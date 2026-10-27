@@ -33,9 +33,9 @@ pub(super) fn review(
         .unwrap();
     pic.set_controllers(coordinator, Some(operator), vec![operator])
         .unwrap();
-    let registry: Result<CoordinatorRegistryResponse, Error> =
+    let registry: Result<canic_contracts::dto::fleet_registry::FleetRegistry, Error> =
         registry_as_operator(pic, coordinator, operator);
-    let CoordinatorRegistryResponse::Registry(registry) = registry.unwrap();
+    let registry = registry.unwrap();
     let infrastructure = [
         (
             coordinator,
@@ -97,7 +97,9 @@ pub(super) fn review(
         plan,
         CapacityImportAdmissionRecord {
             infrastructure,
-            registry_candid_hex: hex_bytes(encode_one(&registry).unwrap()),
+            registry_wire_hex: hex_bytes(
+                canic_contracts::protocol::authority::encode(&registry).unwrap(),
+            ),
             declarations_toml,
             declarations_sha256,
         },
@@ -109,23 +111,6 @@ fn registry_as_operator(
     pic: &PocketIc,
     coordinator: Principal,
     operator: Principal,
-) -> Result<CoordinatorRegistryResponse, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes =
-            ic_platform::candid::contract::encode_args((CoordinatorRegistryRequest::Registry,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                coordinator,
-                operator,
-                canic::protocol::CANIC_COORDINATOR_REGISTRY,
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .unwrap()
+) -> Result<canic_contracts::dto::fleet_registry::FleetRegistry, Error> {
+    crate::pic::registry_discovery::snapshot(pic, coordinator, operator)
 }

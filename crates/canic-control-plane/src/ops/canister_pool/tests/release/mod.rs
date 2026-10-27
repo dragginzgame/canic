@@ -53,12 +53,21 @@ fn release_observes_uncertain_and_blocked_creation_without_readmission() {
             )),
             CanisterPoolCreationProgressRecord::WaitingForFunding { .. } => unreachable!(),
         }
-        let bytes = ic_platform::candid::contract::encode_one(&observed).unwrap();
+        let native = canic_contracts::dto::pool_census::Census::from(observed.clone());
+        let bytes = ic_wire::native::encode_response(
+            canic_contracts::protocol::pool_census::METHOD_ID,
+            &native,
+            canic_contracts::protocol::pool_census::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        let decoded: canic_contracts::dto::pool_census::Census = ic_wire::native::decode_response(
+            canic_contracts::protocol::pool_census::METHOD_ID,
+            &bytes,
+            canic_contracts::protocol::pool_census::RESPONSE_LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<crate::dto::root::RootPoolReleaseResponse>(
-                &bytes
-            )
-            .unwrap(),
+            crate::dto::root::RootPoolReleaseResponse::from(decoded),
             observed
         );
         assert_eq!(CanisterPoolStore::state(), before);

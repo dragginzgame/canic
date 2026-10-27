@@ -7,9 +7,9 @@ use crate::{
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
     dto::template::{
-        StoreOperationStatusResponse, TemplateChunkInput, TemplateChunkResponse,
-        TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateLookupRequest,
-        TemplateManifestInput, TemplateStagingStatusResponse, WasmStoreCatalogEntryResponse,
+        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
+        TemplateChunkSetPrepareInput, TemplateLookupRequest, TemplateManifestInput,
+        TemplateStagingStatusResponse, WasmStoreCatalogEntryResponse,
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
         WasmStoreGcOperationStatus, WasmStoreGcRequest, WasmStoreStatusResponse,
     },
@@ -137,36 +137,55 @@ pub struct WasmStoreCanisterApi;
 
 #[cfg(feature = "wasm-store-canister")]
 impl WasmStoreCanisterApi {
-    /// Resolve the current Store-local operation identity without mutation.
-    pub fn operation_status(operation_id: [u8; 32]) -> Result<StoreOperationStatusResponse, Error> {
+    /// Resolve exact garbage-collection evidence without mutation.
+    pub fn gc_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<WasmStoreGcOperationStatus, Error> {
         if operation_id == [0; 32] {
             return Err(Error::from_registered(
                 canic_contracts::diagnostics::codes::REQUEST_INVALID,
             ));
         }
         let gc = WasmStoreGcOps::status();
-        if gc.operation_id == Some(operation_id) {
-            return Ok(StoreOperationStatusResponse::GarbageCollection(
-                WasmStoreGcOperationStatus {
-                    operation_id,
-                    gc: crate::dto::template::WasmStoreGcStatusResponse {
-                        mode: gc.mode,
-                        changed_at: gc.changed_at,
-                        prepared_at: gc.prepared_at,
-                        started_at: gc.started_at,
-                        completed_at: gc.completed_at,
-                        runs_completed: gc.runs_completed,
-                    },
-                },
+        if gc.operation_id != Some(operation_id) {
+            return Err(Error::from_registered(
+                canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
+            ));
+        }
+        Ok(WasmStoreGcOperationStatus {
+            operation_id,
+            gc: crate::dto::template::WasmStoreGcStatusResponse {
+                mode: gc.mode,
+                changed_at: gc.changed_at,
+                prepared_at: gc.prepared_at,
+                started_at: gc.started_at,
+                completed_at: gc.completed_at,
+                runs_completed: gc.runs_completed,
+            },
+        })
+    }
+
+    /// Resolve the retained activation operation, preserving GC's existing selection priority.
+    pub fn activation_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<canic_contracts::dto::fleet_activation::FleetActivationStatusResponse, Error> {
+        if operation_id == [0; 32] {
+            return Err(Error::from_registered(
+                canic_contracts::diagnostics::codes::REQUEST_INVALID,
+            ));
+        }
+        if WasmStoreGcOps::status().operation_id == Some(operation_id) {
+            return Err(Error::from_registered(
+                canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
             ));
         }
         let activation = canic_core::api::fleet_activation::FleetActivationApi::status()?;
-        if activation.identity.operation_id == operation_id {
-            return Ok(StoreOperationStatusResponse::FleetActivation(activation));
+        if activation.identity.operation_id != operation_id {
+            return Err(Error::from_registered(
+                canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
+            ));
         }
-        Err(Error::from_registered(
-            canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
-        ))
+        Ok(activation)
     }
 
     // Return the current approved release catalog stored in this local wasm store.
@@ -361,14 +380,16 @@ mod tests {
 
     #[test]
     fn store_operation_status_rejects_the_zero_identity_before_state_access() {
-        let Err(error) = WasmStoreCanisterApi::operation_status([0; 32]) else {
-            panic!("the zero operation identity must be rejected");
-        };
-
-        assert_eq!(
-            error.code(),
-            canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
-        );
+        let errors = [
+            WasmStoreCanisterApi::gc_operation_status([0; 32]).unwrap_err(),
+            WasmStoreCanisterApi::activation_operation_status([0; 32]).unwrap_err(),
+        ];
+        for error in errors {
+            assert_eq!(
+                error.code(),
+                canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
+            );
+        }
     }
 }
 
@@ -463,5 +484,23 @@ mod root_tests {
         assert_eq!(replay, receipt);
         assert_eq!(publication_overview().stores[0].created_at, created_at);
         RootWasmStoreState::import(RootWasmStoreStateData::default());
+    }
+}
+
+#[cfg(all(test, feature = "wasm-store-canister"))]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn operation_reads_reject_zero_identity_before_state_lookup() {
+        let invalid = Error::from_registered(canic_contracts::diagnostics::codes::REQUEST_INVALID);
+        assert_eq!(
+            WasmStoreCanisterApi::gc_operation_status([0; 32]).unwrap_err(),
+            invalid
+        );
+        assert_eq!(
+            WasmStoreCanisterApi::activation_operation_status([0; 32]).unwrap_err(),
+            invalid
+        );
     }
 }

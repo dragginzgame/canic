@@ -100,7 +100,7 @@ impl PublicMetricsOps {
     pub fn health() -> PublicHealth {
         let now = IcOps::now_nanos();
         PublicHealth {
-            canister_id: IcOps::canister_self(),
+            canister_id: IcOps::canister_self().into(),
             role: if EnvOps::is_fleet_coordinator_runtime() {
                 Some("fleet_coordinator".to_string())
             } else {
@@ -143,7 +143,7 @@ impl PublicMetricsOps {
                 .into_iter()
                 .map(|row| PublicMetric {
                     name: row.name,
-                    canister_id: row.canister_id,
+                    canister_id: row.canister_id.map(Into::into),
                     value: row.value,
                     unit: row.unit,
                     observed_at_ns: row.observed_at_ns,
@@ -182,7 +182,13 @@ impl PublicMetricsOps {
         let selected = enabled.contains(&request.family);
         let valid_name = request.name.len() <= MAX_PUBLIC_METRIC_TEXT_BYTES;
         let series = (selected && valid_name)
-            .then(|| PublicHistoryCache::series(request.family, request.name, request.canister_id))
+            .then(|| {
+                PublicHistoryCache::series(
+                    request.family,
+                    request.name,
+                    request.canister_id.map(Into::into),
+                )
+            })
             .flatten();
         let slot = now_ns / PUBLIC_METRICS_CADENCE_NS;
         let (unit, mut points) = series.map_or_else(
@@ -256,7 +262,7 @@ impl PublicMetricsOps {
         }
         let rows = metrics.into_iter().map(|row| PublicMetricSample {
             name: row.name,
-            canister_id: row.canister_id,
+            canister_id: row.canister_id.map(Into::into),
             value: row.value,
             unit: row.unit,
             observed_at_ns: row.observed_at_ns,
@@ -436,7 +442,8 @@ fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
     let timers = inventory
         .as_ref()
         .map_or(&[][..], |inventory| inventory.timers());
-    metrics::bounded_performance_entries(MAX_PUBLIC_METRICS / 2 + 1, timers)?
+    let mut rows = checkpoint_overflow_metrics();
+    let measured = metrics::bounded_performance_entries(MAX_PUBLIC_METRICS / 2 + 1, timers)?
         .into_iter()
         .take(MAX_PUBLIC_METRICS / 2 + 1)
         .map(|row| {
@@ -476,8 +483,33 @@ fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                 },
             ])
         })
-        .collect::<Result<Vec<_>, InternalError>>()
-        .map(|rows| rows.into_iter().flatten().collect())
+        .collect::<Result<Vec<_>, InternalError>>()?;
+    rows.extend(measured.into_iter().flatten());
+    Ok(rows)
+}
+
+fn checkpoint_overflow_metrics() -> Vec<PublicMetricSample> {
+    let Some(overflow) = crate::perf::checkpoint_overflow_entry() else {
+        return Vec::new();
+    };
+    vec![
+        PublicMetricSample {
+            name: "perf.checkpoint_overflow.calls".into(),
+            canister_id: None,
+            value: u128::from(overflow.count),
+            unit: "count".into(),
+            observed_at_ns: 0,
+            kind: PublicMetricKind::Gauge,
+        },
+        PublicMetricSample {
+            name: "perf.checkpoint_overflow".into(),
+            canister_id: None,
+            value: overflow.total_instructions,
+            unit: "instructions".into(),
+            observed_at_ns: 0,
+            kind: PublicMetricKind::Gauge,
+        },
+    ]
 }
 
 fn timer_measurement_kind(
@@ -680,7 +712,7 @@ mod tests {
             vec![
                 PublicMetric {
                     name: "demo.assigned".into(),
-                    canister_id: Some(shard),
+                    canister_id: Some(shard.into()),
                     value: 2,
                     unit: "assignments".into(),
                     observed_at_ns: 10,
@@ -688,7 +720,7 @@ mod tests {
                 },
                 PublicMetric {
                     name: "demo.capacity".into(),
-                    canister_id: Some(shard),
+                    canister_id: Some(shard.into()),
                     value: 4,
                     unit: "assignments".into(),
                     observed_at_ns: 10,
@@ -783,6 +815,20 @@ mod tests {
     }
 
     #[test]
+    fn checkpoint_overflow_projection_keeps_wide_totals_and_counts() {
+        crate::perf::reset();
+        let scope = "x".repeat(129);
+        crate::perf::record_checkpoint(&scope, "wide", u64::MAX);
+        crate::perf::record_checkpoint(&scope, "wide", u64::MAX);
+        let rows = checkpoint_overflow_metrics();
+        assert_eq!(rows[0].name, "perf.checkpoint_overflow.calls");
+        assert_eq!(rows[0].value, 2);
+        assert_eq!(rows[1].name, "perf.checkpoint_overflow");
+        assert_eq!(rows[1].value, u128::from(u64::MAX) * 2);
+        crate::perf::reset();
+    }
+
+    #[test]
     fn performance_sampling_is_bounded_and_independent_of_recording_order() {
         let family = PublicMetricFamily::Performance;
         crate::perf::reset();
@@ -793,6 +839,16 @@ mod tests {
         let first = PublicMetricsOps::project(request(family), &BTreeSet::from([family]), 10);
         assert!(first.truncated);
         assert_eq!(first.metrics.entries.len(), MAX_PUBLIC_METRICS);
+        let overflow_calls = first
+            .metrics
+            .entries
+            .iter()
+            .find(|row| row.name == "perf.checkpoint_overflow.calls")
+            .unwrap();
+        assert_eq!(
+            overflow_calls.value,
+            1024 - (MAX_PUBLIC_METRICS / 2) as u128
+        );
         assert_eq!(
             first.metrics.entries[0].name,
             "perf.checkpoint.bounded.sample_0000"

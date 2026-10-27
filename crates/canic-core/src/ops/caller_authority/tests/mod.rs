@@ -3,6 +3,7 @@
 //! Receiver publication, strict revocation and retained local admission evidence.
 
 use super::*;
+use crate::ops::application_checkpoint::{binding, command};
 use crate::{
     config::caller_authority::{
         CallerAuthorityConfig, CallerPermission, CallerScope, CallerSourceSelector,
@@ -17,8 +18,9 @@ use crate::{
 use canic_contracts::{
     dto::application_checkpoint::ApplicationCheckpointParticipantStatus,
     ids::{
-        CallerComponentInstallation, CallerInstallation, CallerRootAuthority, CanisterRole,
-        ComponentChildBinding, ManagedCanisterBinding,
+        ApplicationCheckpointBinding, ApplicationCheckpointPhase, CallerComponentInstallation,
+        CallerInstallation, CallerRootAuthority, CanisterRole, ComponentChildBinding,
+        ManagedCanisterBinding,
     },
 };
 use std::collections::BTreeMap;
@@ -530,9 +532,27 @@ fn wire_acknowledgements_share_the_retained_participant_phase() {
             binding: record.binding().clone(),
             phase: record.phase(),
         };
-        let bytes = ic_platform::candid::contract::encode_one(&acknowledgement).unwrap();
+        let bytes = canic_contracts::protocol::authority::encode(&acknowledgement).unwrap();
         let decoded: ApplicationCheckpointParticipantStatus =
-            ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+            canic_contracts::protocol::authority::decode(&bytes).unwrap();
         assert_eq!(decoded, acknowledgement);
     }
+}
+
+#[test]
+fn application_checkpoint_wire_command_requires_current_installed_authority() {
+    let (authority, _, _) = setup();
+    let selected = ApplicationCheckpointBinding {
+        authority,
+        operation_id: [21; 32],
+        sequence: 1,
+        unit_digest: [22; 32],
+    };
+    let mut request = command(&selected, ApplicationCheckpointPhase::Preparing).unwrap();
+    assert_eq!(binding(&request).unwrap(), selected);
+    request.authority_digest[0] ^= 1;
+    assert_eq!(
+        binding(&request).err().map(|error| error.code()),
+        Some(crate::InternalError::conflict().code())
+    );
 }

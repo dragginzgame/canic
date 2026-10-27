@@ -5,26 +5,14 @@
 //! Boundary: validates terminal current authority before querying Roots and returns no partial
 //! report.
 
-use crate::{
-    info_subnets::{
-        InfoSubnetsCommandError, InfoSubnetsOptions,
-        model::{FleetSubnetInventoryReportV1, SubnetInventoryPlan},
-    },
-    support::candid::registry_entry_candid_path,
+use crate::info_subnets::{
+    InfoSubnetsCommandError, InfoSubnetsOptions,
+    model::{FleetSubnetInventoryReportV1, SubnetInventoryPlan},
 };
-use canic_contracts::{
-    dto::{
-        fleet_subnet_root::FleetSubnetRootCanisterSummary,
-        wire::projection::subnet_information::{
-            CoordinatorStatusRequestFragment, CoordinatorStatusResponseFragment,
-            RootStatusRequestFragment, RootStatusResponseFragment,
-        },
-    },
-    protocol,
-};
+use canic_contracts::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary;
 use canic_host::{
     fleet_ensure::resolve_current_fleet, icp::IcpCli, icp_config::resolve_current_canic_icp_root,
-    query_canister_with_arg, registry::RegistryEntry,
+    registry::RegistryEntry,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
 
@@ -37,78 +25,39 @@ pub(super) fn load_report(
     let icp = IcpCli::new(&options.icp, Some(options.environment.clone())).with_cwd(&icp_root);
     let coordinator = parse_principal(&current.topology.coordinator_canister_id)?;
     let coordinator_entry = exact_entry(&current.registry.entries, coordinator)?;
-    let coordinator_binding =
-        registry_entry_candid_path(Some(&icp_root), &options.environment, coordinator_entry)?;
-
-    let CoordinatorStatusResponseFragment::Registry(registry) = query_canister_with_arg(
-        &icp,
-        &coordinator_binding,
-        coordinator,
-        protocol::CANIC_COORDINATOR_REGISTRY,
-        &CoordinatorStatusRequestFragment::Registry,
-    )?
-    else {
-        return Err(correlation_error());
-    };
-    let CoordinatorStatusResponseFragment::RegistryManifest(manifest) = query_canister_with_arg(
-        &icp,
-        &coordinator_binding,
-        coordinator,
-        protocol::CANIC_OBSERVABILITY,
-        &CoordinatorStatusRequestFragment::RegistryManifest,
-    )?
-    else {
-        return Err(correlation_error());
-    };
-    let CoordinatorStatusResponseFragment::RegistryVersion(version) = query_canister_with_arg(
-        &icp,
-        &coordinator_binding,
-        coordinator,
-        protocol::CANIC_OBSERVABILITY,
-        &CoordinatorStatusRequestFragment::RegistryVersion,
-    )?
-    else {
-        return Err(correlation_error());
-    };
+    let schema = canic_host::protocol_binding::resolve_current_registry_wire_schema(
+        &icp_root,
+        &current,
+        coordinator_entry,
+    )?;
+    let registry = canic_host::registry_discovery::snapshot(&icp, coordinator)?;
+    let manifest = canic_host::registry_discovery::manifest(&icp, &schema, coordinator)?;
+    let version = canic_host::registry_discovery::version(&icp, &schema, coordinator)?;
     let plan = SubnetInventoryPlan::compile(
         options.fleet.clone(),
         &expected,
-        *registry,
+        registry,
         manifest,
         version,
     )?;
-    let summaries = query_root_summaries(
-        &icp,
-        &icp_root,
-        &options.environment,
-        &current.registry.entries,
-        plan.root_principals(),
-    )?;
+    let summaries = query_root_summaries(&icp, &icp_root, &current, plan.root_principals())?;
     plan.complete(summaries).map_err(Into::into)
 }
 
 fn query_root_summaries(
     icp: &IcpCli,
     icp_root: &std::path::Path,
-    environment: &str,
-    entries: &[RegistryEntry],
+    current: &canic_host::fleet_ensure::CurrentFleetResolution,
     roots: Vec<Principal>,
 ) -> Result<Vec<FleetSubnetRootCanisterSummary>, InfoSubnetsCommandError> {
     roots
         .into_iter()
         .map(|root| {
-            let entry = exact_entry(entries, root)?;
-            let binding = registry_entry_candid_path(Some(icp_root), environment, entry)?;
-            let response: RootStatusResponseFragment = query_canister_with_arg(
-                icp,
-                &binding,
-                root,
-                protocol::CANIC_ROOT_STATUS,
-                &RootStatusRequestFragment::Inventory,
+            let entry = exact_entry(&current.registry.entries, root)?;
+            canic_host::protocol_binding::resolve_current_registry_wire_schema(
+                icp_root, current, entry,
             )?;
-            match response {
-                RootStatusResponseFragment::Inventory(summary) => Ok(summary),
-            }
+            Ok(canic_host::registry_discovery::root_inventory(icp, root)?)
         })
         .collect()
 }
@@ -138,10 +87,4 @@ fn parse_principal(value: &str) -> Result<Principal, InfoSubnetsCommandError> {
             "terminal current inventory contains invalid Principal {value}"
         ))
     })
-}
-
-fn correlation_error() -> InfoSubnetsCommandError {
-    InfoSubnetsCommandError::Usage(
-        "Canister returned a differently correlated status response".to_string(),
-    )
 }

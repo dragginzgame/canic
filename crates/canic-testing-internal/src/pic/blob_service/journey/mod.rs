@@ -2,6 +2,7 @@
 //! This does not fetch provider bytes or qualify deployed browser delivery.
 
 mod inspection;
+pub(super) use inspection::qualify_pagination;
 mod refusals;
 pub(super) use refusals::qualify as qualify_refusals;
 

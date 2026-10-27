@@ -23,17 +23,10 @@ use crate::{
             AuthOps, ChainKeyRootDelegationBatchInstallPlan,
             PrepareChainKeyRootDelegationBatchInput,
         },
-        ic::{
-            IcOps,
-            call::{CallOps, CallResult},
-        },
+        ic::{IcOps, call::CallOps},
         runtime::env::EnvOps,
     },
-    protocol,
     workflow::runtime::auth::{RuntimeAuthWorkflow, root_delegation_batch},
-};
-use canic_contracts::dto::wire::projection::role_attestation::{
-    IssuerCommandFragment, IssuerCommandResponseFragment,
 };
 use std::future::Future;
 
@@ -173,25 +166,27 @@ async fn install_delegation_proof_on_issuer(
     issuer_pid: Principal,
     request: InstallActiveDelegationProofRequest,
 ) -> Result<InstallActiveDelegationProofResponse, IssuerProofInstallError> {
-    let builder = CallOps::unbounded_wait(issuer_pid, protocol::CANIC_COMMAND)
-        .with_arg(IssuerCommandFragment::InstallDelegationProof(request))
+    use canic_contracts::{dto::issuer_proof as native, protocol::issuer_proof as wire};
+    let request: native::InstallActiveDelegationProofRequest = request.into();
+    let bytes = ic_wire::native::encode_request(wire::INSTALL_ID, &request, wire::REQUEST_LIMITS)
         .map_err(|_| IssuerProofInstallError::RequestEncoding)?;
-    let call = builder
+    let bytes = CallOps::unbounded_wait(issuer_pid, wire::INSTALL)
+        .with_raw_args(bytes)
         .execute()
         .await
-        .map_err(IssuerProofInstallError::Transport)?;
-    issuer_install_outcome(call)
+        .map_err(IssuerProofInstallError::Transport)?
+        .into_bytes();
+    issuer_install_outcome(&bytes)
 }
 
 fn issuer_install_outcome(
-    call: CallResult,
+    bytes: &[u8],
 ) -> Result<InstallActiveDelegationProofResponse, IssuerProofInstallError> {
-    let result: Result<IssuerCommandResponseFragment, Error> = call
-        .candid()
-        .map_err(|_| IssuerProofInstallError::InvalidResponse)?;
-    issuer_install_response(result.map(|response| match response {
-        IssuerCommandResponseFragment::InstallDelegationProof(response) => response,
-    }))
+    use canic_contracts::{dto::issuer_proof as native, protocol::issuer_proof as wire};
+    let result: Result<native::InstallActiveDelegationProofResponse, Error> =
+        ic_wire::native::decode_response(wire::INSTALL_ID, bytes, wire::RESPONSE_LIMITS)
+            .map_err(|_| IssuerProofInstallError::InvalidResponse)?;
+    issuer_install_response(result.map(Into::into))
 }
 
 fn issuer_install_response(
@@ -342,6 +337,79 @@ mod tests {
                 root_proof: crate::ops::auth::test_fixtures::chain_key_root_proof(8),
             },
         }
+    }
+
+    #[test]
+    fn native_installation_preserves_signed_proof_and_original_installation_evidence() {
+        use canic_contracts::{dto::issuer_proof as native, protocol::issuer_proof as wire};
+        let request = InstallActiveDelegationProofRequest {
+            proof: proof().proof,
+        };
+        let mut canonical = Vec::new();
+        serde_cbor::to_writer(&mut canonical, &request).unwrap();
+        let frame = ic_wire::native::encode_request(
+            wire::INSTALL_ID,
+            &native::InstallActiveDelegationProofRequest::from(request.clone()),
+            wire::REQUEST_LIMITS,
+        )
+        .unwrap();
+        let decoded: native::InstallActiveDelegationProofRequest =
+            ic_wire::native::decode_request(wire::INSTALL_ID, &frame, wire::REQUEST_LIMITS)
+                .unwrap();
+        let restored = InstallActiveDelegationProofRequest::from(decoded);
+        assert_eq!(restored, request);
+        let mut restored_canonical = Vec::new();
+        serde_cbor::to_writer(&mut restored_canonical, &restored).unwrap();
+        assert_eq!(restored_canonical, canonical);
+        let expected = InstallActiveDelegationProofResponse {
+            active_proof: crate::dto::auth::ActiveDelegationProof {
+                proof: restored.proof,
+                cert_hash: [9; 32],
+                not_before_ns: 10,
+                expires_at_ns: 100,
+                refresh_after_ns: 80,
+                installed_at_ns: 11,
+                installed_by: p(1),
+            },
+        };
+        let frame = ic_wire::native::encode_response(
+            wire::INSTALL_ID,
+            &Ok::<_, Error>(native::InstallActiveDelegationProofResponse::from(
+                expected.clone(),
+            )),
+            wire::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        assert!(matches!(issuer_install_outcome(&frame), Ok(actual) if actual == expected));
+    }
+
+    #[test]
+    fn native_installation_keeps_rejection_distinct_from_malformed_response() {
+        use canic_contracts::{dto::issuer_proof as native, protocol::issuer_proof as wire};
+        let rejection: Result<native::InstallActiveDelegationProofResponse, Error> =
+            Err(Error::from_registered(codes::AUTH_CERT_EXPIRED));
+        let mut frame =
+            ic_wire::native::encode_response(wire::INSTALL_ID, &rejection, wire::RESPONSE_LIMITS)
+                .unwrap();
+        assert!(matches!(
+            issuer_install_outcome(&frame),
+            Err(IssuerProofInstallError::RejectedByIssuer(_))
+        ));
+        frame.push(0);
+        assert!(matches!(
+            issuer_install_outcome(&frame),
+            Err(IssuerProofInstallError::InvalidResponse)
+        ));
+        let wrong = ic_wire::native::encode_response(
+            wire::INSTALL_ID + 1,
+            &rejection,
+            wire::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        assert!(matches!(
+            issuer_install_outcome(&wrong),
+            Err(IssuerProofInstallError::InvalidResponse)
+        ));
     }
 
     #[test]

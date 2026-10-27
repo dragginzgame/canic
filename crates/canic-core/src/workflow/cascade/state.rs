@@ -30,7 +30,7 @@ use crate::{
             state::fleet::FleetStateOps,
         },
     },
-    view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget},
+    view::state_cascade::StateCascadeTarget,
     workflow::{
         cascade::{
             snapshot::{StateSnapshot, adapter::StateSnapshotAdapter, state_snapshot_is_empty},
@@ -39,7 +39,6 @@ use crate::{
         runtime::cycles::CycleWorkflow,
     },
 };
-use canic_contracts::ids::CanisterRole;
 
 /// State application and fanout through each recipient's current command contract.
 
@@ -82,18 +81,7 @@ impl StateCascadeWorkflow {
         let report = StateCascadeReportOps::applied(IcOps::canister_self(), reconciliation_error);
         let children = CanisterChildrenOps::pids()
             .into_iter()
-            .map(|canister_id| {
-                let endpoint = match CanisterChildrenOps::role_parent(canister_id) {
-                    Some((role, _)) if role == CanisterRole::WASM_STORE => {
-                        StateCascadeEndpoint::Store
-                    }
-                    _ => StateCascadeEndpoint::Component,
-                };
-                StateCascadeTarget {
-                    canister_id,
-                    endpoint,
-                }
-            })
+            .map(|canister_id| StateCascadeTarget { canister_id })
             .collect::<Vec<_>>();
         Self::fanout(&snapshot, &children, report, MetricOperation::NonrootFanout).await
     }

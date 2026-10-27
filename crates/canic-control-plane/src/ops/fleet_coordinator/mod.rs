@@ -22,9 +22,7 @@ mod root_lifecycle;
 mod service_publication;
 
 use crate::{
-    dto::fleet_coordinator::{
-        CoordinatorOperationStatusResponse, CoordinatorRootRemovalOperationStatus,
-    },
+    dto::fleet_coordinator::CoordinatorRootRemovalOperationStatus,
     installation::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
         FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
@@ -199,23 +197,25 @@ impl FleetCoordinatorOps {
         if operation_id == [0; 32] {
             return Ok(false);
         }
-        if Self::current()?
+        let current = Self::current()?;
+        let admission = current
             .admission_publications
             .iter()
-            .any(|publication| publication.operation_id == operation_id)
-        {
-            return Ok(true);
+            .any(|publication| publication.operation_id == operation_id);
+        let provisioning =
+            Self::provisioning_operation_observation(&current, operation_id)?.is_some();
+        let removal = coordinator_root_removal_operation_status(&current, operation_id)?.is_some();
+        if provisioning && removal {
+            return Err(receipt_invariant(
+                "Coordinator operation ID crosses provisioning and root-removal domains",
+            ));
         }
-        match Self::operation_status(operation_id) {
-            Ok(_) => Ok(true),
-            Err(error)
-                if error.public_error().code()
-                    == canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code() =>
-            {
-                Ok(false)
-            }
-            Err(error) => Err(error),
-        }
+        let rotation = Self::funding_policy_rotation_status(operation_id)?.is_some();
+        let retirement = retirement::retirement_status(&current.retirement)
+            .is_some_and(|status| status.request.operation_id == operation_id);
+        Ok([admission, provisioning, removal, rotation, retirement]
+            .into_iter()
+            .any(|retained| retained))
     }
 
     /// Authorize a controller or exact Root participating in one durable operation.
@@ -265,24 +265,36 @@ impl FleetCoordinatorOps {
     }
 
     /// Resolve one Coordinator-owned durable operation without caller-supplied secondary keys.
-    pub(crate) fn operation_status(
+    pub(crate) fn provisioning_operation_status(
         operation_id: [u8; 32],
-    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
+    ) -> Result<
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+        InternalError,
+    > {
         if operation_id == [0; 32] {
             return Err(InternalError::invalid_input());
         }
-        if let Some(status) = Self::funding_policy_rotation_status(operation_id)? {
-            return Ok(CoordinatorOperationStatusResponse::FundingPolicyRotation(
-                status,
+        let current = Self::current()?;
+
+        let provisioning = Self::provisioning_operation_observation(&current, operation_id)?;
+
+        let root_removal = coordinator_root_removal_operation_status(&current, operation_id)?;
+        if provisioning.is_some() && root_removal.is_some() {
+            return Err(receipt_invariant(
+                "Coordinator operation ID crosses provisioning and root-removal domains",
             ));
         }
-        let current = Self::current()?;
-        if let Some(status) = retirement::retirement_status(&current.retirement)
-            && status.request.operation_id == operation_id
-        {
-            return Ok(CoordinatorOperationStatusResponse::Retirement(status));
-        }
 
+        if let Some(status) = provisioning {
+            return Ok(status);
+        }
+        Err(InternalError::unavailable())
+    }
+
+    fn provisioning_operation_observation(
+        current: &FleetCoordinatorRegistryRecord,
+        operation_id: [u8; 32],
+    ) -> Result<Option<FleetComponentProvisioningStatusResponse>, InternalError> {
         let mut active_provisioning_matches = [
             current.component_provisioning.as_ref(),
             current.component_scale_out.as_ref(),
@@ -313,22 +325,24 @@ impl FleetCoordinatorOps {
             None
         };
 
-        let root_removal = coordinator_root_removal_operation_status(&current, operation_id)?;
-        if provisioning.is_some() && root_removal.is_some() {
+        Ok(provisioning)
+    }
+
+    pub(crate) fn root_removal_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<CoordinatorRootRemovalOperationStatus, InternalError> {
+        if operation_id == [0; 32] {
+            return Err(InternalError::invalid_input());
+        }
+        let current = Self::current()?;
+        let provisioning = Self::provisioning_operation_observation(&current, operation_id)?;
+        let removal = coordinator_root_removal_operation_status(&current, operation_id)?;
+        if provisioning.is_some() && removal.is_some() {
             return Err(receipt_invariant(
                 "Coordinator operation ID crosses provisioning and root-removal domains",
             ));
         }
-
-        if let Some(status) = provisioning {
-            return Ok(CoordinatorOperationStatusResponse::ComponentProvisioning(
-                status,
-            ));
-        }
-        if let Some(status) = root_removal {
-            return Ok(CoordinatorOperationStatusResponse::RootRemoval(status));
-        }
-        Err(InternalError::unavailable())
+        removal.ok_or_else(InternalError::unavailable)
     }
 
     pub(crate) fn compile_genesis(

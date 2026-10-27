@@ -187,7 +187,7 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
             build_script_inputs: BuildScriptInputStateV1::NotRecorded,
         },
         protocol_profile: ProtocolProfileProvenanceV1 {
-            candid_sha256: "3".repeat(64),
+            wire_schema_sha256: "5".repeat(64),
             protocol_profile_digest: "4".repeat(64),
         },
         final_wasm_metrics: crate::build_provenance::WasmArtifactMetricsV1 {

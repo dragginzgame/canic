@@ -3,8 +3,8 @@
 use canic_contracts::dto::{
     error::Error,
     pool_import::{PoolImportContext, PoolImportStatus},
-    wire::projection::capacity_import::{StatusRequest, StatusResponse},
 };
+use canic_contracts::protocol::pool_import_read as protocol;
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -21,6 +21,7 @@ struct QueryEnvelope {
 
 #[derive(serde::Deserialize)]
 struct QueryContent {
+    method_name: String,
     #[serde(with = "serde_bytes")]
     arg: Vec<u8>,
 }
@@ -113,23 +114,50 @@ fn request(stream: &TcpStream) -> (String, Vec<u8>) {
 }
 
 fn root_reply(body: &[u8], status: &PoolImportStatus, context: &PoolImportContext) -> Vec<u8> {
-    let envelope: QueryEnvelope = ciborium::de::from_reader(body).unwrap();
-    let response =
-        match ic_platform::candid::decoder::decode_one::<StatusRequest>(&envelope.content.arg)
+    let envelope: QueryEnvelope = serde_cbor::from_reader(body).unwrap();
+    let arg = match envelope.content.method_name.as_str() {
+        protocol::status::METHOD => {
+            let identity: canic_contracts::dto::pool_import::PoolImportIdentity =
+                ic_wire::native::decode_request(
+                    protocol::status::METHOD_ID,
+                    &envelope.content.arg,
+                    protocol::REQUEST_LIMITS,
+                )
+                .unwrap();
+            assert_eq!(identity.sequence, status.reservation.sequence);
+            assert_eq!(identity.plan_sha256, status.reservation.plan_sha256);
+            ic_wire::native::encode_response(
+                protocol::status::METHOD_ID,
+                &Ok::<_, Error>(canic_contracts::dto::pool_census::ImportStatus::from(
+                    status.clone(),
+                )),
+                protocol::RESPONSE_LIMITS,
+            )
             .unwrap()
-        {
-            StatusRequest::PoolImport(_) => StatusResponse::PoolImport(Box::new(status.clone())),
-            StatusRequest::PoolImportContext => {
-                StatusResponse::PoolImportContext(Box::new(context.clone()))
-            }
-        };
+        }
+        protocol::context::METHOD => {
+            ic_wire::native::decode_request::<()>(
+                protocol::context::METHOD_ID,
+                &envelope.content.arg,
+                protocol::REQUEST_LIMITS,
+            )
+            .unwrap();
+            ic_wire::native::encode_response(
+                protocol::context::METHOD_ID,
+                &Ok::<_, Error>(canic_contracts::dto::pool_import_read::Context::from(
+                    context.clone(),
+                )),
+                protocol::RESPONSE_LIMITS,
+            )
+            .unwrap()
+        }
+        _ => panic!("unexpected Root query"),
+    };
     let response = Response {
         status: "replied",
-        reply: Reply {
-            arg: ic_platform::candid::contract::encode_one(Ok::<_, Error>(response)).unwrap(),
-        },
+        reply: Reply { arg },
     };
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(&response, &mut bytes).unwrap();
+    serde_cbor::to_writer(&mut bytes, &response).unwrap();
     bytes
 }

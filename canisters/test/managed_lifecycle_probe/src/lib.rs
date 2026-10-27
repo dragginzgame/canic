@@ -2,16 +2,19 @@
 
 mod checkpoint;
 mod initialization;
+mod protocol;
 
 use canic::{Error, prelude::*};
-use ic_platform::candid::contract::CandidType;
 use std::cell::Cell;
 
 /// Evidence that a permitted request reached application dispatch.
-#[derive(CandidType, Clone, Debug, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct ManagedGuardReceipt {
-    caller: ic_platform::principal::ExternalPrincipal,
+    caller: ic_platform::Principal,
     workflow_runs: u32,
 }
 
@@ -36,14 +39,12 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 #[expect(clippy::unused_async, reason = "framework lifecycle hook signature")]
 async fn canic_upgrade() {}
 
-#[canic_query(public)]
-fn managed_guard_public_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error> {
-    Ok(ic_platform::principal::ExternalPrincipal::from(
-        ic_platform::cdk::api::msg_caller(),
-    ))
+#[canic_query(public, wire(id = protocol::PUBLIC, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+fn managed_guard_public_probe() -> Result<ic_platform::Principal, Error> {
+    Ok(ic_platform::cdk::api::msg_caller())
 }
 
-#[canic_update(public)]
+#[canic_update(public, wire(id = protocol::GUARD, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn managed_guard_admission_probe() -> Result<ManagedGuardReceipt, Error> {
     let caller = canic::fleet_admission::require_caller()?;
     let workflow_runs = MANAGED_GUARD_WORKFLOW_RUNS.with(|runs| {
@@ -52,13 +53,13 @@ fn managed_guard_admission_probe() -> Result<ManagedGuardReceipt, Error> {
         next
     });
     Ok(ManagedGuardReceipt {
-        caller,
+        caller: caller.into(),
         workflow_runs,
     })
 }
 
-#[canic_update(public)]
-fn managed_guard_owned_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error> {
+#[canic_update(public, wire(id = protocol::OWNED, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+fn managed_guard_owned_probe() -> Result<ic_platform::Principal, Error> {
     let caller = canic::fleet_admission::require_caller()?;
     let application_owner = ic_platform::principal::ExternalPrincipal::from_slice(&[17; 29]);
     if caller != application_owner {
@@ -66,24 +67,21 @@ fn managed_guard_owned_probe() -> Result<ic_platform::principal::ExternalPrincip
             canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
-    Ok(caller)
+    Ok(caller.into())
 }
 
-#[canic_query(public)]
+#[canic_query(public, wire(id = protocol::WORKFLOW_RUNS, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn managed_guard_workflow_runs() -> Result<u32, Error> {
     Ok(MANAGED_GUARD_WORKFLOW_RUNS.with(Cell::get))
 }
 
-#[canic_query(requires(caller::is_fleet_admitted()))]
-fn canic_fleet_admission_parity_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error>
-{
-    Ok(ic_platform::principal::ExternalPrincipal::from(
-        ic_platform::cdk::api::msg_caller(),
-    ))
+#[canic_query(requires(caller::is_fleet_admitted()), wire(id = protocol::PARITY, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+fn canic_fleet_admission_parity_probe() -> Result<ic_platform::Principal, Error> {
+    Ok(ic_platform::cdk::api::msg_caller())
 }
 
 /// Exact application init bytes retained by the synchronous lifecycle owner.
-#[canic_query(public)]
+#[canic_query(public, wire(id = protocol::INITIALIZATION, request = protocol::REQUEST_LIMITS, response = protocol::INITIALIZATION_RESPONSE_LIMITS))]
 fn managed_initialization_bytes() -> Result<Vec<u8>, Error> {
     Ok(initialization::bytes())
 }

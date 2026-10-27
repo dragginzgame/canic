@@ -38,41 +38,11 @@ fn release_candidate_manifest_blockers() -> BTreeSet<String> {
         .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
         .map(|entry| format!("root-capability:{}", entry.variant));
 
-    let root_role_blockers = ROOT_COMMAND_REPLAY_POLICY_MANIFEST
-        .iter()
-        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
-        .map(|entry| format!("root-command:{}", entry.variant));
-
-    let coordinator_role_blockers = COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST
-        .iter()
-        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
-        .map(|entry| format!("coordinator-command:{}", entry.variant));
-
-    let managed_role_blockers = MANAGED_COMMAND_REPLAY_POLICY_MANIFEST
-        .iter()
-        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
-        .map(|entry| format!("managed-command:{}", entry.variant));
-
-    let store_role_blockers = STORE_COMMAND_REPLAY_POLICY_MANIFEST
-        .iter()
-        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
-        .map(|entry| format!("store-command:{}", entry.variant));
-
-    endpoint_blockers
-        .chain(root_command_blockers)
-        .chain(root_role_blockers)
-        .chain(coordinator_role_blockers)
-        .chain(managed_role_blockers)
-        .chain(store_role_blockers)
-        .collect()
+    endpoint_blockers.chain(root_command_blockers).collect()
 }
 
 const fn replay_command_kind(label: &'static str) -> ReplayCommandKindLabel {
     ReplayCommandKindLabel::new(label)
-}
-
-const fn replay_command_manifest(label: &'static str) -> ReplayCommandManifestLabel {
-    ReplayCommandManifestLabel::new(label)
 }
 
 fn enum_variant_names_from_source(
@@ -121,36 +91,6 @@ fn enum_variant_name_from_line(line: &'static str) -> Option<&'static str> {
         .find(|ch: char| ch == '(' || ch == '{' || ch == ',' || ch.is_whitespace())
         .unwrap_or(line.len());
     Some(&line[..end])
-}
-
-fn root_command_variant_names() -> BTreeSet<&'static str> {
-    enum_variant_names_from_source_until(
-        include_str!("../../../../canic-contracts/src/dto/wire/root_command/mod.rs"),
-        "pub enum RootCommand",
-        "\n        }",
-    )
-}
-
-fn coordinator_command_variant_names() -> BTreeSet<&'static str> {
-    enum_variant_names_from_source(
-        include_str!("../../../../canic-contracts/src/dto/fleet_coordinator/mod.rs"),
-        "pub enum CoordinatorCommand",
-    )
-}
-
-fn managed_command_variant_names() -> BTreeSet<&'static str> {
-    enum_variant_names_from_source_until(
-        include_str!("../../../../canic-contracts/src/dto/wire/managed_command/mod.rs"),
-        "pub enum CanisterCommand",
-        "\n        }",
-    )
-}
-
-fn store_command_variant_names() -> BTreeSet<&'static str> {
-    enum_variant_names_from_source(
-        include_str!("../../../../canic-contracts/src/dto/template/mod.rs"),
-        "pub enum StoreCommand",
-    )
 }
 
 fn emitted_endpoint_names(kind: EndpointKind) -> BTreeSet<String> {

@@ -30,6 +30,7 @@ fn parsed_attested_local_subnet() -> ParsedArgs {
         export_name: None,
         payload_max_bytes: None,
         decode: None,
+        wire: None,
         reject_access: false,
         requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
             BuiltinPredicate::AttestedLocalSubnet,
@@ -74,6 +75,7 @@ fn negated_caller_predicate_is_rejected() {
         export_name: None,
         payload_max_bytes: None,
         decode: None,
+        wire: None,
         reject_access: false,
         requires: vec![AccessExprAst::Not(Box::new(AccessExprAst::Pred(
             AccessPredicateAst::Builtin(BuiltinPredicate::CallerIsController),
@@ -95,6 +97,7 @@ fn negated_service_authority_predicate_is_rejected() {
         export_name: None,
         payload_max_bytes: None,
         decode: None,
+        wire: None,
         reject_access: false,
         requires: vec![AccessExprAst::Not(Box::new(AccessExprAst::Pred(
             AccessPredicateAst::Builtin(BuiltinPredicate::ServiceAuthority {
@@ -128,6 +131,7 @@ fn ungated_endpoint_without_public_marker_is_rejected() {
         export_name: None,
         payload_max_bytes: None,
         decode: None,
+        wire: None,
         reject_access: false,
         requires: Vec::new(),
         internal: false,
@@ -147,6 +151,7 @@ fn payload_limit_is_supported_for_queries() {
         export_name: None,
         payload_max_bytes: Some(quote::quote!(1024)),
         decode: None,
+        wire: None,
         reject_access: false,
         requires: Vec::new(),
         internal: false,
@@ -165,6 +170,7 @@ fn composite_query_marker_is_query_only() {
         export_name: None,
         payload_max_bytes: None,
         decode: None,
+        wire: None,
         reject_access: false,
         requires: Vec::new(),
         internal: false,
@@ -177,4 +183,24 @@ fn composite_query_marker_is_query_only() {
         err.to_string()
             .contains("composite is supported only on canic_query")
     );
+}
+
+#[test]
+fn forwarded_result_retains_fallible_access_denial() {
+    for (output, fallible) in [
+        (quote::quote!(Result<Result<u64, StoreError>, Error>), true),
+        (quote::quote!((Result<(), Error>)), true),
+        (quote::quote!(u64), false),
+    ] {
+        let forwarded = proc_macro2::Group::new(proc_macro2::Delimiter::None, output);
+        let signature: Signature = syn::parse2(quote::quote!(fn guarded() -> #forwarded)).unwrap();
+        let options =
+            crate::endpoint::parse::parse_args(quote::quote!(requires(caller::is_controller())))
+                .unwrap();
+        assert_eq!(
+            validate(EndpointKind::Update, options, &signature).is_ok(),
+            fallible
+        );
+        assert_eq!(crate::endpoint::returns_fallible(&signature), fallible);
+    }
 }

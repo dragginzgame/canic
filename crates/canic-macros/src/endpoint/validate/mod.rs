@@ -25,6 +25,7 @@ pub(super) struct ValidatedArgs {
     pub export_name: Option<LitStr>,
     pub payload_max_bytes: Option<TokenStream2>,
     pub decode: Option<TokenStream2>,
+    pub wire: Option<super::parse::WireArgs>,
     pub reject_access: bool,
     pub requires: Vec<AccessExprAst>,
     pub internal: bool,
@@ -36,6 +37,17 @@ pub(super) fn validate(
     parsed: ParsedArgs,
     sig: &Signature,
 ) -> syn::Result<ValidatedArgs> {
+    if parsed.wire.is_some() {
+        if parsed.decode.is_some() || parsed.payload_max_bytes.is_some() {
+            return Err(syn::Error::new_spanned(sig, "wire owns both limits"));
+        }
+        if sig.inputs.len() > 1 || !sig.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                sig,
+                "wire endpoints accept one request value or unit, without generics",
+            ));
+        }
+    }
     let requires_access = !parsed.requires.is_empty();
 
     if parsed.payload_max_bytes.is_some() && parsed.decode.is_some() {
@@ -89,6 +101,7 @@ pub(super) fn validate(
         export_name: parsed.export_name,
         payload_max_bytes: parsed.payload_max_bytes,
         decode: parsed.decode,
+        wire: parsed.wire,
         reject_access: parsed.reject_access,
         requires: parsed.requires,
         internal: parsed.internal,

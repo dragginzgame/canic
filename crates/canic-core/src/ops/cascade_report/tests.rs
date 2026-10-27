@@ -60,7 +60,13 @@ fn bounded_report_and_local_receipt_fit_detail_budget() {
         propagation: report,
         reconciliation_error: Some(InternalError::conflict().into()),
     });
-    let bytes = ic_platform::candid::contract::encode_one(response).unwrap();
+    let response = response.map(crate::dto::fleet_state_control::CommandResult::from);
+    let bytes = ic_wire::native::encode_response(
+        crate::protocol::fleet_state_control::funding::METHOD_ID,
+        &response,
+        crate::protocol::fleet_state_control::RESPONSE_LIMITS,
+    )
+    .unwrap();
     assert!(bytes.len() < CASCADE_SNAPSHOT_MAX_BYTES);
 }
 

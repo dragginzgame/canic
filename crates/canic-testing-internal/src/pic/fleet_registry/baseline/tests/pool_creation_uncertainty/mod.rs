@@ -5,8 +5,7 @@ use canic_contracts::dto::pool::{CanisterPoolCreation, CanisterPoolCreationProgr
 
 /// Typed faults at the test Ledger's reply boundary; no production fault path is added.
 
-#[derive(CandidType, Clone, Copy, Debug)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, serde::Serialize)]
 pub(super) enum CreationRetryRefusal {
     InsufficientFunds,
     CreatedInFuture,
@@ -20,22 +19,13 @@ pub(super) fn set_refusal(
     ledger: Principal,
     refusal: Option<CreationRetryRefusal>,
 ) {
-    let (): () = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((refusal,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                ledger,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "set_creation_retry_refusal",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let (): () = ic_testkit::pic::update_wire(
+        pic,
+        ledger,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        ledger_control_spec("set_creation_retry_refusal", 0x5445_5354_0000_0c03),
+        &refusal,
+    )
     .unwrap();
 }
 
@@ -74,12 +64,7 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
         {
             break;
         }
-        root_command(
-            &fixture.pic,
-            fixture.root,
-            RootCommandFragment::MaintainPool,
-        )
-        .unwrap();
+        crate::pic::canic::maintain_pool(&fixture.pic, fixture.root).unwrap();
     }
     let original = uncertain(&fixture);
     for refusal in [
@@ -90,14 +75,9 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
         CreationRetryRefusal::GenericError,
     ] {
         set_refusal(&fixture.pic, fixture.cycles_ledger, Some(refusal));
-        let response = root_command(
-            &fixture.pic,
-            fixture.root,
-            RootCommandFragment::MaintainPool,
-        )
-        .unwrap();
+        let response = crate::pic::canic::maintain_pool(&fixture.pic, fixture.root).unwrap();
         assert!(
-            matches!(response, RootCommandResponseFragment::MaintainPool(PoolMaintenanceResponse::RefillPending { operation_id, uncertain_result: true }) if operation_id == original.operation_id),
+            matches!(response, PoolMaintenanceResponse::RefillPending { operation_id, uncertain_result: true } if operation_id == original.operation_id),
             "retry refusal {refusal:?} must retain the uncertain creation"
         );
         let retained = uncertain(&fixture);
@@ -107,22 +87,20 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
         assert_eq!(retained.ledger_fee, original.ledger_fee);
         assert_eq!(retained.root, original.root);
         assert_eq!(retained.placement_subnet, original.placement_subnet);
-        let amounts: Vec<Nat> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).query_call(
-                    fixture.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "requested_amounts",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let amounts: Vec<Nat> = ic_testkit::pic::query_wire(
+            &fixture.pic,
+            fixture.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("requested_amounts", 0x5445_5354_0000_0c06),
+            &(),
+        )
+        .map(|values: Vec<ic_wire::Bytes<4_194_304>>| {
+            values
+                .iter()
+                .map(canic_contracts::ops::unsigned_magnitude::to_nat)
+                .collect::<Result<Vec<Nat>, _>>()
+                .expect("canonical ledger amount magnitudes")
+        })
         .unwrap();
         assert_eq!(amounts, vec![Nat::from(original.ledger_amount.to_u128())]);
     }
@@ -133,22 +111,13 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
             .pending_creation
             .is_none()
     );
-    let requests: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (fixture.pic).query_call(
-                fixture.cycles_ledger,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "request_count",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let requests: u64 = ic_testkit::pic::query_wire(
+        &fixture.pic,
+        fixture.cycles_ledger,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+        &(),
+    )
     .unwrap();
     assert_mainnet_refill_result(&fixture, 1, requests);
 }

@@ -97,6 +97,21 @@ fn build_provenance_payload(
         ));
     }
 
+    let artifacts = artifact_provenance(request)?;
+    let wire_schema_sha256 = artifacts
+        .iter()
+        .find(|artifact| {
+            artifact.artifact_kind == super::model::ArtifactProvenanceKindV1::WireSchema
+        })
+        .ok_or("required Wire schema provenance missing")?
+        .sha256
+        .clone();
+
+    if wire_schema_sha256
+        != canic_core::cdk::utils::hash::hex_bytes(request.output.wire_schema_sha256)
+    {
+        return Err("retained Wire schema differs from compiled profile input".into());
+    }
     Ok(BuildProvenanceV1 {
         schema_version: 1,
         generated_at: request.generated_at.clone(),
@@ -106,10 +121,10 @@ fn build_provenance_payload(
         source,
         cargo: cargo_provenance(request, package_manifest)?,
         protocol_profile: ProtocolProfileProvenanceV1 {
-            candid_sha256: canic_core::cdk::utils::hash::hex_bytes(request.output.candid_sha256),
+            wire_schema_sha256,
             protocol_profile_digest: request.output.protocol_profile_digest.to_string(),
         },
-        artifacts: artifact_provenance(request)?,
+        artifacts,
         final_wasm_metrics: final_wasm_metrics(request)?,
         transforms: artifact_transform_provenance(request)?,
         warnings,

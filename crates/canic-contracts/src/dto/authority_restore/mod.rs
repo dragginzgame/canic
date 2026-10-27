@@ -4,21 +4,23 @@
 //! Does not own: history proof, transition validation, persistence, or timer suspension.
 //! Boundary: controller endpoints accept and return these passive v1 shapes.
 
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Controller-selected identity for one authority snapshot operation.
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct AuthoritySnapshotRequest {
     pub operation_id: [u8; 32],
 }
 
 /// Exact reviewed identity for irreversible release fencing within one installation.
 /// This request alone proves neither quiescence nor permission to clear owner state.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AuthorityReleaseRequest {
     pub operation_id: [u8; 32],
     pub review_sha256: [u8; 32],
@@ -26,8 +28,7 @@ pub struct AuthorityReleaseRequest {
 }
 
 /// Durable phase of one authority canister's restore fence.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AuthorityRestoreFencePhase {
     Open,
     Sealed,
@@ -38,8 +39,7 @@ pub enum AuthorityRestoreFencePhase {
 }
 
 /// Current durable authority snapshot/release-fence state.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AuthorityRestoreFenceStatusResponse {
     pub authority_canister: Principal,
     pub phase: AuthorityRestoreFencePhase,

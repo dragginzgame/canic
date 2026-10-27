@@ -20,7 +20,7 @@ use crate::{
         runtime::env::EnvOps,
     },
 };
-use ic_platform::candid::contract::encode_one;
+use canic_contracts::protocol::initialization::encode;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -45,7 +45,7 @@ impl RequestOps {
         extra: Option<A>,
     ) -> Result<CreateCanisterResponse, InternalError>
     where
-        A: CandidType + Send + Sync,
+        A: serde::Serialize + Send + Sync,
     {
         Self::create_canister_with_metadata(
             canister_role,
@@ -64,7 +64,7 @@ impl RequestOps {
         operation_id: OperationId,
     ) -> Result<CreateCanisterResponse, InternalError>
     where
-        A: CandidType + Send + Sync,
+        A: serde::Serialize + Send + Sync,
     {
         Self::allocate_placement_child_with_metadata(
             canister_role,
@@ -97,10 +97,10 @@ impl RequestOps {
         metadata: RootRequestMetadata,
     ) -> Result<CreateCanisterResponse, InternalError>
     where
-        A: CandidType + Send + Sync,
+        A: serde::Serialize + Send + Sync,
     {
         let extra_arg = extra
-            .map(encode_one)
+            .map(encode)
             .transpose()
             .map_err(|_err| InternalError::invariant())?;
 
@@ -125,10 +125,10 @@ impl RequestOps {
         metadata: RootRequestMetadata,
     ) -> Result<CreateCanisterResponse, InternalError>
     where
-        A: CandidType + Send + Sync,
+        A: serde::Serialize + Send + Sync,
     {
         let extra_arg = extra
-            .map(encode_one)
+            .map(encode)
             .transpose()
             .map_err(|_err| InternalError::invariant())?;
 

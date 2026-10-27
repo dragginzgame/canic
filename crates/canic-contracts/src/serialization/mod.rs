@@ -7,6 +7,8 @@
 use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;
 
+mod cbor;
+
 ///
 /// SerializeError
 ///
@@ -22,23 +24,21 @@ pub enum SerializeError {
     Deserialize(String),
 }
 
-/// Serialize one value to CBOR bytes.
+/// Serialize one current storage value to CBOR, representing u128 as 16 big-endian bytes.
+/// This representation is separate from native Wire and external IC CBOR contracts.
 pub fn serialize<T>(value: &T) -> Result<Vec<u8>, SerializeError>
 where
     T: Serialize,
 {
-    let mut bytes = Vec::new();
-    ciborium::ser::into_writer(value, &mut bytes)
-        .map_err(|err| SerializeError::Serialize(err.to_string()))?;
-    Ok(bytes)
+    cbor::encode(value).map_err(|err| SerializeError::Serialize(err.to_string()))
 }
 
-/// Deserialize one value from CBOR bytes.
+/// Deserialize exactly one current storage value, including fixed-width u128 fields.
 pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
 where
     T: DeserializeOwned,
 {
-    ciborium::de::from_reader(bytes).map_err(|err| SerializeError::Deserialize(err.to_string()))
+    cbor::decode(bytes).map_err(|err| SerializeError::Deserialize(err.to_string()))
 }
 
 /// Deserialize a required current-contract field whose explicit value may be null.
@@ -76,29 +76,21 @@ mod tests {
                 deserialize::<ProvisioningFailureOrigin>(&serialize(&origin).unwrap()).unwrap(),
                 origin
             );
-            let ciborium::value::Value::Map(fields) =
-                deserialize(&serialize(&origin).unwrap()).unwrap()
+            let serde_cbor::Value::Map(fields) = deserialize(&serialize(&origin).unwrap()).unwrap()
             else {
                 panic!("origin is a record");
             };
-            let deadline_key = ciborium::value::Value::Text("retry_at_ns".into());
+            let deadline_key = serde_cbor::Value::Text("retry_at_ns".into());
             assert_eq!(
-                fields
-                    .iter()
-                    .find(|(key, _)| key == &deadline_key)
-                    .unwrap()
-                    .1,
-                retry_at_ns.map_or(ciborium::value::Value::Null, |value| {
-                    ciborium::value::Value::Integer(value.into())
+                fields.get(&deadline_key).unwrap(),
+                &retry_at_ns.map_or(serde_cbor::Value::Null, |value| {
+                    serde_cbor::Value::Integer(value.into())
                 }),
             );
-            for key in [
-                deadline_key,
-                ciborium::value::Value::Text("dependency".into()),
-            ] {
+            for key in [deadline_key, serde_cbor::Value::Text("dependency".into())] {
                 let mut incomplete = fields.clone();
-                incomplete.retain(|(field, _)| field != &key);
-                let missing = serialize(&ciborium::value::Value::Map(incomplete)).unwrap();
+                incomplete.retain(|field, _| field != &key);
+                let missing = serialize(&serde_cbor::Value::Map(incomplete)).unwrap();
                 assert!(deserialize::<ProvisioningFailureOrigin>(&missing).is_err());
             }
         }
@@ -110,7 +102,7 @@ mod tests {
         for (code, detail) in [(None, None), (Some(5), Some("stopped".into()))] {
             let dependency = ProvisioningDependencyFailure {
                 target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
-                method: crate::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                method: crate::protocol::store_publication::inspect::METHOD.into(),
                 step: "inspect_template".into(),
                 rejection_code: code,
                 rejection_detail: detail,
@@ -121,15 +113,15 @@ mod tests {
                 dependency
             );
             for missing_key in ["rejection_code", "rejection_detail"] {
-                let ciborium::value::Value::Map(mut fields) =
+                let serde_cbor::Value::Map(mut fields) =
                     deserialize(&serialize(&dependency).unwrap()).unwrap()
                 else {
                     panic!("record")
                 };
-                fields.retain(|(key, _)| key != &ciborium::value::Value::Text(missing_key.into()));
+                fields.retain(|key, _| key != &serde_cbor::Value::Text(missing_key.into()));
                 assert!(
                     deserialize::<ProvisioningDependencyFailure>(
-                        &serialize(&ciborium::value::Value::Map(fields)).unwrap()
+                        &serialize(&serde_cbor::Value::Map(fields)).unwrap()
                     )
                     .is_err()
                 );

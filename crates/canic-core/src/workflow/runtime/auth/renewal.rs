@@ -3,6 +3,8 @@
 //! Responsibility: schedule root-managed delegated-proof renewal sweeps.
 //! Does not own: renewal policy, proof preparation internals, or issuer installs.
 
+#[cfg(any(test, feature = "auth-root-delegation-state"))]
+use crate::workflow::runtime::timer::{cancel_owned_once, owned_once_identity};
 use crate::{
     InternalError,
     config::schema::DelegatedTokenConfig,
@@ -25,13 +27,12 @@ use crate::{
         async_job::AsyncJobWorkflow,
         auth::{provisioning, root_delegation_batch},
         timer::{
-            TimerAuthorityWorkflow, TimerError, require_active, retain_owned_once, with_owned_once,
+            TimerAuthorityWorkflow, TimerError, ensure_owned_once, require_active, with_owned_once,
         },
     },
 };
 use ic_timers::{
-    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity,
-    TimerSchedule, TimerStart, register_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -59,17 +60,12 @@ impl RootIssuerRenewalWorkflow {
 
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(super) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
-        with_owned_once(&RENEWAL_TIMER, |registration| {
-            registration.identity().clone()
-        })
+        owned_once_identity(&RENEWAL_TIMER)
     }
 
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(super) fn cancel_timer() -> Result<(), TimerError> {
-        if let Some(result) = with_owned_once(&RENEWAL_TIMER, OnceRegistration::cancel)? {
-            result?;
-        }
-        Ok(())
+        cancel_owned_once(&RENEWAL_TIMER)
     }
 
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
@@ -334,15 +330,9 @@ impl RootIssuerRenewalWorkflow {
 
     fn declare_timer() -> Result<(), TimerError> {
         require_active()?;
-        if with_owned_once(&RENEWAL_TIMER, |_| ())?.is_some() {
-            return Ok(());
-        }
-        let registration = register_once(
-            Self::timer_identity()?,
-            TimerStart::Retained { initial: None },
-            |_context: OnceContext| crate::perf::with_async_context(Self::run_registered()),
-        )?;
-        retain_owned_once(&RENEWAL_TIMER, registration)
+        ensure_owned_once(&RENEWAL_TIMER, Self::timer_identity, |_context| {
+            crate::perf::with_async_context(Self::run_registered())
+        })
     }
 
     fn consecutive_expected_failures() -> u64 {

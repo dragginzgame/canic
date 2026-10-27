@@ -9,17 +9,15 @@ use crate::{
     dto::cascade::{
         StateCascadeReport, StateSnapshotInput, TopologyPathNode, TopologySnapshotInput,
     },
-    ops::{cascade_report::StateCascadeReportOps, prelude::*, rpc::RpcOps},
-    protocol,
-    view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget},
+    ops::{cascade_report::StateCascadeReportOps, ic::call::CallOps, prelude::*},
+    view::state_cascade::StateCascadeTarget,
 };
 use canic_contracts::{
-    dto::wire::projection::cascade::{
-        ComponentCommandFragment, ComponentCommandResponseFragment, StoreCommandFragment,
-        StoreCommandResponseFragment,
-    },
+    dto::{cascade_transport::TopologySnapshot, fleet_state_control::CascadeReport},
     ids::CanisterRole,
+    protocol::cascade as protocol,
 };
+
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
 
@@ -275,32 +273,14 @@ impl CascadeOps {
         target: StateCascadeTarget,
         snapshot: &StateSnapshotInput,
     ) -> Result<StateCascadeReport, InternalError> {
-        let report = match target.endpoint {
-            StateCascadeEndpoint::Store => {
-                let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
-                    target.canister_id,
-                    protocol::CANIC_WASM_STORE_COMMAND,
-                    StoreCommandFragment::SynchronizeState(snapshot),
-                )
-                .await?;
-                match response {
-                    StoreCommandResponseFragment::SynchronizeState(report) => report,
-                    StoreCommandResponseFragment::SynchronizeTopology => {
-                        return Err(InternalError::conflict());
-                    }
-                }
-            }
-            StateCascadeEndpoint::Component => {
-                let ComponentCommandResponseFragment::SynchronizeState(report) =
-                    RpcOps::call_rpc_result(
-                        target.canister_id,
-                        protocol::CANIC_COMMAND,
-                        ComponentCommandFragment::SynchronizeState(snapshot),
-                    )
-                    .await?;
-                report
-            }
-        };
+        let report: CascadeReport = Self::call_native(
+            target.canister_id,
+            protocol::state::METHOD,
+            protocol::state::METHOD_ID,
+            snapshot,
+        )
+        .await?;
+        let report = report.into();
         StateCascadeReportOps::validate_reply(target.canister_id, &report)?;
         Ok(report)
     }
@@ -309,16 +289,33 @@ impl CascadeOps {
         pid: Principal,
         snapshot: &TopologySnapshotInput,
     ) -> Result<(), InternalError> {
-        let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
+        Self::call_native(
             pid,
-            protocol::CANIC_WASM_STORE_COMMAND,
-            StoreCommandFragment::SynchronizeTopology(snapshot),
+            protocol::topology::METHOD,
+            protocol::topology::METHOD_ID,
+            &TopologySnapshot::from(snapshot.clone()),
         )
-        .await?;
-        match response {
-            StoreCommandResponseFragment::SynchronizeTopology => Ok(()),
-            StoreCommandResponseFragment::SynchronizeState(_) => Err(InternalError::conflict()),
-        }
+        .await
+    }
+
+    async fn call_native<T: serde::Serialize + Sync, R: serde::de::DeserializeOwned>(
+        pid: Principal,
+        method: &str,
+        id: u64,
+        request: &T,
+    ) -> Result<R, InternalError> {
+        let bytes = ic_wire::native::encode_request(id, request, protocol::REQUEST_LIMITS)
+            .map_err(|_| InternalError::invariant())?;
+        // Preserve the original cascade's unbounded wait and public error semantics.
+        let reply = CallOps::unbounded_wait(pid, method)
+            .with_raw_args(bytes)
+            .execute()
+            .await?
+            .into_bytes();
+        let result: Result<R, crate::dto::error::Error> =
+            ic_wire::native::decode_response(id, &reply, protocol::RESPONSE_LIMITS)
+                .map_err(|_| InternalError::invariant())?;
+        result.map_err(InternalError::observed_public)
     }
 }
 

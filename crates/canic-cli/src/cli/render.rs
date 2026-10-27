@@ -8,3 +8,8 @@ pub fn append_dry_run_footer(lines: &mut Vec<String>) {
     lines.push("  dry_run: true".to_string());
     lines.push("  files_changed: 0".to_string());
 }
+
+/// Quote one exact argument in a copyable review or resume command.
+pub fn quote_review_argument(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}

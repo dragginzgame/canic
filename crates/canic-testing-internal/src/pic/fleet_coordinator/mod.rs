@@ -10,17 +10,11 @@ pub(super) use tests::governed_pocketic_cases;
 #[cfg(test)]
 mod tests {
     use crate::pic::{artifacts::build_canonical_fleet_coordinator_wasm, startup::start_pocket_ic};
-    use canic_contracts::dto::fleet_coordinator::{
-        CoordinatorCommand, CoordinatorCommandResponse, CoordinatorObservabilityRequest,
-        CoordinatorObservabilityResponse, CoordinatorOperationReadRequest,
-        CoordinatorOperationReadResponse, CoordinatorOperationStatusResponse,
-        CoordinatorRegistryRequest, CoordinatorRegistryResponse,
-    };
-    use canic_contracts::protocol;
+    use canic_contracts::protocol::initialization::encode;
     use canic_contracts::{
         cycles::Cycles,
         dto::{
-            authority_restore::{AuthorityRestoreFencePhase, AuthoritySnapshotRequest},
+            authority_restore::AuthoritySnapshotRequest,
             component_provisioning::{
                 ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
                 FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
@@ -33,7 +27,6 @@ mod tests {
                 FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
                 FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
             },
-            role::OperationStatusRequest,
         },
         ids::{
             AppId, CanonicalNetworkId, ComponentGroupPlacementId, ComponentSpecAdmission,
@@ -51,7 +44,7 @@ mod tests {
             fleet_registry::FleetRegistryOps,
         },
     };
-    use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
+    use ic_platform::principal::ExternalPrincipal as Principal;
     use {
         ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
         ic_testkit::pic::{CanisterSnapshotTarget, PocketIcSnapshotExt, SnapshotRestoreFunding},
@@ -59,103 +52,34 @@ mod tests {
 
     const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 
-    fn command(
+    fn acknowledge_root_snapshot(
         pic: &PocketIc,
         coordinator: Principal,
-        command: CoordinatorCommand,
-    ) -> Result<CoordinatorCommandResponse, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    coordinator,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    protocol::CANIC_COORDINATOR_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Coordinator command transport")
+        root: Principal,
+        request: FleetSubnetRootSnapshotAcknowledgementRequest,
+    ) -> Result<canic_contracts::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement, Error>
+    {
+        use canic_contracts::{
+            dto::coordinator_acknowledgements, protocol::coordinator_acknowledgements as wire,
+        };
+        let response: Result<coordinator_acknowledgements::RootAcknowledgement, Error> =
+            ic_testkit::pic::update_wire(
+                pic,
+                coordinator,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: wire::acknowledge::METHOD,
+                    method_id: wire::acknowledge::METHOD_ID,
+                    request_limits: wire::acknowledge::REQUEST_LIMITS,
+                    response_limits: wire::RESPONSE_LIMITS,
+                },
+                &coordinator_acknowledgements::AcknowledgeRequest::from(request),
+            )
+            .expect("native Root acknowledgement transport");
+        response.map(Into::into)
     }
 
-    fn command_as(
-        pic: &PocketIc,
-        coordinator: Principal,
-        caller: Principal,
-        command: CoordinatorCommand,
-    ) -> Result<CoordinatorCommandResponse, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    coordinator,
-                    caller,
-                    protocol::CANIC_COORDINATOR_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Coordinator command transport")
-    }
-
-    fn status<R: crate::pic::canic::CoordinatorRead>(
-        pic: &PocketIc,
-        coordinator: Principal,
-        request: R,
-    ) -> Result<R::Response, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    coordinator,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    R::METHOD,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Coordinator status transport")
-    }
-
-    fn status_as<R: crate::pic::canic::CoordinatorRead>(
-        pic: &PocketIc,
-        coordinator: Principal,
-        caller: Principal,
-        request: R,
-    ) -> Result<R::Response, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(coordinator, caller, R::METHOD, request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Coordinator status transport")
-    }
-
-    fn command_error(
-        result: Result<CoordinatorCommandResponse, Error>,
-        message: &'static str,
-    ) -> Error {
+    fn command_error<T>(result: Result<T, Error>, message: &'static str) -> Error {
         match result {
             Err(error) => error,
             Ok(_) => panic!("{message}"),
@@ -204,28 +128,35 @@ placement.minimum_distinct_roots = 2
 "#;
 
     fn assert_public_health(pic: &PocketIc, coordinator: Principal) {
-        use canic_contracts::dto::wire::coordinator::{PublicStatusRequest, PublicStatusResponse};
-        let query = |request| {
-            let bytes = pic
-                .query_call(
-                    coordinator,
-                    principal(99),
-                    "canic_public_status",
-                    encode_one(request).unwrap(),
-                )
-                .unwrap();
-            let (result,): (Result<PublicStatusResponse, Error>,) =
-                ic_platform::candid::decode_args(&bytes, canic::testing::CANDID_REPLY_LIMITS)
-                    .unwrap();
-            result.unwrap()
-        };
-        let PublicStatusResponse::Health(health) = query(PublicStatusRequest::Health) else {
-            panic!("Health response");
-        };
-        let PublicStatusResponse::Overview(overview) = query(PublicStatusRequest::Overview) else {
-            panic!("Overview response");
-        };
-        assert_eq!(health.canister_id, coordinator);
+        let health: canic::dto::public_status::PublicHealth = ic_testkit::pic::query_wire(
+            pic,
+            coordinator,
+            principal(99),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::CANIC_PUBLIC_HEALTH,
+                method_id: canic::protocol::public_health::METHOD_ID,
+                request_limits: canic::protocol::public_health::REQUEST_LIMITS,
+                response_limits: canic::protocol::public_health::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("public Wire health");
+        let overview: Result<canic::dto::role::RoleOverviewResponse, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                coordinator,
+                principal(99),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::CANIC_PUBLIC_OVERVIEW,
+                    method_id: canic::protocol::public_overview::METHOD_ID,
+                    request_limits: canic::protocol::public_overview::REQUEST_LIMITS,
+                    response_limits: canic::protocol::public_overview::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .unwrap();
+        let overview = overview.unwrap();
+        assert_eq!(health.canister_id, coordinator.into());
         assert_eq!(health.role.as_deref(), Some("fleet_coordinator"));
         assert_eq!(health.role.as_deref(), Some(overview.role.as_str()));
     }
@@ -269,78 +200,70 @@ placement.minimum_distinct_roots = 2
         pic.install_canister(
             coordinator,
             wasm,
-            encode_one(args).expect("encode Coordinator init"),
+            encode(args).expect("encode Coordinator init"),
             None,
         );
 
         assert_supported_standards(&pic, coordinator);
         assert_public_health(&pic, coordinator);
 
-        let CoordinatorObservabilityResponse::RegistryVersion(genesis) = status(
-            &pic,
-            coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .expect("genesis version") else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
+        let genesis =
+            crate::pic::registry_discovery::version(&pic, coordinator).expect("genesis version");
+        assert_registry_discovery(&pic, coordinator, &genesis);
         let first_request = FleetSubnetRootJoinRequest {
             expected_registry: genesis,
             entry: joining_entry(&topology, 5, 21, 1),
         };
-        let CoordinatorCommandResponse::JoinRoot(first) = command(
+        let first = crate::pic::registry_discovery::join(
             &pic,
             coordinator,
-            CoordinatorCommand::JoinRoot(first_request.clone()),
+            Principal::anonymous(),
+            first_request.clone(),
         )
-        .expect("first join") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        .expect("first join");
         assert_eq!(first.version.revision, 2);
 
         let second_request = FleetSubnetRootJoinRequest {
             expected_registry: first.version.clone(),
             entry: joining_entry(&topology, 7, 22, 2),
         };
-        let CoordinatorCommandResponse::JoinRoot(second) = command(
+        let second = crate::pic::registry_discovery::join(
             &pic,
             coordinator,
-            CoordinatorCommand::JoinRoot(second_request),
+            Principal::anonymous(),
+            second_request,
         )
-        .expect("second join") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        .expect("second join");
         assert_eq!(second.version.revision, 3);
 
-        let CoordinatorCommandResponse::JoinRoot(retried) = command(
+        let retried = crate::pic::registry_discovery::join(
             &pic,
             coordinator,
-            CoordinatorCommand::JoinRoot(first_request),
+            Principal::anonymous(),
+            first_request,
         )
-        .expect("late first retry") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        .expect("late first retry");
         assert_eq!(
             retried, first,
             "late exact retry must retain the original revision-two response"
         );
 
-        let CoordinatorRegistryResponse::Registry(registry) =
-            status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let registry =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
                 .expect("joined Registry");
         assert_eq!(registry.revision, 3);
         assert_eq!(registry.fleet_subnet_roots.len(), 2);
 
         assert_root_snapshot_endpoints(&pic, coordinator, &registry, &second.version);
 
-        let unauthorized = command_as(
+        let unauthorized = crate::pic::registry_discovery::join(
             &pic,
             coordinator,
             principal(99),
-            CoordinatorCommand::JoinRoot(FleetSubnetRootJoinRequest {
+            FleetSubnetRootJoinRequest {
                 expected_registry: second.version,
                 entry: joining_entry(&topology, 9, 23, 1),
-            }),
+            },
         );
         assert_eq!(
             command_error(unauthorized, "non-controller join must fail").code(),
@@ -364,7 +287,7 @@ placement.minimum_distinct_roots = 2
         pic.install_canister(
             coordinator,
             wasm,
-            encode_one(args).expect("encode Coordinator init"),
+            encode(args).expect("encode Coordinator init"),
             None,
         );
 
@@ -377,46 +300,29 @@ placement.minimum_distinct_roots = 2
             operation_id: [71; 32],
             plan,
         };
-        let CoordinatorCommandResponse::OperationAccepted(receipt) = command(
-            &pic,
-            coordinator,
-            CoordinatorCommand::ProvisionComponents(request),
-        )
-        .expect("prepare Component provisioning") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        let receipt =
+            crate::pic::batch_control::prepare(&pic, coordinator, Principal::anonymous(), request)
+                .expect("prepare Component provisioning");
         assert_eq!(receipt.operation_id, [71; 32]);
-        let CoordinatorOperationReadResponse::Operation(
-            CoordinatorOperationStatusResponse::ComponentProvisioning(prepared),
-        ) = status(
+        let prepared = crate::pic::canic::coordinator_provisioning(
             &pic,
             coordinator,
-            CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                operation_id: [71; 32],
-            }),
+            Principal::anonymous(),
+            [71; 32],
         )
-        .expect("Component provisioning status")
-        else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
+        .expect("Component provisioning status");
         assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
         assert_eq!(prepared.plan_hash, plan_hash);
         assert_eq!(prepared.root_batch_count, 2);
         assert_eq!(prepared.component_count, 2);
 
-        let CoordinatorOperationReadResponse::Operation(
-            CoordinatorOperationStatusResponse::ComponentProvisioning(observed),
-        ) = status(
+        let observed = crate::pic::canic::coordinator_provisioning(
             &pic,
             coordinator,
-            CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                operation_id: [71; 32],
-            }),
+            Principal::anonymous(),
+            [71; 32],
         )
-        .expect("Component provisioning status")
-        else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
+        .expect("Component provisioning status");
         assert_eq!(observed, prepared);
     }
 
@@ -424,15 +330,17 @@ placement.minimum_distinct_roots = 2
         let request = AuthoritySnapshotRequest {
             operation_id: [41; 32],
         };
-        let CoordinatorCommandResponse::PrepareAuthoritySnapshot(sealed) = command(
+        let sealed = crate::pic::protected_state::prepare_snapshot(
             pic,
             coordinator,
-            CoordinatorCommand::PrepareAuthoritySnapshot(request),
+            Principal::anonymous(),
+            request,
         )
-        .expect("authority snapshot prepare") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
-        assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
+        .expect("authority snapshot prepare");
+        assert_eq!(
+            sealed.phase,
+            canic::dto::authority_restore_status::Phase::Sealed
+        );
         assert_eq!(sealed.operation_id, Some(request.operation_id));
 
         let snapshots = pic
@@ -441,15 +349,17 @@ placement.minimum_distinct_roots = 2
                 sender: None,
             }])
             .expect("Coordinator snapshot capture");
-        let CoordinatorCommandResponse::ResumeAuthoritySnapshot(resumed) = command(
+        let resumed = crate::pic::protected_state::resume_snapshot(
             pic,
             coordinator,
-            CoordinatorCommand::ResumeAuthoritySnapshot(request),
+            Principal::anonymous(),
+            request,
         )
-        .expect("live authority snapshot resume") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
-        assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
+        .expect("live authority snapshot resume");
+        assert_eq!(
+            resumed.phase,
+            canic::dto::authority_restore_status::Phase::Open
+        );
 
         pic.restore_snapshots(
             &snapshots,
@@ -459,35 +369,45 @@ placement.minimum_distinct_roots = 2
         )
         .expect("Coordinator snapshot restore");
         assert_public_health(pic, coordinator);
-        let CoordinatorObservabilityResponse::AuthorityRestore(restored) = status(
+        let restored = crate::pic::protected_state::authority_restore(
             pic,
             coordinator,
-            CoordinatorObservabilityRequest::AuthorityRestore,
-        )
-        .expect("restored authority fence status") else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
-        assert_eq!(restored.phase, AuthorityRestoreFencePhase::Sealed);
+            Principal::anonymous(),
+        );
+        let restored = restored.expect("restored Coordinator fence");
+        assert_eq!(
+            restored.phase,
+            canic::dto::authority_restore_status::Phase::Sealed
+        );
+        assert_eq!(restored.authority_canister, coordinator.into());
+        assert_eq!(restored.operation_id, Some(request.operation_id));
+        let outsider =
+            crate::pic::protected_state::authority_restore(pic, coordinator, principal(99));
+        assert!(
+            matches!(outsider, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+        );
 
-        let rejected_resume = command(
+        let rejected_resume = crate::pic::protected_state::resume_snapshot(
             pic,
             coordinator,
-            CoordinatorCommand::ResumeAuthoritySnapshot(request),
+            Principal::anonymous(),
+            request,
         );
         assert_eq!(
-            command_error(
+            status_error(
                 rejected_resume,
                 "restored authority must remain mutation-fenced",
             )
             .code(),
             canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
-        let ordinary_mutation = command(
+        let ordinary_mutation = crate::pic::registry_discovery::activate(
             pic,
             coordinator,
-            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+            Principal::anonymous(),
+            FleetRegistryActivationRequest {
                 expected_registry: registry_version(pic, coordinator),
-            }),
+            },
         );
         assert!(
             ordinary_mutation.is_err(),
@@ -499,15 +419,35 @@ placement.minimum_distinct_roots = 2
         pic: &PocketIc,
         coordinator: Principal,
     ) -> canic_contracts::dto::fleet_registry::FleetRegistryVersion {
-        let CoordinatorObservabilityResponse::RegistryVersion(version) = status(
-            pic,
-            coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .expect("restored Registry version") else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
-        version
+        crate::pic::registry_discovery::version(pic, coordinator)
+            .expect("restored Registry version")
+    }
+
+    fn assert_registry_discovery(
+        pic: &PocketIc,
+        coordinator: Principal,
+        version: &canic_contracts::dto::fleet_registry::FleetRegistryVersion,
+    ) {
+        let manifest =
+            crate::pic::registry_discovery::manifest(pic, coordinator, Principal::anonymous())
+                .expect("registry manifest");
+        assert_eq!(manifest.authority, version.authority);
+        assert_eq!(manifest.revision, version.revision);
+        assert_eq!(manifest.content_hash, version.content_hash);
+        assert!(manifest.byte_length > 0);
+        let rejected_manifest =
+            crate::pic::registry_discovery::manifest(pic, coordinator, principal(99));
+        let rejected_version =
+            crate::pic::registry_discovery::version_as(pic, coordinator, principal(99));
+        for error in [
+            rejected_manifest.unwrap_err(),
+            rejected_version.unwrap_err(),
+        ] {
+            assert_eq!(
+                error.code(),
+                canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+            );
+        }
     }
 
     fn assert_root_snapshot_endpoints(
@@ -517,21 +457,12 @@ placement.minimum_distinct_roots = 2
         version: &canic_contracts::dto::fleet_registry::FleetRegistryVersion,
     ) {
         let first_root = principal(21);
-        let CoordinatorRegistryResponse::Registry(snapshot) = status_as(
-            pic,
-            coordinator,
-            first_root,
-            CoordinatorRegistryRequest::Registry,
-        )
-        .expect("registered root snapshot");
+        let snapshot = crate::pic::registry_discovery::snapshot(pic, coordinator, first_root)
+            .expect("registered root snapshot");
         assert_eq!(&snapshot, registry);
 
-        let unregistered_snapshot = status_as(
-            pic,
-            coordinator,
-            principal(99),
-            CoordinatorRegistryRequest::Registry,
-        );
+        let unregistered_snapshot =
+            crate::pic::registry_discovery::snapshot(pic, coordinator, principal(99));
         assert_eq!(
             status_error(
                 unregistered_snapshot,
@@ -544,43 +475,27 @@ placement.minimum_distinct_roots = 2
         let request = FleetSubnetRootSnapshotAcknowledgementRequest {
             version: version.clone(),
         };
-        let CoordinatorCommandResponse::AcknowledgeRootSnapshot(first_ack) = command_as(
-            pic,
-            coordinator,
-            first_root,
-            CoordinatorCommand::AcknowledgeRootSnapshot(request.clone()),
-        )
-        .expect("first acknowledgement") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
-        let CoordinatorCommandResponse::AcknowledgeRootSnapshot(repeated) = command_as(
-            pic,
-            coordinator,
-            first_root,
-            CoordinatorCommand::AcknowledgeRootSnapshot(request.clone()),
-        )
-        .expect("acknowledgement retry") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        let first_ack = acknowledge_root_snapshot(pic, coordinator, first_root, request.clone())
+            .expect("first acknowledgement");
+        let repeated = acknowledge_root_snapshot(pic, coordinator, first_root, request.clone())
+            .expect("acknowledgement retry");
         assert_eq!(repeated, first_ack);
-        let CoordinatorCommandResponse::AcknowledgeRootSnapshot(_) = command_as(
-            pic,
-            coordinator,
-            principal(22),
-            CoordinatorCommand::AcknowledgeRootSnapshot(request),
-        )
-        .expect("second acknowledgement") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        let _ = acknowledge_root_snapshot(pic, coordinator, principal(22), request)
+            .expect("second acknowledgement");
 
-        let CoordinatorObservabilityResponse::RootAcknowledgements(acknowledgements) = status(
+        let acknowledgements = crate::pic::canic::coordinator_root_acknowledgements(
             pic,
             coordinator,
-            CoordinatorObservabilityRequest::RootAcknowledgements,
+            Principal::anonymous(),
         )
-        .expect("acknowledgement inventory") else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
+        .expect("query Root acknowledgement inventory");
+        let denied =
+            crate::pic::canic::coordinator_root_acknowledgements(pic, coordinator, principal(99))
+                .unwrap_err();
+        assert_eq!(
+            denied.code(),
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        );
         assert_eq!(acknowledgements.len(), 2);
         assert!(acknowledgements.iter().all(|ack| &ack.version == version));
 
@@ -595,37 +510,35 @@ placement.minimum_distinct_roots = 2
         let activation_request = FleetRegistryActivationRequest {
             expected_registry: version.clone(),
         };
-        let CoordinatorCommandResponse::ActivateRegistry(activated) = command(
+        let activated = crate::pic::registry_discovery::activate(
             pic,
             coordinator,
-            CoordinatorCommand::ActivateRegistry(activation_request.clone()),
+            Principal::anonymous(),
+            activation_request.clone(),
         )
-        .expect("Registry activation") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        .expect("Registry activation");
         assert_eq!(&activated.previous_version, version);
         assert_eq!(activated.version.revision, version.revision + 1);
-        let CoordinatorCommandResponse::ActivateRegistry(repeated) = command(
+        let repeated = crate::pic::registry_discovery::activate(
             pic,
             coordinator,
-            CoordinatorCommand::ActivateRegistry(activation_request.clone()),
+            Principal::anonymous(),
+            activation_request.clone(),
         )
-        .expect("Registry activation retry") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        .expect("Registry activation retry");
         assert_eq!(repeated, activated);
-        let unauthorized = command_as(
+        let unauthorized = crate::pic::registry_discovery::activate(
             pic,
             coordinator,
             principal(99),
-            CoordinatorCommand::ActivateRegistry(activation_request),
+            activation_request,
         );
         assert_eq!(
             command_error(unauthorized, "non-controller activation must fail").code(),
             canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
-        let CoordinatorRegistryResponse::Registry(active) =
-            status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let active =
+            crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous())
                 .expect("query active Registry");
         assert!(
             active
@@ -641,66 +554,52 @@ placement.minimum_distinct_roots = 2
         coordinator: Principal,
         topology: &canic_core::control_plane_support::config::ComponentTopology,
     ) -> FleetRegistry {
-        let CoordinatorObservabilityResponse::RegistryVersion(genesis) = status(
+        let genesis =
+            crate::pic::registry_discovery::version(pic, coordinator).expect("genesis version");
+        let first = crate::pic::registry_discovery::join(
             pic,
             coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .expect("genesis version") else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
-        let CoordinatorCommandResponse::JoinRoot(first) = command(
-            pic,
-            coordinator,
-            CoordinatorCommand::JoinRoot(FleetSubnetRootJoinRequest {
+            Principal::anonymous(),
+            FleetSubnetRootJoinRequest {
                 expected_registry: genesis,
                 entry: joining_entry(topology, 5, 21, 1),
-            }),
+            },
         )
-        .expect("first join") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
-        let CoordinatorCommandResponse::JoinRoot(second) = command(
+        .expect("first join");
+        let second = crate::pic::registry_discovery::join(
             pic,
             coordinator,
-            CoordinatorCommand::JoinRoot(FleetSubnetRootJoinRequest {
+            Principal::anonymous(),
+            FleetSubnetRootJoinRequest {
                 expected_registry: first.version,
                 entry: joining_entry(topology, 7, 22, 1),
-            }),
+            },
         )
-        .expect("second join") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        .expect("second join");
         let joined_version = second.version;
         for root in [principal(21), principal(22)] {
-            let CoordinatorCommandResponse::AcknowledgeRootSnapshot(_) = command_as(
+            let _ = acknowledge_root_snapshot(
                 pic,
                 coordinator,
                 root,
-                CoordinatorCommand::AcknowledgeRootSnapshot(
-                    FleetSubnetRootSnapshotAcknowledgementRequest {
-                        version: joined_version.clone(),
-                    },
-                ),
+                FleetSubnetRootSnapshotAcknowledgementRequest {
+                    version: joined_version.clone(),
+                },
             )
-            .expect("root acknowledgement") else {
-                panic!("Coordinator returned a differently correlated command response");
-            };
+            .expect("root acknowledgement");
         }
-        let CoordinatorCommandResponse::ActivateRegistry(_) = command(
+        let _ = crate::pic::registry_discovery::activate(
             pic,
             coordinator,
-            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+            Principal::anonymous(),
+            FleetRegistryActivationRequest {
                 expected_registry: joined_version,
-            }),
+            },
         )
-        .expect("activate Registry") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
-        let CoordinatorRegistryResponse::Registry(registry) =
-            status(pic, coordinator, CoordinatorRegistryRequest::Registry)
-                .expect("active Registry");
-        registry
+        .expect("activate Registry");
+
+        crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous())
+            .expect("active Registry")
     }
 
     fn fresh_component_plan(

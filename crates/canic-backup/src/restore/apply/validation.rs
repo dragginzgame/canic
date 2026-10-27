@@ -38,14 +38,11 @@ pub enum RestoreApplyDryRunValidationError {
     #[error("restore apply dry-run artifact check duplicates source canister {0}")]
     DuplicateArtifactSource(String),
 
-    #[error("restore apply dry-run has duplicate operation sequence {0}")]
-    DuplicateSequence(usize),
+    #[error(transparent)]
+    EffectGraph(#[from] ic_backup::model::effect_graph::EffectGraphError),
 
     #[error("restore apply dry-run field {0} is required")]
     MissingField(&'static str),
-
-    #[error("restore apply dry-run is missing operation sequence {0}")]
-    MissingSequence(usize),
 
     #[error("restore apply dry-run projection {0} does not match its concrete operations")]
     ProjectionMismatch(&'static str),
@@ -68,7 +65,9 @@ impl RestoreApplyDryRun {
         validate_nonempty("backup_id", &self.backup_id)?;
         validate_readiness(self)?;
         validate_operation_projections(self)?;
-        validate_operation_sequences(&self.operations)?;
+        crate::restore::ordering::serial_effect_graph(
+            self.operations.iter().map(|operation| operation.sequence),
+        )?;
         for operation in &self.operations {
             validate_operation_identity(operation)?;
         }
@@ -155,25 +154,6 @@ fn validate_operation_projections(
         dry_run.rendered_operations,
         dry_run.operations.len(),
     )
-}
-
-fn validate_operation_sequences(
-    operations: &[RestoreApplyDryRunOperation],
-) -> Result<(), RestoreApplyDryRunValidationError> {
-    let mut sequences = BTreeSet::new();
-    for operation in operations {
-        if !sequences.insert(operation.sequence) {
-            return Err(RestoreApplyDryRunValidationError::DuplicateSequence(
-                operation.sequence,
-            ));
-        }
-    }
-    for expected in 0..operations.len() {
-        if !sequences.contains(&expected) {
-            return Err(RestoreApplyDryRunValidationError::MissingSequence(expected));
-        }
-    }
-    Ok(())
 }
 
 fn validate_operation_identity(

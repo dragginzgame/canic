@@ -113,15 +113,9 @@ use canic_contracts::{
         fixture_provisioning::{FixtureAssignment, FixtureProvisioningStatus},
         fleet_activation::FleetActivationPhase,
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootStatus},
-        role::{
-            OperationAcceptedResponse as CanisterCommandResponseFragment, OperationStatusRequest,
-        },
+        role::OperationStatusRequest,
         root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse},
         runtime::{RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus},
-        wire::projection::component_registry::{
-            CanisterCommandFragment, CanisterOperationStatusFragment,
-            CanisterStatusRequestFragment, CanisterStatusResponseFragment,
-        },
     },
     ids::{
         CanisterRole, ComponentBinding, ComponentInstanceId, FleetSubnetRootBinding,
@@ -171,7 +165,6 @@ use component_installation::{
 use component_installation::{
     validate_installed_component_status, validate_prepared_install_status,
 };
-use ic_platform::candid::contract::CandidType;
 use lifecycle_drivers::{
     advance_component_draining_boundary, advance_subtree_removal_phase,
     component_allocation_reconciliation_complete, component_draining_advance_removal_response,
@@ -602,8 +595,7 @@ struct PreparedSubtreeLeafDeletePlan {
     already_deleted: bool,
 }
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize, serde::Serialize)]
 struct ComponentDirectoryCursorPayload {
     directory: ComponentDirectoryHead,
     parent_canister_id: Option<ic_platform::principal::ExternalPrincipal>,
@@ -1422,7 +1414,13 @@ pub async fn quiesce_component(
     if plan.already_quiescent {
         return component_quiescence_response(draining);
     }
-    observe_or_stop_component(&plan).await?;
+    WorkloadRemovalTarget {
+        canister_id: plan.stop.canister_id,
+        controller: plan.stop.controller,
+        expected_module_hash: plan.expected_status_module_hash,
+    }
+    .stop()
+    .await?;
     let quiescent = ComponentRegistryOps::mark_component_quiescent(
         plan.component,
         plan.operation_id,
@@ -1530,7 +1528,15 @@ pub async fn delete_component(
         return component_deletion_response(draining);
     }
 
-    observe_or_recycle_component(&plan).await?;
+    WorkloadRemovalTarget {
+        canister_id: plan.deletion.quiescence.stop.canister_id,
+        controller: plan.deletion.quiescence.stop.controller,
+        expected_module_hash: plan.expected_status_module_hash,
+    }
+    .recycle(&ComponentRegistryOps::component_recycling_claim(
+        plan.component,
+    )?)
+    .await?;
     let deleted = ComponentRegistryOps::mark_component_deleted(
         plan.component,
         plan.operation_id,
@@ -1878,7 +1884,13 @@ pub async fn stop_subtree_leaf(
     if plan.progressed_beyond_stopped {
         return Ok(subtree_removal_response(removal));
     }
-    observe_or_stop_subtree_leaf(&plan).await?;
+    WorkloadRemovalTarget {
+        canister_id: plan.stop.leaf.canister_id,
+        controller: plan.stop.controller,
+        expected_module_hash: plan.expected_status_module_hash,
+    }
+    .stop()
+    .await?;
     let stopped = ComponentRegistryOps::mark_subtree_leaf_stopped(
         plan.component,
         plan.operation_id,
@@ -2004,7 +2016,16 @@ pub async fn delete_subtree_leaf(
     if plan.already_deleted {
         return Ok(subtree_removal_response(removal));
     }
-    observe_or_recycle_subtree_leaf(&plan).await?;
+    WorkloadRemovalTarget {
+        canister_id: plan.deletion.stopped.stop.leaf.canister_id,
+        controller: plan.deletion.stopped.stop.controller,
+        expected_module_hash: plan.expected_status_module_hash,
+    }
+    .recycle(&CanisterPoolClaimKey {
+        component: plan.component,
+        operation_id: plan.deletion.stopped.stop.leaf.allocation_operation_id,
+    })
+    .await?;
     let deleted = ComponentRegistryOps::mark_subtree_leaf_deleted(
         plan.component,
         plan.operation_id,
@@ -2816,7 +2837,7 @@ pub async fn prepare_component_directories(
     request: RootComponentDirectoryPreparationRequest,
 ) -> Result<RootComponentDirectoryPreparationResponse, InternalError> {
     let plan = prepared_component_runtime_plan(request.operation_id).await?;
-    prepare_component_directories_with_plan(request, plan).await
+    Box::pin(prepare_component_directories_with_plan(request, plan)).await
 }
 
 async fn prepare_component_directories_with_plan(
@@ -3716,26 +3737,34 @@ fn read_directory_page(
 async fn query_managed_binding(
     canister: ic_platform::principal::ExternalPrincipal,
 ) -> Result<ManagedCanisterBinding, InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_OBSERVABILITY)
-        .with_arg(CanisterStatusRequestFragment::Binding)?
+    let bytes = ic_wire::native::encode_request(
+        protocol::protected_binding::METHOD_ID,
+        &(),
+        protocol::protected_binding::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
+    let reply = CallOps::bounded_wait(canister, protocol::protected_binding::METHOD)
+        .with_raw_args(bytes)
         .execute()
         .await
         .map_err(|error| {
             error.with_dependency_failure(
                 canister,
-                protocol::CANIC_OBSERVABILITY,
+                protocol::protected_binding::METHOD,
                 "managed_binding",
             )
-        })?;
-    let result: Result<CanisterStatusResponseFragment, Error> =
-        call.candid().map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
-        })?;
-    match result.map_err(InternalError::observed_public)? {
-        CanisterStatusResponseFragment::Binding(binding) => Ok(*binding),
-        CanisterStatusResponseFragment::Operation(_)
-        | CanisterStatusResponseFragment::Readiness(_) => Err(InternalError::conflict()),
-    }
+        })?
+        .into_bytes();
+    let result: Result<canic_contracts::dto::component_directory::ManagedCanisterBinding, Error> =
+        ic_wire::native::decode_response(
+            protocol::protected_binding::METHOD_ID,
+            &reply,
+            protocol::protected_binding::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
+    result
+        .map(Into::into)
+        .map_err(InternalError::observed_public)
 }
 
 async fn prepared_component_runtime_plan(
@@ -4136,34 +4165,35 @@ async fn query_component_runtime_status(
     canister: ic_platform::principal::ExternalPrincipal,
     operation_id: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_CONTROL_STATUS)
-        .with_arg(CanisterStatusRequestFragment::Operation(
-            OperationStatusRequest { operation_id },
-        ))?
+    use canic_contracts::protocol::runtime_reporting as wire;
+    let bytes = ic_wire::native::encode_request(
+        wire::METHOD_ID,
+        &OperationStatusRequest { operation_id },
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let call = CallOps::bounded_wait(canister, wire::METHOD)
+        .with_raw_args(bytes)
         .execute()
         .await
         .map_err(|error| {
-            error.with_dependency_failure(
-                canister,
-                protocol::CANIC_CONTROL_STATUS,
-                "component_runtime_status",
-            )
+            error.with_dependency_failure(canister, wire::METHOD, "component_runtime_status")
         })?;
-    let result: Result<CanisterStatusResponseFragment, Error> =
-        call.candid().map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
-        })?;
-    match result.map_err(InternalError::observed_public)? {
-        CanisterStatusResponseFragment::Operation(operation) => {
-            let CanisterOperationStatusFragment::ConfigureRuntime(status) = *operation;
-            if status.operation_id == operation_id {
-                Ok(status.runtime)
-            } else {
-                Err(InternalError::conflict())
-            }
-        }
-        CanisterStatusResponseFragment::Binding(_)
-        | CanisterStatusResponseFragment::Readiness(_) => Err(InternalError::conflict()),
+    let result: Result<
+        canic_contracts::dto::runtime_reporting::ComponentRuntimeOperationStatus,
+        Error,
+    > = ic_wire::native::decode_response(
+        wire::METHOD_ID,
+        &call.into_bytes(),
+        wire::RESPONSE_LIMITS,
+    )
+    .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
+    let status: canic_contracts::dto::role::ComponentRuntimeOperationStatus =
+        result.map_err(InternalError::observed_public)?.into();
+    if status.operation_id == operation_id {
+        Ok(status.runtime)
+    } else {
+        Err(InternalError::conflict())
     }
 }
 
@@ -4172,26 +4202,33 @@ async fn require_component_runtime_ready(
     expected_role: &CanisterRole,
     expected_fixture: Option<&canic_contracts::dto::fixture_provisioning::FixtureAssignment>,
 ) -> Result<(), InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_OBSERVABILITY)
-        .with_arg(CanisterStatusRequestFragment::Readiness)?
+    let bytes = ic_wire::native::encode_request(
+        protocol::protected_readiness::METHOD_ID,
+        &(),
+        protocol::protected_readiness::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
+    let reply = CallOps::bounded_wait(canister, protocol::protected_readiness::METHOD)
+        .with_raw_args(bytes)
         .execute()
         .await
         .map_err(|error| {
             error.with_dependency_failure(
                 canister,
-                protocol::CANIC_OBSERVABILITY,
+                protocol::protected_readiness::METHOD,
                 "component_readiness",
             )
-        })?;
-    let result: Result<CanisterStatusResponseFragment, Error> =
-        call.candid().map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
-        })?;
-    let CanisterStatusResponseFragment::Readiness(status) =
-        result.map_err(InternalError::observed_public)?
-    else {
-        return Err(InternalError::conflict());
-    };
+        })?
+        .into_bytes();
+    let result: Result<canic_contracts::dto::runtime_observation::CanicReadinessStatus, Error> =
+        ic_wire::native::decode_response(
+            protocol::protected_readiness::METHOD_ID,
+            &reply,
+            protocol::protected_readiness::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
+    let status: canic_contracts::dto::runtime::CanicReadinessStatus =
+        result.map_err(InternalError::observed_public)?.into();
     if status.schema_version != RUNTIME_INTROSPECTION_SCHEMA_VERSION
         || status.role.as_deref() != Some(expected_role.as_str())
     {
@@ -4408,20 +4445,26 @@ async fn configure_target_component_runtime(
     canister: ic_platform::principal::ExternalPrincipal,
     request: ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    use canic_contracts::protocol::runtime_configuration as wire;
     let operation_id = request.operation_id;
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_COMMAND)
-        .with_arg(CanisterCommandFragment::ConfigureRuntime(request))?
+    let request = canic_contracts::dto::runtime_configuration::ComponentRuntimeDirectoryPreparationRequest::from(request);
+    let bytes = ic_wire::native::encode_request(wire::METHOD_ID, &request, wire::REQUEST_LIMITS)
+        .map_err(|_| InternalError::invariant())?;
+    let call = CallOps::bounded_wait(canister, wire::METHOD)
+        .with_raw_args(bytes)
         .execute()
         .await
         .map_err(|error| {
-            error.with_dependency_failure(canister, protocol::CANIC_COMMAND, "configure_runtime")
+            error.with_dependency_failure(canister, wire::METHOD, "configure_runtime")
         })?;
-    let result: Result<CanisterCommandResponseFragment, Error> =
-        call.candid().map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
-        })?;
-    let CanisterCommandResponseFragment::OperationAccepted(receipt) =
-        result.map_err(InternalError::observed_public)?;
+    let result: Result<canic_contracts::dto::role::OperationReceipt, Error> =
+        ic_wire::native::decode_response(
+            wire::METHOD_ID,
+            &call.into_bytes(),
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
+    let receipt = result.map_err(InternalError::observed_public)?;
     if receipt.operation_id != operation_id {
         return Err(InternalError::conflict());
     }
@@ -5290,6 +5333,14 @@ fn component_deployment_limits(
     }
 }
 
+const COMPONENT_DIRECTORY_CURSOR_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: MAX_COMPONENT_DIRECTORY_CURSOR_BYTES,
+    // Admission charges the nested authority values cumulatively, beyond encoded length.
+    allocation: 262_144,
+    nodes: 2_048,
+    depth: 32,
+};
+
 fn decode_component_directory_cursor(
     request: &ComponentDirectoryPageRequest,
 ) -> Result<Option<ComponentDirectoryCanonicalCursor>, InternalError> {
@@ -5299,9 +5350,11 @@ fn decode_component_directory_cursor(
     if cursor.0.is_empty() || cursor.0.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
         return Err(InternalError::invalid_input());
     }
-    let payload =
-        ic_platform::candid::decoder::decode_one::<ComponentDirectoryCursorPayload>(&cursor.0)
-            .map_err(|_| InternalError::invalid_input())?;
+    let payload = ic_wire::native::decode::<ComponentDirectoryCursorPayload>(
+        &cursor.0,
+        COMPONENT_DIRECTORY_CURSOR_LIMITS,
+    )
+    .map_err(|_| InternalError::invalid_input())?;
     if ComponentDirectoryCursorBinding::from_payload(&payload)
         != ComponentDirectoryCursorBinding::from_request(request)
     {
@@ -5327,7 +5380,7 @@ fn encode_component_directory_cursor(
         last_role: cursor.role,
         last_canister_id: cursor.canister_id,
     };
-    let bytes = ic_platform::candid::contract::encode_one(payload)
+    let bytes = ic_wire::native::encode(&payload, COMPONENT_DIRECTORY_CURSOR_LIMITS)
         .map_err(|_error| InternalError::invariant())?;
     if bytes.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
         return Err(InternalError::invariant());
@@ -5706,172 +5759,62 @@ fn prepared_subtree_leaf_delete_plan(
     })
 }
 
-async fn observe_or_stop_component(
-    plan: &PreparedComponentQuiescencePlan,
-) -> Result<(), InternalError> {
-    match observed_component_quiescence_status(plan).await? {
-        CanisterStatusType::Stopped => return Ok(()),
-        CanisterStatusType::Stopping => {
-            return Err(InternalError::unavailable());
+/// Exact physical authority shared by Component and subtree-leaf removal workflows.
+struct WorkloadRemovalTarget {
+    canister_id: ic_platform::principal::ExternalPrincipal,
+    controller: ic_platform::principal::ExternalPrincipal,
+    expected_module_hash: [u8; 32],
+}
+
+impl WorkloadRemovalTarget {
+    async fn stop(&self) -> Result<(), InternalError> {
+        match self.observed_status().await? {
+            CanisterStatusType::Stopped => return Ok(()),
+            CanisterStatusType::Stopping => return Err(InternalError::unavailable()),
+            CanisterStatusType::Running => {}
         }
-        CanisterStatusType::Running => {}
-    }
 
-    let stop_error = MgmtOps::stop_canister(plan.stop.canister_id).await.err();
-    match observed_component_quiescence_status(plan).await? {
-        CanisterStatusType::Stopped => Ok(()),
-        CanisterStatusType::Stopping => Err(InternalError::unavailable()),
-        CanisterStatusType::Running => match stop_error {
-            Some(error) => Err(error),
-            None => Err(InternalError::unavailable()),
-        },
-    }
-}
-
-async fn observed_component_quiescence_status(
-    plan: &PreparedComponentQuiescencePlan,
-) -> Result<CanisterStatusType, InternalError> {
-    let status = MgmtOps::canister_status(plan.stop.canister_id).await?;
-    if !has_exact_workload_controllers(plan.stop.controller, &status.settings.controllers)? {
-        return Err(InternalError::conflict());
-    }
-    if status.module_hash.as_deref() != Some(plan.expected_status_module_hash.as_slice()) {
-        return Err(InternalError::conflict());
-    }
-    Ok(status.status)
-}
-
-async fn observe_or_stop_subtree_leaf(
-    plan: &PreparedSubtreeLeafStopPlan,
-) -> Result<(), InternalError> {
-    match observed_subtree_leaf_status(plan).await? {
-        CanisterStatusType::Stopped => return Ok(()),
-        CanisterStatusType::Stopping => {
-            return Err(InternalError::unavailable());
+        let stop_error = MgmtOps::stop_canister(self.canister_id).await.err();
+        match self.observed_status().await? {
+            CanisterStatusType::Stopped => Ok(()),
+            CanisterStatusType::Stopping => Err(InternalError::unavailable()),
+            CanisterStatusType::Running => match stop_error {
+                Some(error) => Err(error),
+                None => Err(InternalError::unavailable()),
+            },
         }
-        CanisterStatusType::Running => {}
     }
 
-    let stop_error = MgmtOps::stop_canister(plan.stop.leaf.canister_id)
-        .await
-        .err();
-    match observed_subtree_leaf_status(plan).await? {
-        CanisterStatusType::Stopped => Ok(()),
-        CanisterStatusType::Stopping => Err(InternalError::unavailable()),
-        CanisterStatusType::Running => match stop_error {
-            Some(error) => Err(error),
-            None => Err(InternalError::unavailable()),
-        },
-    }
-}
-
-async fn observe_or_recycle_subtree_leaf(
-    plan: &PreparedSubtreeLeafDeletePlan,
-) -> Result<(), InternalError> {
-    let leaf = &plan.deletion.stopped.stop.leaf;
-    let canister_id = leaf.canister_id;
-    let claim = CanisterPoolClaimKey {
-        component: plan.component,
-        operation_id: leaf.allocation_operation_id,
-    };
-    if CanisterPoolOps::contains_asset(canister_id) {
-        return crate::workflow::canister_pool::recycle(canister_id, &claim).await;
-    }
-    match observed_subtree_leaf_for_deletion(plan).await? {
-        CanisterStatusObservation::Absent => {
-            return Err(InternalError::unavailable());
+    async fn recycle(&self, claim: &CanisterPoolClaimKey) -> Result<(), InternalError> {
+        if !CanisterPoolOps::contains_asset(self.canister_id) {
+            let observation = MgmtOps::observe_canister_status(self.canister_id).await?;
+            let CanisterStatusObservation::Present(status) = observation else {
+                return Err(InternalError::unavailable());
+            };
+            if self.validate_status(&status)? != CanisterStatusType::Stopped {
+                return Err(InternalError::conflict());
+            }
         }
-        CanisterStatusObservation::Present(_) => {}
+        crate::workflow::canister_pool::recycle(self.canister_id, claim).await
     }
 
-    crate::workflow::canister_pool::recycle(canister_id, &claim).await
-}
-
-async fn observe_or_recycle_component(
-    plan: &PreparedComponentDeletionPlan,
-) -> Result<(), InternalError> {
-    let canister_id = plan.deletion.quiescence.stop.canister_id;
-    let claim = ComponentRegistryOps::component_recycling_claim(plan.component)?;
-    if CanisterPoolOps::contains_asset(canister_id) {
-        return crate::workflow::canister_pool::recycle(canister_id, &claim).await;
+    async fn observed_status(&self) -> Result<CanisterStatusType, InternalError> {
+        let status = MgmtOps::canister_status(self.canister_id).await?;
+        self.validate_status(&status)
     }
-    match observed_component_for_deletion(plan).await? {
-        CanisterStatusObservation::Absent => {
-            return Err(InternalError::unavailable());
+
+    fn validate_status(
+        &self,
+        status: &CanisterStatus,
+    ) -> Result<CanisterStatusType, InternalError> {
+        if !has_exact_workload_controllers(self.controller, &status.settings.controllers)? {
+            return Err(InternalError::conflict());
         }
-        CanisterStatusObservation::Present(_) => {}
+        if status.module_hash.as_deref() != Some(self.expected_module_hash.as_slice()) {
+            return Err(InternalError::conflict());
+        }
+        Ok(status.status)
     }
-
-    crate::workflow::canister_pool::recycle(canister_id, &claim).await
-}
-
-async fn observed_component_for_deletion(
-    plan: &PreparedComponentDeletionPlan,
-) -> Result<CanisterStatusObservation, InternalError> {
-    let stop = &plan.deletion.quiescence.stop;
-    let observation = MgmtOps::observe_canister_status(stop.canister_id).await?;
-    let CanisterStatusObservation::Present(status) = &observation else {
-        return Ok(observation);
-    };
-    validate_component_deletion_live_status(status, stop, plan.expected_status_module_hash)?;
-    Ok(observation)
-}
-
-fn validate_component_deletion_live_status(
-    status: &CanisterStatus,
-    stop: &RootComponentQuiescenceStopIntentView,
-    expected_status_module_hash: [u8; 32],
-) -> Result<(), InternalError> {
-    if !has_exact_workload_controllers(stop.controller, &status.settings.controllers)? {
-        return Err(InternalError::conflict());
-    }
-    if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
-        return Err(InternalError::conflict());
-    }
-    if status.status != CanisterStatusType::Stopped {
-        return Err(InternalError::conflict());
-    }
-    Ok(())
-}
-
-async fn observed_subtree_leaf_status(
-    plan: &PreparedSubtreeLeafStopPlan,
-) -> Result<CanisterStatusType, InternalError> {
-    let status = MgmtOps::canister_status(plan.stop.leaf.canister_id).await?;
-    validate_subtree_leaf_live_status(&status, &plan.stop, plan.expected_status_module_hash)
-}
-
-async fn observed_subtree_leaf_for_deletion(
-    plan: &PreparedSubtreeLeafDeletePlan,
-) -> Result<CanisterStatusObservation, InternalError> {
-    let observation =
-        MgmtOps::observe_canister_status(plan.deletion.stopped.stop.leaf.canister_id).await?;
-    let CanisterStatusObservation::Present(status) = &observation else {
-        return Ok(observation);
-    };
-    let status_type = validate_subtree_leaf_live_status(
-        status,
-        &plan.deletion.stopped.stop,
-        plan.expected_status_module_hash,
-    )?;
-    if status_type != CanisterStatusType::Stopped {
-        return Err(InternalError::conflict());
-    }
-    Ok(observation)
-}
-
-fn validate_subtree_leaf_live_status(
-    status: &CanisterStatus,
-    stop: &RootComponentSubtreeStopEffectView,
-    expected_status_module_hash: [u8; 32],
-) -> Result<CanisterStatusType, InternalError> {
-    if !has_exact_workload_controllers(stop.controller, &status.settings.controllers)? {
-        return Err(InternalError::conflict());
-    }
-    if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
-        return Err(InternalError::conflict());
-    }
-    Ok(status.status)
 }
 
 #[cfg(test)]

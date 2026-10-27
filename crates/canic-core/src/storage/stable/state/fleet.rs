@@ -1,5 +1,6 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
+    impl_storable_unbounded,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -28,7 +29,7 @@ pub struct FleetStateRecord {
     pub cycles_funding_enabled: bool,
 }
 
-impl_storable_bounded!(FleetStateRecord, 32, true);
+impl_storable_unbounded!(FleetStateRecord);
 
 impl FleetStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "FleetStateRecord";

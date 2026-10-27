@@ -9,6 +9,7 @@ use crate::{
     test_support::temp_dir,
 };
 use canic_contracts::ids::BuildNetwork;
+use sha2_host::Digest as _;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -89,6 +90,8 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
     let did_path = artifact_root.join("app.did");
     fs::write(&wasm_path, b"\0asm\x01\0\0\0").expect("write wasm");
     fs::write(&wasm_gz_path, b"gzip").expect("write gzip");
+    fs::write(wasm_path.with_extension("wire.json"), b"schema fixture").unwrap();
+    fs::write(wasm_path.with_extension("wire.ts"), b"binding fixture").unwrap();
 
     let request = sample_request(
         &root,
@@ -103,6 +106,7 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
             wasm_gz_path,
             did_path,
             candid_sha256: [3; 32],
+            wire_schema_sha256: sha2_host::Sha256::digest(b"schema fixture").into(),
             protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
                 [4; 32],
             ),
@@ -112,13 +116,48 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
     let artifacts = artifact_provenance(&request).expect("artifact provenance");
 
     fs::remove_dir_all(&root).expect("remove root");
-    assert_eq!(artifacts.len(), 2);
+    assert_eq!(artifacts.len(), 4);
+    assert_eq!(
+        artifacts[2].artifact_kind,
+        ArtifactProvenanceKindV1::WireSchema
+    );
+    assert_eq!(
+        artifacts[3].artifact_kind,
+        ArtifactProvenanceKindV1::WireBindings
+    );
     assert_eq!(artifacts[0].artifact_kind, ArtifactProvenanceKindV1::Wasm);
     assert_eq!(
         artifacts[1].artifact_kind,
         ArtifactProvenanceKindV1::WasmGzip
     );
     assert_ne!(artifacts[0].sha256, artifacts[1].sha256);
+}
+
+#[test]
+fn wire_provenance_requires_both_outputs_and_tracks_exact_schema_bytes() {
+    let root = temp_dir("canic-wire-provenance");
+    let output = write_sample_artifacts(&root, "app");
+    let schema = output.wasm_path.with_extension("wire.json");
+    let bindings = output.wasm_path.with_extension("wire.ts");
+    let request = sample_request(&root, output);
+    let first = artifact_provenance(&request).unwrap();
+    fs::write(&schema, b"different schema bytes").unwrap();
+    let second = artifact_provenance(&request).unwrap();
+    let hash = |artifacts: &[ArtifactProvenanceV1]| {
+        artifacts
+            .iter()
+            .find(|item| item.artifact_kind == ArtifactProvenanceKindV1::WireSchema)
+            .unwrap()
+            .sha256
+            .clone()
+    };
+    assert_ne!(hash(&first), hash(&second));
+    fs::remove_file(&schema).unwrap();
+    assert!(artifact_provenance(&request).is_err());
+    fs::write(&schema, b"restored schema").unwrap();
+    fs::remove_file(bindings).unwrap();
+    assert!(artifact_provenance(&request).is_err());
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -203,12 +242,20 @@ fn build_provenance_envelope_wraps_stable_payload() {
     assert_eq!(payload.cargo.package_metadata_app, "demo");
     assert_eq!(payload.cargo.package_metadata_role, "app");
     assert!(payload.cargo.cargo_lock_sha256.is_some());
-    assert_eq!(payload.protocol_profile.candid_sha256, "03".repeat(32));
     assert_eq!(
         payload.protocol_profile.protocol_profile_digest,
         "04".repeat(32)
     );
-    assert_eq!(payload.artifacts.len(), 2);
+    assert_eq!(payload.artifacts.len(), 4);
+    assert_eq!(
+        payload.protocol_profile.wire_schema_sha256,
+        payload
+            .artifacts
+            .iter()
+            .find(|item| item.artifact_kind == ArtifactProvenanceKindV1::WireSchema)
+            .unwrap()
+            .sha256
+    );
     assert_eq!(payload.transforms.len(), 3);
     assert_eq!(payload.transforms[0].tool, "ic-wasm");
     assert_eq!(payload.transforms[1].tool, "ic-wasm");
@@ -395,6 +442,8 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
     let did_path = artifact_root.join(format!("{role}.did"));
     fs::write(&wasm_path, b"\0asm\x01\0\0\0").expect("write wasm");
     fs::write(&wasm_gz_path, b"gzip").expect("write gzip");
+    fs::write(wasm_path.with_extension("wire.json"), b"schema fixture").unwrap();
+    fs::write(wasm_path.with_extension("wire.ts"), b"binding fixture").unwrap();
 
     CanisterArtifactBuildOutput {
         package_name: format!("canister_demo_{role}"),
@@ -407,6 +456,7 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
         wasm_gz_path,
         did_path,
         candid_sha256: [3; 32],
+        wire_schema_sha256: sha2_host::Sha256::digest(b"schema fixture").into(),
         protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
             [4; 32],
         ),

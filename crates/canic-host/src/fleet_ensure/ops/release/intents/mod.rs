@@ -23,15 +23,14 @@ use canic_contracts::{
         error::Error as CanicError,
         fleet_registry::FleetRegistry,
         release_intents::{IntentReleaseEntry, IntentReleaseKey, IntentReleaseResponse},
-        wire::projection::release_intents::{Request, Response},
     },
-    protocol,
+    protocol::release_evidence::{REQUEST_LIMITS, RESPONSE_LIMITS, intents as protocol},
 };
 use ic_platform::{agent::Agent, principal::ExternalPrincipal as Principal};
 use std::{collections::BTreeMap, time::Duration};
 use thiserror::Error;
 
-const RESPONSE_BYTES: usize = 256 * 1024;
+const RESPONSE_BYTES: usize = RESPONSE_LIMITS.bytes;
 const MAXIMUM_CENSUS_BYTES: usize = 8 * 1024 * 1024;
 const MAXIMUM_INTENTS: usize = 4096;
 const QUERY_DEADLINE: Duration = Duration::from_secs(15);
@@ -92,23 +91,28 @@ pub(super) async fn collect_with_agent(
         verify_owners(agent, review, registry).await?;
         let mut remaining = MAXIMUM_CENSUS_BYTES;
         let mut owners = BTreeMap::new();
-        let targets =
-            std::iter::once((review.authority.coordinator, protocol::CANIC_OBSERVABILITY)).chain(
-                registry
-                    .fleet_subnet_roots
-                    .iter()
-                    .map(|entry| (entry.fleet_subnet_root, protocol::CANIC_ROOT_STATUS)),
-            );
-        for (owner, method) in targets {
+        let targets = std::iter::once(review.authority.coordinator).chain(
+            registry
+                .fleet_subnet_roots
+                .iter()
+                .map(|entry| entry.fleet_subnet_root),
+        );
+        for owner in targets {
             let fail = |stage| ReleaseIntentsError::Observation { owner, stage };
             let mut pages = Pages::new(owner);
             loop {
-                let argument =
-                    ic_platform::candid::contract::encode_one(Request::IntentRelease(pages.cursor))
-                        .map_err(|_| fail(ReleaseIntentsStage::Query))?;
+                let argument = ic_wire::native::encode_request(
+                    protocol::METHOD_ID,
+                    &pages.cursor,
+                    REQUEST_LIMITS,
+                )
+                .map_err(|_| fail(ReleaseIntentsStage::Query))?;
                 let bytes = tokio::time::timeout(
                     QUERY_DEADLINE,
-                    agent.query(&owner, method).with_arg(argument).call(),
+                    agent
+                        .query(&owner, protocol::METHOD)
+                        .with_arg(argument)
+                        .call(),
                 )
                 .await
                 .map_err(|_| fail(ReleaseIntentsStage::Query))?
@@ -161,17 +165,10 @@ pub fn decode_response(
     *remaining = remaining
         .checked_sub(bytes.len())
         .ok_or_else(|| fail(ReleaseIntentsStage::Budget))?;
-    let limits = ic_platform::candid::DecodeLimits {
-        reply_bytes: RESPONSE_BYTES,
-        decoding_quota: RESPONSE_BYTES * 8,
-        skipping_quota: RESPONSE_BYTES * 8,
-        type_entries: 512,
-        header_bytes: 16 * 1024,
-    };
-    let response: Result<Response, CanicError> = ic_platform::candid::decode_one(bytes, limits)
-        .map_err(|_| fail(ReleaseIntentsStage::Decode))?;
-    let Response::IntentRelease(page) =
-        response.map_err(|rejection| ReleaseIntentsError::Rejected { owner, rejection })?;
+    let response: Result<IntentReleaseResponse, CanicError> =
+        ic_wire::native::decode_response(protocol::METHOD_ID, bytes, RESPONSE_LIMITS)
+            .map_err(|_| fail(ReleaseIntentsStage::Decode))?;
+    let page = response.map_err(|rejection| ReleaseIntentsError::Rejected { owner, rejection })?;
     Ok(page)
 }
 
@@ -191,7 +188,7 @@ impl Pages {
     }
 
     fn push(&mut self, page: IntentReleaseResponse) -> Result<bool, ReleaseIntentsStage> {
-        if page.owner != self.owner {
+        if page.owner != self.owner.into() {
             return Err(ReleaseIntentsStage::Binding);
         }
         if self.pages.len() >= MAXIMUM_INTENTS {

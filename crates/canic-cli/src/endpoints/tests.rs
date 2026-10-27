@@ -1,65 +1,26 @@
 use super::*;
 
-// Ensure plain output renders function, mode, and signature columns.
 #[test]
-fn renders_plain_endpoint_signatures_as_table() {
-    let endpoints = vec![
-        EndpointEntry {
-            payload_limits: None,
-            name: "canic_observability".to_string(),
-            candid: "canic_observability : (opt text, opt text, Level, PageRequest) -> () query;"
-                .to_string(),
-            modes: vec![EndpointMode::Query],
-            arguments: vec![
-                test_endpoint_type("opt text"),
-                test_endpoint_type("opt text"),
-                test_endpoint_type("Level"),
-                test_endpoint_type("PageRequest"),
-            ],
-            returns: Vec::new(),
-        },
-        EndpointEntry {
-            payload_limits: None,
-            name: "canic_command".to_string(),
-            candid: "canic_command : (Envelope) -> (Result);".to_string(),
-            modes: Vec::new(),
-            arguments: vec![test_endpoint_type("Envelope")],
-            returns: vec![test_endpoint_type("Result")],
-        },
-        EndpointEntry {
-            payload_limits: None,
-            name: "application_stream".to_string(),
-            candid: "application_stream : (Envelope) -> (Result) query oneway;".to_string(),
-            modes: vec![EndpointMode::Query, EndpointMode::Oneway],
-            arguments: vec![test_endpoint_type("Envelope")],
-            returns: vec![test_endpoint_type("Result")],
-        },
-    ];
-
-    let rendered = render_plain_endpoints(&endpoints);
-    let lines = rendered.lines().collect::<Vec<_>>();
-    assert!(lines.len() >= endpoints.len() + 2);
-    let mode_column = lines[0].find("MODE").expect("mode column");
-    let signature_column = lines[0].find("SIGNATURE").expect("signature column");
-    let expected = [
-        ("query", "(opt text, opt text, Level, PageRequest) -> ()"),
-        ("update", "(Envelope) -> (Result)"),
-        ("query oneway", "(Envelope) -> (Result)"),
-    ];
-    for ((line, endpoint), (mode, signature)) in lines[2..].iter().zip(&endpoints).zip(expected) {
-        assert_eq!(line[..mode_column].trim(), endpoint.name);
-        assert_eq!(line[mode_column..signature_column].trim(), mode);
-        assert_eq!(line[signature_column..].trim(), signature);
-    }
-}
-
-fn test_endpoint_type(candid: &str) -> EndpointType {
-    EndpointType::Named {
-        candid: candid.to_string(),
-        cardinality: EndpointCardinality::Single,
-        name: candid.to_string(),
-        resolved: None,
-    }
+fn wire_endpoint_report_preserves_shapes_and_all_budgets() {
+    let method = serde_json::json!({
+        "name":"inspect", "id":"9001", "kind":"query", "mode":"query",
+        "request":{"k":"unit"}, "response":{"k":"ref","name":"reply"},
+        "requestBytes":128,"requestAllocation":256,"requestNodes":16,"requestDepth":8,
+        "responseBytes":512,"responseAllocation":1024,"responseNodes":64,"responseDepth":16
+    });
+    let mut document = serde_json::json!({"schema_version":1,"methods":[method],
+        "types":{"reply":{"k":"u","bits":64}}});
+    let schema = model::read_schema(&serde_json::to_vec(&document).unwrap()).unwrap();
+    assert_eq!(serde_json::to_value(&schema.methods[0]).unwrap(), method);
+    assert_eq!(schema.types, document["types"]);
+    let rendered = render_plain_endpoints(&schema.methods);
+    assert!(rendered.contains("9001"));
+    assert!(rendered.contains("request=128/256/16/8 response=512/1024/64/16"));
+    document["methods"].as_array_mut().unwrap().push(method);
+    assert!(matches!(
+        model::read_schema(&serde_json::to_vec(&document).unwrap()),
+        Err(EndpointsCommandError::Schema)
+    ));
 }
 
 // Ensure endpoint options parse Fleet selection and output controls.
@@ -93,8 +54,8 @@ fn selected_build_requires_finalized_identity() {
     let root = crate::test_support::TempDir::new("endpoint-build-selection");
     assert!(matches!(
         transport::endpoint_report_at(&root, &options),
-        Err(EndpointsCommandError::BuiltCandid(
-            canic_host::release_set::BuiltCandidError::ReleaseSet(_)
+        Err(EndpointsCommandError::BuiltSchema(
+            canic_host::release_set::BuiltDeclarationError::ReleaseSet(_)
         ))
     ));
     assert!(matches!(

@@ -34,7 +34,8 @@ pub(super) fn extract_candid_with_tool(
     // Normalization can add one terminal newline, but never expands the
     // admitted capture beyond that. Process admission remains Canic-owned.
     let limit = crate::MAX_DOCUMENT_READ_BYTES + 1;
-    Ok(ic_host_text::normalize::normalize_lines(&output.stdout, limit)?.into_bytes())
+    let normalized = ic_host_text::normalize::normalize_lines(&output.stdout, limit)?;
+    Ok(format!("{}\n", normalized.trim_end_matches('\n')).into_bytes())
 }
 
 // Remove stale ICP-generated Candid sidecars so surface scans match the exact
@@ -69,6 +70,15 @@ mod tests {
         assert_eq!(
             normalize_lines(b"//  \nservice : {  \n  method : () -> ();\t\n}", 1024).unwrap(),
             "//\nservice : {\n  method : () -> ();\n}\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extractor_output_has_exactly_one_terminal_newline() {
+        assert_eq!(
+            run_extractor_script("printf 'service : {}\\n\\n'").unwrap(),
+            b"service : {}\n"
         );
     }
 

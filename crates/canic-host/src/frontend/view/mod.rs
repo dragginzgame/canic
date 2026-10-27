@@ -66,6 +66,7 @@ pub struct FrontendAssetCapacityView {
 
 /// Selected terminal authority without protected Registry or admission records.
 pub struct FrontendAuthorityView {
+    pub release_build_id: canic_contracts::ids::ReleaseBuildId,
     pub app: String,
     pub fleet: String,
     pub fleet_id: String,
@@ -80,10 +81,4 @@ pub struct FrontendAuthorityView {
 pub struct FrontendBundleView {
     pub manifest: FrontendManifestRecord,
     pub files: BTreeMap<String, Vec<u8>>,
-}
-
-/// Generated browser and TypeScript modules for one checked Candid service.
-pub struct FrontendBindingsView {
-    pub javascript: Vec<u8>,
-    pub typescript: Vec<u8>,
 }

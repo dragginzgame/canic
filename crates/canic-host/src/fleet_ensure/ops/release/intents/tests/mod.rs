@@ -8,7 +8,7 @@ use canic_contracts::dto::{
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> IntentReleaseResponse {
     IntentReleaseResponse {
-        owner,
+        owner: owner.into(),
         entry: Some(IntentReleaseEntry::Local {
             intent_id: 1,
             record: ReplayReleaseIntent {
@@ -24,8 +24,12 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> Intent
 }
 
 pub(in crate::fleet_ensure::ops::release) fn wire(page: IntentReleaseResponse) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::IntentRelease(page)))
-        .unwrap()
+    ic_wire::native::encode_response(
+        protocol::METHOD_ID,
+        &Ok::<_, CanicError>(page),
+        RESPONSE_LIMITS,
+    )
+    .unwrap()
 }
 
 #[test]
@@ -34,7 +38,7 @@ fn pages_keep_original_accounting_across_the_store_boundary() {
     let mut local = fixture(owner);
     local.next_after = Some(IntentReleaseKey::Local(1));
     let receipt = IntentReleaseResponse {
-        owner,
+        owner: owner.into(),
         entry: Some(IntentReleaseEntry::ReceiptBacked(IntentReleaseReceipt {
             operation_id: [0; 32],
             payload_hash_schema_version: 1,
@@ -72,7 +76,7 @@ fn rejects_wrong_owner_cursor_regression_and_false_completion() {
         Pages::new(owner).push(wrong_owner.clone()),
         Err(ReleaseIntentsStage::Binding)
     );
-    wrong_owner.owner = owner;
+    wrong_owner.owner = owner.into();
     wrong_owner.next_after = Some(IntentReleaseKey::ReceiptBacked([1; 32]));
     assert_eq!(
         Pages::new(owner).push(wrong_owner),
@@ -88,7 +92,7 @@ fn rejects_wrong_owner_cursor_regression_and_false_completion() {
     );
     assert_eq!(
         pages.push(IntentReleaseResponse {
-            owner,
+            owner: owner.into(),
             entry: None,
             next_after: None
         }),
@@ -124,7 +128,7 @@ fn decoding_and_collection_bounds_refuse_without_returning_partial_evidence() {
     page.next_after = Some(IntentReleaseKey::Local(1));
     assert_eq!(pages.push(page), Err(ReleaseIntentsStage::Budget));
     let empty = IntentReleaseResponse {
-        owner,
+        owner: owner.into(),
         entry: None,
         next_after: None,
     };

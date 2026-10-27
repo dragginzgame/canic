@@ -95,54 +95,17 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             .module_hash
             .is_none()
     );
-    let refused: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(request.clone()),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    service,
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let refused = bind_initialization(&pic, fixture.root_id, service, request.clone());
     assert_eq!(
-        refused.err().expect("binding refusal").code(),
+        refused.expect_err("binding refusal").code(),
         canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
+    assert_malformed_binding_frames(&pic, fixture.root_id, member_operation, &request);
     let mut wrong_target = request.clone();
     wrong_target.initialization.target_canister = coordinator;
-    let refused: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(wrong_target),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let refused = bind_initialization(&pic, fixture.root_id, Principal::anonymous(), wrong_target);
     assert_eq!(
-        refused.err().expect("binding refusal").code(),
+        refused.expect_err("binding refusal").code(),
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(allocation(&pic, fixture.root_id, member_operation), before);
@@ -154,7 +117,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         .submit_call(
             fixture.root_id,
             Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_COMMAND,
+            initialization_wire::METHOD,
             canic_host::component_initialization::encode_command(&request).unwrap(),
         )
         .unwrap();
@@ -175,28 +138,9 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
     let mut changed = input.clone();
     changed.project = "different-blob-project".into();
     conflicting.initialization.arguments = wire::encode_request("blob_install", changed).unwrap();
-    let refused: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(conflicting),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let refused = bind_initialization(&pic, fixture.root_id, Principal::anonymous(), conflicting);
     assert_eq!(
-        refused.err().expect("binding refusal").code(),
+        refused.expect_err("binding refusal").code(),
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     await_root_provisioning(&pic, fixture.root_id, operation, |status| {
@@ -224,26 +168,12 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         .canister_status(service, Some(fixture.root_id))
         .unwrap()
         .version;
-    let replay: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(request.clone()),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let replay = bind_initialization(
+        &pic,
+        fixture.root_id,
+        Principal::anonymous(),
+        request.clone(),
+    );
     replay.unwrap();
     assert_eq!(
         pic.canister_status(service, Some(fixture.root_id))
@@ -419,7 +349,7 @@ fn root_manifest(
     application: &canic_host::release_set::ApplicationArtifactUnion,
     fixtures: &canic_host::release_set::fixture::FixtureArtifactManifest,
 ) -> RootStoreReleaseSetManifest {
-    let projection: FleetSubnetRootInitArgs = decode_one(
+    let projection: FleetSubnetRootInitArgs = canic_contracts::protocol::initialization::decode(
         &install_root_args_with_release_set_digest_and_coordinator(ManagedRootInstallInput {
             root_id: Principal::anonymous(),
             wasm_store: Principal::anonymous(),

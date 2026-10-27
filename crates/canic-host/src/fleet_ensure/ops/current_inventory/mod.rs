@@ -15,7 +15,7 @@ use super::{
 };
 use crate::{
     MAX_DOCUMENT_READ_BYTES,
-    canister_protocol::{call_with_candid, query_with_candid},
+    canister_protocol::query_wire,
     fleet_ensure::{
         model::{DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetEnsureStateRecord},
         ops::bounded_observations,
@@ -34,9 +34,7 @@ use crate::{
 };
 use canic_contracts::{
     dto::{
-        canister::{
-            CanisterInfo, CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType,
-        },
+        canister::{CanisterInfo, CanisterStatusResponse, CanisterStatusType},
         component_provisioning::{
             FleetComponentProvisioningPhase, FleetComponentProvisioningStatusResponse,
             RootComponentProvisioningPhase, RootComponentProvisioningResult,
@@ -51,18 +49,8 @@ use canic_contracts::{
         fleet_registry::{
             FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus,
         },
-        page::PageRequest,
+        page::{Page, PageRequest},
         pool::{CanisterPoolAssetStatus, CanisterPoolClaim, CanisterPoolStatusRequest},
-        role::OperationStatusRequest,
-        wire::projection::{
-            capacity_management::{
-                RootRequest as RootInventoryCommand, RootResponse as RootInventoryCommandResponse,
-            },
-            current_inventory::{
-                ChildrenStatusRequest, ChildrenStatusResponse, RootInventoryStatusRequest,
-                RootInventoryStatusResponse,
-            },
-        },
     },
     ids::{
         CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
@@ -73,11 +61,12 @@ use canic_contracts::{
 use canic_core::{
     cdk::utils::hash::hex_bytes,
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
-    role_contract::{RoleCapabilityKey, RoleContractResolution, derive_protocol_profile_hashes},
+    role_contract::{RoleCapabilityKey, RoleContractResolution},
 };
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::read::read_optional_file_no_follow;
 use ic_platform::principal::ExternalPrincipal as Principal;
+use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fs,
@@ -93,10 +82,9 @@ pub(super) struct ProtocolCatalog {
 }
 
 pub(super) struct ProtocolEntry {
-    binding: RegistryProtocolBinding,
-    pub(super) candid_path: PathBuf,
-    pub(super) installed_module_hash: String,
+    pub(super) binding: RegistryProtocolBinding,
     pub(super) raw_module_hash: String,
+    pub(super) installed_module_hash: String,
 }
 
 struct ComponentPartitionAuthority<'a> {
@@ -133,7 +121,6 @@ struct RootComponentSummary {
 
 struct DescendantParent {
     canister_id: Principal,
-    candid_path: PathBuf,
     maximum_children: u64,
     release_set: FleetSubnetRootReleaseSet,
     role: CanisterRole,
@@ -170,10 +157,10 @@ pub(super) fn terminal_inventory(
         })
         .ok_or_else(|| inventory_error("terminal inventory has no exact Coordinator"))?;
     let coordinator_principal = retained_principal(desired, state, &coordinator.name)?;
-    let coordinator_candid = resolve_path(root, &protocol_intent.coordinator_candid);
-    let root_candid = resolve_path(root, &protocol_intent.root_candid);
-    let store_candid = resolve_path(root, &protocol_intent.store_candid);
-    let registry = query_registry(icp, &coordinator_candid, coordinator_principal)?;
+    let coordinator_wire_schema = resolve_path(root, &protocol_intent.coordinator_wire_schema);
+    let root_wire_schema = resolve_path(root, &protocol_intent.root_wire_schema);
+    let store_wire_schema = resolve_path(root, &protocol_intent.store_wire_schema);
+    let registry = query_registry(icp, coordinator_principal)?;
     let config_path = resolve_path(root, &protocol_intent.app_config);
     let config = AppConfigSnapshot::load(&config_path)
         .map_err(|error| inventory_error(error.to_string()))?;
@@ -190,7 +177,7 @@ pub(super) fn terminal_inventory(
         &registry_version,
         &component_operation,
     )?;
-    let authorities = query_current_root_authorities(icp, desired, state, &store_candid)?;
+    let authorities = query_current_root_authorities(icp, desired, state)?;
     validate_root_authority(&registry, &authorities)?;
     let release_set = common_release_set(&authorities)?;
     let protocols = ProtocolCatalog::load(
@@ -198,9 +185,9 @@ pub(super) fn terminal_inventory(
         &config_path,
         &config,
         release_set.release_build_id,
-        &coordinator_candid,
-        &root_candid,
-        &store_candid,
+        &coordinator_wire_schema,
+        &root_wire_schema,
+        &store_wire_schema,
     )?;
     let (entries, controlled_cycles_by_principal) = query_entries(
         icp,
@@ -224,9 +211,9 @@ impl ProtocolCatalog {
         config_path: &Path,
         config: &AppConfigSnapshot,
         release_build_id: canic_contracts::ids::ReleaseBuildId,
-        coordinator_candid: &Path,
-        root_candid: &Path,
-        store_candid: &Path,
+        coordinator_wire_schema: &Path,
+        root_wire_schema: &Path,
+        store_wire_schema: &Path,
     ) -> Result<Self, CurrentProtocolError> {
         let infrastructure =
             load_persisted_canic_infrastructure_artifact_manifest(root, release_build_id)
@@ -249,15 +236,15 @@ impl ProtocolCatalog {
         };
         let coordinator = infrastructure_protocol(
             infrastructure_entry(CanicInfrastructureRole::FleetCoordinator)?,
-            coordinator_candid,
+            coordinator_wire_schema,
         )?;
         let root_protocol = infrastructure_protocol(
             infrastructure_entry(CanicInfrastructureRole::FleetSubnetRoot)?,
-            root_candid,
+            root_wire_schema,
         )?;
         let store = infrastructure_protocol(
             infrastructure_entry(CanicInfrastructureRole::WasmStore)?,
-            store_candid,
+            store_wire_schema,
         )?;
         let mut by_role = BTreeMap::from([(store.binding.role.clone(), store)]);
         let roles = application
@@ -282,23 +269,22 @@ impl ProtocolCatalog {
                     )));
                 }
             };
-            let candid_path = application_candid_sidecar(root, &artifact.wasm_relative_path)?;
+            let wire_schema_path = application_wire_sidecar(root, &artifact.wasm_relative_path)?;
             let binding = RegistryProtocolBinding {
                 release_identity: finalized.record.builder_version.clone(),
                 role: artifact.role.clone(),
                 capabilities: contract.capabilities,
-                candid_sha256: artifact.candid_sha256,
+                wire_schema_sha256: artifact.wire_schema_sha256,
                 protocol_profile_digest: artifact.protocol_profile_digest,
             };
-            verify_protocol(&candid_path, &binding)?;
+            verify_wire_schema(&wire_schema_path, &artifact.wire_schema_sha256)?;
             if by_role
                 .insert(
                     artifact.role.clone(),
                     ProtocolEntry {
                         binding,
-                        candid_path,
-                        installed_module_hash: artifact.wasm_gz_sha256_hex.clone(),
                         raw_module_hash: artifact.wasm_sha256_hex.clone(),
+                        installed_module_hash: artifact.wasm_gz_sha256_hex.clone(),
                     },
                 )
                 .is_some()
@@ -323,21 +309,20 @@ impl ProtocolCatalog {
 
 fn infrastructure_protocol(
     artifact: &CanicInfrastructureArtifactEntry,
-    candid_path: &Path,
+    wire_schema_path: &Path,
 ) -> Result<ProtocolEntry, CurrentProtocolError> {
     let binding = RegistryProtocolBinding {
         release_identity: artifact.protocol_release_identity.clone(),
         role: artifact.protocol_role.clone(),
         capabilities: artifact.protocol_capabilities.clone(),
-        candid_sha256: artifact.candid_sha256,
+        wire_schema_sha256: artifact.wire_schema_sha256,
         protocol_profile_digest: artifact.protocol_profile_digest,
     };
-    verify_protocol(candid_path, &binding)?;
+    verify_wire_schema(wire_schema_path, &artifact.wire_schema_sha256)?;
     Ok(ProtocolEntry {
         binding,
-        candid_path: candid_path.to_path_buf(),
-        installed_module_hash: artifact.wasm_sha256_hex.clone(),
         raw_module_hash: artifact.wasm_sha256_hex.clone(),
+        installed_module_hash: artifact.wasm_sha256_hex.clone(),
     })
 }
 
@@ -361,7 +346,7 @@ fn query_entries(
         pid: coordinator_text.clone(),
         role: Some(CanisterRole::FLEET_COORDINATOR.to_string()),
         parent_pid: None,
-        module_hash: Some(protocols.coordinator.installed_module_hash.clone()),
+        module_hash: Some(protocols.coordinator.raw_module_hash.clone()),
         protocol_binding: Some(protocols.coordinator.binding.clone()),
     }];
     let mut seen = BTreeSet::from([coordinator]);
@@ -385,7 +370,7 @@ fn query_entries(
             pid: root.fleet_subnet_root.to_text(),
             role: Some(CanisterRole::ROOT.to_string()),
             parent_pid: Some(coordinator_text.clone()),
-            module_hash: Some(protocols.root.installed_module_hash.clone()),
+            module_hash: Some(protocols.root.raw_module_hash.clone()),
             protocol_binding: Some(protocols.root.binding.clone()),
         });
         let authority = authorities
@@ -403,15 +388,10 @@ fn query_entries(
             pid: store.to_text(),
             role: Some(CanisterRole::WASM_STORE.to_string()),
             parent_pid: Some(root.fleet_subnet_root.to_text()),
-            module_hash: Some(store_protocol.installed_module_hash.clone()),
+            module_hash: Some(store_protocol.raw_module_hash.clone()),
             protocol_binding: Some(store_protocol.binding.clone()),
         });
-        let status = query_root_component_status(
-            icp,
-            &protocols.root.candid_path,
-            root.fleet_subnet_root,
-            operation_id,
-        )?;
+        let status = query_root_component_status(icp, root.fleet_subnet_root, operation_id)?;
         let component_summary = append_root_components(
             icp,
             &TerminalRootComponentAuthority {
@@ -507,12 +487,7 @@ fn query_entries(
     }
     let descendant_bound = maximum_descendant_page(config.component_topology());
     while let Some(parent) = parents.pop_front() {
-        let children = query_all_children(
-            icp,
-            &parent.candid_path,
-            parent.canister_id,
-            parent.maximum_children,
-        )?;
+        let children = query_all_children(icp, parent.canister_id, parent.maximum_children)?;
         if children.len() > maximum_entries.saturating_sub(entries.len()) {
             return Err(inventory_error(format!(
                 "current Fleet exceeds authority-derived inventory bound {maximum_entries}"
@@ -520,7 +495,9 @@ fn query_entries(
         }
         let mut pending = Vec::with_capacity(children.len());
         for child in &children {
-            if child.parent_pid != Some(parent.canister_id) || !seen.insert(child.pid) {
+            if child.parent_pid != Some(parent.canister_id.into())
+                || !seen.insert(Principal::from(child.pid))
+            {
                 return Err(inventory_error(format!(
                     "Canister {} has conflicting current parent authority",
                     child.pid
@@ -534,17 +511,19 @@ fn query_entries(
                 )));
             }
             let protocol = protocol.expect("checked current protocol");
-            let workload = pool_workloads.get(&child.pid).ok_or_else(|| {
-                inventory_error(format!(
-                    "terminal descendant {} has no exact Root pool Workload claim",
-                    child.pid
-                ))
-            })?;
+            let workload = pool_workloads
+                .get(&Principal::from(child.pid))
+                .ok_or_else(|| {
+                    inventory_error(format!(
+                        "terminal descendant {} has no exact Root pool Workload claim",
+                        Principal::from(child.pid)
+                    ))
+                })?;
             terminal_field_exact("descendant.root", &parent.root, &workload.root)?;
             let component = component_bindings.get(&workload.component).ok_or_else(|| {
                 inventory_error(format!(
                     "terminal descendant {} names an unknown top-level Component",
-                    child.pid
+                    Principal::from(child.pid)
                 ))
             })?;
             let descendant = TerminalDescendantAuthority {
@@ -558,21 +537,20 @@ fn query_entries(
             };
             insert_terminal_workload(
                 &mut component_workloads,
-                child.pid,
+                Principal::from(child.pid),
                 workload.clone(),
                 "terminal Component has more than one Root allocation authority",
             )?;
             pending.push(descendant);
         }
-        let observations =
-            observe_terminal_descendants(icp, &protocols.root.candid_path, &pending)?;
+        let observations = observe_terminal_descendants(icp, &pending)?;
         for (descendant, observed) in pending.into_iter().zip(observations) {
             let child = descendant.child;
             let protocol = descendant.protocol;
             let entry = registry_entry(child, protocol, observed.module_hash.as_deref())?;
             insert_controlled_cycles(
                 &mut controlled_cycles_by_principal,
-                child.pid,
+                Principal::from(child.pid),
                 observed_cycle_balance(&observed)?,
             )?;
             if protocol
@@ -581,8 +559,7 @@ fn query_entries(
                 .contains(&RoleCapabilityKey::ChildProvisioning)
             {
                 parents.push_back(DescendantParent {
-                    canister_id: child.pid,
-                    candid_path: protocol.candid_path.clone(),
+                    canister_id: Principal::from(child.pid),
                     maximum_children: descendant_bound,
                     release_set: parent.release_set,
                     role: child.role.clone(),
@@ -604,26 +581,22 @@ fn query_entries(
 
 fn query_root_component_status(
     icp: &IcpCli,
-    candid_path: &Path,
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<RootComponentProvisioningStatusResponse, CurrentProtocolError> {
-    let response: RootInventoryStatusResponse = terminal_observation(
+    let response: canic_contracts::dto::component_read::Provisioning = terminal_observation(
         "root_component_provisioning",
-        query_with_candid(
+        crate::canister_protocol::query_wire_cli(
             icp,
-            candid_path,
             root,
-            protocol::CANIC_ROOT_OPERATION_STATUS,
-            &RootInventoryStatusRequest::ComponentProvisioning(OperationStatusRequest {
-                operation_id,
-            }),
+            protocol::component_read::provisioning::METHOD,
+            protocol::component_read::provisioning::METHOD_ID,
+            &operation_id,
+            protocol::component_read::REQUEST_LIMITS,
+            protocol::component_read::RESPONSE_LIMITS,
         ),
     )?;
-    let RootInventoryStatusResponse::ComponentProvisioning(status) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
-    Ok(*status)
+    Ok(response.into())
 }
 
 #[expect(
@@ -767,7 +740,6 @@ fn append_root_components(
             let binding = &member.binding;
             let observed = inspect_root_controlled_canister(
                 icp,
-                &protocols.root.candid_path,
                 authority.root.fleet_subnet_root,
                 binding.canister_id,
             )?;
@@ -802,7 +774,6 @@ fn append_root_components(
         {
             parents.push_back(DescendantParent {
                 canister_id: binding.canister_id,
-                candid_path: protocol.candid_path.clone(),
                 maximum_children: descendant_bound,
                 release_set: *authority.active_release_set,
                 role: binding.role.clone(),
@@ -1053,26 +1024,20 @@ fn validate_component_partition(
     member: &canic_contracts::dto::component_provisioning::RootProvisionedGroupMember,
     protocol_entry: &ProtocolEntry,
 ) -> Result<(), CurrentProtocolError> {
-    let response: RootInventoryStatusResponse = terminal_observation(
+    let partition = terminal_observation(
         "component_active_partition",
-        crate::canister_protocol::query_authenticated(
+        crate::canister_protocol::registry_read::active_partition(
             icp,
             root,
-            protocol::CANIC_ROOT_STATUS,
-            &RootInventoryStatusRequest::ComponentRegistryActivePartition(
-                ComponentRegistryActivePartitionRequest {
-                    component: member.binding.component,
-                    provisioning_operation_id: authority.operation_id,
-                    plan_hash: authority.plan_hash,
-                    group_placement: (*authority.group_placement).clone(),
-                    member_path: member.member_path.clone(),
-                },
-            ),
+            ComponentRegistryActivePartitionRequest {
+                component: member.binding.component,
+                provisioning_operation_id: authority.operation_id,
+                plan_hash: authority.plan_hash,
+                group_placement: (*authority.group_placement).clone(),
+                member_path: member.member_path.clone(),
+            },
         ),
     )?;
-    let RootInventoryStatusResponse::ComponentRegistryActivePartition(partition) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
     validate_component_partition_response(authority, member, protocol_entry, &partition)
 }
 
@@ -1230,23 +1195,21 @@ fn validate_component_partition_authority(
 
 fn observe_terminal_descendants(
     icp: &IcpCli,
-    root_candid_path: &Path,
     descendants: &[TerminalDescendantAuthority<'_>],
 ) -> Result<Vec<CanisterStatusResponse>, CurrentProtocolError> {
     // Validate all independent receipts before issuing any management inspection.
     bounded_observations::collect(descendants, |descendant| {
-        validate_terminal_descendant_allocation(icp, root_candid_path, descendant)
+        validate_terminal_descendant_allocation(icp, descendant)
     })?;
     bounded_observations::collect(descendants, |descendant| {
         let observed = inspect_root_controlled_canister(
             icp,
-            root_candid_path,
             descendant.root,
-            descendant.child.pid,
+            Principal::from(descendant.child.pid),
         )?;
         require_terminal_component_authority(
             descendant.root,
-            descendant.child.pid,
+            Principal::from(descendant.child.pid),
             &observed,
             descendant.protocol,
             &descendant.component.authority.binding.recovery_controllers,
@@ -1257,25 +1220,21 @@ fn observe_terminal_descendants(
 
 fn validate_terminal_descendant_allocation(
     icp: &IcpCli,
-    root_candid_path: &Path,
     authority: &TerminalDescendantAuthority<'_>,
 ) -> Result<(), CurrentProtocolError> {
-    let response: RootInventoryStatusResponse = terminal_observation(
+    let response: canic_contracts::dto::component_read::ChildAllocation = terminal_observation(
         "descendant_allocation",
-        query_with_candid(
+        crate::canister_protocol::query_wire_cli(
             icp,
-            root_candid_path,
             authority.root,
-            protocol::CANIC_ROOT_OPERATION_STATUS,
-            &RootInventoryStatusRequest::ComponentChildProvisioning(OperationStatusRequest {
-                operation_id: authority.workload.operation_id,
-            }),
+            protocol::component_read::child_allocation::METHOD,
+            protocol::component_read::child_allocation::METHOD_ID,
+            &authority.workload.operation_id,
+            protocol::component_read::REQUEST_LIMITS,
+            protocol::component_read::RESPONSE_LIMITS,
         ),
     )?;
-    let RootInventoryStatusResponse::ComponentChildProvisioning(status) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
-    validate_terminal_descendant_allocation_response(authority, &status)
+    validate_terminal_descendant_allocation_response(authority, &response.into())
 }
 
 fn validate_terminal_descendant_allocation_response(
@@ -1300,7 +1259,7 @@ fn validate_terminal_descendant_allocation_response(
     terminal_field_exact(
         "descendant.parent_canister_id",
         &authority.child.parent_pid,
-        &Some(allocation.parent_canister_id),
+        &Some(allocation.parent_canister_id.into()),
     )?;
     terminal_field_exact(
         "descendant.parent_role",
@@ -1333,7 +1292,7 @@ fn validate_terminal_descendant_allocation_response(
         .ok_or_else(|| terminal_field_missing("descendant.creation"))?;
     terminal_field_exact(
         "descendant.creation.canister",
-        &Some(authority.child.pid),
+        &Some(Principal::from(authority.child.pid)),
         &creation.canister,
     )?;
     let installation = allocation
@@ -1348,7 +1307,7 @@ fn validate_terminal_descendant_allocation_response(
     terminal_field_exact(
         "descendant.binding.parent_canister_id",
         &authority.child.parent_pid,
-        &Some(installation.binding.parent_canister_id),
+        &Some(installation.binding.parent_canister_id.into()),
     )?;
     terminal_field_exact(
         "descendant.binding.role",
@@ -1357,7 +1316,7 @@ fn validate_terminal_descendant_allocation_response(
     )?;
     terminal_field_exact(
         "descendant.binding.canister_id",
-        &authority.child.pid,
+        &Principal::from(authority.child.pid),
         &installation.binding.canister_id,
     )?;
     terminal_field_exact(
@@ -1391,21 +1350,17 @@ fn append_pool_assets(
     let mut asset_count = 0_u64;
     let mut store_seen = false;
     loop {
-        let response: RootInventoryStatusResponse = terminal_observation(
+        let page = terminal_observation(
             "root_pool",
-            crate::canister_protocol::query_authenticated(
+            crate::canister_protocol::pool_inventory::query(
                 icp,
                 root.fleet_subnet_root,
-                protocol::CANIC_ROOT_STATUS,
-                &RootInventoryStatusRequest::Pool(CanisterPoolStatusRequest {
+                &CanisterPoolStatusRequest {
                     start_after,
                     limit: 256,
-                }),
+                },
             ),
         )?;
-        let RootInventoryStatusResponse::Pool(page) = response else {
-            return Err(CurrentProtocolError::ResponseMismatch);
-        };
         if page.config != root.limits.canister_pool {
             return Err(inventory_error(
                 "Root pool policy differs from the Registry",
@@ -1554,30 +1509,22 @@ fn validate_complete_workload_coverage(
 
 pub(in crate::fleet_ensure) fn inspect_root_controlled_canister(
     icp: &IcpCli,
-    root_candid_path: &Path,
     root: Principal,
     canister_id: Principal,
 ) -> Result<CanisterStatusResponse, CurrentProtocolError> {
     icp.measure_canister_inspection(root, canister_id, || {
-        crate::canister_protocol::inspection::preflight_inspection(
-            icp,
-            root_candid_path,
-            root,
-            canister_id,
-        )?;
-        let response: RootInventoryCommandResponse = terminal_observation(
+        crate::canister_protocol::inspection::preflight_inspection(icp, root, canister_id)?;
+        let outcome = terminal_observation(
             "root_controlled_canister",
-            call_with_candid(
-                icp,
-                root_candid_path,
-                root,
-                protocol::CANIC_ROOT_COMMAND,
-                &RootInventoryCommand::InspectCanister(CanisterInspectionRequest { canister_id }),
-            ),
+            crate::canister_protocol::inspection::inspect_outcome(icp, root, canister_id),
         )?;
-        match response {
-            RootInventoryCommandResponse::InspectCanister(status) => Ok(*status),
-            RootInventoryCommandResponse::InspectionReserveRequired(evidence) => Err(
+        match outcome {
+            canic_contracts::dto::canister::CanisterInspectionOutcome::Status(status) => {
+                Ok(*status)
+            }
+            canic_contracts::dto::canister::CanisterInspectionOutcome::ReserveRequired(
+                evidence,
+            ) => Err(
                 crate::CanisterProtocolError::inspection_reserve(root, canister_id, evidence)
                     .into(),
             ),
@@ -1654,7 +1601,6 @@ fn insert_controlled_cycles(
 
 fn query_all_children(
     icp: &IcpCli,
-    candid_path: &Path,
     parent: Principal,
     maximum_children: u64,
 ) -> Result<Vec<CanisterInfo>, CurrentProtocolError> {
@@ -1662,20 +1608,21 @@ fn query_all_children(
     let mut offset = 0_u64;
     let mut expected_total = None;
     loop {
-        let response: ChildrenStatusResponse = terminal_observation(
+        let page: Page<CanisterInfo> = terminal_observation(
             "component_children",
-            query_with_candid(
+            query_wire(
                 icp,
-                candid_path,
                 parent,
-                protocol::CANIC_PUBLIC_STATUS,
-                &ChildrenStatusRequest::Children(PageRequest {
+                protocol::CANIC_PUBLIC_CHILDREN,
+                protocol::public_children::METHOD_ID,
+                &PageRequest {
                     limit: CHILD_PAGE_LIMIT,
                     offset,
-                }),
+                },
+                protocol::public_children::REQUEST_LIMITS,
+                protocol::public_children::RESPONSE_LIMITS,
             ),
         )?;
-        let ChildrenStatusResponse::Children(page) = response;
         let page_len = u64::try_from(page.entries.len())
             .map_err(|_| inventory_error("child page length does not fit u64"))?;
         if page_len > CHILD_PAGE_LIMIT
@@ -1717,13 +1664,19 @@ fn registry_entry(
     protocol_entry: &ProtocolEntry,
     observed_module_hash: Option<&[u8]>,
 ) -> Result<RegistryEntry, CurrentProtocolError> {
-    require_current_module(child.pid, observed_module_hash, protocol_entry)?;
-    if child.module_hash.as_ref().is_some_and(|hash| {
-        hash.len() != 32 || hex_bytes(hash) != protocol_entry.installed_module_hash
-    }) {
+    require_current_module(
+        Principal::from(child.pid),
+        observed_module_hash,
+        protocol_entry,
+    )?;
+    if child
+        .module_hash
+        .as_ref()
+        .is_some_and(|hash| hash.len() != 32 || hex_bytes(hash) != protocol_entry.raw_module_hash)
+    {
         return Err(CurrentProtocolError::TerminalDirectoryModule {
-            canister: child.pid,
-            expected: protocol_entry.installed_module_hash.clone(),
+            canister: Principal::from(child.pid),
+            expected: protocol_entry.raw_module_hash.clone(),
             observed: hex_bytes(
                 child
                     .module_hash
@@ -1916,14 +1869,11 @@ fn maximum_inventory_entries(
         })
 }
 
-fn verify_protocol(
-    path: &Path,
-    binding: &RegistryProtocolBinding,
-) -> Result<(), CurrentProtocolError> {
+fn verify_wire_schema(path: &Path, expected: &[u8; 32]) -> Result<(), CurrentProtocolError> {
     let bytes = match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
-            return Err(CurrentProtocolError::ReadCandid {
+            return Err(CurrentProtocolError::ReadArtifact {
                 path: path.to_path_buf(),
                 source: std::io::Error::new(
                     std::io::ErrorKind::NotFound,
@@ -1937,21 +1887,14 @@ fn verify_protocol(
             });
         }
         Err(source) => {
-            return Err(CurrentProtocolError::ReadCandid {
+            return Err(CurrentProtocolError::ReadArtifact {
                 path: path.to_path_buf(),
                 source: source.into(),
             });
         }
     };
-    let observed = derive_protocol_profile_hashes(
-        &binding.release_identity,
-        &binding.role,
-        &binding.capabilities,
-        &bytes,
-    );
-    if observed.candid_sha256 != binding.candid_sha256
-        || observed.protocol_profile_digest != binding.protocol_profile_digest
-    {
+    let observed: [u8; 32] = Sha256::digest(&bytes).into();
+    if observed != *expected {
         return Err(CurrentProtocolError::ProtocolSidecarChanged {
             path: path.to_path_buf(),
         });
@@ -1959,22 +1902,22 @@ fn verify_protocol(
     Ok(())
 }
 
-fn application_candid_sidecar(
+fn application_wire_sidecar(
     root: &Path,
     wasm_relative_path: &str,
 ) -> Result<PathBuf, CurrentProtocolError> {
     validate_release_artifact_relative_path(wasm_relative_path)
         .map_err(|error| inventory_error(error.to_string()))?;
-    let mut candid_relative_path = PathBuf::from(wasm_relative_path);
-    candid_relative_path.set_extension("did");
-    let candid_path = root.join(&candid_relative_path);
+    let mut schema_relative_path = PathBuf::from(wasm_relative_path);
+    schema_relative_path.set_extension("wire.json");
+    let schema_path = root.join(&schema_relative_path);
     let canonical_root = fs::canonicalize(root).map_err(|source| {
         inventory_error(format!(
             "cannot resolve current protocol root {}: {source}",
             root.display()
         ))
     })?;
-    let parent = candid_path
+    let parent = schema_path
         .parent()
         .ok_or_else(|| inventory_error("current protocol sidecar has no parent"))?;
     let canonical_parent = fs::canonicalize(parent).map_err(|source| {
@@ -1986,10 +1929,10 @@ fn application_candid_sidecar(
     if !canonical_parent.starts_with(&canonical_root) {
         return Err(inventory_error(format!(
             "current protocol sidecar escapes the canonical ICP root: {}",
-            candid_path.display()
+            schema_path.display()
         )));
     }
-    Ok(candid_path)
+    Ok(schema_path)
 }
 
 fn resolve_path(root: &Path, configured: &str) -> PathBuf {
@@ -2011,6 +1954,8 @@ fn inventory_error(reason: impl Into<String>) -> CurrentProtocolError {
 mod tests {
     #[cfg(unix)]
     mod descendant_reads;
+    #[cfg(unix)]
+    mod provisioning_read;
 
     use super::*;
     use canic_contracts::{
@@ -2035,24 +1980,16 @@ mod tests {
     use canic_core::role_contract::ProtocolProfileDigest;
 
     fn protocol_entry(module_hash: &str) -> ProtocolEntry {
-        protocol_entry_with_hashes(module_hash, module_hash)
-    }
-
-    fn protocol_entry_with_hashes(
-        raw_module_hash: &str,
-        installed_module_hash: &str,
-    ) -> ProtocolEntry {
         ProtocolEntry {
             binding: RegistryProtocolBinding {
                 release_identity: "0.109.test".to_string(),
                 role: CanisterRole::from("managed_component"),
                 capabilities: BTreeSet::new(),
-                candid_sha256: [1; 32],
+                wire_schema_sha256: [1; 32],
                 protocol_profile_digest: ProtocolProfileDigest::from_bytes([2; 32]),
             },
-            candid_path: PathBuf::from("managed_component.did"),
-            installed_module_hash: installed_module_hash.to_string(),
-            raw_module_hash: raw_module_hash.to_string(),
+            raw_module_hash: module_hash.to_string(),
+            installed_module_hash: module_hash.to_string(),
         }
     }
 
@@ -2063,9 +2000,9 @@ mod tests {
         let expected = "11".repeat(32);
         let protocol = protocol_entry(&expected);
         let mut info = CanisterInfo {
-            pid: child,
+            pid: child.into(),
             role: protocol.binding.role.clone(),
-            parent_pid: Some(parent),
+            parent_pid: Some(parent.into()),
             module_hash: None,
             created_at: 1,
         };
@@ -2191,24 +2128,28 @@ mod tests {
     }
 
     #[test]
-    fn component_inventory_distinguishes_raw_wasm_from_installed_gzip_hash() {
+    fn component_inventory_binds_exact_installed_payload_and_raw_directory() {
         let child = Principal::from_slice(&[9; 29]);
         let raw = "11".repeat(32);
+        let mut protocol = protocol_entry(&raw);
         let installed = "22".repeat(32);
-        let protocol = protocol_entry_with_hashes(&raw, &installed);
+        protocol.installed_module_hash = installed.clone();
         let info = CanisterInfo {
-            pid: child,
+            pid: child.into(),
             role: protocol.binding.role.clone(),
-            parent_pid: Some(Principal::from_slice(&[7; 29])),
-            module_hash: None,
+            parent_pid: Some(Principal::from_slice(&[7; 29]).into()),
+            module_hash: Some(vec![0x11; 32]),
             created_at: 1,
         };
 
         let projected = registry_entry(&info, &protocol, Some(&[0x22; 32]))
-            .expect("live status uses the exact installed gzip payload hash");
+            .expect("live status matches the exact installed compressed payload");
         assert_eq!(projected.module_hash.as_deref(), Some(installed.as_str()));
         assert_eq!(protocol.raw_module_hash, raw);
-        assert!(registry_entry(&info, &protocol, Some(&[0x11; 32])).is_err());
+        assert!(matches!(
+            registry_entry(&info, &protocol, Some(&[0x11; 32])),
+            Err(CurrentProtocolError::TerminalCanisterModule { .. })
+        ));
     }
 
     #[test]
@@ -2224,9 +2165,9 @@ mod tests {
             root,
         };
         let child_info = CanisterInfo {
-            pid: child,
+            pid: child.into(),
             role: protocol.binding.role.clone(),
-            parent_pid: Some(parent),
+            parent_pid: Some(parent.into()),
             module_hash: Some(vec![0x11; 32]),
             created_at: 1,
         };
@@ -2335,7 +2276,7 @@ mod tests {
                     payload_size_bytes: 128,
                     initial_cycles: Cycles::new(5_000_000_000_000),
                     controller: root,
-                    canister: Some(child.pid),
+                    canister: Some(Principal::from(child.pid)),
                 },
             ),
             installation: Some(
@@ -2346,7 +2287,7 @@ mod tests {
                         component: member.binding.clone(),
                         parent_canister_id: member.binding.canister_id,
                         role: child.role.clone(),
-                        canister_id: child.pid,
+                        canister_id: Principal::from(child.pid),
                     },
                 },
             ),
@@ -2937,70 +2878,55 @@ mod tests {
     }
 
     #[test]
-    fn protocol_sidecar_binds_hash_and_complete_profile() {
+    fn wire_sidecar_binds_exact_release_hash() {
         let root = crate::test_support::temp_dir("terminal-protocol-sidecar");
         fs::create_dir_all(&root).expect("create sidecar fixture");
-        let path = root.join("managed_component.did");
-        let candid = b"service : { ping : () -> () query; };";
-        fs::write(&path, candid).expect("write sidecar");
-        let role = CanisterRole::from("managed_component");
-        let capabilities = BTreeSet::new();
-        let hashes = derive_protocol_profile_hashes("0.109.test", &role, &capabilities, candid);
-        let binding = RegistryProtocolBinding {
-            release_identity: "0.109.test".to_string(),
-            role,
-            capabilities,
-            candid_sha256: hashes.candid_sha256,
-            protocol_profile_digest: hashes.protocol_profile_digest,
-        };
-        verify_protocol(&path, &binding).expect("verify exact current sidecar");
-        fs::write(&path, b"service : {};").expect("change sidecar");
+        let path = root.join("managed_component.wire.json");
+        let schema = crate::test_support::WIRE_SCHEMA;
+        fs::write(&path, schema).expect("write sidecar");
+        let expected: [u8; 32] = Sha256::digest(schema).into();
+        verify_wire_schema(&path, &expected).expect("verify exact current sidecar");
+        fs::write(&path, b"changed schema").expect("change sidecar");
         assert!(matches!(
-            verify_protocol(&path, &binding),
+            verify_wire_schema(&path, &expected),
             Err(CurrentProtocolError::ProtocolSidecarChanged { path: observed })
                 if observed == path
         ));
     }
 
     #[test]
-    fn fresh_fleet_application_candid_comes_from_immutable_artifact_path() {
-        let root = crate::test_support::temp_dir("terminal-artifact-candid");
+    fn fresh_fleet_application_schema_comes_from_immutable_artifact_path() {
+        let root = crate::test_support::temp_dir("terminal-artifact-schema");
         let artifact_parent = root.join(".icp/release/artifacts/managed_component");
         fs::create_dir_all(&artifact_parent).expect("create immutable artifact directory");
-        let candid = application_candid_sidecar(
+        let schema = application_wire_sidecar(
             &root,
             ".icp/release/artifacts/managed_component/release-bound-module.wasm",
         )
-        .expect("derive immutable Candid sidecar");
+        .expect("derive immutable Wire sidecar");
 
-        assert_eq!(candid, artifact_parent.join("release-bound-module.did"),);
+        assert_eq!(
+            schema,
+            artifact_parent.join("release-bound-module.wire.json"),
+        );
     }
 
     #[cfg(unix)]
     #[test]
-    fn fresh_fleet_protocol_candid_rejects_final_symlink() {
+    fn fresh_fleet_wire_schema_rejects_final_symlink() {
         use std::os::unix::fs::symlink;
 
         let root = crate::test_support::temp_dir("terminal-protocol-sidecar-link");
         fs::create_dir_all(&root).expect("create sidecar fixture");
-        let target = root.join("target.did");
-        let link = root.join("managed_component.did");
-        let candid = b"service : { ping : () -> () query; };";
-        fs::write(&target, candid).expect("write target sidecar");
+        let target = root.join("target.wire.json");
+        let link = root.join("managed_component.wire.json");
+        let schema = crate::test_support::WIRE_SCHEMA;
+        fs::write(&target, schema).expect("write target sidecar");
         symlink(&target, &link).expect("link mutable sidecar");
-        let role = CanisterRole::from("managed_component");
-        let capabilities = BTreeSet::new();
-        let hashes = derive_protocol_profile_hashes("0.109.test", &role, &capabilities, candid);
-        let binding = RegistryProtocolBinding {
-            release_identity: "0.109.test".to_string(),
-            role,
-            capabilities,
-            candid_sha256: hashes.candid_sha256,
-            protocol_profile_digest: hashes.protocol_profile_digest,
-        };
+        let expected: [u8; 32] = Sha256::digest(schema).into();
 
         assert!(matches!(
-            verify_protocol(&link, &binding),
+            verify_wire_schema(&link, &expected),
             Err(CurrentProtocolError::ProtocolSidecarNotRegular { path: observed })
                 if observed == link
         ));

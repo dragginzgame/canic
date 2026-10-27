@@ -15,8 +15,7 @@ use crate::dto::{
 
 /// Exact sensitive runtime observation selected by an authenticated controller path.
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug)]
 pub enum CanisterObservabilityRequest {
     ChildFunding(Principal),
     CycleBalance,
@@ -27,8 +26,7 @@ pub enum CanisterObservabilityRequest {
 }
 
 /// Exact sensitive runtime observation returned to an authenticated controller path.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+
 pub enum CanisterObservabilityResponse {
     ChildFunding(ChildFundingUsage),
     CycleBalance(CycleBalanceStatusResponse),
@@ -40,8 +38,7 @@ pub enum CanisterObservabilityResponse {
 
 /// Parent-local ledger and unresolved transfer evidence for one exact child.
 /// Accounted cycles can include an in-flight grant; missing reservation evidence is unknown.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct ChildFundingUsage {
     pub parent: Principal,
     pub child: Principal,
@@ -50,40 +47,4 @@ pub struct ChildFundingUsage {
     pub last_accounted_at_secs: u64,
     pub pending_operations: u32,
     pub reserved_cycles: Option<crate::cycles::Cycles>,
-}
-
-/// Root-routed request for one Root-controlled canister's sensitive observations.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct FleetCanisterObservabilityRequest {
-    pub canister_id: Principal,
-    pub request: CanisterObservabilityRequest,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fleet_observability_request_round_trips_through_candid() {
-        let request = FleetCanisterObservabilityRequest {
-            canister_id: Principal::from_slice(&[7; 29]),
-            request: CanisterObservabilityRequest::CycleHistory(PageRequest {
-                offset: 3,
-                limit: 5,
-            }),
-        };
-
-        let bytes = ic_platform::candid::contract::encode_one(&request)
-            .expect("encode observability request");
-        let decoded: FleetCanisterObservabilityRequest =
-            ic_platform::candid::decoder::decode_one(&bytes).expect("decode observability request");
-
-        assert_eq!(decoded.canister_id, request.canister_id);
-        let CanisterObservabilityRequest::CycleHistory(page) = decoded.request else {
-            panic!("expected CycleHistory request");
-        };
-        assert_eq!(page.offset, 3);
-        assert_eq!(page.limit, 5);
-    }
 }

@@ -10,10 +10,11 @@ use std::{sync::Arc, time::Duration};
 
 use ic_platform::{
     agent::{
-        Agent, AgentBuilder, AgentError, BasicIdentity, Identity, Prime256v1Identity,
+        Agent, AgentBuilder, AgentError, BasicIdentity, Identity, Prime256v1Identity, RejectCode,
         Secp256k1Identity,
     },
     candid::contract::CandidType,
+    management_canister_types::{CanisterIdRecord, DeleteCanisterSnapshotArgs, Snapshot},
     principal::ExternalPrincipal as Principal,
 };
 use serde::{Deserialize, de::DeserializeOwned};
@@ -27,12 +28,6 @@ use super::{
 const MANAGEMENT_CANISTER_STATUS: &str = "canister_status";
 const MANAGEMENT_INGRESS_EXPIRY: Duration = Duration::from_mins(4);
 pub const SNAPSHOT_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct ManagementSnapshot {
-    id: Vec<u8>,
-}
 
 #[derive(Debug, Deserialize)]
 struct IcpNetworkStatus {
@@ -86,6 +81,24 @@ pub enum IcpManagementCallError {
     MissingEnvironment,
 }
 
+impl IcpManagementCallError {
+    /// Only an exact typed destination rejection establishes target absence.
+    pub(crate) fn is_canister_not_found(&self, canister: Principal) -> bool {
+        let Self::AgentCall(
+            AgentError::CertifiedReject { reject, .. }
+            | AgentError::UncertifiedReject { reject, .. },
+        ) = self
+        else {
+            return false;
+        };
+        let absence_code = (RejectCode::DestinationInvalid, Some("IC0301"));
+        if (reject.reject_code, reject.error_code.as_deref()) != absence_code {
+            return false;
+        }
+        reject.reject_message == format!("Canister {canister} not found")
+    }
+}
+
 impl IcpCli {
     /// List exact snapshot IDs through the selected authenticated management boundary.
     pub(crate) fn management_snapshot_ids(
@@ -115,16 +128,10 @@ impl IcpCli {
         canister_id: Principal,
         snapshot_id: Vec<u8>,
     ) -> Result<(), IcpManagementCallError> {
-        #[derive(CandidType)]
-        #[candid_path("ic_platform::candid::contract")]
-        struct Request {
-            canister_id: Principal,
-            snapshot_id: Vec<u8>,
-        }
         self.snapshot_update(
             canister_id,
             "delete_canister_snapshot",
-            &Request {
+            &DeleteCanisterSnapshotArgs {
                 canister_id,
                 snapshot_id,
             },
@@ -324,12 +331,7 @@ pub async fn read_snapshot_ids(
     agent: &Agent,
     canister: Principal,
 ) -> Result<Vec<Vec<u8>>, IcpManagementCallError> {
-    #[derive(CandidType)]
-    #[candid_path("ic_platform::candid::contract")]
-    struct Request {
-        canister_id: Principal,
-    }
-    let argument = ic_platform::candid::contract::encode_one(Request {
+    let argument = ic_platform::candid::contract::encode_one(CanisterIdRecord {
         canister_id: canister,
     })
     .map_err(IcpManagementCallError::CandidEncode)?;
@@ -358,7 +360,7 @@ fn decode_snapshot_ids(bytes: &[u8]) -> Result<Vec<Vec<u8>>, IcpManagementCallEr
     config
         .set_decoding_quota(SNAPSHOT_RESPONSE_BYTES * 64)
         .set_skipping_quota(SNAPSHOT_RESPONSE_BYTES * 64);
-    let snapshots: Vec<ManagementSnapshot> =
+    let snapshots: Vec<Snapshot> =
         ic_platform::candid::decoder::decode_one_with_config(bytes, &config)
             .map_err(IcpManagementCallError::CandidResponse)?;
     Ok(snapshots.into_iter().map(|snapshot| snapshot.id).collect())
@@ -432,9 +434,65 @@ mod tests {
     use std::cell::RefCell;
 
     #[test]
+    fn canister_absence_requires_exact_typed_reject_authority() {
+        let target = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+        let other = Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap();
+        for certified in [false, true] {
+            for (code, error_code, reported, expected) in [
+                (RejectCode::DestinationInvalid, Some("IC0301"), target, true),
+                (RejectCode::DestinationInvalid, Some("IC0301"), other, false),
+                (RejectCode::CanisterError, Some("IC0301"), target, false),
+                (
+                    RejectCode::DestinationInvalid,
+                    Some("IC0503"),
+                    target,
+                    false,
+                ),
+                (RejectCode::DestinationInvalid, None, target, false),
+            ] {
+                let reject = ic_platform::agent::RejectResponse {
+                    reject_code: code,
+                    error_code: error_code.map(str::to_string),
+                    reject_message: format!("Canister {reported} not found"),
+                };
+                let error = if certified {
+                    AgentError::CertifiedReject {
+                        reject,
+                        operation: None,
+                    }
+                } else {
+                    AgentError::UncertifiedReject {
+                        reject,
+                        operation: None,
+                    }
+                };
+                assert_eq!(
+                    IcpManagementCallError::AgentCall(error).is_canister_not_found(target),
+                    expected
+                );
+            }
+        }
+        for error in [
+            IcpManagementCallError::AgentCall(AgentError::TransportError(
+                ic_platform::agent::TransportError::Generic(format!(
+                    "IC0301: Canister {target} not found"
+                )),
+            )),
+            IcpManagementCallError::Icp(crate::icp::IcpCommandError::Failed {
+                command: "status".to_string(),
+                stderr: format!("IC0301: Canister {target} not found"),
+            }),
+        ] {
+            assert!(!error.is_canister_not_found(target));
+        }
+    }
+
+    #[test]
     fn snapshot_inventory_decoder_preserves_ids_and_refuses_oversized_or_malformed_replies() {
-        let bytes = ic_platform::candid::contract::encode_one(vec![ManagementSnapshot {
+        let bytes = ic_platform::candid::contract::encode_one(vec![Snapshot {
             id: vec![1, 2, 3],
+            taken_at_timestamp: 42,
+            total_size: 1024,
         }])
         .unwrap();
         assert_eq!(decode_snapshot_ids(&bytes).unwrap(), [vec![1, 2, 3]]);

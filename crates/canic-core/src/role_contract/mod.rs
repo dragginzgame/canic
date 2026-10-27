@@ -31,5 +31,5 @@ pub use policy::{
 };
 pub use profile::{
     PROTOCOL_PROFILE_DIGEST_ENV, ProtocolProfileDigest, ProtocolProfileDigestParseError,
-    ProtocolProfileHashes, derive_protocol_profile_hashes,
+    ProtocolProfileHashes, derive_protocol_profile_digest, derive_protocol_profile_hashes,
 };

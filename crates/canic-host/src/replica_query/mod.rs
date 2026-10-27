@@ -13,14 +13,11 @@ use self::transport::local_query;
 use crate::icp_config::{
     IcpConfigError, resolve_current_canic_icp_root, resolve_icp_build_network_from_root,
 };
+use canic_contracts::protocol::public_overview;
 use canic_contracts::{
-    dto::{
-        error::Error as CanicError,
-        wire::projection::overview::{RoleStatusRequest, RoleStatusResponse},
-    },
+    dto::{error::Error as CanicError, role::RoleOverviewResponse},
     ids::BuildNetwork,
 };
-use ic_platform::candid::contract::Decode;
 use std::path::Path;
 use thiserror::Error as ThisError;
 
@@ -34,6 +31,9 @@ pub use self::status::{local_replica_gateway_listening, local_replica_status_rea
 pub enum ReplicaQueryError {
     #[error(transparent)]
     Candid(ic_platform::candid::contract::Error),
+
+    #[error(transparent)]
+    Wire(#[from] ic_wire::Error),
 
     #[error("{0}")]
     Canister(CanicError),
@@ -80,11 +80,16 @@ pub(crate) fn query_ready(
     endpoint: &str,
     icp_root: Option<&Path>,
 ) -> Result<bool, ReplicaQueryError> {
-    let arg = ic_platform::candid::contract::encode_one(RoleStatusRequest::Overview)
-        .map_err(ReplicaQueryError::Candid)?;
+    let arg = ic_wire::native::encode_request(
+        public_overview::METHOD_ID,
+        &(),
+        public_overview::REQUEST_LIMITS,
+    )?;
     let bytes = local_query(environment, canister, endpoint, &arg, icp_root)?;
-    let result = Decode!(&bytes, Result<RoleStatusResponse, CanicError>)
-        .map_err(ReplicaQueryError::Candid)?;
-    let RoleStatusResponse::Overview(response) = result.map_err(ReplicaQueryError::Canister)?;
-    Ok(response.bootstrap.ready)
+    let result: Result<RoleOverviewResponse, CanicError> = ic_wire::native::decode_response(
+        public_overview::METHOD_ID,
+        &bytes,
+        public_overview::RESPONSE_LIMITS,
+    )?;
+    Ok(result.map_err(ReplicaQueryError::Canister)?.bootstrap.ready)
 }

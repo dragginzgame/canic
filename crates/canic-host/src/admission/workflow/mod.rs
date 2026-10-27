@@ -10,10 +10,10 @@ use crate::{
             AdmissionPlanRecord,
         },
         ops::{
-            assemble_plan, current_binding, exact_retained_operation, operation_identity,
-            operation_successor, project_participant_catalog, query_coordinator_admission,
-            query_coordinator_registry, query_coordinator_registry_version, require_idle_admission,
-            root_report, same_root_status_head, submit, successor_policy, validate_live_authority,
+            assemble_plan, exact_retained_operation, operation_identity, operation_successor,
+            project_participant_catalog, query_coordinator_admission, query_coordinator_registry,
+            query_coordinator_registry_version, require_idle_admission, root_report,
+            same_root_status_head, submit, successor_policy, validate_live_authority,
             validate_live_plan_state, validate_plan_file,
         },
         view::{AdmissionRootReport, AdmissionStatusReport},
@@ -21,7 +21,6 @@ use crate::{
     fleet_ensure::resolve_current_fleet,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    query_canister_with_arg,
 };
 use canic_contracts::{
     dto::{
@@ -31,7 +30,6 @@ use canic_contracts::{
         },
         fleet_registry::FleetSubnetRootStatus,
         page::PageRequest,
-        wire::projection::admission::{RemoteRootStatusRequest, RemoteRootStatusResponse},
     },
     ids::{FleetAdmissionPolicy, FleetAdmissionSelector},
 };
@@ -93,28 +91,26 @@ fn connect(fleet: &str, target: &AdmissionTarget) -> Result<AdmissionConnection,
     let current = resolve_current_fleet(&root, &target.environment, fleet)?;
     let initial_registry = current.initial_active_registry(fleet)?.clone();
     let coordinator = initial_registry.authority.binding.coordinator;
-    let coordinator_binding = current_binding(&current, &root, &coordinator, fleet)?;
-    let mut root_bindings = BTreeMap::new();
+    let coordinator_schema = super::ops::current_admission_schema(&current, &root, coordinator)?;
+    let mut root_schemas = BTreeMap::new();
     for fleet_subnet_root in &current.topology.fleet_subnet_root_canister_ids {
         let fleet_subnet_root = fleet_subnet_root
             .parse::<Principal>()
             .map_err(|error| authority_error(error.to_string()))?;
-        root_bindings.insert(
+        root_schemas.insert(
             fleet_subnet_root,
-            current_binding(&current, &root, &fleet_subnet_root, fleet)?,
+            super::ops::current_admission_schema(&current, &root, fleet_subnet_root)?,
         );
     }
     let icp = IcpCli::new(&target.icp, Some(target.environment.clone())).with_cwd(&root);
-    let registry = query_coordinator_registry(&icp, &coordinator_binding, coordinator)?;
-    let registry_version =
-        query_coordinator_registry_version(&icp, &coordinator_binding, coordinator)?;
-    let admission = query_coordinator_admission(&icp, &coordinator_binding, coordinator)?;
+    let registry = query_coordinator_registry(&icp, coordinator)?;
+    let registry_version = query_coordinator_registry_version(&icp, &current, &root, coordinator)?;
+    let admission = query_coordinator_admission(&icp, &coordinator_schema, coordinator)?;
     validate_live_authority(&initial_registry, &registry, &registry_version, &admission)?;
     Ok(AdmissionConnection {
         coordinator,
         icp,
-        coordinator_binding,
-        root_bindings,
+        root_schemas,
         registry,
         registry_version,
         admission,
@@ -183,21 +179,19 @@ fn query_root_status(
     let mut retained: Option<FleetAdmissionRootStatusResponse> = None;
     let mut participants = Vec::new();
     loop {
-        let binding = connection
-            .root_bindings
+        let schema = connection
+            .root_schemas
             .get(&root)
             .ok_or_else(|| authority_error("Root is absent from current ensure authority"))?;
-        let response: RemoteRootStatusResponse = query_canister_with_arg(
+        let page = super::ops::query_root_admission(
             &connection.icp,
-            binding,
+            schema,
             root,
-            canic_contracts::protocol::CANIC_ROOT_STATUS,
-            &RemoteRootStatusRequest::Admission(PageRequest {
+            PageRequest {
                 limit: ROOT_STATUS_PAGE_SIZE,
                 offset,
-            }),
+            },
         )?;
-        let RemoteRootStatusResponse::Admission(page) = response;
         if let Some(first) = retained.as_ref()
             && !same_root_status_head(first, &page)
         {

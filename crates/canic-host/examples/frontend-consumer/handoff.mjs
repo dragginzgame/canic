@@ -1,4 +1,5 @@
-import { Actor, HttpAgent, IC_ROOT_KEY } from '@icp-sdk/core/agent';
+import { HttpAgent, IC_ROOT_KEY, createAgentOptions, queryRaw } from '@tokostudios/ic-platform/agent';
+import { Principal } from '@tokostudios/ic-platform/principal';
 
 const encoder = new TextEncoder();
 const verified = new WeakMap();
@@ -48,7 +49,7 @@ export async function verifyHandoff(manifestBytes, expectedDigest, readFile) {
   const rootKey = fromHex(manifest.local_root_key_der_hex ?? IC_ROOT_KEY);
   if (await networkIdentity(rootKey) !== manifest.canonical_network_id) throw new Error('Network trust mismatch');
   if (manifest.roles.length === 0 || manifest.roles.length > 128) throw new Error('Invalid role selection');
-  const files = [manifest.alternative_origins, ...manifest.roles.flatMap(role => [role.candid, role.javascript, role.typescript])];
+  const files = [manifest.alternative_origins, ...manifest.roles.flatMap(role => [role.wire_schema, role.javascript, role.typescript, ...role.modules])];
   const names = new Set();
   let total = 0;
   for (const file of files) {
@@ -65,11 +66,28 @@ export async function verifyHandoff(manifestBytes, expectedDigest, readFile) {
   return handoff;
 }
 
-/** Use a verified handoff with a statically imported generated factory and a browser-owned identity. */
-export async function createCanicActor(handoff, canisterId, idlFactory, identity) {
-  if (!verified.has(handoff)) throw new Error('Verify the handoff before constructing an actor');
+/** Bind raw authenticated transport to verified release codecs and explicit trust. */
+export async function createCanicClient(handoff, canisterId, bindings, identity) {
+  if (!verified.has(handoff)) throw new Error('Verify the handoff before constructing a client');
   if (!handoff.manifest.roles.some(role => role.canister_id === canisterId)) throw new Error('Canister is outside this handoff');
-  const agent = await HttpAgent.create({ host: handoff.manifest.api_origin, identity,
-    rootKey: Uint8Array.from(verified.get(handoff)), shouldFetchRootKey: false });
-  return Actor.createActor(idlFactory, { agent, canisterId });
+  const target = Principal.fromText(canisterId);
+  const agent = await HttpAgent.create(createAgentOptions({ host: new URL(handoff.manifest.api_origin), identity,
+    rootKey: Uint8Array.from(verified.get(handoff)),
+    retryTimes: 3, verifyQuerySignatures: true, shouldSyncTime: false }));
+  return Object.freeze({
+    async call(method, request = null) {
+      const codec = bindings[method];
+      if (!codec || codec.methodName !== method) throw new Error('Method is outside these bindings');
+      const arg = codec.encodeRequest(request);
+      let reply;
+      if (codec.mode === 'query') {
+        reply = await queryRaw(agent, target, { methodName: method, arg });
+      } else if (codec.mode === 'update') {
+        reply = (await agent.update(target, { methodName: method, arg, effectiveCanisterId: target })).reply;
+      } else {
+        throw new Error('Unsupported Wire transport mode');
+      }
+      return codec.decodeResponse(new Uint8Array(reply));
+    },
+  });
 }

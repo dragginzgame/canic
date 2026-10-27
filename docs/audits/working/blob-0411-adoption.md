@@ -1,4 +1,193 @@
-# Blob 0.41.1 ownership and acceptance audit — 2026-10-22
+# Blob ownership and acceptance audit
+
+## Current mounted coverage summary — Blob 0.47.0
+
+This supersedes the historical inventory below. The canonical method owner is
+`ic_blob_storage_contracts::mount_service_endpoints!`, expanded by the Canic
+adapter; export parity is not exhaustive behavioral coverage.
+
+| Mounted surface | Current consumer evidence | Remaining boundary |
+| --- | --- | --- |
+| Upload, reference, tenant, certificate and read descriptors | `pic/blob_service/journey/` and managed installation cases, both shapes | Actual provider bytes/browser deployment |
+| Local status, admission, manifest, content, capacity and receipts | `journey/inspection/`, original identities and restored observations | Selected assertions, not exhaustive branch coverage |
+| Tenant/service upload history | `journey/inspection/pagination/`, result/scan boundaries, scope and complete union | Concurrent live provider activity is not simulated |
+| Gateway sync/cancel/revoke | `operator/provider/{gateways,races}/`, success, bounds, exact cancellation, discarded reply, held stale callbacks and fencing, both shapes | Default-branch delivery |
+| Account balance and payment relationship | `operator/provider/{account,relationship}/`, exact bindings, typed provider/decode refusals | Actual provider/payer linkage |
+| Funding history/outcome/assessment | `operator/funding/`, empty/refunded records and cursors; `paid/outcome/` covers exact acknowledged, credit-required and unknown-transfer outcomes, refunds/grants/fences, caller/intent refusal and read-only replay through recovery | Positive independently confirmed credit and receipt replay remain #494; real-provider evidence remains Blob #34 |
+| External GC callbacks | `operator/provider/gc/`, bounds, caller/revocation, atomic refusal, replay and restore, both shapes | Physical deletion and billing cessation |
+
+Current requalification uses Blob/Contracts 0.47, Tooling/Testkit 0.68.1,
+Platform 0.6.15, Wire 0.7.5, Auth 0.16, Memory/Storage 0.51 and Timers 0.31.
+The two-composition generated-client case and all five embedded profiles pass (536s/255s),
+including finalized Wasm, exact retained schemas/bindings, permissions, held-reply
+races and paid-outcome recovery. Generated tenant requests exercise actual Blob
+endpoints, caller/service-binding denial, malformed frames and unchanged mutation
+replay. Current installed logs are in `/tmp/canic-blob047-installed/`; strict
+adapter/consumer Clippy and dependency admission are in `/tmp/canic-blob047/`.
+Earlier internal Clippy evidence retains its original graph. Each current catalog method has a corresponding invocation in
+the maintained fixture modules named above. This is method reachability plus the
+selected assertions, not exhaustive branch coverage. Positive independent-credit
+confirmation and immutable receipt replay remain #494. Earlier dated sections
+retain their historical graphs and gaps; this summary supersedes them.
+
+No current mounted method is claimed uninvoked. Distinct local test results do
+not prove every branch, real-provider behavior or default-branch delivery.
+
+The shared frontend delivery path also passes installed SDK query/update
+acceptance on the earlier Blob 0.45 graph (451s; `/tmp/canic-blob-browser-current/`), with all
+three lock hashes unchanged. Its application probe does not establish Blob
+browser upload/download or independent provider credit.
+
+## Historical evidence — superseded graphs and gaps
+
+The following reports retain their original dates and dependency selections.
+Statements of missing coverage or unpublished dependencies below describe those
+runs only; use the current summary above and the current handoff for open work.
+
+## Blob held-funding concurrency qualified — 2026-10-22
+
+The embedded managed proof holds the first provider callback, invokes concurrent
+funding ingress twice and verifies that neither the original dispatch nor a new
+reservation proceeds. The exact held request and mounted funding summary remain
+unchanged. Releasing malformed bytes refunds the whole first offer; exhausted
+provider slots reject the second offer with a whole refund. Their distinct typed
+outcomes remain observable with zero accepted cycles before and after restoration.
+No production funding policy, provider evidence, scheduler or journal was added.
+
+Strict embedded-consumer and internal Clippy pass. The installed managed case
+passes in `/tmp/canic-blob-concurrency/embedded-retry.log`. The first build was
+correctly rejected after Cargo.lock changed from Wire 0.6.0 to 0.6.1 during the
+build; that incoming selection was preserved. No mixed-input result is admitted.
+This is PocketIC/framework evidence, not native macOS or real-provider acceptance.
+
+Published Blob remains 0.42.0 and Testkit 0.64.1. Tooling #235's bounded
+cycle-acceptance fixture is implemented upstream but not published. Accepted
+payments/partial refunds, accepted malformed/error/lost callbacks, positive credit
+and budget renewal remain unqualified under #494. Real-provider payer linkage is
+application/deployment evidence. #494 stays open for these gaps and default-branch
+delivery; the complete batch is not ready to push or publish. Changelogs are updated.
+No commit, push, release, deployment or sibling edit.
+
+
+## Host 0.64.1 closes the local held-callback gap — 2026-10-22
+
+Published Testkit 0.64.1 supplies the native held-reply fixture. Both managed
+compositions pass cancellation/revocation-before-callback proofs in
+`operator/provider/races/`: observe the held original request, commit the local
+invalidation, verify the same reply remains held, release it, then require
+Conflict and exact unchanged terminal state. A new authorized refresh still
+succeeds. No live/automatic progress or simulated clock advancement is used
+while replies are held; provider upgrades occur only outside held calls.
+
+Strict Clippy, actual Rust 1.91 native compilation, three dependency admissions
+and both managed cases pass; normal adapter Wasm excludes Host/Testkit/wat/wast.
+Logs: `/tmp/canic-host0641/`. #622 remains open for default-branch delivery;
+#494/#235 own the distinct accepted-payment gap. No native macOS, real-provider
+or complete release readiness claim. Earlier missing-fixture notes are historical.
+
+
+## #622 populated funding inspection — 2026-10-22
+
+The embedded installed fixture's two real rejected/full-refund operations now
+qualify descending funding history, exclusive cursor boundaries, exact retained
+outcomes, changed amount/target conflicts, caller refusal, unknown-operation
+absence and repeated observation. Queries preserve stable memory. The same
+checks run before restoration, while fenced and after continuity recovery.
+This proves populated refunded records, not accepted/credited payment outcomes.
+
+Strict internal Clippy, the targeted embedded managed PocketIC case and focused
+format/diff checks pass; `/tmp/canic-622-populated/{clippy,embedded}.log`.
+No production, dependency or deployed fixture source changed in this slice.
+The dedicated fixture still qualifies empty funding views; populated records
+are exercised in the application that opts into the funding API.
+
+Published Testkit remains 0.64.0. #234's held-reply support is implemented locally
+upstream but unpublished, so cancellation/revocation-before-stale-callback tests
+remain open. #235 and #494 own accepted-payment qualification. #622 remains open
+for delayed callbacks and default-branch delivery. No full-release readiness,
+live-provider/native macOS qualification, commit, push or deployment is claimed.
+
+## Blob GC bounds and remaining race/funding gaps — 2026-10-22
+
+Both managed compositions now qualify the mounted external GC liveness endpoint
+at the shared 10,000-root bound, reject over-count and over-byte requests, and
+refuse gateway listing/acknowledgment after explicit revocation while retaining
+public conservative liveness. Strict internal Clippy and both targeted managed
+PocketIC cases pass: `/tmp/canic-blob-races/{clippy-gc,dedicated-gc,embedded-gc}.log`.
+No production API or dependency changes in this slice.
+
+The attempted delayed gateway callback test did not establish cancellation-first
+ordering: immediate provider replies completed during Canic's asynchronous
+continuity admission and cancellation correctly returned `Conflict`. Both failed
+experiments are retained in `/tmp/canic-blob-races/{dedicated,embedded}.log`; the
+timing-dependent test was removed. This is not evidence of a Blob defect.
+[IC Tooling #234](https://github.com/dragginzgame/ic-tooling/issues/234) requests a
+bounded held-response fixture so [#622](https://github.com/dragginzgame/canic/issues/622)
+can prove cancellation/revocation before the original callback.
+
+[#494](https://github.com/dragginzgame/canic/issues/494) remains pending a decision
+between an opt-in application-supplied trusted-evidence host API and inspection-only
+until a concrete evidence source exists. Shared funding dispatch/journal APIs
+are available; provider qualification, payer linkage, complete account activity
+and other liabilities cannot be inferred from local journal/balance alone.
+No paid path, fabricated evidence or automatic schedule was introduced.
+
+No 100% integration or complete 0.112 readiness claim; delayed races, guarded
+funding and real-provider acceptance remain unqualified. Native macOS and live
+provider execution were not performed. No commit, push, release or deployment.
+
+
+## Superseding adoption: published 0.42.0
+
+The maintained selection is now published Blob/contracts 0.42.0 in all three
+Canic graphs. Both managed compositions pass again, including the three newly
+mounted external Candid GC callbacks. Their bounded decoders and policy remain
+upstream-owned; Canic supplies raw endpoint admission, context and Candid exports.
+Tests cover liveness, gateway authority, malformed roots, atomic batch refusal,
+release/listing, acknowledgment replay and restoration while retaining physical
+bytes and billing liabilities. The 0.41 evidence below remains historical.
+
+The integration exposed a Canic macro parser defect with invisible groups around
+forwarded literal export names. The corrected parser and focused regressions pass.
+Scoped strict Clippy, both independent consumer Clippy checks, three locked
+admissions, Rust 1.91 adapter Wasm and both consumer native checks pass. Managed
+consumer Wasm/runtime qualification uses the configured compiler. Direct consumer
+MSRV Wasm checks refused the unsupported Cargo build path; they are not passes.
+Evidence and initial failures: `/tmp/canic-blob042/`.
+
+Remaining: delayed gateway callback races (#622), guarded paid-dispatch and
+renewal/uncertainty composition (#494), default-branch delivery and real-provider
+evidence. The 0.42 acknowledgment profile removes the old universal independent
+credit-proof prerequisite; it does not make provider acknowledgment credit proof.
+No full-integration percentage or complete 0.112 release readiness is established.
+
+## Follow-through: operator cross-tenant pagination
+
+Both managed compositions compare the complete service-wide history against the
+union of two separately authorized tenant scans. Full entries match, without
+duplicate identities or repeated cursors; multiple service pages remain bounded.
+Tenant callers are denied service history, and a service cursor reused under a
+tenant scope returns CursorScope. Cursor bindings and unchanged stable memory
+are asserted. Strict Clippy and both managed cases pass; evidence:
+`/tmp/canic-blob-service-pages/`.
+
+The cross-tenant pagination gap below is now covered. Delayed gateway callbacks,
+paid-funding/provider acceptance and default-branch delivery remain distinct gaps;
+no exhaustive coverage or production-readiness claim is made.
+
+## Follow-through: populated tenant history
+
+Both managed compositions populate 65 additional reservations through public
+admission. Tenant history returns all original IDs in order across result-limited
+pages; a nonmatching filter crosses the scan limit with an empty continuation.
+Returned cursors advance and reject changed tenant/filter reuse. Queries preserve
+stable memory. Fixture capacities increase while reservation accounting remains
+exact; production page limits are unchanged. Strict Clippy and both cases pass:
+`/tmp/canic-blob-pagination/`.
+
+This qualifies tenant upload-history pagination, not service-wide cross-tenant
+scans, populated paid-funding history or delayed callback races. #622 stays open
+and local working-tree evidence is not default-branch delivery.
 
 ## Follow-through: payment-relationship observations
 
@@ -96,7 +285,7 @@ replacement. Historical design/audit documents are evidence, not active engines.
 Canic's generic fixture importer still exists; its historical Blob-labelled
 issue #123 is not evidence of a duplicate application Blob service.
 
-## Coverage matrix
+## Historical 0.41.1 coverage matrix
 
 | Surface | Evidence | Remaining limitation |
 | --- | --- | --- |
@@ -110,7 +299,7 @@ issue #123 is not evidence of a duplicate application Blob service.
 | Native build/dependency boundaries | Preceding 0.41.1 strict adapter/consumer Clippy and all three locked admissions passed | Current patch MSRV/native macOS not rerun |
 
 The canonical catalog contains 27 owned Wire methods and the external Candid
-certificate method. Fourteen methods have no direct invocation anywhere in the
+certificate method. At that original inspection, fourteen methods had no direct invocation in the
 maintained Canic Rust tests inspected:
 
 - Gateway: `blob_sync_gateways`, `blob_cancel_gateway_sync`, `blob_revoke_gateway`.

@@ -15,10 +15,8 @@ use canic::{
         ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce, SubnetId,
     },
 };
-use ic_platform::{
-    candid::{contract::encode_one, decoder::decode_one},
-    principal::ExternalPrincipal as Principal,
-};
+use canic_contracts::protocol::initialization::{decode, encode};
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[test]
 fn managed_init_payload_is_constructible_through_public_facade_paths() {
@@ -108,9 +106,8 @@ fn managed_init_payload_is_constructible_through_public_facade_paths() {
             principals: vec![Principal::from_slice(&[14])],
         }),
     };
-    let encoded = encode_one(&payload).expect("encode public managed payload");
-    let decoded =
-        decode_one::<CanisterInitPayload>(&encoded).expect("decode public managed payload");
+    let encoded = encode(&payload).expect("encode public managed payload");
+    let decoded = decode::<CanisterInitPayload>(&encoded).expect("decode public managed payload");
 
     assert_eq!(decoded, payload);
     assert_caller_authority_contract(&payload);
@@ -142,11 +139,11 @@ fn assert_caller_authority_contract(payload: &CanisterInitPayload) {
         install_id: payload.component_install_id,
     };
     assert_eq!(
-        decode_one::<CallerReceiverAuthority>(&encode_one(&receiver).unwrap()).unwrap(),
+        decode::<CallerReceiverAuthority>(&encode(&receiver).unwrap()).unwrap(),
         receiver
     );
     assert_eq!(
-        decode_one::<CallerComponentInstallation>(&encode_one(&component).unwrap()).unwrap(),
+        decode::<CallerComponentInstallation>(&encode(&component).unwrap()).unwrap(),
         component
     );
 }

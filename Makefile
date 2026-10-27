@@ -537,9 +537,9 @@ release-push-check:
 
 .PHONY: cargo-dependency-boundaries-gate
 cargo-dependency-boundaries-gate:
-	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)"
-	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)/integrations/blob-service/consumer"
-	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)/integrations/blob-service/embedded-consumer"
+	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)" --external-ic
+	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)/integrations/blob-service/consumer" --external-ic
+	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)/integrations/blob-service/embedded-consumer" --external-ic
 
 # Canic owns the runtime roots and single-provider policy; Shared observes them.
 .PHONY: runtime-dependency-graph-gate
@@ -549,7 +549,7 @@ runtime-dependency-graph-gate:
 		--target wasm32-unknown-unknown --all-features \
 		--require ic-memory=1 --require ic-timers=1 --forbid ic-cdk-timers \
 		--forbid canic-blob-service --forbid canic-cli --forbid canic-testing-internal \
-		--forbid criterion --forbid ic-testkit
+		--forbid ic-testkit
 
 # Release validation reuses adoption phases without repeating workspace Clippy.
 .PHONY: dependency-adoption-admission dependency-adoption-fixtures

@@ -126,7 +126,6 @@ pub enum FleetEnsureActionKind {
     ObservePoolReadiness,
     PrepareComponentRegistry,
     PrepareStoreFixture,
-    Protocol,
     ProvisionComponents,
     PublishStoreChunk,
     PublishStoreFixtureChunk,

@@ -104,7 +104,8 @@ fn generated_packages_preserve_special_characters_in_dependency_patch_paths() {
             },
         )
         .unwrap();
-        let document: toml::Value = toml::from_str(&fs::read_to_string(manifest).unwrap()).unwrap();
+        let document: toml::Value =
+            toml::from_str(&fs::read_to_string(&manifest).unwrap()).unwrap();
         assert_eq!(
             document["dependencies"]["canic"]["path"].as_str(),
             canic_manifest.parent().unwrap().to_str()
@@ -121,6 +122,23 @@ fn generated_packages_preserve_special_characters_in_dependency_patch_paths() {
             document["dependencies"]["ic-platform"]["features"][0].as_str(),
             Some("cdk")
         );
+        assert_eq!(
+            document["features"]["wire-schema"][0].as_str(),
+            Some("canic/wire-schema")
+        );
+        assert_eq!(document["lib"]["crate-type"][1].as_str(), Some("rlib"));
+        assert_eq!(
+            document["example"][0]["required-features"][0].as_str(),
+            Some("wire-schema")
+        );
+        let producer = fs::read_to_string(
+            manifest
+                .parent()
+                .unwrap()
+                .join("examples/wire_schema/main.rs"),
+        )
+        .unwrap();
+        assert!(producer.contains("use fixture as _;"));
         for &name in CANIC_FAMILY_CRATES {
             let expected = root.join("crates").join(name);
             assert_eq!(

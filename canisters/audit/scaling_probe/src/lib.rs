@@ -1,5 +1,7 @@
 #![expect(clippy::unused_async)]
 
+mod protocol;
+
 use canic::{
     Error,
     api::{canister::placement::ScalingApi, metrics::MetricsQuery},
@@ -20,7 +22,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 /// Run no-op upgrade handling for the audit scaling probe.
 async fn canic_upgrade() {}
 
-#[canic_query(requires(env::build_local_only()))]
+#[canic_query(requires(env::build_local_only()), wire(id = protocol::PLAN, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_plan_create_worker_probe() -> Result<QueryPerfSample<bool>, Error> {
     let value = ScalingApi::plan_create_worker(POOL_NAME)?;
     Ok(MetricsQuery::sample_query(value))

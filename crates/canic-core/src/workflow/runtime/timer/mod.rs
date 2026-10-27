@@ -396,6 +396,45 @@ pub fn with_owned_once<T>(
         .map_err(|_| TimerError::CustodyBusy)?
 }
 
+/// Return the exact identity currently held by one domain owner.
+pub(in crate::workflow) fn owned_once_identity(
+    owner: &'static LocalKey<RefCell<Option<OnceRegistration>>>,
+) -> Result<Option<TimerIdentity>, TimerError> {
+    with_owned_once(owner, |registration| registration.identity().clone())
+}
+
+/// Cancel the retained registration's schedule without discarding its custody.
+pub(in crate::workflow) fn cancel_owned_once(
+    owner: &'static LocalKey<RefCell<Option<OnceRegistration>>>,
+) -> Result<(), TimerError> {
+    if let Some(result) = with_owned_once(owner, OnceRegistration::cancel)? {
+        result?;
+    }
+    Ok(())
+}
+
+/// Lazily declare one inactive retained claim, rolling back provider registration
+/// if custody cannot be retained. Domain owners still admit activity and schedules.
+pub(in crate::workflow) fn ensure_owned_once<F, Fut>(
+    owner: &'static LocalKey<RefCell<Option<OnceRegistration>>>,
+    identity: impl FnOnce() -> Result<TimerIdentity, TimerError>,
+    callback: F,
+) -> Result<(), TimerError>
+where
+    F: FnMut(OnceContext) -> Fut + 'static,
+    Fut: Future<Output = OnceRunResult> + 'static,
+{
+    if with_owned_once(owner, |_| ())?.is_some() {
+        return Ok(());
+    }
+    let registration = register_once(
+        identity()?,
+        TimerStart::Retained { initial: None },
+        callback,
+    )?;
+    retain_owned_once(owner, registration)
+}
+
 /// Retain one exact domain owner's native once registration with rollback on rejection.
 pub fn retain_owned_once(
     owner: &'static LocalKey<RefCell<Option<OnceRegistration>>>,
@@ -491,6 +530,38 @@ mod tests {
                 .iter()
                 .all(|identity| identity.owner() == "canic")
         );
+    }
+
+    thread_local! {
+        static TEST_ONCE_OWNER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
+    }
+
+    #[test]
+    fn retained_timer_helpers_admit_empty_custody_and_refuse_a_busy_owner() {
+        assert!(owned_once_identity(&TEST_ONCE_OWNER).unwrap().is_none());
+        cancel_owned_once(&TEST_ONCE_OWNER).unwrap();
+        TEST_ONCE_OWNER.with(|owner| {
+            let _borrow = owner.borrow_mut();
+            assert!(matches!(
+                owned_once_identity(&TEST_ONCE_OWNER),
+                Err(TimerError::CustodyBusy)
+            ));
+            assert!(matches!(
+                cancel_owned_once(&TEST_ONCE_OWNER),
+                Err(TimerError::CustodyBusy)
+            ));
+            assert!(matches!(
+                ensure_owned_once(
+                    &TEST_ONCE_OWNER,
+                    || panic!("busy custody must refuse before identity or provider admission"),
+                    |_context| async {
+                        OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop)
+                    },
+                ),
+                Err(TimerError::CustodyBusy)
+            ));
+        });
+        assert!(owned_once_identity(&TEST_ONCE_OWNER).unwrap().is_none());
     }
 
     #[test]

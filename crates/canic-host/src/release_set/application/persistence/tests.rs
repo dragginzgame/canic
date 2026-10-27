@@ -7,7 +7,6 @@
 use super::*;
 use crate::{
     release_build::{finalize_release_build_from_manifest, plan_release_build},
-    release_set::WASM_MAGIC,
     test_support::temp_dir,
 };
 use canic_contracts::ids::{CanisterRole, ReleaseBuildId};
@@ -450,6 +449,11 @@ fn build_output(
     let wasm_gz_path = artifact_root.join(format!("{role}.wasm.gz"));
     let bytes = wasm(marker, release_build_id);
     fs::write(&wasm_path, &bytes).expect("write Wasm");
+    fs::write(
+        wasm_path.with_extension("wire.json"),
+        crate::test_support::WIRE_SCHEMA,
+    )
+    .unwrap();
     fs::write(&wasm_gz_path, gzip(&bytes)).expect("write gzip Wasm");
 
     ApplicationArtifactFileBuildOutput {
@@ -472,15 +476,13 @@ fn replace_output_bytes(output: &ApplicationArtifactFileBuildOutput, marker: u8)
 }
 
 fn wasm(marker: u8, release_build_id: ReleaseBuildId) -> Vec<u8> {
-    let mut bytes = wasm_without_identity(marker);
-    bytes.extend_from_slice(release_build_id.to_string().as_bytes());
-    bytes
+    let mut identity = vec![marker];
+    identity.extend_from_slice(release_build_id.to_string().as_bytes());
+    crate::test_support::wire_wasm(&identity)
 }
 
 fn wasm_without_identity(marker: u8) -> Vec<u8> {
-    let mut bytes = WASM_MAGIC.to_vec();
-    bytes.push(marker);
-    bytes
+    crate::test_support::wire_wasm(&[marker])
 }
 
 fn gzip(bytes: &[u8]) -> Vec<u8> {
@@ -489,4 +491,78 @@ fn gzip(bytes: &[u8]) -> Vec<u8> {
         .write(Vec::new(), Compression::best());
     encoder.write_all(bytes).expect("write gzip");
     encoder.finish().expect("finish gzip")
+}
+
+#[test]
+fn wire_identity_binds_retained_bytes_and_refuses_missing_or_changed_sidecars() {
+    let root = temp_dir("application-wire-identity");
+    let id = plan_release_build(&root).unwrap().record.release_build_id;
+    let topology = topology();
+    let targets = targets();
+    let outputs = build_outputs(&root, id);
+    let path = outputs[0].wasm_path.with_extension("wire.json");
+    let original = fs::read(&path).unwrap();
+    let mut wrong_method: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    wrong_method["methods"][0]["id"] = serde_json::json!("9002");
+    for invalid in [
+        b"not a schema".to_vec(),
+        serde_json::to_vec(&wrong_method).unwrap(),
+    ] {
+        fs::write(&path, invalid).unwrap();
+        assert!(matches!(
+            compile_and_persist_application_artifact_union(
+                &root, &topology, id, &targets, &outputs
+            ),
+            Err(ApplicationArtifactUnionPersistenceError::ReleaseSet(
+                ApplicationReleaseSetError::WireSchema { .. }
+            ))
+        ));
+    }
+    fs::write(&path, b"").unwrap();
+    assert!(matches!(
+        compile_and_persist_application_artifact_union(&root, &topology, id, &targets, &outputs),
+        Err(ApplicationArtifactUnionPersistenceError::ReleaseSet(
+            ApplicationReleaseSetError::EmptyArtifact {
+                kind: "Wire schema",
+                ..
+            }
+        ))
+    ));
+    fs::remove_file(&path).unwrap();
+    assert!(matches!(
+        compile_and_persist_application_artifact_union(&root, &topology, id, &targets, &outputs),
+        Err(ApplicationArtifactUnionPersistenceError::ArtifactRead {
+            kind: "Wire schema",
+            ..
+        })
+    ));
+    fs::write(&path, &original).unwrap();
+    let first =
+        compile_and_persist_application_artifact_union(&root, &topology, id, &targets, &outputs)
+            .unwrap();
+    let entry = first
+        .union
+        .entries
+        .iter()
+        .find(|entry| entry.role == outputs[0].role)
+        .unwrap();
+    assert_eq!(
+        entry.wire_schema_sha256,
+        <[u8; 32]>::from(Sha256::digest(&original))
+    );
+    assert_ne!(entry.wire_schema_sha256, entry.candid_sha256);
+    let sealed = fs::read(&first.path).unwrap();
+    fs::write(&path, [&original[..], b"\n"].concat()).unwrap();
+    assert!(matches!(
+        compile_and_persist_application_artifact_union(&root, &topology, id, &targets, &outputs),
+        Err(ApplicationArtifactUnionPersistenceError::ConflictingUnion { .. })
+    ));
+    assert_eq!(fs::read(&first.path).unwrap(), sealed);
+    fs::write(&path, original).unwrap();
+    assert_eq!(
+        compile_and_persist_application_artifact_union(&root, &topology, id, &targets, &outputs)
+            .unwrap(),
+        first
+    );
+    fs::remove_dir_all(root).unwrap();
 }

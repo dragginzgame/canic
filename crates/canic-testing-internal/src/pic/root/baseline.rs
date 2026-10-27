@@ -251,10 +251,7 @@ fn capture_cached_root_baseline(
     progress(spec, "capturing cached root snapshots");
     let started_at = Instant::now();
     let baseline = CachedPocketIcBaseline::capture(
-        ic_testkit::pic::PocketIcInstance {
-            instance: initialized.pic,
-            server: None,
-        },
+        ic_testkit::pic::PocketIcInstance::from_borrowed_server(initialized.pic),
         snapshot_targets,
         initialized.metadata,
     )

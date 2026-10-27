@@ -37,6 +37,11 @@ impl AuthApi {
     ///
     /// `min_accepted_epoch` can tighten the configured per-role epoch floor;
     /// the effective floor is the greater of the application and configured values.
+    ///
+    /// After verification, the receiving application must compare
+    /// `attestation.payload.role` with its allowed roles before performing effects.
+    /// Successful proof verification establishes bindings and freshness; the
+    /// receiver owns authorization for the attested role.
     pub fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
@@ -49,6 +54,10 @@ impl AuthApi {
     ///
     /// `min_accepted_epoch` can tighten the configured per-role epoch floor;
     /// the effective floor is the greater of the application and configured values.
+    ///
+    /// The receiving application must also authorize `attestation.payload.role`
+    /// against its allowed roles before performing effects. A valid caller and
+    /// live-Subnet binding does not select the roles permitted by the application.
     pub fn verify_local_subnet_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,

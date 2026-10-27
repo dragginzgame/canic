@@ -5,6 +5,8 @@
 //! Boundary: host settlement installs children and synchronizes their parent before replies.
 
 mod codec;
+mod ops;
+mod protocol;
 
 use canic::{
     Error,
@@ -14,9 +16,6 @@ use canic::{
         CreateCanisterResponse, CyclesResponse, Request, Response,
     },
     ids::CanisterRole,
-};
-use canic_contracts::dto::wire::projection::capability_rpc::{
-    RootCommandFragment, RootCommandResponseFragment,
 };
 use ic_platform::cdk::call::Call;
 use ic_platform::{
@@ -33,8 +32,7 @@ thread_local! {
     static ALLOCATIONS: RefCell<Vec<FixtureChildAllocation>> = const { RefCell::new(Vec::new()) };
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct FixtureChildAllocation {
     request_id: [u8; 32],
     parent: Principal,
@@ -94,27 +92,106 @@ struct StubCreateCanisterResult {
 #[ic_platform::cdk::init]
 const fn init() {}
 
-#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
-async fn canic_root_command(
-    command: RootCommandFragment,
-) -> Result<RootCommandResponseFragment, Error> {
-    let RootCommandFragment::RespondCapability(envelope) = command;
-    let request_id = envelope.metadata.request_id;
+#[ic_platform::cdk::update(
+    decode_with = "codec::acknowledge::decode",
+    encode_with = "codec::acknowledge::encode"
+)]
+async fn canic_root_capability_acknowledge(
+    request: canic::dto::root_capability::CapabilityRequest<
+        canic::dto::rpc::AcknowledgePlacementReceiptRequest,
+    >,
+) -> Result<(), Error> {
+    let envelope = canic_contracts::ops::root_capability::into_root_request(request, |value| {
+        Request::AcknowledgePlacementReceipt(value)
+    });
     let response = RootCapabilityResponseV1 {
-        response: handle_request(request_id, envelope.capability).await?,
+        response: handle_request(envelope.metadata.request_id, envelope.capability).await?,
     };
-    Ok(RootCommandResponseFragment::RespondCapability(response))
+    canic_contracts::ops::root_capability::acknowledge_response(response)
+}
+
+#[ic_platform::cdk::update(
+    decode_with = "codec::allocate::decode",
+    encode_with = "codec::allocate::encode"
+)]
+async fn canic_root_capability_allocate(
+    request: canic::dto::root_capability::CapabilityRequest<
+        canic::dto::root_capability::CreateCanisterRequest,
+    >,
+) -> Result<canic::dto::root_capability::CreateCanisterResponse, Error> {
+    let envelope = canic_contracts::ops::root_capability::into_root_request(request, |value| {
+        Request::AllocatePlacementChild(value.into())
+    });
+    let response = RootCapabilityResponseV1 {
+        response: handle_request(envelope.metadata.request_id, envelope.capability).await?,
+    };
+    canic_contracts::ops::root_capability::create_response(response)
+}
+
+#[ic_platform::cdk::update(
+    decode_with = "codec::create::decode",
+    encode_with = "codec::create::encode"
+)]
+async fn canic_root_capability_create(
+    request: canic::dto::root_capability::CapabilityRequest<
+        canic::dto::root_capability::CreateCanisterRequest,
+    >,
+) -> Result<canic::dto::root_capability::CreateCanisterResponse, Error> {
+    let envelope = canic_contracts::ops::root_capability::into_root_request(request, |value| {
+        Request::CreateCanister(value.into())
+    });
+    let response = RootCapabilityResponseV1 {
+        response: handle_request(envelope.metadata.request_id, envelope.capability).await?,
+    };
+    canic_contracts::ops::root_capability::create_response(response)
+}
+
+#[ic_platform::cdk::update(
+    decode_with = "codec::recycle::decode",
+    encode_with = "codec::recycle::encode"
+)]
+async fn canic_root_capability_recycle(
+    request: canic::dto::root_capability::CapabilityRequest<
+        canic::dto::root_capability::RecycleCanisterRequest,
+    >,
+) -> Result<(), Error> {
+    let envelope = canic_contracts::ops::root_capability::into_root_request(request, |value| {
+        Request::RecycleCanister(value.into())
+    });
+    let response = RootCapabilityResponseV1 {
+        response: handle_request(envelope.metadata.request_id, envelope.capability).await?,
+    };
+    canic_contracts::ops::root_capability::recycle_response(response)
+}
+
+#[ic_platform::cdk::update(
+    decode_with = "codec::cycles::decode",
+    encode_with = "codec::cycles::encode"
+)]
+async fn canic_root_capability_cycles(
+    request: canic::dto::root_capability::CapabilityRequest<canic::dto::rpc::CyclesRequest>,
+) -> Result<canic::dto::rpc::CyclesResponse, Error> {
+    let envelope = canic_contracts::ops::root_capability::into_root_request(request, |value| {
+        Request::Cycles(value)
+    });
+    let response = RootCapabilityResponseV1 {
+        response: handle_request(envelope.metadata.request_id, envelope.capability).await?,
+    };
+    canic_contracts::ops::root_capability::cycles_response(response)
 }
 
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::allocations::decode",
+    encode_with = "codec::allocations::encode"
 )]
-fn testing_component_child_allocations() -> Vec<FixtureChildAllocation> {
-    ALLOCATIONS.with_borrow(Clone::clone)
+fn testing_component_child_allocations(_request: ()) -> Vec<protocol::ChildAllocation> {
+    ALLOCATIONS.with_borrow(|rows| rows.iter().map(protocol::ChildAllocation::from).collect())
 }
 
-#[ic_platform::cdk::query(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
+#[ic_platform::cdk::query(
+    decode_with = "codec::is_settled::decode",
+    encode_with = "codec::is_settled::encode"
+)]
 fn testing_component_child_is_settled(request_id: [u8; 32]) -> bool {
     ALLOCATIONS.with_borrow(|allocations| {
         allocations
@@ -123,7 +200,10 @@ fn testing_component_child_is_settled(request_id: [u8; 32]) -> bool {
     })
 }
 
-#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
+#[ic_platform::cdk::update(
+    decode_with = "codec::settle::decode",
+    encode_with = "codec::settle::encode"
+)]
 fn testing_settle_component_child(request_id: [u8; 32]) -> Result<(), Error> {
     ALLOCATIONS.with_borrow_mut(|allocations| {
         let allocation = allocations
@@ -208,12 +288,17 @@ async fn await_settlement(request_id: [u8; 32]) -> Result<(), Error> {
             "testing_component_child_is_settled",
         )
         .take_raw_args(
-            encode_one(request_id).unwrap_or_else(|error| panic!("failed to encode args: {error}")),
+            ic_wire::native::encode_request(protocol::IS_SETTLED, &request_id, protocol::LIMITS)
+                .unwrap_or_else(|error| panic!("failed to encode settlement request: {error}")),
         )
         .await
         .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
-        let (settled,): (bool,) = decode_args_with_config(response.as_ref(), &DecoderConfig::new())
-            .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        let settled: bool = ic_wire::native::decode_response(
+            protocol::IS_SETTLED,
+            response.as_ref(),
+            protocol::LIMITS,
+        )
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
         if settled {
             return Ok(());
         }
@@ -277,3 +362,28 @@ async fn create_canister() -> Result<Principal, Error> {
 }
 
 canic::finish!();
+
+canic::__canic_register_wire_schema!(
+    "testing_component_child_allocations",
+    Query,
+    protocol::ALLOCATIONS,
+    (),
+    Vec<protocol::ChildAllocation>,
+    protocol::LIMITS,
+    protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "testing_component_child_is_settled",
+    Query,
+    protocol::IS_SETTLED,
+    [u8; 32],
+    bool,
+    protocol::LIMITS,
+    protocol::LIMITS
+);
+canic::__canic_register_wire_schema!("testing_settle_component_child", Update, protocol::SETTLE, [u8; 32], Result<(), Error>, protocol::LIMITS, protocol::LIMITS);
+canic::__canic_register_wire_schema!("canic_root_capability_acknowledge", Update, canic::protocol::root_capability::acknowledge::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::rpc::AcknowledgePlacementReceiptRequest>, Result<(), Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_wire_schema!("canic_root_capability_allocate", Update, canic::protocol::root_capability::allocate::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::CreateCanisterRequest>, Result<canic::dto::root_capability::CreateCanisterResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_wire_schema!("canic_root_capability_create", Update, canic::protocol::root_capability::create::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::CreateCanisterRequest>, Result<canic::dto::root_capability::CreateCanisterResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_wire_schema!("canic_root_capability_recycle", Update, canic::protocol::root_capability::recycle::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::RecycleCanisterRequest>, Result<(), Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_wire_schema!("canic_root_capability_cycles", Update, canic::protocol::root_capability::cycles::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::rpc::CyclesRequest>, Result<canic::dto::rpc::CyclesResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);

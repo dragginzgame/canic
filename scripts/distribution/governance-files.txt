@@ -1,8 +1,10 @@
 DRAGGINZGAME.md
+rules/engineering-details.md
 rules/contributions.md
 rules/changelogs.md
 rules/change-reporting.md
 rules/cargo-dependencies.md
+rules/rpc-budgets.md
 rules/rust-workspaces.md
 rules/dependency-pinning.md
 rules/git-hooks.md

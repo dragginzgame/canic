@@ -9,324 +9,178 @@
 macro_rules! canic_emit_local_wasm_store_endpoints {
     () => {
         $crate::__canic_fixture_reply_support!();
-
-        #[doc(hidden)]
-        const fn __canic_wasm_store_command_payload_max_bytes(
-            command: &::canic::dto::template::StoreCommand,
-        ) -> usize {
-            match command {
-                ::canic::dto::template::StoreCommand::SynchronizeState(_)
-                | ::canic::dto::template::StoreCommand::SynchronizeTopology(_) => {
-                    ::canic::__internal::contracts::protocol::CASCADE_SNAPSHOT_MAX_BYTES
-                }
-                _ => ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
-            }
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::store_activation::prepare::METHOD_ID, request = ::canic::protocol::store_activation::REQUEST_LIMITS, response = ::canic::protocol::store_activation::RESPONSE_LIMITS))]
+        fn canic_wasm_store_prepare_credential(request: ::canic::dto::fleet_activation::FleetCredentialGenerationRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+            let operation_id = request.operation_id;
+            $crate::__internal::core::api::fleet_activation::FleetActivationApi::prepare_nonroot_credential_generation(request)?;
+            Ok(::canic::dto::role::OperationReceipt { operation_id })
         }
 
-        #[doc(hidden)]
-        fn __canic_inspect_wasm_store_update_message() {
-            let method = $crate::__internal::core::ingress::payload::current_method_name();
-            if method == $crate::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK
-                || method == $crate::protocol::CANIC_WASM_STORE_CHUNK
-            {
-                $crate::__internal::core::ingress::payload::inspect_update_message();
-                return;
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::store_activation::activate::METHOD_ID, request = ::canic::protocol::store_activation::REQUEST_LIMITS, response = ::canic::protocol::store_activation::RESPONSE_LIMITS))]
+        fn canic_wasm_store_activate(request: ::canic::dto::fleet_activation::FleetActivationRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+            let operation_id = request.operation_id;
+            let transition = $crate::__internal::core::api::fleet_activation::FleetActivationApi::activate_nonroot(request)?;
+            if transition.transitioned {
+                __canic_schedule_prepared_activation_init(transition.application_init_args);
             }
-            if method != $crate::__internal::contracts::protocol::CANIC_WASM_STORE_COMMAND {
-                $crate::__internal::core::ingress::payload::inspect_update_message();
-                return;
-            }
-
-            let bytes = $crate::__internal::core::ingress::payload::current_payload_bytes();
-            if bytes.len() > ::canic::__internal::contracts::protocol::CASCADE_SNAPSHOT_MAX_BYTES {
-                return;
-            }
-            let Ok(command) =
-                ::canic::__internal::ic_platform::candid::decoder::decode_one::<::canic::dto::template::StoreCommand>(&bytes)
-            else {
-                return;
-            };
-            if $crate::__internal::core::ingress::payload::payload_within_limit(
-                bytes.len(),
-                __canic_wasm_store_command_payload_max_bytes(&command),
-            ) {
-                $crate::__internal::core::ingress::payload::accept_current_message();
-            }
+            Ok(::canic::dto::role::OperationReceipt { operation_id })
         }
 
-        #[$crate::canic_update(
-            internal,
-            public,
-            payload(max_bytes = ::canic::__internal::contracts::protocol::CASCADE_SNAPSHOT_MAX_BYTES)
-        )]
-        async fn canic_wasm_store_command(
-            command: ::canic::dto::template::StoreCommand,
-        ) -> Result<::canic::dto::template::StoreCommandResponse, ::canic::Error> {
-            use ::canic::dto::template::{StoreCommand, StoreCommandResponse};
-
-            if !matches!(&command, StoreCommand::SynchronizeState(_)) {
-                $crate::__internal::core::access::expr::eval_default_fleet_guard(
-                    $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
-                    $crate::__internal::contracts::ids::EndpointCall {
-                        endpoint: $crate::__internal::contracts::ids::EndpointId::new(
-                            $crate::__internal::contracts::protocol::CANIC_WASM_STORE_COMMAND,
-                        ),
-                        kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
-                    },
-                )
-                    .map_err(::canic::Error::from)?;
-            }
-
-            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-            if matches!(
-                &command,
-                StoreCommand::ActivateFleet(_)
-                    | StoreCommand::InspectTemplate(_)
-                    | StoreCommand::PrepareFleetCredential(_)
-                    | StoreCommand::PrepareFixture(_)
-                    | StoreCommand::SetFixtureGrant(_)
-                    | StoreCommand::ReclaimDeletionCycles(_)
-                    | StoreCommand::RunGc(_)
-            ) {
-                $crate::__internal::core::access::auth::is_root(caller)
-                    .map_err(::canic::Error::from)?;
-            }
-            if matches!(
-                &command,
-                StoreCommand::SynchronizeState(_) | StoreCommand::SynchronizeTopology(_)
-            ) {
-                $crate::__internal::core::access::auth::is_parent(caller)
-                    .map_err(::canic::Error::from)?;
-            }
-            if matches!(
-                &command,
-                StoreCommand::PrepareChunkSet(_) | StoreCommand::StageManifest(_)
-            ) {
-                use $crate::__internal::core::access::expr::AccessCheck as _;
-                let context = $crate::__internal::core::access::expr::AccessContext {
-                    caller,
-                    call: $crate::__internal::contracts::ids::EndpointCall {
-                        endpoint: $crate::__internal::contracts::ids::EndpointId::new(
-                            $crate::__internal::contracts::protocol::CANIC_WASM_STORE_COMMAND,
-                        ),
-                        kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
-                    },
-                };
-                $crate::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate
-                    .eval(&context)
-                    .map_err(::canic::Error::from)?;
-            }
-
-            match command {
-                StoreCommand::PrepareFixture(request) => {
-                    $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::prepare(request)
-                        .map(StoreCommandResponse::FixtureSource)
-                }
-                StoreCommand::SetFixtureGrant(request) => {
-                    let enabled = request.enabled;
-                    let result = $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::set_grant(*request)?;
-                    if result.is_ok() {
-                        $crate::__canic_fixture_reply_checkpoint!(if enabled {
-                            __CanicFixtureReplyKind::Grant
-                        } else {
-                            __CanicFixtureReplyKind::Revoke
-                        });
-                    }
-                    // Keep the default expansion free of fixture-only unused bindings.
-                    let _ = enabled;
-                    Ok(StoreCommandResponse::FixtureGrant(Box::new(result)))
-                }
-                StoreCommand::ActivateFleet(request) => {
-                    let operation_id = request.operation_id;
-                    let transition = $crate::__internal::core::api::fleet_activation::FleetActivationApi::activate_nonroot(request)?;
-                    if transition.transitioned {
-                        __canic_schedule_prepared_activation_init(transition.application_init_args);
-                    }
-                    Ok(StoreCommandResponse::OperationAccepted(
-                        ::canic::dto::role::OperationReceipt { operation_id },
-                    ))
-                }
-                StoreCommand::InspectTemplate(request) => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::info(
-                        request.template_id,
-                        request.version,
-                    )
-                    .map(StoreCommandResponse::InspectTemplate)
-                }
-                StoreCommand::PrepareChunkSet(request) => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::prepare(request)
-                        .map(StoreCommandResponse::PrepareChunkSet)
-                }
-                StoreCommand::PrepareFleetCredential(request) => {
-                    let operation_id = request.operation_id;
-                    $crate::__internal::core::api::fleet_activation::FleetActivationApi::prepare_nonroot_credential_generation(request)?;
-                    Ok(StoreCommandResponse::OperationAccepted(
-                        ::canic::dto::role::OperationReceipt { operation_id },
-                    ))
-                }
-                StoreCommand::ReclaimDeletionCycles(request) => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::reclaim_deletion_cycles(request)
-                        .await
-                        .map(StoreCommandResponse::ReclaimDeletionCycles)
-                }
-                StoreCommand::RespondCapability(envelope) => {
-                    $crate::__internal::core::api::rpc::RpcApi::response_capability_v1_nonroot(
-                        envelope,
-                    )
-                    .await
-                    .map(StoreCommandResponse::RespondCapability)
-                }
-                StoreCommand::RunGc(request) => {
-                    let operation_id = request.operation_id;
-                    ::canic::api::canister::template::WasmStoreCanisterApi::request_gc(request)?;
-                    Ok(StoreCommandResponse::OperationAccepted(
-                        ::canic::dto::role::OperationReceipt { operation_id },
-                    ))
-                }
-                StoreCommand::StageManifest(request) => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::stage_manifest(request)?;
-                    Ok(StoreCommandResponse::StageManifest)
-                }
-                StoreCommand::SynchronizeState(snapshot) => {
-                    $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot)
-                        .await
-                        .map(StoreCommandResponse::SynchronizeState)
-                }
-                StoreCommand::SynchronizeTopology(snapshot) => {
-                    $crate::__internal::core::api::cascade::CascadeApi::sync_topology(
-                        snapshot,
-                    )
-                    .await?;
-                    Ok(StoreCommandResponse::SynchronizeTopology)
-                }
-            }
+        $crate::__canic_emit_cycles_capability_endpoint!();
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::store_gc::METHOD_ID, request = ::canic::protocol::store_gc::REQUEST_LIMITS, response = ::canic::protocol::store_gc::RESPONSE_LIMITS))]
+        fn canic_wasm_store_run_gc(request: ::canic::dto::template::WasmStoreGcRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+            let operation_id = request.operation_id;
+            ::canic::api::canister::template::WasmStoreCanisterApi::request_gc(request)?;
+            Ok(::canic::dto::role::OperationReceipt { operation_id })
         }
 
-        ::canic::__internal::contracts::__canic_store_wire_types! {
-            serde_crate = "::canic::__internal::serde",
-
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::store_publication::fixture_prepare::METHOD_ID, request = ::canic::protocol::store_publication::REQUEST_LIMITS, response = ::canic::protocol::store_publication::RESPONSE_LIMITS))]
+        fn canic_wasm_store_prepare_fixture(request: ::canic::dto::fixture_provisioning::FixtureDescriptor) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::prepare(request)
         }
 
-        #[$crate::canic_query(public)]
-        fn canic_public_status(
-            request: PublicStatusRequest,
-        ) -> Result<PublicStatusResponse, ::canic::Error> {
-            match request {
-                PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(
-                    ::canic::__internal::core::api::public_status::PublicStatusApi::health(),
-                )),
-                PublicStatusRequest::History(request) => Ok(PublicStatusResponse::History(::canic::__internal::core::api::public_status::PublicStatusApi::history(request))),
-                PublicStatusRequest::Metrics(request) => Ok(PublicStatusResponse::Metrics(
-                    ::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request),
-                )),
-                PublicStatusRequest::Overview => {
-                    let capabilities =
-                        $crate::__internal::core::role_contract::built_in_role_capabilities(
-                            $crate::__internal::core::role_contract::BuiltInRoleKind::WasmStore,
-                        );
-                    Ok(PublicStatusResponse::Overview(
-                        $crate::__internal::core::api::role::RoleOverviewApi::overview(
-                            $crate::__internal::contracts::ids::CanisterRole::from("wasm_store"),
-                            &capabilities,
-                            $crate::__canic_protocol_profile_digest!(),
-                            $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
-                                env!("CARGO_PKG_NAME"),
-                                env!("CARGO_PKG_VERSION"),
-                                env!("CARGO_PKG_DESCRIPTION"),
-                                $crate::VERSION,
-                                $crate::__internal::cdk::api::canister_version(),
-                            ),
-                            $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
-                        ),
-                    ))
-                }
-            }
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::store_publication::inspect::METHOD_ID, request = ::canic::protocol::store_publication::REQUEST_LIMITS, response = ::canic::protocol::store_publication::RESPONSE_LIMITS))]
+        fn canic_wasm_store_inspect_template(request: ::canic::dto::template::TemplateLookupRequest) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::info(request.template_id, request.version)
         }
 
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        fn canic_observability(
-            request: StoreObservabilityRequest,
-        ) -> Result<StoreObservabilityResponse, ::canic::Error> {
-            match request {
-                StoreObservabilityRequest::CycleBalance => Ok(StoreObservabilityResponse::CycleBalance(
-                    ::canic::dto::role::CycleBalanceStatusResponse {
-                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
-                    },
-                )),
-                StoreObservabilityRequest::CycleHistory(page) => Ok(StoreObservabilityResponse::CycleHistory(
-                    $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
-                )),
-            }
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::store_publication::prepare::METHOD_ID, request = ::canic::protocol::store_publication::REQUEST_LIMITS, response = ::canic::protocol::store_publication::RESPONSE_LIMITS))]
+        fn canic_wasm_store_prepare_chunk_set(request: ::canic::dto::template::TemplateChunkSetPrepareInput) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::prepare(request)
         }
 
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        fn canic_wasm_store_status(
-            request: StoreStatusRequest,
-        ) -> Result<StoreStatusResponse, ::canic::Error> {
-            match request {
-                StoreStatusRequest::Authority => {
-                    $crate::__internal::core::api::fleet_activation::FleetActivationApi::wasm_store_authority()
-                        .map(StoreStatusResponse::Authority)
-                }
-                StoreStatusRequest::Operation(request) => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::operation_status(
-                        request.operation_id,
-                    )
-                    .map(StoreStatusResponse::Operation)
-                }
-            }
-        }
-
-
-        #[$crate::canic_query(requires(custom(
-            ::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate
-        )))]
-        fn canic_wasm_store_catalog(
-            request: StoreCatalogRequest,
-        ) -> Result<StoreCatalogResponse, ::canic::Error> {
-            match request {
-                StoreCatalogRequest::Fixture(content) => {
-                    Ok(StoreCatalogResponse::Fixture($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::source_status(content)))
-                }
-                StoreCatalogRequest::FixtureGrant(target) => {
-                    Ok(StoreCatalogResponse::FixtureGrant($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::grant_status(target).map(Box::new)))
-                }
-                StoreCatalogRequest::Catalog => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::catalog()
-                        .map(StoreCatalogResponse::Catalog)
-                }
-                StoreCatalogRequest::Storage => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::status()
-                        .map(StoreCatalogResponse::Storage)
-                }
-                StoreCatalogRequest::Template(request) => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::staging_status(request)
-                        .map(StoreCatalogResponse::Template)
-                }
-            }
-        }
-
-        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::__internal::core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES))]
-        fn canic_wasm_store_publish_chunk(
-            request: ::canic::dto::template::TemplateChunkInput,
-        ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreCanisterApi::publish_chunk(request)
-        }
-
-        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::__internal::core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES))]
-        fn canic_wasm_store_publish_fixture(
-            request: ::canic::dto::fixture_provisioning::FixtureChunkUpload,
-        ) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
-            $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::upload(request)
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::store_publication::stage::METHOD_ID, request = ::canic::protocol::store_publication::REQUEST_LIMITS, response = ::canic::protocol::store_publication::RESPONSE_LIMITS))]
+        fn canic_wasm_store_stage_manifest(request: ::canic::dto::template::TemplateManifestInput) -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::stage_manifest(request)
         }
 
         $crate::__canic_fixture_reply_endpoint! {
-        #[$crate::canic_update(internal, public)]
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::store_control::grant::METHOD_ID, request = ::canic::protocol::store_control::REQUEST_LIMITS, response = ::canic::protocol::store_control::RESPONSE_LIMITS))]
+        fn canic_wasm_store_set_fixture_grant(request: ::canic::dto::store_control::FixtureGrantRequest) -> Result<Result<::canic::dto::runtime_reporting::FixtureGrant, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            let enabled = request.enabled;
+            let result = $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::set_grant(request.into())?;
+            if result.is_ok() {
+                $crate::__canic_fixture_reply_checkpoint!(if enabled { __CanicFixtureReplyKind::Grant } else { __CanicFixtureReplyKind::Revoke });
+            }
+            let _ = enabled;
+            Ok(result.map(Into::into))
+        }
+
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::store_control::reclaim::METHOD_ID, request = ::canic::protocol::store_control::REQUEST_LIMITS, response = ::canic::protocol::store_control::RESPONSE_LIMITS))]
+        async fn canic_wasm_store_reclaim_deletion_cycles(request: ::canic::dto::template::WasmStoreDeletionCycleReclamationRequest) -> Result<::canic::dto::store_control::ReclamationResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::reclaim_deletion_cycles(request).await.map(Into::into)
+        }
+
+        $crate::__canic_emit_state_cascade_endpoint!();
+
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::cascade::topology::METHOD_ID, request = ::canic::protocol::cascade::REQUEST_LIMITS, response = ::canic::protocol::cascade::RESPONSE_LIMITS))]
+        async fn canic_synchronize_topology(snapshot: ::canic::dto::cascade_transport::TopologySnapshot) -> Result<(), ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                $crate::__internal::contracts::ids::EndpointCall {
+                    endpoint: $crate::__internal::contracts::ids::EndpointId::new(::canic::protocol::cascade::topology::METHOD),
+                    kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
+                },
+            ).map_err(::canic::Error::from)?;
+            let caller = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_parent(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::cascade::CascadeApi::sync_topology(snapshot.into()).await
+        }
+
+        $crate::__canic_emit_public_health_endpoint!();
+        $crate::__canic_emit_public_metrics_endpoint!();
+
+        $crate::__canic_emit_public_history_endpoint!();
+
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_overview::METHOD_ID, request = ::canic::protocol::public_overview::REQUEST_LIMITS, response = ::canic::protocol::public_overview::RESPONSE_LIMITS))]
+        fn canic_public_overview() -> Result<::canic::dto::role::RoleOverviewResponse, ::canic::Error> {
+            let capabilities =
+                $crate::__internal::core::role_contract::built_in_role_capabilities(
+                    $crate::__internal::core::role_contract::BuiltInRoleKind::WasmStore,
+                );
+            Ok(
+                $crate::__internal::core::api::role::RoleOverviewApi::overview(
+                    $crate::__internal::contracts::ids::CanisterRole::from("wasm_store"),
+                    &capabilities,
+                    $crate::__canic_protocol_profile_digest!(),
+                    $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
+                        env!("CARGO_PKG_NAME"),
+                        env!("CARGO_PKG_VERSION"),
+                        env!("CARGO_PKG_DESCRIPTION"),
+                        $crate::VERSION,
+                        $crate::__internal::cdk::api::canister_version(),
+                    ),
+                    $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
+                ),
+            )
+        }
+
+        $crate::__canic_emit_cycle_balance_endpoint!(before = []);
+
+        $crate::__canic_emit_cycle_history_endpoint!(before = []);
+
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::store_status::authority::METHOD_ID, request = ::canic::protocol::store_status::REQUEST_LIMITS, response = ::canic::protocol::store_status::RESPONSE_LIMITS))]
+        fn canic_wasm_store_authority() -> Result<::canic::dto::store_status::Authority, ::canic::Error> {
+            $crate::__internal::core::api::fleet_activation::FleetActivationApi::wasm_store_authority().map(Into::into)
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::store_status::activation::METHOD_ID, request = ::canic::protocol::store_status::REQUEST_LIMITS, response = ::canic::protocol::store_status::RESPONSE_LIMITS))]
+        fn canic_wasm_store_activation_status(request: ::canic::dto::role::OperationStatusRequest) -> Result<::canic::dto::runtime_reporting::FleetActivationStatusResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::activation_operation_status(request.operation_id).map(Into::into)
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::store_status::gc::METHOD_ID, request = ::canic::protocol::store_status::REQUEST_LIMITS, response = ::canic::protocol::store_status::RESPONSE_LIMITS))]
+        fn canic_wasm_store_gc_status(request: ::canic::dto::role::OperationStatusRequest) -> Result<::canic::dto::template::WasmStoreGcOperationStatus, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::gc_operation_status(request.operation_id)
+        }
+
+        #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::store_inventory::catalog::METHOD_ID, request = ::canic::protocol::store_inventory::REQUEST_LIMITS, response = ::canic::protocol::store_inventory::RESPONSE_LIMITS))]
+        fn canic_wasm_store_inventory() -> Result<Vec<::canic::dto::template::WasmStoreCatalogEntryResponse>, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::catalog()
+        }
+
+        #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::store_inventory::storage::METHOD_ID, request = ::canic::protocol::store_inventory::REQUEST_LIMITS, response = ::canic::protocol::store_inventory::RESPONSE_LIMITS))]
+        fn canic_wasm_store_storage() -> Result<::canic::dto::template::WasmStoreStatusResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::status()
+        }
+
+        #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::store_catalog::fixture::METHOD_ID, request = ::canic::protocol::store_catalog::REQUEST_LIMITS, response = ::canic::protocol::store_catalog::RESPONSE_LIMITS))]
+        fn canic_wasm_store_fixture_status(content: [u8; 32]) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            Ok($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::source_status(content))
+        }
+
+        #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::store_catalog::grant::METHOD_ID, request = ::canic::protocol::store_catalog::REQUEST_LIMITS, response = ::canic::protocol::store_catalog::RESPONSE_LIMITS))]
+        fn canic_wasm_store_fixture_grant(target: ::canic::__internal::ic_platform::Principal) -> Result<Option<::canic::dto::runtime_reporting::FixtureGrant>, ::canic::Error> {
+            Ok($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::grant_status(target.into()).map(Into::into))
+        }
+
+        #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::store_catalog::template::METHOD_ID, request = ::canic::protocol::store_catalog::REQUEST_LIMITS, response = ::canic::protocol::store_catalog::RESPONSE_LIMITS))]
+        fn canic_wasm_store_template_status(request: ::canic::dto::template::TemplateLookupRequest) -> Result<::canic::dto::template::TemplateStagingStatusResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::staging_status(request)
+        }
+
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::template_bytes::METHOD_ID, request = ::canic::protocol::template_bytes::REQUEST_LIMITS, response = ::canic::protocol::template_bytes::RESPONSE_LIMITS))]
+        fn canic_wasm_store_publish_chunk(
+            request: ::canic::dto::template_bytes::PublishRequest,
+        ) -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::publish_chunk(request.into())
+        }
+
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), wire(id = ::canic::protocol::fixture_bytes::upload::METHOD_ID, request = ::canic::protocol::fixture_bytes::CHUNK_LIMITS, response = ::canic::protocol::fixture_bytes::UPLOAD_RESPONSE_LIMITS))]
+        fn canic_wasm_store_publish_fixture(
+            request: ::canic::dto::fixture_bytes::UploadRequest,
+        ) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::upload(request.into())
+        }
+
+        $crate::__canic_fixture_reply_endpoint! {
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::fixture_bytes::read::METHOD_ID, request = ::canic::protocol::fixture_bytes::READ_REQUEST_LIMITS, response = ::canic::protocol::fixture_bytes::CHUNK_LIMITS))]
         fn canic_wasm_store_fixture_chunk(
-            request: ::canic::dto::fixture_provisioning::FixtureChunkRead,
-        ) -> Result<Result<Vec<u8>, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            request: ::canic::dto::fixture_bytes::ReadRequest,
+        ) -> Result<Result<::canic::dto::fixture_bytes::ChunkResponse, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            let request: ::canic::dto::fixture_provisioning::FixtureChunkRead = request.into();
             let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
             // Framework admission cannot express this request-bound grant. Authenticate
             // its exact caller and full revision here before delegating payload access.
@@ -337,11 +191,11 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             if result.is_ok() {
                 $crate::__canic_fixture_reply_checkpoint!(__CanicFixtureReplyKind::Chunk);
             }
-            Ok(result)
+            Ok(result.map(|bytes| ::canic::dto::fixture_bytes::ChunkResponse { bytes }))
         }
         }
 
-        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        #[$crate::canic_update(internal, requires(caller::is_root()), wire(id = ::canic::protocol::wasm_store_chunk::METHOD_ID, request = ::canic::protocol::wasm_store_chunk::REQUEST_LIMITS, response = ::canic::protocol::wasm_store_chunk::RESPONSE_LIMITS))]
         fn canic_wasm_store_chunk(
             request: ::canic::dto::template::TemplateChunkRequest,
         ) -> Result<::canic::dto::template::TemplateChunkResponse, ::canic::Error> {

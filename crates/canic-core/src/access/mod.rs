@@ -68,9 +68,6 @@ pub enum AccessError {
     #[error("access denied: a negated access predicate matched")]
     NegatedPredicateMatched,
 
-    #[error("access denied: a role attestation is malformed")]
-    RoleAttestationMalformed,
-
     #[error("access denied: role attestation subject does not match caller")]
     RoleAttestationSubjectMismatch,
 
@@ -128,9 +125,6 @@ impl AccessError {
             Self::BuildNetworkMismatch => AccessDiagnosticCodes::public(codes::PLATFORM_CONFLICT),
             Self::BuildNetworkUnavailable => {
                 AccessDiagnosticCodes::public(codes::PLATFORM_UNAVAILABLE)
-            }
-            Self::RoleAttestationMalformed => {
-                AccessDiagnosticCodes::public(codes::SECURITY_INVALID_STATE)
             }
             Self::RoleAttestationSubjectMismatch => {
                 AccessDiagnosticCodes::public(codes::AUTHORITY_CONFLICT)
@@ -216,10 +210,6 @@ mod tests {
             (
                 AccessError::NegatedPredicateMatched,
                 codes::CONFIGURATION_INVALID_STATE,
-            ),
-            (
-                AccessError::RoleAttestationMalformed,
-                codes::SECURITY_INVALID_STATE,
             ),
             (
                 AccessError::RoleAttestationSubjectMismatch,

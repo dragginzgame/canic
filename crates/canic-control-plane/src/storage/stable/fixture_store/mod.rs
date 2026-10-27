@@ -7,7 +7,7 @@
 
 use canic_contracts::dto::fixture_provisioning::{FixtureDescriptor, FixtureGrant};
 use canic_core::cdk::structures::{DefaultMemoryImpl, StableBTreeMap as BTreeMap};
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 use std::cell::RefCell;
 
@@ -20,8 +20,7 @@ std::thread_local! {
 }
 
 /// Exact descriptor and monotonic ingestion progress, committed with each chunk.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct FixtureSourceRecord {
     pub descriptor: FixtureDescriptor,
     pub next_chunk: u32,
@@ -65,7 +64,7 @@ impl FixtureStore {
                 match entry.key()[0] {
                     1 => {
                         let source: FixtureSourceRecord =
-                            ic_platform::candid::decoder::decode_one(&entry.value())
+                            canic_contracts::serialization::deserialize(&entry.value())
                                 .expect("fixture source record");
                         inventory.sources += 1;
                         inventory.expected_chunks = inventory
@@ -83,13 +82,13 @@ impl FixtureStore {
 
     pub fn source(content: [u8; 32]) -> Option<FixtureSourceRecord> {
         get(key(1, content, 0)).map(|bytes| {
-            ic_platform::candid::decoder::decode_one(&bytes).expect("fixture source record")
+            canic_contracts::serialization::deserialize(&bytes).expect("fixture source record")
         })
     }
 
     pub fn grant(target: Principal) -> Option<FixtureGrant> {
         get(grant_key(target)).map(|bytes| {
-            ic_platform::candid::decoder::decode_one(&bytes).expect("fixture grant record")
+            canic_contracts::serialization::deserialize(&bytes).expect("fixture grant record")
         })
     }
 
@@ -103,7 +102,7 @@ impl FixtureStore {
     ) -> FixtureStoreEntryRecord {
         FixtureStoreEntryRecord {
             key: key(1, content, 0),
-            value: ic_platform::candid::contract::encode_one(record)
+            value: canic_contracts::serialization::serialize(record)
                 .expect("bounded fixture source encoding"),
         }
     }
@@ -118,7 +117,7 @@ impl FixtureStore {
     pub fn grant_entry(target: Principal, grant: &FixtureGrant) -> FixtureStoreEntryRecord {
         FixtureStoreEntryRecord {
             key: grant_key(target),
-            value: ic_platform::candid::contract::encode_one(grant)
+            value: canic_contracts::serialization::serialize(grant)
                 .expect("bounded fixture grant encoding"),
         }
     }

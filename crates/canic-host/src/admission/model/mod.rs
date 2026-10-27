@@ -2,7 +2,7 @@
 //!
 //! Host owns authority and operations; command parsing and rendering belong to CLI.
 
-use crate::{icp::IcpCli, protocol_binding::ResolvedProtocolBinding};
+use crate::{icp::IcpCli, release_set::BuiltWireSchema};
 use canic_contracts::{
     dto::{
         fleet_admission::{FleetAdmissionMutationRequest, FleetAdmissionStatusResponse},
@@ -42,8 +42,7 @@ pub struct AdmissionParticipantCatalogRecord {
 pub(super) struct AdmissionConnection {
     pub coordinator: Principal,
     pub icp: IcpCli,
-    pub coordinator_binding: ResolvedProtocolBinding,
-    pub root_bindings: BTreeMap<Principal, ResolvedProtocolBinding>,
+    pub root_schemas: BTreeMap<Principal, BuiltWireSchema>,
     pub registry: FleetRegistry,
     pub registry_version: FleetRegistryVersion,
     pub admission: FleetAdmissionStatusResponse,

@@ -70,12 +70,15 @@ fn census_retains_expired_uncertainty_and_history_without_pruning_or_mutation() 
     let mut seen = Vec::new();
     for expected in &before.entries {
         let page = observe(owner, cursor).unwrap();
-        assert_eq!(page.owner, owner);
+        assert_eq!(page.owner, owner.into());
         assert_eq!(observe(owner, cursor).unwrap(), page);
         let entry = page.entry.as_ref().unwrap();
         assert_eq!(entry.slot, expected.key.0);
         assert_eq!(entry.operation_id, expected.record.operation_id);
-        assert_eq!(entry.actor, expected.record.actor.effective_principal);
+        assert_eq!(
+            entry.actor,
+            expected.record.actor.effective_principal.into()
+        );
         assert_eq!(entry.authentication, Authentication::DelegatedToken);
         assert_eq!(entry.expires_at_ns, Some(3));
         assert_eq!(
@@ -90,17 +93,27 @@ fn census_retains_expired_uncertainty_and_history_without_pruning_or_mutation() 
         assert_eq!(
             entry.effect,
             Some(Effect::ManagementCall {
-                canister: Principal::from_slice(&[4]),
+                canister: Principal::from_slice(&[4]).into(),
                 method: "deposit_cycles".into()
             })
         );
-        let bytes = ic_platform::candid::contract::encode_one(&page).unwrap();
+        let bytes = ic_wire::native::encode_response(
+            crate::protocol::release_evidence::receipts::METHOD_ID,
+            &page,
+            crate::protocol::release_evidence::RESPONSE_LIMITS,
+        )
+        .unwrap();
         assert!(
             bytes.len() < 4096,
             "cached response bytes must stay outside the census"
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<ReplayReleaseResponse>(&bytes).unwrap(),
+            ic_wire::native::decode_response::<ReplayReleaseResponse>(
+                crate::protocol::release_evidence::receipts::METHOD_ID,
+                &bytes,
+                crate::protocol::release_evidence::RESPONSE_LIMITS
+            )
+            .unwrap(),
             page
         );
         seen.push((entry.operation_id, entry.phase));

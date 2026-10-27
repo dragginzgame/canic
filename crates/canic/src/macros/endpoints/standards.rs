@@ -14,10 +14,10 @@ macro_rules! canic_emit_icrc_standards_endpoints {
         }
 
         #[cfg(canic_icrc21_enabled)]
-        #[$crate::canic_query(internal, public)]
+        #[$crate::canic_query(internal, public, on_access_denied = "reject")]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::dto::icrc21::ConsentMessageRequest,
-        ) -> ::canic::dto::icrc21::ConsentMessageResponse {
+        ) -> Result<::canic::dto::icrc21::ConsentInfo, ::canic::dto::icrc21::Icrc21Error> {
             $crate::__internal::core::api::icrc::Icrc21Query::consent_message(req)
         }
     };

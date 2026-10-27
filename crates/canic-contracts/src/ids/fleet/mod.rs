@@ -5,7 +5,6 @@
 //! Boundary: IDs use canonical lowercase hexadecimal text; names are validated labels.
 
 use super::{AppId, CanonicalNetworkId};
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{fmt, str::FromStr};
 use thiserror::Error as ThisError;
@@ -43,19 +42,6 @@ impl fmt::Display for FleetId {
             write!(formatter, "{byte:02x}")?;
         }
         Ok(())
-    }
-}
-
-impl CandidType for FleetId {
-    fn _ty() -> ic_platform::candid::contract::types::Type {
-        ic_platform::candid::contract::types::TypeInner::Text.into()
-    }
-
-    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-    where
-        S: ic_platform::candid::contract::types::Serializer,
-    {
-        serializer.serialize_text(&self.to_string())
     }
 }
 
@@ -163,11 +149,12 @@ impl<'de> Deserialize<'de> for FleetName {
 /// Complete network-qualified Fleet identity.
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetKey {
     pub canonical_network_id: CanonicalNetworkId,
     pub fleet_id: FleetId,
@@ -179,9 +166,12 @@ pub struct FleetKey {
 /// Immutable binding between one installed Fleet and its source App.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetBinding {
     pub fleet: FleetKey,
     pub app: AppId,
@@ -306,9 +296,9 @@ mod tests {
             fleet_id,
         };
         let mut current_bytes = Vec::new();
-        ciborium::ser::into_writer(&fleet, &mut current_bytes).expect("serialize Fleet key");
+        serde_cbor::to_writer(&mut current_bytes, &fleet).expect("serialize Fleet key");
         let current: FleetKeyWire =
-            ciborium::de::from_reader(current_bytes.as_slice()).expect("decode current Fleet key");
+            serde_cbor::from_reader(current_bytes.as_slice()).expect("decode current Fleet key");
 
         assert_eq!(
             current,
@@ -318,11 +308,11 @@ mod tests {
             }
         );
 
-        let current_candid = ic_platform::candid::contract::encode_one(fleet)
-            .expect("encode current Candid Fleet key");
-        let decoded_candid: FleetKey = ic_platform::candid::decoder::decode_one(&current_candid)
-            .expect("decode current Candid Fleet key");
-        assert_eq!(decoded_candid, fleet);
+        let current_wire =
+            crate::protocol::authority::encode(fleet).expect("encode current Wire Fleet key");
+        let decoded_wire: FleetKey = crate::protocol::authority::decode(&current_wire)
+            .expect("decode current Wire Fleet key");
+        assert_eq!(decoded_wire, fleet);
     }
 
     #[test]

@@ -11,8 +11,7 @@ mod tests;
 use crate::{
     dto::{
         fleet_coordinator::{
-            CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
-            FleetFundingPolicyRotationStatusPhase,
+            CoordinatorFundingStatusResponse, FleetFundingPolicyRotationStatusPhase,
         },
         root::RootRemovalOperationStatus,
     },
@@ -32,48 +31,40 @@ use crate::{
         FleetFundingPolicyRotationStep, FleetRootFundingCallView, FleetRootFundingDisposition,
     },
 };
-use canic_contracts::{
-    dto::{
-        component_provisioning::{
-            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
-            FleetComponentProvisioningPhase, FleetComponentProvisioningPrepareRequest,
-            FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse,
-            RootComponentDirectorySynchronizationResponse, RootComponentProvisioningStatusResponse,
-        },
-        error::Error,
-        fleet_admission::{
-            FleetAdmissionMutationOutcome, FleetAdmissionMutationRequest,
-            FleetAdmissionMutationResponse, FleetAdmissionOperationPhase,
-            FleetAdmissionRootReceipt, FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
-        },
-        fleet_coordinator::CoordinatorOperationReadRequest as RemoteRootStatusRequest,
-        fleet_funding::{
-            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
-            FleetFundingPolicyRotationRootActivateRequest,
-            FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
-            FleetFundingPolicyRotationStageRootRequest, FleetRootFundingAcceptanceReceipt,
-            FleetRootFundingRequest, FleetRootFundingResponse,
-        },
-        fleet_registry::{
-            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-            FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
-            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
-            FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
-            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingReservationRequest,
-            FleetSubnetRootDrainingReservationResponse,
-            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
-            FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
-            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
-        },
-        role::{OperationReceipt, OperationStatusRequest, RootRemovalRequest},
-        state::SetStateResponse,
-        wire::projection::coordinator_root::{
-            RemoteRootCommand, RemoteRootCommandResponse, RemoteRootOperationStatusResponse,
-            RemoteRootStatusResponse,
-        },
+use canic_contracts::dto::{
+    component_provisioning::{
+        FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
+        FleetComponentProvisioningPhase, FleetComponentProvisioningPrepareRequest,
+        FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
+        FleetComponentProvisioningStatusResponse, RootComponentDirectorySynchronizationResponse,
+        RootComponentProvisioningStatusResponse,
     },
-    protocol,
+    error::Error,
+    fleet_admission::{
+        FleetAdmissionMutationOutcome, FleetAdmissionMutationRequest,
+        FleetAdmissionMutationResponse, FleetAdmissionOperationPhase, FleetAdmissionStatusRequest,
+        FleetAdmissionStatusResponse,
+    },
+    fleet_funding::{
+        FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+        FleetFundingPolicyRotationRootActivateRequest,
+        FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
+        FleetFundingPolicyRotationStageRootRequest, FleetRootFundingAcceptanceReceipt,
+        FleetRootFundingRequest, FleetRootFundingResponse,
+    },
+    fleet_registry::{
+        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+        FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
+        FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
+        FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
+        FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingReservationRequest,
+        FleetSubnetRootDrainingReservationResponse,
+        FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
+        FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
+        FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+    },
+    role::{OperationReceipt, RootRemovalRequest},
+    state::SetStateResponse,
 };
 use canic_core::{
     api::timer::TimerApi,
@@ -113,33 +104,89 @@ impl FleetCoordinatorWorkflow {
     }
 
     #[cfg(test)]
-    pub(crate) fn operation_status(
+    pub(crate) fn provisioning_operation_status(
         operation_id: [u8; 32],
-    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
-        Self::resolve_operation_status(operation_id)
+    ) -> Result<
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+        InternalError,
+    > {
+        FleetCoordinatorOps::provisioning_operation_status(operation_id)
     }
 
-    pub(crate) fn operation_status_for_caller(
+    pub(crate) fn provisioning_operation_status_for_caller(
         operation_id: [u8; 32],
         caller: Principal,
         caller_is_controller: bool,
-    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
+    ) -> Result<
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+        InternalError,
+    > {
+        Self::authorize_operation_read(operation_id, caller, caller_is_controller)?;
+        FleetCoordinatorOps::provisioning_operation_status(operation_id)
+    }
+
+    fn authorize_operation_read(
+        operation_id: [u8; 32],
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<(), InternalError> {
         FleetCoordinatorOps::authorize_operation_caller(
             operation_id,
             caller,
             caller_is_controller,
         )?;
-        Self::resolve_operation_status(operation_id)
+        if operation_id == [0; 32] {
+            return Err(InternalError::invalid_input());
+        }
+        Ok(())
     }
 
-    fn resolve_operation_status(
+    pub(crate) fn admission_operation_status(
         operation_id: [u8; 32],
-    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
-        let registry = FleetCoordinatorOps::registry()?;
-        if let Some(status) = FleetAdmissionOps::operation_status(&registry, operation_id)? {
-            return Ok(CoordinatorOperationStatusResponse::Admission(status));
-        }
-        FleetCoordinatorOps::operation_status(operation_id)
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::fleet_admission::FleetAdmissionOperationStatusResponse,
+        InternalError,
+    > {
+        Self::authorize_operation_read(operation_id, caller, caller_is_controller)?;
+        FleetAdmissionOps::operation_status(&FleetCoordinatorOps::registry()?, operation_id)?
+            .ok_or_else(InternalError::unavailable)
+    }
+
+    pub(crate) fn funding_rotation_status(
+        operation_id: [u8; 32],
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse,
+        InternalError,
+    > {
+        Self::authorize_operation_read(operation_id, caller, caller_is_controller)?;
+        FleetCoordinatorOps::funding_policy_rotation_status(operation_id)?
+            .ok_or_else(InternalError::unavailable)
+    }
+
+    pub(crate) fn retirement_operation_status(
+        operation_id: [u8; 32],
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<canic_contracts::dto::fleet_registry::FleetRetirementStatus, InternalError> {
+        Self::authorize_operation_read(operation_id, caller, caller_is_controller)?;
+        FleetCoordinatorOps::retirement_operation_status(operation_id)?
+            .ok_or_else(InternalError::unavailable)
+    }
+
+    pub(crate) fn root_removal_operation_status(
+        operation_id: [u8; 32],
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::fleet_coordinator::CoordinatorRootRemovalOperationStatus,
+        InternalError,
+    > {
+        Self::authorize_operation_read(operation_id, caller, caller_is_controller)?;
+        FleetCoordinatorOps::root_removal_operation_status(operation_id)
     }
 
     pub(crate) fn initialize(
@@ -460,37 +507,36 @@ impl FleetCoordinatorWorkflow {
     pub(crate) async fn accept_root_removal(
         request: FleetSubnetRootDrainingReservationRequest,
     ) -> Result<OperationReceipt, InternalError> {
+        use canic_contracts::{dto::retirement_control, protocol::retirement_control as wire};
         Self::require_non_admission_operation_id(request.operation_id)?;
         let reservation = Self::prepare_root_draining_reservation(request)?;
         let expected = OperationReceipt {
             operation_id: reservation.request.operation_id,
         };
-        let call = CallOps::unbounded_wait(
-            reservation.request.expected_root.fleet_subnet_root,
-            protocol::CANIC_ROOT_COMMAND,
+        let root = reservation.request.expected_root.fleet_subnet_root;
+        let bytes = ic_wire::native::encode_request(
+            wire::root_remove::METHOD_ID,
+            &retirement_control::RootRemovalRequest::from(RootRemovalRequest { reservation }),
+            wire::REQUEST_LIMITS,
         )
-        .with_arg(RemoteRootCommand::RemoveRoot(RootRemovalRequest {
-            reservation,
-        }))?
-        .execute()
-        .await?;
-        let result: Result<RemoteRootCommandResponse, Error> = call.candid()?;
-        match result.map_err(InternalError::observed_public)? {
-            RemoteRootCommandResponse::OperationAccepted(receipt) if *receipt == expected => {
-                schedule_coordinator_root_removal(receipt.operation_id, Duration::ZERO);
-                Ok(*receipt)
-            }
-            RemoteRootCommandResponse::AcceptFunding(_)
-            | RemoteRootCommandResponse::ActivateFleetAdmission(_)
-            | RemoteRootCommandResponse::ActivateFundingPolicyRotation(_)
-            | RemoteRootCommandResponse::OpenFleetAdmission(_)
-            | RemoteRootCommandResponse::OperationAccepted(_)
-            | RemoteRootCommandResponse::PrepareFleetAdmission(_)
-            | RemoteRootCommandResponse::PrepareFundingPolicyRotation(_)
-            | RemoteRootCommandResponse::SynchronizeComponentDirectories(_) => {
-                Err(InternalError::conflict())
-            }
+        .map_err(|_| InternalError::invariant())?;
+        let reply = CallOps::unbounded_wait(root, wire::root_remove::METHOD)
+            .with_raw_args(bytes)
+            .execute()
+            .await?
+            .into_bytes();
+        let result: Result<OperationReceipt, Error> = ic_wire::native::decode_response(
+            wire::root_remove::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+        let receipt = result.map_err(InternalError::observed_public)?;
+        if receipt != expected {
+            return Err(InternalError::conflict());
         }
+        schedule_coordinator_root_removal(receipt.operation_id, Duration::ZERO);
+        Ok(receipt)
     }
 
     pub(crate) fn root_draining_reservation_status(
@@ -588,12 +634,8 @@ async fn advance_fleet_admission_once(operation_id: [u8; 32]) -> Result<bool, In
             if request.operation_id != operation_id {
                 return Err(InternalError::conflict());
             }
-            let receipt = call_root_admission(
-                fleet_subnet_root,
-                RemoteRootCommand::PrepareFleetAdmission(request),
-                RootAdmissionResponsePhase::Prepare,
-            )
-            .await?;
+            let receipt =
+                crate::ops::fleet_admission::transport::prepare(fleet_subnet_root, request).await?;
             FleetAdmissionOps::record_root_receipt(&registry, receipt)?;
             Ok(false)
         }
@@ -609,12 +651,9 @@ async fn advance_fleet_admission_once(operation_id: [u8; 32]) -> Result<bool, In
             if request.operation_id != operation_id {
                 return Err(InternalError::conflict());
             }
-            let receipt = call_root_admission(
-                fleet_subnet_root,
-                RemoteRootCommand::ActivateFleetAdmission(request),
-                RootAdmissionResponsePhase::Activate,
-            )
-            .await?;
+            let receipt =
+                crate::ops::fleet_admission::transport::activate(fleet_subnet_root, request)
+                    .await?;
             FleetAdmissionOps::record_root_receipt(&registry, receipt)?;
             Ok(false)
         }
@@ -625,12 +664,8 @@ async fn advance_fleet_admission_once(operation_id: [u8; 32]) -> Result<bool, In
             if request.operation_id != operation_id {
                 return Err(InternalError::conflict());
             }
-            let receipt = call_root_admission(
-                fleet_subnet_root,
-                RemoteRootCommand::OpenFleetAdmission(request),
-                RootAdmissionResponsePhase::Open,
-            )
-            .await?;
+            let receipt =
+                crate::ops::fleet_admission::transport::open(fleet_subnet_root, request).await?;
             FleetAdmissionOps::record_root_receipt(&registry, receipt)?;
             Ok(false)
         }
@@ -652,40 +687,6 @@ async fn advance_fleet_admission_once(operation_id: [u8; 32]) -> Result<bool, In
             }
             Ok(true)
         }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum RootAdmissionResponsePhase {
-    Activate,
-    Open,
-    Prepare,
-}
-
-async fn call_root_admission(
-    fleet_subnet_root: Principal,
-    command: RemoteRootCommand,
-    expected: RootAdmissionResponsePhase,
-) -> Result<FleetAdmissionRootReceipt, InternalError> {
-    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
-        .with_arg(command)?
-        .execute()
-        .await?;
-    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
-    match (expected, response.map_err(InternalError::observed_public)?) {
-        (
-            RootAdmissionResponsePhase::Activate,
-            RemoteRootCommandResponse::ActivateFleetAdmission(receipt),
-        )
-        | (
-            RootAdmissionResponsePhase::Open,
-            RemoteRootCommandResponse::OpenFleetAdmission(receipt),
-        )
-        | (
-            RootAdmissionResponsePhase::Prepare,
-            RemoteRootCommandResponse::PrepareFleetAdmission(receipt),
-        ) => Ok(*receipt),
-        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -781,15 +782,7 @@ fn schedule_coordinator_root_removal(operation_id: [u8; 32], delay: Duration) {
 async fn advance_coordinator_root_removal_once(
     operation_id: [u8; 32],
 ) -> Result<bool, InternalError> {
-    let current = match FleetCoordinatorOps::operation_status(operation_id)? {
-        CoordinatorOperationStatusResponse::RootRemoval(current) => current,
-        CoordinatorOperationStatusResponse::Admission(_)
-        | CoordinatorOperationStatusResponse::ComponentProvisioning(_)
-        | CoordinatorOperationStatusResponse::Retirement(_)
-        | CoordinatorOperationStatusResponse::FundingPolicyRotation(_) => {
-            return Err(InternalError::conflict());
-        }
-    };
+    let current = FleetCoordinatorOps::root_removal_operation_status(operation_id)?;
     if current.readiness.is_some() {
         return Ok(true);
     }
@@ -849,19 +842,24 @@ async fn query_root_removal(
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<RootRemovalOperationStatus, InternalError> {
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_OPERATION_STATUS)
-        .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
-            operation_id,
-        }))?
+    use canic_contracts::{dto::root_removal_read, protocol::root_removal_read as wire};
+    let bytes =
+        ic_wire::native::encode_request(wire::METHOD_ID, &operation_id, wire::REQUEST_LIMITS)
+            .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::unbounded_wait(root, wire::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let response: Result<RemoteRootStatusResponse, Error> = result.candid()?;
-    match response.map_err(InternalError::observed_public)? {
-        RemoteRootStatusResponse::Operation(RemoteRootOperationStatusResponse::RemoveRoot(
-            status,
-        )) if status.operation_id == operation_id => Ok(*status),
-        RemoteRootStatusResponse::Operation(_) => Err(InternalError::conflict()),
+        .await?
+        .into_bytes();
+    let response: Result<root_removal_read::Status, Error> =
+        ic_wire::native::decode_response(wire::METHOD_ID, &reply, wire::RESPONSE_LIMITS)
+            .map_err(|_| InternalError::invariant())?;
+    let status =
+        RootRemovalOperationStatus::from(response.map_err(InternalError::observed_public)?);
+    if status.operation_id != operation_id {
+        return Err(InternalError::conflict());
     }
+    Ok(status)
 }
 
 fn schedule_component_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Duration) {
@@ -1154,22 +1152,29 @@ const fn component_provisioning_phase_rank(phase: FleetComponentProvisioningPhas
 async fn accept_root_component_provisioning(
     call: FleetComponentProvisioningRootAcceptanceCallView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    use canic_contracts::{dto::batch_control, protocol::batch_control as wire};
     let operation_id = call.request.operation_id;
     let plan_hash = call.request.plan_hash;
     let root = call.fleet_subnet_root;
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_COMMAND)
-        .with_arg(RemoteRootCommand::ProvisionComponents(call.request))?
+    let bytes = ic_wire::native::encode_request(
+        wire::accept::METHOD_ID,
+        &batch_control::RootRequest::from(call.request),
+        wire::ROOT_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::unbounded_wait(root, wire::accept::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
-    match response.map_err(InternalError::observed_public)? {
-        RemoteRootCommandResponse::OperationAccepted(receipt)
-            if receipt.operation_id == operation_id =>
-        {
-            query_root_component_provisioning(root, operation_id, plan_hash).await
-        }
-        _ => Err(InternalError::conflict()),
+        .await?
+        .into_bytes();
+    let response: Result<OperationReceipt, Error> =
+        ic_wire::native::decode_response(wire::accept::METHOD_ID, &reply, wire::RESPONSE_LIMITS)
+            .map_err(|_| InternalError::invariant())?;
+    let receipt = response.map_err(InternalError::observed_public)?;
+    if receipt.operation_id != operation_id {
+        return Err(InternalError::conflict());
     }
+    query_root_component_provisioning(root, operation_id, plan_hash).await
 }
 
 enum FleetRootFundingCallOutcome {
@@ -1180,19 +1185,32 @@ enum FleetRootFundingCallOutcome {
 async fn call_root_funding_acceptance(
     call: FleetRootFundingCallView,
 ) -> Result<FleetRootFundingCallOutcome, InternalError> {
+    use canic_contracts::{dto::funding_control, protocol::funding_control as wire};
     let granted_cycles = call.request.granted_cycles.to_u128();
-    let result = CallOps::bounded_wait(call.fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
-        .with_arg(RemoteRootCommand::AcceptFunding(call.request))?
+    let bytes = ic_wire::native::encode_request(
+        wire::root_accept::METHOD_ID,
+        &funding_control::AcceptanceRequest::from(call.request),
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::bounded_wait(call.fleet_subnet_root, wire::root_accept::METHOD)
+        .with_raw_args(bytes)
         .with_cycles(granted_cycles)
         .execute()
-        .await?;
-    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
+        .await?
+        .into_bytes();
+    let response: Result<funding_control::AcceptanceReceipt, Error> =
+        ic_wire::native::decode_response(
+            wire::root_accept::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
     match response {
-        Ok(RemoteRootCommandResponse::AcceptFunding(receipt)) => {
-            Ok(FleetRootFundingCallOutcome::Accepted(receipt))
-        }
+        Ok(receipt) => Ok(FleetRootFundingCallOutcome::Accepted(Box::new(
+            receipt.into(),
+        ))),
         Err(_) => Ok(FleetRootFundingCallOutcome::Rejected),
-        Ok(_) => Err(InternalError::conflict()),
     }
 }
 
@@ -1200,30 +1218,56 @@ async fn call_root_funding_policy_rotation_prepare(
     fleet_subnet_root: Principal,
     request: FleetFundingPolicyRotationRootPrepareRequest,
 ) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
-    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
-        .with_arg(RemoteRootCommand::PrepareFundingPolicyRotation(request))?
+    use canic_contracts::{dto::funding_control, protocol::funding_control as wire};
+    let bytes = ic_wire::native::encode_request(
+        wire::root_prepare::METHOD_ID,
+        &funding_control::PrepareRequest::from(request),
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::bounded_wait(fleet_subnet_root, wire::root_prepare::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
-    match response.map_err(InternalError::observed_public)? {
-        RemoteRootCommandResponse::PrepareFundingPolicyRotation(receipt) => Ok(*receipt),
-        _ => Err(InternalError::conflict()),
-    }
+        .await?
+        .into_bytes();
+    let response: Result<funding_control::RotationReceipt, Error> =
+        ic_wire::native::decode_response(
+            wire::root_prepare::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+    response
+        .map(Into::into)
+        .map_err(InternalError::observed_public)
 }
 
 async fn call_root_funding_policy_rotation_activate(
     fleet_subnet_root: Principal,
     request: FleetFundingPolicyRotationRootActivateRequest,
 ) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
-    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
-        .with_arg(RemoteRootCommand::ActivateFundingPolicyRotation(request))?
+    use canic_contracts::{dto::funding_control, protocol::funding_control as wire};
+    let bytes = ic_wire::native::encode_request(
+        wire::root_activate::METHOD_ID,
+        &funding_control::ActivateRequest::from(request),
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::bounded_wait(fleet_subnet_root, wire::root_activate::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
-    match response.map_err(InternalError::observed_public)? {
-        RemoteRootCommandResponse::ActivateFundingPolicyRotation(receipt) => Ok(*receipt),
-        _ => Err(InternalError::conflict()),
-    }
+        .await?
+        .into_bytes();
+    let response: Result<funding_control::RotationReceipt, Error> =
+        ic_wire::native::decode_response(
+            wire::root_activate::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+    response
+        .map(Into::into)
+        .map_err(InternalError::observed_public)
 }
 
 async fn advance_root_component_provisioning(
@@ -1242,27 +1286,36 @@ async fn query_root_component_provisioning(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_OPERATION_STATUS)
-        .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
-            operation_id,
-        }))?
+    use canic_contracts::{dto::component_read, protocol::component_read as wire};
+    let bytes = ic_wire::native::encode_request(
+        wire::provisioning::METHOD_ID,
+        &operation_id,
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::unbounded_wait(root, wire::provisioning::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let response: Result<RemoteRootStatusResponse, Error> = result.candid()?;
-    match response.map_err(InternalError::observed_public)? {
-        RemoteRootStatusResponse::Operation(
-            RemoteRootOperationStatusResponse::ProvisionComponents(response),
-        ) if response.operation_id == operation_id && response.plan_hash == plan_hash => {
-            if let Some(error) = FleetCoordinatorOps::observed_root_failure(
-                response.phase,
-                response.last_failure.clone(),
-            ) {
-                return Err(error);
-            }
-            Ok(*response)
-        }
-        RemoteRootStatusResponse::Operation(_) => Err(InternalError::conflict()),
+        .await?
+        .into_bytes();
+    let response: Result<component_read::Provisioning, Error> = ic_wire::native::decode_response(
+        wire::provisioning::METHOD_ID,
+        &reply,
+        wire::RESPONSE_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let response = RootComponentProvisioningStatusResponse::from(
+        response.map_err(InternalError::observed_public)?,
+    );
+    if response.operation_id != operation_id || response.plan_hash != plan_hash {
+        return Err(InternalError::conflict());
     }
+    if let Some(error) =
+        FleetCoordinatorOps::observed_root_failure(response.phase, response.last_failure.clone())
+    {
+        return Err(error);
+    }
+    Ok(response)
 }
 
 enum RootComponentDirectoryAdvanceResponse {
@@ -1299,25 +1352,30 @@ async fn advance_root_component_directories(
             fleet_subnet_root,
             request,
         } => {
-            let result = CallOps::unbounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
-                .with_arg(RemoteRootCommand::SynchronizeComponentDirectories(*request))?
+            use canic_contracts::{dto::batch_control, protocol::batch_control as wire};
+            let bytes = ic_wire::native::encode_request(
+                wire::synchronize::METHOD_ID,
+                &batch_control::SynchronizeRequest::from(*request),
+                wire::SYNCHRONIZE_LIMITS,
+            )
+            .map_err(|_| InternalError::invariant())?;
+            let reply = CallOps::unbounded_wait(fleet_subnet_root, wire::synchronize::METHOD)
+                .with_raw_args(bytes)
                 .execute()
-                .await?;
-            let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
-            match response.map_err(InternalError::observed_public)? {
-                RemoteRootCommandResponse::SynchronizeComponentDirectories(response) => Ok(
-                    RootComponentDirectoryAdvanceResponse::Synchronization(*response),
-                ),
-                RemoteRootCommandResponse::AcceptFunding(_)
-                | RemoteRootCommandResponse::ActivateFleetAdmission(_)
-                | RemoteRootCommandResponse::ActivateFundingPolicyRotation(_)
-                | RemoteRootCommandResponse::OpenFleetAdmission(_)
-                | RemoteRootCommandResponse::OperationAccepted(_)
-                | RemoteRootCommandResponse::PrepareFleetAdmission(_)
-                | RemoteRootCommandResponse::PrepareFundingPolicyRotation(_) => {
-                    Err(InternalError::conflict())
-                }
-            }
+                .await?
+                .into_bytes();
+            let response: Result<batch_control::Synchronization, Error> =
+                ic_wire::native::decode_response(
+                    wire::synchronize::METHOD_ID,
+                    &reply,
+                    wire::RESPONSE_LIMITS,
+                )
+                .map_err(|_| InternalError::invariant())?;
+            response
+                .map(|response| {
+                    RootComponentDirectoryAdvanceResponse::Synchronization(response.into())
+                })
+                .map_err(InternalError::observed_public)
         }
     }
 }

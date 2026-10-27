@@ -33,15 +33,14 @@ canic network enroll local \
 ## Configure And Build An App
 
 ```bash
-canic app create demo
-canic scaffold canister demo app
-canic app role attach demo app --component-spec demo.app
+canic app create demo --yes
 canic build demo app --profile release \
   --provenance artifacts/demo-app-provenance.json
 ```
 
-App and build operations do not choose live canisters, spend cycles, or create
-a Fleet operation.
+App creation includes the `app` package and its Component Spec. Build it directly;
+use scaffolding when adding another role. App and build operations do not choose
+live canisters, spend cycles, or create a Fleet operation.
 
 ## Declare Current Fleet State
 

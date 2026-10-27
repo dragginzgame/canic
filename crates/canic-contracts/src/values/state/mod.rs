@@ -7,7 +7,6 @@
 //! Boundary: storage and DTO modules re-export these values to preserve public
 //! API paths while internal code imports the domain owner where practical.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display};
 
@@ -15,8 +14,11 @@ use std::{fmt, fmt::Display};
 /// FleetMode
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetMode {
     #[default]
     Enabled,
@@ -40,8 +42,11 @@ impl Display for FleetMode {
 /// FleetStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetStatus {
     Active,
     Readonly,

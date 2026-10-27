@@ -120,9 +120,9 @@ Imported assets do not become harness-owned named allocation requests. Local
 builds disable automatic Ledger refill; additional local supply requires explicit
 creation and Root import. Discovery does not change that funding contract.
 
-Preparation stages exact sealed Candid into the selected environment's normal
-binding layout. Use the existing [frontend handoff](frontend-handoff.md), through
-`{"command":"frontend","fleet":"development","input":"frontend.json","out":"browser"}`.
+Frontend export compiles the selected release's sealed Wire sources with explicitly
+prepared tools. Use the [frontend handoff](frontend-handoff.md), through
+`{"command":"frontend","fleet":"development","input":"frontend.json","out":"browser","node":"/absolute/path/to/node","typescript":"/absolute/path/to/node_modules/typescript"}`.
 The frontend input must select this session's environment and gateway, its
 reported role IDs and the configured admission derivation origin. PocketIC
 installs Internet Identity alongside its Registry, CMC and Cycles Ledger;

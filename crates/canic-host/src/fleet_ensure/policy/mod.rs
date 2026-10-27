@@ -229,14 +229,8 @@ pub enum EnsurePolicyError {
     #[error("controlled canister {name} has no resolved {kind} identity")]
     MissingArtifactIdentity { kind: &'static str, name: String },
 
-    #[error("protocol step {step} targets unknown or absent controlled canister {canister}")]
-    InvalidProtocolTarget { canister: String, step: String },
-
     #[error("protocol step {0} has duplicate or empty authority")]
     InvalidProtocolStep(String),
-
-    #[error("protocol step {0} is missing an exact live terminal observation")]
-    MissingProtocolObservation(String),
 
     #[error("controlled canister {0} must configure init_arg and init_candid together")]
     IncompleteInitTemplate(String),
@@ -410,72 +404,11 @@ pub fn compile_plan(
 
     let mut protocol_actions = Vec::new();
     let mut protocol_names = BTreeSet::new();
-    for step in &desired.protocol_steps {
-        let ready = observation
-            .protocol_ready
-            .get(&step.name)
-            .copied()
-            .ok_or_else(|| EnsurePolicyError::MissingProtocolObservation(step.name.clone()))?;
-        if ready {
-            continue;
-        }
-        if !protocol_names.insert(step.name.as_str()) {
-            return Err(EnsurePolicyError::InvalidProtocolStep(step.name.clone()));
-        }
-        let configured = desired
-            .canisters
-            .iter()
-            .find(|canister| canister.name == step.canister)
-            .ok_or_else(|| EnsurePolicyError::InvalidProtocolTarget {
-                canister: step.canister.clone(),
-                step: step.name.clone(),
-            })?;
-        let principal = observation
-            .canisters
-            .get(&step.canister)
-            .and_then(Option::as_ref)
-            .map_or_else(
-                || format!("created:{}", step.canister),
-                |live| live.principal.clone(),
-            );
-        if configured.presence != DesiredPresence::Present {
-            return Err(EnsurePolicyError::InvalidProtocolTarget {
-                canister: step.canister.clone(),
-                step: step.name.clone(),
-            });
-        }
-        let identities = artifacts.protocol_by_step.get(&step.name).ok_or_else(|| {
-            EnsurePolicyError::MissingArtifactIdentity {
-                kind: "protocol contract",
-                name: step.name.clone(),
-            }
-        })?;
-        let maximum_execution_burn_cycles = parse_canister_cycles(
-            &step.canister,
-            "protocol.maximum_execution_burn_cycles",
-            &step.maximum_execution_burn_cycles,
-        )?;
-        protocol_actions.push(EnsureAction::Protocol {
-            candid: step.candid.clone(),
-            candid_sha256: identities.candid_sha256.clone(),
-            command_args: step.command_args.clone(),
-            command_args_sha256: identities.command_args_sha256.clone(),
-            command_method: step.command_method.clone(),
-            expected_status: step.expected_status.clone(),
-            expected_status_sha256: identities.expected_status_sha256.clone(),
-            maximum_execution_burn_cycles,
-            name: step.name.clone(),
-            principal,
-            status_args: step.status_args.clone(),
-            status_args_sha256: identities.status_args_sha256.clone(),
-            status_method: step.status_method.clone(),
-        });
-    }
     let expected_typed_protocol = desired.protocol.as_ref();
     for action in compiled_protocol_actions {
         let EnsureAction::FleetProtocol {
             action: current_action,
-            candid,
+            wire_schema,
             name,
             principal,
             ..
@@ -550,15 +483,15 @@ pub fn compile_plan(
                 .is_none_or(|identity| identity != [0; 32]),
         };
         let protocol_matches = expected_typed_protocol.is_some_and(|protocol| {
-            let expected_candid = match target_kind {
-                DesiredCanisterKind::Coordinator => protocol.coordinator_candid.as_str(),
-                DesiredCanisterKind::Root => protocol.root_candid.as_str(),
-                DesiredCanisterKind::Store => protocol.store_candid.as_str(),
+            let expected_wire_schema = match target_kind {
+                DesiredCanisterKind::Coordinator => protocol.coordinator_wire_schema.as_str(),
+                DesiredCanisterKind::Root => protocol.root_wire_schema.as_str(),
+                DesiredCanisterKind::Store => protocol.store_wire_schema.as_str(),
                 DesiredCanisterKind::Auxiliary
                 | DesiredCanisterKind::Component
                 | DesiredCanisterKind::Pool => return false,
             };
-            candid == expected_candid
+            wire_schema == expected_wire_schema
         });
         if name.is_empty()
             || !protocol_names.insert(name.as_str())
@@ -638,7 +571,6 @@ pub fn compile_plan(
                             CanisterDisposition::Reuse | CanisterDisposition::Reinstall
                         )
                     })))
-            && desired.protocol_steps.is_empty()
             && protocol_actions.is_empty()
     });
     let reconciliation_only = !protocol_actions.is_empty() && protocol_actions.iter().all(|action| matches!(action,
@@ -1688,6 +1620,7 @@ fn reuse_plan(
         desired,
         configured,
         live,
+        observation,
         cycle_policy,
         bounds,
         created_at_time,
@@ -1734,6 +1667,7 @@ fn append_target_funding(
     desired: &DesiredFleet,
     configured: &crate::fleet_ensure::model::DesiredCanister,
     live: &LiveCanister,
+    observation: &FleetObservation,
     cycle_policy: CanisterCyclePolicy,
     bounds: CycleBounds,
     created_at_time: u64,
@@ -1760,17 +1694,7 @@ fn append_target_funding(
     actions.insert(
         0,
         EnsureAction::Fund {
-            pool_funding: if configured.kind == DesiredCanisterKind::Pool {
-                live.controllers
-                    .first()
-                    .cloned()
-                    .map(|root| PoolFundingAuthority {
-                        root,
-                        lifecycle: EstatePoolAssetLifecycle::Ready,
-                    })
-            } else {
-                None
-            },
+            pool_funding: pool_funding_authority(configured, observation)?,
             amount,
             created_at_time,
             expected_post_cycles,
@@ -1783,6 +1707,28 @@ fn append_target_funding(
     );
     accumulator.add_funding(amount)?;
     accumulator.add_fee(bounds.ledger_fee)
+}
+
+fn pool_funding_authority(
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+    observation: &FleetObservation,
+) -> Result<Option<PoolFundingAuthority>, EnsurePolicyError> {
+    if configured.kind != DesiredCanisterKind::Pool {
+        return Ok(None);
+    }
+    let root = configured
+        .parent
+        .as_ref()
+        .and_then(|parent| observation.canisters.get(parent))
+        .and_then(Option::as_ref)
+        .ok_or_else(|| EnsurePolicyError::InvalidTopology {
+            name: configured.name.clone(),
+            reason: "pool funding requires an observed parent Root",
+        })?;
+    Ok(Some(PoolFundingAuthority {
+        root: root.principal.clone(),
+        lifecycle: EstatePoolAssetLifecycle::Ready,
+    }))
 }
 
 fn target_funding_margin(actions: usize, bounds: CycleBounds) -> Result<u128, EnsurePolicyError> {
@@ -1993,12 +1939,6 @@ fn validate_authority(
             maximum: MAX_FLEET_ENSURE_CANISTERS,
         });
     }
-    if desired.protocol_steps.len() > MAX_FLEET_ENSURE_PROTOCOL_STEPS {
-        return Err(EnsurePolicyError::TooManyProtocolSteps {
-            actual: desired.protocol_steps.len(),
-            maximum: MAX_FLEET_ENSURE_PROTOCOL_STEPS,
-        });
-    }
     if desired.maximum_stalled_observations == 0 {
         return Err(EnsurePolicyError::InvalidStallBound);
     }
@@ -2113,19 +2053,6 @@ fn validate_authority(
         }
     }
     validate_typed_topology(desired)?;
-    let mut protocol_names = BTreeSet::new();
-    for step in &desired.protocol_steps {
-        if step.name.is_empty()
-            || step.command_method.is_empty()
-            || step.status_method.is_empty()
-            || !protocol_names.insert(step.name.as_str())
-            || !desired.canisters.iter().any(|canister| {
-                canister.name == step.canister && canister.presence == DesiredPresence::Present
-            })
-        {
-            return Err(EnsurePolicyError::InvalidProtocolStep(step.name.clone()));
-        }
-    }
     if !desired.canisters.iter().any(|configured| {
         configured.presence == DesiredPresence::Present && configured.name == desired.treasury
     }) {
@@ -2321,7 +2248,7 @@ fn validate_typed_topology(desired: &DesiredFleet) -> Result<(), EnsurePolicyErr
                     | DesiredCanisterKind::Component
             )
     });
-    if has_managed_topology && desired.protocol.is_none() && desired.protocol_steps.is_empty() {
+    if has_managed_topology && desired.protocol.is_none() {
         return Err(EnsurePolicyError::InvalidTopology {
             name: desired.fleet.clone(),
             reason: "managed Fleet roles require complete typed protocol intent",
@@ -3202,10 +3129,6 @@ fn account_protocol_action(
         EnsureAction::FleetProtocol {
             maximum_execution_burn_cycles,
             ..
-        }
-        | EnsureAction::Protocol {
-            maximum_execution_burn_cycles,
-            ..
         } => accumulator.add_burn(*maximum_execution_burn_cycles),
         action => Err(EnsurePolicyError::InvalidProtocolStep(
             action.name().to_string(),
@@ -3271,7 +3194,6 @@ fn maximum_observation_count(
                 | EnsureAction::Transfer { .. } => 2,
                 EnsureAction::Install { .. }
                 | EnsureAction::FleetProtocol { .. }
-                | EnsureAction::Protocol { .. }
                 | EnsureAction::SetControllers { .. }
                 | EnsureAction::Start { .. }
                 | EnsureAction::Stop { .. }

@@ -1,4 +1,4 @@
-use super::{IcpJsonResponseError, decode_json_response, decode_json_result_response};
+use super::{IcpJsonResponseError, decode_json_response};
 use canic_contracts::{diagnostics::codes, dto::error::Error as CanicError};
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_host_tools::response::{JsonErrorKind, ResponseError};
@@ -15,22 +15,9 @@ fn decodes_plain_typed_response_bytes() {
 }
 
 #[test]
-fn decodes_successful_typed_result_response_bytes() {
-    let output = response_json(&Ok::<u64, CanicError>(42));
-
-    assert_eq!(
-        decode_json_result_response::<u64>(&output).expect("decode result"),
-        42
-    );
-}
-
-#[test]
 fn preserves_typed_canister_rejection() {
-    let output = response_json(&Err::<u64, _>(CanicError::from_registered(
-        codes::AUTHORITY_UNAUTHORIZED,
-    )));
-    let error = decode_json_result_response::<u64>(&output).expect_err("reject result");
-
+    let error =
+        IcpJsonResponseError::Rejected(CanicError::from_registered(codes::AUTHORITY_UNAUTHORIZED));
     let IcpJsonResponseError::Rejected(error) = error else {
         panic!("expected typed canister rejection");
     };

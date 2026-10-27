@@ -335,7 +335,7 @@ fn protected_request_receipts_preserve_child_subject_parent_and_incomplete_pairs
     request.request_id = 11;
     request.parent_request_id = Some(10);
     request.kind = IcpRequestKind::Query;
-    request.method = Some("canic_observability".into());
+    request.method = Some("canic_coordinator_funding".into());
     receipt.request(&request);
     request.elapsed_micros = 20;
     request.succeeded = Some(false);
@@ -382,7 +382,7 @@ fn direct_import_transport_pairs_retain_subject_and_cancelled_status_read() {
     let mut update = request(None);
     update.kind = IcpRequestKind::AgentUpdate;
     update.subject = Some(child);
-    update.method = Some("canic_root_command".into());
+    update.method = Some("canic_root_inspect_canister".into());
     receipt.request(&update);
     update.succeeded = Some(false);
     receipt.request(&update);

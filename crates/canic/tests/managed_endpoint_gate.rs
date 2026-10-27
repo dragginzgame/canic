@@ -194,21 +194,21 @@ fn active_runtime_replay_offers_only_internal_bootstrap_recovery() {
     let source = fs::read_to_string(&macro_path)
         .unwrap_or_else(|error| panic!("read {}: {error}", macro_path.display()));
     let configure_runtime = source
-        .split("CanisterCommand::ConfigureRuntime(request) =>")
+        .split("fn canic_configure_runtime(")
         .nth(1)
         .and_then(|rest| {
-            rest.split("CanisterCommand::InstallDelegationProof(request)")
+            rest.split("$crate::__canic_emit_state_cascade_endpoint!")
                 .next()
         })
-        .expect("managed ConfigureRuntime command arm");
+        .expect("managed runtime configuration endpoint");
     let configuration = configure_runtime
-        .find("configure_runtime(request)?")
+        .find("configure_runtime(request.into())?")
         .expect("runtime configuration");
     let internal_bootstrap = configure_runtime
         .find("LifecycleApi::schedule_init_nonroot_bootstrap")
         .expect("internal bootstrap scheduler");
     let operation_receipt = configure_runtime
-        .find("CanisterCommandResponse::OperationAccepted")
+        .find("Ok(::canic::dto::role::OperationReceipt")
         .expect("ConfigureRuntime operation receipt");
 
     assert!(configuration < internal_bootstrap);
@@ -297,7 +297,7 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
 
     assert!(
         !local_status.contains("FleetAdmissionProjection")
-            && !local_status.contains("AdmissionStatusRequest::Admission"),
+            && !local_status.contains("canic_admission_status"),
         "standalone-local status must not expose managed Fleet-admission state"
     );
 
@@ -315,53 +315,21 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
     }
 }
 
-fn assert_managed_admission_contracts(workspace: &Path, status: &str, command: &str) {
-    let capability =
-        "fleet_admission_attributes=[#[cfg(canic_capability_fleet_admission_projection)]],";
-    for emitter in [status, command] {
-        let compact: String = emitter.split_whitespace().collect();
-        assert!(
-            compact.contains(capability),
-            "managed admission capability selection"
-        );
+fn assert_managed_admission_contracts(_workspace: &Path, status: &str, command: &str) {
+    assert!(status.contains("#[cfg(canic_capability_fleet_admission_projection)]"));
+    assert!(status.contains("admission_control::managed_status::METHOD_ID"));
+    assert!(status.contains("admission_control::ManagedStatus"));
+    for phase in ["prepare", "activate", "open"] {
+        let function = format!("fn canic_admission_{phase}(");
+        let offset = command
+            .find(&function)
+            .expect("native target admission endpoint");
+        let preceding = &command[..offset];
+        let guard = preceding
+            .rfind("#[cfg(canic_capability_fleet_admission_projection)]")
+            .expect("admission endpoint capability");
+        assert!(preceding[guard..].contains(&format!("target_{phase}::METHOD_ID")));
     }
-    assert!(status.contains("AdmissionStatusRequest::Admission"));
-    let managed = wire_macro_tokens(workspace, "managed", "__canic_managed_wire_types");
-    assert!(managed.contains("$($fleet_admission_attributes)*Admission("));
-    let command = wire_macro_tokens(
-        workspace,
-        "managed_command",
-        "__canic_managed_command_wire_types",
-    );
-    for variant in [
-        "ActivateFleetAdmission",
-        "OpenFleetAdmission",
-        "PrepareFleetAdmission",
-    ] {
-        assert!(
-            command.contains(&format!("$($fleet_admission_attributes)*{variant}(")),
-            "managed admission command variant {variant} must be role-pruned"
-        );
-    }
-}
-
-fn wire_macro_tokens(workspace: &Path, module: &str, name: &str) -> String {
-    let source = fs::read_to_string(workspace.join(format!(
-        "crates/canic-contracts/src/dto/wire/{module}/mod.rs"
-    )))
-    .expect("wire contract source");
-    let file = syn::parse_file(&source).expect("wire contract syntax");
-    let tokens = file
-        .items
-        .into_iter()
-        .find_map(|item| match item {
-            syn::Item::Macro(item) if item.ident.as_ref().is_some_and(|ident| ident == name) => {
-                Some(item.mac.tokens.to_string())
-            }
-            _ => None,
-        })
-        .expect("wire declaration macro");
-    tokens.split_whitespace().collect()
 }
 
 #[test]
@@ -390,8 +358,8 @@ fn managed_start_remains_a_thin_profile_surface_composer() {
     assert!(
         !managed_start.contains("workflow::")
             && !managed_start.contains(".await")
-            && !managed_start.contains("fn canic_observability")
-            && !managed_start.contains("fn canic_command"),
+            && !managed_start.contains("fn canic_coordinator_funding")
+            && !managed_start.contains("fn canic_request_cycles"),
         "start! must compose lifecycle and role emitters without owning orchestration or protocol handlers"
     );
 }

@@ -1,12 +1,14 @@
 //! Module: backup::tests::fixtures::execution
 //!
-//! Responsibility: build and mutate backup execution journal test fixtures.
+//! Responsibility: construct retained backup execution journal test fixtures.
 //! Does not own: backup plan construction or filesystem layout setup.
-//! Boundary: deterministic execution-journal state transitions for tests.
+//! Boundary: explicit records for status and integrity tests.
 
 use super::{HASH, plan::valid_backup_plan};
 use canic_backup::{
-    execution::{BackupExecutionJournal, BackupExecutionOperationReceipt},
+    execution::{
+        BackupExecutionJournal, BackupExecutionOperationReceipt, BackupExecutionOperationState,
+    },
     plan::BackupOperationKind,
 };
 
@@ -14,9 +16,24 @@ use canic_backup::{
 pub(in crate::backup::tests) fn accepted_execution_journal() -> BackupExecutionJournal {
     let mut journal =
         BackupExecutionJournal::from_plan(&valid_backup_plan()).expect("execution journal");
-    journal
-        .accept_preflight_bundle_at("preflight-test".to_string(), Some("unix:10".to_string()))
-        .expect("accept preflight");
+    journal.preflight_id = Some("preflight-test".to_string());
+    journal.preflight_accepted = true;
+    for operation in &mut journal.operations {
+        operation.blocking_reasons.clear();
+        if matches!(
+            operation.kind,
+            BackupOperationKind::ValidateTopology
+                | BackupOperationKind::ValidateControlAuthority
+                | BackupOperationKind::ValidateSnapshotReadAuthority
+                | BackupOperationKind::ValidateQuiescencePolicy
+        ) {
+            operation.state = BackupExecutionOperationState::Completed;
+            operation.state_updated_at = Some("unix:10".to_string());
+        } else {
+            operation.state = BackupExecutionOperationState::Ready;
+        }
+    }
+    journal.validate().expect("retained preflight fixture");
     journal
 }
 
@@ -25,7 +42,6 @@ pub(in crate::backup::tests) fn complete_execution_operation(
     journal: &mut BackupExecutionJournal,
     sequence: usize,
 ) {
-    mark_execution_operation_pending(journal, sequence);
     let operation = journal
         .operations
         .iter()
@@ -49,9 +65,26 @@ pub(in crate::backup::tests) fn complete_execution_operation(
         }
         _ => {}
     }
+    let operation = &mut journal.operations[sequence];
+    operation.state = BackupExecutionOperationState::Completed;
+    operation.state_updated_at.clone_from(&receipt.updated_at);
+    operation.blocking_reasons.clear();
+    if operation.kind == BackupOperationKind::CreateSnapshot {
+        operation.snapshot_ids_before = Some(Vec::new());
+    }
+    journal.operation_receipts.push(receipt);
+    journal.restart_required = journal.operations.iter().any(|stop| {
+        stop.kind == BackupOperationKind::Stop
+            && stop.state == BackupExecutionOperationState::Completed
+            && journal.operations.iter().any(|start| {
+                start.kind == BackupOperationKind::Start
+                    && start.target_canister_id == stop.target_canister_id
+                    && start.state != BackupExecutionOperationState::Completed
+            })
+    });
     journal
-        .record_operation_receipt(receipt)
-        .expect("record completed operation");
+        .validate()
+        .expect("retained completed operation fixture");
 }
 
 // Fail one operation in an execution journal.
@@ -60,7 +93,6 @@ pub(in crate::backup::tests) fn fail_execution_operation(
     sequence: usize,
     reason: &str,
 ) {
-    mark_execution_operation_pending(journal, sequence);
     let operation = journal
         .operations
         .iter()
@@ -73,25 +105,15 @@ pub(in crate::backup::tests) fn fail_execution_operation(
         Some(format!("unix:{sequence}1")),
         reason.to_string(),
     );
-    journal
-        .record_operation_receipt(receipt)
-        .expect("record failed operation");
-}
-
-fn mark_execution_operation_pending(journal: &mut BackupExecutionJournal, sequence: usize) {
-    let operation = journal
-        .operations
-        .iter()
-        .find(|operation| operation.sequence == sequence)
-        .expect("operation exists");
-    let updated_at = Some(format!("unix:{sequence}0"));
+    let operation = &mut journal.operations[sequence];
+    operation.state = BackupExecutionOperationState::Failed;
+    operation.state_updated_at.clone_from(&receipt.updated_at);
+    operation.blocking_reasons = vec![reason.to_string()];
     if operation.kind == BackupOperationKind::CreateSnapshot {
-        journal
-            .mark_snapshot_create_pending_at(sequence, updated_at, Vec::new())
-            .expect("mark snapshot operation pending");
-    } else {
-        journal
-            .mark_operation_pending_at(sequence, updated_at)
-            .expect("mark operation pending");
+        operation.snapshot_ids_before = Some(Vec::new());
     }
+    journal.operation_receipts.push(receipt);
+    journal
+        .validate()
+        .expect("retained failed operation fixture");
 }

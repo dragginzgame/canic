@@ -44,16 +44,11 @@ use canic_contracts::{
         fleet_activation::{
             FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
         },
-        fleet_coordinator::CoordinatorOperationReadRequest as RemoteCoordinatorStatusRequest,
         fleet_registry::FleetSubnetRootStatus,
         fleet_subnet_root::FleetSubnetRootAuthority,
-        role::{OperationReceipt, OperationStatusRequest},
-        wire::projection::component_provisioning::{
-            RemoteCoordinatorOperationStatusResponse, RemoteCoordinatorStatusResponse,
-        },
+        role::OperationReceipt,
     },
     ids::{ComponentInstanceId, ManagedCanisterBinding},
-    protocol,
 };
 use canic_core::{
     api::timer::TimerApi,
@@ -375,19 +370,30 @@ async fn query_coordinator_provisioning(
     canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
     InternalError,
 > {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_OPERATION_STATUS)
-        .with_arg(RemoteCoordinatorStatusRequest::Operation(
-            OperationStatusRequest { operation_id },
-        ))?
+    use canic_contracts::{dto::component_read, protocol::component_read as wire};
+    let bytes = ic_wire::native::encode_request(
+        wire::coordinator_provisioning::METHOD_ID,
+        &operation_id,
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::unbounded_wait(coordinator, wire::coordinator_provisioning::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let result: Result<RemoteCoordinatorStatusResponse, Error> = call.candid()?;
-    match result.map_err(InternalError::observed_public)? {
-        RemoteCoordinatorStatusResponse::Operation(
-            RemoteCoordinatorOperationStatusResponse::ComponentProvisioning(status),
-        ) if status.operation_id == operation_id && status.plan_hash == plan_hash => Ok(status),
-        RemoteCoordinatorStatusResponse::Operation(_) => Err(InternalError::conflict()),
+        .await?
+        .into_bytes();
+    let result: Result<component_read::CoordinatorProvisioning, Error> =
+        ic_wire::native::decode_response(
+            wire::coordinator_provisioning::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+    let status = result.map_err(InternalError::observed_public)?;
+    if status.operation_id != operation_id || status.plan_hash != plan_hash {
+        return Err(InternalError::conflict());
     }
+    Ok(status.into())
 }
 
 /// Read one exact durable acceptance receipt under Coordinator authentication.
@@ -491,7 +497,12 @@ pub async fn publish(
         return RootComponentProvisioningOps::finalize_published(&request, IcOps::now_nanos())
             .map(crate::ops::component_provisioning::status_response);
     };
-    publish_component_directory(&request, member, mirror.directory).await
+    Box::pin(publish_component_directory(
+        &request,
+        member,
+        mirror.directory,
+    ))
+    .await
 }
 
 /// Activate one exact grouped Component step or the root runtime after publication.

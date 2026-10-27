@@ -26,8 +26,7 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildIcOnly) => "build_ic_only",
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => "build_local_only",
-        BuiltinPredicate::AttestedLocalSubnet
-        | BuiltinPredicate::AttestedLocalSubnetArgument(_) => "attested_local_subnet",
+        BuiltinPredicate::AttestedLocalSubnetArgument(_) => "attested_local_subnet",
         BuiltinPredicate::ServiceAuthority { .. } => "deployment_service_authority",
     }
 }
@@ -37,7 +36,6 @@ pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
         BuiltinPredicate::Fleet(_) => AccessMetricKind::Guard,
         BuiltinPredicate::Caller(_)
         | BuiltinPredicate::CallerPermission { .. }
-        | BuiltinPredicate::AttestedLocalSubnet
         | BuiltinPredicate::AttestedLocalSubnetArgument(_)
         | BuiltinPredicate::ServiceAuthority { .. } => AccessMetricKind::Auth,
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
@@ -102,9 +100,6 @@ pub(super) fn evaluate<const FLEET_ADMISSION: bool>(
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => {
             access::env::build_network_local()
-        }
-        BuiltinPredicate::AttestedLocalSubnet => {
-            access::auth::is_attested_local_subnet(ctx.caller)
         }
         BuiltinPredicate::AttestedLocalSubnetArgument(attestation) => {
             access::auth::verify_decoded_attestation(attestation, ctx.caller)

@@ -164,15 +164,25 @@ prepare_downstream_root() {
     local downstream_root="$1"
     local package_root="$2"
 
-    mkdir -p "$downstream_root/src" "$downstream_root/apps"
+    mkdir -p "$downstream_root/src/protocol" "$downstream_root/examples/wire_schema" "$downstream_root/apps"
     prepare_packaged_canic_patch_config "$downstream_root" "$package_root"
 
     cp "$ROOT/apps/test/canic.toml" "$downstream_root/apps/canic.toml"
 
     cat > "$downstream_root/Cargo.toml" <<EOF
+[workspace]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.0"
+
+[workspace.dependencies]
+canic = { path = "$package_root/canic-$VERSION", default-features = false }
+$(sed -n '/^ic-platform = /p; /^ic-wire = /p; /^serde = /p' "$ROOT/Cargo.toml")
+
 [package]
 name = "canic-packaged-downstream-probe"
-version = "0.0.0"
+version = { workspace = true }
 edition = "2024"
 rust-version = "$MSRV"
 publish = false
@@ -184,15 +194,23 @@ role = "app"
 
 [lib]
 name = "canic_packaged_downstream_probe"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [dependencies]
-candid = { version = "0.10", default-features = false }
-canic = { path = "$package_root/canic-$VERSION", default-features = false, features = [] }
-ic-cdk = "0.20"
+canic = { workspace = true, features = [] }
+ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-wire = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
-canic = { path = "$package_root/canic-$VERSION", default-features = false }
+canic = { workspace = true }
 EOF
 
     cat > "$downstream_root/build.rs" <<'EOF'
@@ -204,9 +222,6 @@ EOF
     cat > "$downstream_root/canic.toml" <<'EOF'
 [app]
 name = "packaged_probe"
-
-[auth.delegated_tokens]
-enabled = false
 
 [roles.root]
 kind = "root"
@@ -221,8 +236,10 @@ maximum_instances = 1
 EOF
 
     cat > "$downstream_root/src/lib.rs" <<'EOF'
-use candid::Principal;
+mod protocol;
+
 use canic::Error;
+use ic_platform::Principal;
 
 async fn canic_setup() {}
 
@@ -232,12 +249,29 @@ async fn canic_upgrade() {}
 
 canic::start!();
 
-#[canic::canic_query(public)]
+#[canic::canic_query(public, wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 fn packaged_probe(subject: Principal) -> Result<Principal, Error> {
     Ok(subject)
 }
 
 canic::finish!();
+EOF
+    cat > "$downstream_root/src/protocol/mod.rs" <<'EOF'
+//! Native contract of the packaged application probe.
+pub const METHOD_ID: u64 = 0x5445535400001000;
+pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 4096,
+    allocation: 16_384,
+    nodes: 256,
+    depth: 16,
+};
+EOF
+    cat > "$downstream_root/examples/wire_schema/main.rs" <<'EOF'
+use canic_packaged_downstream_probe as _;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    canic::endpoint::schema::producer::run()
+}
 EOF
 }
 
@@ -347,51 +381,32 @@ run_packaged_canister_probe() {
     local downstream_root="$1"
     local target_dir="$2-canister"
     local wasm_path="$target_dir/wasm32-unknown-unknown/debug/canic_packaged_downstream_probe.wasm"
-    local local_did="$downstream_root/packaged-probe.local.did"
-    local ic_did="$downstream_root/packaged-probe.ic.did"
+    local environment schema
+    local method_id
+    method_id="$(printf '%d' 0x5445535400001000)"
 
     mkdir -p "$PROOF_HOME" "$target_dir" "$PROOF_TMPDIR"
-
-    command -v candid-extractor >/dev/null || {
-        echo "packaged downstream Canister proof requires candid-extractor" >&2
-        exit 1
-    }
-    (
-        cd "$downstream_root"
-        CANIC_INTERNAL_CANDID_BUILD=1 \
-        CANIC_ROLE_CONTRACT_VALIDATED=1 \
-            ICP_ENVIRONMENT=local \
-            HOME="$PROOF_HOME" \
-            CARGO_HOME="$HOST_CARGO_HOME" \
-            CARGO_TARGET_DIR="$target_dir" \
-            RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
-            RUSTUP_HOME="$HOST_RUSTUP_HOME" \
-            TMPDIR="$PROOF_TMPDIR" \
+    for environment in local ic; do
+        schema="$downstream_root/packaged-probe.$environment.wire.json"
+        (
+            cd "$downstream_root"
+            export CANIC_ROLE_CONTRACT_VALIDATED=1
+            export ICP_ENVIRONMENT="$environment"
+            export HOME="$PROOF_HOME" CARGO_HOME="$HOST_CARGO_HOME"
+            export CARGO_TARGET_DIR="$target_dir" RUSTUP_HOME="$HOST_RUSTUP_HOME"
+            export TMPDIR="$PROOF_TMPDIR" RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings"
             cargo "+$MSRV" build --offline --locked --target wasm32-unknown-unknown >/dev/null
-    )
-    candid-extractor "$wasm_path" >"$local_did"
-    grep -Fq 'packaged_probe' "$local_did" || {
-        echo "packaged downstream local Wasm omitted its typed Candid endpoint" >&2
-        exit 1
-    }
-
-    (
-        cd "$downstream_root"
-        CANIC_ROLE_CONTRACT_VALIDATED=1 \
-            ICP_ENVIRONMENT=ic \
-            HOME="$PROOF_HOME" \
-            CARGO_HOME="$HOST_CARGO_HOME" \
-            CARGO_TARGET_DIR="$target_dir" \
-            RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
-            RUSTUP_HOME="$HOST_RUSTUP_HOME" \
-            TMPDIR="$PROOF_TMPDIR" \
-            cargo "+$MSRV" build --offline --locked --target wasm32-unknown-unknown >/dev/null
-    )
-    if candid-extractor "$wasm_path" >"$ic_did" 2>/dev/null &&
-        grep -Fq 'packaged_probe' "$ic_did"; then
-        echo "packaged downstream IC Wasm unexpectedly retained local Candid export" >&2
-        exit 1
-    fi
+            cargo "+$MSRV" run --offline --locked --quiet --features wire-schema \
+                --example wire_schema -- "$wasm_path" >"$schema"
+        )
+        "$JQ_BIN" -e --arg id "$method_id" '
+            .schema_version == 1 and
+            ([.methods[] | select(.name == "packaged_probe")] |
+                length == 1 and all(.[];
+                    .id == $id and .kind == "query" and
+                    .requestBytes == 4096 and .responseBytes == 4096))
+        ' "$schema" >/dev/null
+    done
 }
 
 run_probe() {
@@ -426,7 +441,7 @@ assert_fleet_probe_outputs() {
     local package="$5"
     local manifest="$downstream_root/.canic/generated/canic.toml/$package/Cargo.toml"
     local artifacts="$downstream_root/.icp/local/canisters/$role"
-    for extension in wasm wasm.gz did; do
+    for extension in wasm wasm.gz did wire.json wire.ts; do
         test -s "$artifacts/$role.$extension"
     done
     cargo metadata --locked --offline --no-deps --format-version=1 --manifest-path "$manifest" |

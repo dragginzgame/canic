@@ -64,7 +64,7 @@ pub async fn complete(
         publication::verify_inputs(paths, &journal, operation.publication_started)?;
     }
     let transport = CapacityImportTransport::from_icp(icp)?;
-    if operation.settled_status_candid_hex.is_none() {
+    if operation.settled_status_wire_hex.is_none() {
         transport.verify_destination(&journal.plan).await?;
         let observed = finish_root(store, &mut journal, &transport).await?;
         journal = publication::retain_settled(&journal, &observed)?;

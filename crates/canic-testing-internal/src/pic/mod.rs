@@ -2,6 +2,7 @@
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod application_checkpoint;
+pub mod application_probe;
 mod artifacts;
 mod audit;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
@@ -14,26 +15,26 @@ mod cases;
 mod delegation;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod fleet_coordinator;
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 mod fleet_registry;
+pub mod issuer_probe;
 #[cfg(test)]
 mod journey_policy;
 mod lifecycle;
 mod progress;
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+mod protected_state;
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+mod registry_discovery;
 mod root;
+pub mod runtime_probe;
 mod startup;
 #[cfg(test)]
 mod timing;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod workers;
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 use canic_contracts::ids::{FleetAdmissionPolicy, FleetBinding, FleetCoordinatorRootFundingPolicy};
 use canic_contracts::{
     cycles::Cycles,
@@ -42,19 +43,13 @@ use canic_contracts::{
         FleetSubnetRootFundingPolicy,
     },
 };
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 use canic_core::shared_support::fleet_admission_policy::{
     bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
 };
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 use cases::GovernedTestCase;
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 use ic_platform::principal::ExternalPrincipal as Principal;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 use std::{
@@ -80,10 +75,7 @@ pub use canic::{
     standalone_canister_candid, standalone_canister_wasm, wait_until_ready,
 };
 pub use delegation::{create_user_shard, role_grant};
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 pub use fleet_registry::{
     ActiveComponentRegistryFixture, setup_active_component_registry,
     setup_fresh_active_component_registry,
@@ -97,26 +89,17 @@ pub use lifecycle::{
 pub use root::{
     RootBaselineMetadata, RootBaselineSpec, ensure_root_release_artifacts_built, load_root_wasm,
 };
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 pub use root::{
     RootBaselineRecipe, RootBaselineRecipeError, build_root_cached_baseline,
     restore_root_cached_baseline, setup_root_topology,
 };
 pub use startup::start_pocket_ic;
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 pub(crate) const fn coordinator_root_funding_policy() -> FleetCoordinatorRootFundingPolicy {
     FleetCoordinatorRootFundingPolicy {
         funding_profile: FleetFundingProfile::SingleSubnet,
@@ -148,10 +131,7 @@ pub(crate) const fn root_funding_authority() -> FleetSubnetRootFundingAuthority 
     }
 }
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 pub(crate) fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
     let template =
         compile_fleet_admission_policy_template(vec![Principal::from_slice(&[1; 29])], Vec::new())
@@ -505,3 +485,13 @@ mod governed_suite {
         );
     }
 }
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod admission_control;
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod retirement_control;
+
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod batch_control;

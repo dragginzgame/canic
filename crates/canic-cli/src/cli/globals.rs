@@ -97,6 +97,22 @@ fn global_option_name(arg: &str) -> Option<&'static str> {
     }
 }
 
+/// Reject explicitly selected globals that the chosen command cannot consume.
+pub fn unsupported_global_option(
+    command: &str,
+    tail: &[OsString],
+    global_icp: Option<&str>,
+    global_environment: Option<&str>,
+) -> Option<&'static str> {
+    if global_environment.is_some() && !command_accepts_global_environment(command, tail) {
+        return Some("--environment");
+    }
+    if global_icp.is_some() && !command_accepts_global_icp(command, tail) {
+        return Some("--icp");
+    }
+    None
+}
+
 /// Inject top-level `--icp` into commands that accept ICP CLI selection.
 pub fn apply_global_icp(command: &str, tail: &mut Vec<OsString>, global_icp: Option<String>) {
     let Some(global_icp) = global_icp else {
@@ -173,7 +189,10 @@ fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool 
     match command {
         "admission" | "build" | "component" | "cycles" | "fleet" | "frontend" | "inspect"
         | "medic" | "observatory" | "status" | "token" => true,
-        "app" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
+        "app" => matches!(
+            tail.first().and_then(|arg| arg.to_str()),
+            Some("config" | "list")
+        ),
         "auth" => auth_leaf_accepts_globals(tail),
         "info" => info_leaf_accepts_globals(tail),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
@@ -223,6 +242,71 @@ fn tail_has_option(tail: &[OsString], name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsupported_globals_reject_before_command_dispatch() {
+        for (command, leaf) in [
+            ("app", "create"),
+            ("diagnostic", "build-lock"),
+            ("network", "enroll"),
+            ("replica", "start"),
+            ("scaffold", "canister"),
+            ("state", "audit"),
+            ("toolchain", "install"),
+        ] {
+            let tail = [OsString::from(leaf)];
+            assert_eq!(
+                unsupported_global_option(command, &tail, None, Some("staging")),
+                Some("--environment"),
+                "{command} {leaf}"
+            );
+            assert_eq!(unsupported_global_option(command, &tail, None, None), None);
+        }
+        for (command, leaf) in [("app", "config"), ("build", "demo"), ("network", "enroll")] {
+            assert_eq!(
+                unsupported_global_option(command, &[leaf.into()], Some("/custom/icp"), None),
+                Some("--icp")
+            );
+        }
+    }
+
+    #[test]
+    fn app_config_and_list_preserve_the_selected_environment() {
+        for leaf in ["config", "list"] {
+            let mut tail = vec![OsString::from(leaf), OsString::from("demo")];
+            assert_eq!(
+                unsupported_global_option("app", &tail, None, Some("staging")),
+                None
+            );
+            apply_global_environment("app", &mut tail, Some("staging".into()));
+            assert_eq!(
+                tail_option_value(&tail, INTERNAL_ENVIRONMENT_OPTION),
+                Some("staging")
+            );
+            assert!(global_environment_conflict("app", &tail, Some("staging")).is_none());
+            assert!(global_environment_conflict("app", &tail, Some("ic")).is_some());
+        }
+    }
+
+    #[test]
+    fn accepted_target_globals_remain_independent_of_leaf_mint_amounts() {
+        let mut tail = ["mint", "--icp", "0.01"].map(OsString::from).to_vec();
+        assert_eq!(
+            unsupported_global_option("cycles", &tail, Some("/custom/icp"), Some("staging")),
+            None
+        );
+        apply_global_icp("cycles", &mut tail, Some("/custom/icp".into()));
+        apply_global_environment("cycles", &mut tail, Some("staging".into()));
+        assert_eq!(tail_option_value(&tail, "--icp"), Some("0.01"));
+        assert_eq!(
+            tail_option_value(&tail, INTERNAL_ICP_OPTION),
+            Some("/custom/icp")
+        );
+        assert_eq!(
+            tail_option_value(&tail, INTERNAL_ENVIRONMENT_OPTION),
+            Some("staging")
+        );
+    }
 
     #[test]
     fn misplaced_global_option_detects_command_tail_flags() {

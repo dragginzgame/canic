@@ -1,0 +1,129 @@
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,14 @@
+ # Changelog
+ 
++## [0.6.20]
++
++### ➕ Added
++
++- Expose the pinned management lifecycle/settings/ECDSA and complete history
++  records needed by Canic external adapters, preserving upstream identities.
++- Expose ICRC transfer arguments/memos and an explicit ICRC-21 consent namespace.
++  Consumers retain authorization, resource bounds, retries and consent policy.
++
+ ## [0.6.19] - 2026-10-26
+ 
+ ### 📝 Summary
+--- a/crates/ic-platform/src/management_canister_types/mod.rs
++++ b/crates/ic-platform/src/management_canister_types/mod.rs
+@@ -1,4 +1,4 @@
+-//! External management HTTP, history, snapshot and status types with upstream identities.
++//! External management lifecycle, settings, signing, HTTP, history and snapshot contracts.
+ //!
+ //! The exact 0.11.0 dependency retains required Candid formats, including pricing
+ //! and replication fields. Consumers own bounds, cycles, transforms, calls and
+@@ -8,14 +8,21 @@
+ //! storage allocation, response admission or effect/recovery policy.
+ 
+ pub use ic_management_canister_types::{
+-    CanisterIdRecord, CanisterInfoArgs, CanisterInfoResult, CanisterStatusResult,
+-    CanisterStatusType, CanisterTimer, ChangeDetails, ChunkHash, CodeDeploymentMode,
+-    DefiniteCanisterSettings, DeleteCanisterSnapshotArgs, HttpHeader, HttpMethod, HttpRequestArgs,
+-    HttpRequestResult, LoadCanisterSnapshotArgs, MemoryMetrics, OnLowWasmMemoryHookStatus,
+-    QueryStats, ReadCanisterSnapshotDataArgs, ReadCanisterSnapshotDataResult,
+-    ReadCanisterSnapshotMetadataArgs, ReadCanisterSnapshotMetadataResult, Snapshot,
++    CanisterIdRecord, CanisterInfoArgs, CanisterInfoResult, CanisterInstallMode, CanisterSettings,
++    CanisterStatusResult, CanisterStatusType, CanisterTimer, Change, ChangeDetails, ChangeOrigin,
++    ChunkHash, CodeDeploymentMode, CodeDeploymentRecord, ControllersChangeRecord, CreationRecord,
++    DefiniteCanisterSettings, DeleteCanisterSnapshotArgs, EcdsaCurve, EcdsaKeyId,
++    EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable, FromCanisterRecord,
++    FromUserRecord, HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult,
++    InstallChunkedCodeArgs, LoadCanisterSnapshotArgs, LogVisibility, MemoryMetrics,
++    OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataArgs,
++    ReadCanisterSnapshotDataResult, ReadCanisterSnapshotMetadataArgs,
++    ReadCanisterSnapshotMetadataResult, SignWithEcdsaArgs, SignWithEcdsaResult, Snapshot,
+     SnapshotDataKind, SnapshotDataOffset, SnapshotMetadataGlobal, SnapshotSource, StatusVisibility,
+-    TakeCanisterSnapshotArgs, TransformArgs, TransformContext, TransformFunc,
+-    UploadCanisterSnapshotDataArgs, UploadCanisterSnapshotMetadataArgs,
+-    UploadCanisterSnapshotMetadataResult,
++    TakeCanisterSnapshotArgs, TransformArgs, TransformContext, TransformFunc, UninstallCodeArgs,
++    UpdateSettingsArgs, UploadCanisterSnapshotDataArgs, UploadCanisterSnapshotMetadataArgs,
++    UploadCanisterSnapshotMetadataResult, UploadChunkArgs,
+ };
++
++// Settings and install requests retain the complete upstream type. Consumers
++// select permitted actions and preserve exact encoded bytes across retries.
+--- a/crates/ic-platform/src/icrc_ledger_types/mod.rs
++++ b/crates/ic-platform/src/icrc_ledger_types/mod.rs
+@@ -6,10 +6,12 @@
+ //! brings transitive Candid but selects no Platform codec, executor, parser or
+ //! Agent feature. Upstream storage integration is not selected.
+ 
++pub mod icrc21;
++
+ pub use icrc_ledger_types::icrc::generic_metadata_value::MetadataValue;
+ pub use icrc_ledger_types::icrc::generic_value::{ICRC3Value, Value};
+ pub use icrc_ledger_types::icrc1::account::Account;
+-pub use icrc_ledger_types::icrc1::transfer::TransferError;
++pub use icrc_ledger_types::icrc1::transfer::{Memo, TransferArg, TransferError};
+ pub use icrc_ledger_types::icrc2::allowance::{Allowance, AllowanceArgs};
+ pub use icrc_ledger_types::icrc3::archive::{GetArchivesArgs, ICRC3ArchiveInfo, QueryArchiveFn};
+ pub use icrc_ledger_types::icrc3::blocks::{
+--- /dev/null
++++ b/crates/ic-platform/src/icrc_ledger_types/icrc21/mod.rs
+@@ -0,0 +1,10 @@
++//! External ICRC-21 consent DTOs with their original upstream identities.
++//!
++//! This explicit namespace keeps consent Value distinct from the ledger generic
++//! Value. Consumers own consent policy, authentication and endpoint mounting.
++
++pub use icrc_ledger_types::icrc21::errors::{ErrorInfo, Icrc21Error};
++pub use icrc_ledger_types::icrc21::requests::{
++    ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec, DisplayMessageType,
++};
++pub use icrc_ledger_types::icrc21::responses::{ConsentInfo, ConsentMessage, FieldsDisplay, Value};
+--- a/docs/migration.md
++++ b/docs/migration.md
+@@ -1891,3 +1891,28 @@
+ Manifests continue selecting `cdk` and explicit `candid`; no new feature is needed.
+ Legacy `cdk::storage` Candid checkpoints are untouched and remain a compatibility
+ exception, not a new storage format.
++
++## Canic external-contract closeout exports
++
++The management feature additionally exposes the existing pinned 0.11.0 lifecycle,
++settings, ECDSA and complete change-origin/record identities needed by Canic's
++external adapters. These are explicit upstream types, not new call workflows,
++cryptographic implementations or execution authority. Canic's uninstall request
++with sender version maps to UninstallCodeArgs, not the ordinary CanisterIdRecord.
++
++The ledger feature additionally exposes TransferArg and Memo. Its explicit
++icrc21 namespace exposes consent request, metadata, display, response and error
++DTOs; icrc21::Value remains distinct from the existing generic ledger Value.
++There are no blanket upstream module exports or compatibility aliases.
++
++Consumer adoption requires a published supplying version. Full CanisterSettings
++has optional fields absent from Canic's subset, and CanisterInstallMode has the
++complete external variant set. Re-encode new operations, measure their actual
++request cost and preserve original encoded bytes across uncertain retries. Do
++not assume the prior local subset emitted byte-identical Candid type tables.
++Canic still owns endpoint authorization, controller/caller/version bindings,
++reply admission, allowed actions, paid-effect ordering and same-release recovery.
++
++CMC, Cycles Ledger creation, NNS and asset DTO families are not supplied by this
++export addition. They require separately identified canonical suppliers. No
++Canic dependency adoption or published-version availability is asserted here.
+--- a/docs/ic-inventory.md
++++ b/docs/ic-inventory.md
+@@ -64,8 +64,8 @@
+ | `candid_parser`; Candid printer | native `candid_parser`, optional `candid-service` exports | Tooling Host's Candid parsing; Canic host/testing and service generation | Upstream parser/compiler remains external. Retirement requires consumer migration, not a manifest-only deletion. |
+ | `ic-agent` | native `agent` builders, identities, request/error types | Query `src/agent.rs`; Tooling Host `src/agent`; Backup Agent; Blob CLI; Canic Host | Upstream transport implementation, no fork. Consumers own retries/authentication. Platform owns explicit exposure only. |
+ | `pocket-ic` | native `pocket_ic` client/DTO identities | Tooling Testkit `src/{lib.rs,pic/transport.rs}` | Upstream simulator client; Testkit owns server provisioning, compatibility, lifecycle and transport policy. |
+-| `ic-management-canister-types` | `management_canister_types` | Canic Core; Backup snapshot/submission modules | Upstream exact DTO identity and Candid format. Platform pin does not transfer IC protocol ownership. |
+-| `icrc-ledger-types` | `icrc_ledger_types` account/metadata/transfer/archive DTOs | Query `src/icrc/{ledger.rs,live}`; Canic Host | Upstream external ledger formats, distinct from owned Account. No ledger/storage policy in Platform. |
++| `ic-management-canister-types` | `management_canister_types` lifecycle/settings/ECDSA/history/snapshot/status DTOs | Canic Core/Host/Control Plane; Backup snapshot/submission modules | Upstream exact DTO identity and Candid format. Platform pin does not transfer IC protocol ownership. |
++| `icrc-ledger-types` | `icrc_ledger_types` account/metadata/transfer/archive DTOs and explicit `icrc21` consent namespace | Query `src/icrc/{ledger.rs,live}`; Canic Host | Upstream external ledger formats, distinct from owned Account. No ledger/storage policy in Platform. |
+ | `ic-certification` | `certification` certificate/hash-tree types and operations | Tooling Host certificate decoder; Query certification; Auth signature store/verification; Canic | Upstream tree/hash implementations. Host owns bounded CBOR decoding; consumers own trust roots and verification policy. |
+ | `ic-verify-bls-signature` | `bls`; imported verifier dependency | Auth and Canic test keys; Auth canister verification | Upstream cryptography unchanged. No in-house primitive replacement. |
+ | `k256`, `curve25519-dalek`, `ed25519-dalek` | `ecdsa`, `ed25519` | Auth `src/{chain_key_signature,portable_signature}.rs`; Canic tests | General-purpose upstream crypto, not DFINITY-only code. Platform controls selected identities/features, not algorithms. |

@@ -12,10 +12,7 @@ use crate::{
     domain::{
         policy::pure::{
             PolicyError,
-            fleet_activation::{
-                require_prepared_nonroot_endpoint, require_prepared_root_endpoint,
-                require_prepared_store_data_endpoint,
-            },
+            fleet_activation::{require_prepared_nonroot_endpoint, require_prepared_root_endpoint},
         },
         provisioning_failure::{ProvisioningFailureStage, ProvisioningRetryCategory},
     },
@@ -27,17 +24,14 @@ use crate::{
             FleetCredentialGenerationRequest, FleetCredentialManifest,
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
-        role::OperationStatusRequest,
     },
     ops::{
         cascade::CascadeOps,
         fleet_activation::FleetActivationEvidenceOps,
         ic::IcOps,
-        rpc::RpcOps,
         runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
-    protocol,
     view::fleet_activation::{
         FleetActivationTransition, FleetActivationWasmStoreAuthorityView,
         FleetActivationWasmStoreView,
@@ -48,11 +42,6 @@ use crate::{
         topology::TopologyCascadeWorkflow,
     },
 };
-use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as StoreStatusRequestFragment;
-use canic_contracts::dto::role::OperationAcceptedResponse as StoreCommandResponseFragment;
-use canic_contracts::dto::wire::projection::store_activation::StoreCommandFragment;
-use canic_contracts::dto::wire::projection::store_activation::StoreOperationStatusFragment;
-use canic_contracts::dto::wire::projection::store_activation::StoreStatusResponseFragment;
 use canic_contracts::ids::EndpointCall;
 use canic_contracts::ids::EndpointCallKind;
 use canic_contracts::ids::EndpointId;
@@ -170,7 +159,6 @@ impl FleetActivationWorkflow {
 
         let targets = [crate::view::state_cascade::StateCascadeTarget {
             canister_id: wasm_store.pid,
-            endpoint: crate::view::state_cascade::StateCascadeEndpoint::Store,
         }];
         let report = StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &targets).await?;
         crate::ops::cascade_report::StateCascadeReportOps::require_complete(&report)?;
@@ -288,43 +276,29 @@ impl FleetActivationWorkflow {
         Ok(())
     }
 
-    /// Enforce the activation phase for a compile-selected Store data-lane endpoint.
-    pub fn require_store_data_endpoint_allowed(call: EndpointCall) -> Result<(), InternalError> {
-        if FleetActivationRuntimeOps::is_standalone_local() {
-            return Ok(());
-        }
-        let status = FleetActivationOps::status(false)
-            .map_err(StorageOpsError::from)
-            .map_err(InternalError::from)?;
-        match status.phase {
-            FleetActivationPhase::Prepared => require_prepared_store_data_endpoint(call)
-                .map_err(PolicyError::from)
-                .map_err(InternalError::from),
-            FleetActivationPhase::Active => Ok(()),
-        }
-    }
-
-    /// Preserve the prepared-Root fence after role methods collapse many variants into one name.
-    pub fn require_root_command_variant_allowed(
+    /// Enforce the prepared-Root fence with the exact update identity.
+    pub fn require_root_update_allowed(
+        method: &'static str,
         prepared_allowed: bool,
     ) -> Result<(), InternalError> {
         Self::require_root_role_variant_allowed(
             prepared_allowed,
             EndpointCall {
-                endpoint: EndpointId::new(protocol::CANIC_ROOT_COMMAND),
+                endpoint: EndpointId::new(method),
                 kind: EndpointCallKind::Update,
             },
         )
     }
 
-    /// Preserve the prepared-Root observation fence for the consolidated status selector.
-    pub fn require_root_status_variant_allowed(
+    /// Enforce the prepared-Root observation fence with the exact query identity.
+    pub fn require_root_query_allowed(
+        method: &'static str,
         prepared_allowed: bool,
     ) -> Result<(), InternalError> {
         Self::require_root_role_variant_allowed(
             prepared_allowed,
             EndpointCall {
-                endpoint: EndpointId::new(protocol::CANIC_ROOT_STATUS),
+                endpoint: EndpointId::new(method),
                 kind: EndpointCallKind::Query,
             },
         )
@@ -361,12 +335,17 @@ async fn resume_nonroot_activation(
         state_snapshot_hash: entry.state_snapshot_hash,
         topology_snapshot_hash: entry.topology_snapshot_hash,
     };
-    let prepared: FleetActivationStatusResponse = match submit_store_fleet_command(
+    let prepared: FleetActivationStatusResponse = match observe_store_fleet_transition(
         entry.principal,
-        StoreCommandFragment::PrepareFleetCredential(FleetCredentialGenerationRequest {
-            operation_id: child_operation_id,
-            credential: request.credential,
-        }),
+        crate::ops::rpc::store_activation::prepare(
+            entry.principal,
+            FleetCredentialGenerationRequest {
+                operation_id: child_operation_id,
+                credential: request.credential,
+            },
+        )
+        .await,
+        ProvisioningFailureStage::StoreCredential,
         child_operation_id,
     )
     .await
@@ -398,13 +377,18 @@ async fn resume_nonroot_activation(
         &expected_cascade,
         request.credential,
     )?;
-    let activated: FleetActivationStatusResponse = match submit_store_fleet_command(
+    let activated: FleetActivationStatusResponse = match observe_store_fleet_transition(
         entry.principal,
-        StoreCommandFragment::ActivateFleet(FleetActivationRequest {
-            operation_id: child_operation_id,
-            credential: request.credential,
-            activation_evidence_hash,
-        }),
+        crate::ops::rpc::store_activation::activate(
+            entry.principal,
+            FleetActivationRequest {
+                operation_id: child_operation_id,
+                credential: request.credential,
+                activation_evidence_hash,
+            },
+        )
+        .await,
+        ProvisioningFailureStage::StoreActivation,
         child_operation_id,
     )
     .await
@@ -460,29 +444,20 @@ async fn reconcile_nonroot_activation_status_after_call_error(
     Ok(observed)
 }
 
-async fn submit_store_fleet_command(
+async fn observe_store_fleet_transition(
     pid: Principal,
-    command: StoreCommandFragment,
+    response: Result<crate::dto::role::OperationReceipt, InternalError>,
+    stage: ProvisioningFailureStage,
     operation_id: [u8; 32],
 ) -> Result<FleetActivationStatusResponse, InternalError> {
-    let stage = match &command {
-        StoreCommandFragment::PrepareFleetCredential(_) => {
-            ProvisioningFailureStage::StoreCredential
-        }
-        StoreCommandFragment::ActivateFleet(_) => ProvisioningFailureStage::StoreActivation,
-    };
-    let response: StoreCommandResponseFragment =
-        RpcOps::call_rpc_result(pid, protocol::CANIC_WASM_STORE_COMMAND, command)
-            .await
-            .map_err(|error| {
-                error.with_provisioning_failure(
-                    stage,
-                    pid,
-                    operation_id,
-                    ProvisioningRetryCategory::Backoff,
-                )
-            })?;
-    let StoreCommandResponseFragment::OperationAccepted(receipt) = response;
+    let receipt = response.map_err(|error| {
+        error.with_provisioning_failure(
+            stage,
+            pid,
+            operation_id,
+            ProvisioningRetryCategory::Backoff,
+        )
+    })?;
     if receipt.operation_id != operation_id {
         return Err(InternalError::conflict().with_provisioning_failure(
             stage,
@@ -498,16 +473,9 @@ async fn query_store_fleet_activation_status(
     pid: Principal,
     operation_id: [u8; 32],
 ) -> Result<FleetActivationStatusResponse, InternalError> {
-    let response: StoreStatusResponseFragment = RpcOps::call_rpc_result(
-        pid,
-        protocol::CANIC_WASM_STORE_STATUS,
-        StoreStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-    )
-    .await
-    .map_err(|error| store_status_failure(error, pid, operation_id))?;
-    let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
-        status,
-    )) = response;
+    let status = crate::ops::rpc::store_activation::status(pid, operation_id)
+        .await
+        .map_err(|error| store_status_failure(error, pid, operation_id))?;
     if status.identity.operation_id != operation_id {
         return Err(InternalError::conflict().with_provisioning_failure(
             ProvisioningFailureStage::StoreIdentity,

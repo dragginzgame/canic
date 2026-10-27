@@ -68,7 +68,6 @@ fn continuation_review_reserves_only_available_headroom_and_exposes_pending_disc
         estate_funding_domains: BTreeMap::new(),
         ledger_fee_cycles: 0,
         operator_cycles: 0,
-        protocol_ready: BTreeMap::new(),
     };
     let bounds = CycleBounds {
         observation_burn: 3,
@@ -352,7 +351,6 @@ fn full_failed_inventory_funds_exact_retained_assets_without_creating_replacemen
         maximum_update_burn_cycles: "20".into(),
         operator: Principal::from_slice(&[12]).to_text(),
         protocol: None,
-        protocol_steps: Vec::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         treasury: "coordinator".into(),
     };
@@ -378,8 +376,8 @@ fn full_failed_inventory_funds_exact_retained_assets_without_creating_replacemen
                     request: canic_contracts::dto::pool::PoolCanisterRequest { canister_id },
                     minimum_cycles: Cycles::new(pool.readiness_floor_cycles),
                 }),
-                candid: "root.did".into(),
-                candid_sha256: "42".repeat(32),
+                wire_schema: "root.wire.json".into(),
+                wire_schema_sha256: "42".repeat(32),
                 maximum_execution_burn_cycles: 20,
                 name: format!("pool-reconcile-{canister_id}"),
                 principal: root.clone(),
@@ -411,7 +409,6 @@ fn full_failed_inventory_funds_exact_retained_assets_without_creating_replacemen
         )]),
         ledger_fee_cycles: 5,
         operator_cycles: 10_000,
-        protocol_ready: BTreeMap::new(),
     };
     let mut accumulator = PlanAccumulator::new();
     append_pool_reconciliation_funding(
@@ -573,4 +570,84 @@ fn apply_policy_rejects_bootstrap_imports_above_the_root_maximum() {
                 && error.maximum_size == 2
                 && error.root == "root-0"
     ));
+}
+
+#[test]
+fn pool_funding_uses_observed_parent_authority_independent_of_controllers() {
+    use crate::fleet_ensure::model::{
+        CanisterRuntimeStatus, DesiredCanister, DesiredCanisterKind, DesiredPresence, LiveCanister,
+    };
+
+    let root = Principal::from_slice(&[41]).to_text();
+    let recovery = Principal::from_slice(&[42]).to_text();
+    let mut configured = DesiredCanister {
+        canic_init: None,
+        controller_canisters: vec!["root".into()],
+        controllers: vec![recovery.clone()],
+        drain: None,
+        initial_cycles: "100".into(),
+        init_arg: None,
+        init_candid: None,
+        kind: DesiredCanisterKind::Pool,
+        minimum_cycles: "100".into(),
+        name: "pool".into(),
+        parent: Some("root".into()),
+        presence: DesiredPresence::Present,
+        principal: None,
+        protocol_binding: None,
+        replace: false,
+        subnet: Principal::from_slice(&[43]).to_text(),
+        wasm: None,
+    };
+    let mut observation = FleetObservation {
+        additional_controlled_cycles: BTreeMap::new(),
+        canisters: BTreeMap::from([(
+            "root".into(),
+            Some(LiveCanister {
+                canister_version: None,
+                controllers: vec![recovery.clone()],
+                cycles: 1_000,
+                module_sha256: None,
+                principal: root.clone(),
+                reinstall_required: false,
+                root_owned_lifecycle: None,
+                status: CanisterRuntimeStatus::Running,
+            }),
+        )]),
+        estate_funding_domains: BTreeMap::new(),
+        ledger_fee_cycles: 5,
+        operator_cycles: 1_000,
+    };
+    for controllers in [
+        vec![recovery.clone(), root.clone()],
+        vec![root.clone(), recovery],
+        vec![],
+    ] {
+        configured.controllers = controllers;
+        assert_eq!(
+            super::pool_funding_authority(&configured, &observation),
+            Ok(Some(PoolFundingAuthority {
+                root: root.clone(),
+                lifecycle: EstatePoolAssetLifecycle::Ready,
+            }))
+        );
+    }
+    for parent in [Some("missing".into()), None] {
+        configured.parent = parent;
+        assert!(matches!(
+            super::pool_funding_authority(&configured, &observation),
+            Err(EnsurePolicyError::InvalidTopology { name, .. }) if name == "pool"
+        ));
+    }
+    configured.parent = Some("root".into());
+    observation.canisters.insert("root".into(), None);
+    assert!(matches!(
+        super::pool_funding_authority(&configured, &observation),
+        Err(EnsurePolicyError::InvalidTopology { name, .. }) if name == "pool"
+    ));
+    configured.kind = DesiredCanisterKind::Auxiliary;
+    assert_eq!(
+        super::pool_funding_authority(&configured, &observation),
+        Ok(None)
+    );
 }

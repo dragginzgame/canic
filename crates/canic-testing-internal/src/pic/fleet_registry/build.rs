@@ -370,13 +370,9 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) -> Vec<
                 INTERNAL_TEST_RELEASE_BUILD_ID,
             ])
             .into_iter()
-            .map(|(key, value)| {
-                (
-                    std::ffi::OsString::from(key),
-                    std::ffi::OsString::from(value),
-                )
-            }),
+            .map(|(key, value)| (key.into(), value.into())),
         ),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("fast".into()),

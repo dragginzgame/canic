@@ -39,8 +39,14 @@ pub enum FrontendError {
     #[error("frontend artifact exceeds the configured {0} bound")]
     Bound(&'static str),
 
-    #[error("invalid frontend Candid: {0}")]
-    Candid(String),
+    #[error(transparent)]
+    Compiler(#[from] ops::compiler::BrowserCompilerError),
+
+    #[error(transparent)]
+    Release(#[from] crate::protocol_binding::ReleaseProtocolBindingError),
+
+    #[error(transparent)]
+    Wire(#[from] crate::artifact_io::WireArtifactError),
 
     #[error("frontend environment or network differs from the terminal Fleet")]
     Environment,
@@ -81,9 +87,6 @@ pub enum FrontendError {
 
     #[error("frontend canister Principal must identify a concrete canister")]
     Principal,
-
-    #[error(transparent)]
-    ProtocolBinding(#[from] crate::protocol_binding::ProtocolBindingError),
 
     #[error("frontend selection has no unique terminal role binding: {0}")]
     Role(String),

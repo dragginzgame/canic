@@ -42,7 +42,7 @@ const fn action_kind(action: &EnsureAction) -> FleetEnsureActionKind {
         EnsureAction::Fund { .. } => FleetEnsureActionKind::Fund,
         EnsureAction::FundEstate { .. } => FleetEnsureActionKind::FundEstate,
         EnsureAction::Install { .. } => FleetEnsureActionKind::Install,
-        EnsureAction::Protocol { .. } => FleetEnsureActionKind::Protocol,
+
         EnsureAction::SetControllers { .. } => FleetEnsureActionKind::SetControllers,
         EnsureAction::Start { .. } => FleetEnsureActionKind::Start,
         EnsureAction::Stop { .. } => FleetEnsureActionKind::Stop,

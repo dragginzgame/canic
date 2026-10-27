@@ -13,7 +13,6 @@ mod tests;
 
 use crate::{
     MAX_DOCUMENT_READ_BYTES,
-    canister_protocol::query_with_candid,
     component_topology::{
         PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput, PlannedFleetTopology,
         RootComponentAdmissionInput, RootPoolCapacityError, RootPoolCapacityInput,
@@ -44,11 +43,7 @@ use crate::{
 };
 use canic_contracts::{
     cycles::Cycles,
-    dto::{
-        fleet_subnet_root::FleetSubnetRootAuthority,
-        pool::CanisterPoolStatusRequest,
-        wire::projection::estate_generation::{RootEstateStatusRequest, RootEstateStatusResponse},
-    },
+    dto::{fleet_subnet_root::FleetSubnetRootAuthority, pool::CanisterPoolStatusRequest},
     ids::{
         BuildNetwork, ComponentGroupDeploymentId, ComponentSpecId, CyclesFundingBudget,
         FleetAdmissionPolicyTemplate, FleetBinding, FleetCoordinatorBinding,
@@ -57,7 +52,6 @@ use canic_contracts::{
         FleetSubnetRootFundingPolicy, FleetSubnetRootLimits, FleetSubnetWasmStoreAuthority,
         ReleaseBuildId, SubnetId,
     },
-    protocol,
 };
 use canic_core::{
     control_plane_support::config::ComponentDeploymentConfiguration,
@@ -259,24 +253,24 @@ pub enum FleetGenerateError {
     #[error("duplicate Fleet admission Principal {principal}")]
     FleetAdmissionDuplicate { principal: Principal },
 
-    #[error("artifact Candid sidecar is missing: {}", path.display())]
-    CandidMissing { path: PathBuf },
+    #[error("artifact Wire schema sidecar is missing: {}", path.display())]
+    WireSchemaMissing { path: PathBuf },
 
-    #[error("artifact Candid sidecar is not a regular no-follow file: {}", path.display())]
-    CandidNotRegular { path: PathBuf },
+    #[error("artifact Wire schema sidecar is not a regular no-follow file: {}", path.display())]
+    WireSchemaNotRegular { path: PathBuf },
 
-    #[error("failed to read artifact Candid sidecar {}: {source}", path.display())]
-    CandidRead {
+    #[error("failed to read artifact Wire schema sidecar {}: {source}", path.display())]
+    WireSchemaRead {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
 
     #[error(
-        "artifact Candid sidecar digest differs from release authority at {}: expected {expected:?}, observed {observed:?}",
+        "artifact Wire schema sidecar digest differs from release authority at {}: expected {expected:?}, observed {observed:?}",
         path.display()
     )]
-    CandidDigestMismatch {
+    WireSchemaDigestMismatch {
         path: PathBuf,
         expected: [u8; 32],
         observed: [u8; 32],
@@ -715,7 +709,6 @@ struct ExpectedRootEstateAuthority {
 struct RootEstateAuthorityRequest<'a, 'request> {
     app: &'a canic_contracts::ids::AppId,
     generation: &'a FleetGenerateRequest<'request>,
-    root_candid: &'a Path,
     seed: &'a EstateSeed,
     source: &'a FleetSource,
     topology: &'a crate::component_topology::PlannedFleetTopology,
@@ -725,7 +718,6 @@ struct EstateObservationRequest<'a, 'request> {
     app: &'a canic_contracts::ids::AppId,
     generation: &'a FleetGenerateRequest<'request>,
     operator: Principal,
-    root_candid: &'a Path,
     root_wasm_sha256: &'a str,
     seed: &'a EstateSeed,
     source: &'a FleetSource,
@@ -872,10 +864,9 @@ fn generate(
         &infrastructure.manifest.entries,
         CanicInfrastructureRole::WasmStore,
     )?;
-    let coordinator_candid = candid_sidecar(request.root, coordinator_artifact)?;
-    let root_candid = candid_sidecar(request.root, root_artifact)?;
-    let store_candid = candid_sidecar(request.root, store_artifact)?;
-    let root_candid_path = request.root.join(&root_candid);
+    let coordinator_wire_schema = wire_schema_sidecar(request.root, coordinator_artifact)?;
+    let root_wire_schema = wire_schema_sidecar(request.root, root_artifact)?;
+    let store_wire_schema = wire_schema_sidecar(request.root, store_artifact)?;
     let generation_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| FleetGenerateError::Clock)?
@@ -892,7 +883,6 @@ fn generate(
             app: config.model().app_id(),
             generation: request,
             operator,
-            root_candid: &root_candid_path,
             root_wasm_sha256: &root_artifact.wasm_sha256_hex,
             seed: &seed,
             source: &source,
@@ -925,9 +915,9 @@ fn generate(
         coordinator_artifact,
         root_artifact,
         store_artifact,
-        coordinator_candid: &coordinator_candid,
-        root_candid: &root_candid,
-        store_candid: &store_candid,
+        coordinator_wire_schema: &coordinator_wire_schema,
+        root_wire_schema: &root_wire_schema,
+        store_wire_schema: &store_wire_schema,
         observed: &observed,
         treasury,
         ledger_fee_cycles,
@@ -1074,9 +1064,9 @@ struct CompileDesiredRequest<'a> {
     coordinator_artifact: &'a CanicInfrastructureArtifactEntry,
     root_artifact: &'a CanicInfrastructureArtifactEntry,
     store_artifact: &'a CanicInfrastructureArtifactEntry,
-    coordinator_candid: &'a str,
-    root_candid: &'a str,
-    store_candid: &'a str,
+    coordinator_wire_schema: &'a str,
+    root_wire_schema: &'a str,
+    store_wire_schema: &'a str,
     observed: &'a BTreeMap<String, ObservedCanister>,
     treasury: &'a str,
     ledger_fee_cycles: u128,
@@ -1375,11 +1365,11 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         protocol: Some(DesiredFleetProtocol {
             app_config,
             component_group_placements: placements,
-            coordinator_candid: input.coordinator_candid.to_string(),
-            root_candid: input.root_candid.to_string(),
-            store_candid: input.store_candid.to_string(),
+            coordinator_wire_schema: input.coordinator_wire_schema.to_string(),
+            root_wire_schema: input.root_wire_schema.to_string(),
+            store_wire_schema: input.store_wire_schema.to_string(),
         }),
-        protocol_steps: Vec::new(),
+
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         treasury: if input.treasury == input.seed.coordinator {
             "coordinator".to_string()
@@ -1428,7 +1418,6 @@ fn observe_estate(
         app,
         generation: request,
         operator,
-        root_candid,
         root_wasm_sha256,
         seed,
         source,
@@ -1662,7 +1651,6 @@ fn observe_estate(
         &RootEstateAuthorityRequest {
             app,
             generation: request,
-            root_candid,
             seed,
             source,
             topology,
@@ -1821,23 +1809,11 @@ fn observe_root_owned_pool_assets(
             .chain(root.pool_imports.iter().map(String::as_str))
             .collect::<std::collections::BTreeSet<_>>();
         let root_principal = parse_principal("Fleet Subnet Root", &root.root)?;
-        let response: RootEstateStatusResponse = query_with_candid(
-            icp,
-            request.root_candid,
-            root_principal,
-            protocol::CANIC_ROOT_STATUS,
-            &RootEstateStatusRequest::FleetAuthority,
-        )
-        .map_err(|error| FleetGenerateError::CanisterUnavailable {
-            canister: root.root.clone(),
-            reason: format!("protected Root authority observation failed: {error}"),
-        })?;
-        let RootEstateStatusResponse::FleetAuthority(authority) = response else {
-            return Err(FleetGenerateError::SeedTopology(format!(
-                "Root {} returned the wrong authority projection",
-                root.root
-            )));
-        };
+        let authority = crate::canister_protocol::root_authority::query(icp, root_principal)
+            .map_err(|error| FleetGenerateError::CanisterUnavailable {
+                canister: root.root.clone(),
+                reason: format!("protected Root authority observation failed: {error}"),
+            })?;
         let expected_coordinator = FleetCoordinatorBinding {
             fleet: FleetBinding {
                 fleet: FleetKey {
@@ -1883,36 +1859,24 @@ fn observe_root_owned_pool_assets(
         };
         require_root_policy_matches(
             &root.root,
-            &RootDesiredPolicy::from(authority.as_ref()),
+            &RootDesiredPolicy::from(&authority),
             &expected_policy,
         )?;
         let mut found = BTreeMap::new();
         let mut start_after = None;
         loop {
-            let status_request = RootEstateStatusRequest::Pool(CanisterPoolStatusRequest {
-                start_after,
-                limit: 256,
-            });
-            let page = {
-                let response: RootEstateStatusResponse = query_with_candid(
-                    icp,
-                    request.root_candid,
-                    root_principal,
-                    protocol::CANIC_ROOT_STATUS,
-                    &status_request,
-                )
-                .map_err(|error| FleetGenerateError::CanisterUnavailable {
-                    canister: root.root.clone(),
-                    reason: format!("protected Root pool observation failed: {error}"),
-                })?;
-                let RootEstateStatusResponse::Pool(page) = response else {
-                    return Err(FleetGenerateError::SeedTopology(format!(
-                        "Root {} returned the wrong pool projection",
-                        root.root
-                    )));
-                };
-                *page
-            };
+            let page = crate::canister_protocol::pool_inventory::query(
+                icp,
+                root_principal,
+                &CanisterPoolStatusRequest {
+                    start_after,
+                    limit: 256,
+                },
+            )
+            .map_err(|error| FleetGenerateError::CanisterUnavailable {
+                canister: root.root.clone(),
+                reason: format!("protected Root pool observation failed: {error}"),
+            })?;
             if page.config != authority.binding.limits.canister_pool {
                 return Err(FleetGenerateError::SeedTopology(format!(
                     "Root {} live pool policy conflicts with its retained authority",
@@ -2367,32 +2331,32 @@ fn artifact(
         .ok_or_else(|| FleetGenerateError::Release(format!("missing {role:?} artifact")))
 }
 
-fn candid_sidecar(
+/// Select the native sidecar sealed by the exact infrastructure release entry.
+fn wire_schema_sidecar(
     root: &Path,
     artifact: &CanicInfrastructureArtifactEntry,
 ) -> Result<String, FleetGenerateError> {
-    let wasm = root.join(&artifact.wasm_relative_path);
-    let path = wasm.with_extension("did");
+    let path = root
+        .join(&artifact.wasm_relative_path)
+        .with_extension("wire.json");
     let bytes = match read_optional_file_no_follow(&path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
-        Ok(None) => {
-            return Err(FleetGenerateError::CandidMissing { path });
-        }
+        Ok(None) => return Err(FleetGenerateError::WireSchemaMissing { path }),
         Err(ArtifactError::NotRegularFile) => {
-            return Err(FleetGenerateError::CandidNotRegular { path });
+            return Err(FleetGenerateError::WireSchemaNotRegular { path });
         }
         Err(source) => {
-            return Err(FleetGenerateError::CandidRead {
+            return Err(FleetGenerateError::WireSchemaRead {
                 path,
                 source: source.into(),
             });
         }
     };
-    let actual: [u8; 32] = Sha256::digest(bytes).into();
-    if actual != artifact.candid_sha256 {
-        return Err(FleetGenerateError::CandidDigestMismatch {
+    let actual: [u8; 32] = Sha256::digest(&bytes).into();
+    if actual != artifact.wire_schema_sha256 {
+        return Err(FleetGenerateError::WireSchemaDigestMismatch {
             path,
-            expected: artifact.candid_sha256,
+            expected: artifact.wire_schema_sha256,
             observed: actual,
         });
     }

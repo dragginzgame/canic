@@ -120,11 +120,11 @@ pub(super) fn resolve_authority(
         fixture_publication_retry_attempts,
         app_config_sha256: artifact_sha256(root, &protocol.app_config)?,
         application_artifact_union_sha256: sha256_hex(&union_bytes),
-        coordinator_candid_sha256: artifact_sha256(root, &protocol.coordinator_candid)?,
+        coordinator_wire_schema_sha256: artifact_sha256(root, &protocol.coordinator_wire_schema)?,
         maximum_successor_actions: u32::try_from(maximum)
             .map_err(|error| invalid(error.to_string()))?,
-        root_candid_sha256: artifact_sha256(root, &protocol.root_candid)?,
-        store_candid_sha256: artifact_sha256(root, &protocol.store_candid)?,
+        root_wire_schema_sha256: artifact_sha256(root, &protocol.root_wire_schema)?,
+        store_wire_schema_sha256: artifact_sha256(root, &protocol.store_wire_schema)?,
     }))
 }
 

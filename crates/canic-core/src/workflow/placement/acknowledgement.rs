@@ -18,15 +18,14 @@ use crate::{
         runtime::{
             async_job::AsyncJobWorkflow,
             timer::{
-                TimerAuthorityWorkflow, TimerError, require_active, retain_owned_once,
-                with_owned_once,
+                TimerAuthorityWorkflow, TimerError, cancel_owned_once, ensure_owned_once,
+                owned_once_identity, require_active, with_owned_once,
             },
         },
     },
 };
 use ic_timers::{
-    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity,
-    TimerSchedule, TimerStart, register_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -72,17 +71,12 @@ impl PlacementAcknowledgementWorkflow {
 
     /// Return the claimed placement-acknowledgement identity, when declared.
     pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
-        with_owned_once(&ACKNOWLEDGEMENT_TIMER, |registration| {
-            registration.identity().clone()
-        })
+        owned_once_identity(&ACKNOWLEDGEMENT_TIMER)
     }
 
     /// Cancel the retained placement-acknowledgement registration for suspension.
     pub(crate) fn cancel_timer() -> Result<(), TimerError> {
-        if let Some(result) = with_owned_once(&ACKNOWLEDGEMENT_TIMER, OnceRegistration::cancel)? {
-            result?;
-        }
-        Ok(())
+        cancel_owned_once(&ACKNOWLEDGEMENT_TIMER)
     }
 
     /// Recover one expired acknowledgement attempt from the durable receipt index.
@@ -264,15 +258,11 @@ impl PlacementAcknowledgementWorkflow {
 
     fn declare_timer() -> Result<(), TimerError> {
         require_active()?;
-        if with_owned_once(&ACKNOWLEDGEMENT_TIMER, |_| ())?.is_some() {
-            return Ok(());
-        }
-        let registration = register_once(
-            Self::timer_identity()?,
-            TimerStart::Retained { initial: None },
-            |_context: OnceContext| async { Self::run_registered().await },
-        )?;
-        retain_owned_once(&ACKNOWLEDGEMENT_TIMER, registration)
+        ensure_owned_once(
+            &ACKNOWLEDGEMENT_TIMER,
+            Self::timer_identity,
+            |_context| async { Self::run_registered().await },
+        )
     }
 }
 

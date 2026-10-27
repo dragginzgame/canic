@@ -153,7 +153,8 @@ mod tests {
 
     fn certificate(canister: Principal, root: [u8; 32]) -> Vec<u8> {
         let mut bytes = Vec::new();
-        ciborium::into_writer(
+        serde_cbor::to_writer(
+            &mut bytes,
             &Certificate {
                 tree: labeled(
                     b"canister",
@@ -165,7 +166,6 @@ mod tests {
                 signature: Vec::new(),
                 delegation: None,
             },
-            &mut bytes,
         )
         .unwrap();
         bytes

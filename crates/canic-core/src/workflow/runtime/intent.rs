@@ -32,11 +32,13 @@ use crate::{
         },
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
-    workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
+    workflow::runtime::timer::{
+        TimerError, cancel_owned_once, ensure_owned_once, owned_once_identity, require_active,
+        with_owned_once,
+    },
 };
 use ic_timers::{
-    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity,
-    TimerSchedule, TimerStart, register_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
 };
 use std::cell::RefCell;
 
@@ -322,16 +324,11 @@ impl IntentCleanupWorkflow {
     }
 
     pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
-        with_owned_once(&INTENT_CLEANUP_TIMER, |registration| {
-            registration.identity().clone()
-        })
+        owned_once_identity(&INTENT_CLEANUP_TIMER)
     }
 
     pub(crate) fn cancel_timer() -> Result<(), TimerError> {
-        if let Some(result) = with_owned_once(&INTENT_CLEANUP_TIMER, OnceRegistration::cancel)? {
-            result?;
-        }
-        Ok(())
+        cancel_owned_once(&INTENT_CLEANUP_TIMER)
     }
 
     /// Reconstruct the sole live cleanup deadline from the stable expiry index.
@@ -534,15 +531,11 @@ impl IntentCleanupWorkflow {
     }
 
     fn ensure_declared() -> Result<(), TimerError> {
-        if with_owned_once(&INTENT_CLEANUP_TIMER, |_| ())?.is_some() {
-            return Ok(());
-        }
-        let registration = register_once(
-            Self::timer_identity()?,
-            TimerStart::Retained { initial: None },
-            |_context: OnceContext| async { Self::run_due_batch() },
-        )?;
-        retain_owned_once(&INTENT_CLEANUP_TIMER, registration)
+        ensure_owned_once(
+            &INTENT_CLEANUP_TIMER,
+            Self::timer_identity,
+            |_context| async { Self::run_due_batch() },
+        )
     }
 
     fn next_directive(now_ns: u64) -> Result<OnceDecision, InternalError> {

@@ -5,11 +5,7 @@
 //! Boundary: the dedicated facade macro is the only canister export authority.
 
 use crate::{
-    dto::fleet_coordinator::{
-        CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
-    },
-    installation::FleetCoordinatorInitArgs,
-    workflow::fleet_coordinator::FleetCoordinatorWorkflow,
+    installation::FleetCoordinatorInitArgs, workflow::fleet_coordinator::FleetCoordinatorWorkflow,
 };
 use canic_contracts::dto::{
     component_provisioning::{
@@ -101,11 +97,71 @@ impl FleetCoordinatorApi {
         canic_core::api::ready::ReadyApi::mark_ready();
     }
 
-    pub fn operation_status(
+    /// Observe one retained operation under its existing caller authority.
+    pub fn admission_operation_status(
         operation_id: [u8; 32],
-    ) -> Result<CoordinatorOperationStatusResponse, Error> {
+    ) -> Result<canic_contracts::dto::fleet_admission::FleetAdmissionOperationStatusResponse, Error>
+    {
         let caller = msg_caller().into();
-        FleetCoordinatorWorkflow::operation_status_for_caller(
+        FleetCoordinatorWorkflow::admission_operation_status(
+            operation_id,
+            caller,
+            is_controller(&caller.into()),
+        )
+        .map_err(Into::into)
+    }
+
+    /// Observe one retained operation under its existing caller authority.
+    pub fn funding_rotation_status(
+        operation_id: [u8; 32],
+    ) -> Result<
+        canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse,
+        Error,
+    > {
+        let caller = msg_caller().into();
+        FleetCoordinatorWorkflow::funding_rotation_status(
+            operation_id,
+            caller,
+            is_controller(&caller.into()),
+        )
+        .map_err(Into::into)
+    }
+
+    /// Observe one retained operation under its existing caller authority.
+    pub fn retirement_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<canic_contracts::dto::fleet_registry::FleetRetirementStatus, Error> {
+        let caller = msg_caller().into();
+        FleetCoordinatorWorkflow::retirement_operation_status(
+            operation_id,
+            caller,
+            is_controller(&caller.into()),
+        )
+        .map_err(Into::into)
+    }
+
+    /// Observe retained Root-removal authority without advancing its effects.
+    pub fn root_removal_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<canic_contracts::dto::fleet_coordinator::CoordinatorRootRemovalOperationStatus, Error>
+    {
+        let caller = msg_caller().into();
+        FleetCoordinatorWorkflow::root_removal_operation_status(
+            operation_id,
+            caller,
+            is_controller(&caller.into()),
+        )
+        .map_err(Into::into)
+    }
+
+    pub fn provisioning_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+        Error,
+    > {
+        let caller = msg_caller().into();
+        FleetCoordinatorWorkflow::provisioning_operation_status_for_caller(
             operation_id,
             caller,
             is_controller(&caller.into()),
@@ -118,83 +174,50 @@ impl FleetCoordinatorApi {
         FleetCoordinatorWorkflow::root_funding_status().map_err(Into::into)
     }
 
-    /// Dispatch one closed Coordinator command and preserve its exact response correlation.
-    pub async fn command(command: CoordinatorCommand) -> Result<CoordinatorCommandResponse, Error> {
-        match command {
-            CoordinatorCommand::AcknowledgeRootSnapshot(request) => {
-                Self::acknowledge_calling_root_snapshot(request)
-                    .map(CoordinatorCommandResponse::AcknowledgeRootSnapshot)
-            }
-            CoordinatorCommand::ActivateRegistry(request) => {
-                Self::activate_registry(request).map(CoordinatorCommandResponse::ActivateRegistry)
-            }
-            CoordinatorCommand::ApplyFundingPolicyRotation(request) => {
-                Self::apply_funding_policy_rotation(request)
-                    .map(CoordinatorCommandResponse::OperationAccepted)
-            }
-            CoordinatorCommand::BeginFundingPolicyRotation(request) => {
-                Self::begin_funding_policy_rotation(request)
-                    .map(CoordinatorCommandResponse::OperationAccepted)
-            }
-            CoordinatorCommand::CompleteRootDeletion(request) => {
-                Self::complete_root_deletion(request)
-                    .map(CoordinatorCommandResponse::CompleteRootDeletion)
-            }
-            CoordinatorCommand::JoinRoot(request) => {
-                Self::join_root(request).map(CoordinatorCommandResponse::JoinRoot)
-            }
-            CoordinatorCommand::MutateAdmission(request) => {
-                Self::mutate_admission(request).map(CoordinatorCommandResponse::MutateAdmission)
-            }
-            CoordinatorCommand::PrepareAuthoritySnapshot(request) => {
-                FleetCoordinatorWorkflow::require_root_funding_snapshot_resumable()
-                    .map_err(Error::from)?;
-                canic_core::api::authority_restore::AuthorityRestoreApi::prepare_coordinator_snapshot(
-                    request,
-                )
-                .await
-                .map(CoordinatorCommandResponse::PrepareAuthoritySnapshot)
-            }
-            CoordinatorCommand::PrepareRootDeletionExecution(request) => {
-                Self::begin_root_deletion_execution(request)
-                    .map(CoordinatorCommandResponse::PrepareRootDeletionExecution)
-            }
-            CoordinatorCommand::ProvisionComponents(request) => {
-                FleetCoordinatorWorkflow::accept_component_provisioning(request)
-                    .map(CoordinatorCommandResponse::OperationAccepted)
-                    .map_err(Into::into)
-            }
-            CoordinatorCommand::RemoveRoot(request) => {
-                FleetCoordinatorWorkflow::accept_root_removal(request)
-                    .await
-                    .map(CoordinatorCommandResponse::OperationAccepted)
-                    .map_err(Into::into)
-            }
-            CoordinatorCommand::RequestRootFunding(request) => {
-                Self::request_calling_root_funding(request)
-                    .await
-                    .map(CoordinatorCommandResponse::RequestRootFunding)
-            }
-            CoordinatorCommand::ResumeAuthoritySnapshot(request) => {
-                canic_core::api::authority_restore::AuthorityRestoreApi::resume_coordinator_snapshot(
-                    request,
-                )
-                .await
-                .map(CoordinatorCommandResponse::ResumeAuthoritySnapshot)
-            }
-            CoordinatorCommand::Retire(request) => {
-                crate::workflow::fleet_coordinator::retirement::retire(msg_caller().into(), request)
-                    .await
-                    .map(CoordinatorCommandResponse::Retire)
-                    .map_err(Into::into)
-            }
-            CoordinatorCommand::SetRootFunding(request) => Self::set_root_funding(request)
-                .map(CoordinatorCommandResponse::SetRootFunding),
-            CoordinatorCommand::StageFundingPolicyRotationRoot(request) => {
-                Self::stage_funding_policy_rotation_root(request)
-                    .map(CoordinatorCommandResponse::OperationAccepted)
-            }
-        }
+    /// Retain the reviewed plan before the existing autonomous workflow performs effects.
+    pub fn provision_components(
+        request: crate::dto::component_provisioning::FleetComponentProvisioningPrepareRequest,
+    ) -> Result<crate::dto::role::OperationReceipt, Error> {
+        FleetCoordinatorWorkflow::accept_component_provisioning(request).map_err(Into::into)
+    }
+
+    /// Accept the exact controller-reviewed removal without changing its durable reservation.
+    pub async fn remove_root(
+        request: crate::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest,
+    ) -> Result<crate::dto::role::OperationReceipt, Error> {
+        FleetCoordinatorWorkflow::accept_root_removal(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Reconcile the original terminal Ledger transfer as the authenticated IC caller.
+    pub async fn retire(
+        request: crate::dto::fleet_registry::FleetRetirementRequest,
+    ) -> Result<crate::dto::fleet_registry::FleetRetirementStatus, Error> {
+        crate::workflow::fleet_coordinator::retirement::retire(msg_caller().into(), request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn prepare_authority_snapshot(
+        request: canic_contracts::dto::authority_restore::AuthoritySnapshotRequest,
+    ) -> Result<canic_contracts::dto::authority_restore::AuthorityRestoreFenceStatusResponse, Error>
+    {
+        FleetCoordinatorWorkflow::require_root_funding_snapshot_resumable().map_err(Error::from)?;
+        canic_core::api::authority_restore::AuthorityRestoreApi::prepare_coordinator_snapshot(
+            request,
+        )
+        .await
+    }
+
+    pub async fn resume_authority_snapshot(
+        request: canic_contracts::dto::authority_restore::AuthoritySnapshotRequest,
+    ) -> Result<canic_contracts::dto::authority_restore::AuthorityRestoreFenceStatusResponse, Error>
+    {
+        canic_core::api::authority_restore::AuthorityRestoreApi::resume_coordinator_snapshot(
+            request,
+        )
+        .await
     }
 
     pub fn begin_funding_policy_rotation(

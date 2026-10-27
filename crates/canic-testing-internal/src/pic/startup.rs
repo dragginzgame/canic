@@ -10,6 +10,9 @@ const POCKET_IC_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 const POCKET_IC_SERVER_URL_ENV: &str = "IC_TESTKIT_POCKET_IC_URL";
 
 /// Start one explicitly configured PocketIC instance within the harness deadline.
+///
+/// # Panics
+/// Panics if Testkit connect mode unexpectedly acquires server ownership.
 pub fn try_start_pocket_ic(builder: PocketIcBuilder) -> Result<PocketIc, PocketIcStartupError> {
     // An absent/non-Unicode URL is rejected by shared URL admission. Keep
     // explicit connect mode so an executable selection cannot spawn a server.
@@ -19,7 +22,12 @@ pub fn try_start_pocket_ic(builder: PocketIcBuilder) -> Result<PocketIc, PocketI
         timeout: POCKET_IC_STARTUP_TIMEOUT,
     }
     .build_instance(builder)
-    .map(|owned| owned.instance)
+    .map(|owned| {
+        // Connect borrows the caller-owned server; no server custody is transferred.
+        let (instance, server) = owned.into_parts();
+        assert!(server.is_none(), "Connect must not acquire server custody");
+        instance
+    })
 }
 
 /// Start one PocketIC instance or stop the current test with structured diagnostics.

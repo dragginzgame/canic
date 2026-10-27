@@ -407,6 +407,7 @@ fn build_result_json(
             "wasm": artifact.wasm_path,
             "wasm_gz": artifact.wasm_gz_path,
             "candid": artifact.did_path,
+            "wire_schema": artifact.wasm_path.with_extension("wire.json"),
             "package": artifact.package_name,
             "package_version": artifact.package_version,
         })),
@@ -1728,6 +1729,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn role_build_json_exposes_native_schema_next_to_wasm() {
+        let root = temp_dir("build-wire-output");
+        let options = build_options(&root, "demo", "app");
+        let artifact = test_artifact_output(&root, "app", 256, 128);
+        let result = build_result_json(&options, None, None, Some(&artifact), false);
+        assert_eq!(
+            result["artifact"]["wire_schema"],
+            artifact
+                .wasm_path
+                .with_extension("wire.json")
+                .to_string_lossy()
+                .as_ref()
+        );
+        assert_eq!(
+            result["artifact"]["wasm"],
+            artifact.wasm_path.to_string_lossy().as_ref()
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn build_options(root: &std::path::Path, app: &str, role: &str) -> BuildOptions {
         BuildOptions {
             app: app.to_string(),
@@ -1780,6 +1802,7 @@ mod tests {
             wasm_gz_path,
             did_path: artifact_root.join(format!("{role}.did")),
             candid_sha256: [0; 32],
+            wire_schema_sha256: [0; 32],
             protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
                 [0; 32],
             ),

@@ -237,42 +237,36 @@ fn pending_root_operations_are_not_reported_as_successful_grants() {
 
 #[cfg(unix)]
 #[test]
-fn protected_query_uses_canonical_candid_and_does_not_cache_usage() {
+fn protected_query_uses_native_funding_and_does_not_cache_usage() {
     use std::os::unix::fs::PermissionsExt as _;
     let directory = crate::test_support::temp_dir("startup-funding-observation");
     std::fs::create_dir_all(&directory).unwrap();
     let executable = directory.join("icp");
     let response_file = directory.join("response.json");
     let script = crate::test_support::tool_script(&format!(
-        "#!/bin/sh\ncase \"$*\" in\n  --version) printf 'icp @ICP_VERSION@\\n' ;;\n  *canic_observability*--query*) cat '{}' ;;\n  *) exit 1 ;;\nesac\n",
+        "#!/bin/sh\ncase \"$*\" in\n  --version) printf 'icp @ICP_VERSION@\\n' ;;\n  *canic_coordinator_funding*--query*) cat '{}' ;;\n  *) exit 1 ;;\nesac\n",
         response_file.display()
     ));
     std::fs::write(&executable, script).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let write = |value| {
-        let bytes =
-            ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-                CoordinatorObservabilityResponse::Funding(value),
-            ))
-            .unwrap();
+        let native = canic_contracts::dto::funding_read::CoordinatorStatus::from(value);
+        let bytes = ic_wire::native::encode_response(
+            canic_contracts::protocol::funding_read::coordinator_status::METHOD_ID,
+            &Ok::<_, canic_contracts::dto::error::Error>(native),
+            canic_contracts::protocol::funding_read::RESPONSE_LIMITS,
+        )
+        .unwrap();
         std::fs::write(
             &response_file,
-            serde_json::json!({"response_bytes": canic_core::cdk::utils::hash::hex_bytes(&bytes)})
-                .to_string(),
+            canic_core::cdk::utils::hash::hex_bytes(&bytes),
         )
         .unwrap();
     };
     let icp = IcpCli::new(executable.to_str().unwrap(), None);
-    let candid = directory.join("coordinator.did");
-    std::fs::write(
-        &candid,
-        include_str!("../../../../../../canic/candid/fleet_coordinator.did"),
-    )
-    .unwrap();
     let observe_now = || {
         observe(
             &icp,
-            &candid,
             Principal::from_slice(&[1]),
             &BTreeSet::new(),
             &policy(),

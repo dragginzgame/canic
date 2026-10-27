@@ -53,7 +53,9 @@ fn command() -> Command {
         .subcommand(Command::new("export").about("Write a reviewed environment and binding bundle")
             .arg(value_arg("fleet").required(true))
             .arg(value_arg("input").long("input").required(true).help("Selected-environment frontend JSON"))
-            .arg(value_arg("out").long("out").required(true).help("New or identical bundle directory")))
+            .arg(value_arg("out").long("out").required(true).help("New or identical bundle directory"))
+            .arg(value_arg("node").long("node").required(true).help("Prepared pinned Node executable"))
+            .arg(value_arg("typescript").long("typescript").required(true).help("Prepared pinned TypeScript package directory")))
         .subcommand(Command::new("verify").about("Verify files against an independently retained digest")
             .arg(value_arg("directory").required(true))
             .arg(value_arg("sha256").long("sha256").required(true)))
@@ -63,7 +65,7 @@ fn command() -> Command {
             .arg(value_arg("canister").long("canister").required(true).value_parser(clap::value_parser!(ic_platform::principal::ExternalPrincipal)))
             .arg(value_arg("prefix").long("prefix").required(true).help("Exact remote handoff directory, such as /canic"))
             .after_help("Example:\n  canic --environment ic frontend verify-uploaded browser/canic --sha256 <digest> --canister <principal> --prefix /canic"))
-        .after_help("Examples:\n  canic frontend export demo --input frontend-local.json --out browser/canic\n  canic frontend verify browser/canic --sha256 <digest>\n  canic --environment ic frontend export demo --input frontend-ic.json --out browser/canic --json")
+        .after_help("Examples:\n  canic frontend export demo --input frontend-local.json --out browser/canic --node <node> --typescript <typescript>\n  canic frontend verify browser/canic --sha256 <digest>\n  canic --environment ic frontend export demo --input frontend-ic.json --out browser/canic --node <node> --typescript <typescript> --json")
 }
 
 /// Parse the selected environment and delegate to the host handoff owner.
@@ -93,6 +95,10 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), FrontendComma
                 &required_string(leaf, "fleet"),
                 &input,
                 Path::new(&required_string(leaf, "out")),
+                &ops::compiler::BrowserCompiler {
+                    node: required_string(leaf, "node").into(),
+                    typescript: required_string(leaf, "typescript").into(),
+                },
             )?
         }
         "verify" => ops::verify_bundle(

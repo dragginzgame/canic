@@ -2,7 +2,7 @@
 //!
 //! Responsibility: render protected Coordinator/Root funding diagnostics for one current Fleet.
 //! Does not own: funding decisions, policy rotation, or value-transfer mutation.
-//! Boundary: terminal ensure inventory selects exact infrastructure targets and Candid bindings.
+//! Boundary: terminal ensure inventory selects exact infrastructure targets and installed artifacts.
 
 use crate::{
     cli::{
@@ -12,39 +12,32 @@ use crate::{
     cycles::CyclesCommandError,
     support::icp_target::IcpTargetOptions,
 };
-use canic_contracts::dto::fleet_coordinator::{
-    CoordinatorRegistryRequest, CoordinatorRegistryResponse,
-};
 use canic_contracts::dto::{
     error::Error,
     fleet_coordinator::CoordinatorFundingWindowStatusResponse as RemoteFundingWindowStatus,
 };
 use canic_contracts::{
     dto::{
+        fleet_coordinator::{
+            CoordinatorFundingStatusResponse, CoordinatorRootFundingStatusResponse,
+        },
         fleet_funding::FleetRootFundingResponse,
         fleet_registry::{FleetRegistry, FleetSubnetRootEntry},
-        wire::projection::funding_status::{
-            RemoteCoordinatorFundingStatus, RemoteCoordinatorRootFundingStatus,
-            RemoteCoordinatorStatusResponse, RemoteRootFundingStatus, RemoteRootStatusResponse,
-        },
+        root::RootFundingStatusResponse,
     },
     ids::{FleetFundingProfile, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy},
 };
 use canic_core::{
-    cdk::{
-        types::Principal,
-        utils::hash::{decode_hex, hex_bytes},
-    },
+    cdk::{types::Principal, utils::hash::hex_bytes},
     shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
 use canic_host::{
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     format::cycles_tc,
     icp_config::resolve_current_canic_icp_root,
-    protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
+    protocol_binding::resolve_current_registry_wire_schema,
 };
 use clap::Command as ClapCommand;
-use ic_platform::candid::decoder::decode_one;
 use serde::Serialize;
 use std::ffi::OsString;
 
@@ -62,7 +55,7 @@ struct FundingOptions {
 struct RootFundingReport {
     canister_id: Principal,
     placement_subnet: String,
-    status: RemoteRootFundingStatus,
+    status: RootFundingStatusResponse,
     direct_topup_command: String,
 }
 
@@ -72,7 +65,7 @@ struct FundingReport {
     environment: String,
     source: &'static str,
     coordinator_canister_id: Principal,
-    coordinator: RemoteCoordinatorFundingStatus,
+    coordinator: CoordinatorFundingStatusResponse,
     coordinator_direct_topup_command: String,
     roots: Vec<RootFundingReport>,
 }
@@ -124,29 +117,17 @@ fn collect_funding(options: &FundingOptions) -> Result<FundingReport, CyclesComm
     let current = resolve_current_fleet(&root, &options.target.environment, &options.fleet)?;
     let initial_registry = current.initial_active_registry(&options.fleet)?;
     let coordinator = initial_registry.authority.binding.coordinator;
-    let coordinator_binding = current_binding(
-        &current,
-        &root,
-        &options.target.environment,
-        coordinator,
-        &options.fleet,
-    )?;
+    require_current_schema(&current, &root, coordinator, &options.fleet)?;
     let icp = options.target.icp_cli(&root);
-    let live_registry = query_registry(&icp, coordinator, &coordinator_binding)?;
+    let live_registry = query_registry(&icp, coordinator)?;
     validate_registry_authority(&current, initial_registry, &live_registry, coordinator)?;
-    let coordinator_status = query_coordinator(&icp, coordinator, &coordinator_binding)?;
+    let coordinator_status = query_coordinator(&icp, coordinator)?;
     validate_coordinator_status(&live_registry, &coordinator_status, coordinator)?;
 
     let mut roots = Vec::with_capacity(live_registry.fleet_subnet_roots.len());
     for entry in &live_registry.fleet_subnet_roots {
-        let binding = current_binding(
-            &current,
-            &root,
-            &options.target.environment,
-            entry.fleet_subnet_root,
-            &options.fleet,
-        )?;
-        let status = query_root(&icp, entry.fleet_subnet_root, &binding)?;
+        require_current_schema(&current, &root, entry.fleet_subnet_root, &options.fleet)?;
+        let status = query_root(&icp, entry.fleet_subnet_root)?;
         validate_root_status(entry, &status, &coordinator_status)?;
         roots.push(RootFundingReport {
             canister_id: entry.fleet_subnet_root,
@@ -174,13 +155,12 @@ fn collect_funding(options: &FundingOptions) -> Result<FundingReport, CyclesComm
     })
 }
 
-fn current_binding(
+fn require_current_schema(
     current: &CurrentFleetResolution,
     root: &std::path::Path,
-    environment: &str,
     principal: Principal,
     fleet: &str,
-) -> Result<ResolvedProtocolBinding, CyclesCommandError> {
+) -> Result<(), CyclesCommandError> {
     let principal = principal.to_text();
     let entry = current
         .registry
@@ -192,67 +172,43 @@ fn current_binding(
                 "Fleet {fleet} omits current infrastructure participant {principal}"
             ))
         })?;
-    resolve_registry_protocol_binding(root, environment, entry)
+    resolve_current_registry_wire_schema(root, current, entry)
+        .map(|_| ())
         .map_err(|error| funding_authority_error(error.to_string()))
 }
 
 fn query_registry(
     icp: &canic_host::icp::IcpCli,
     coordinator: Principal,
-    binding: &ResolvedProtocolBinding,
 ) -> Result<FleetRegistry, CyclesCommandError> {
-    let CoordinatorRegistryResponse::Registry(registry) = canic_host::query_canister_with_arg(
-        icp,
-        binding,
-        coordinator,
-        canic_contracts::protocol::CANIC_COORDINATOR_REGISTRY,
-        &CoordinatorRegistryRequest::Registry,
-    )?;
-    Ok(registry)
+    Ok(canic_host::registry_discovery::snapshot(icp, coordinator)?)
 }
 
 fn query_coordinator(
     icp: &canic_host::icp::IcpCli,
     coordinator: Principal,
-    binding: &ResolvedProtocolBinding,
-) -> Result<RemoteCoordinatorFundingStatus, CyclesCommandError> {
-    let output = icp.canister_query_arg_output_with_candid(
-        &coordinator.to_text(),
-        canic_contracts::protocol::CANIC_OBSERVABILITY,
-        "(variant { Funding })",
-        Some("hex"),
-        Some(binding.candid_path()),
-    )?;
-    let bytes = decode_hex(output.trim()).map_err(CyclesCommandError::FundingResponseHex)?;
-    let response = decode_one::<Result<RemoteCoordinatorStatusResponse, Error>>(&bytes)
-        .map_err(CyclesCommandError::FundingResponseCandid)?;
-    match response {
-        Ok(RemoteCoordinatorStatusResponse::Funding(status)) => Ok(*status),
-        Ok(RemoteCoordinatorStatusResponse::Registry(_)) => Err(funding_authority_error(
-            "Coordinator returned the wrong protected funding status variant",
-        )),
-        Err(error) => Err(funding_rejected(error)),
+) -> Result<CoordinatorFundingStatusResponse, CyclesCommandError> {
+    match canic_host::funding_read::coordinator_status(icp, coordinator) {
+        Ok(status) => Ok(status),
+        Err(canic_host::CanisterProtocolError::Response {
+            source: canic_host::icp::IcpJsonResponseError::Rejected(error),
+            ..
+        }) => Err(funding_rejected(error)),
+        Err(error) => Err(error.into()),
     }
 }
 
 fn query_root(
     icp: &canic_host::icp::IcpCli,
     root: Principal,
-    binding: &ResolvedProtocolBinding,
-) -> Result<RemoteRootFundingStatus, CyclesCommandError> {
-    let output = icp.canister_query_arg_output_with_candid(
-        &root.to_text(),
-        canic_contracts::protocol::CANIC_ROOT_STATUS,
-        "(variant { Funding })",
-        Some("hex"),
-        Some(binding.candid_path()),
-    )?;
-    let bytes = decode_hex(output.trim()).map_err(CyclesCommandError::FundingResponseHex)?;
-    let response = decode_one::<Result<RemoteRootStatusResponse, Error>>(&bytes)
-        .map_err(CyclesCommandError::FundingResponseCandid)?;
-    match response {
-        Ok(RemoteRootStatusResponse::Funding(status)) => Ok(status),
-        Err(error) => Err(funding_rejected(error)),
+) -> Result<RootFundingStatusResponse, CyclesCommandError> {
+    match canic_host::funding_read::root_status(icp, root) {
+        Ok(status) => Ok(status),
+        Err(canic_host::CanisterProtocolError::Response {
+            source: canic_host::icp::IcpJsonResponseError::Rejected(error),
+            ..
+        }) => Err(funding_rejected(error)),
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -285,7 +241,7 @@ fn validate_registry_authority(
 
 fn validate_coordinator_status(
     registry: &FleetRegistry,
-    status: &RemoteCoordinatorFundingStatus,
+    status: &CoordinatorFundingStatusResponse,
     coordinator: Principal,
 ) -> Result<(), CyclesCommandError> {
     let roots_are_exact = registry.fleet_subnet_roots.iter().all(|entry| {
@@ -309,7 +265,7 @@ fn validate_coordinator_status(
 
 fn coordinator_root_identity_matches_registry(
     entry: &FleetSubnetRootEntry,
-    status: &RemoteCoordinatorRootFundingStatus,
+    status: &CoordinatorRootFundingStatusResponse,
 ) -> bool {
     let identity_matches = status.fleet_subnet_root == entry.fleet_subnet_root;
     let lifecycle_matches = status.lifecycle_status == entry.status;
@@ -318,7 +274,7 @@ fn coordinator_root_identity_matches_registry(
 
 fn coordinator_policy_matches_registry(
     entry: &FleetSubnetRootEntry,
-    status: &RemoteCoordinatorRootFundingStatus,
+    status: &CoordinatorRootFundingStatusResponse,
     rotation_active: bool,
 ) -> bool {
     if rotation_active {
@@ -330,8 +286,8 @@ fn coordinator_policy_matches_registry(
 
 fn validate_root_status(
     entry: &FleetSubnetRootEntry,
-    status: &RemoteRootFundingStatus,
-    coordinator: &RemoteCoordinatorFundingStatus,
+    status: &RootFundingStatusResponse,
+    coordinator: &CoordinatorFundingStatusResponse,
 ) -> Result<(), CyclesCommandError> {
     let Some(coordinator_root) = coordinator
         .roots
@@ -511,7 +467,7 @@ fn funding_result_label(result: Option<&FleetRootFundingResponse>) -> String {
     }
 }
 
-fn icp_refill_label(status: &RemoteRootFundingStatus) -> String {
+fn icp_refill_label(status: &RootFundingStatusResponse) -> String {
     let Some(policy) = status.icp_refill_policy.as_ref() else {
         return "not configured".to_string();
     };
@@ -562,90 +518,62 @@ const fn funding_profile_label(profile: FleetFundingProfile) -> &'static str {
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     #[test]
-    fn funding_registry_query_decodes_one_endpoint_result_and_preserves_rejection() {
-        use canic_contracts::{
-            diagnostics::codes, dto::fleet_coordinator::CoordinatorRegistryResponse,
+    fn funding_registry_query_requires_explicit_network_authority() {
+        use canic_host::{
+            CanisterProtocolError,
+            icp::{IcpCli, IcpManagementCallError, IcpQueryError},
         };
-        use canic_host::{CanisterProtocolError, icp::IcpJsonResponseError};
-        use std::fs;
-
-        let root = crate::test_support::temp_dir("funding-registry-query");
-        let registry = funding_registry_fixture();
-        let coordinator = registry.authority.binding.coordinator;
-        let (icp, binding) = registry_query_fixture(&root, coordinator);
-        let reply: Result<CoordinatorRegistryResponse, Error> =
-            Ok(CoordinatorRegistryResponse::Registry(registry.clone()));
-        fs::write(
-            root.join("response.json"),
-            serde_json::json!({ "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(reply).unwrap()) })
-                .to_string(),
-        )
-        .unwrap();
-        assert_eq!(
-            query_registry(&icp, coordinator, &binding).unwrap(),
-            registry
-        );
-        let request = fs::read(root.join("request.bin")).unwrap();
-        assert_eq!(
-            ic_platform::candid::decoder::decode_one::<
-                canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest,
-            >(&request,)
-            .unwrap(),
-            canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest::Registry,
-        );
-
-        let rejected = Error::from_registered(codes::PLATFORM_UNAVAILABLE);
-        let reply: Result<CoordinatorRegistryResponse, Error> = Err(rejected);
-        fs::write(
-            root.join("response.json"),
-            serde_json::json!({ "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(reply).unwrap()) })
-                .to_string(),
-        )
-        .unwrap();
+        let coordinator = Principal::from_slice(&[2]);
+        let icp = IcpCli::new("/missing/query-authority-icp", None);
         assert!(matches!(
-            query_registry(&icp, coordinator, &binding),
-            Err(CyclesCommandError::FundingProtocol(CanisterProtocolError::Response {
+            query_registry(&icp, coordinator),
+            Err(CyclesCommandError::FundingProtocol(CanisterProtocolError::ReadOnlyQuery {
                 canister,
-                method: canic_contracts::protocol::CANIC_COORDINATOR_REGISTRY,
-                source: IcpJsonResponseError::Rejected(actual),
-            })) if canister == coordinator && actual == rejected
+                method: canic_contracts::protocol::registry_discovery::snapshot::METHOD,
+                source: IcpQueryError::Authority(source),
+            })) if canister == coordinator
+                && matches!(*source, IcpManagementCallError::MissingEnvironment)
         ));
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[cfg(unix)]
-    fn registry_query_fixture(
-        root: &std::path::Path,
-        coordinator: Principal,
-    ) -> (canic_host::icp::IcpCli, ResolvedProtocolBinding) {
-        use canic_core::role_contract::derive_protocol_profile_hashes;
-        use canic_host::{protocol_binding::RegistryProtocolBinding, registry::RegistryEntry};
-        use std::{collections::BTreeSet, fs, os::unix::fs::PermissionsExt};
+    #[test]
+    fn root_funding_query_preserves_rejection_and_exact_wire_identity() {
+        use canic_contracts::{diagnostics::codes, protocol::funding_read as wire};
+        let root = crate::test_support::temp_dir("funding-root-query");
+        let icp = registry_query_fixture(&root);
+        let canister = Principal::from_slice(&[1]);
+        let rejected = Error::from_registered(codes::PLATFORM_UNAVAILABLE);
+        let reply: Result<canic_contracts::dto::funding_read::RootStatus, Error> = Err(rejected);
+        let bytes = ic_wire::native::encode_response(
+            wire::root_status::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        std::fs::write(root.join("response.json"), hex_bytes(bytes)).unwrap();
+        assert!(
+            matches!(canic_host::funding_read::root_status(&icp, canister),
+            Err(canic_host::CanisterProtocolError::Response {
+                canister: actual, method: wire::root_status::METHOD,
+                source: canic_host::icp::IcpJsonResponseError::Rejected(error),
+            }) if actual == canister && error == rejected)
+        );
+        let request = std::fs::read(root.join("request.bin")).unwrap();
+        ic_wire::native::decode_request::<()>(
+            wire::root_status::METHOD_ID,
+            &request,
+            wire::REQUEST_LIMITS,
+        )
+        .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
-        let role = canic_contracts::ids::CanisterRole::from("coordinator");
-        let candid = b"service : {}\n";
-        let capabilities = BTreeSet::new();
-        let profile =
-            derive_protocol_profile_hashes("funding-query-fixture", &role, &capabilities, candid);
-        let did = canic_host::icp::local_canister_candid_path(root, "local", role.as_str());
-        fs::create_dir_all(did.parent().unwrap()).unwrap();
-        fs::write(did, candid).unwrap();
-        let entry = RegistryEntry {
-            pid: coordinator.to_text(),
-            role: Some(role.to_string()),
-            parent_pid: None,
-            module_hash: None,
-            protocol_binding: Some(RegistryProtocolBinding {
-                release_identity: "funding-query-fixture".to_string(),
-                role,
-                capabilities,
-                candid_sha256: profile.candid_sha256,
-                protocol_profile_digest: profile.protocol_profile_digest,
-            }),
-        };
-        let binding = resolve_registry_protocol_binding(root, "local", &entry).unwrap();
+    #[cfg(unix)]
+    fn registry_query_fixture(root: &std::path::Path) -> canic_host::icp::IcpCli {
+        use std::{fs, os::unix::fs::PermissionsExt};
+        fs::create_dir_all(root).unwrap();
         let version = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../ci/ic-tools.tsv"
@@ -661,52 +589,7 @@ mod tests {
             "#!/bin/sh\nset -eu\nif [ \"$1\" = --version ]; then echo 'icp {version}'; exit 0; fi\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = --args-file ]; then shift; cp \"$1\" request.bin; fi\n  shift\ndone\ncat response.json\n",
         )).unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
-        (
-            canic_host::icp::IcpCli::new(executable.to_str().unwrap(), None).with_cwd(root),
-            binding,
-        )
-    }
-
-    #[cfg(unix)]
-    fn funding_registry_fixture() -> FleetRegistry {
-        use canic_contracts::ids::{
-            AppId, CanonicalNetworkId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
-            FleetRegistryAuthority, SubnetId,
-        };
-        use canic_core::shared_support::fleet_admission_policy::{
-            bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
-        };
-        let fleet = FleetBinding {
-            fleet: FleetKey {
-                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                fleet_id: FleetId::from_generated_bytes([4; 32]),
-            },
-            app: AppId::from("demo"),
-        };
-        FleetRegistry {
-            authority: FleetRegistryAuthority {
-                binding: FleetCoordinatorBinding {
-                    fleet: fleet.clone(),
-                    coordinator_subnet: SubnetId::from(Principal::from_slice(&[1])),
-                    coordinator: Principal::from_slice(&[2]),
-                    recovery_controllers: Vec::new(),
-                },
-                epoch: 1,
-            },
-            revision: 7,
-            admission: bind_initial_fleet_admission_policy(
-                fleet,
-                &compile_fleet_admission_policy_template(
-                    vec![Principal::from_slice(&[3])],
-                    Vec::new(),
-                )
-                .unwrap(),
-            )
-            .unwrap(),
-            component_specs: Vec::new(),
-            fleet_subnet_roots: Vec::new(),
-            services: Vec::new(),
-        }
+        canic_host::icp::IcpCli::new(executable.to_str().unwrap(), None).with_cwd(root)
     }
 
     #[test]

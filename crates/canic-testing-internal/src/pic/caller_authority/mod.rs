@@ -1,25 +1,15 @@
 //! Module: pic::caller_authority
 //!
-//! Protected delivery loss/replay and generated Candid qualification for managed fixtures.
-
-mod candid_contract;
+//! Protected delivery loss/replay and native Wire qualification for managed fixtures.
 
 use canic::{
     Error,
     dto::{caller_authority::*, role::OperationStatusRequest},
     testing::ManagedComponentGroupFixture,
 };
-use canic_contracts::dto::wire::projection::{
-    caller_authority::{StatusRequest, StatusResponse},
-    fixture_caller_authority::{Command, Response},
-};
 use ic_platform::pocket_ic::PocketIc;
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::time::Duration;
-
-pub(super) fn qualify_candid(workspace: &std::path::Path) {
-    candid_contract::qualify(workspace);
-}
 
 pub(super) fn qualify_delivery(
     fixture: &ManagedComponentGroupFixture,
@@ -196,13 +186,18 @@ fn assert_foreign_root_refused(
 }
 
 fn discard_reply(pic: &PocketIc, root: Principal, hub: Principal, request: CallerAuthorityCommand) {
+    let request = canic_contracts::ops::caller_authority_status::publication_request(request);
     let message = pic
         .submit_call(
             hub,
             root,
-            canic::protocol::CANIC_COMMAND,
-            ic_platform::candid::contract::encode_args((Command::CallerAuthority(request),))
-                .unwrap(),
+            request.method,
+            ic_wire::native::encode_request(
+                request.method_id,
+                &request.publication,
+                canic::protocol::caller_authority::REQUEST_LIMITS,
+            )
+            .unwrap(),
         )
         .unwrap();
     for _ in 0..12 {
@@ -236,21 +231,22 @@ fn command(
     hub: Principal,
     request: CallerAuthorityCommand,
 ) -> Result<CallerAuthorityReceipt, Error> {
-    let response: Result<Response, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((Command::CallerAuthority(request),))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(hub, caller, canic::protocol::CANIC_COMMAND, request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+    let request = canic_contracts::ops::caller_authority_status::publication_request(request);
+    let response: Result<canic::dto::caller_authority_status::CallerAuthorityReceipt, Error> =
+        ic_testkit::pic::update_wire(
+            pic,
+            hub,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: request.method,
+                method_id: request.method_id,
+                request_limits: canic::protocol::caller_authority::REQUEST_LIMITS,
+                response_limits: canic::protocol::caller_authority::RESPONSE_LIMITS,
+            },
+            &request.publication,
+        )
         .unwrap();
-    response.map(|Response::CallerAuthority(receipt)| receipt)
+    response.map(Into::into)
 }
 
 fn status(
@@ -259,42 +255,32 @@ fn status(
     target: Principal,
     operation_id: [u8; 32],
 ) -> CallerAuthorityStatus {
-    let response: Result<StatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                StatusRequest::CallerAuthority(OperationStatusRequest { operation_id }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    target,
-                    root,
-                    canic::protocol::CANIC_CONTROL_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
-    let StatusResponse::CallerAuthority(status) = response.unwrap();
-    status
+    let response: Result<canic::dto::caller_authority_status::CallerAuthorityStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            target,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::caller_authority_status::METHOD,
+                method_id: canic::protocol::caller_authority_status::METHOD_ID,
+                request_limits: canic::protocol::caller_authority_status::REQUEST_LIMITS,
+                response_limits: canic::protocol::caller_authority_status::RESPONSE_LIMITS,
+            },
+            &OperationStatusRequest { operation_id },
+        )
+        .expect("caller authority Wire transport");
+    response.expect("Root caller authority status").into()
 }
 
 fn probe(pic: &PocketIc, hub: Principal, shard: Principal) -> Result<Principal, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(hub, shard, "test_caller_probe", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+        pic,
+        hub,
+        shard,
+        crate::pic::application_probe::CALLER_PROBE,
+        &(),
+    )
+    .map(|reply| reply.map(Into::into))
     .unwrap()
 }
 

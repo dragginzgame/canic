@@ -23,7 +23,6 @@ pub enum FleetObservationStage {
     Planning,
     PoolBalances,
     ProtocolActions,
-    ProtocolReadiness,
     RootManagement,
     TerminalInventory,
 }

@@ -5,6 +5,7 @@
 //! Boundary: consumes backup manifests and artifacts to produce restore plans and runner state.
 
 mod apply;
+mod ordering;
 mod persistence;
 mod plan;
 mod runner;

@@ -6,17 +6,16 @@
 
 use super::*;
 use crate::ops::cost_guard::CostGuardPermit;
-use ic_platform::candid::contract::ArgumentEncoder;
 
 impl MgmtOps {
     /// Install chunked code after a cost guard has reserved deployment quota and cycles.
-    pub async fn install_chunked_code_with_permit<T: ArgumentEncoder>(
+    pub async fn install_chunked_code_with_permit(
         _permit: &CostGuardPermit,
         target_canister: Principal,
         store_canister: Principal,
         chunk_hashes_list: Vec<Vec<u8>>,
         wasm_module_hash: Vec<u8>,
-        args: T,
+        arg: Vec<u8>,
     ) -> Result<(), InternalError> {
         let chunk_count = chunk_hashes_list.len();
         management_call(MgmtInfra::install_chunked_code(
@@ -24,7 +23,7 @@ impl MgmtOps {
             store_canister,
             chunk_hashes_list,
             wasm_module_hash,
-            args,
+            arg,
         ))
         .await
         .map_err(|error| {

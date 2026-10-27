@@ -5,7 +5,7 @@
 //! Boundary: authoritative owners validate these passive shapes before storing or acting on them.
 
 use crate::ids::{FleetBinding, FleetKey, ReleaseBuildId};
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Maximum managed Canisters represented by one Fleet activation.
@@ -18,8 +18,7 @@ pub const MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES: usize = 64;
 /// FleetCascadeManifestEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCascadeManifestEntry {
     pub principal: Principal,
     pub state_snapshot_hash: [u8; 32],
@@ -30,8 +29,11 @@ pub struct FleetCascadeManifestEntry {
 /// FleetCascadeActivationEvidence
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetCascadeActivationEvidence {
     Source {
         cascade_manifest_hash: [u8; 32],
@@ -46,8 +48,11 @@ pub enum FleetCascadeActivationEvidence {
 /// FleetCredentialGenerationRef
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetCredentialGenerationRef {
     pub generation: u64,
     pub manifest_hash: [u8; 32],
@@ -57,8 +62,7 @@ pub struct FleetCredentialGenerationRef {
 /// FleetCredentialManifestEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCredentialManifestEntry {
     pub root_issuer: Principal,
     pub subject_canister: Principal,
@@ -74,8 +78,7 @@ pub struct FleetCredentialManifestEntry {
 /// FleetCredentialManifest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCredentialManifest {
     pub fleet: FleetKey,
     pub activation_id: [u8; 32],
@@ -89,8 +92,11 @@ pub struct FleetCredentialManifest {
 /// FleetActivationIdentity
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetActivationIdentity {
     pub fleet: FleetBinding,
     pub operation_id: [u8; 32],
@@ -101,8 +107,11 @@ pub struct FleetActivationIdentity {
 /// FleetActivationPhase
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetActivationPhase {
     Prepared,
     Active,
@@ -112,8 +121,7 @@ pub enum FleetActivationPhase {
 /// FleetActivationStatusResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetActivationStatusResponse {
     pub phase: FleetActivationPhase,
     pub identity: FleetActivationIdentity,
@@ -124,22 +132,31 @@ pub struct FleetActivationStatusResponse {
     pub activated_at_ns: Option<u64>,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetActivationResumeRequest {
     pub operation_id: [u8; 32],
     pub credential: FleetCredentialGenerationRef,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetCredentialGenerationRequest {
     pub operation_id: [u8; 32],
     pub credential: FleetCredentialGenerationRef,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetActivationRequest {
     pub operation_id: [u8; 32],
     pub credential: FleetCredentialGenerationRef,
@@ -162,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn fleet_activation_status_roundtrips_as_named_candid_shapes() {
+    fn fleet_activation_status_roundtrips_as_named_wire_shapes() {
         let input = FleetActivationStatusResponse {
             phase: FleetActivationPhase::Prepared,
             identity: FleetActivationIdentity {
@@ -185,10 +202,9 @@ mod tests {
             activated_at_ns: None,
         };
 
-        let bytes =
-            ic_platform::candid::contract::encode_one(&input).expect("encode activation status");
+        let bytes = crate::protocol::authority::encode(&input).expect("encode activation status");
         let decoded: FleetActivationStatusResponse =
-            ic_platform::candid::decoder::decode_one(&bytes).expect("decode activation status");
+            crate::protocol::authority::decode(&bytes).expect("decode activation status");
 
         assert_eq!(decoded, input);
     }

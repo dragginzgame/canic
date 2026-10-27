@@ -1,5 +1,6 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
+    impl_storable_unbounded,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -46,7 +47,7 @@ pub struct EnvRecord {
     pub parent_pid: Option<Principal>,
 }
 
-impl_storable_bounded!(EnvRecord, 2_048, true);
+impl_storable_unbounded!(EnvRecord);
 
 impl EnvRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "EnvRecord";

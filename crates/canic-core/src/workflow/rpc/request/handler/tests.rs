@@ -38,6 +38,7 @@ use crate::{
         RootCapabilityCallerAuthority, RootCapabilityMemberAuthority, RootCapabilityParentAuthority,
     },
 };
+use canic_contracts::protocol::authority::encode;
 use canic_contracts::{
     cycles::{Cycles, TC},
     ids::{
@@ -46,7 +47,6 @@ use canic_contracts::{
         FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
     },
 };
-use ic_platform::candid::contract::encode_one;
 use std::collections::HashMap;
 
 fn p(id: u8) -> Principal {
@@ -1181,7 +1181,7 @@ fn payload_hash_includes_capability_variant_discriminant() {
     .payload_hash();
 
     let struct_only_hash = {
-        let bytes = encode_one(&CyclesRequest {
+        let bytes = encode(&CyclesRequest {
             cycles: 42,
             metadata: None,
         })
@@ -1240,9 +1240,11 @@ fn check_replay_rejects_expired_entry() {
     let replay_input = capability.replay_input().expect("metadata");
     let payload_hash = replay_input.payload_hash;
     let request_id = replay_input.metadata.request_id;
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
-        cycles_transferred: 500,
-    }))
+    let response_bytes = crate::ops::replay::encode_replay_response(&Response::Cycles(
+        CyclesResponse::Transferred {
+            cycles_transferred: 500,
+        },
+    ))
     .expect("encode");
 
     seed_root_replay_receipt(
@@ -1660,7 +1662,8 @@ fn check_replay_rejects_cross_variant_same_request_id() {
 fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
     ReplayReceiptOps::reset_for_tests();
 
-    let ok = encode_one(Response::RecycleCanister).expect("encode");
+    let ok =
+        crate::ops::replay::encode_replay_response(&Response::RecycleCanister).expect("encode");
 
     for i in 0..5u8 {
         seed_root_replay_receipt(
@@ -1705,9 +1708,11 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
 fn check_replay_rejects_when_capacity_reached() {
     ReplayReceiptOps::reset_for_tests();
 
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
-        cycles_transferred: 1,
-    }))
+    let response_bytes = crate::ops::replay::encode_replay_response(&Response::Cycles(
+        CyclesResponse::Transferred {
+            cycles_transferred: 1,
+        },
+    ))
     .expect("encode");
 
     for i in 0..MAX_ROOT_REPLAY_ENTRIES {
@@ -1743,9 +1748,11 @@ fn check_replay_rejects_when_capacity_reached() {
 fn placement_receipt_acknowledgement_does_not_reserve_replay_capacity() {
     ReplayReceiptOps::reset_for_tests();
 
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
-        cycles_transferred: 1,
-    }))
+    let response_bytes = crate::ops::replay::encode_replay_response(&Response::Cycles(
+        CyclesResponse::Transferred {
+            cycles_transferred: 1,
+        },
+    ))
     .expect("encode");
     for i in 0..MAX_ROOT_REPLAY_ENTRIES {
         let mut request_id = [0u8; 32];
@@ -1774,9 +1781,11 @@ fn check_replay_rejects_when_caller_capacity_reached() {
     ReplayReceiptOps::reset_for_tests();
 
     let caller = p(9);
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
-        cycles_transferred: 1,
-    }))
+    let response_bytes = crate::ops::replay::encode_replay_response(&Response::Cycles(
+        CyclesResponse::Transferred {
+            cycles_transferred: 1,
+        },
+    ))
     .expect("encode");
 
     for i in 0..MAX_ROOT_REPLAY_ENTRIES_PER_CALLER {

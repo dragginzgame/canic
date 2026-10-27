@@ -20,7 +20,7 @@ impl FleetSubnetRootDrainingReservationOps {
     ) -> Result<[u8; 32], InternalError> {
         let mut authority = response.clone();
         authority.reservation_hash = [0; 32];
-        let payload = ic_platform::candid::contract::encode_one(authority)
+        let payload = canic_contracts::protocol::authority::encode(authority)
             .map_err(|_error| InternalError::invariant())?;
         let mut hasher = Sha256::new();
         hasher.update(ROOT_DRAINING_RESERVATION_HASH_DOMAIN);

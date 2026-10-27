@@ -4,11 +4,7 @@ use super::*;
 use canic::dto::component_registry::{
     ComponentRegistryPartitionRequest, RootComponentChildAllocationRequest,
 };
-use canic_contracts::dto::root::RootComponentChildOperationStatus;
-
-use canic_contracts::dto::wire::projection::fixture_baseline_child_reserve::Command;
-
-use canic_contracts::dto::wire::projection::fixture_baseline_child_reserve::Response;
+use canic_contracts::dto::component_registry::RootComponentChildAllocationResponse;
 
 #[test]
 pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim() {
@@ -31,14 +27,16 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     let root = fixture.root_id;
     let (version, sync) = join_and_synchronize_root(&pic, coordinator, &fixture);
     activate_registry_and_prepare_component_registry(&pic, coordinator, &fixture, version, sync);
-    let CoordinatorRegistryResponse::Registry(registry) =
-        coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+    let registry =
+        crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
+            .unwrap();
     let operation_id = [0x93; 32];
     let plan = fixture_fresh_component_plan(config.model(), &registry, operation_id);
-    coordinator_command(
+    crate::pic::batch_control::prepare(
         &pic,
         coordinator,
-        CoordinatorCommand::ProvisionComponents(plan.request.clone()),
+        Principal::anonymous(),
+        plan.request.clone(),
     )
     .unwrap();
     wait_for_parent_commit(&pic, root, operation_id);
@@ -63,12 +61,9 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
             .raw()
     );
     let child = operation(&pic, root, origin.operation_id);
-    assert_eq!(
-        child.allocation.phase,
-        RootComponentAllocationPhase::Reserved
-    );
-    assert!(child.allocation.creation.is_none());
-    assert!(child.allocation.installation.is_none());
+    assert_eq!(child.phase, RootComponentAllocationPhase::Reserved);
+    assert!(child.creation.is_none());
+    assert!(child.installation.is_none());
     let claim = root_pool_status(&pic, root).entries.into_iter().find(|entry| {
         matches!(&entry.status, CanisterPoolAssetStatus::Claimed { claim } if claim.operation_id == origin.operation_id)
     }).expect("the same failed initial claim remains reserved");
@@ -94,9 +89,9 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
         "bootstrap completes after replenishing its retained Root"
     );
     let recovered = operation(&pic, root, origin.operation_id);
-    assert!(recovered.allocation.last_failure.is_none());
+    assert!(recovered.last_failure.is_none());
     assert_eq!(
-        recovered.allocation.creation.unwrap().canister,
+        recovered.creation.unwrap().canister,
         Some(claim.canister_id)
     );
     assert_eq!(
@@ -139,14 +134,19 @@ fn assert_host_origin(
     let paths =
         canic_host::fleet_ensure::ops::EnsurePaths::under(&directory, "local", "child-origin");
     let state = canic_host::fleet_ensure::ops::read_state(&paths, "child-origin").unwrap();
-    let candid = workspace.join("crates/canic/candid/fleet_coordinator.did");
+    let wire_schema = directory.join("coordinator.wire.json");
+    std::fs::write(
+        &wire_schema,
+        crate::pic::artifacts::build_canonical_fleet_coordinator_schema(&workspace),
+    )
+    .expect("retain installed Coordinator schema");
     let action = EnsureAction::FleetProtocol {
         action: Box::new(CurrentFleetProtocolAction::ProvisionComponents {
             plan_hash: plan.plan_hash,
             request: plan.request.clone(),
         }),
-        candid: candid.to_str().unwrap().into(),
-        candid_sha256: hex_bytes(wasm_hash(&std::fs::read(candid).unwrap())),
+        wire_schema: wire_schema.to_str().unwrap().into(),
+        wire_schema_sha256: hex_bytes(wasm_hash(&std::fs::read(&wire_schema).unwrap())),
         maximum_execution_burn_cycles: 0,
         name: "component-provisioning".into(),
         principal: coordinator.to_text(),
@@ -183,7 +183,12 @@ fn assert_balance_control_requires_controller(pic: &PocketIc, root: Principal) {
             root,
             Principal::from_slice(&[0x95; 29]),
             "audit_recovery_balance",
-            ic_platform::candid::contract::encode_args((0_u128,)).unwrap(),
+            ic_wire::native::encode_request(
+                crate::pic::application_probe::AUDIT_ROOT_BALANCE.method_id,
+                &0_u128,
+                crate::pic::application_probe::AUDIT_ROOT_BALANCE.request_limits,
+            )
+            .unwrap(),
         )
         .expect_err("a non-controller cannot burn the audit Root's balance");
     assert_eq!(
@@ -194,13 +199,9 @@ fn assert_balance_control_requires_controller(pic: &PocketIc, root: Principal) {
 
 fn wait_for_parent_commit(pic: &PocketIc, root: Principal, operation_id: [u8; 32]) {
     for _ in 0..240 {
-        if let Ok(RootStatusResponseFragment::Operation(
-            RootOperationStatusResponse::ProvisionComponents(status),
-        )) = root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-        ) && status.component_count > 0
+        if let Ok(status) =
+            crate::pic::canic::root_provisioning(pic, root, Principal::anonymous(), operation_id)
+            && status.component_count > 0
             && status.registry_committed_component_count == status.component_count
         {
             assert!(!status.root_runtime_active);
@@ -217,18 +218,13 @@ fn provisioning_status(
     coordinator: Principal,
     operation_id: [u8; 32],
 ) -> canic::dto::component_provisioning::FleetComponentProvisioningStatusResponse {
-    let CoordinatorOperationReadResponse::Operation(
-        CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-    ) = coordinator_status(
+    crate::pic::canic::coordinator_provisioning(
         pic,
         coordinator,
-        CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+        Principal::anonymous(),
+        operation_id,
     )
     .unwrap()
-    else {
-        panic!("correlated provisioning operation")
-    };
-    status
 }
 
 #[test]
@@ -266,16 +262,14 @@ pub(super) fn low_native_reserve_retains_child_failure_and_recovers_same_claim()
             },
         )
         .expect("active parent Hub");
-    let RootStatusResponseFragment::ComponentRegistryPartition(partition) = root_status(
+    let partition = root_partition(
         &pic,
         root,
-        RootStatusRequestFragment::ComponentRegistryPartition(ComponentRegistryPartitionRequest {
+        ComponentRegistryPartitionRequest {
             component: parent.component,
-        }),
+        },
     )
-    .unwrap() else {
-        panic!("partition response")
-    };
+    .unwrap();
     prepare_spare(&pic, root);
     pause_and_reduce_reserve(&pic, root);
     let request = RootComponentChildAllocationRequest {
@@ -287,30 +281,26 @@ pub(super) fn low_native_reserve_retains_child_failure_and_recovers_same_claim()
     };
     provision(&pic, root, parent.canister_id, &request);
     let blocked = wait_for(&pic, root, request.operation_id, |status| {
-        status.allocation.last_failure.is_some()
+        status.last_failure.is_some()
     });
-    let failure = blocked.allocation.last_failure.unwrap();
+    let failure = blocked.last_failure.unwrap();
     assert_eq!(
         failure.diagnostic_code,
         canic_contracts::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED
             .raw_code()
             .raw()
     );
-    assert_eq!(
-        blocked.allocation.phase,
-        RootComponentAllocationPhase::Reserved
-    );
-    assert!(blocked.allocation.creation.is_none());
-    assert!(blocked.allocation.installation.is_none());
+    assert_eq!(blocked.phase, RootComponentAllocationPhase::Reserved);
+    assert!(blocked.creation.is_none());
+    assert!(blocked.installation.is_none());
     let claim = root_pool_status(&pic, root).entries.into_iter().find(|entry| {
         matches!(&entry.status, CanisterPoolAssetStatus::Claimed { claim } if claim.operation_id == request.operation_id)
     }).expect("retained pool claim");
     pic.add_cycles(root, 5_000_000_000_000);
     let recovered = wait_for(&pic, root, request.operation_id, |status| {
-        status.allocation.last_failure.is_none()
-            && status.allocation.phase == RootComponentAllocationPhase::Committed
+        status.last_failure.is_none()
+            && status.phase == RootComponentAllocationPhase::Committed
             && status
-                .allocation
                 .creation
                 .as_ref()
                 .and_then(|creation| creation.canister)
@@ -320,7 +310,7 @@ pub(super) fn low_native_reserve_retains_child_failure_and_recovers_same_claim()
                 })
     });
     assert_eq!(
-        recovered.allocation.creation.as_ref().unwrap().canister,
+        recovered.creation.as_ref().unwrap().canister,
         Some(claim.canister_id)
     );
     provision(&pic, root, parent.canister_id, &request);
@@ -345,17 +335,15 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
         .expect("existing spare pool asset");
     pic.add_cycles(spare.canister_id, 20_000_000_000_000);
     for _ in 0..30 {
-        let response = root_command(
+        let response = import_canister(
             pic,
             root,
-            RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+            PoolCanisterRequest {
                 canister_id: spare.canister_id,
-            }),
+            },
         );
         match response {
-            Ok(RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported {
-                ..
-            })) => {}
+            Ok(PoolImportResponse::Imported { .. }) => {}
             // Background maintenance may already own this physical reset.
             // Retry only its transient contention result; authority conflicts fail.
             Err(error) => assert_eq!(
@@ -378,48 +366,22 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
 }
 
 fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
-    let paused: Result<Response, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((Command::SetCyclesFunding(
-                    canic::dto::state::SetCyclesFundingRequest { enabled: false },
-                ),))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
-    let Response::SetCyclesFunding(paused) = paused.unwrap() else {
-        panic!("funding response")
-    };
+    let paused = crate::pic::protected_state::set_funding(
+        pic,
+        root,
+        Principal::anonymous(),
+        canic::dto::state::SetCyclesFundingRequest { enabled: false },
+    )
+    .unwrap();
     assert_eq!(paused.propagation.unconfirmed_targets, 0);
     assert!(paused.reconciliation_error.is_none());
-    let burned: u128 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((800_000_000_000_u128,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                root,
-                Principal::anonymous(),
-                "audit_recovery_balance",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let burned: u128 = ic_testkit::pic::update_wire(
+        pic,
+        root,
+        Principal::anonymous(),
+        crate::pic::application_probe::AUDIT_ROOT_BALANCE,
+        &800_000_000_000_u128,
+    )
     .expect("update Candid harness call");
     assert!(burned > 0);
     assert!(pic.cycle_balance(root) < 1_000_000_000_000);
@@ -431,29 +393,21 @@ fn provision(
     parent: Principal,
     request: &RootComponentChildAllocationRequest,
 ) {
-    let response: Result<Response, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::ProvisionChild(request.clone()),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    parent,
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
-    let Response::OperationAccepted(receipt) = response.unwrap() else {
-        panic!("accepted child")
-    };
+    use canic::protocol::component_control as wire;
+    let response: Result<canic::dto::role::OperationReceipt, Error> = ic_testkit::pic::update_wire(
+        pic,
+        root,
+        parent,
+        ic_testkit::pic::WireCallSpec {
+            method: wire::child::METHOD,
+            method_id: wire::child::METHOD_ID,
+            request_limits: wire::REQUEST_LIMITS,
+            response_limits: wire::RESPONSE_LIMITS,
+        },
+        request,
+    )
+    .expect("native child provisioning transport");
+    let receipt = response.unwrap();
     assert_eq!(receipt.operation_id, request.operation_id);
 }
 
@@ -461,26 +415,17 @@ fn operation(
     pic: &PocketIc,
     root: Principal,
     operation_id: [u8; 32],
-) -> RootComponentChildOperationStatus {
-    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::ProvisionChild(status)) =
-        root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-        )
-        .unwrap()
-    else {
-        panic!("child operation")
-    };
-    status
+) -> RootComponentChildAllocationResponse {
+    crate::pic::canic::root_child_allocation(pic, root, Principal::anonymous(), operation_id)
+        .expect("native child allocation status")
 }
 
 fn wait_for(
     pic: &PocketIc,
     root: Principal,
     operation_id: [u8; 32],
-    predicate: impl Fn(&RootComponentChildOperationStatus) -> bool,
-) -> RootComponentChildOperationStatus {
+    predicate: impl Fn(&RootComponentChildAllocationResponse) -> bool,
+) -> RootComponentChildAllocationResponse {
     for _ in 0..180 {
         let status = operation(pic, root, operation_id);
         if predicate(&status) {
@@ -496,21 +441,12 @@ fn wait_for(
 }
 
 fn lower_root_reserve(pic: &PocketIc, root: Principal) -> u128 {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((800_000_000_000_u128,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                root,
-                Principal::anonymous(),
-                "audit_recovery_balance",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire(
+        pic,
+        root,
+        Principal::anonymous(),
+        crate::pic::application_probe::AUDIT_ROOT_BALANCE,
+        &800_000_000_000_u128,
+    )
     .expect("update Candid harness call")
 }

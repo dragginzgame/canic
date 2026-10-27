@@ -34,7 +34,7 @@ pub struct BuildProvenanceV1 {
 /// Exact generated binding identity carried beside one build artifact.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProtocolProfileProvenanceV1 {
-    pub candid_sha256: String,
+    pub wire_schema_sha256: String,
     pub protocol_profile_digest: String,
 }
 
@@ -144,6 +144,8 @@ pub enum ArtifactProvenanceKindV1 {
     Wasm,
     WasmGzip,
     Candid,
+    WireSchema,
+    WireBindings,
     Metadata,
     Other,
 }

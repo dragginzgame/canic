@@ -228,10 +228,9 @@ workspace catalog, with Canic defaults disabled:
 
 ```toml
 [workspace.dependencies]
-candid = "<version>"
 canic = { version = "<same-version-as-canic-cli>", default-features = false }
-ic-cdk = "0.20"
-ic-platform = { version = "0.1.5", default-features = false }
+ic-platform = { version = "0.6.19", default-features = false }
+ic-wire = { version = "0.7.18", default-features = false }
 ```
 
 In each canister member, use dependency tables and an explicit runtime feature
@@ -247,10 +246,9 @@ app = "example"
 role = "hub"
 
 [dependencies]
-candid.workspace = true
-ic-platform = { workspace = true, features = ["candid"] }
+ic-platform = { workspace = true, features = ["cdk"] }
 canic = { workspace = true, features = [] }
-ic-cdk.workspace = true
+ic-wire.workspace = true
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
@@ -261,7 +259,7 @@ canic = { workspace = true, features = [] }
 
 use ic_platform::Principal;
 use canic::{Error, prelude::*};
-use ic_cdk::api::msg_caller;
+use ic_platform::cdk::api::msg_caller;
 
 canic::start!();
 
@@ -269,12 +267,18 @@ async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
-#[canic_query(public)]
+const LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
+};
+
+#[canic_query(public,
+    wire(id = 0x4150_5000_0000_0001, request = LIMITS, response = LIMITS))]
 fn whoami_query() -> Result<Principal, Error> {
     Ok(msg_caller())
 }
 
-#[canic_update(public)]
+#[canic_update(public,
+    wire(id = 0x4150_5000_0000_0002, request = LIMITS, response = LIMITS))]
 fn whoami_update() -> Result<Principal, Error> {
     Ok(msg_caller())
 }
@@ -327,21 +331,19 @@ class, reconcile exact live results, reach terminal cycle conservation, and
 prove an immediate second plan/apply performs zero mutation actions. Separate
 runtime tests may then exercise application-specific parent/child behavior.
 
-## Candid Surface
+## Protocol artifacts
 
-Canic-managed canisters expose application methods plus Canic runtime,
-metadata, readiness, and management methods. When comparing an old non-Canic
-canister to a Canic-managed rewrite, compare the application surface separately
-from Canic-owned methods.
+Canic-managed canisters expose owned application and framework methods through
+native Wire. The builder produces `<role>.wire.json` and `<role>.wire.ts` from
+the compiled declarations and checks their method IDs, modes and budgets against
+the final Wasm. Callers use those generated clients or the declared Wire codec.
 
-Canic uses a dedicated declaration build to extract each `.did`, then omits the
-debug-only `get_candid_pointer` export from the final artifact. Local final
-managed artifacts embed public `candid:service` metadata for introspection;
-production `ICP_ENVIRONMENT=ic` artifacts skip that metadata. A focused
-`canic build <app> <role> --standalone-local --features <features>` build keeps
-Candid only in the adjacent `.did`, proves the runtime method exports match it,
-and omits both the pointer export and embedded metadata from the deployable
-Wasm.
+The adjacent `.did` describes lifecycle arguments and required external IC
+protocols. It does not describe owned Wire methods. The finalizer checks both
+codec inventories against exports and removes the debug-only
+`get_candid_pointer`. Local managed artifacts may embed `candid:service`;
+production IC and standalone-local artifacts keep external Candid in the sidecar.
+Neither sidecar substitutes for the native Wire schema or its release identity.
 
 ## Continue From Here
 

@@ -55,7 +55,7 @@ impl MgmtOps {
     ) -> Result<CanisterHistoryResponse, InternalError> {
         let response = management_call(MgmtInfra::canister_history(canister_pid)).await?;
         Ok(CanisterHistoryResponse {
-            canister_id: canister_pid,
+            canister_id: canister_pid.into(),
             history_candid: response.into_bytes(),
         })
     }
@@ -230,10 +230,7 @@ mod tests {
             .into(),
         )
         .unwrap();
-        let bytes = ic_platform::candid::contract::encode_one(response).unwrap();
-        let decoded: CanisterInspectionOutcome =
-            ic_platform::candid::decoder::decode_one(&bytes).unwrap();
-        let CanisterInspectionOutcome::ReserveRequired(evidence) = decoded else {
+        let CanisterInspectionOutcome::ReserveRequired(evidence) = response else {
             panic!("expected protected reserve evidence");
         };
         assert_eq!(

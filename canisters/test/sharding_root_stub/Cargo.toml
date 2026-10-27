@@ -4,17 +4,22 @@ edition = { workspace = true }
 version = { workspace = true }
 publish = false
 
-[package.metadata.cargo-machete]
-ignored = ["serde"]
-
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
 
 [dependencies]
 canic = { workspace = true, features = [] }
 canic-contracts.workspace = true
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-wire = { workspace = true }
 serde = { workspace = true }
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [lints]
 workspace = true

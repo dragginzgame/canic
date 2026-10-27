@@ -16,26 +16,19 @@ use crate::{
 use canic_contracts::{
     dto::{
         component_registry::ComponentLifecycleStatus,
-        error::Error,
         fleet_admission::{
             FleetAdmissionActivateRootRequest, FleetAdmissionActivateTargetRequest,
             FleetAdmissionOpenRootRequest, FleetAdmissionOpenTargetRequest,
             FleetAdmissionPrepareRootRequest, FleetAdmissionPrepareTargetRequest,
-            FleetAdmissionRootReceipt, FleetAdmissionTargetReceipt,
-            FleetAdmissionTargetTransitionPhase,
+            FleetAdmissionRootReceipt, FleetAdmissionTargetTransitionPhase,
         },
         page::PageRequest,
-        wire::projection::root_admission::{RemoteManagedCommand, RemoteManagedCommandResponse},
     },
     ids::{FleetAdmissionPolicy, FleetAdmissionProjection, ManagedCanisterBinding},
-    protocol,
 };
 use canic_core::{
     api::timer::TimerApi,
-    control_plane_support::{
-        error::InternalError,
-        ops::{config::ConfigOps, ic::call::CallOps},
-    },
+    control_plane_support::{error::InternalError, ops::config::ConfigOps},
     shared_support::fleet_admission_policy::{
         effective_fleet_admission_principals, fleet_admission_target_for_binding,
         materialize_fleet_admission_projection,
@@ -165,17 +158,14 @@ async fn advance_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
     }
     match step {
         RootAdmissionStep::Prepare { projection } => {
-            let receipt = call_target(
-                &projection,
-                RemoteManagedCommand::PrepareFleetAdmission(Box::new(
-                    FleetAdmissionPrepareTargetRequest {
-                        operation_id,
-                        expected_generation: current.request.expected_generation,
-                        expected_policy_digest: current.request.expected_policy_digest,
-                        successor: projection.clone(),
-                    },
-                )),
-                FleetAdmissionTargetTransitionPhase::Prepare,
+            let receipt = crate::ops::root_admission::transport::prepare(
+                target_principal(&projection.target),
+                FleetAdmissionPrepareTargetRequest {
+                    operation_id,
+                    expected_generation: current.request.expected_generation,
+                    expected_policy_digest: current.request.expected_policy_digest,
+                    successor: projection.clone(),
+                },
             )
             .await?;
             RootAdmissionOps::record_target_receipt(
@@ -188,17 +178,16 @@ async fn advance_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
             Ok(false)
         }
         RootAdmissionStep::Activate { projection } => {
-            let receipt = call_target(
-                &projection,
-                RemoteManagedCommand::ActivateFleetAdmission(FleetAdmissionActivateTargetRequest {
+            let receipt = crate::ops::root_admission::transport::activate(
+                target_principal(&projection.target),
+                FleetAdmissionActivateTargetRequest {
                     operation_id,
                     expected_generation: current.request.expected_generation,
                     expected_policy_digest: current.request.expected_policy_digest,
                     successor_generation: projection.generation,
                     successor_policy_digest: projection.policy_digest,
                     successor_projection_digest: projection.projection_digest,
-                }),
-                FleetAdmissionTargetTransitionPhase::Activate,
+                },
             )
             .await?;
             RootAdmissionOps::record_target_receipt(
@@ -211,15 +200,14 @@ async fn advance_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
             Ok(false)
         }
         RootAdmissionStep::Open { projection } => {
-            let receipt = call_target(
-                &projection,
-                RemoteManagedCommand::OpenFleetAdmission(FleetAdmissionOpenTargetRequest {
+            let receipt = crate::ops::root_admission::transport::open(
+                target_principal(&projection.target),
+                FleetAdmissionOpenTargetRequest {
                     operation_id,
                     generation: projection.generation,
                     policy_digest: projection.policy_digest,
                     projection_digest: projection.projection_digest,
-                }),
-                FleetAdmissionTargetTransitionPhase::Open,
+                },
             )
             .await?;
             RootAdmissionOps::record_target_receipt(
@@ -236,35 +224,6 @@ async fn advance_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
             Ok(true)
         }
         RootAdmissionStep::Waiting => unreachable!(),
-    }
-}
-
-async fn call_target(
-    projection: &FleetAdmissionProjection,
-    command: RemoteManagedCommand,
-    expected_phase: FleetAdmissionTargetTransitionPhase,
-) -> Result<FleetAdmissionTargetReceipt, InternalError> {
-    let target = target_principal(&projection.target);
-    let call = CallOps::bounded_wait(target, protocol::CANIC_COMMAND)
-        .with_arg(command)?
-        .execute()
-        .await?;
-    let result: Result<RemoteManagedCommandResponse, Error> = call.candid()?;
-    let response = result.map_err(InternalError::observed_public)?;
-    match (expected_phase, response) {
-        (
-            FleetAdmissionTargetTransitionPhase::Prepare,
-            RemoteManagedCommandResponse::PrepareFleetAdmission(receipt),
-        )
-        | (
-            FleetAdmissionTargetTransitionPhase::Activate,
-            RemoteManagedCommandResponse::ActivateFleetAdmission(receipt),
-        )
-        | (
-            FleetAdmissionTargetTransitionPhase::Open,
-            RemoteManagedCommandResponse::OpenFleetAdmission(receipt),
-        ) => Ok(receipt),
-        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -402,21 +361,28 @@ mod tests {
             projection_digest: [0xe5; 32],
             principals: (8_u16..264).map(principal).collect(),
         };
-        let command = RemoteManagedCommand::PrepareFleetAdmission(Box::new(
-            FleetAdmissionPrepareTargetRequest {
-                operation_id: [0xe6; 32],
-                expected_generation: u64::MAX - 1,
-                expected_policy_digest: [0xe7; 32],
-                successor,
-            },
-        ));
-
-        let bytes = ic_platform::candid::contract::encode_one(command)
-            .expect("production target command Candid");
-        eprintln!(
-            "maximum production target prepare command bytes: {}",
-            bytes.len()
-        );
+        let original = FleetAdmissionPrepareTargetRequest {
+            operation_id: [0xe6; 32],
+            expected_generation: u64::MAX - 1,
+            expected_policy_digest: [0xe7; 32],
+            successor,
+        };
+        let command =
+            canic_contracts::dto::admission_control::PrepareTargetRequest::from(original.clone());
+        let bytes = ic_wire::native::encode_request(
+            canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+            &command,
+            canic_contracts::protocol::admission_control::REQUEST_LIMITS,
+        )
+        .expect("production target native command");
+        let decoded: canic_contracts::dto::admission_control::PrepareTargetRequest =
+            ic_wire::native::decode_request(
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &bytes,
+                canic_contracts::protocol::admission_control::REQUEST_LIMITS,
+            )
+            .unwrap();
+        assert_eq!(FleetAdmissionPrepareTargetRequest::from(decoded), original);
         assert!(
             bytes.len() <= canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
             "maximum production target command must fit the frozen 16 KiB envelope"

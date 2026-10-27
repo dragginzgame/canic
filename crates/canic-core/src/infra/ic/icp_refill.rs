@@ -16,24 +16,12 @@ use ic_platform::{
 };
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use std::fmt;
 use thiserror::Error as ThisError;
 
 const CMC_TOPUP_MEMO_BYTES: &[u8] = b"TPUP\0\0\0\0";
 const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
 
-///
-/// Icrc1Account
-///
-/// Raw ICRC-1 account payload used only by the ICP ledger adapter.
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct Icrc1Account {
-    pub owner: Principal,
-    pub subaccount: Option<[u8; 32]>,
-}
+pub use ic_platform::icrc_ledger_types::{Account, TransferError};
 
 ///
 /// TransferArg
@@ -45,7 +33,7 @@ pub struct Icrc1Account {
 #[candid_path("ic_platform::candid::contract")]
 pub struct TransferArg {
     pub from_subaccount: Option<[u8; 32]>,
-    pub to: Icrc1Account,
+    pub to: Account,
     pub fee: Option<Nat>,
     pub created_at_time: Option<u64>,
     pub memo: Option<Memo>,
@@ -66,59 +54,6 @@ pub struct Memo(pub ByteBuf);
 impl From<Vec<u8>> for Memo {
     fn from(bytes: Vec<u8>) -> Self {
         Self(ByteBuf::from(bytes))
-    }
-}
-
-///
-/// TransferError
-///
-/// ICRC-1 `icrc1_transfer` error payload.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum TransferError {
-    BadFee { expected_fee: Nat },
-    BadBurn { min_burn_amount: Nat },
-    InsufficientFunds { balance: Nat },
-    TooOld,
-    CreatedInFuture { ledger_time: u64 },
-    TemporarilyUnavailable,
-    Duplicate { duplicate_of: Nat },
-    GenericError { error_code: Nat, message: String },
-}
-
-impl fmt::Display for TransferError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::BadFee { expected_fee } => write!(f, "transfer fee should be {expected_fee}"),
-            Self::BadBurn { min_burn_amount } => {
-                write!(
-                    f,
-                    "the minimum number of tokens to be burned is {min_burn_amount}"
-                )
-            }
-            Self::InsufficientFunds { balance } => {
-                write!(
-                    f,
-                    "the debit account doesn't have enough funds to complete the transaction, current balance: {balance}"
-                )
-            }
-            Self::TooOld => write!(f, "transaction's created_at_time is too far in the past"),
-            Self::CreatedInFuture { ledger_time } => write!(
-                f,
-                "transaction's created_at_time is in future, current ledger time is {ledger_time}"
-            ),
-            Self::TemporarilyUnavailable => write!(f, "the ledger is temporarily unavailable"),
-            Self::Duplicate { duplicate_of } => write!(
-                f,
-                "transaction is a duplicate of another transaction in block {duplicate_of}"
-            ),
-            Self::GenericError {
-                error_code,
-                message,
-            } => write!(f, "{error_code} {message}"),
-        }
     }
 }
 
@@ -279,7 +214,7 @@ impl IcpRefillInfra {
     ) -> TransferArg {
         TransferArg {
             from_subaccount,
-            to: Icrc1Account {
+            to: Account {
                 owner: to_owner,
                 subaccount: to_subaccount,
             },
@@ -336,7 +271,7 @@ impl IcpRefillInfra {
     /// Query the exact source account balance on the selected ICP ledger.
     pub async fn icrc1_balance_of(
         ledger_id: Principal,
-        account: Icrc1Account,
+        account: Account,
     ) -> Result<Nat, IcInfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_balance_of")
             .with_arg(account)?

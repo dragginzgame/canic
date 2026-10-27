@@ -20,17 +20,21 @@ impl IcpCli {
         canister: &str,
         method: &str,
         args_file: &Path,
-        candid_path: &Path,
+        candid_path: Option<&Path>,
     ) -> std::process::Command {
         self.record_remote_call();
-        self.canister_binary_args_command(
+        let mut command = self.canister_binary_args_command(
             canister,
             method,
             args_file,
             Some("json"),
-            Some(candid_path),
+            candid_path,
             CanisterCallMode::Query,
-        )
+        );
+        if candid_path.is_none() {
+            command.args(["--output", "hex"]);
+        }
+        command
     }
 
     /// Call one canister method with raw binary Candid arguments from a file.
@@ -368,7 +372,7 @@ mod binary_args_tests {
         let icp = IcpCli::new("icp", Some("local".to_string()));
         let command = icp.canister_binary_args_command(
             "root",
-            "canic_root_status",
+            "canic_root_funding",
             Path::new("/state/args.bin"),
             Some("json"),
             None,
@@ -377,7 +381,7 @@ mod binary_args_tests {
 
         assert_eq!(
             command_display(&command),
-            "icp canister call root canic_root_status --args-file /state/args.bin --args-format bin --query --json -e local"
+            "icp canister call root canic_root_funding --args-file /state/args.bin --args-format bin --query --json -e local"
         );
     }
 }

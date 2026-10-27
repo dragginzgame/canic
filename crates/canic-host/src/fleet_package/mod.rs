@@ -92,7 +92,9 @@ pub fn materialize(
             "metadata": { "canic": { "app": spec.app, "role": spec.role } },
         },
         "workspace": { "resolver": "3" },
-        "lib": { "name": spec.crate_name, "crate-type": ["cdylib"] },
+        "lib": { "name": spec.crate_name, "crate-type": ["cdylib", "rlib"] },
+        "features": { "wire-schema": ["canic/wire-schema"] },
+        "example": [{ "name": "wire_schema", "required-features": ["wire-schema"] }],
         "dependencies": {
             "canic": { "path": canic_root, "default-features": false, "features": spec.features },
             "ic-platform": { "version": format!("={}", dependencies.ic_platform_version), "default-features": false, "features": ["cdk"] },
@@ -113,6 +115,11 @@ pub fn materialize(
     fs::create_dir_all(directory.join("src"))?;
     write_if_changed(manifest, source.as_bytes())?;
     write_if_changed(&directory.join("src/lib.rs"), spec.entrypoint.as_bytes())?;
+    fs::create_dir_all(directory.join("examples/wire_schema"))?;
+    write_if_changed(
+        &directory.join("examples/wire_schema/main.rs"),
+        format!("use {} as _;\nfn main() -> Result<(), Box<dyn std::error::Error>> {{\n    canic::endpoint::schema::producer::run()\n}}\n", spec.crate_name).as_bytes(),
+    )?;
     if let Some(script) = spec.build_script {
         write_if_changed(&directory.join("build.rs"), script.as_bytes())?;
     }

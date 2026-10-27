@@ -10,11 +10,13 @@ use crate::{
     domain::policy::pure as policy,
     log::{Level, Topic},
     ops::{config::ConfigOps, ic::IcOps, runtime::log::LogOps},
-    workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
+    workflow::runtime::timer::{
+        TimerError, cancel_owned_once, ensure_owned_once, owned_once_identity, require_active,
+        with_owned_once,
+    },
 };
 use ic_timers::{
-    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity,
-    TimerSchedule, TimerStart, register_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
 };
 use std::cell::RefCell;
 
@@ -34,16 +36,11 @@ impl LogRetentionWorkflow {
     }
 
     pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
-        with_owned_once(&LOG_RETENTION_TIMER, |registration| {
-            registration.identity().clone()
-        })
+        owned_once_identity(&LOG_RETENTION_TIMER)
     }
 
     pub(crate) fn cancel_timer() -> Result<(), TimerError> {
-        if let Some(result) = with_owned_once(&LOG_RETENTION_TIMER, OnceRegistration::cancel)? {
-            result?;
-        }
-        Ok(())
+        cancel_owned_once(&LOG_RETENTION_TIMER)
     }
 
     /// Reconstruct the sole live age deadline from retained log state.
@@ -89,15 +86,11 @@ impl LogRetentionWorkflow {
     }
 
     fn ensure_declared() -> Result<(), TimerError> {
-        if with_owned_once(&LOG_RETENTION_TIMER, |_| ())?.is_some() {
-            return Ok(());
-        }
-        let registration = register_once(
-            Self::timer_identity()?,
-            TimerStart::Retained { initial: None },
-            |_context: OnceContext| async { Self::run_due_batch() },
-        )?;
-        retain_owned_once(&LOG_RETENTION_TIMER, registration)
+        ensure_owned_once(
+            &LOG_RETENTION_TIMER,
+            Self::timer_identity,
+            |_context| async { Self::run_due_batch() },
+        )
     }
 
     pub(crate) fn run_due_batch() -> OnceRunResult {

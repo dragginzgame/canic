@@ -105,7 +105,7 @@ standalone-local lifecycle supports local development and testing.
 
 | Capability | What it does |
 | --- | --- |
-| [Runtime](docs/features/runtime/README.md) | Startup, persistent memory, timers, typed calls, and monitoring |
+| [Runtime](docs/features/runtime/README.md) | Startup, persistent memory, native timer composition, typed calls, and monitoring |
 | [Authentication](docs/features/authentication/README.md) | Protect methods and keep caller and user identities separate |
 | [Fleet orchestration](docs/features/fleet-orchestration/README.md) | Plan, review, deploy, retry, and recover multi-canister applications |
 | [Scaling and placement](docs/features/scaling-and-placement/README.md) | Control how applications grow and where canisters may run |

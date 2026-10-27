@@ -27,8 +27,11 @@ pub fn memory() -> canic::memory::MemoryBootstrap {
 }
 
 /// One passive application row exposed by the disposable fixture.
-#[derive(ic_platform::candid::contract::CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct UserRow {
     pub id: u64,
     pub value: u64,

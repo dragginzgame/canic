@@ -1,107 +1,45 @@
-//! Module: canister_protocol::inspection
-//!
-//! Responsibility: reject an observed Root reserve shortfall before a protected inspection.
-//! Does not own: funding authority, retry, target discovery, or balance caching.
-//! Boundary: query through the caller's exact Candid binding; actual call admission remains on IC.
-
+//! Require fresh, caller-bound reserve evidence before a protected inspection.
+//! The query is indicative; actual outbound admission remains owned by IC.
 use crate::{
-    canister_protocol::{CanisterProtocolError, contract::parse_text, query_with_candid},
-    icp::IcpCli,
+    canister_protocol::CanisterProtocolError,
+    icp::{IcpCli, IcpJsonResponseError},
 };
 use canic_contracts::{
     dto::{
-        canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
-        wire::projection::inspection_reserve::{
-            InspectionReserveRequest, InspectionReserveResponse,
-        },
+        canister::CanisterInspectionReserveResponse, error::Error,
+        inspection_reserve::InspectionReserve,
     },
-    protocol,
+    protocol::inspection_reserve as protocol,
 };
-use ic_platform::candid::contract::types::FuncMode;
-use ic_platform::{
-    candid::contract::{CandidType, types::TypeInner},
-    principal::ExternalPrincipal as Principal,
-};
-use std::{fs, path::Path};
+use ic_platform::principal::ExternalPrincipal as Principal;
 
-/// Query afresh when the exact bound contract exposes the reserve selector.
-///
-/// Retained source evidence may expose only the protected inspection itself. Its
-/// absence of a quote is not evidence of sufficient reserve. A declared query's
-/// failure always propagates; it never permits bypassing preflight.
-
+/// Query the maintained Root endpoint; unavailable evidence never permits a paid inspection.
 pub fn preflight_inspection(
     icp: &IcpCli,
-    candid_path: &Path,
     root: Principal,
     target: Principal,
 ) -> Result<(), CanisterProtocolError> {
-    let contract = fs::read_to_string(candid_path).map_err(|error| {
-        CanisterProtocolError::InspectionContract {
-            caller: root,
-            detail: error.to_string(),
-        }
+    let target_native: ic_platform::Principal = target.into();
+    let evidence: Result<InspectionReserve, Error> = icp
+        .canister_query_wire(
+            &root.to_text(),
+            protocol::METHOD,
+            protocol::METHOD_ID,
+            &target_native,
+            protocol::REQUEST_LIMITS,
+            protocol::RESPONSE_LIMITS,
+        )
+        .map_err(|source| CanisterProtocolError::WireQuery {
+            canister: root,
+            method: protocol::METHOD,
+            source,
+        })?;
+    let evidence = evidence.map_err(|error| CanisterProtocolError::Response {
+        canister: root,
+        method: protocol::METHOD,
+        source: IcpJsonResponseError::Rejected(error),
     })?;
-    if !declares_inspection_reserve(&contract).map_err(|detail| {
-        CanisterProtocolError::InspectionContract {
-            caller: root,
-            detail,
-        }
-    })? {
-        return Ok(());
-    }
-    let InspectionReserveResponse::InspectionReserve(evidence) = query_with_candid(
-        icp,
-        candid_path,
-        root,
-        protocol::CANIC_OBSERVABILITY,
-        &InspectionReserveRequest::InspectionReserve(CanisterInspectionRequest {
-            canister_id: target,
-        }),
-    )?;
-    validate_inspection_reserve(root, target, evidence)
-}
-
-fn declares_inspection_reserve(contract: &str) -> Result<bool, String> {
-    let (environment, actor) = parse_text(contract).map_err(|error| error.to_string())?;
-    let actor = actor.ok_or_else(|| "missing service declaration".to_string())?;
-    let service = environment
-        .as_service(&actor)
-        .map_err(|error| error.to_string())?;
-    let Some((_, method)) = service
-        .iter()
-        .find(|(name, _)| name == protocol::CANIC_OBSERVABILITY)
-    else {
-        return Ok(false);
-    };
-    let function = environment
-        .as_func(method)
-        .map_err(|error| error.to_string())?;
-    let [argument] = function.args.as_slice() else {
-        return Err("observability must accept one request variant".to_string());
-    };
-    let argument = environment
-        .trace_type(argument)
-        .map_err(|error| error.to_string())?;
-    let TypeInner::Variant(fields) = argument.as_ref() else {
-        return Err("observability must accept one request variant".to_string());
-    };
-    let Some(field) = fields.iter().find(|field| {
-        field.id.get_id() == ic_platform::candid::contract::idl_hash("InspectionReserve")
-    }) else {
-        return Ok(false);
-    };
-    if function.modes != [FuncMode::Query] {
-        return Err("inspection reserve must be a query".to_string());
-    }
-    ic_platform::candid::contract::types::subtype::equal(
-        &mut std::collections::HashSet::default(),
-        &environment,
-        &field.ty,
-        &CanisterInspectionRequest::ty(),
-    )
-    .map_err(|error| format!("inspection reserve target contract: {error}"))?;
-    Ok(true)
+    validate_inspection_reserve(root, target, evidence.into())
 }
 
 /// Bind reserve evidence to the exact Root and target before any paid inspection.
@@ -127,78 +65,51 @@ pub fn validate_inspection_reserve(
     Ok(())
 }
 
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
+/// Invoke one exact native observation; callers retain ownership of reserve preflight.
+pub fn inspect_outcome(
+    icp: &IcpCli,
+    root: Principal,
+    target: Principal,
+) -> Result<canic_contracts::dto::canister::CanisterInspectionOutcome, CanisterProtocolError> {
+    use canic_contracts::{dto::inspection, protocol::inspection as wire};
+    let response: inspection::Response = super::call_wire(
+        icp,
+        root,
+        wire::METHOD,
+        wire::METHOD_ID,
+        &inspection::Request {
+            canister_id: target.into(),
+        },
+        wire::REQUEST_LIMITS,
+        wire::RESPONSE_LIMITS,
+    )?;
+    response
+        .try_into()
+        .map_err(|source| CanisterProtocolError::WireUpdate {
+            canister: root,
+            method: wire::METHOD,
+            source: crate::icp::IcpWireQueryError::Wire(source),
+        })
+}
+
+/// Preserve reserve refusals as exact Root/target-bound errors after lossless decoding.
+pub fn inspect_status(
+    icp: &IcpCli,
+    root: Principal,
+    target: Principal,
+) -> Result<canic_contracts::dto::canister::CanisterStatusResponse, CanisterProtocolError> {
+    use canic_contracts::dto::canister::CanisterInspectionOutcome;
+    match inspect_outcome(icp, root, target)? {
+        CanisterInspectionOutcome::Status(status) => Ok(*status),
+        CanisterInspectionOutcome::ReserveRequired(evidence) => Err(
+            CanisterProtocolError::inspection_reserve(root, target, evidence),
+        ),
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    #[ignore = "opt-in local parsing measurement using an exact retained Candid artifact"]
-    fn retained_contract_parsing_measurement() {
-        let path = std::env::var_os("CANIC_BENCH_INSPECTION_CANDID")
-            .expect("set CANIC_BENCH_INSPECTION_CANDID to a retained Root Candid file");
-        let source = fs::read_to_string(&path).unwrap();
-        let expected = declares_inspection_reserve(&source).unwrap();
-        let mut samples = Vec::new();
-        for _ in 0..5 {
-            let started = std::time::Instant::now();
-            for _ in 0..33 {
-                let source = fs::read_to_string(&path).unwrap();
-                assert_eq!(
-                    declares_inspection_reserve(std::hint::black_box(&source)).unwrap(),
-                    expected
-                );
-            }
-            samples.push(started.elapsed().as_micros());
-        }
-        eprintln!(
-            "[CANIC-INSPECTION-PARSE] {}",
-            serde_json::json!({
-                "source_sha256": canic_core::cdk::utils::hash::sha256_hex(source.as_bytes()),
-                "source_bytes": source.len(),
-                "inspections_per_sample": 33,
-                "uncached_micros": samples,
-            })
-        );
-    }
-
-    #[test]
-    fn inspection_preflight_uses_the_bound_selector_and_resolves_type_aliases() {
-        let contract = r"
-            type Target = principal;
-            type Request = record { canister_id : Target };
-            type Observation = variant { InspectionReserve : Request; CycleBalance };
-            service : { canic_observability : (Observation) -> () query }
-        ";
-        assert_eq!(declares_inspection_reserve(contract), Ok(true));
-        assert_eq!(
-            declares_inspection_reserve(
-                "service : { canic_observability : (variant { CycleBalance }) -> () query }"
-            ),
-            Ok(false)
-        );
-        // A name in unrelated declarations or explanatory text grants no capability.
-        assert_eq!(
-            declares_inspection_reserve(
-                "type InspectionReserve = nat; service : { status : () -> () query }"
-            ),
-            Ok(false)
-        );
-        for invalid in [
-            "invalid Candid".to_string(),
-            "type Request = principal;".to_string(),
-            contract.replace(" query", ""),
-            contract.replace("Target = principal", "Target = text"),
-            contract.replace("(Observation)", "(principal)"),
-            contract.replace("(Observation)", "()"),
-        ] {
-            assert!(declares_inspection_reserve(&invalid).is_err());
-        }
-    }
-
     #[test]
     fn inspection_preflight_binds_authority_and_rejects_invalid_or_insufficient_samples() {
         let root = Principal::from_slice(&[1]);

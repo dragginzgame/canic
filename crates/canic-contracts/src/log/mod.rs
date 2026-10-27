@@ -1,12 +1,12 @@
 //! Shared log severity value; logging and rendering remain runtime-owned.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
-#[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, CandidType, Deserialize, Serialize,
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
 )]
-#[candid_path("ic_platform::candid::contract")]
 pub enum Level {
     Debug,
     Info,

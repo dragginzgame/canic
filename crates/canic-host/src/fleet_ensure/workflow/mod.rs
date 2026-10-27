@@ -17,6 +17,8 @@ mod funding_tests;
 mod independent_effects;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;
+#[cfg(test)]
+mod plan_authority_tests;
 pub mod readiness;
 mod reinstall;
 pub mod release;
@@ -27,19 +29,20 @@ use crate::fleet_ensure::{
     dto::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState},
     inventory::project_current_fleet_inventory,
     model::{
-        ActualCycleConservation, CanisterDisposition, CurrentFleetProtocolAction,
-        CycleConservation, EffectRecord, EffectState, EnsureAction, EstateFundingDomainPlan,
-        EstateFundingRequiredRecord, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion,
-        FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureReport,
-        FleetEnsureStateRecord, FleetObservation, RootManagementObservation,
-        create_balance_is_terminal,
+        ActualCycleConservation, CanisterDisposition, CurrentFleetProtocolAction, EffectRecord,
+        EffectState, EnsureAction, EstateFundingDomainPlan, EstateFundingRequiredRecord,
+        FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion, FleetEnsureJournalRecord,
+        FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureReport, FleetEnsureStateRecord,
+        FleetObservation, RootManagementObservation, create_balance_is_terminal,
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
         continuation::verify_release_transition,
         effect_evidence::{retain_cycles, retain_observation},
         effect_preparation::prepare_effect,
-        lock_operation, read_root_start_authority, read_state, reserve_fixture_publication_attempt,
+        lock_operation,
+        plan_authority::same_plan_authority,
+        read_root_start_authority, read_state, reserve_fixture_publication_attempt,
         resolve_desired_artifacts, retain_configured_principal_bindings, write_journal, write_plan,
         write_state,
     },
@@ -3143,7 +3146,7 @@ where
         },
         &targets,
     )?;
-    if normalized_plan(plan) != normalized_plan(&current)
+    if !same_plan_authority(plan, &current)
         || management.roots.iter().any(|(name, observed)| {
             targets.contains(name)
                 && observed.live.status
@@ -3220,7 +3223,6 @@ where
         estate_funding_domains: BTreeMap::new(),
         ledger_fee_cycles: 0,
         operator_cycles: management.operator_cycles,
-        protocol_ready: BTreeMap::new(),
     })
 }
 
@@ -3247,7 +3249,7 @@ fn compatible_root_start_prerequisite(
                     .saturating_sub(current.observed_cycles)
                     <= maximum_movement
             })
-        && normalized_plan(retained) == normalized_plan(current)
+        && same_plan_authority(retained, current)
 }
 
 fn attach_terminal_inventory_cycles<P>(
@@ -3344,7 +3346,7 @@ fn compatible_after_bounded_observation(
     if !retained_funding_remains_sufficient(retained, desired, observation) {
         return false;
     }
-    normalized_plan(retained) == normalized_plan(current)
+    same_plan_authority(retained, current)
 }
 
 fn retained_funding_remains_sufficient(
@@ -3405,58 +3407,6 @@ fn retained_funding_remains_sufficient(
                 .checked_add(*amount)
                 .is_some_and(|funded| funded >= minimum)
         })
-}
-
-fn normalized_plan(plan: &FleetEnsurePlan) -> FleetEnsurePlan {
-    let mut normalized = plan.clone();
-    normalized.plan_sha256.clear();
-    normalized.reviewed_desired = None;
-    if let Some(review) = &mut normalized.recovery_review {
-        // These estimates move with bounded observations; they grant no funding authority.
-        review.continuation_reserve_cycles = 0;
-        for funding in &mut review.known_pool_funding {
-            funding.amount_cycles = 0;
-            funding.funding_deficit_cycles = 0;
-        }
-    }
-    normalized.conservation = CycleConservation {
-        estate_funding_domains: plan
-            .conservation
-            .estate_funding_domains
-            .iter()
-            .cloned()
-            .map(|mut domain| {
-                domain.available_cycles = None;
-                domain.maximum_funding_cycles = 0;
-                domain.root_principal = None;
-                domain.shortfall_cycles = 0;
-                domain
-            })
-            .collect(),
-        expected_post_operation_cycles: 0,
-        maximum_execution_burn_cycles: 0,
-        maximum_new_funding_cycles: 0,
-        maximum_operator_debit_cycles: 0,
-        maximum_unavoidable_fee_cycles: 0,
-        observed_controlled_cycles: 0,
-        retained_in_reused_canisters_cycles: 0,
-        scheduled_transfer_cycles: 0,
-    };
-    for canister in &mut normalized.canisters {
-        canister.observed_cycles = 0;
-        for action in &mut canister.actions {
-            if let EnsureAction::Fund {
-                amount,
-                funding_deficit_cycles,
-                ..
-            } = action
-            {
-                *amount = 0;
-                *funding_deficit_cycles = 0;
-            }
-        }
-    }
-    normalized
 }
 
 fn attach_terminal_cycles<E>(
@@ -4818,7 +4768,7 @@ pub(super) const fn action_order(action: &EnsureAction) -> u8 {
         | EnsureAction::DeleteSnapshot { .. } => 4,
         EnsureAction::Uninstall { .. } | EnsureAction::Install { .. } => 5,
         EnsureAction::Start { .. } => 6,
-        EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 7,
+        EnsureAction::FleetProtocol { .. } => 7,
         EnsureAction::Transfer { .. } => 8,
         EnsureAction::Stop { .. } => 9,
         EnsureAction::Delete { .. } => 10,
@@ -4828,6 +4778,7 @@ pub(super) const fn action_order(action: &EnsureAction) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fleet_ensure::model::CycleConservation;
 
     #[test]
     fn store_binding_requires_exact_retained_root_or_reviewed_root_install() {
@@ -4952,7 +4903,7 @@ mod tests {
                 release_identity: "0.110.test".to_string(),
                 role: canic_contracts::ids::CanisterRole::from("managed_component"),
                 capabilities: BTreeSet::new(),
-                candid_sha256: [1; 32],
+                wire_schema_sha256: [1; 32],
                 protocol_profile_digest:
                     canic_core::role_contract::ProtocolProfileDigest::from_bytes([2; 32]),
             }),
@@ -5082,7 +5033,6 @@ mod tests {
             )]),
             ledger_fee_cycles: 0,
             operator_cycles: 0,
-            protocol_ready: BTreeMap::new(),
         }
     }
 
@@ -5411,8 +5361,8 @@ mod tests {
                     },
                 },
             ),
-            candid: "store.did".to_string(),
-            candid_sha256: "11".repeat(32),
+            wire_schema: "store.wire.json".to_string(),
+            wire_schema_sha256: "11".repeat(32),
             maximum_execution_burn_cycles: 0,
             name: "publish-store-chunk".to_string(),
             principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
@@ -5565,8 +5515,8 @@ mod tests {
                     },
                 },
             ),
-            candid: "store.did".to_string(),
-            candid_sha256: "11".repeat(32),
+            wire_schema: "store.wire.json".to_string(),
+            wire_schema_sha256: "11".repeat(32),
             maximum_execution_burn_cycles: 1,
             name: "prepare".to_string(),
             principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
@@ -5953,7 +5903,6 @@ mod tests {
             estate_funding_domains: BTreeMap::new(),
             ledger_fee_cycles: 0,
             operator_cycles: 0,
-            protocol_ready: BTreeMap::new(),
         }
     }
 

@@ -7,12 +7,9 @@
 #[cfg(test)]
 mod tests;
 
-use super::{
-    CurrentProtocolError, ResolvedProtocolAction, RootCommandFragment, RootCommandResponseFragment,
-    observation, unavailable_observation,
-};
+use super::{CurrentProtocolError, ResolvedProtocolAction, observation, unavailable_observation};
 use crate::{
-    canister_protocol::{call_with_candid, query_with_candid},
+    canister_protocol::{call_wire, query_wire_cli},
     fleet_ensure::{model::CurrentFleetProtocolAction, ops::EffectObservation},
     icp::IcpCli,
     release_set::{
@@ -24,7 +21,6 @@ use canic_contracts::{
     dto::{
         fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus, FixtureStoreError},
         root_store::{RootStoreBootstrapRequest, RootStoreFixture, RootStoreFixturePrepareRequest},
-        template::{StoreCatalogRequest, StoreCatalogResponse},
     },
     protocol,
 };
@@ -93,12 +89,14 @@ pub(super) fn observe_preparation(
     resolved: &ResolvedProtocolAction<'_>,
     source: &RootStoreFixture,
 ) -> Result<EffectObservation, CurrentProtocolError> {
-    let status: Result<FixtureSourceStatus, FixtureStoreError> = query_with_candid(
+    let status: Result<FixtureSourceStatus, FixtureStoreError> = query_wire_cli(
         icp,
-        &resolved.candid_path,
         resolved.target,
         protocol::CANIC_ROOT_FIXTURE_STATUS,
+        protocol::root_store_reporting::fixture::METHOD_ID,
         &source.content_id,
+        protocol::root_store_reporting::REQUEST_LIMITS,
+        protocol::root_store_reporting::RESPONSE_LIMITS,
     )?;
     match status {
         Ok(status) => {
@@ -116,16 +114,15 @@ pub(super) fn observe_upload(
     expected: &FixtureSourceStatus,
     source_bytes: u64,
 ) -> Result<EffectObservation, CurrentProtocolError> {
-    let response: StoreCatalogResponse = query_with_candid(
+    let status: Result<FixtureSourceStatus, FixtureStoreError> = query_wire_cli(
         icp,
-        &resolved.candid_path,
         resolved.target,
-        protocol::CANIC_WASM_STORE_CATALOG,
-        &StoreCatalogRequest::Fixture(expected.content_id),
+        protocol::store_catalog::fixture::METHOD,
+        protocol::store_catalog::fixture::METHOD_ID,
+        &expected.content_id,
+        protocol::store_catalog::REQUEST_LIMITS,
+        protocol::store_catalog::RESPONSE_LIMITS,
     )?;
-    let StoreCatalogResponse::Fixture(status) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
     match status {
         Ok(status) => observation(upload_applied(expected, source_bytes, &status)?, &status),
         Err(FixtureStoreError::NotFound) => Ok(unavailable_observation()),
@@ -142,16 +139,15 @@ pub(super) fn prepare(
     if request.role != source.role {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
-    let response: RootCommandResponseFragment = call_with_candid(
+    let status: Result<FixtureSourceStatus, FixtureStoreError> = call_wire(
         icp,
-        &resolved.candid_path,
         resolved.target,
-        protocol::CANIC_ROOT_COMMAND,
-        &RootCommandFragment::PrepareStoreFixture(request.clone()),
+        protocol::root_store_control::prepare::METHOD,
+        protocol::root_store_control::prepare::METHOD_ID,
+        request,
+        protocol::root_store_control::REQUEST_LIMITS,
+        protocol::root_store_control::RESPONSE_LIMITS,
     )?;
-    let RootCommandResponseFragment::PrepareStoreFixture(status) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
     let status = status.map_err(CurrentProtocolError::Fixture)?;
     verify_source_status(source, &status)?;
     Ok(source.content_id.to_vec())
@@ -164,12 +160,14 @@ pub(super) fn upload(
     expected: &FixtureSourceStatus,
     source_bytes: u64,
 ) -> Result<Vec<u8>, CurrentProtocolError> {
-    let status: Result<FixtureSourceStatus, FixtureStoreError> = call_with_candid(
+    let status: Result<FixtureSourceStatus, FixtureStoreError> = call_wire(
         icp,
-        &resolved.candid_path,
         resolved.target,
         protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
-        request,
+        protocol::fixture_bytes::upload::METHOD_ID,
+        &canic_contracts::dto::fixture_bytes::UploadRequest::from(request.clone()),
+        protocol::fixture_bytes::CHUNK_LIMITS,
+        protocol::fixture_bytes::UPLOAD_RESPONSE_LIMITS,
     )?;
     if !upload_applied(
         expected,

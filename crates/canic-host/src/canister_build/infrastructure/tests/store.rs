@@ -137,24 +137,3 @@ fn wasm_store_declaration_build_uses_the_canonical_candid_environment() {
         ))
     );
 }
-
-#[test]
-fn canonical_store_status_matches_current_rust_contract() {
-    use canic_contracts::dto::template::WasmStoreStatusResponse;
-    use ic_platform::candid::contract::types::internal::TypeContainer;
-    use ic_platform::candid_parser::CandidSource;
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../canic/candid/wasm_store.did");
-    let source = fs::read_to_string(path).unwrap();
-    let (mut env, _) = CandidSource::Text(&source).load().unwrap();
-    let canonical = env.find_type("WasmStoreStatusResponse").unwrap().clone();
-    let mut rust = TypeContainer::new();
-    let ty = rust.add::<WasmStoreStatusResponse>();
-    let ty = env.merge_type(rust.env, ty);
-    ic_platform::candid::contract::types::subtype::equal(
-        &mut std::collections::HashSet::default(),
-        &env,
-        &canonical,
-        &ty,
-    )
-    .expect("shipped Store status Candid equals the complete runtime response");
-}

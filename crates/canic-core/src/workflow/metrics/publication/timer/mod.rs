@@ -10,12 +10,14 @@ use crate::{
     ops::{ic::IcOps, runtime::public_metrics::PublicMetricsOps},
     workflow::{
         metrics::publication::PublicMetricsWorkflow,
-        runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
+        runtime::timer::{
+            TimerError, cancel_owned_once, ensure_owned_once, owned_once_identity, require_active,
+            with_owned_once,
+        },
     },
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
-    TimerStart, register_once,
 };
 use std::cell::RefCell;
 
@@ -32,16 +34,11 @@ impl PublicSamplingTimer {
     }
 
     pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
-        with_owned_once(&SAMPLING_TIMER, |registration| {
-            registration.identity().clone()
-        })
+        owned_once_identity(&SAMPLING_TIMER)
     }
 
     pub(crate) fn cancel_timer() -> Result<(), TimerError> {
-        if let Some(result) = with_owned_once(&SAMPLING_TIMER, OnceRegistration::cancel)? {
-            result?;
-        }
-        Ok(())
+        cancel_owned_once(&SAMPLING_TIMER)
     }
 
     /// Start or reconcile one retained claim only when publication is selected.
@@ -51,15 +48,9 @@ impl PublicSamplingTimer {
             return Ok(());
         }
         require_active()?;
-        if with_owned_once(&SAMPLING_TIMER, |_| ())?.is_none() {
-            let registration = register_once(
-                Self::timer_identity()?,
-                TimerStart::Retained { initial: None },
-                |_context| async { Self::run() },
-            )
-            .map_err(TimerError::from)?;
-            retain_owned_once(&SAMPLING_TIMER, registration)?;
-        }
+        ensure_owned_once(&SAMPLING_TIMER, Self::timer_identity, |_context| async {
+            Self::run()
+        })?;
         let deadline = next_deadline(IcOps::now_nanos());
         with_owned_once(&SAMPLING_TIMER, |registration| {
             registration.reconcile_schedule(deadline.map(TimerSchedule::At))

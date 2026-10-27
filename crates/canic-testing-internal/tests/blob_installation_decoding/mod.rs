@@ -1,16 +1,15 @@
 //! Exact Blob installation decoding for dedicated and nested application inputs.
 //! Blob owns Wire limits; the embedding application owns its outer envelope.
 
-use canic::endpoint::ArgumentDecodeError;
 use canic_blob_service::__private::ic_blob_storage_contracts::wire;
 use canic_blob_service::dto::configuration::{
     ServiceBillingInput, ServiceConfigurationInput, ServiceFundingInput, ServiceInstallationInput,
     ServiceReadInput, ServiceResourceInput,
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use canic_contracts::protocol::initialization::encode;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
-#[derive(CandidType, Debug, serde::Deserialize, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, serde::Deserialize, PartialEq, serde::Serialize)]
 struct EmbeddedInput {
     initial_count: u64,
     blob: Vec<u8>,
@@ -23,8 +22,7 @@ struct UnmodeledInstallationInput {
     unmodeled: Principal,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct UnmodeledEmbeddedInput {
     initial_count: u64,
     blob: Vec<u8>,
@@ -146,18 +144,19 @@ fn dedicated_configuration_is_exact_and_bounded_wire() {
 
 #[test]
 fn embedded_configuration_bounds_its_own_envelope_and_nested_blob_bytes() {
-    let envelope_limits = canic::endpoint::ArgumentLimits {
-        max_bytes: 16_384,
-        skipping_quota: 0,
-        ..canic_blob_service::lifecycle::REQUEST_LIMITS
+    let envelope_limits = ic_wire::Limits {
+        bytes: 16_384,
+        allocation: 262_144,
+        nodes: 16_384,
+        depth: 32,
     };
     let blob = installation();
     let input = EmbeddedInput {
         initial_count: 41,
         blob: wire::encode_request("blob_install", &blob).unwrap(),
     };
-    let current = ic_platform::candid::contract::encode_one(&input).unwrap();
-    let (decoded,): (EmbeddedInput,) = envelope_limits.decode(&current).unwrap();
+    let current = encode(&input).unwrap();
+    let (decoded,): (EmbeddedInput,) = ic_wire::native::decode(&current, envelope_limits).unwrap();
     assert_eq!(decoded, input);
     assert_eq!(
         wire::decode_request::<ServiceInstallationInput>(
@@ -167,25 +166,25 @@ fn embedded_configuration_bounds_its_own_envelope_and_nested_blob_bytes() {
         ),
         Ok(blob.clone())
     );
-    let field = ic_platform::candid::contract::encode_one(UnmodeledEmbeddedInput {
+    let field = encode(UnmodeledEmbeddedInput {
         initial_count: input.initial_count,
         blob: input.blob.clone(),
         unmodeled: Principal::anonymous(),
     })
     .unwrap();
-    let extra = ic_platform::candid::contract::encode_args((&input, "small")).unwrap();
+    let extra = encode((&input, "small")).unwrap();
     for bytes in [field, extra] {
         assert_eq!(
-            envelope_limits.decode::<(EmbeddedInput,)>(&bytes),
-            Err(ArgumentDecodeError::InvalidCandid)
+            ic_wire::native::decode::<(EmbeddedInput,)>(&bytes, envelope_limits),
+            Err(ic_wire::Error::Trailing)
         );
     }
-    let nested = ic_platform::candid::contract::encode_one(EmbeddedInput {
+    let nested = encode(EmbeddedInput {
         initial_count: 41,
         blob: wire::encode_request("blob_install", unmodeled(&blob)).unwrap(),
     })
     .unwrap();
-    let (decoded,): (EmbeddedInput,) = envelope_limits.decode(&nested).unwrap();
+    let (decoded,): (EmbeddedInput,) = ic_wire::native::decode(&nested, envelope_limits).unwrap();
     assert_eq!(
         wire::decode_request::<ServiceInstallationInput>(
             "blob_install",

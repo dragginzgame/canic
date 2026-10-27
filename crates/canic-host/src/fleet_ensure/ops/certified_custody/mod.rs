@@ -79,15 +79,14 @@ fn project(
     let path = |field: &'static [u8]| [b"canister".as_slice(), principal.as_slice(), field];
     let bytes = ic_platform::agent::lookup_value(certificate, path(b"controllers"))
         .map_err(|_| invalid())?;
-    let mut input = bytes;
-    let mut controllers: Vec<Principal> =
-        ciborium::de::from_reader_with_recursion_limit(&mut input, 8).map_err(|_| invalid())?;
+    // The IC codec owns its recursion ceiling; this leaf admits at most ten
+    // principals and bounds bytes before allocating the decoded collection.
+    if bytes.len() > 512 {
+        return Err(invalid());
+    }
+    let mut controllers: Vec<Principal> = serde_cbor::from_slice(bytes).map_err(|_| invalid())?;
     let unique = controllers.iter().collect::<BTreeSet<_>>();
-    if !input.is_empty()
-        || controllers.is_empty()
-        || controllers.len() > 10
-        || unique.len() != controllers.len()
-    {
+    if controllers.is_empty() || controllers.len() > 10 || unique.len() != controllers.len() {
         return Err(invalid());
     }
     controllers.sort_unstable();

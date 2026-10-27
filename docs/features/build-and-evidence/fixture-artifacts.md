@@ -93,7 +93,7 @@ preflight include fixture payload bytes in the Store allowance. Store admission
 also accounts for retained metadata and grants, so payload preflight alone is
 not a promise that all storage will fit.
 
-The authenticated `PrepareStoreFixture` Root command selects a role from that
+The authenticated `canic_root_prepare_store_fixture` Wire update selects a role from that
 protected manifest. The caller cannot supply a replacement descriptor or source
 URL. Root registers one bounded descriptor with its exact adopted Store and
 returns the retained upload cursor. Repeating registration recovers that cursor.
@@ -300,7 +300,7 @@ on execution from existing balances.
 
 ## Receipt-gated readiness
 
-Protected `canic_observability(Readiness)` includes a structured `fixture` result
+Protected `canic_readiness` includes a structured `fixture` result
 with pending progress, an exact completion receipt or a typed failure. Its overall
 readiness remains `NotReady` until both runtime bootstrap and the required receipt
 are complete. Public health and bootstrap observations remain infrastructure

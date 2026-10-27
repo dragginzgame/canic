@@ -5,6 +5,7 @@
 //! Boundary: wraps IC call ops and preserves wire-level public errors.
 
 pub mod request;
+pub mod store_activation;
 
 use crate::{
     InternalError,
@@ -17,20 +18,13 @@ use crate::{
         rpc::{CreateCanisterParent, Request, Response},
     },
     ops::{
-        ic::{
-            IcOps,
-            call::{CallOps, CallResult},
-        },
+        ic::{IcOps, call::CallOps},
         prelude::*,
         rpc::request::{RequestConversionOps, RequestOpsError},
         runtime::env::EnvOps,
     },
-    protocol,
 };
-use canic_contracts::dto::wire::projection::capability_rpc::{
-    CanisterCommandFragment, CanisterCommandResponseFragment, RootCommandFragment,
-    RootCommandResponseFragment,
-};
+use canic_contracts::protocol::cycles_capability as wire;
 use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
 
@@ -67,7 +61,7 @@ impl From<RpcOpsError> for InternalError {
 ///
 
 pub trait Rpc {
-    type Response: CandidType + DeserializeOwned;
+    type Response: DeserializeOwned;
 
     fn into_request(self) -> Request;
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError>;
@@ -84,32 +78,6 @@ const DEFAULT_CAPABILITY_METADATA_TTL_NS: u64 = 300_000_000_000;
 pub struct RpcOps;
 
 impl RpcOps {
-    ///
-    /// call_rpc_result
-    ///
-    /// Calls a method that returns `Result<T, Error>` and
-    /// preserves `Error` at the ops boundary.
-    ///
-    pub async fn call_rpc_result<T>(
-        pid: Principal,
-        method: &str,
-        arg: impl CandidType,
-    ) -> Result<T, InternalError>
-    where
-        T: CandidType + DeserializeOwned,
-    {
-        let call: CallResult = CallOps::unbounded_wait(pid, method)
-            .with_arg(arg)?
-            .execute()
-            .await?;
-
-        let call_res: Result<T, Error> = call.candid::<Result<T, Error>>()?;
-
-        let res = call_res.map_err(RpcOpsError::RemoteRejected)?;
-
-        Ok(res)
-    }
-
     ///
     /// execute_response_rpc
     ///
@@ -145,13 +113,17 @@ impl RpcOps {
                 metadata,
             };
 
-            let response: RootCommandResponseFragment = Self::call_rpc_result(
-                target_pid,
-                protocol::CANIC_ROOT_COMMAND,
-                RootCommandFragment::RespondCapability(envelope),
-            )
-            .await?;
-            let RootCommandResponseFragment::RespondCapability(response) = response;
+            let call = canic_contracts::ops::root_capability::encode_request(envelope)
+                .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_FAILED))?;
+            let bytes = CallOps::unbounded_wait(target_pid, call.method)
+                .with_raw_args(call.bytes)
+                .execute()
+                .await?
+                .into_bytes();
+            let response =
+                canic_contracts::ops::root_capability::decode_response(call.method_id, &bytes)
+                    .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_INVALID))?
+                    .map_err(RpcOpsError::RemoteRejected)?;
 
             return Ok(response.response);
         }
@@ -168,16 +140,27 @@ impl RpcOps {
             metadata,
         };
 
-        let response: CanisterCommandResponseFragment = Self::call_rpc_result(
-            target_pid,
-            protocol::CANIC_COMMAND,
-            CanisterCommandFragment::RespondCapability(envelope),
-        )
-        .await?;
-        let CanisterCommandResponseFragment::RespondCapability(response) = response;
+        let bytes =
+            ic_wire::native::encode_request(wire::METHOD_ID, &envelope, wire::REQUEST_LIMITS)
+                .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_FAILED))?;
+        let bytes = CallOps::unbounded_wait(target_pid, wire::METHOD)
+            .with_raw_args(bytes)
+            .execute()
+            .await?
+            .into_bytes();
+        let response = decode_nonroot_cycles_reply(&bytes)?;
 
         Ok(Response::Cycles(response.response))
     }
+}
+
+fn decode_nonroot_cycles_reply(
+    bytes: &[u8],
+) -> Result<crate::dto::capability::NonrootCyclesCapabilityResponseV1, InternalError> {
+    let result: Result<crate::dto::capability::NonrootCyclesCapabilityResponseV1, Error> =
+        ic_wire::native::decode_response(wire::METHOD_ID, bytes, wire::RESPONSE_LIMITS)
+            .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_INVALID))?;
+    result.map_err(|error| RpcOpsError::RemoteRejected(error).into())
 }
 
 const fn uses_structural_capability_proof(request: &Request) -> bool {
@@ -218,6 +201,29 @@ mod tests {
         AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CyclesRequest,
         RecycleCanisterRequest, RootRequestMetadata,
     };
+
+    #[test]
+    fn native_cycles_reply_preserves_rejection_and_codec_error_codes() {
+        let rejection: Result<crate::dto::capability::NonrootCyclesCapabilityResponseV1, Error> =
+            Err(Error::from_registered(
+                crate::diagnostics::codes::SECURITY_CONFLICT,
+            ));
+        let frame =
+            ic_wire::native::encode_response(wire::METHOD_ID, &rejection, wire::RESPONSE_LIMITS)
+                .unwrap();
+        let error = decode_nonroot_cycles_reply(&frame).unwrap_err();
+        assert_eq!(
+            Error::from(error).raw_code(),
+            crate::diagnostics::codes::SECURITY_CONFLICT
+                .raw_code()
+                .raw()
+        );
+        let malformed = decode_nonroot_cycles_reply(&[]).unwrap_err();
+        assert_eq!(
+            Error::from(malformed).raw_code(),
+            crate::diagnostics::codes::CODEC_INVALID.raw_code().raw()
+        );
+    }
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

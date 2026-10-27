@@ -4,11 +4,11 @@ use canic::{
     dto::abi::v1::{CanisterInitAuthority, CanisterInitPayload},
     ids::{CanisterRole, ComponentSpecId},
 };
+use canic_contracts::protocol::initialization::decode;
 use canic_testing_internal::{
     canister::{APP, SCALE_HUB, SCALE_REPLICA, TEST, USER_HUB, USER_SHARD, WASM_STORE},
     pic::{invalid_init_args, managed_test_init_identity, upgrade_args},
 };
-use ic_platform::candid::decoder::{decode_args, decode_one};
 use ic_testkit::fake_principal;
 
 // Verify canonical test role constants stay aligned with canister role names.
@@ -33,7 +33,7 @@ fn canister_role_constants_have_expected_names() {
 #[test]
 fn invalid_init_args_encode_mismatched_component_authority() {
     let (payload, user_payload): (CanisterInitPayload, Option<Vec<u8>>) =
-        decode_args(&invalid_init_args()).expect("decode invalid init args");
+        decode(&invalid_init_args()).expect("decode invalid init args");
     let identity = managed_test_init_identity();
 
     assert!(user_payload.is_none());
@@ -49,7 +49,7 @@ fn invalid_init_args_encode_mismatched_component_authority() {
 // Verify the upgrade fixture is the empty tuple expected by no-payload upgrades.
 #[test]
 fn upgrade_args_encode_empty_tuple() {
-    decode_one::<()>(&upgrade_args()).expect("decode upgrade args");
+    decode::<()>(&upgrade_args()).expect("decode upgrade args");
 }
 
 // Verify role value helpers used by fixture constants remain available.

@@ -7,11 +7,7 @@
 use crate::{
     InternalError,
     dto::observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
-    ops::{ic::IcOps, rpc::RpcOps},
-    protocol,
-};
-use canic_contracts::dto::wire::projection::observability_relay::{
-    CanisterCommandFragment, CanisterCommandResponseFragment,
+    ops::ic::IcOps,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
 
@@ -49,12 +45,5 @@ pub async fn observe_root_controlled_canister(
         return Err(InternalError::invalid_input());
     }
 
-    let response: CanisterCommandResponseFragment = RpcOps::call_rpc_result(
-        canister_id,
-        protocol::CANIC_COMMAND,
-        CanisterCommandFragment::Observe(request),
-    )
-    .await?;
-    let CanisterCommandResponseFragment::Observe(response) = response;
-    Ok(response)
+    crate::ops::observability_relay::observe(canister_id, request).await
 }

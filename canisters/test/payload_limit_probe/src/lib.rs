@@ -14,12 +14,11 @@ const LIMITS: ArgumentLimits = ArgumentLimits {
     max_type_len: 8,
     max_header_len: 128,
 };
-const LIFECYCLE_LIMITS: ArgumentLimits = ArgumentLimits {
-    max_bytes: 4096,
-    decoding_quota: 20_000,
-    skipping_quota: 64,
-    max_type_len: 16,
-    max_header_len: 256,
+const LIFECYCLE_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 4096,
+    allocation: 65_536,
+    nodes: 4096,
+    depth: 32,
 };
 const WORK_LIMITS: ArgumentLimits = ArgumentLimits {
     decoding_quota: 40,
@@ -48,8 +47,7 @@ fn bounded_init() {
     ic_platform::cdk::api::debug_print("bounded participant init");
     // Prove that participant witnesses survive a failed install, even though
     // reinstall clears the previous canister logs before entering init.
-    let (args,): (Option<Vec<u8>>,) = LIFECYCLE_LIMITS
-        .decode(&ic_platform::cdk::api::msg_arg_data())
+    let (args,): (Option<Vec<u8>>,) = canic::endpoint::read_initialization(LIFECYCLE_LIMITS)
         .expect("the framework already admitted this envelope");
     if args.as_deref() == Some(&[1]) {
         ic_platform::cdk::api::debug_print("bounded participant trap witness");
@@ -100,8 +98,8 @@ fn plain_commit(allow: bool) -> PlainReply {
     commit()
 }
 
-#[canic_update(requires(custom(Gate(allow)), custom(Gate(true))), decode = LIMITS)]
-fn result_commit(allow: bool) -> Result<PlainReply, Error> {
+#[canic_update(requires(custom(Gate(allow)), custom(Gate(true))), on_access_denied = "reject", decode = LIMITS)]
+fn result_commit(allow: bool) -> Result<PlainReply, String> {
     assert!(allow);
     Ok(commit())
 }
@@ -114,15 +112,24 @@ fn dispatch_counts() -> PlainReply {
     }
 }
 
-#[canic_query(public)]
-fn access_counts() -> Result<Vec<canic::dto::metrics::MetricEntry>, Error> {
-    Ok(
-        canic::api::metrics::MetricsQuery::security(canic::dto::page::PageRequest {
-            limit: 100,
-            offset: 0,
-        })
-        .entries,
-    )
+// This probe reports one observed security counter without exporting the internal metrics view.
+#[canic_query(public, on_access_denied = "reject", wire(id = 7010, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+fn access_counts(method: String) -> u64 {
+    canic::api::metrics::MetricsQuery::security(canic::dto::page::PageRequest {
+        limit: 100,
+        offset: 0,
+    })
+    .entries
+    .into_iter()
+    .filter(|entry| {
+        entry.labels.first().is_some_and(|label| label == "access")
+            && entry.labels.get(1).is_some_and(|label| label == &method)
+    })
+    .map(|entry| match entry.value {
+        canic::dto::metrics::MetricValue::Count(count) => count,
+        _ => panic!("security metrics must count denials"),
+    })
+    .sum()
 }
 
 #[canic_query(public, on_access_denied = "reject", decode = LIMITS)]
@@ -161,13 +168,14 @@ fn bounded_header(value: u64) -> PlainReply {
 }
 
 /// Relay arbitrary bytes so update refusal is exercised without inspect_message.
-#[canic_update(public, payload(max_bytes = 16 * 1024))]
-async fn relay_bounded(target: Principal, method: String, bytes: Vec<u8>) -> Result<bool, Error> {
+#[canic_update(on_access_denied = "reject", public, payload(max_bytes = 16 * 1024))]
+async fn relay_bounded(target: Principal, method: String, bytes: Vec<u8>) -> Result<bool, String> {
     Call::unbounded_wait(target, &method)
         .with_raw_args(bytes)
         .execute()
         .await
         .map(|_| true)
+        .map_err(|error| error.to_string())
 }
 
 // Provide an empty setup hook so `start!` can schedule user lifecycle work.
@@ -180,29 +188,31 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 /// Relay a generated payload through a real inter-canister update.
-#[canic_update(public)]
-async fn relay_explicit_echo(target: Principal, len: usize) -> Result<usize, Error> {
+#[canic_update(on_access_denied = "reject", public)]
+async fn relay_explicit_echo(target: Principal, len: usize) -> Result<usize, String> {
     Call::unbounded_wait(target, "explicit_echo")
-        .with_arg("x".repeat(len))?
-        .execute_candid::<Result<usize, Error>>()
-        .await?
+        .with_arg("x".repeat(len))
+        .map_err(|error| error.to_string())?
+        .execute_candid::<Result<usize, String>>()
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 /// Echo payload length under the default update ingress limit.
-#[canic_update(public)]
-fn default_echo(payload: String) -> Result<usize, Error> {
+#[canic_update(on_access_denied = "reject", public)]
+fn default_echo(payload: String) -> Result<usize, String> {
     Ok(payload.len())
 }
 
 /// Echo payload length under an explicit larger update ingress limit.
-#[canic_update(public, payload(max_bytes = 32 * 1024))]
-fn explicit_echo(payload: String) -> Result<usize, Error> {
+#[canic_update(on_access_denied = "reject", public, payload(max_bytes = 32 * 1024))]
+fn explicit_echo(payload: String) -> Result<usize, String> {
     Ok(payload.len())
 }
 
 /// Echo payload length under an explicit limit and exported method name.
-#[canic_update(public, name = "wire_named_echo", payload(max_bytes = 24 * 1024))]
-fn named_echo(payload: String) -> Result<usize, Error> {
+#[canic_update(on_access_denied = "reject", public, name = "wire_named_echo", payload(max_bytes = 24 * 1024))]
+fn named_echo(payload: String) -> Result<usize, String> {
     Ok(payload.len())
 }
 
@@ -213,4 +223,91 @@ fn bare_echo(payload: String) -> usize {
     payload.len()
 }
 
+const NATIVE_PRINCIPAL_METHOD_ID: u64 = 7001;
+const NATIVE_COMMIT_METHOD_ID: u64 = 7002;
+
+const WIRE_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 1024,
+    allocation: 4096,
+    nodes: 64,
+    depth: 8,
+};
+
+/// Exercise the native identity without a Candid implementation or codec.
+#[canic_query(public, on_access_denied = "reject", wire(id = crate::NATIVE_PRINCIPAL_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+fn native_principal(principal: ic_platform::Principal) -> ic_platform::Principal {
+    principal
+}
+
+/// A synchronous mutation must roll back if its Wire reply exceeds the allowance.
+#[canic_update(requires(custom(Gate(length > 0))), on_access_denied = "reject", wire(id = crate::NATIVE_COMMIT_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+fn native_commit(length: u32) -> Vec<u8> {
+    let _ = commit();
+    vec![0; length as usize]
+}
+
+const NATIVE_RAW_METHOD_ID: u64 = 7003;
+
+// The codec owner supplies its actual projection; a raw unit signature is not a schema.
+canic::__canic_register_wire_schema!(
+    "native_raw",
+    Update,
+    NATIVE_RAW_METHOD_ID,
+    u32,
+    Vec<u8>,
+    WIRE_LIMITS,
+    WIRE_LIMITS
+);
+
+#[canic::canic_raw_update(public, wire(id = crate::NATIVE_RAW_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+fn native_raw() {
+    ic_platform::cdk::api::debug_print("raw Wire owner entered");
+    let length: u32 = ic_wire::native::decode_request(
+        NATIVE_RAW_METHOD_ID,
+        &ic_platform::cdk::api::msg_arg_data(),
+        WIRE_LIMITS,
+    )
+    .unwrap();
+    let _ = commit();
+    let bytes = ic_wire::native::encode_response(
+        NATIVE_RAW_METHOD_ID,
+        &vec![0_u8; length as usize],
+        WIRE_LIMITS,
+    )
+    .unwrap();
+    ic_platform::cdk::api::msg_reply(bytes);
+}
+
+const NATIVE_COMPOSITE_METHOD_ID: u64 = 7004;
+
+/// Qualify async Wire reply encoding after a real composite-query callback.
+#[canic_query(public, composite, on_access_denied = "reject", wire(id = crate::NATIVE_COMPOSITE_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+async fn native_composite(target: ic_platform::Principal) -> ic_platform::Principal {
+    let own = ic_platform::cdk::api::canister_self();
+    let request =
+        ic_wire::native::encode_request(NATIVE_PRINCIPAL_METHOD_ID, &own, WIRE_LIMITS).unwrap();
+    let response = ic_platform::cdk::call::Call::unbounded_wait(target, "native_principal")
+        .with_raw_args(&request)
+        .await
+        .unwrap();
+    ic_wire::native::decode_response(
+        NATIVE_PRINCIPAL_METHOD_ID,
+        &response.into_bytes(),
+        WIRE_LIMITS,
+    )
+    .unwrap()
+}
+
+const NATIVE_RESULT_METHOD_ID: u64 = 7005;
+
+/// Preserve typed access denials without dispatching the application handler.
+#[canic_update(requires(custom(Gate(allow)), custom(Gate(true))), wire(id = crate::NATIVE_RESULT_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+fn native_result(allow: bool) -> Result<u64, Error> {
+    assert!(allow);
+    Ok(commit().committed)
+}
+
 canic::finish!();
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests;

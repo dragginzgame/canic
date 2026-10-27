@@ -121,12 +121,6 @@ pub enum JournalValidationError {
     #[error("field {field} must be a valid principal: {value}")]
     InvalidPrincipal { field: &'static str, value: String },
 
-    #[error("invalid journal transition from {from:?} to {to:?}")]
-    InvalidStateTransition {
-        from: ArtifactState,
-        to: ArtifactState,
-    },
-
     #[error("unsupported hash algorithm {0}")]
     UnsupportedHashAlgorithm(String),
 

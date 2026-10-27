@@ -8,11 +8,14 @@ use std::{fmt, fmt::Display};
 /// Error
 ///
 /// Public API error payload. Only registered runtime reasons may originate a
-/// value; Candid/Serde decoding may still preserve any raw `u16`.
+/// value; Wire/Serde decoding may still preserve any raw `u16`.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct Error {
     code: u16,
 }
@@ -32,7 +35,7 @@ impl Error {
         DiagnosticCode::from_raw(self.code)
     }
 
-    /// Observe the raw Candid `nat16` value.
+    /// Observe the raw Wire `nat16` value.
     #[must_use]
     pub const fn raw_code(&self) -> u16 {
         self.code

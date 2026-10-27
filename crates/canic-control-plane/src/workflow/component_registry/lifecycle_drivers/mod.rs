@@ -111,10 +111,10 @@ async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<boo
         RootComponentAllocationProgressView::Committed { commitment, .. } => {
             let plan = prepared_component_runtime_plan_for_reconciliation(operation_id).await?;
             if !commitment.directory_prepared {
-                prepare_component_directories_with_plan(
+                Box::pin(prepare_component_directories_with_plan(
                     RootComponentDirectoryPreparationRequest { operation_id },
                     plan,
-                )
+                ))
                 .await?;
                 return Ok(false);
             }

@@ -7,15 +7,17 @@
 //! Boundary: DTOs re-export these values to preserve the public API path while
 //! internal code imports them from the domain owner.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 ///
 /// CycleTopupEventStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 #[remain::sorted]
 pub enum CycleTopupEventStatus {
     RequestErr,
@@ -24,8 +26,11 @@ pub enum CycleTopupEventStatus {
 }
 
 /// Scheduling decision after a failed automatic parent funding request.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum CycleTopupFailureDisposition {
     Retry,
     Terminal,

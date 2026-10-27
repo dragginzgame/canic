@@ -44,7 +44,7 @@ pub extern "C" fn registry() {
     reply();
 }
 
-#[unsafe(export_name = "canister_query canic_root_status")]
+#[unsafe(export_name = "canister_query canic_root_funding_release")]
 pub extern "C" fn pool() {
     reply();
 }
@@ -58,7 +58,7 @@ pub extern "C" fn replace_funding() {
     unsafe { msg_reply() };
 }
 
-#[unsafe(export_name = "canister_query canic_observability")]
+#[unsafe(export_name = "canister_query canic_coordinator_funding")]
 pub extern "C" fn funding() {
     FUNDING.with(|reply| {
         let bytes = reply.borrow();
@@ -67,4 +67,29 @@ pub extern "C" fn funding() {
             msg_reply();
         }
     });
+}
+
+#[unsafe(export_name = "canister_query canic_release_intents")]
+pub extern "C" fn intents() {
+    funding();
+}
+
+#[unsafe(export_name = "canister_query canic_release_receipts")]
+pub extern "C" fn receipts() {
+    funding();
+}
+
+#[unsafe(export_name = "canister_query canic_root_provisioning_release")]
+pub extern "C" fn provisioning() {
+    reply();
+}
+
+#[unsafe(export_name = "canister_query canic_root_pool_release")]
+pub extern "C" fn pool_release() {
+    reply();
+}
+
+#[unsafe(export_name = "canister_query canic_root_pool")]
+pub extern "C" fn pool_inventory() {
+    reply();
 }

@@ -27,7 +27,7 @@ fn interleaved_async_requests_keep_subjects_and_results_independent() {
     let mut first = Box::pin(icp.measure_async_request(
         IcpRequestKind::AgentUpdate,
         root,
-        "canic_root_command",
+        "canic_root_inspect_canister",
         Some(first_child),
         pending::<Result<(), u8>>(),
     ));
@@ -35,7 +35,7 @@ fn interleaved_async_requests_keep_subjects_and_results_independent() {
     let mut second = Box::pin(clone.measure_async_request(
         IcpRequestKind::AgentQuery,
         root,
-        "canic_root_status",
+        "canic_root_funding",
         Some(second_child),
         ready(Err::<(), _>(7_u8)),
     ));

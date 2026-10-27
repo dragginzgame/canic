@@ -10,50 +10,44 @@ pub mod registry;
 mod tests;
 
 use crate::{
-    canister_protocol::query_with_candid,
+    canister_protocol::funding_read::coordinator_status,
     fleet_ensure::view::startup_funding::{
         StartupCoordinatorAccounting, StartupCoordinatorUsage, StartupUsageUnavailable,
     },
     icp::IcpCli,
 };
 use canic_contracts::{
-    dto::fleet_coordinator::{
-        CoordinatorFundingStatusResponse, CoordinatorObservabilityRequest,
-        CoordinatorObservabilityResponse,
-    },
+    dto::fleet_coordinator::CoordinatorFundingStatusResponse,
     ids::FleetCoordinatorRootFundingPolicy,
 };
 use canic_core::control_plane_support::policy::fleet_funding::{
     FleetFundingWindowSnapshot, funding_window_remaining,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::{collections::BTreeSet, path::Path};
+use std::collections::BTreeSet;
 
-/// Read one exact parent's child ledger; callers bind installed code and the Candid sidecar.
+/// Read one exact parent's child ledger after callers bind the installed authority.
 pub fn observe_child(
     icp: &IcpCli,
-    candid: &Path,
     parent: Principal,
     child: Principal,
 ) -> Result<
     crate::fleet_ensure::view::startup_funding::StartupChildAccounting,
     StartupUsageUnavailable,
 > {
-    use canic_contracts::dto::observability::{
-        CanisterObservabilityRequest, CanisterObservabilityResponse,
-    };
-    let response: CanisterObservabilityResponse = query_with_candid(
-        icp,
-        candid,
-        parent,
-        canic_contracts::protocol::CANIC_OBSERVABILITY,
-        &CanisterObservabilityRequest::ChildFunding(child),
-    )
-    .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
-    let CanisterObservabilityResponse::ChildFunding(value) = response else {
-        return Err(StartupUsageUnavailable::ObservationFailed);
-    };
-    project_child(value, parent, child)
+    use canic_contracts::protocol::child_funding;
+    let response: canic_contracts::dto::child_funding::ChildFundingUsage =
+        crate::canister_protocol::query_wire(
+            icp,
+            parent,
+            child_funding::METHOD,
+            child_funding::METHOD_ID,
+            &ic_platform::Principal::from(child),
+            child_funding::REQUEST_LIMITS,
+            child_funding::RESPONSE_LIMITS,
+        )
+        .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
+    project_child(response.into(), parent, child)
 }
 
 pub(in crate::fleet_ensure) fn project_child(
@@ -83,22 +77,14 @@ pub(in crate::fleet_ensure) fn project_child(
     )
 }
 
-/// Query only the selected current Coordinator through its verified Candid sidecar.
+/// Query only the selected current Coordinator after installed artifact qualification.
 pub fn observe(
     icp: &IcpCli,
-    candid: &Path,
     coordinator: Principal,
     roots: &BTreeSet<Principal>,
     policy: &FleetCoordinatorRootFundingPolicy,
 ) -> StartupCoordinatorUsage {
-    let response: Result<CoordinatorObservabilityResponse, _> = query_with_candid(
-        icp,
-        candid,
-        coordinator,
-        canic_contracts::protocol::CANIC_OBSERVABILITY,
-        &CoordinatorObservabilityRequest::Funding,
-    );
-    let Ok(CoordinatorObservabilityResponse::Funding(status)) = response else {
+    let Ok(status) = coordinator_status(icp, coordinator) else {
         return StartupCoordinatorUsage::Unavailable(StartupUsageUnavailable::ObservationFailed);
     };
     match project(status, coordinator, roots, policy) {

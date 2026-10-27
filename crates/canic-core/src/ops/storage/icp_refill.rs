@@ -7,7 +7,8 @@
 use crate::{
     InternalError,
     domain::icp_refill::{
-        IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger, icp_refill_outcome_is_resumable,
+        IcpRefillErrorCode, IcpRefillOutcome, IcpRefillStatus, IcpRefillTrigger,
+        decide_refill_outcome, icp_refill_outcome_is_resumable,
     },
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     storage::stable::icp_refill::{
@@ -1235,10 +1236,8 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            record.transfer_uncertain = false;
             record.ledger_block_index = Some(ledger_block_index);
-            clear_error(record);
-            record.status = IcpRefillRecordStatus::Transferred;
+            apply_outcome(record, IcpRefillOutcome::TransferConfirmed, None);
         })
     }
 
@@ -1248,12 +1247,10 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            record.transfer_uncertain = false;
             record.ledger_block_index = Some(ledger_block_index);
-            set_error(
+            apply_outcome(
                 record,
-                IcpRefillRecordStatus::Transferred,
-                IcpRefillErrorCode::Duplicate,
+                IcpRefillOutcome::TransferDuplicate,
                 Some("ledger transfer duplicate; reusing duplicate block".to_string()),
             );
         })
@@ -1266,7 +1263,11 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            set_failure(record, error_code, error_message);
+            apply_outcome(
+                record,
+                IcpRefillOutcome::Failure(error_code),
+                Some(error_message),
+            );
         })
     }
 
@@ -1276,11 +1277,10 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            record.budget_reserved = record.transfer_uncertain;
-            set_failure(
+            apply_outcome(
                 record,
-                IcpRefillErrorCode::LedgerTransferFailed,
-                error_message,
+                IcpRefillOutcome::TransferRejected,
+                Some(error_message),
             );
         })
     }
@@ -1293,7 +1293,11 @@ impl IcpRefillRecordOps {
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
             record.fee_e8s = expected_fee_e8s;
-            set_failure(record, IcpRefillErrorCode::BadFee, error_message);
+            apply_outcome(
+                record,
+                IcpRefillOutcome::Failure(IcpRefillErrorCode::BadFee),
+                Some(error_message),
+            );
         })
     }
 
@@ -1308,12 +1312,7 @@ impl IcpRefillRecordOps {
 
     pub fn mark_notify_processing(id: u64, now_ns: u64) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            set_error(
-                record,
-                IcpRefillRecordStatus::NotifyProcessing,
-                IcpRefillErrorCode::Processing,
-                None,
-            );
+            apply_outcome(record, IcpRefillOutcome::NotifyProcessing, None);
         })
     }
 
@@ -1324,8 +1323,7 @@ impl IcpRefillRecordOps {
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
             record.cycles_sent = Some(Nat::from(cycles_sent));
-            clear_error(record);
-            record.status = IcpRefillRecordStatus::Completed;
+            apply_outcome(record, IcpRefillOutcome::Completed, None);
         })
     }
 
@@ -1335,10 +1333,10 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            set_failure(
+            apply_outcome(
                 record,
-                IcpRefillErrorCode::CyclesSentOverflow,
-                error_message,
+                IcpRefillOutcome::Failure(IcpRefillErrorCode::CyclesSentOverflow),
+                Some(error_message),
             );
         })
     }
@@ -1351,12 +1349,7 @@ impl IcpRefillRecordOps {
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
             record.refund_block_index = refund_block_index;
-            set_error(
-                record,
-                IcpRefillRecordStatus::Refunded,
-                IcpRefillErrorCode::Refunded,
-                Some(reason),
-            );
+            apply_outcome(record, IcpRefillOutcome::Refunded, Some(reason));
         })
     }
 
@@ -1366,12 +1359,7 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            set_error(
-                record,
-                IcpRefillRecordStatus::InvalidTransaction,
-                IcpRefillErrorCode::InvalidTransaction,
-                Some(reason),
-            );
+            apply_outcome(record, IcpRefillOutcome::InvalidTransaction, Some(reason));
         })
     }
 
@@ -1382,12 +1370,7 @@ impl IcpRefillRecordOps {
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
             record.transaction_too_old_min_block_index = min_block_index;
-            set_error(
-                record,
-                IcpRefillRecordStatus::TransactionTooOld,
-                IcpRefillErrorCode::TransactionTooOld,
-                None,
-            );
+            apply_outcome(record, IcpRefillOutcome::TransactionTooOld, None);
         })
     }
 
@@ -1396,11 +1379,10 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            record.budget_reserved = record.transfer_uncertain;
-            set_failure(
+            apply_outcome(
                 record,
-                IcpRefillErrorCode::TransferWindowStale,
-                "transfer retry window expired before ledger block was recorded".to_string(),
+                IcpRefillOutcome::TransferWindowStale,
+                Some("transfer retry window expired before ledger block was recorded".to_string()),
             );
         })
     }
@@ -1411,7 +1393,11 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            set_failure(record, IcpRefillErrorCode::NotifyFailed, error_message);
+            apply_outcome(
+                record,
+                IcpRefillOutcome::Failure(IcpRefillErrorCode::NotifyFailed),
+                Some(error_message),
+            );
         })
     }
 
@@ -1421,7 +1407,11 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            set_failure(record, IcpRefillErrorCode::NotifyMaxAttempts, error_message);
+            apply_outcome(
+                record,
+                IcpRefillOutcome::Failure(IcpRefillErrorCode::NotifyMaxAttempts),
+                Some(error_message),
+            );
         })
     }
 }
@@ -1513,32 +1503,17 @@ fn ensure_compatible_operation(
     Err(IcpRefillRecordOpsError::OperationConflict { id: existing.id })
 }
 
-fn clear_error(record: &mut IcpRefillRecord) {
-    record.error_code = None;
-    record.error_message = None;
-}
-
-fn set_failure(
+fn apply_outcome(
     record: &mut IcpRefillRecord,
-    error_code: IcpRefillErrorCode,
-    error_message: String,
-) {
-    set_error(
-        record,
-        IcpRefillRecordStatus::Failed,
-        error_code,
-        Some(error_message),
-    );
-}
-
-fn set_error(
-    record: &mut IcpRefillRecord,
-    status: IcpRefillRecordStatus,
-    error_code: IcpRefillErrorCode,
+    outcome: IcpRefillOutcome,
     error_message: Option<String>,
 ) {
-    record.status = status;
-    record.error_code = Some(error_code.into());
+    let decision =
+        decide_refill_outcome(outcome, record.transfer_uncertain, record.budget_reserved);
+    record.status = decision.status.into();
+    record.error_code = decision.error_code.map(Into::into);
+    record.transfer_uncertain = decision.transfer_uncertain;
+    record.budget_reserved = decision.budget_reserved;
     record.error_message = error_message.map(truncate_error);
 }
 

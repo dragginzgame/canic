@@ -1,40 +1,30 @@
 //! Exact role-specific queries and bounded conversion into passive host facts.
 
 mod process;
+#[cfg(test)]
+mod tests;
 
 use crate::{
-    icp::{IcpCli, IcpJsonResponseError, cleanup_candid_argument_file, response_bytes},
+    icp::{IcpCli, IcpJsonResponseError, cleanup_binary_argument_file, response_bytes},
     observatory::view::{
         CostWindowView, MetricSamplesView, ObservationFailure, RoleFundingView, RoleOverviewView,
         RootEstateView, StoreInventoryView,
     },
-    protocol_binding::resolve_registry_protocol_binding,
     registry::RegistryEntry,
 };
 use canic_contracts::{
     dto::{
         page::PageRequest,
-        pool::CanisterPoolStatusRequest,
-        public_status::{PublicHistoryRequest, PublicMetricFamily, PublicMetricsRequest},
-        template::WasmStoreStatusResponse,
-        wire::projection::{
-            capacity_inventory::{RootRequest as EstateRequest, RootResponse as EstateResponse},
-            observatory::{
-                MetricRequest, MetricResponse, RootFundingResponse, StoreRequest, StoreResponse,
-            },
-            overview::{
-                RoleStatusRequest as OverviewRequest, RoleStatusResponse as OverviewResponse,
-            },
-            release_coordinator_funding::{
-                Request as FundingRequest, Response as CoordinatorResponse,
-            },
+        public_status::{
+            PublicHistoryRequest, PublicHistorySnapshot, PublicMetricFamily, PublicMetricsRequest,
         },
+        template::WasmStoreStatusResponse,
     },
     ids::WasmStoreGcMode,
     protocol,
 };
 use canic_core::role_contract::RoleCapabilityKey;
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::path::Path;
 
 /// Independent role observations; implementations must not retry or substitute another role.
@@ -52,10 +42,11 @@ pub trait ObservatoryTransport {
     fn attempts(&self) -> u64;
 }
 
-/// Query-only ICP adapter. The budget bounds envelope admission before Candid decoding.
+/// Query-only ICP adapter. The budget bounds envelope admission before payload decoding.
 pub struct IcpObservatoryTransport<'a> {
     pub icp: &'a IcpCli,
     pub root: &'a Path,
+    pub fleet: &'a str,
     pub environment: &'a str,
     pub maximum_response_bytes: usize,
     pub attempted_queries: u64,
@@ -64,32 +55,21 @@ pub struct IcpObservatoryTransport<'a> {
     pub compatibility: Option<Result<(), ObservationFailure>>,
 }
 
-impl IcpObservatoryTransport<'_> {
-    fn metric_query(
-        &mut self,
-        entry: &RegistryEntry,
-        request: &MetricRequest,
-    ) -> Result<MetricResponse, ObservationFailure> {
-        let binding = entry
-            .protocol_binding
-            .as_ref()
-            .ok_or(ObservationFailure::BindingUnavailable)?;
-        let capability = match request {
-            MetricRequest::Metrics(_) => RoleCapabilityKey::ObservabilityMetrics,
-            MetricRequest::History(_) => RoleCapabilityKey::ObservabilityHistory,
-        };
-        if !binding.capabilities.contains(&capability) {
-            return Err(ObservationFailure::Unsupported);
-        }
-        self.query(entry, protocol::CANIC_PUBLIC_STATUS, request)
-    }
+/// Exact declaration admitted before a native query is sent.
+struct NativeQueryContract {
+    method_id: u64,
+    request: ic_wire::Limits,
+    response: ic_wire::Limits,
+}
 
-    fn query<I: CandidType, O: CandidType + serde::de::DeserializeOwned>(
+impl IcpObservatoryTransport<'_> {
+    fn query_encoded(
         &mut self,
         entry: &RegistryEntry,
         method: &'static str,
-        request: &I,
-    ) -> Result<O, ObservationFailure> {
+        argument: &[u8],
+        contract: NativeQueryContract,
+    ) -> Result<String, ObservationFailure> {
         let remaining = self
             .deadline
             .checked_duration_since(std::time::Instant::now())
@@ -112,20 +92,29 @@ impl IcpObservatoryTransport<'_> {
             .as_ref()
             .expect("checked version")
             .clone()?;
-        let binding = resolve_registry_protocol_binding(self.root, self.environment, entry)
-            .map_err(|_| ObservationFailure::BindingUnavailable)?;
+        let current =
+            crate::fleet_ensure::resolve_current_fleet(self.root, self.environment, self.fleet)
+                .map_err(|_| ObservationFailure::BindingUnavailable)?;
+        let schema = crate::protocol_binding::resolve_current_registry_wire_schema(
+            self.root, &current, entry,
+        )
+        .map_err(|_| ObservationFailure::BindingUnavailable)?;
+        crate::artifact_io::require_wire_method(
+            &schema.schema,
+            method,
+            contract.method_id,
+            protocol::wire_declaration::MethodKind::Query,
+            contract.request,
+            contract.response,
+        )
+        .map_err(|_| ObservationFailure::BindingUnavailable)?;
         let canister =
             Principal::from_text(&entry.pid).map_err(|_| ObservationFailure::InvalidResponse)?;
-        let argument = ic_platform::candid::contract::encode_one(request)
-            .map_err(|_| ObservationFailure::InvalidResponse)?;
-        let argument = crate::icp::write_candid_argument_file(&argument)
+        let argument = crate::icp::write_binary_argument_file(argument)
             .map_err(|_| ObservationFailure::TransportUnavailable)?;
-        let mut command = self.icp.bounded_query_command(
-            &canister.to_text(),
-            method,
-            &argument,
-            binding.candid_path(),
-        );
+        let mut command =
+            self.icp
+                .bounded_query_command(&canister.to_text(), method, &argument, None);
         self.attempted_queries += 1;
         let result = self
             .deadline
@@ -138,19 +127,40 @@ impl IcpObservatoryTransport<'_> {
                     remaining.min(self.query_timeout),
                 )
             });
-        cleanup_candid_argument_file(&argument);
-        let envelope = result?;
-        decode_reply(&envelope, self.maximum_response_bytes)
+        cleanup_binary_argument_file(&argument);
+        result
     }
 }
 
 impl ObservatoryTransport for IcpObservatoryTransport<'_> {
     fn overview(&mut self, entry: &RegistryEntry) -> Result<RoleOverviewView, ObservationFailure> {
-        let OverviewResponse::Overview(reply) = self.query(
+        let argument = ic_wire::native::encode_request(
+            protocol::public_overview::METHOD_ID,
+            &(),
+            protocol::public_overview::REQUEST_LIMITS,
+        )
+        .map_err(|_| ObservationFailure::InvalidResponse)?;
+        let envelope = self.query_encoded(
             entry,
-            protocol::CANIC_PUBLIC_STATUS,
-            &OverviewRequest::Overview,
+            protocol::CANIC_PUBLIC_OVERVIEW,
+            &argument,
+            NativeQueryContract {
+                method_id: protocol::public_overview::METHOD_ID,
+                request: protocol::public_overview::REQUEST_LIMITS,
+                response: protocol::public_overview::RESPONSE_LIMITS,
+            },
         )?;
+        let response: Result<
+            canic_contracts::dto::role::RoleOverviewResponse,
+            canic_contracts::dto::error::Error,
+        > = decode_public_reply(
+            &envelope,
+            self.maximum_response_bytes,
+            protocol::public_overview::METHOD_ID,
+            protocol::public_overview::RESPONSE_LIMITS,
+        )?;
+        let reply =
+            response.map_err(|error| response_failure(IcpJsonResponseError::Rejected(error)))?;
         let binding = entry
             .protocol_binding
             .as_ref()
@@ -175,11 +185,33 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
     fn funding(&mut self, entry: &RegistryEntry) -> Result<RoleFundingView, ObservationFailure> {
         match entry.role.as_deref() {
             Some("fleet_coordinator") => {
-                let CoordinatorResponse::Funding(reply) = self.query(
+                let argument = ic_wire::native::encode_request(
+                    protocol::funding_read::coordinator_status::METHOD_ID,
+                    &(),
+                    protocol::funding_read::REQUEST_LIMITS,
+                )
+                .map_err(|_| ObservationFailure::InvalidResponse)?;
+                let envelope = self.query_encoded(
                     entry,
-                    protocol::CANIC_OBSERVABILITY,
-                    &FundingRequest::Funding,
+                    protocol::funding_read::coordinator_status::METHOD,
+                    &argument,
+                    NativeQueryContract {
+                        method_id: protocol::funding_read::coordinator_status::METHOD_ID,
+                        request: protocol::funding_read::REQUEST_LIMITS,
+                        response: protocol::funding_read::RESPONSE_LIMITS,
+                    },
                 )?;
+                let response: Result<
+                    canic_contracts::dto::funding_read::CoordinatorStatus,
+                    canic_contracts::dto::error::Error,
+                > = decode_public_reply(
+                    &envelope,
+                    self.maximum_response_bytes,
+                    protocol::funding_read::coordinator_status::METHOD_ID,
+                    protocol::funding_read::RESPONSE_LIMITS,
+                )?;
+                let reply = response
+                    .map_err(|error| response_failure(IcpJsonResponseError::Rejected(error)))?;
                 if reply.coordinator.to_text() != entry.pid {
                     return Err(ObservationFailure::InvalidResponse);
                 }
@@ -195,8 +227,36 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
                 })
             }
             Some("root") => {
-                let RootFundingResponse::Funding(reply) =
-                    self.query(entry, protocol::CANIC_ROOT_STATUS, &FundingRequest::Funding)?;
+                let argument = ic_wire::native::encode_request(
+                    protocol::funding_read::root_status::METHOD_ID,
+                    &(),
+                    protocol::funding_read::REQUEST_LIMITS,
+                )
+                .map_err(|_| ObservationFailure::InvalidResponse)?;
+                let envelope = self.query_encoded(
+                    entry,
+                    protocol::funding_read::root_status::METHOD,
+                    &argument,
+                    NativeQueryContract {
+                        method_id: protocol::funding_read::root_status::METHOD_ID,
+                        request: protocol::funding_read::REQUEST_LIMITS,
+                        response: protocol::funding_read::RESPONSE_LIMITS,
+                    },
+                )?;
+                let response: Result<
+                    canic_contracts::dto::funding_read::RootStatus,
+                    canic_contracts::dto::error::Error,
+                > = decode_public_reply(
+                    &envelope,
+                    self.maximum_response_bytes,
+                    protocol::funding_read::root_status::METHOD_ID,
+                    protocol::funding_read::RESPONSE_LIMITS,
+                )?;
+                let native = response
+                    .map_err(|error| response_failure(IcpJsonResponseError::Rejected(error)))?;
+                let reply: canic_contracts::dto::root::RootFundingStatusResponse = native
+                    .try_into()
+                    .map_err(|_| ObservationFailure::InvalidResponse)?;
                 if reply.fleet_subnet_root.to_text() != entry.pid {
                     return Err(ObservationFailure::InvalidResponse);
                 }
@@ -215,14 +275,36 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
         if entry.role.as_deref() != Some("root") {
             return Err(ObservationFailure::Unsupported);
         }
-        let EstateResponse::Pool(reply) = self.query(
-            entry,
-            protocol::CANIC_ROOT_STATUS,
-            &EstateRequest::Pool(CanisterPoolStatusRequest {
+        let argument = ic_wire::native::encode_request(
+            protocol::pool_inventory::METHOD_ID,
+            &canic_contracts::dto::pool_inventory::Request {
                 start_after: None,
                 limit: 1,
-            }),
+            },
+            protocol::pool_inventory::REQUEST_LIMITS,
+        )
+        .map_err(|_| ObservationFailure::InvalidResponse)?;
+        let envelope = self.query_encoded(
+            entry,
+            protocol::pool_inventory::METHOD,
+            &argument,
+            NativeQueryContract {
+                method_id: protocol::pool_inventory::METHOD_ID,
+                request: protocol::pool_inventory::REQUEST_LIMITS,
+                response: protocol::pool_inventory::RESPONSE_LIMITS,
+            },
         )?;
+        let response: Result<
+            canic_contracts::dto::pool_inventory::Page,
+            canic_contracts::dto::error::Error,
+        > = decode_public_reply(
+            &envelope,
+            self.maximum_response_bytes,
+            protocol::pool_inventory::METHOD_ID,
+            protocol::pool_inventory::RESPONSE_LIMITS,
+        )?;
+        let reply =
+            response.map_err(|error| response_failure(IcpJsonResponseError::Rejected(error)))?;
         if reply.entries.len() > 1 {
             return Err(ObservationFailure::InvalidResponse);
         }
@@ -242,11 +324,31 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
         if entry.role.as_deref() != Some("wasm_store") {
             return Err(ObservationFailure::Unsupported);
         }
-        let StoreResponse::Storage(reply) = self.query(
+        let argument = ic_wire::native::encode_request(
+            protocol::store_inventory::storage::METHOD_ID,
+            &(),
+            protocol::store_inventory::REQUEST_LIMITS,
+        )
+        .map_err(|_| ObservationFailure::InvalidResponse)?;
+        let envelope = self.query_encoded(
             entry,
-            protocol::CANIC_WASM_STORE_CATALOG,
-            &StoreRequest::Storage,
+            protocol::store_inventory::storage::METHOD,
+            &argument,
+            NativeQueryContract {
+                method_id: protocol::store_inventory::storage::METHOD_ID,
+                request: protocol::store_inventory::REQUEST_LIMITS,
+                response: protocol::store_inventory::RESPONSE_LIMITS,
+            },
         )?;
+        let response: Result<WasmStoreStatusResponse, canic_contracts::dto::error::Error> =
+            decode_public_reply(
+                &envelope,
+                self.maximum_response_bytes,
+                protocol::store_inventory::storage::METHOD_ID,
+                protocol::store_inventory::RESPONSE_LIMITS,
+            )?;
+        let reply =
+            response.map_err(|error| response_failure(IcpJsonResponseError::Rejected(error)))?;
         Ok(store_inventory(reply))
     }
 
@@ -255,41 +357,93 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
         entry: &RegistryEntry,
         family: PublicMetricFamily,
     ) -> Result<MetricSamplesView, ObservationFailure> {
-        let reply = self.metric_query(
-            entry,
-            &MetricRequest::Metrics(PublicMetricsRequest {
-                family,
-                page: PageRequest {
-                    limit: 256,
-                    offset: 0,
-                },
-            }),
-        )?;
-        let MetricResponse::Metrics(reply) = reply else {
-            return Err(ObservationFailure::InvalidResponse);
+        let binding = entry
+            .protocol_binding
+            .as_ref()
+            .ok_or(ObservationFailure::BindingUnavailable)?;
+        if !binding
+            .capabilities
+            .contains(&RoleCapabilityKey::ObservabilityMetrics)
+        {
+            return Err(ObservationFailure::Unsupported);
+        }
+        let request = PublicMetricsRequest {
+            family,
+            page: PageRequest {
+                limit: 256,
+                offset: 0,
+            },
         };
+        let argument = ic_wire::native::encode_request(
+            protocol::public_metrics::METHOD_ID,
+            &request,
+            protocol::public_metrics::REQUEST_LIMITS,
+        )
+        .map_err(|_| ObservationFailure::InvalidResponse)?;
+        let envelope = self.query_encoded(
+            entry,
+            protocol::CANIC_PUBLIC_METRICS,
+            &argument,
+            NativeQueryContract {
+                method_id: protocol::public_metrics::METHOD_ID,
+                request: protocol::public_metrics::REQUEST_LIMITS,
+                response: protocol::public_metrics::RESPONSE_LIMITS,
+            },
+        )?;
+        let reply = decode_public_reply(
+            &envelope,
+            self.maximum_response_bytes,
+            protocol::public_metrics::METHOD_ID,
+            protocol::public_metrics::RESPONSE_LIMITS,
+        )?;
         crate::observatory::ops::metrics::samples(reply, family)
     }
 
     fn cost_window(&mut self, entry: &RegistryEntry) -> Result<CostWindowView, ObservationFailure> {
-        let reply = self.metric_query(
-            entry,
-            &MetricRequest::History(PublicHistoryRequest {
-                family: PublicMetricFamily::Cycles,
-                name: "balance".into(),
-                canister_id: Some(
-                    Principal::from_text(&entry.pid)
-                        .map_err(|_| ObservationFailure::InvalidResponse)?,
-                ),
-                page: PageRequest {
-                    limit: 1,
-                    offset: 0,
-                },
-            }),
-        )?;
-        let MetricResponse::History(reply) = reply else {
-            return Err(ObservationFailure::InvalidResponse);
+        let binding = entry
+            .protocol_binding
+            .as_ref()
+            .ok_or(ObservationFailure::BindingUnavailable)?;
+        if !binding
+            .capabilities
+            .contains(&RoleCapabilityKey::ObservabilityHistory)
+        {
+            return Err(ObservationFailure::Unsupported);
+        }
+        let request = PublicHistoryRequest {
+            family: PublicMetricFamily::Cycles,
+            name: "balance".into(),
+            canister_id: Some(
+                ic_platform::Principal::from_text(&entry.pid)
+                    .map_err(|_| ObservationFailure::InvalidResponse)?,
+            ),
+            page: PageRequest {
+                limit: 1,
+                offset: 0,
+            },
         };
+        let argument = ic_wire::native::encode_request(
+            protocol::public_history::METHOD_ID,
+            &request,
+            protocol::public_history::REQUEST_LIMITS,
+        )
+        .map_err(|_| ObservationFailure::InvalidResponse)?;
+        let envelope = self.query_encoded(
+            entry,
+            protocol::CANIC_PUBLIC_HISTORY,
+            &argument,
+            NativeQueryContract {
+                method_id: protocol::public_history::METHOD_ID,
+                request: protocol::public_history::REQUEST_LIMITS,
+                response: protocol::public_history::RESPONSE_LIMITS,
+            },
+        )?;
+        let reply: PublicHistorySnapshot = decode_public_reply(
+            &envelope,
+            self.maximum_response_bytes,
+            protocol::public_history::METHOD_ID,
+            protocol::public_history::RESPONSE_LIMITS,
+        )?;
         if reply.points.entries.len() > 1 {
             return Err(ObservationFailure::InvalidResponse);
         }
@@ -337,19 +491,17 @@ fn response_failure(error: IcpJsonResponseError) -> ObservationFailure {
     }
 }
 
-fn decode_reply<O: CandidType + serde::de::DeserializeOwned>(
+fn decode_public_reply<T: serde::Serialize + serde::de::DeserializeOwned>(
     envelope: &str,
     maximum_bytes: usize,
-) -> Result<O, ObservationFailure> {
+    method_id: u64,
+    mut limits: ic_wire::Limits,
+) -> Result<T, ObservationFailure> {
+    if envelope.len() > maximum_bytes {
+        return Err(ObservationFailure::InvalidResponse);
+    }
     let bytes = response_bytes(envelope).map_err(response_failure)?;
-    let mut config = ic_platform::candid::decoder::DecoderConfig::new();
-    // Bound decoder work as well as captured bytes, including skipped Candid fields.
-    config.set_decoding_quota(maximum_bytes.saturating_mul(64));
-    config.set_skipping_quota(maximum_bytes);
-    let reply: Result<O, canic_contracts::dto::error::Error> =
-        ic_platform::candid::decoder::decode_one_with_config(&bytes, &config)
-            .map_err(|_| ObservationFailure::InvalidResponse)?;
-    reply.map_err(|error| ObservationFailure::Rejected {
-        code: u32::from(error.raw_code()),
-    })
+    limits.bytes = limits.bytes.min(maximum_bytes);
+    ic_wire::native::decode_response(method_id, &bytes, limits)
+        .map_err(|_| ObservationFailure::InvalidResponse)
 }

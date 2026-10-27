@@ -1,0 +1,3775 @@
+{
+  "kind": "development-evidence-not-release-validation",
+  "date": "2026-10-26",
+  "head": "cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5",
+  "branch": "main",
+  "dirty": true,
+  "packageVersion": "0.111.0",
+  "openDraft": "0.112.0",
+  "note": "Each log qualifies its recorded source slice and graph; earlier native runs do not independently qualify later changes. Initial size measurements predate final cursor allowance and consent-wrapper changes; full-App artifact records are listed separately.",
+  "locks": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "1d4c851ca75d1e576ff5f48568fd97cb42cdb16417e0b79e648b721a816a0612",
+      "packages": [
+        {
+          "name": "candid",
+          "version": "0.10.39"
+        },
+        {
+          "name": "candid_derive",
+          "version": "0.10.39"
+        },
+        {
+          "name": "candid_parser",
+          "version": "0.4.1"
+        },
+        {
+          "name": "canic",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-backup",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-blob-service",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-cli",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-contracts",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-control-plane",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-core",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-host",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-macros",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-testing-internal",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-tests",
+          "version": "0.111.0"
+        },
+        {
+          "name": "ic-blob-storage",
+          "version": "0.49.2"
+        },
+        {
+          "name": "ic-blob-storage-contracts",
+          "version": "0.49.2"
+        },
+        {
+          "name": "ic-memory",
+          "version": "0.51.5"
+        },
+        {
+          "name": "ic-platform",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-platform-macros",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-query",
+          "version": "0.74.3"
+        },
+        {
+          "name": "ic-storage",
+          "version": "0.51.5"
+        },
+        {
+          "name": "ic-wire",
+          "version": "0.7.18"
+        },
+        {
+          "name": "ic-wire-derive",
+          "version": "0.7.18"
+        },
+        {
+          "name": "serde_cbor",
+          "version": "0.11.2"
+        }
+      ],
+      "currentSha256": "1d4c851ca75d1e576ff5f48568fd97cb42cdb16417e0b79e648b721a816a0612",
+      "unchangedFromCapture": true
+    },
+    {
+      "path": "integrations/blob-service/consumer/Cargo.lock",
+      "sha256": "c0b98999346e8ff37c81fb7bf24a797165c49ec68a4933786275ce742a6b78bf",
+      "packages": [
+        {
+          "name": "candid",
+          "version": "0.10.39"
+        },
+        {
+          "name": "candid_derive",
+          "version": "0.10.39"
+        },
+        {
+          "name": "canic",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-blob-service",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-contracts",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-core",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-macros",
+          "version": "0.111.0"
+        },
+        {
+          "name": "ic-blob-storage",
+          "version": "0.49.1"
+        },
+        {
+          "name": "ic-blob-storage-contracts",
+          "version": "0.49.1"
+        },
+        {
+          "name": "ic-memory",
+          "version": "0.51.4"
+        },
+        {
+          "name": "ic-platform",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-platform-macros",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-storage",
+          "version": "0.51.4"
+        },
+        {
+          "name": "ic-wire",
+          "version": "0.7.17"
+        },
+        {
+          "name": "ic-wire-derive",
+          "version": "0.7.17"
+        },
+        {
+          "name": "serde_cbor",
+          "version": "0.11.2"
+        }
+      ],
+      "currentSha256": "c0b98999346e8ff37c81fb7bf24a797165c49ec68a4933786275ce742a6b78bf",
+      "unchangedFromCapture": true
+    },
+    {
+      "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+      "sha256": "b008d2ce0719e055f189c376eeb7a5579d1a8bbdf2cfa03728985412219046bd",
+      "packages": [
+        {
+          "name": "candid",
+          "version": "0.10.39"
+        },
+        {
+          "name": "candid_derive",
+          "version": "0.10.39"
+        },
+        {
+          "name": "canic",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-blob-service",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-contracts",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-core",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-macros",
+          "version": "0.111.0"
+        },
+        {
+          "name": "ic-blob-storage",
+          "version": "0.49.1"
+        },
+        {
+          "name": "ic-blob-storage-contracts",
+          "version": "0.49.1"
+        },
+        {
+          "name": "ic-memory",
+          "version": "0.51.4"
+        },
+        {
+          "name": "ic-platform",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-platform-macros",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-storage",
+          "version": "0.51.4"
+        },
+        {
+          "name": "ic-wire",
+          "version": "0.7.17"
+        },
+        {
+          "name": "ic-wire-derive",
+          "version": "0.7.17"
+        },
+        {
+          "name": "serde_cbor",
+          "version": "0.11.2"
+        }
+      ],
+      "currentSha256": "941f7dee1b73719a908155931a018deae3bf7dfc0c2e8e2a56cc9e33ac2183db",
+      "unchangedFromCapture": false
+    },
+    {
+      "path": "integrations/blob-service/consumer/.canic/generated/canic.toml/canic-fleet-root/Cargo.lock",
+      "sha256": "63961bc843ebbda403047ce0a9f94a804f6fd6d0c82eec8c2e66815b2a845121",
+      "packages": [
+        {
+          "name": "candid",
+          "version": "0.10.39"
+        },
+        {
+          "name": "candid_derive",
+          "version": "0.10.39"
+        },
+        {
+          "name": "canic",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-contracts",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-control-plane",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-core",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-fleet-root",
+          "version": "0.111.0"
+        },
+        {
+          "name": "canic-macros",
+          "version": "0.111.0"
+        },
+        {
+          "name": "ic-memory",
+          "version": "0.51.4"
+        },
+        {
+          "name": "ic-platform",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-platform-macros",
+          "version": "0.6.19"
+        },
+        {
+          "name": "ic-storage",
+          "version": "0.51.4"
+        },
+        {
+          "name": "ic-wire",
+          "version": "0.7.17"
+        },
+        {
+          "name": "ic-wire-derive",
+          "version": "0.7.17"
+        },
+        {
+          "name": "serde_cbor",
+          "version": "0.11.2"
+        }
+      ],
+      "currentSha256": "63961bc843ebbda403047ce0a9f94a804f6fd6d0c82eec8c2e66815b2a845121",
+      "unchangedFromCapture": true
+    }
+  ],
+  "embeddedLockChange": {
+    "beforePath": "/tmp/canic-storage-experiment-20261026/workspace/integrations/blob-service/embedded-consumer/Cargo.lock",
+    "beforeSha256": "b008d2ce0719e055f189c376eeb7a5579d1a8bbdf2cfa03728985412219046bd",
+    "afterPath": "integrations/blob-service/embedded-consumer/Cargo.lock",
+    "afterSha256": "941f7dee1b73719a908155931a018deae3bf7dfc0c2e8e2a56cc9e33ac2183db",
+    "cause": "Explicit ic-platform icrc-ledger-types feature for imported upstream Account and TransferError contracts.",
+    "addedPackages": [
+      {
+        "name": "base32",
+        "version": "0.4.0",
+        "checksum": "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa",
+        "dependencies": []
+      },
+      {
+        "name": "icrc-cbor",
+        "version": "0.1.0",
+        "checksum": "90569d2894d9536c5416943556ac6339df249f06611b3c41029196b39e0dd119",
+        "dependencies": [
+          "candid",
+          "minicbor",
+          "num-bigint",
+          "num-traits"
+        ]
+      },
+      {
+        "name": "icrc-ledger-types",
+        "version": "0.2.0",
+        "checksum": "a11c866a01b93ef6bd0e3dc01374df41bc70a8b79027a2fd120543a094668978",
+        "dependencies": [
+          "base32",
+          "candid",
+          "crc32fast",
+          "hex",
+          "icrc-cbor",
+          "minicbor",
+          "num-bigint",
+          "num-traits",
+          "serde",
+          "serde_bytes",
+          "sha2 0.10.9",
+          "strum",
+          "strum_macros",
+          "time"
+        ]
+      },
+      {
+        "name": "libm",
+        "version": "0.2.16",
+        "checksum": "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981",
+        "dependencies": []
+      },
+      {
+        "name": "minicbor",
+        "version": "0.19.1",
+        "checksum": "d7005aaf257a59ff4de471a9d5538ec868a21586534fff7f85dd97d4043a6139",
+        "dependencies": [
+          "minicbor-derive"
+        ]
+      },
+      {
+        "name": "minicbor-derive",
+        "version": "0.13.0",
+        "checksum": "1154809406efdb7982841adb6311b3d095b46f78342dd646736122fe6b19e267",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 1.0.109"
+        ]
+      },
+      {
+        "name": "rustversion",
+        "version": "1.0.23",
+        "checksum": "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f",
+        "dependencies": []
+      },
+      {
+        "name": "strum",
+        "version": "0.26.3",
+        "checksum": "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06",
+        "dependencies": [
+          "strum_macros"
+        ]
+      },
+      {
+        "name": "strum_macros",
+        "version": "0.26.4",
+        "checksum": "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be",
+        "dependencies": [
+          "heck",
+          "proc-macro2",
+          "quote",
+          "rustversion",
+          "syn 2.0.119"
+        ]
+      },
+      {
+        "name": "syn",
+        "version": "1.0.109",
+        "checksum": "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "unicode-ident"
+        ]
+      }
+    ],
+    "removedPackages": [],
+    "changedRetainedChecksums": [],
+    "changedDependencyEdges": [
+      {
+        "name": "hex",
+        "version": "0.4.3",
+        "before": [],
+        "after": [
+          "serde"
+        ]
+      },
+      {
+        "name": "ic-platform",
+        "version": "0.6.19",
+        "before": [
+          "candid",
+          "crc32fast",
+          "data-encoding",
+          "ic-cdk-executor",
+          "ic-management-canister-types",
+          "ic-platform-macros",
+          "ic-secp256k1",
+          "ic-stable-structures",
+          "ic-wire",
+          "ic0",
+          "ic_principal",
+          "pin-project-lite",
+          "serde",
+          "serde_json",
+          "thiserror 2.0.21"
+        ],
+        "after": [
+          "candid",
+          "crc32fast",
+          "data-encoding",
+          "ic-cdk-executor",
+          "ic-management-canister-types",
+          "ic-platform-macros",
+          "ic-secp256k1",
+          "ic-stable-structures",
+          "ic-wire",
+          "ic0",
+          "ic_principal",
+          "icrc-ledger-types",
+          "pin-project-lite",
+          "serde",
+          "serde_json",
+          "thiserror 2.0.21"
+        ]
+      },
+      {
+        "name": "num-traits",
+        "version": "0.2.19",
+        "before": [
+          "autocfg"
+        ],
+        "after": [
+          "autocfg",
+          "libm"
+        ]
+      }
+    ]
+  },
+  "rootMeasurements": [
+    {
+      "path": "/tmp/canic-extraction-closeout-20261026/root-typed-final.wasm",
+      "sha256": "88a49030c440cef629b21f17c29b2eb9f0e59ec1c6d9ed56c17aa43aab3ad646",
+      "totalBytes": 9334807,
+      "codeBodyBytes": 8802273,
+      "functions": 33700
+    },
+    {
+      "path": "integrations/blob-service/consumer/.icp/local/canisters/root/root.wasm",
+      "sha256": "56e7ccc5f735964d8eb398839afc736bfb5a009d953525ba73526b77dc4ec852",
+      "totalBytes": 9109417,
+      "codeBodyBytes": 8597689,
+      "functions": 32925
+    },
+    {
+      "path": "integrations/blob-service/consumer/.canic/release-builds/d55b2185278e608f71a163140dca3ff6e9b05b8efcdde0e027eca0f19a8bb97d/artifacts/root/root.wasm",
+      "sha256": "d79e1cba6161b78ee1fe687e2c03405328a06a4ba7bc588258bda8d6e11b0e64",
+      "totalBytes": 9109546,
+      "codeBodyBytes": 8597817,
+      "functions": 32926
+    },
+    {
+      "path": "integrations/blob-service/consumer/.canic/release-builds/bc353a6cdc28d33dec5b2c58c0c3daed7ac26f25bbe739dc28a49f949a04ebe7/artifacts/root/root.wasm",
+      "sha256": "2d93f41d95edbd5422ea5bd0690a59f49ea4445cdd02da2106307b95fb338c35",
+      "totalBytes": 9109546,
+      "codeBodyBytes": 8597817,
+      "functions": 32926
+    }
+  ],
+  "commands": [
+    {
+      "label": "macros-lifecycle",
+      "command": "cargo test --locked --offline -p canic-macros --lib lifecycle::",
+      "log": "/tmp/canic-candid-hard-cut-20261026/macros-lifecycle.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.97s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "core-config",
+      "command": "cargo test --locked --offline -p canic-core --lib config:: --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/core-config.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 50.67s",
+        "test result: ok. 151 passed; 0 failed; 0 ignored; 0 measured; 1204 filtered out; finished in 2.19s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "core-auth",
+      "command": "cargo test --locked --offline -p canic-core --lib ops::auth:: --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/core-auth.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.10s",
+        "test ops::auth::error::tests::proof_availability_and_validation_retain_public_auth_causes ... ok",
+        "test ops::auth::error::tests::root_data_certificate_unavailable_maps_to_public_code ... ok",
+        "test result: ok. 132 passed; 0 failed; 0 ignored; 0 measured; 1223 filtered out; finished in 0.18s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "cp-provisioning",
+      "command": "cargo test --locked --offline -p canic-control-plane --lib ops::component_provisioning:: --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/cp-provisioning.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 1m 08s",
+        "test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 333 filtered out; finished in 0.01s",
+        "error: test failed, to rerun pass `-p canic-control-plane --lib`"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "cp-registry",
+      "command": "cargo test --locked --offline -p canic-control-plane --lib ops::component_registry:: --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/cp-registry.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.10s",
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 316 filtered out; finished in 0.14s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "cp-cursor",
+      "command": "cargo test --locked --offline -p canic-control-plane --lib component_directory_cursor_is_opaque_and_bound_to_head_and_filters --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/cp-cursor.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 348 filtered out; finished in 0.00s",
+        "error: test failed, to rerun pass `-p canic-control-plane --lib`"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "fixture-payloads",
+      "command": "cargo test --locked --offline -p canic-testing-internal --test fixture_payloads --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/fixture-payloads.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 1m 21s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "facade-contracts",
+      "command": "cargo test --locked --offline -p canic --test ids_facade --test protocol_surface --test endpoint_macro --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/facade-contracts.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 1m 09s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "lifecycle-consumer-check",
+      "command": "cargo check --locked --offline -p canic-tests --test lifecycle_boundary --test pic_ingress_payload_limits",
+      "log": "/tmp/canic-candid-hard-cut-20261026/lifecycle-consumer-check.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 40.32s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "cp-provisioning-r2",
+      "command": "cargo test --locked --offline -p canic-control-plane --lib ops::component_provisioning:: --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/cp-provisioning-r2.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 15.05s",
+        "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 333 filtered out; finished in 0.01s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "host-version-proof",
+      "command": "cargo test --locked --offline -p canic-host --lib versionless_icp_status_uses_exact_typed_management_version --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/host-version-proof.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 50.17s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1281 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "cp-cursor-r2",
+      "command": "cargo test --locked --offline -p canic-control-plane --lib component_directory_cursor_is_opaque_and_bound_to_head_and_filters --all-features",
+      "log": "/tmp/canic-candid-hard-cut-20261026/cp-cursor-r2.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 18.65s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 348 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "canonical-coordinator",
+      "command": "cargo run --locked --offline -p canic-host --example build_artifact -- fleet_coordinator fast . . apps/test/canic.toml --environment local --refresh-canonical-did",
+      "log": "/tmp/canic-candid-hard-cut-20261026/canonical-coordinator.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 53.44s",
+        "/home/adam/projects/canic/.icp/local/canisters/fleet_coordinator/fleet_coordinator.wasm.gz"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "canonical-store",
+      "command": "cargo run --locked --offline -p canic-host --example build_artifact -- wasm_store fast . . apps/test/canic.toml --environment local --refresh-canonical-did",
+      "log": "/tmp/canic-candid-hard-cut-20261026/canonical-store.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 0.21s",
+        "/home/adam/projects/canic/.icp/local/canisters/wasm_store/wasm_store.wasm.gz"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "embedded-peer",
+      "command": "cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+      "log": "/tmp/canic-candid-hard-cut-20261026/embedded-peer.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 58.73s"
+      ],
+      "outcome": "passed (governed regeneration script exited successfully)"
+    },
+    {
+      "label": "dedicated-blob",
+      "command": "cargo run --locked --offline -p canic-host --example build_artifact -- blob fast integrations/blob-service/consumer integrations/blob-service/consumer canic.toml --environment local",
+      "log": "/tmp/canic-candid-hard-cut-20261026/dedicated-blob.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 0.17s",
+        "/home/adam/projects/canic/integrations/blob-service/consumer/.icp/local/canisters/blob/blob.wasm.gz"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "embedded-blob",
+      "command": "cargo run --locked --offline -p canic-host --example build_artifact -- backend fast integrations/blob-service/embedded-consumer integrations/blob-service/embedded-consumer canic.toml --environment local",
+      "log": "/tmp/canic-candid-hard-cut-20261026/embedded-blob.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 0.19s",
+        "/home/adam/projects/canic/integrations/blob-service/embedded-consumer/.icp/local/canisters/backend/backend.wasm.gz"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "icrc21-runtime-check",
+      "command": "cargo check --locked --offline -p runtime_probe --lib",
+      "log": "/tmp/canic-candid-hard-cut-20261026/icrc21-runtime-check.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 24.15s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "icrc21-facade-test",
+      "command": "cargo test --locked --offline -p canic --test protocol_surface",
+      "log": "/tmp/canic-candid-hard-cut-20261026/icrc21-facade-test.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 40.39s",
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "strict-lint-r3",
+      "command": "cargo clippy --locked --offline -p canic-contracts -p canic-core -p canic-control-plane -p canic-host -p canic-macros -p canic --lib --all-features -- -D warnings",
+      "log": "/tmp/canic-candid-hard-cut-20261026/strict-lint-r3.log",
+      "resultLines": [
+        "error: this function has a `#[must_use]` attribute with no message, but returns a type already considered as `#[must_use]`",
+        "error: this function has a `#[must_use]` attribute with no message, but returns a type already considered as `#[must_use]`",
+        "error: could not compile `canic-core` (lib) due to 2 previous errors"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "installed-blob-dedicated",
+      "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_composition_dedicated",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-blob-dedicated.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 2m 12s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.20s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 440.71s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 442.16s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 440.71s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 442.16s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "make: *** [Makefile:452: test-pocketic-case] Error 1"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "installed-blob-embedded",
+      "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_composition_embedded",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-blob-embedded.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 151.47s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 8.57s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 8.55s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 8.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 8.50s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 290.89s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "installed-payload-limits",
+      "command": "make test-pocketic-case CASE=pic_ingress_payload_limits",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-payload-limits.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 1m 41s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.87s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "strict-lint-r4",
+      "command": "cargo clippy --locked --offline -p canic-contracts -p canic-core -p canic-control-plane -p canic-host -p canic-macros -p canic --lib --all-features -- -D warnings",
+      "log": "/tmp/canic-candid-hard-cut-20261026/strict-lint-r4.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 28.12s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "host-install-history",
+      "command": "cargo test (canic-host lib; install_history filter; full invocation not retained)",
+      "log": "/tmp/canic-candid-hard-cut-20261026/host-install-history.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 1m 28s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1278 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "installed-checkpoint",
+      "command": "make test-pocketic-case CASE=pic::lifecycle::tests::application_checkpoint_freeze_restore_and_delayed_messages",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-checkpoint.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 22.06s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 22.06s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "make: *** [Makefile:452: test-pocketic-case] Error 1"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "installed-root-bootstrap",
+      "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-root-bootstrap.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 338.62s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 338.62s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "make: *** [Makefile:452: test-pocketic-case] Error 1"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "installed-root-recovery",
+      "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::root_restart_reconciles_held_store_grant_and_revocation_replies",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-root-recovery.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s",
+        "error[E0425]: cannot find function `trap` in module `$crate::__internal::cdk::api`",
+        "error: could not compile `canic-fleet-wasm-store` (lib) due to 6 previous errors",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 122 filtered out; finished in 78.04s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "error[E0425]: cannot find function `trap` in module `$crate::__internal::cdk::api`",
+        "error: could not compile `canic-fleet-wasm-store` (lib) due to 6 previous errors",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 122 filtered out; finished in 78.04s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "make: *** [Makefile:452: test-pocketic-case] Error 1"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "installed-release-binding",
+      "command": "make test-pocketic-case CASE=canister_build::release_binding::tests::governed_pocketic_release_binding_retains_runtime_identity",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-release-binding.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 1m 52s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.19s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1273 filtered out; finished in 25.31s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "blob-fixture-lint",
+      "command": "cargo clippy --locked --offline -p canic-testing-internal --lib --tests --features governed-pocketic-tests -- -D warnings",
+      "log": "/tmp/canic-candid-hard-cut-20261026/blob-fixture-lint.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 59.91s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "installed-blob-dedicated-r2",
+      "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_composition_dedicated",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-blob-dedicated-r2.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 12.59s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.20s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 116.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 130.92s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "installed-checkpoint-r2",
+      "command": "make test-pocketic-case CASE=pic::lifecycle::tests::application_checkpoint_freeze_restore_and_delayed_messages",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-checkpoint-r2.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 12.58s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 6.33s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 121 filtered out; finished in 6.33s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "make: *** [Makefile:452: test-pocketic-case] Error 1"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "installed-checkpoint-r3",
+      "command": "make test-pocketic-case CASE=pic::lifecycle::tests::application_checkpoint_freeze_restore_and_delayed_messages",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-checkpoint-r3.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 12.84s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 7.22s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "operation-fixture-budgets",
+      "command": "cargo test --locked --offline -p canic-testing-internal --lib --features governed-pocketic-tests operation_fixture_budgets_admit_complete_current_requests",
+      "log": "/tmp/canic-candid-hard-cut-20261026/operation-fixture-budgets.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 8.98s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "installed-root-bootstrap-r2",
+      "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-root-bootstrap-r2.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 12.46s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 12.46s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+        "error: test failed, to rerun pass `-p canic-testing-internal --lib`",
+        "error: 1 target failed:",
+        "make: *** [Makefile:452: test-pocketic-case] Error 1"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "operation-fixture-budgets-r2",
+      "command": "cargo test --locked --offline -p canic-testing-internal --lib --features governed-pocketic-tests operation_fixture_budgets_admit_complete_current_requests",
+      "log": "/tmp/canic-candid-hard-cut-20261026/operation-fixture-budgets-r2.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 7.55s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.00s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "installed-root-bootstrap-r3",
+      "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-root-bootstrap-r3.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 12.47s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 82.58s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "installed-root-recovery-r2",
+      "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::root_restart_reconciles_held_store_grant_and_revocation_replies",
+      "log": "/tmp/canic-candid-hard-cut-20261026/installed-root-recovery-r2.log",
+      "resultLines": [
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 15.58s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s",
+        "    Finished `fast` profile [optimized] target(s) in 1.80s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 100.21s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "strict-fixture-lint-final",
+      "command": "cargo clippy --locked --offline -p canic-testing-internal --lib --tests --features governed-pocketic-tests -- -D warnings",
+      "log": "/tmp/canic-candid-hard-cut-20261026/strict-fixture-lint-final.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 2.31s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "strict-app-lint-final",
+      "command": "cargo clippy --locked --offline -p canic --lib --all-features -p canister_user_hub -p canister_user_shard -p canister_index_hub -p managed_lifecycle_probe -- -D warnings",
+      "log": "/tmp/canic-candid-hard-cut-20261026/strict-app-lint-final.log",
+      "resultLines": [
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: long literal lacking separators",
+        "error: could not compile `canister_index_hub` (lib) due to 2 previous errors",
+        "error: could not compile `canister_user_shard` (lib) due to 9 previous errors",
+        "error: could not compile `canister_user_hub` (lib) due to 13 previous errors"
+      ],
+      "outcome": "failed"
+    },
+    {
+      "label": "strict-app-lint-final-r2",
+      "command": "cargo clippy --locked --offline -p canic --lib --all-features -p canister_user_hub -p canister_user_shard -p canister_index_hub -p managed_lifecycle_probe -- -D warnings",
+      "log": "/tmp/canic-candid-hard-cut-20261026/strict-app-lint-final-r2.log",
+      "resultLines": [
+        "    Finished `dev` profile [optimized + debuginfo] target(s) in 0.72s"
+      ],
+      "outcome": "passed"
+    },
+    {
+      "label": "final-format",
+      "command": "xargs -d '\\n' rustfmt --edition 2024 --check --config skip_children=true < /tmp/canic-candid-hard-cut-20261026/final-format-files.txt",
+      "log": "/tmp/canic-candid-hard-cut-20261026/final-format.log",
+      "resultLines": [],
+      "outcome": "passed"
+    }
+  ],
+  "finalSource": {
+    "trackedDiffSha256": "fc58ab2665cc36b2fb06183127c5eeb3f9f0692f2f3dd2c44687d862c237e4e3",
+    "trackedDiffPath": "/tmp/canic-candid-hard-cut-20261026/final-worktree.patch",
+    "untrackedFiles": [
+      {
+        "path": "apps/demo/app/examples/wire_schema/main.rs",
+        "sha256": "5d4dd3a5edf69bde4a661c0a5fd3298e18d9f8bbeef114a7940de0e556e18703"
+      },
+      {
+        "path": "apps/demo/user_hub/examples/wire_schema/main.rs",
+        "sha256": "44a91188a06113e60bd4ba3ecd01fea31bdfcbf9463fefacb0b41b78f704e506"
+      },
+      {
+        "path": "apps/demo/user_hub/src/protocol/mod.rs",
+        "sha256": "caf957d9b66ed00cca28935454a9ebfedb1282aafbbabec5162e69499237e355"
+      },
+      {
+        "path": "apps/demo/user_shard/examples/wire_schema/main.rs",
+        "sha256": "b2ac4d76067ac9a2f0195f6e332f998db05de9f4074fab961f05d5913068bb92"
+      },
+      {
+        "path": "apps/demo/user_shard/src/protocol/mod.rs",
+        "sha256": "9ca0f115aaeac63eca9268857fee8b94bf1612a3bec1381200d29dd3bf7107c1"
+      },
+      {
+        "path": "apps/test/app/examples/wire_schema/main.rs",
+        "sha256": "eb6cb4975e269246b44674e4d0c4d064ce6ddbcd10e38f4228014954808687b4"
+      },
+      {
+        "path": "apps/test/index_child/examples/wire_schema/main.rs",
+        "sha256": "575358b4402290407b67aa509d90b581438f0a943797bfe9f68d674057883d13"
+      },
+      {
+        "path": "apps/test/index_child/src/protocol/mod.rs",
+        "sha256": "9042089beceecbd5d5d5a0d1555202849bf34dcf3741aefc7b61c7ae0e262258"
+      },
+      {
+        "path": "apps/test/index_hub/examples/wire_schema/main.rs",
+        "sha256": "dd786aa932b8062198ac87516cd04782f158675a4e4aa6521480c9bb1e10a317"
+      },
+      {
+        "path": "apps/test/index_hub/src/ops/mod.rs",
+        "sha256": "ebb4d3843d5556eb3af573effe0768c1cef930ed5c959a99fbfd8f2d628a922d"
+      },
+      {
+        "path": "apps/test/index_hub/src/protocol/mod.rs",
+        "sha256": "e7499b984e4a7878766bec9b80d534807a20a38df087373a71c48c5c23fe68c1"
+      },
+      {
+        "path": "apps/test/scale/examples/wire_schema/main.rs",
+        "sha256": "befc8ba8c41ec21f9ad859cc939080cc7ea578ec9d7c8bed7b913b8f65b5ec35"
+      },
+      {
+        "path": "apps/test/scale/src/protocol/mod.rs",
+        "sha256": "3be625cf12869ce0ee775900368b73e7255808b7ee6160327a98eb7f8d170e97"
+      },
+      {
+        "path": "apps/test/scale_hub/examples/wire_schema/main.rs",
+        "sha256": "2be8ced069dbd3a470736bb9332559f4e98e30f7fe5823f517c6f30d99abb3a3"
+      },
+      {
+        "path": "apps/test/scale_hub/src/protocol/mod.rs",
+        "sha256": "88418694d82f1b14725f80f0e607867de0e4f969789bf5bcdf829fe46554d89b"
+      },
+      {
+        "path": "apps/test/test/examples/wire_schema/main.rs",
+        "sha256": "d09cffb2c90524d910dcb062f8d970f38198512d2b23bcc8632007c7e81eae44"
+      },
+      {
+        "path": "apps/test/test/src/protocol/mod.rs",
+        "sha256": "0352a08e4d470d8f55da32a2910e1a20ae99d96cc850384c7fc3a16cd0e19e08"
+      },
+      {
+        "path": "apps/test/user_hub/examples/wire_schema/main.rs",
+        "sha256": "e17d200eedc055f345d9c175d8a4c87591c57588dac1fc3d2cd9aecfb18ac3de"
+      },
+      {
+        "path": "apps/test/user_hub/src/protocol/mod.rs",
+        "sha256": "06a7cf01880a9d8b2ef6d61f6110e91395ef9cf1152170274d988fabf52feb80"
+      },
+      {
+        "path": "apps/test/user_shard/examples/wire_schema/main.rs",
+        "sha256": "5c96770a87d19a15d2a7bf77010aed57d64204a5ae391be37bed9be8e6f4e9ed"
+      },
+      {
+        "path": "apps/test/user_shard/src/protocol/mod.rs",
+        "sha256": "694f4e383c43bf2dc488d8da751fc91fe691846b4c8a73c8e604b5951b5cf91e"
+      },
+      {
+        "path": "canisters/audit/leaf_probe/examples/wire_schema/main.rs",
+        "sha256": "9b010c0ea80dc911d3677353125f15506bb6f4c0c0dc5116f29974d457c04dda"
+      },
+      {
+        "path": "canisters/audit/leaf_probe/src/ops/mod.rs",
+        "sha256": "9ab9aa62d5793ec4124da31082f44f604318354974cfa4801d50940b2e72e23d"
+      },
+      {
+        "path": "canisters/audit/leaf_probe/src/protocol/mod.rs",
+        "sha256": "09009118fbde71896395c9a3bf8c650374069b71ea1f7f0038bad253a63a06d7"
+      },
+      {
+        "path": "canisters/audit/leaf_probe/src/tests/mod.rs",
+        "sha256": "d29a8e35518af8efb3d28dafbac356ff9d06c9ce3c2d66dfb17559d61fd038d8"
+      },
+      {
+        "path": "canisters/audit/local_authorization_probe/examples/wire_schema/main.rs",
+        "sha256": "b663dfcca4d5206e72e3647de191e39112f40840ca6bc79d4cdf27c8f7d1de78"
+      },
+      {
+        "path": "canisters/audit/minimal/examples/wire_schema/main.rs",
+        "sha256": "711142029af062fbcc8683e2e030109721466fc1acf8e787563e4d50f1ba65cc"
+      },
+      {
+        "path": "canisters/audit/minimal_metrics/examples/wire_schema/main.rs",
+        "sha256": "53d81da37aba0628707d95c4b8b6619b8fa2f727f0264eafedda177ac7a27a1f"
+      },
+      {
+        "path": "canisters/audit/root_probe/examples/wire_schema/main.rs",
+        "sha256": "01f718b692fccc6e414a042246c7e8c321e84668893507682f5dd268094d7e34"
+      },
+      {
+        "path": "canisters/audit/root_probe/operator-component.toml",
+        "sha256": "1908c2d394af22c713843c9ebd7ca0a08b0b9ccfe512eb14e363b7cc6e3213f5"
+      },
+      {
+        "path": "canisters/audit/root_probe/src/protocol/mod.rs",
+        "sha256": "7f4221e7495887fc238b02cc7742b720bdc66ace1393a7a8bc63d922e4c658ab"
+      },
+      {
+        "path": "canisters/audit/scaling_probe/examples/wire_schema/main.rs",
+        "sha256": "1fe9892d2891192127f229d1b71323440e417001ae67e629830f0975f8c832b0"
+      },
+      {
+        "path": "canisters/audit/scaling_probe/src/protocol/mod.rs",
+        "sha256": "565317bcca433639dcf653685b7a36a852062d45587cce46013ae31c87fb01b5"
+      },
+      {
+        "path": "canisters/sandbox/blank/examples/wire_schema/main.rs",
+        "sha256": "5fac7f5c7a300f1311b3e9c8ed4bd5b19c66496d1856f10a67458310d379e0cf"
+      },
+      {
+        "path": "canisters/sandbox/blank/src/protocol/mod.rs",
+        "sha256": "4203721ddd93dedffd5fc8d0e8ad2ee615f5c1554f8888c2411c5bd7bcffba83"
+      },
+      {
+        "path": "canisters/test/cycles_ledger_stub/examples/wire_schema/main.rs",
+        "sha256": "fe2a4aaae65c2d7f44723deff558088f5d1517fbe744d6ebfa706a8adbb82d1c"
+      },
+      {
+        "path": "canisters/test/cycles_ledger_stub/src/codec/tests/mod.rs",
+        "sha256": "e4eb8e667835e0c2f3e1a173fbba1a2eb25e03e9791c9a782ea49fafb04af7b3"
+      },
+      {
+        "path": "canisters/test/cycles_ledger_stub/src/protocol/mod.rs",
+        "sha256": "0f49e00263c4afdb612b0d2a8154c3dde53266f642c371363ea78811e1df7f68"
+      },
+      {
+        "path": "canisters/test/cycles_ledger_stub/src/schema/mod.rs",
+        "sha256": "cae6f95052ce982902451af0c8131b14decbaed1d9b21c0f61eb9febf2d45bf6"
+      },
+      {
+        "path": "canisters/test/delegation_issuer_stub/examples/wire_schema/main.rs",
+        "sha256": "5de345b3fc3e63a39ceef03101d72611fa49a492411382b259096cfd3df528e6"
+      },
+      {
+        "path": "canisters/test/delegation_issuer_stub/src/protocol/mod.rs",
+        "sha256": "feb9c3d8c6e9009a8407547b62b944ebf0e0d8092d431609ba2542c26d8c5e83"
+      },
+      {
+        "path": "canisters/test/delegation_root_stub/examples/wire_schema/main.rs",
+        "sha256": "daf0acf4bf7def10349d75b0817629ae34d85c88c5f4e61678e4f19ae7bfe121"
+      },
+      {
+        "path": "canisters/test/delegation_root_stub/src/protocol/mod.rs",
+        "sha256": "cd1256840330895937afdebc75d4850a0a4b91b8e97af1fefa6b752ca09c67c5"
+      },
+      {
+        "path": "canisters/test/intent_authority/examples/wire_schema/main.rs",
+        "sha256": "61f312808f4dbbddd9c2e6a42988a8ae9eb45cfb4ddd2d87e2fbb20966b92eff"
+      },
+      {
+        "path": "canisters/test/intent_authority/src/protocol/mod.rs",
+        "sha256": "b2089a34d5709e89c3002ce8bdbc20c979924cd11e8a158b80a539da7e6712e4"
+      },
+      {
+        "path": "canisters/test/managed_lifecycle_probe/checkpoint.toml",
+        "sha256": "779ddd355e67371e3bb84953eb00f98cba4d8fdcfbedd03464ab4c2e7a4760b6"
+      },
+      {
+        "path": "canisters/test/managed_lifecycle_probe/examples/wire_schema/main.rs",
+        "sha256": "aa4e8877faef76bdb6b2a50fe5090db144939e7d9ac3e81023b31cc77139cddf"
+      },
+      {
+        "path": "canisters/test/managed_lifecycle_probe/src/checkpoint/ops/mod.rs",
+        "sha256": "d2d6b0e193e111c7cc9bd5b6705972d738684890ec7129232fdc930195b5112f"
+      },
+      {
+        "path": "canisters/test/managed_lifecycle_probe/src/checkpoint/protocol/mod.rs",
+        "sha256": "362a048b74f3e041e53a9bc4d7260baf2c84afa36bc704a6bb85df02eda8f788"
+      },
+      {
+        "path": "canisters/test/managed_lifecycle_probe/src/protocol/mod.rs",
+        "sha256": "145c79ee612406d2a261f2cb08632b9712c2e54df060d284fc8ea5a3b9e1c504"
+      },
+      {
+        "path": "canisters/test/payload_limit_probe/examples/wire_schema/main.rs",
+        "sha256": "c44edc29a1125b525fcffc0b894a170d12d8d054d72fd3a62aaebf5129061ca3"
+      },
+      {
+        "path": "canisters/test/payload_limit_probe/src/tests/mod.rs",
+        "sha256": "3543715c420db8d23e6f18025b17d039a4e359ce6e36fa27c283511eafbbcbee"
+      },
+      {
+        "path": "canisters/test/root_funding_probe/examples/wire_schema/main.rs",
+        "sha256": "e523c34271a60615c8a6a28c8804c19c1286dc3099a892bbbe9ea55feb67e693"
+      },
+      {
+        "path": "canisters/test/root_funding_probe/src/ops/mod.rs",
+        "sha256": "0aac8271d7f6b0549569e8cdfd6a9d8afc012ef4aeadc2e82c710261b930bac3"
+      },
+      {
+        "path": "canisters/test/root_funding_probe/src/protocol/mod.rs",
+        "sha256": "3177be792f775bb5829f901c4618ad0c2489fe839043f35606d265e5e080e157"
+      },
+      {
+        "path": "canisters/test/root_funding_probe/src/schema/mod.rs",
+        "sha256": "4d19ea43897d79f4df04f435408f2951bb9d8e56217a724217417b5481d56b4f"
+      },
+      {
+        "path": "canisters/test/runtime_probe/examples/wire_schema/main.rs",
+        "sha256": "144172c7fa8964493e90ea978a1ba4a3f32ef5bc492b362a5abc4c3f585d424a"
+      },
+      {
+        "path": "canisters/test/runtime_probe/src/timer_wire/mod.rs",
+        "sha256": "b5d18924aabdc96ce6ced0b4ee62debb2ea0211464a650fa75f7c5d27ce10ff7"
+      },
+      {
+        "path": "canisters/test/sharding_root_stub/examples/wire_schema/main.rs",
+        "sha256": "b638a462c82365dfdc5df95f4f8b7feecd088291945fe9c800fb5429ec6a5759"
+      },
+      {
+        "path": "canisters/test/sharding_root_stub/src/ops/mod.rs",
+        "sha256": "fd455a82b7d4591b45b7e56c1236fb043950b919b7ad8dff1b407bf28cc4cfab"
+      },
+      {
+        "path": "canisters/test/sharding_root_stub/src/protocol/mod.rs",
+        "sha256": "81ba12081416a6b4aa3a6af4ba4ef6c4f0586854a2a2b13dabf5761a58cc18f8"
+      },
+      {
+        "path": "ci/external-ic-dependencies.txt",
+        "sha256": "b32efafd147ca5bc96bbeaeab67ad175e34dfc441b14c16f3c2b7a5c70b67dca"
+      },
+      {
+        "path": "crates/canic-backup/src/restore/ordering/mod.rs",
+        "sha256": "37108d04683ed62f87719d596c85c3fb783a63407e0b20f0f4b306731f24ad2c"
+      },
+      {
+        "path": "crates/canic-cli/src/support/parallel/mod.rs",
+        "sha256": "75110b62b459089bdfb76bc6b263ac7764591bcdfc4321fec5deb84cfd64dc5a"
+      },
+      {
+        "path": "crates/canic-cli/src/support/parallel/tests.rs",
+        "sha256": "fec4d2a3a742b59866a8ac2e13a21c86c1072cbebd1befb62032c8441e3ad042"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/accounts/mod.rs",
+        "sha256": "ab4229795aa934ff9d308312b14341931566c8f037fd03ff7daa0e7643dc163d"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/check.mjs",
+        "sha256": "caaf0854a8e7588758ddf0b1389340b7c9fef952c8dadbcc07f84edd9cecd040"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/identities/mod.rs",
+        "sha256": "efbc2c288708d502102e48fbaf169b974e3cbf5cd2117afa8416403e590db1b5"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/main.rs",
+        "sha256": "a8d93745ea753461f69e4fbe5b1e811e4b91e6d7e9f7e383684096f67f71bacd"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/results/mod.rs",
+        "sha256": "7b4af6f94e3d4b6441c4ffc8cc47bbadc3d140802d5f8536d3bbf1870da02c31"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/runtime_values/mod.rs",
+        "sha256": "0bdce6618a88e23b6cdd3593a669d21aef3606c1c34bf48ce9d9542a9a04918c"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/unsigned_magnitude/mod.rs",
+        "sha256": "03caa2410d4167ba0df0f90ec7bd53d4bebeeb3ae451024d71bf1c40502c9fa3"
+      },
+      {
+        "path": "crates/canic-contracts/src/cycles/schema/mod.rs",
+        "sha256": "75905ae9c43f46fe7f5955185a841c113403e5659842b9c0a01bd1a15cc65605"
+      },
+      {
+        "path": "crates/canic-contracts/src/deployment/schema/mod.rs",
+        "sha256": "ee638c36e572e8bb9859d1aa8a5c86cb55b6bad5899ba5d7fbc81076457363fd"
+      },
+      {
+        "path": "crates/canic-contracts/src/deployment/schema/tests/mod.rs",
+        "sha256": "2a25ea3e3873541159208bb50850c1b57cb1a19fadbab59c0c1c62662609c44f"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/admission_control/mod.rs",
+        "sha256": "45c198d0ea5fd0e76fb638983d4001f58c26246dbd41419446ca8e0f76edb54a"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/authority_restore_status/mod.rs",
+        "sha256": "8a89bbdea928c0a996b43e3cc7967e0fc07ad87f0a0f30591872a9b801f001f7"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/batch_control/mod.rs",
+        "sha256": "f2c594fe4824a114fe475612236f6a1f554bd9f72de3837201de47f7f3269b46"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/caller_authority_status/mod.rs",
+        "sha256": "7fab53383f47749886539fd2c5a9a954396d438bbc5ad9a95f278cb759fa234d"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/cascade_transport/mod.rs",
+        "sha256": "6a0ac668421759e9dba8065c9ed19364670581fb09ff243d4534f7c24df94849"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/child_funding/mod.rs",
+        "sha256": "63a8810fbe2824b7b5e7d3a0bb7a4cfae031ff2e4a4079580a74669ddd24975c"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/component_control/mod.rs",
+        "sha256": "74bf3f5c7b21bf389dedd56bf7685df835d8bb4b3836701917614958e4967a12"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/component_directory/mod.rs",
+        "sha256": "f241c8f33e7cf3ec4d1b540177a957da1a4ad383d39df058969c41da145e3e1b"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/component_initialization/mod.rs",
+        "sha256": "295008ef700b658ac88f007761f8d427d7a298f45e7e7755d9c9a81529f4c940"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/component_read/mod.rs",
+        "sha256": "a2d331bb8b228d8c6755343ad7affb8c70b05cf0bad9958f299eb2fc91f8ab4a"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/component_removal_read/mod.rs",
+        "sha256": "78966501fe78e2d5fea0ab12e5be576b214bbd2e2460bc6f8922978cb84d6807"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/coordinator_acknowledgements/mod.rs",
+        "sha256": "09ac0d8f37fc66eb71d22ab357e515b525239abcc5c90f695c84f0d82999025a"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/cycle_topups/mod.rs",
+        "sha256": "ba2967a7ebfd26d19612732909d26dc023e2351a36425e20b7680ada13e70e95"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/fixture_bytes/mod.rs",
+        "sha256": "b95bb971071c24e38f268f756a00c1fe007f009f55abc78c79ee320caedafebe"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/fixture_reply/mod.rs",
+        "sha256": "fc64b9f87b6aae388dd65964592433e1650fe3944d8205e7d97c506067f5f5f3"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/fleet_snapshot/mod.rs",
+        "sha256": "4428edec9617f25748eb128aa21aaa9e893e9a102461b6bd3ecf5692ba54f075"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/fleet_state_control/mod.rs",
+        "sha256": "22415dfe6c05c86d4a3ecdd366e061f0e6fa37dc99a2b3f8a7257dde8b59bd5f"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/funding_control/mod.rs",
+        "sha256": "4324096d3d9fc0789395aa642eaaa8df6412a93d4a257710954a38edaa79daf1"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/funding_read/mod.rs",
+        "sha256": "7a964a27824a31a25fb0e741cb78ab7e3bb6c5c7837ab387f417c4b6a0e933f8"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/import_control/mod.rs",
+        "sha256": "0306ee172a003b7cb229c896551735d5191391517d6e7577c46eced3d214e031"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/inspection/mod.rs",
+        "sha256": "243c21e4538dc1894184b5b241b1a27835f81c278739f65dc5fe56718de067f0"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/inspection_history/mod.rs",
+        "sha256": "32602f47b836b13ba2437f91545690d1cec898e482b2556733b6c9e2ccdc710c"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/inspection_reserve/mod.rs",
+        "sha256": "eba6c06bea8dedfb8023b2f3a318040394a6764d3992d86555333330f4f69007"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/issuer_control/mod.rs",
+        "sha256": "5eb8822d8aab5f6d97e6534074e667d91c01d2a737f24c02e828b6a364f10059"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/issuer_proof/mod.rs",
+        "sha256": "df3dfb3469b04c4296286466b254ab84141a4e9dc0bf1ba09b6d082ab0925f62"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/issuer_proof/tests/mod.rs",
+        "sha256": "d5ebe1e252348a45bb340aeabf5e55f642ec3320dd2b06a2098b769cc2dfc88f"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/issuer_renewal/mod.rs",
+        "sha256": "06f704bc2d2642b7ceeb50a11faa35f6d19ccb7d18875a591142e0c0b54120a3"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/metric_page/mod.rs",
+        "sha256": "594517998382a5958afe71092da34d3b1cdb534b41e892dd697b9e49456b36f7"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/page/tests/mod.rs",
+        "sha256": "7e229c93a7f69b2a4d29e3b3493f2791e0ffc857322f723cd85322d0b8d9e12a"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/pool_census/mod.rs",
+        "sha256": "c483a12b7110f1480f195e963b3dc29324896ce9f6e4eed8955dacf99ee074d9"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/pool_control/mod.rs",
+        "sha256": "e7809fb850555c54668beeb312b964c45fbf0eb110f741853c8f08d60366ed55"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/pool_import_read/mod.rs",
+        "sha256": "84c3c7796900f2c358e6f12666f076241e54c653a8e4fc2646b6f7085ca7113f"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/pool_inventory/mod.rs",
+        "sha256": "ce6e44bec8218ff20e13824552d1a04d5a50edf6cf803e0f5faf371119e24d2d"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/pool_retry/mod.rs",
+        "sha256": "93bf63da61c4ba6bdb822c132e0fb9a755d881f4786dcbf39717a157e4e1c603"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/provisioning_census/mod.rs",
+        "sha256": "eb25526377aef2644f8793ec6ad487ea2de84ad97105e05bab002f25f935931e"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/public_status/tests/mod.rs",
+        "sha256": "2bcfef1f78d7e0baec6315f2fcedcbe2378acad9e6c3afc3d009a30618e7cb81"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/registry_control/mod.rs",
+        "sha256": "2e53073c0a9457bb9f144494cb5b82ba95814d8017826632df67ddd24c4ce357"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/registry_discovery/mod.rs",
+        "sha256": "a9d7349edf42cfb17fff4cb0a64b7ef2caef6278115af86388f9457f3ee454f4"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/registry_read/mod.rs",
+        "sha256": "43c2f06666dfe05d754d423cb0fd9d9ca81bc26fda0150d16ea842aedb04ff37"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/retirement_control/mod.rs",
+        "sha256": "9f8589d3182830ae236bf593927d65c32c5cf5ea8f9f72c476cf34282700a09b"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/role_attestation/mod.rs",
+        "sha256": "7b6cb5e29df8802011dc72fae9d2b04eaeb9a76cf0adf70e8d4ba5ada12d74de"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/root_authority/mod.rs",
+        "sha256": "bda88ee1e4b931eaaa35d16bd780ef9f6a06ef9bf0f3a64dcc1d662994b28ca8"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/root_capability/mod.rs",
+        "sha256": "8fc6677b4b3217c7bfc2c0f577f3fdf689a5d9f42506bec277435b4f0e49cf82"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/root_deletion/mod.rs",
+        "sha256": "4327ce7a33ab11bebd6d7a392f5efb83200d1815d67a473da5c130c0490199df"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/root_observation/mod.rs",
+        "sha256": "54684f186c6e1b23fc36ea7cc40b5a43fc96f90b1a581e648f71b57bccf6b230"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/root_removal_read/mod.rs",
+        "sha256": "2293d9b4c5e975085bae1fb06df6642c5287cced52eee695e8f3057581b280ae"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/root_store_control/mod.rs",
+        "sha256": "814fd33d6fb16e4f7fe9144e9bfeaefc04c6848540de491ec54af5f314ecf770"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/root_store_reporting/mod.rs",
+        "sha256": "25db44702a5f824443c33a5d3958959460b1a0ff273073af7e755d97fe9da99b"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/runtime_configuration/mod.rs",
+        "sha256": "62cdad32f4e6ee97d65036bb37a0264586de15d177d2f30a2e001fcbc7d44c53"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/runtime_observation/mod.rs",
+        "sha256": "0955ac43eb85f7adb24b0cbdec2293ad52f30cef086b31a8bfa570855ced4553"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/runtime_reporting/mod.rs",
+        "sha256": "8d33dc0e9ae41f7bb72a3c9dcf45e1c0395cf5554384ecae8c8dbb363ea2a3bf"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/store_control/mod.rs",
+        "sha256": "e6a4867c7da8b56d5b62b9cad8ff62cac69e71b30a36e94e562a8bc59743b658"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/store_status/mod.rs",
+        "sha256": "150f61c37032efd69ea670f29bf378c1c689ad3ce5870f93e2e238be81f969d6"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/subtree_read/mod.rs",
+        "sha256": "dee06ef8e64b28d11d13d3f433b49831c927d6179c3bd26bccc79cdf4dbc0c8d"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/template_bytes/mod.rs",
+        "sha256": "6465644b3c79c9fff3190f2337b7316e7495c4bca4cc31ede49edd2fe3f687d8"
+      },
+      {
+        "path": "crates/canic-contracts/src/ids/build_network/schema/mod.rs",
+        "sha256": "24a30680e08ff10fdc49b0dd82454865aee34e6c99a96d04057be9379884b46f"
+      },
+      {
+        "path": "crates/canic-contracts/src/ids/build_network/schema/tests/mod.rs",
+        "sha256": "f83e44ccdfc0802a6b864f209ad02ea74a17ab3d3c2770159287d658f7aa8ec9"
+      },
+      {
+        "path": "crates/canic-contracts/src/ids/wire_schema/adapter.ts",
+        "sha256": "82e3bb7043cdc82b2f1ee0ec6d90d7b5a21e3de287e3cb622b955e3c5f68d026"
+      },
+      {
+        "path": "crates/canic-contracts/src/ids/wire_schema/identities.ts",
+        "sha256": "d8ec043079280ddbca8ff94f1fa7f251a643fd2fdbc91d061e4f495ce61efb38"
+      },
+      {
+        "path": "crates/canic-contracts/src/ids/wire_schema/mod.rs",
+        "sha256": "7dff31be5794e7c3a66bbaece18b0d57109d88ee5887406698782e92bc0cc1b3"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/admission_control/mod.rs",
+        "sha256": "fdb9363c1dd503b33ad73342cedd11d652debc434d8736d51fb829e336d2abe7"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/authority_restore_status/mod.rs",
+        "sha256": "a0672d09f477b4c63c4acc8b3be298d8e3d5b53db5053b14127871b4a2693396"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/batch_control/mod.rs",
+        "sha256": "5bc0302292e91948212fced634c857c1e53db187e34357dbb77173d149aab218"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/caller_authority_status/mod.rs",
+        "sha256": "fc1033683f563ff07d7c0dee5a822261c439bfaa1de6e3b3ae75584fcbe7f224"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/cascade_transport/mod.rs",
+        "sha256": "b318c062f65b41455de5fc3026b96f063c5c47459a5891926c1c8fe0e08b5b90"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/child_funding/mod.rs",
+        "sha256": "77620b6f84e4b46317db031fd7137be12ad809de2125fa97464e525e30bf31a3"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/component_control/mod.rs",
+        "sha256": "e57e72fc4263833a81b2a105a201e6a6c695b43d543e0de099ae141e4f3119d7"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/component_directory/mod.rs",
+        "sha256": "a7df10198a67d9ee1796226d0f0ac3b96995986500318331add3f07fcc89cfd8"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/component_initialization/mod.rs",
+        "sha256": "613b7ceb253018b722ee55ac48b36bef44ce56205dbb5574616ffa30250752d6"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/component_read/mod.rs",
+        "sha256": "c57ae7c359a68bbd678f722353730cb3a32b6e8b030a534002034f63c6105bd8"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/component_removal_read/mod.rs",
+        "sha256": "c06e8ad36e7a5b3d6511fdfd2aaf05737ba70e6c3925c23780ae6626f52826ea"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/coordinator_acknowledgements/mod.rs",
+        "sha256": "28fa7e1a7c12b9a43bd98a873d39e62ed6580f096dc35fc3e34cb79b8bde200c"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/cycle_topups/mod.rs",
+        "sha256": "020c23c357943fdb1b97de1e6b662db01f8d0048b7463e44bf1094b58415930a"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/fixture_bytes/mod.rs",
+        "sha256": "b2011b1a7af01397e42770ca3fbb3c847b8fa2b544c4424f89e360de45431659"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/fleet_snapshot/mod.rs",
+        "sha256": "9087b95f02e53ee0d14c2b7cd5d8a6153c33de439177b7fdb7c388f44fa1198b"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/fleet_state_control/mod.rs",
+        "sha256": "12b7915669655e3f83766f68e1422631a95b6e95df775a4ad9f959140047724d"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/funding_control/mod.rs",
+        "sha256": "85069d3c299af1336a9caa4a3179e0ba651a5fa6a6a1e6e838a80c144c835bb8"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/funding_read/mod.rs",
+        "sha256": "9ef848245ae33d3e50eb53a512ea924c9feeaa8f19a3b1537b5be63dbb5beda3"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/funding_read/tests/mod.rs",
+        "sha256": "b844a511ec46f4f4fad6850bdbb2efee5a2c44cfe50cb01d335d21c2000546f3"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/inspection/mod.rs",
+        "sha256": "1b698867c5a7772f8b92ff3c6792b8e3e9f1a26e2ec22fc4de538b1c1a54106e"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/inspection/tests/mod.rs",
+        "sha256": "cad073517c1c529c08b2f217026ad70817d1a2f63bf9159380e337549aba39f6"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/inspection_reserve/mod.rs",
+        "sha256": "8486d0feb04a874bb2934fce4ffa9d1d4151448ecee9ad7a967c039531da3b56"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/issuer_control/mod.rs",
+        "sha256": "bc2edd9dcc43e29563b1a81c8a9f6daa377a40c3053f5458088a11a29049a959"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/issuer_control/tests/mod.rs",
+        "sha256": "ecfec2f22aac73cddde90d766ed57928e8494abc3d836760e42bd10954965346"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/issuer_proof/mod.rs",
+        "sha256": "b3cbf6de9b6b32367573bfae45e2078650a4719100589b7c41f3d9ed5cdbb909"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/issuer_renewal/mod.rs",
+        "sha256": "ebc231be16ed53abac9cd61d1e9e79bea095973d4a928db465f46ec4f710d7db"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/metric_page/mod.rs",
+        "sha256": "72d9b78e9b5f8499a62f39f4ec6afff289a9092125769b01d369040df3406bd6"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/mod.rs",
+        "sha256": "03e42e7754d1e55be9e95f485b0ac14cdb264a46ca9b200f7ad751e8e224d9a9"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/pool_census/mod.rs",
+        "sha256": "6ef0a6c16641046e8dd38581c8c57eac59d5d1fc83323229c7a8519b78820293"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/pool_import_read/mod.rs",
+        "sha256": "a982a70ec552ceae24d2d4986abca79520289b2d55e40ed2c314e42067418908"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/pool_inventory/mod.rs",
+        "sha256": "81558f7715b0b8532e1759b52aa49d55651ae5e9f11b663698c2083cae3e7ed9"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/pool_retry/mod.rs",
+        "sha256": "c8358e38f55f5857b9b512725594e939ffd5ffa3ef28c7168ee90627fba59399"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/provisioning_census/mod.rs",
+        "sha256": "6993ff38e5c6456c4c81dd19a2fd41a40606bb205089fbf652d664e10b4fa4f2"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/registry_control/mod.rs",
+        "sha256": "80144f534dd6e12a1748351b682cf72c59226a1623d53ea110744151e9bc1cce"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/registry_discovery/mod.rs",
+        "sha256": "19b18fa19844b50c439159219aaf6662a7bc6476558c1cc1269e576223d36161"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/registry_read/mod.rs",
+        "sha256": "f4fbfc21ffa582ddfa0c4b0eeef6138ade125b954d0ed58db5293ee91345c9a5"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/retirement_control/mod.rs",
+        "sha256": "ef581d25e1be21e8cf630bb2e573f5cae215cfaaaca4a215fa0db440a7b67914"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/role_attestation/mod.rs",
+        "sha256": "69189ba8184ac85e0f8feb58250d30a469173f4be02e77e335c04873f0af899b"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/role_attestation/tests/mod.rs",
+        "sha256": "8de11c68126b9e9a5bc72751ff9c8e7f362622ad3a9eef1e015b7b0ba6898504"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_authority/mod.rs",
+        "sha256": "6a4b432cf85e862a36d291fda597dfa8ac74828a089e071e7710d20b1a48833c"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_capability/mod.rs",
+        "sha256": "533aa00d64704b105fd9433830393bfaa4602e66d1d4e09d177597dad5e78fa4"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_capability/tests/mod.rs",
+        "sha256": "098b04e338f03f9d061d5b8c949e100b8cf714bc963cc56cefae20e5e5c1d915"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_deletion/mod.rs",
+        "sha256": "33ab070ff344e61711b5a9782b9030f7792cdef79b5dae1e80938f6e6af87b71"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_observation/mod.rs",
+        "sha256": "ca5e0f1f480c2d0b82cb53ef721252046ae614b2687c4ed3eb1345c921bf5a3a"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_removal_read/mod.rs",
+        "sha256": "9cd7ad5a0d94f535908e7b38fd955278123d83345e0c90c8dec1444cfc0a68f9"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_store_control/mod.rs",
+        "sha256": "0db962a22abf2c1960fafb8e72c7ea4aad63e88f8d3732d6313525604a9652b1"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/root_store_reporting/mod.rs",
+        "sha256": "9f4a5c27b355a5e6b6145e6ed10905170b7e2e5e228859388819f22775c64f56"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/runtime_configuration/mod.rs",
+        "sha256": "60db7285eb76185c0cd7bfc5ac6b956f58720ec39f700d47a32598f2cb85631a"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/runtime_observation/mod.rs",
+        "sha256": "31fbab18dc4ada400a41bc5b8275e6aacf72c35f7abe8f19c8ce19f1ed918591"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/runtime_reporting/mod.rs",
+        "sha256": "591ed3ff228282f2fb724ded60312c6f0067803271aa409f7f723cb9dbc885a4"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/store_control/mod.rs",
+        "sha256": "51de3e1600f47bfbd8e55f66b455caacc4bb1a50df18e933aa1902cbeef11269"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/store_status/mod.rs",
+        "sha256": "5b7f3472c841cb566e6b8ed17518d5c5cb7074584945f19a05bbb4dabff388e0"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/subtree_read/mod.rs",
+        "sha256": "8aaae62c20ca45b376141f648d41d96a86521951278abac0cf9a4686983a5c05"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/template_bytes/mod.rs",
+        "sha256": "3e3596a08e1de22a7ad1aa8e7a067660994c10e5f9bfee7f1c9d6d88040671c5"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/unsigned_magnitude/mod.rs",
+        "sha256": "5eb9e9e9e6465b5d62bd446f4bd3524a826a099a497ef7c7964a634ff414d415"
+      },
+      {
+        "path": "crates/canic-contracts/src/ops/unsigned_magnitude/tests/mod.rs",
+        "sha256": "99dbdebe692cac3a27ceb0bdc80f41cf51b440966a6f68483de5ca7f9d2c6f16"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/admission_control/mod.rs",
+        "sha256": "4bd679625ac123bce92850fce55d6b35a27aa41b9af664e2bab8039e40c2a519"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/admission_control/tests/mod.rs",
+        "sha256": "a592563cb2f829fada276c9afa575253e1add6ab801ee2a96f0f764749b90b29"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/application_checkpoint/mod.rs",
+        "sha256": "1a11b3fb5fef72edecb06002f1e0ac340ef35106030e229b4f5253c74332b35f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/authority/mod.rs",
+        "sha256": "f87e70a331e54df516baef60391b6d4e7d49d1e1e7a5872bf95cc96871fc742b"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/batch_control/mod.rs",
+        "sha256": "21262e09a9e0b2526a0171e785aede33e38a4b965aa15eeef0396af200112624"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/batch_control/tests/mod.rs",
+        "sha256": "7443cc72454d74e81f7f1eca4ee6c6c89f79f35fc5caa21864df0048cdb5eb6d"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/caller_authority/mod.rs",
+        "sha256": "a36e0b87d5715e7eaddabe3c90dd8412ca57a35cb752711bf6ad4c61bb057575"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/caller_authority_status/mod.rs",
+        "sha256": "059c9142ec7fe7c7b9ea26ef46181af5b3fadbe2bea2a63dfe4e4dbe90f5d6da"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cascade/mod.rs",
+        "sha256": "48ad50fd0e883352cd0280419f30f9a2086fad960b6be35d1d6419578d2debc5"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cascade/tests/mod.rs",
+        "sha256": "9b80bfb6fa29da4413d41994209ff6a30cd1f3655e7e6bd7a6050ff721f25993"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/child_funding/mod.rs",
+        "sha256": "40d1b6a21d1534b7eae6469aa91f8b466f071b6f12a64528a7bece6e542e85cc"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_control/mod.rs",
+        "sha256": "dd45b53abf70e33061a3b33a7f93769253b039380b5f499904e75d1567ee68c4"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_directory/mod.rs",
+        "sha256": "ae72dfeb5aed0bdb670e70aed9ec4e23e5412ea45a5d20b0c2a920f165af7988"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_initialization/mod.rs",
+        "sha256": "73baeb584ead57a8e77a8cdb6ec1c738c016a872d858ebf1c5e334698767270d"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_initialization/tests/mod.rs",
+        "sha256": "36abc2d119cfa3258430f2a4cc3ebeb400d888bdab03c80a52f984ec9c649e46"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_read/mod.rs",
+        "sha256": "6d7ffe4058926faa9e7de41ea845dbcbfb7e3e3ac0c11edbc2c6a3c6880931f1"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_read/tests/mod.rs",
+        "sha256": "6fc25da1269bb867b66886844424807a13b9bebf0eb5e144ec03f7eed9c40036"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_removal_read/mod.rs",
+        "sha256": "c0eccf4c760b52df895ea86a7d865a68ec209f583469f949080914fbb35a7904"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/component_removal_read/tests/mod.rs",
+        "sha256": "d4ef0953e31827b37327fdca26a0eb060be9ee2cc77b36169684e9006f807211"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/coordinator_acknowledgements/mod.rs",
+        "sha256": "879add03b9cc21a83a02c2b431552ff531ccac0cccdaaf23ec182900cb661881"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/coordinator_acknowledgements/tests/mod.rs",
+        "sha256": "43903da638fe1df6a8d772d88758d739009718e0dcf92f677ef067e41c64df98"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cycle_balance/mod.rs",
+        "sha256": "14ce1bef8fa65c57cb507799fb2d7e46a3150b33acc077a45b1730f6450ee6e6"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cycle_history/mod.rs",
+        "sha256": "8f319745c20e0bbc5c269f04abf4c25febd10dc3c59e06179d117ab3cc25ae25"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cycle_refill/mod.rs",
+        "sha256": "a36092f2e94f5a474b537542045343f5a6c79589eecf3b361e561bba757bbec5"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cycle_refill/tests/mod.rs",
+        "sha256": "c4467d7c6de03eed1bdc48cc141f87d26f1b2bdec10c892888dc210784414cc2"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cycle_topups/mod.rs",
+        "sha256": "29f4d09818a8d3c3ebda049eb84ec7aa26a986a97eb8f2d02c56cb03aea94158"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cycles_capability/mod.rs",
+        "sha256": "7fc3b7e142cae2765e92cbf18476497e99376dc2d7423526abc5fcb107ff113f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/cycles_capability/tests/mod.rs",
+        "sha256": "2547c8da054929520b449c5cd90043bf10e0c073810eb7db3fccb1f5414f618e"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/fixture_bytes/mod.rs",
+        "sha256": "13d4667dbe0e7f47ef4ea4a78aef3601e5947606859dd96b15b9051cac1cdf4d"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/fixture_bytes/tests/mod.rs",
+        "sha256": "1588a97e331d2e7545a29e11a1760ce6c5e1f8561c96464b41f81219bfb32a3f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/fixture_reply/mod.rs",
+        "sha256": "b04bb51211daee4172eab9d7a9f3f709b2632a2190dd3e2058e3667db7c95f26"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/fixture_reply/tests/mod.rs",
+        "sha256": "7ce386182d4022b77943d637e23af6716a881a47a775912c05a1d1b3eb9125e7"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/fleet_state_control/mod.rs",
+        "sha256": "8a86c365f3818067ec559073e261c52047cfb23a6507a26e4ac93895f069586a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/fleet_state_control/tests/mod.rs",
+        "sha256": "edba837f02169e942a3022c383a3b6d814c1412a25b90e1b5d2978cf1f8f3d6a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/funding_control/mod.rs",
+        "sha256": "32423c68099be55e869759c7e0bdd3006175c46daffd8be47e5bc8acb284c37d"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/funding_control/tests/mod.rs",
+        "sha256": "1c6890a59621220585130a2a9350246244ac3e98f1dc5e759b35a720d839e108"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/funding_read/mod.rs",
+        "sha256": "0d63a149454b939e922c3ad08ec87ffc39f8b0b63c1d249a8f1add4f48f308cb"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/funding_read/tests/mod.rs",
+        "sha256": "80c0d7a7080e59a5553badc3abc774af520fffcd5478bcbc05141bf23a154f85"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/import_control/mod.rs",
+        "sha256": "a3f24cbeb1ab8659db3a6aea832540640f76c13f2998fc239b33eb7350574f32"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/import_control/tests/mod.rs",
+        "sha256": "3ff258c5d2d905479e5216ed44abe3ca2206ee3869bff7fdddf1ccf0bf60e899"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/initialization/mod.rs",
+        "sha256": "c01e7ed5dedf8e7dfe7657abf314ccd1cf484d9fec92d10e6046d7a190592fca"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/inspection/mod.rs",
+        "sha256": "eaf60474415e411a545bc450f052315fa4efbc3d198c63914bff111d570bc070"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/inspection/tests/mod.rs",
+        "sha256": "86785754c890f2dda5c15b66ca46ca168a0a367d10083514d0983fd4d6e26a18"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/inspection_history/mod.rs",
+        "sha256": "3a882518f2f9b4b1b40b905065d1db5293f0fd6a7e24267bb570c4de96e9f931"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/inspection_history/tests/mod.rs",
+        "sha256": "c319e58b7275a34db522d4dcb84aed9713aa8f790df4851c0a77ae0b82910d21"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/inspection_reserve/mod.rs",
+        "sha256": "382cc390f1f3c1792dd2a4db1ea787b8ab10d256c553f6ecf0f3cc58ffcf804e"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/inspection_reserve/tests/mod.rs",
+        "sha256": "605db1a6d28355746751f1d435207c9c58fc3c137dadffef78f92b3bb5c30f17"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/issuer_control/mod.rs",
+        "sha256": "40572bf7496a973a72316558ffee299e2edd3af943d4653a503c1ea4d4733930"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/issuer_proof/mod.rs",
+        "sha256": "9e4ba1a89316a8021630f97e53a16dee4450119361a580e687cf24bcc9354d6f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/issuer_renewal/mod.rs",
+        "sha256": "9d2e831c7ad043872aa3c7eb42162f19011741a489d51a6d6816827b95a2ceda"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/issuer_renewal/tests/mod.rs",
+        "sha256": "fcc4546c9b392d1b9029d7d7da99280a2225ecac9978382b61006368b695896c"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/observability_relay/mod.rs",
+        "sha256": "f9ec6e3982b8fcec2d4a74c610a952a52e96dc6e78f63e90b2f0405e148c9268"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_census/mod.rs",
+        "sha256": "986b6bb62f232df3493384aeeca9533db79b981987bfb9b27c964b87d9c51c0f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_census/tests/mod.rs",
+        "sha256": "62aae1c612ccc78838137f5c91d26a558f976a4b98fd5594b20750e2d5ca44e9"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_control/mod.rs",
+        "sha256": "2d47b4300a77466954e34a25b23f762a7f53b22a5707bd022b7b07008fd61ad3"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_control/tests/mod.rs",
+        "sha256": "45d46db3092b8806470b3b06bd2f703e8bbbd11fedf36824d8e544b74244cc7c"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_import_read/mod.rs",
+        "sha256": "ded8188be8e1b62cc5dff49985835704245a8dccaf49e1a1dd78bbda5bf49b4c"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_import_read/tests/mod.rs",
+        "sha256": "b3a1b88b64a831d4edcf11ddbce5fde1ff7f1996733c96a1edf512566151f33f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_inventory/mod.rs",
+        "sha256": "fd4aa8df647f23f6d46374748f4a56180856d18ce67dca3edded570c646389bf"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_inventory/tests/mod.rs",
+        "sha256": "9286b51d76326e003391d5554b64d243d25761cb222e33090b4fddc4f05e6526"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_retry/mod.rs",
+        "sha256": "6b092f2ced98cb75bbfde4bc8a7c8bc22e56ee8ac23fd8926e98f59166ab2db9"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/pool_retry/tests/mod.rs",
+        "sha256": "684e7e7e7a09e5b80617c2ccdc2b388a8280c5a05ce4289c06a8fb153be4922d"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_binding/mod.rs",
+        "sha256": "f10b28385b1a80e87e5478fc43cc6b5584657e146d3585d5f61a9d6d45e83e19"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_health/mod.rs",
+        "sha256": "bb64198083f21869da075cad0be566305df8b7cdb2ed8a6112a1b5a80802422f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_logs/mod.rs",
+        "sha256": "f365b2554731196adfe270ecf43b0e35b14853781776f92d978cd5e409c212e2"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_memory_allocations/mod.rs",
+        "sha256": "c673bbf684a2ede431ae68866b11034975e231f27150e2b82f78fb94ec2da916"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_metrics/mod.rs",
+        "sha256": "afd72fe31107659a3d14c0f9e9824f799e978bf7b1353f84db93abacd07994ea"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_readiness/mod.rs",
+        "sha256": "4ae22fa1503dd3a4a9866f059e887ebfd1f6fe3653a91bcde4af73a09de39eb7"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_runtime/mod.rs",
+        "sha256": "adf10218c5ddd02e5e0b45fbcd49e00d11022b269837147a33ff11d367fa0011"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_state/mod.rs",
+        "sha256": "380b97632b49aad3b2b3d23fa265b3e163a2996faef47bbafff55611d63eed09"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/protected_state/tests/mod.rs",
+        "sha256": "aecf7aa80b5623688d52b3a5f936fc63d32f1868a7768e6d09212d096b881a32"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/provisioning_census/mod.rs",
+        "sha256": "9bab9d5ef292abcb28596968ad249b492d061accbcee85c1284976bcc9a747f4"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/provisioning_census/tests/mod.rs",
+        "sha256": "e84330a41efe292a16a55d5a90782dfc622e0b6fed7300cba7b92404e368ee7a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_children/mod.rs",
+        "sha256": "f1f6057bdb3ba53781c97a1f883193c04649adf34fcbf7a6af0f0010efb85f36"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_children/tests/mod.rs",
+        "sha256": "9bf09bf3d85099a5e05ba9f9521b55d01f6bc86b431f796e5d996da859b2ea8e"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_health/mod.rs",
+        "sha256": "36efb504afb935e46af1a3febcff28efecbc98139a06dc1c30d968c70b945cdf"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_health/tests/mod.rs",
+        "sha256": "b89bb6669a2c4d7a4c8c811bd2d6ed4888bdfeceb93ff37ed3e33add6a425ef1"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_history/mod.rs",
+        "sha256": "f2f54f1793a58bc0fafdcb5d3b4cbbda10d5f4678d33e240567b076492a62950"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_metrics/mod.rs",
+        "sha256": "bf84c8f25f68bf542025a2e509a33c781dcf31699e6dde6b772218b6edea2be0"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_metrics/tests/mod.rs",
+        "sha256": "7d75f280703041a29a4056351ccb3d4344b6ac732cc7e6f7745b3ef8bcfa6e37"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_overview/mod.rs",
+        "sha256": "6da9e2a16c790ef3fe2886a4835c082b55c2a9e94e77073ca4d8627808858b39"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/public_overview/tests/mod.rs",
+        "sha256": "467f59d7f3733ecebc65efa21ab0effe95f68ccbafd5290f3234548b5ac887fc"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/registry_control/mod.rs",
+        "sha256": "612be87aca5ca709bbe910e55295b3e24b8f7d65cace42005c531bb17212c360"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/registry_control/tests/mod.rs",
+        "sha256": "5c15497536b282c9abcc0bde04cb8ce82f21a04d40cd86c5b9361351739d215f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/registry_discovery/mod.rs",
+        "sha256": "fbb31fc8c482a6198e505b9a37759086408cb48b15162eb8de266b2d6949cf52"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/registry_discovery/tests/mod.rs",
+        "sha256": "ac698c169bc9255ba6a2d1b1f0824264298725dd894257cf7d8cb2db3cf1f989"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/registry_read/mod.rs",
+        "sha256": "121f20510da0c843eebfe22d0dac048d274e2061bfcbe441ad54ccc74fb98034"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/registry_read/tests/mod.rs",
+        "sha256": "b1e11062c7be5f8f273566a5ff3ed8e938f8a7c2f43a06a501ea58f5b8fdc869"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/release_evidence/mod.rs",
+        "sha256": "d4843ac8206db6f08355613f3ce90ac645121e1b7f22931433eecac6bc1a5c3c"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/release_evidence/tests/mod.rs",
+        "sha256": "785abad5c95128d9631a6d3dca1fca5d1cfd3ebedc710b8256bbd7c43647c0a1"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/retirement_control/mod.rs",
+        "sha256": "f68ebf24aec0e6c81173d79c9945e57d2febd4ebd11815ea74d42638f8928523"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/retirement_control/tests/mod.rs",
+        "sha256": "a89e0121d5fba761fed25a2181da7fb9b1f848c826fed001df1975771577229b"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/role_attestation/mod.rs",
+        "sha256": "f0ea21c5def16e7e92b14c70560f2d61acc4c5be2888254d6a89c574a509534e"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_activation/mod.rs",
+        "sha256": "faf95cadd18c84ff28271014cb85a0274b693fcdb2b67063a3dddbe286a82f4d"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_activation/tests/mod.rs",
+        "sha256": "cddab30f46f7b2eb167099413b0957690d2f78cfe8ff9a82c4b8c1dbee0e8adb"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_authority/mod.rs",
+        "sha256": "b460c658a4af5e7f803c9c2fc8f7124a6fc05738cafb79f80fd2e21bbc3cdd4a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_authority/tests/mod.rs",
+        "sha256": "94634b229e7ad0a78d5588e5abc9dfddea715c2a6f951aa9f2f4d14344a1e3b6"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_capability/mod.rs",
+        "sha256": "8163a749f1fd7442e056643498536a178d71c685b13fca597db46c52dc77498f"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_config/mod.rs",
+        "sha256": "e4e174884151be929537c3260b1c581576413604c1ccb90335630a2c41bcef5b"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_config/tests/mod.rs",
+        "sha256": "63e83426582b84f7dfc39d74b6694e5df049774179b8fa9f2b61eae495fa190a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_deletion/mod.rs",
+        "sha256": "0b4a912845c2b56c32ebfcef6a377cc4732a4cf5059986ab65bcefebd42644fc"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_observation/mod.rs",
+        "sha256": "8a4b02050762d3eb80074901e35301e1ffe1e56366deffff17112e85f731d59c"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_observation/tests/mod.rs",
+        "sha256": "ec1b5cce02f91b96f5a5c27a8672a2a7f3a6eb062511e9f45312ccf3c3d08aa3"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_removal_read/mod.rs",
+        "sha256": "eeacbaf9fa21e19f81d805b0ff2b16a97ebb8827b7c9aa45e0f0e34f6d592783"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_removal_read/tests/mod.rs",
+        "sha256": "af9053d291d40381eb175a35580352404bfd65ba5620894e8bc71a2e4588b5c1"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_store_control/mod.rs",
+        "sha256": "885861837d35cc01c4e058deccd90b5cfca52d235346106ec7c27657ae3e1424"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_store_control/tests/mod.rs",
+        "sha256": "fcc5e0e2b84459348ebd65a767f8d4cb5785dc280a1049125c84052d1bb6e65a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_store_reporting/mod.rs",
+        "sha256": "dd9345851cd754f55c3c025cd83f0d2844d0e1c443d1fb28a2fa611259d947ff"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/root_store_reporting/tests/mod.rs",
+        "sha256": "bac2aa1b88c435f22bd0666b76d158eeeb41c6627b3faa4916108943d9552867"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/runtime_configuration/mod.rs",
+        "sha256": "ae279bb3d4181cd29ff40f6488f96e9f88d1179d3841a0d69ba9f948cae416d0"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/runtime_configuration/tests/mod.rs",
+        "sha256": "3113cd00c22b8815adaf0ca0f7955fe56edf85ea5c5e70889042e008d89f5c76"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/runtime_reporting/mod.rs",
+        "sha256": "40c8b564a24c05df44e8f0deb26a7e0f9972d73a3fd0a9d25833f2fe5a62f71e"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/runtime_reporting/tests/mod.rs",
+        "sha256": "8a899146467888945c96c906a229e3f36eb998abe75748339b9013e1327f6809"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_activation/mod.rs",
+        "sha256": "d6ef335374f668b0ec54ab8f18b506aefb1885f12db0a7eb545b0b50158f2f01"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_activation/tests/mod.rs",
+        "sha256": "b281b2f9789f1c03a2ab8592dbc76df9b024ae5bfff80798a69af386f0fcbd70"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_catalog/mod.rs",
+        "sha256": "1a26496a3987adce8cae2fdf01d7aa0ee5e0c3609362f41c638d9fe2b795398e"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_catalog/tests/mod.rs",
+        "sha256": "399c31134632070a6f1c8720310fd4bd89a514e999766b31b008e2bc96781adf"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_control/mod.rs",
+        "sha256": "8df5bb6ba79acec77e67855bc6b17760818db5252acec9214da6aa8136ec3131"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_control/tests/mod.rs",
+        "sha256": "734eed22c6761d7d5d0f1fa5223ee8c7a1840f59afecfc28e44cf3e4434e307d"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_gc/mod.rs",
+        "sha256": "44be1e6af5e961b74bd94d089937c2d4b61d13d8458002a62c74a2934da89d3a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_inventory/mod.rs",
+        "sha256": "8e99f70145ea1ebb2afc789c4c045c94e6fca185ac3fb93318b7c693f2827ad5"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_inventory/tests/mod.rs",
+        "sha256": "22af2d9720f0bdb4912d6a37077ede8f099e4edb7b67a7bb61f978ab0f1140df"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_publication/mod.rs",
+        "sha256": "9e6b4968b49251e02a79df92f05eb3f4a95f57c3b6603a7353eb0ad2bed8cc89"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_publication/tests/mod.rs",
+        "sha256": "3f385b2eb05436fa37579a1d1846d52b9e761da0c499d783a065566c1305c646"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_status/mod.rs",
+        "sha256": "dde9ca8fbc2deb087dbecdcb4c7576a0669ecb9134d7041dc6ccc8db9dc2e0e6"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/store_status/tests/mod.rs",
+        "sha256": "033060f0678f36920781a3b5ac38f4b6a0d566be7a0e5111501d33f882fda2ce"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/subtree_read/mod.rs",
+        "sha256": "ec467c69ccb8de1d2b7bb4f3ed5ba92568f6fd7409455dc5408f370042cee894"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/subtree_read/tests/mod.rs",
+        "sha256": "7fe539c4fbfc8cd51650317630c136bb66b6c16d4238f87b922e98a012daf3de"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/template_bytes/mod.rs",
+        "sha256": "4d82c3d4afffd5aa8656150a2b79780089e071e1253c8b38507e1112bb8c4102"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/template_bytes/tests/mod.rs",
+        "sha256": "a2d209d1ee8aa87712a1dd4d40a8187c709459c3d60afc8c5d8ddaa8f993cf5a"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/wasm_store_chunk/mod.rs",
+        "sha256": "de596b1591364ce516d854451c13131d4dc3697f2376cd350f57f93b5f4bc005"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/wasm_store_chunk/tests/mod.rs",
+        "sha256": "e4d6eed565094ea4e00bc76adc3fbe2a532544755885b2f79d29b81058b76aa3"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/wire_declaration/mod.rs",
+        "sha256": "29e3f8a06107b89497aab03b531ab87dc27a0dd65ac107944de9abcae8753b97"
+      },
+      {
+        "path": "crates/canic-contracts/src/protocol/wire_declaration/tests/mod.rs",
+        "sha256": "8672ce6564c089d6a3bbe3949b4b2928cda1cf940241c8953cbd6fc09b56b52f"
+      },
+      {
+        "path": "crates/canic-contracts/src/serialization/cbor/de.rs",
+        "sha256": "eb22411fc446e867d5c0225dc50fadfc75280f62f5b0ad2773c2283fd8bc5432"
+      },
+      {
+        "path": "crates/canic-contracts/src/serialization/cbor/mod.rs",
+        "sha256": "00a94dee9361570b40fbd09a46437c04d42845d93c480e926366b14b533cd66d"
+      },
+      {
+        "path": "crates/canic-contracts/src/serialization/cbor/ser.rs",
+        "sha256": "b893e9e93881bebd78c9a4173288f6d22dca081aceab1085fc715286bacecc68"
+      },
+      {
+        "path": "crates/canic-contracts/src/serialization/cbor/tests.rs",
+        "sha256": "553ffe90f6b7d655df6f610a90708bb6842c061afc0691129474282235cb5f00"
+      },
+      {
+        "path": "crates/canic-contracts/src/values/public_metrics/schema/mod.rs",
+        "sha256": "2028f75816033b986e16c792889bfac06e04b005402ac41ca304056f9239f12c"
+      },
+      {
+        "path": "crates/canic-contracts/src/values/runtime/schema/mod.rs",
+        "sha256": "366fddc5e58a9ee878be4de972c64000f22c8462a65cc05886df7ba1206c223c"
+      },
+      {
+        "path": "crates/canic-contracts/src/values/runtime/schema/tests/mod.rs",
+        "sha256": "f2ddb0f30fdaded926fac2d19a075cd0f82ea7c6947b735e6c4fb53633bf9835"
+      },
+      {
+        "path": "crates/canic-control-plane/src/api/application_checkpoint/mod.rs",
+        "sha256": "1974b721bd6d0d9473d09b4b344f03a6fc25bdb10988a2c9be5352027842aa2b"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/application_checkpoint/mod.rs",
+        "sha256": "6016b9dbce31b4caeafb721861a50c10b347fee333ffcb6cc67e2bdc13e5fe69"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/application_checkpoint/tests.rs",
+        "sha256": "29973e41eed0c613070c85718564619edce48558b50eb4529d569499f06da52a"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/fleet_admission/transport/mod.rs",
+        "sha256": "09728f78c513260e0e03dbe9597fa3fe0fd719a1d565d59afde1a6067d99150e"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/root_admission/transport/mod.rs",
+        "sha256": "66663f7c0d0aef5d270c6f5789e9ba16bf3dfffe49baae057ee5246161b22a3e"
+      },
+      {
+        "path": "crates/canic-control-plane/src/storage/stable/application_checkpoint/mod.rs",
+        "sha256": "1231cfcaa6956dc7bb43bb68e502138697f24fde3c8a2041abada55daea5a405"
+      },
+      {
+        "path": "crates/canic-control-plane/src/view/application_checkpoint/mod.rs",
+        "sha256": "fb6e6d00b3c8beaa193a6f0057ef7b6f0e3c0ff70a3b72f05f2297fc743e7798"
+      },
+      {
+        "path": "crates/canic-control-plane/src/workflow/application_checkpoint/mod.rs",
+        "sha256": "5df2145bda02fc3d0991bd7b192f382d444dceb8b5422021a11a30a77146fdb9"
+      },
+      {
+        "path": "crates/canic-core/src/config/provisioning_grants/mod.rs",
+        "sha256": "2ee98ac96545544a6a9e70e327090aaf3dcba1130a01e8547e9369eff202eadf"
+      },
+      {
+        "path": "crates/canic-core/src/ops/application_checkpoint/mod.rs",
+        "sha256": "81f197d054068ffd484c8efe8d789c5df8278a1857a0e456f2148d0e594e14ef"
+      },
+      {
+        "path": "crates/canic-core/src/ops/observability_relay/mod.rs",
+        "sha256": "9eefe2a6e0c9dc4e7d7e6ecdbba85d78b0ac26e91cb667a7f8c5e1eb223c4616"
+      },
+      {
+        "path": "crates/canic-core/src/ops/rpc/store_activation/mod.rs",
+        "sha256": "f64c62a803a27d90e797d64aac69e6058f9b37e2297451ea64920450823fb62e"
+      },
+      {
+        "path": "crates/canic-host/examples/frontend-consumer/check-boundary.mjs",
+        "sha256": "1ea59fb381745c57931d9207213fd08deed20431b230ea33e9d3746759029bcd"
+      },
+      {
+        "path": "crates/canic-host/src/artifact_io/wire/mod.rs",
+        "sha256": "dbcd66b0a3a15a915acda466361314789dcd87a632b5f8f2cb99dcdd776b71e1"
+      },
+      {
+        "path": "crates/canic-host/src/artifact_io/wire/tests/mod.rs",
+        "sha256": "3e2419777a766fcbc2463e60efd15f40b487a7c6f099c1858a8a638392f0a8c7"
+      },
+      {
+        "path": "crates/canic-host/src/canister_build/release_binding/protocol/mod.rs",
+        "sha256": "57419ec00987c883fc7a2fea81f035278958a61a15a2aea30879d07ec523dbf5"
+      },
+      {
+        "path": "crates/canic-host/src/canister_build/wire_schema/build/mod.rs",
+        "sha256": "7232bcf9b424d50e681a1cf78d73900e0ff3499caca49c4c7062e1e9b5db5fce"
+      },
+      {
+        "path": "crates/canic-host/src/canister_build/wire_schema/build/tests/mod.rs",
+        "sha256": "4eddc3ff32824083c4111d50b207de65be65dae365e9c9d9d811c3c0428deaf7"
+      },
+      {
+        "path": "crates/canic-host/src/canister_build/wire_schema/mod.rs",
+        "sha256": "63694a70abf86f053061055b7530e002c919c29edb81f28851a22dcb428edb86"
+      },
+      {
+        "path": "crates/canic-host/src/canister_build/wire_schema/tests/mod.rs",
+        "sha256": "bcf25d16b6a9b265e0cd4682faa50041f9113d9a92eccc682cc330e96caefa29"
+      },
+      {
+        "path": "crates/canic-host/src/canister_protocol/funding_read/mod.rs",
+        "sha256": "cb1fa5ce1d984a577b3bd68df366d883923cdf344a7b199bfe5087af4ff5755e"
+      },
+      {
+        "path": "crates/canic-host/src/canister_protocol/pool_inventory/mod.rs",
+        "sha256": "10ec002a7e95127a626d7d39b57e25a0c16f5edf4be6c7a3a5929e75493a27d5"
+      },
+      {
+        "path": "crates/canic-host/src/canister_protocol/registry_read/mod.rs",
+        "sha256": "8887a2074554e9fd2f924824b3f9a3be486851761f646182fb47e738d9089e88"
+      },
+      {
+        "path": "crates/canic-host/src/canister_protocol/root_authority/mod.rs",
+        "sha256": "ba11c1f126552e97035e2b4baccd0c5f1262c3aca0a98cef3e70afa0eea0afb5"
+      },
+      {
+        "path": "crates/canic-host/src/config_discovery/tests.rs",
+        "sha256": "a1442f90620c678fda6dc277e7f8877007c233c5d223e0f4ed1ec2e13490a7c0"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/current_inventory/ordinary/tests/mod.rs",
+        "sha256": "da30d032ea60c739872c4d581bc29ad8440065532dbd3700e2a25febc1b233ef"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/current_inventory/tests/provisioning_read/mod.rs",
+        "sha256": "c0f0a6d37182a018f208b54fd4dd747b7f2fc9996ea9ee10e4d27cd7e797875d"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/schema/mod.rs",
+        "sha256": "445885410f92ffb73f712bd085e329b26aeeeec1df9394f4d11b4ae740b49b8a"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/schema/tests.rs",
+        "sha256": "6fa4226ca677317cec932eac0ffce3d172546091946146fbf1e2d316ed1acef7"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/init_arguments/mod.rs",
+        "sha256": "9e07530cfb28e5dc200132420d2ee0615d65d86637af7227ccb01cbf205bf510"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/plan_authority/mod.rs",
+        "sha256": "0e76334d1dcc5f2dd50c1b1d739cb136c0e18dfdd02d2e161fa4ba4aa3c3c765"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/workflow/plan_authority_tests/mod.rs",
+        "sha256": "22d27c0af414b30330ed2bb7199b9d458cd36beb54e62384c92abe2823ead5cd"
+      },
+      {
+        "path": "crates/canic-host/src/frontend/ops/compiler/mod.rs",
+        "sha256": "535a9246a98043ab728884fef389db2d9f608e145c782a9d7dd057e0d47cffc8"
+      },
+      {
+        "path": "crates/canic-host/src/frontend/ops/compiler/tests/mod.rs",
+        "sha256": "3fbfcb929ff1b15fb308809d94ee36751448b97bdab02e12dc6fa13515b6f3db"
+      },
+      {
+        "path": "crates/canic-host/src/icp/binary_arguments/mod.rs",
+        "sha256": "489c20c7842cf9d0604a5b586a973e12b39be7cedf36f75e53a18b7ae11ebade"
+      },
+      {
+        "path": "crates/canic-host/src/icp/wire/mod.rs",
+        "sha256": "9ee543cf1a95bcc4bbd09c9778be8494a4447ac8cd6373fc2efdea911c867f3f"
+      },
+      {
+        "path": "crates/canic-host/src/icp/wire/tests/mod.rs",
+        "sha256": "3e6c8e6dc0c39d9d1ea85a53693e347c65d6e73427374e98aceefd4ffae5fd05"
+      },
+      {
+        "path": "crates/canic-host/src/observability/relay/mod.rs",
+        "sha256": "4494997b42ce58287287b2123ce2b94fbe6ba4ccc597bf05767d4a5021e2d479"
+      },
+      {
+        "path": "crates/canic-host/src/observatory/ops/transport/tests/mod.rs",
+        "sha256": "b54850de86b3da6b47f7b310d167f6ace29d9a558d7238aa5ddd10e654772d24"
+      },
+      {
+        "path": "crates/canic-host/src/registry_discovery/mod.rs",
+        "sha256": "4950a164ca463a53c56c4960dc7ad9fe6d13e33b88c085edc525e9521b017765"
+      },
+      {
+        "path": "crates/canic-host/src/release_set/declaration/mod.rs",
+        "sha256": "74726abe7ef3b86c96e2ec416dff57fa65dbc2ab4d1820aa52f861b4c55f21ad"
+      },
+      {
+        "path": "crates/canic-host/src/release_set/declaration/tests.rs",
+        "sha256": "600113b363c248d73f83b7df4299d0573cd5866c8970b025def25e6df4d0c26b"
+      },
+      {
+        "path": "crates/canic-host/src/release_set/test_artifact/mod.rs",
+        "sha256": "2c35b0682264b498c68dcae91a99376611459dac564e5202fcf8eb978170e47a"
+      },
+      {
+        "path": "crates/canic-macros/src/adapter/wire/mod.rs",
+        "sha256": "29fd12d8df6473db49f0575498910408af8864a869889774ca7d9aab462acdb8"
+      },
+      {
+        "path": "crates/canic-macros/src/endpoint/expand/wire/mod.rs",
+        "sha256": "f36712ea44cccd70e14b0d9ae9d774e319d1abeabe391df20b0b74d7b718065a"
+      },
+      {
+        "path": "crates/canic-macros/src/endpoint/parse/wire/mod.rs",
+        "sha256": "c6ac969a6be9ba03e75aa5e8708592758a61552f281a82ab470f6b68b838bba2"
+      },
+      {
+        "path": "crates/canic-testing-internal/examples/wire_composition/check.mjs",
+        "sha256": "761b71cab5dfb695cdfaccd9fc11fe785ea245963a96d31c4a53771c5e26a0c5"
+      },
+      {
+        "path": "crates/canic-testing-internal/examples/wire_composition/installed.mjs",
+        "sha256": "d076078588785626e9ae1100f3748a8aa5c4bacc40882965f98b2e939d7d2903"
+      },
+      {
+        "path": "crates/canic-testing-internal/examples/wire_composition/main.rs",
+        "sha256": "55434f9d4919ca17d64aadcef76fc5e0a5ca25199d8ded92ffb18a14c120cc69"
+      },
+      {
+        "path": "crates/canic-testing-internal/examples/wire_composition/retained.mjs",
+        "sha256": "a4d25b8224ee0125e9214eb79bb918502fa246c9153bb2829cb2e243b2a4bec1"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/payload_contract/mod.rs",
+        "sha256": "f2176a7f50d876ced6d800ff56ca5beef19b988b3181da6f7ce2e6c84ba8af0a"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/admission_control/mod.rs",
+        "sha256": "3bf24592e8ef0eba3343e93437a6dec4c2133302e1b5db6a241b1fed8e500e76"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/application_checkpoint/protocol/mod.rs",
+        "sha256": "e8940a39420c2fd74f9fa92e392151d3d090fe8df2b2a17f30ceab4f77b10576"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/application_checkpoint/root/mod.rs",
+        "sha256": "bc7a2f0bdbfd53d696f5a1fc68dd9278b13086a8be82a33cd7e05d07209e1c3c"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/application_probe/mod.rs",
+        "sha256": "a33a28f06d7ad3dba7143927cbbfc343614879e4697ed042ad57c387155e2f09"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/batch_control/mod.rs",
+        "sha256": "4f10a9e2359704a9ef57a6f4f65a685f0d67c19c65c1ebbc85bf0816e85c4ea5"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/application/mod.rs",
+        "sha256": "f58fe5eee8611a6abae08f771f9f0cea451f5baeb4ac0915131b5fbe6b787b23"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/browser/mod.rs",
+        "sha256": "f0a58a695fe5f6a2415c08c579990f818834c4021f45eba5fd947c17388c9c09"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/journey/inspection/pagination/mod.rs",
+        "sha256": "590500b4a5b85e910f939584ea4bde3d28662fbc4b12a2a22d631ec2938ad81e"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/journey/inspection/pagination/service/mod.rs",
+        "sha256": "c955995e092e2611a00be8b053588b67791f8050f0fab68fed431989f8aacec7"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/funding/concurrency/mod.rs",
+        "sha256": "fce5f7401581168ebcbe4448a3584828ab24c749a597f7e46555859105dbcc77"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/funding/paid/budget/mod.rs",
+        "sha256": "fe6730f715f3513814f18eecf9c72f65d9167632d49f9dfefb6ed57e121598ac"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/funding/paid/held/mod.rs",
+        "sha256": "0d27ab35a36c5e855c8e04d4e8ee1b0306280fc36b62d437d888dbbf30f9e754"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/funding/paid/liquidity/mod.rs",
+        "sha256": "660fd7940205d51de3ea9d95399ae6784588bac29eabc67706662f2e4838f819"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/funding/paid/mod.rs",
+        "sha256": "f47bee6d370abe88a5fe974fb52c89b25798ae5edbb3369b996efdfa6cb9e168"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/funding/paid/outcome/mod.rs",
+        "sha256": "38872c212b2504a55db94e243100657d611bdab7cc34f4b0733528eafad91498"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/funding/populated/mod.rs",
+        "sha256": "eb14cddfd9023530df740dbf6609f57dd5f5d72b3af928ff5264ab6b18c3570b"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/provider/gc/mod.rs",
+        "sha256": "82f45aadc669582fc085e48d77e4c43241f0a751fa2853dcf58418fa5ce7d277"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/operator/provider/races/mod.rs",
+        "sha256": "914067732ee2eec6c480dd10f5de8c6eb1eba94f0b44e07811c4ba83ff9f87c7"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/blob_service/schema/mod.rs",
+        "sha256": "cf590e29f2e12612712f53d17ddd9f99a0d8a66f69b325eb0f4e0bde6d964b76"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/observation_relay/mod.rs",
+        "sha256": "dcb2fcf64bcb8b5dda76e60fc5811009e2f9c854179bce7d9329a144a9408113"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/packaged_consumer/protocol/mod.rs",
+        "sha256": "d04c4b68e72d07b6579e6907d8862dd9e24b80a69100fb53de6eb8299bb14619"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/issuer_probe/mod.rs",
+        "sha256": "0c5826d7be5ba8a23fd6ca4673ce88e6f0b57a15600ccb0b20ea7c32d5ceb166"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/protected_state/mod.rs",
+        "sha256": "b3de36dd5be32d468e38231b1128c2d19a34197d1eb3000b33a3b4ed90ff01b3"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/registry_discovery/mod.rs",
+        "sha256": "eea56aa6efd53c270af1714bd3c16b069abeb7fb0420169d41107e8925f3e8ca"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/retirement_control/mod.rs",
+        "sha256": "b4fcd5f98506869ec5f5c005aa718bfc96f3d70a820e803732d57bf105ebdf2c"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/runtime_probe/mod.rs",
+        "sha256": "55e801176343b0dcf5d8d134f61a8f20a8d9d41b9b2ac4c5e186db50a963eb90"
+      },
+      {
+        "path": "crates/canic/src/endpoint/registration/mod.rs",
+        "sha256": "4eeff347042f4b89d6039c7b81f95c73f1fdca3fbe6d565dfcfe356882b68f5c"
+      },
+      {
+        "path": "crates/canic/src/endpoint/schema/mod.rs",
+        "sha256": "c430aa32a4609c3bcedb65cb93190627669dfdad8dcea573350733eaaa9ef14a"
+      },
+      {
+        "path": "crates/canic/src/endpoint/schema/producer/mod.rs",
+        "sha256": "02142f8a4f20bb4247fc5b1983cfe75a2b5a49dcdaa2bdddaec88e646794bf31"
+      },
+      {
+        "path": "crates/canic/src/endpoint/schema/tests/mod.rs",
+        "sha256": "b763f08c53987b2755379492b4119b4927a622fc14904437fb7880f7e888ec10"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/cascade.rs",
+        "sha256": "6e37cfcdf35e1a699a261bfd89cf5d5f667de7f428937917abfc85e56677faab"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/child_funding/mod.rs",
+        "sha256": "1c66ccfd5d11d312bf7d63392692a310783227277feaac89034d60268ef8731a"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/cycle_balance/mod.rs",
+        "sha256": "bf2fe4608140f9a10d119d92291a77b7d8b85580700c59f52ac73bcd339e3c98"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/cycle_history/mod.rs",
+        "sha256": "e301739ba783242946ac536b3e1d1fc1681e958b3cb2217ea15bfc3978ad9114"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/cycle_topups/mod.rs",
+        "sha256": "af34f3af9e8fcb1a5e387d49afdacd6f96830343bef9746349abb17e81aa5aee"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/cycles_capability/mod.rs",
+        "sha256": "87a974bf5e571fe30f1a12db1aeb354a8ffd1101f11cd51dc0d071b9513ac1bb"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/observation_updates/mod.rs",
+        "sha256": "ea03ad75752683ceaf0682a43a1a84e55008eabd103abed6467e8580e7b5bc80"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_binding/mod.rs",
+        "sha256": "f71cb2532b405a22215a43ee48b698e724382c7f463d5cbdb7df8605cfd105bd"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_health/mod.rs",
+        "sha256": "803af3eb035bc7c01fd9ea6d17d64595b193536bff8db7d66c50f5f054adcff2"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_logs/mod.rs",
+        "sha256": "6663ffae0a569c092eb67edb276e54a2e48527ee53ba30c9e8ab5a015e055fcc"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_memory_allocations/mod.rs",
+        "sha256": "57fb321be6eadea0d2cd6fbbce3cc90b4107767b756405a2beb95e60a738523f"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_metrics/mod.rs",
+        "sha256": "48fc7d40065bf494d24567aba95d2836ffc3544e5765ebeb6069101d81a13a75"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_readiness/mod.rs",
+        "sha256": "5ebd6709bb598cd39eceb68793a22023e34689277c1c43902de0a734a34a0ac4"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_runtime/mod.rs",
+        "sha256": "c9b65248bee401c096b544c42b5b237471288e1c7e901089aa90e0d6b882b588"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/protected_state/mod.rs",
+        "sha256": "b9f0c3bdca3c8ab66acd79095b2123bc8bd8efb3ba9c648eb2558e97192949e5"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/release_evidence/mod.rs",
+        "sha256": "8ca9d58309e4f1050573be47f2313968cbe64b2fcf23e5eafb54050fd36da7f3"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/root_capability/mod.rs",
+        "sha256": "34ccf5dc3d31da2a0a09193f761d0d1db309891eeecac2b5b255bf778d59505d"
+      },
+      {
+        "path": "crates/canic/src/macros/endpoints/root_observation/mod.rs",
+        "sha256": "b0e0310c013e5143bc42699476d1224f7aa147aacfbdfe3c0f9cf1d0e82eba1c"
+      },
+      {
+        "path": "crates/canic/tests/wire_schema/mod.rs",
+        "sha256": "e2c59e66390b8c918d7e3c900fcca318c13f6ce54fefbdec4a9da42ca895138c"
+      },
+      {
+        "path": "docs/audits/working/0.112-push-readiness/endpoint-candidates.tsv",
+        "sha256": "cc824d7ecbb1b3b10ba5d486fb018be55383db126f6656e59b7ae8e9b2b09434"
+      },
+      {
+        "path": "docs/audits/working/0.112-push-readiness/plan.md",
+        "sha256": "4d71e0ef26d4cf27a806bad5f945122c7d5a329b2428e4c3338a2a7702f54789"
+      },
+      {
+        "path": "docs/audits/working/0.112-push-readiness/storage-codec-experiment.json",
+        "sha256": "c29cd7255dbaaef799c8299dcd3b261e859620ce6638abe93ef9bb92813bf386"
+      },
+      {
+        "path": "docs/design/0.112-standalone-blob-service-extraction/wire-hard-cut.md",
+        "sha256": "c4957cea7f4a5538be6ebf81bdb14ddc2496293915ef5d3afbea0c0677e8fb9e"
+      },
+      {
+        "path": "docs/node-tools.md",
+        "sha256": "c96e7f919c1f0b88155316f79567438fd5e1fc0c07a31b308170dbc8adf91b11"
+      },
+      {
+        "path": "docs/status/archive/2026-10-24-blob-wire-precompact.md",
+        "sha256": "9d1d512715972b72234859477f525031c4170713dff21bceee63ec9df541c300"
+      },
+      {
+        "path": "docs/status/archive/2026-10-25-wire-source-progress.md",
+        "sha256": "492c74564ad5384d5bc64936a9c9f36eaf0662cb9eee28fea19ba7fe1702319b"
+      },
+      {
+        "path": "docs/status/archive/2026-10-26-wire-source-progress.md",
+        "sha256": "62e63f61c8df285c22bf0465d7a0f2fb49d105b1509dbd68227e9df979416663"
+      },
+      {
+        "path": "integrations/blob-service/consumer/examples/wire_schema/main.rs",
+        "sha256": "b821e5aa32fc6e324c6729fafba2a8bc207947418c94c85950cfec005b8b9083"
+      },
+      {
+        "path": "integrations/blob-service/consumer/src/schema/mod.rs",
+        "sha256": "05612b88777e6b13999e7536d0ed1b5886119a2bb7650a13ef8524b1f11fd479"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/examples/wire_schema/main.rs",
+        "sha256": "626225fca668b8b6926ae6617b9aa909bdf4578ad6bf4f08e9a9fa2837ef33b3"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/src/funding/evidence/mod.rs",
+        "sha256": "141af70a279479175cbcd755ebee18beb7e9a8db471e1a13875a2ae876e2c744"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/src/funding/mod.rs",
+        "sha256": "14ea3143c81a8f57e265c61d24660a918c5533d3ecbc8eb1f1912c94606e88ab"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/src/funding/paid/budget/mod.rs",
+        "sha256": "5b5142ad2e02aa6019cac463b4ab0013e822d7d03db68bdfb8119d583ccb9aab"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/src/funding/paid/liquidity/mod.rs",
+        "sha256": "282717fa52ce00bbafa78bd47067bbbd3d581f2c0dba060e23fe7f1a49041e8d"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/src/funding/paid/mod.rs",
+        "sha256": "2f734c0256c21339ce174090b1eb4a49349438e87b39b6c8bbd013ea3cbc89fc"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/src/funding/paid/uncertain/mod.rs",
+        "sha256": "b201842213e0ca48890cdb2d93e4e6d53d6004a56ae1b39e2271e8e28c764738"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/src/protocol/mod.rs",
+        "sha256": "97eef48b64b64b7a0df7163dc9027598cf155323d53d1333add27f14444495e2"
+      },
+      {
+        "path": "integrations/blob-service/src/funding/mod.rs",
+        "sha256": "5802501cac430f5f56b0ad3c43da6bb170f25e1f1c768eccd6a961a564ef5c41"
+      },
+      {
+        "path": "integrations/blob-service/src/schema/mod.rs",
+        "sha256": "6e10eb0b34085b872fd2595e6c3a9c735f8d307c401efe570764ee648a4b9596"
+      },
+      {
+        "path": "rules/engineering-details.md",
+        "sha256": "32c612512bbb0b189f9eb9bb1bd0a0b47a02190fdbde2f7081b30ca315e4390a"
+      },
+      {
+        "path": "rules/rpc-budgets.md",
+        "sha256": "e3aed908dd9b08bf93255328bb056bed57298dab39944e3726aad2726548e653"
+      },
+      {
+        "path": "scripts/ci/describe-tool-selection.pl",
+        "sha256": "4cfa90a020aefc5115fe5f7103eb5857f837acb9e0cf91f6362947a4abea211c"
+      }
+    ],
+    "excludedSelf": "docs/audits/working/0.112-push-readiness/owned-candid-cut.json",
+    "note": "Final dirty-source fingerprint, captured after focused validation; full prior dirty work is preserved. Does not assert all commands inspected identical intermediate snapshots."
+  },
+  "additionalResultLogs": [
+    {
+      "log": "/tmp/canic-candid-hard-cut-20261026/contracts-tests-r1.log",
+      "resultLines": [
+        "test result: FAILED. 314 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "error: test failed, to rerun pass `-p canic-contracts --lib`"
+      ],
+      "note": "Full invocation not retained in script inventory; result only."
+    },
+    {
+      "log": "/tmp/canic-candid-hard-cut-20261026/contracts-tests-r2.log",
+      "resultLines": [
+        "test result: ok. 315 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+      ],
+      "note": "Full invocation not retained in script inventory; result only."
+    },
+    {
+      "log": "/tmp/canic-candid-hard-cut-20261026/host-init-tests.log",
+      "resultLines": [
+        "error[E0432]: unresolved import `crate::fleet_ensure::ops::infrastructure_bootstrap::LedgerAccount`",
+        "error: could not compile `canic-host` (lib test) due to 1 previous error"
+      ],
+      "note": "Full invocation not retained in script inventory; result only."
+    },
+    {
+      "log": "/tmp/canic-candid-hard-cut-20261026/host-init-tests-r2.log",
+      "resultLines": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1280 filtered out; finished in 0.00s"
+      ],
+      "note": "Full invocation not retained in script inventory; result only."
+    },
+    {
+      "log": "/tmp/canic-candid-hard-cut-20261026/host-management-tests.log",
+      "resultLines": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1278 filtered out; finished in 0.00s"
+      ],
+      "note": "Full invocation not retained in script inventory; result only."
+    }
+  ],
+  "staticChecks": [
+    {
+      "command": "xargs -d '\\n' rustfmt --edition 2024 --check --config skip_children=true < /tmp/canic-candid-hard-cut-20261026/final-format-files.txt",
+      "outcome": "passed",
+      "log": "/tmp/canic-candid-hard-cut-20261026/final-format.log"
+    },
+    {
+      "command": "git diff --check",
+      "outcome": "passed",
+      "log": "/tmp/canic-candid-hard-cut-20261026/diff-check.log"
+    },
+    {
+      "command": "perl scripts/ci/check-documentation-links.pl --root /home/adam/projects/canic docs/audits/working/0.112-push-readiness/plan.md docs/status/current.md docs/changelog/0.112.md CHANGELOG.md docs/features/runtime/update-payload-limits.md docs/design/0.112-standalone-blob-service-extraction/0.112-design.md docs/design/0.112-standalone-blob-service-extraction/wire-hard-cut.md integrations/blob-service/README.md",
+      "outcome": "passed",
+      "log": "/tmp/canic-candid-hard-cut-20261026/document-links.log"
+    }
+  ],
+  "upstreamExportGaps": {
+    "platform": "0.6.19",
+    "sourceHead": "c75fdff26751f771492e5c44f154b218610362f6",
+    "classification": "BLOCKED; no upstream edits or publication performed",
+    "records": [
+      {
+        "owner": "Platform management contracts",
+        "canic": "crates/canic-core/src/infra/ic/mgmt/types.rs:20",
+        "requiredExports": [
+          "CanisterSettings",
+          "UpdateSettingsArgs",
+          "UploadChunkArgs",
+          "CanisterInstallMode",
+          "InstallChunkedCodeArgs",
+          "UninstallCodeArgs",
+          "LogVisibility",
+          "EnvironmentVariable",
+          "EcdsaKeyId",
+          "EcdsaCurve",
+          "EcdsaPublicKeyArgs",
+          "EcdsaPublicKeyResult",
+          "SignWithEcdsaArgs",
+          "SignWithEcdsaResult"
+        ],
+        "availableUnderlying": "ic-management-canister-types 0.11.0",
+        "gap": "Types exist in pinned underlying crate but are not re-exported by Platform 0.6.19. Sender-version request shapes must map to the exact method contract."
+      },
+      {
+        "owner": "Platform replicated history contracts",
+        "canic": [
+          "crates/canic-control-plane/src/ops/canister_pool/capacity_import/history/mod.rs:10",
+          "crates/canic-host/src/fleet_ensure/ops/install_history/mod.rs:37"
+        ],
+        "requiredExports": [
+          "Change",
+          "ChangeOrigin",
+          "FromUserRecord",
+          "FromCanisterRecord",
+          "CreationRecord",
+          "ControllersChangeRecord",
+          "CodeDeploymentRecord"
+        ],
+        "availableUnderlying": "ic-management-canister-types 0.11.0",
+        "gap": "Complete origin matching and fixture construction require these public identities; ChangeDetails and CanisterInfoResult alone do not expose the missing enum names."
+      },
+      {
+        "owner": "Platform ICRC contracts",
+        "canic": [
+          "crates/canic-core/src/infra/ic/icp_refill.rs:34",
+          "crates/canic-contracts/src/dto/icrc21/mod.rs:24"
+        ],
+        "requiredExports": [
+          "icrc1::transfer::TransferArg",
+          "icrc1::transfer::Memo",
+          "icrc21::requests::* (DTOs)",
+          "icrc21::responses::* (DTOs)",
+          "icrc21::errors::{ErrorInfo,Icrc21Error}"
+        ],
+        "availableUnderlying": "icrc-ledger-types 0.2.0",
+        "gap": "Pinned underlying DTOs exist; selected Platform public module exports only the listed subset, including Account/TransferError already adopted."
+      },
+      {
+        "owner": "Named external supplier required",
+        "canic": [
+          "crates/canic-core/src/infra/ic/icp_refill.rs:115",
+          "crates/canic-core/src/infra/ic/cycles_ledger.rs:25",
+          "crates/canic-core/src/infra/ic/nns/registry.rs:26",
+          "crates/canic-host/src/frontend/ops/uploaded/mod.rs"
+        ],
+        "gap": "CMC notify/rate, Cycles Ledger creation/transfer, NNS registry and asset-store DTO families need an exact published supplier; management types and ICRC account types are not substitutes."
+      }
+    ]
+  },
+  "continuationQualification": {
+    "kind": "targeted-development-evidence-not-release-validation",
+    "date": "2026-10-26",
+    "source": {
+      "comparison": "Previous owned-Candid final source capture versus current continuation before documentation edits",
+      "trackedDiffMatches": true,
+      "changedPreviouslyUntrackedFiles": [],
+      "baselinePatch": "/tmp/canic-closeout-final-20261026/current-worktree.patch",
+      "baselinePatchSha256": "fc58ab2665cc36b2fb06183127c5eeb3f9f0692f2f3dd2c44687d862c237e4e3",
+      "note": "Production behavior unchanged; source continuity verified before final fixture corrections. Package/browser/frontend/operator results precede only those fixture/test corrections. Final timer and Root deletion checks qualify the corrected inputs."
+    },
+    "locksUnchanged": true,
+    "commands": [
+      {
+        "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_browser_compositions",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/blob-browser-r2.log",
+        "sha256": "f367b28182c2f6b54efea0382ab248e2e5c8c8632d7a5d20c441280aea7419c4",
+        "resultLines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 115.49s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 147.98s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 305.10s",
+          "workspace runner wall time: 319s"
+        ]
+      },
+      {
+        "command": "make test-packaged-downstream-cli",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/packaged-cli.log",
+        "sha256": "d3072351913a8d57de79740205f1c963495be628efa38c5c43f20b9c4a88e0be",
+        "resultLines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 740.17s",
+          "workspace runner wall time: 754s",
+          "packaged downstream CLI probe passed"
+        ]
+      },
+      {
+        "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::frontend_handoff_public_cli_and_sdk_preserve_admission_and_local_trust",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/frontend-admission.log",
+        "sha256": "faad8741a4ac7d3865e4042d52bcc85ecea594a9807910f008b40f3f0c20cf59",
+        "resultLines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 275.11s",
+          "workspace runner wall time: 289s"
+        ]
+      },
+      {
+        "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::operator_component_public_cli_uses_real_icp_and_exports_terminal_binding",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/operator-component.log",
+        "sha256": "14c74bc86713d55d9c0bd76e7a11a3e66abfcc21c1fa927320467c637579f482",
+        "resultLines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.01s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 154.34s",
+          "workspace runner wall time: 168s"
+        ]
+      },
+      {
+        "command": "make test-pocketic-case CASE=timer_authority",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/timer-authority-r2.log",
+        "sha256": "0846d1391d3d2a5f25c5d5733f74f540b162bbb5a653456b63e8ce34bf822efa",
+        "resultLines": [
+          "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 93.19s",
+          "workspace runner wall time: 192s"
+        ]
+      },
+      {
+        "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/root-deletion-readiness.log",
+        "sha256": "e7e6b00e73dcb9fb8a44008c399cd864fd6e1fd38b97d2835105dc5f23fb1870",
+        "resultLines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 123 filtered out; finished in 0.01s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 123 filtered out; finished in 295.96s",
+          "workspace runner wall time: 411s"
+        ]
+      },
+      {
+        "command": "cargo test --locked --offline -p canic-testing-internal --lib intent_request_budget_admits_optional_ttl",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/timer-budget-regression.log",
+        "sha256": "079e359a913e54644ac0b1a7b23e79e5454d12a43cc61a5a077560d5c75ecad4",
+        "resultLines": [
+          "    Finished `test` profile [optimized + debuginfo] target(s) in 13.19s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "command": "cargo test --locked --offline -p canic-core --lib rejected_performance_does_not_starve_selected_occupancy",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/sampling-rejection-regression.log",
+        "sha256": "3eee10e0e0c6766e9cd649eae5af5257c261660f8d60c71ac964364aa2d5283d",
+        "resultLines": [
+          "    Finished `test` profile [optimized + debuginfo] target(s) in 45.41s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1329 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "command": "cargo clippy --locked --offline -p runtime_probe -p canic-testing-internal --lib --all-features -- -D warnings",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/timer-fixture-clippy-r2.log",
+        "sha256": "ab1e1da18825551dfc4979382e9b9183047acc6b9c2f0691306904c973e49df0",
+        "resultLines": [
+          "    Finished `dev` profile [optimized + debuginfo] target(s) in 15.95s"
+        ]
+      }
+    ],
+    "initialBrowserFailure": {
+      "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_browser_compositions",
+      "log": "/tmp/canic-closeout-final-20261026/blob-browser.log",
+      "sha256": "624c9edafcdb18c0b7a5c7e4aa087c47685267fc0e4744008089475b69670d69",
+      "outcome": "failed",
+      "reason": "Required prepared Node environment omitted; no source defect. Passing rerun uses explicit pinned Node and TypeScript paths."
+    },
+    "timerCorrection": {
+      "initialLog": "/tmp/canic-closeout-final-20261026/timer-authority.log",
+      "initialResult": "9 passed; 2 failed",
+      "diagnosticLog": "/tmp/canic-closeout-final-20261026/timer-budget-diagnostic.log",
+      "initialClippyLog": "/tmp/canic-closeout-final-20261026/timer-fixture-clippy.log",
+      "initialClippyResult": "Six unreadable hex method-ID literals; separators added without changing numeric values",
+      "corrections": [
+        "BEGIN_INTENT allocation 1024 to 4096 in fixture and caller; byte/node/depth limits unchanged",
+        "Endpoint-label injection exercises public performance rejection; oversized checkpoints now correctly use overflow",
+        "Native round-trip admission regression and native inventory classification"
+      ],
+      "files": [
+        {
+          "path": "canisters/test/runtime_probe/src/lib.rs",
+          "sha256": "936f4b4656a6335fa09f76cfb92e8decddbe023e71b3de76c7db2133618fbcec"
+        },
+        {
+          "path": "canisters/test/runtime_probe/src/timer_wire/mod.rs",
+          "sha256": "8c2e9f6534745bae08a036f9707664a6c4a5263bbc3af80123dceca0f8e9a87d"
+        },
+        {
+          "path": "crates/canic-testing-internal/src/pic/runtime_probe/mod.rs",
+          "sha256": "6be9fb3e3d98c52902352f3d853169495e2e2747aeefbec9b76df01ae3fda89f"
+        },
+        {
+          "path": "crates/canic-testing-internal/src/pic/cases/mod.rs",
+          "sha256": "19b721dfd0808fa2f8c24fd07db5ef06e2d76dfe7c3bc36f745a80980d9527b8"
+        },
+        {
+          "path": "crates/canic-core/src/workflow/metrics/publication/mod.rs",
+          "sha256": "fbf257c83ffd0e676dd41f0680dcea7d462a090e6642c4fd29cd0fd25adde5fa"
+        }
+      ],
+      "beforeFiles": "/tmp/canic-closeout-final-20261026/timer-before/",
+      "productionBehaviorChanged": false
+    },
+    "tools": {
+      "node": "24.21.0",
+      "typescript": "6.0.3",
+      "platformNpm": "@tokostudios/ic-platform@0.1.0",
+      "environment": {
+        "CANIC_FRONTEND_NODE": "/home/adam/.nvm/versions/node/v24.21.0/bin/node",
+        "CANIC_FRONTEND_TYPESCRIPT": "/home/adam/projects/canic/crates/canic-host/examples/frontend-consumer/node_modules/typescript"
+      },
+      "hashes": "7fde7b8afa198da66257f42ee2001d874c7355631e6d1579a5fb5ef1f246df4c  /home/adam/.nvm/versions/node/v24.21.0/bin/node\naf568dccf7e4ef1287616609e9ed156081476d54e5c0810952fb84c7e827c92a  crates/canic-host/examples/frontend-consumer/package-lock.json\n9332e97c30d3e53ed54910b89207ed657fb444066484df6e5b6965bf130865e9  crates/canic-host/examples/frontend-consumer/node_modules/typescript/package.json\n"
+    },
+    "extractedPackage": {
+      "selectedLocks": [
+        {
+          "path": "/tmp/canic-closeout-final-20261026/packaged-tool-Cargo.lock",
+          "sha256": "8e1f26d1cd2abf0ee707a7140251194dab1cac9111820d001e937e694a6ff76b",
+          "packages": [
+            {
+              "name": "candid",
+              "version": "0.10.39",
+              "checksum": "3cf88a2a95ce5fcb4c93a19946313a1877d36894d9f14c82ba0a38ab9f1ff682"
+            },
+            {
+              "name": "canic-backup",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-cli",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-contracts",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-control-plane",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-core",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-host",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "ic-agent",
+              "version": "0.49.3",
+              "checksum": "4ac2c4f1ac865dce73eb8b14b3e08029af24347f1d4307f69ac52c2172b78e3a"
+            },
+            {
+              "name": "ic-auth",
+              "version": "0.17.1",
+              "checksum": "b498d9981816367c59317b7c74e666d40650fe6bc08c0c78c4c04d7255cb7178"
+            },
+            {
+              "name": "ic-auth-protocol-types",
+              "version": "0.17.1",
+              "checksum": "130a6fe93fa317914c72bdf61bdb957a333c202da8daacc7f09924cef6f86501"
+            },
+            {
+              "name": "ic-backup",
+              "version": "0.44.4",
+              "checksum": "edf74ab726f9f55f0a26678a5c87b091689d4be5e26855ce2bf5778f614d2c78"
+            },
+            {
+              "name": "ic-build",
+              "version": "0.68.9",
+              "checksum": "237f7e7191c7b82234b7831010e8e7f1a4bd448466f30aeb515e223e24e62943"
+            },
+            {
+              "name": "ic-cdk-executor",
+              "version": "2.0.0",
+              "checksum": "33716b730ded33690b8a704bff3533fda87d229e58046823647d28816e9bcee7"
+            },
+            {
+              "name": "ic-certification",
+              "version": "3.2.0",
+              "checksum": "754e3037360152de7e5f2bd0ccf51db8864b6a03c5a2b4ffc6a65286c0e2ffa7"
+            },
+            {
+              "name": "ic-ed25519",
+              "version": "0.6.0",
+              "checksum": "6ad3d86f2e35cb99ae7497b3e4fa92ad751a8e8978f0680d37b86dd51ef91714"
+            },
+            {
+              "name": "ic-host-artifacts",
+              "version": "0.68.9",
+              "checksum": "b3e5d37ea51d6546d94bb05cbdd5ac6dc92a1836c0e2775d52813ce36931e4eb"
+            },
+            {
+              "name": "ic-host-fs",
+              "version": "0.68.9",
+              "checksum": "90621d682eb910e12d87de75319769720f45d4f6f25432c81dfe2cfd803bd348"
+            },
+            {
+              "name": "ic-host-process",
+              "version": "0.68.9",
+              "checksum": "c947528037206b7092608ec4017d19388b3f5578d96ed79236ae3342747d7aa2"
+            },
+            {
+              "name": "ic-host-text",
+              "version": "0.68.9",
+              "checksum": "ae58f5947aa71fb56a7d5173a61e4073b5faa726be4c34844bce82e7696a42b3"
+            },
+            {
+              "name": "ic-host-tools",
+              "version": "0.68.9",
+              "checksum": "f1c6ad0714f7066e3ba83ddb0182401ab3d82e03c75fd4428553d9f99a6d0a69"
+            },
+            {
+              "name": "ic-management-canister-types",
+              "version": "0.11.0",
+              "checksum": "b3e3162bdfbdbc6ca3b4bfa8145f9ba19cddaf3eb8d1af8dc7be6a39557b76c2"
+            },
+            {
+              "name": "ic-memory",
+              "version": "0.51.5",
+              "checksum": "dead2c824f6ea8e7277524b53f1e01d22c5284729c15895b882d83f002ffdb7e"
+            },
+            {
+              "name": "ic-metrics",
+              "version": "0.16.3",
+              "checksum": "4b29592cae8a0f2d6f1d7d8d4fbd107cfbb3f3ad2e3e18515d7f598665037056"
+            },
+            {
+              "name": "ic-platform",
+              "version": "0.6.19",
+              "checksum": "d9d5eea342cfe485766ede1ac89475590b76da4c6749607602e57b016ef9543b"
+            },
+            {
+              "name": "ic-platform-macros",
+              "version": "0.6.19",
+              "checksum": "201e090837b4a4f0727fdd96a4de4c3b247893b44efcbc657d0cfd255b5bafa3"
+            },
+            {
+              "name": "ic-query",
+              "version": "0.74.3",
+              "checksum": "7b7d9570781b6f3b9429337fb1af6d5374015e4ae84683013930bddec55c9b1b"
+            },
+            {
+              "name": "ic-secp256k1",
+              "version": "0.3.0",
+              "checksum": "3bf34836f1c4e8114b6d13b7699428939742e9ad73615bc0be4799ccc5566869"
+            },
+            {
+              "name": "ic-stable-structures",
+              "version": "0.7.2",
+              "checksum": "8ee3372ddc0cf2a747fc26ce2d075a240ed6bfab151e63bc70109e8967f7ce6f"
+            },
+            {
+              "name": "ic-storage",
+              "version": "0.51.5",
+              "checksum": "cac6b3edb3d8afd3c9bf38ffc9611f3a9fba4e4d36b543baf224bc9b0a4b147e"
+            },
+            {
+              "name": "ic-timers",
+              "version": "0.31.5",
+              "checksum": "dd522e9d986f864e9c395e3be6deeb07b9d905555b988ca770890693d9515d05"
+            },
+            {
+              "name": "ic-transport-types",
+              "version": "0.49.3",
+              "checksum": "dfaa92cecba48dcd4ef3b626847bb1f54f0d90fb2f1471755141d385f8ffc42c"
+            },
+            {
+              "name": "ic-verify-bls-signature",
+              "version": "0.6.0",
+              "checksum": "cd6c4261586eb473fe1219de63186a98e554985d5fd6f3488036c8fb82452e27"
+            },
+            {
+              "name": "ic-wire",
+              "version": "0.7.18",
+              "checksum": "edd828493d11d764d091290eac815bcea8fca77754d567d818c17236118251bb"
+            },
+            {
+              "name": "ic-wire-derive",
+              "version": "0.7.18",
+              "checksum": "7d9398da50d1b4edc54804ca53f8974adee7250695176c2040638c078f59d24d"
+            },
+            {
+              "name": "serde_cbor",
+              "version": "0.11.2",
+              "checksum": "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
+            }
+          ]
+        },
+        {
+          "path": "/tmp/canic-closeout-final-20261026/packaged-consumer-Cargo.lock",
+          "sha256": "0bc6fb3084e4e03581240166a3fdee6edefaf948806dc26fdf73eddf2c9add60",
+          "packages": [
+            {
+              "name": "candid",
+              "version": "0.10.39",
+              "checksum": "3cf88a2a95ce5fcb4c93a19946313a1877d36894d9f14c82ba0a38ab9f1ff682"
+            },
+            {
+              "name": "canic",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-contracts",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-core",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "canic-macros",
+              "version": "0.111.0",
+              "checksum": null
+            },
+            {
+              "name": "ic-auth",
+              "version": "0.17.1",
+              "checksum": "b498d9981816367c59317b7c74e666d40650fe6bc08c0c78c4c04d7255cb7178"
+            },
+            {
+              "name": "ic-auth-protocol-types",
+              "version": "0.17.1",
+              "checksum": "130a6fe93fa317914c72bdf61bdb957a333c202da8daacc7f09924cef6f86501"
+            },
+            {
+              "name": "ic-cdk-executor",
+              "version": "2.0.0",
+              "checksum": "33716b730ded33690b8a704bff3533fda87d229e58046823647d28816e9bcee7"
+            },
+            {
+              "name": "ic-host-artifacts",
+              "version": "0.68.9",
+              "checksum": "b3e5d37ea51d6546d94bb05cbdd5ac6dc92a1836c0e2775d52813ce36931e4eb"
+            },
+            {
+              "name": "ic-management-canister-types",
+              "version": "0.11.0",
+              "checksum": "b3e3162bdfbdbc6ca3b4bfa8145f9ba19cddaf3eb8d1af8dc7be6a39557b76c2"
+            },
+            {
+              "name": "ic-memory",
+              "version": "0.51.5",
+              "checksum": "dead2c824f6ea8e7277524b53f1e01d22c5284729c15895b882d83f002ffdb7e"
+            },
+            {
+              "name": "ic-metrics",
+              "version": "0.16.3",
+              "checksum": "4b29592cae8a0f2d6f1d7d8d4fbd107cfbb3f3ad2e3e18515d7f598665037056"
+            },
+            {
+              "name": "ic-platform",
+              "version": "0.6.19",
+              "checksum": "d9d5eea342cfe485766ede1ac89475590b76da4c6749607602e57b016ef9543b"
+            },
+            {
+              "name": "ic-platform-macros",
+              "version": "0.6.19",
+              "checksum": "201e090837b4a4f0727fdd96a4de4c3b247893b44efcbc657d0cfd255b5bafa3"
+            },
+            {
+              "name": "ic-secp256k1",
+              "version": "0.3.0",
+              "checksum": "3bf34836f1c4e8114b6d13b7699428939742e9ad73615bc0be4799ccc5566869"
+            },
+            {
+              "name": "ic-stable-structures",
+              "version": "0.7.2",
+              "checksum": "8ee3372ddc0cf2a747fc26ce2d075a240ed6bfab151e63bc70109e8967f7ce6f"
+            },
+            {
+              "name": "ic-storage",
+              "version": "0.51.5",
+              "checksum": "cac6b3edb3d8afd3c9bf38ffc9611f3a9fba4e4d36b543baf224bc9b0a4b147e"
+            },
+            {
+              "name": "ic-timers",
+              "version": "0.31.5",
+              "checksum": "dd522e9d986f864e9c395e3be6deeb07b9d905555b988ca770890693d9515d05"
+            },
+            {
+              "name": "ic-wire",
+              "version": "0.7.18",
+              "checksum": "edd828493d11d764d091290eac815bcea8fca77754d567d818c17236118251bb"
+            },
+            {
+              "name": "ic-wire-derive",
+              "version": "0.7.18",
+              "checksum": "7d9398da50d1b4edc54804ca53f8974adee7250695176c2040638c078f59d24d"
+            },
+            {
+              "name": "serde_cbor",
+              "version": "0.11.2",
+              "checksum": "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
+            }
+          ]
+        }
+      ],
+      "archives": [
+        {
+          "path": "target/package/canic-0.111.0.crate",
+          "sha256": "0b14e0e2a496852de92b0249f708888ed32b0d40c36bf557cead4d4eec0553dc"
+        },
+        {
+          "path": "target/package/canic-backup-0.111.0.crate",
+          "sha256": "570ab462235449688a1087f78a2850fc22ae2c5605336454cce26e7f18950473"
+        },
+        {
+          "path": "target/package/canic-cli-0.111.0.crate",
+          "sha256": "fc52c5ee82f41d61309d59bef01fb207bc37db0990b216ab4fbd23a15623d70b"
+        },
+        {
+          "path": "target/package/canic-contracts-0.111.0.crate",
+          "sha256": "e79ac0702f3af52a2384bcfa66bd5a0e2d8080495b7df27c4b6d0a4983d6c51b"
+        },
+        {
+          "path": "target/package/canic-control-plane-0.111.0.crate",
+          "sha256": "2cdbee7931f153c3f678f20f9b737f6a84372a593aab62e8499860adb7f50e88"
+        },
+        {
+          "path": "target/package/canic-core-0.111.0.crate",
+          "sha256": "d76c080da78e645408d405106d1c148b5914457628fae7a766859b0cb54c5fe3"
+        },
+        {
+          "path": "target/package/canic-host-0.111.0.crate",
+          "sha256": "5d0587c857553d129085da58a32a9e83ef2ca1693ed4fb711e81d860a0a6434e"
+        },
+        {
+          "path": "target/package/canic-macros-0.111.0.crate",
+          "sha256": "75b10ea5de457a0b20a3f10fd33b0c47f76ab94f24201e66476a67983eb4f573"
+        }
+      ],
+      "cliSha256": "14635099252d12f0f53e615da55242e0b90b257f68d62d1accf8e145cfb3ac82",
+      "releaseBuildId": "13c1cf88dfe4fdd8d787b37a481b5e27258b802ebf4a28216e87168a3884b402",
+      "artifactEvidence": "/tmp/canic-closeout-final-20261026/packaged-release/",
+      "artifacts": [
+        {
+          "path": "artifacts/app/app.did",
+          "bytes": 1461,
+          "sha256": "74aa35f491707bd3ecfb40eeaa25f6e0fec6b8d945ec00e51a0333fa3c9f38d7"
+        },
+        {
+          "path": "artifacts/app/app.wasm",
+          "bytes": 4744569,
+          "sha256": "8af8cfcd0e9e0e414fb809a75bdca804010d3c190d260f668654af83fdf971f7"
+        },
+        {
+          "path": "artifacts/app/app.wasm.gz",
+          "bytes": 1378950,
+          "sha256": "6e4c3ed9292270c5c3f02dcb79d6fa1c4f167b85d66a6165aed7258939f484f3"
+        },
+        {
+          "path": "artifacts/app/app.wire.json",
+          "bytes": 249299,
+          "sha256": "d8b142590aa4c6fb72eb003f5286ff55628f79e1708e18a0dfb9b4a36ef95087"
+        },
+        {
+          "path": "artifacts/app/app.wire.ts",
+          "bytes": 392425,
+          "sha256": "6cd1b2d51c9c013b81bd01ad1d91a535d78c6cfcd839f3018041ffdc9de086c8"
+        },
+        {
+          "path": "artifacts/fleet_coordinator/fleet_coordinator.did",
+          "bytes": 2173,
+          "sha256": "e95603ca5419960c9c7aab05060d2eb216014fb1ecd0d789b755301cf6097e71"
+        },
+        {
+          "path": "artifacts/fleet_coordinator/fleet_coordinator.wasm",
+          "bytes": 4540061,
+          "sha256": "4b88b5cf6574c6929712830509e8fdc854cef8c5f5118d4d61d095c7f190011b"
+        },
+        {
+          "path": "artifacts/fleet_coordinator/fleet_coordinator.wasm.gz",
+          "bytes": 1214916,
+          "sha256": "b38d8714058d229eb46284cb7cb72afafc901d42dd62caa537317023d32a282c"
+        },
+        {
+          "path": "artifacts/fleet_coordinator/fleet_coordinator.wire.json",
+          "bytes": 166755,
+          "sha256": "bad512b307687ccd88af6810cd1bdf79a61b6be3498858306eaf141d6d1dac63"
+        },
+        {
+          "path": "artifacts/fleet_coordinator/fleet_coordinator.wire.ts",
+          "bytes": 260942,
+          "sha256": "70396fbe15c5a5b6acbce18aa40832bcf6751701c86dbe00e95e675de3f715a4"
+        },
+        {
+          "path": "artifacts/root/root.did",
+          "bytes": 5991,
+          "sha256": "1d3bf27338cacafe28c1d5f7fd16389d3f00c52f1ebfcd839af46a42fccaf2da"
+        },
+        {
+          "path": "artifacts/root/root.wasm",
+          "bytes": 9112530,
+          "sha256": "3067cb2bcdce84231ef88c646fb1f82dcffcebb2989268efea7bf503dbc6831e"
+        },
+        {
+          "path": "artifacts/root/root.wasm.gz",
+          "bytes": 2514172,
+          "sha256": "e968e9fddfca454d226dfae07df35ff62a17ae6b9fe0ef43875c6e123b84023e"
+        },
+        {
+          "path": "artifacts/root/root.wire.json",
+          "bytes": 430936,
+          "sha256": "687d6450975d4f655a015c6e29a6080f0f836da8b0cf2433b4e8783752830a4e"
+        },
+        {
+          "path": "artifacts/root/root.wire.ts",
+          "bytes": 744716,
+          "sha256": "6114a3d6812e89d2cef128cbb68592a90220fa6488c2e377c3f3cba1fda814da"
+        },
+        {
+          "path": "artifacts/wasm_store/wasm_store.did",
+          "bytes": 1937,
+          "sha256": "35cc7b550d49435fb16e920dfa9cc5fe4012b3ff6e4d0617e6afa7930e63ba7d"
+        },
+        {
+          "path": "artifacts/wasm_store/wasm_store.wasm",
+          "bytes": 3124680,
+          "sha256": "b86b7b38269fe43961f7d5e49ee825fa73ddb00708f4c44c52d8a4607687e4df"
+        },
+        {
+          "path": "artifacts/wasm_store/wasm_store.wasm.gz",
+          "bytes": 868504,
+          "sha256": "38950b0a16150608f71456eb4524dabf000e292982df73a3d2e7598878f81e6c"
+        },
+        {
+          "path": "artifacts/wasm_store/wasm_store.wire.json",
+          "bytes": 81189,
+          "sha256": "09422b0e4d90ccc012643b4ee2ade11c1813db2bac13f4a8dae8671dc111dc89"
+        },
+        {
+          "path": "artifacts/wasm_store/wasm_store.wire.ts",
+          "bytes": 113945,
+          "sha256": "23fba25f89b158e8b28762c333b94fdfec724364ac6283b0c39519f6a2a57227"
+        }
+      ],
+      "coldBuildSeconds": 622.95,
+      "completeReuseSeconds": 34.97,
+      "note": "Debug CLI; qualification timings, not production performance. Successful isolated package scratch was cleaned by its owning script; locks, identities and manifests were captured before cleanup."
+    },
+    "browserBuildIds": {
+      "dedicated": "48d05881acff8b2d20e1a28731d2ad8b2b29acb782de0bdae031bf8da41d27e2",
+      "embedded": "60b295134c25f2ef0fd2d2a5d06fb0e43ba32a402f3afd8fec47a16f4b0e6b9c"
+    },
+    "review": {
+      "A": "owned native identity complete",
+      "B": "owned callers complete; external DTO supply blocked by CT-06",
+      "C": "local generated/package delivery complete",
+      "D": "targeted qualification complete",
+      "E": "local reconciliation complete; CT-06 prevents complete requested push readiness"
+    },
+    "notRun": [
+      "broad workspace validation",
+      "release/version transaction",
+      "live provider or paid operations",
+      "native macOS qualification",
+      "TEE hardware qualification",
+      "GitHub tracker updates or publication"
+    ],
+    "readiness": "Owned cut locally qualified. Full requested cleanup remains blocked by CT-06 upstream contract supply/publication/adoption, unless explicitly accepted by maintainer.",
+    "finalScope": {
+      "comparison": "Previous source baseline to final continuation, including fixture corrections and report edits",
+      "changedTrackedPaths": [
+        "canisters/test/runtime_probe/src/lib.rs",
+        "crates/canic-testing-internal/src/pic/cases/mod.rs",
+        "docs/status/current.md",
+        "crates/canic-core/src/workflow/metrics/publication/mod.rs"
+      ],
+      "changedPreviouslyUntrackedFiles": [
+        "canisters/test/runtime_probe/src/timer_wire/mod.rs",
+        "crates/canic-testing-internal/src/pic/runtime_probe/mod.rs",
+        "docs/audits/working/0.112-push-readiness/plan.md"
+      ],
+      "unexpectedChanges": [],
+      "finalPatchSha256": "0a12127f951e4c63e70d9e79935d8e2c2f40392ef30e30cda5e4d4fde1e156f2"
+    },
+    "indexUnchanged": true,
+    "staticChecks": [
+      {
+        "command": "git diff --check",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/final-diff-check.log"
+      },
+      {
+        "command": "perl scripts/ci/check-documentation-links.pl --root /home/adam/projects/canic docs/audits/working/0.112-push-readiness/plan.md docs/status/current.md",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/final-doc-links.log"
+      },
+      {
+        "command": "rustfmt --edition 2024 --check --config skip_children=true canisters/test/runtime_probe/src/lib.rs canisters/test/runtime_probe/src/timer_wire/mod.rs crates/canic-core/src/workflow/metrics/publication/mod.rs crates/canic-testing-internal/src/pic/runtime_probe/mod.rs crates/canic-testing-internal/src/pic/cases/mod.rs",
+        "outcome": "passed",
+        "log": "/tmp/canic-closeout-final-20261026/final-format.log"
+      },
+      {
+        "command": "node /tmp/canic-closeout-final-20261026/verify-continuation-scope.mjs; compare captured lock hashes and Git index",
+        "outcome": "passed",
+        "note": "Only five fixture/test files and the three final report/evidence files changed; production behavior and dependency selections are unchanged."
+      }
+    ]
+  },
+  "ct06SupplyPreparation": {
+    "date": "2026-10-27",
+    "classification": "BLOCKED pending upstream contribution/publication and consumer adoption",
+    "platformBase": "c75fdff26751f771492e5c44f154b218610362f6",
+    "patch": {
+      "path": "docs/audits/working/0.112-push-readiness/platform-external-contracts.patch",
+      "sha256": "4ecfff50e4b450e51f4648406b99c89d1b48bb9e3615add239cc4597ed09c890",
+      "files": 6,
+      "applyCheck": "passed against pristine archived base"
+    },
+    "latestPublished": {
+      "version": "0.6.19",
+      "checksum": "d9d5eea342cfe485766ede1ac89475590b76da4c6749607602e57b016ef9543b",
+      "yanked": false,
+      "source": "https://index.crates.io/ic/-p/ic-platform"
+    },
+    "remoteInspection": {
+      "managementModuleBlob": "55df6a7c985c04220f525ba60c572d7a80fa4d59",
+      "openPrs": [],
+      "openIssueNumbers": [
+        59,
+        56,
+        50,
+        38
+      ],
+      "matchingSupplyIssueFound": false
+    },
+    "selectedUnderlying": {
+      "management": "0.11.0",
+      "icrcLedger": "0.2.0"
+    },
+    "isolatedLock": {
+      "sha256": "d257472ea971308283c108795275183ed7c91396ac83f93ab0409cab894dcf7f",
+      "unchanged": true
+    },
+    "commands": [
+      {
+        "command": "cargo check --locked --offline -p ic-platform --lib --no-default-features --features management-canister-types,icrc-ledger-types",
+        "outcome": "passed",
+        "log": "/tmp/canic-ct06-20261027/native-check.log",
+        "sha256": "4965fbf556d2a2c07ce881eca7016fa571eaa70329ebf709e32837d2f06024ee",
+        "resultLines": [
+          "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.73s"
+        ]
+      },
+      {
+        "command": "cargo clippy --locked --offline -p ic-platform --lib --no-default-features --features management-canister-types,icrc-ledger-types -- -D warnings",
+        "outcome": "passed",
+        "log": "/tmp/canic-ct06-20261027/targeted-clippy.log",
+        "sha256": "dbb43b9131bdc3ad6e3cac3426278163a950721fec9211b84a9e431551e10f38",
+        "resultLines": [
+          "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s"
+        ]
+      },
+      {
+        "command": "cargo check --locked --offline -p ic-platform --lib --no-default-features --features management-canister-types,icrc-ledger-types --target wasm32-unknown-unknown",
+        "outcome": "passed",
+        "log": "/tmp/canic-ct06-20261027/wasm-check.log",
+        "sha256": "6b587c1cb57c6b5aa69e38ac4e37111f017bd58c4fb21fe1761a96860e47375e",
+        "resultLines": [
+          "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.08s"
+        ]
+      },
+      {
+        "command": "cargo +1.91.0 check --locked --offline -p ic-platform --lib --no-default-features --features management-canister-types,icrc-ledger-types",
+        "outcome": "passed",
+        "log": "/tmp/canic-ct06-20261027/msrv-check.log",
+        "sha256": "e2a23a91ed4b225f031c53b8fdfb55c017289f65166f6e147a83bcee1c1bddaf",
+        "resultLines": [
+          "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.01s"
+        ]
+      }
+    ],
+    "runContext": "Isolated archive and target under /tmp/canic-ct06-20261027; sibling working checkout untouched; offline locked compile checks only.",
+    "scope": [
+      "21 explicit management/lifecycle/ECDSA/history exports",
+      "TransferArg and Memo",
+      "10 explicit ICRC-21 types under icrc_ledger_types::icrc21",
+      "Migration and inventory updates; proposed changelog draft only"
+    ],
+    "adoptionHazards": [
+      "Full CanisterSettings adds optional fields absent from Canic subset; preserve unspecified fields and qualify complete encoding/cost",
+      "CanisterInstallMode includes full variants; encoded type table need not equal the local Install-only enum",
+      "Uninstall sender-version requests map to UninstallCodeArgs, not CanisterIdRecord",
+      "Consent Value needs its own namespace to avoid existing generic ledger Value collision"
+    ],
+    "notSupplied": [
+      "CMC notify/rate DTOs",
+      "Cycles Ledger creation DTOs",
+      "NNS registry DTOs",
+      "asset-store DTOs"
+    ],
+    "notRun": [
+      "runtime tests",
+      "full upstream Clippy gate",
+      "installed IC/provider calls",
+      "Canic dependency adoption",
+      "publication"
+    ],
+    "gitPublication": "Awaiting explicit permission to submit the prepared isolated PR; original no-commit/no-push instruction remains in force."
+  }
+}

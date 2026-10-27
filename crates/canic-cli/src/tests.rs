@@ -111,6 +111,30 @@ fn global_options_are_forwarded_only_once() {
 }
 
 #[test]
+fn unsupported_global_targets_are_usage_errors_before_leaf_effects() {
+    for args in [
+        &["--environment", "staging", "network", "enroll", "local"][..],
+        &["--environment", "staging", "app", "create", "demo"],
+        &["--icp", "/custom/icp", "app", "config", "demo"],
+    ] {
+        let error = run(args.iter().map(OsString::from)).expect_err("unsupported global target");
+        assert!(matches!(
+            &error,
+            CliError::Clap(error) if error.kind() == ErrorKind::UnknownArgument
+        ));
+        assert_eq!(cli_error_exit_code(&error), 2);
+    }
+}
+
+#[test]
+fn incomplete_component_apply_is_nonzero_for_automation() {
+    let error = CliError::Component(Box::new(component::ComponentCommandError::Incomplete {
+        resume_command: "canic component apply demo core --review review".into(),
+    }));
+    assert_eq!(cli_error_exit_code(&error), 1);
+}
+
+#[test]
 fn current_read_only_commands_receive_global_target_options() {
     for (command, raw_tail) in [
         ("admission", &["status", "staging"][..]),

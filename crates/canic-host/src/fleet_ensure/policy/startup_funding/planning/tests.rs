@@ -630,6 +630,5 @@ fn empty_observation(desired: &DesiredFleet) -> FleetObservation {
         additional_controlled_cycles: BTreeMap::default(),
         ledger_fee_cycles: 100_000_000,
         operator_cycles: u128::MAX,
-        protocol_ready: BTreeMap::default(),
     }
 }

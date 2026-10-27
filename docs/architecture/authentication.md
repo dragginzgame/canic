@@ -174,11 +174,11 @@ domain = canic-root-role-attestation
 
 Issuance flow:
 
-- `canic_root_command::PrepareRoleAttestation` is an update call on an `Active`
+- `canic_root_prepare_role_attestation` is an update call on an `Active`
   Fleet Subnet Root by an active Component Registry member
 - prepare resolves the protected Registry partition and requires its exact
   canister, role and placement Subnet to match the request
-- `canic_root_auth_status::RoleAttestation` is a query call by the same still-active caller
+- `canic_root_role_attestation` is a query call by the same still-active caller
 - retrieval is caller-bound and returns the embedded root proof
 
 The query retrieval step requires a Root data certificate. It is therefore a
@@ -201,8 +201,8 @@ Verifier behavior:
 
 Current issuance rule:
 
-- `canic_root_command::PrepareRoleAttestation` and
-  `canic_root_auth_status::RoleAttestation` are the active Root protocol variants
+- `canic_root_prepare_role_attestation` and
+  `canic_root_role_attestation` are the active Root protocol variants
 
 The current role-attestation request supplies its epoch; issuance validates
 the subject, role, placement and TTL but does not derive that epoch from a

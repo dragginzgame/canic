@@ -166,10 +166,7 @@ pub(super) fn build_access_plan(
     }
 
     let fleet_admission = exprs.iter().any(expr_has_fleet_admission);
-    let decoded = args
-        .decode
-        .as_ref()
-        .and_then(|_| super::first_typed_arg_ident(sig));
+    let decoded = super::first_typed_arg_ident(sig);
     let exprs: Vec<_> = exprs
         .iter()
         .map(|expr| expr_from_ast(expr, decoded.as_ref()))
@@ -224,11 +221,6 @@ fn expr_from_ast(expr: &AccessExprAst, decoded: Option<&syn::Ident>) -> TokenStr
 }
 
 fn expr_from_builtin(pred: &BuiltinPredicate, decoded: Option<&syn::Ident>) -> TokenStream2 {
-    if let Some(argument) = decoded
-        && matches!(pred, BuiltinPredicate::AttestedLocalSubnet)
-    {
-        return quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet_argument(&#argument));
-    }
     match pred {
         BuiltinPredicate::CallerPermission { permission } => quote!({
             const _: () = assert!(
@@ -267,7 +259,13 @@ fn expr_from_builtin(pred: &BuiltinPredicate, decoded: Option<&syn::Ident>) -> T
             quote!(::canic::__internal::core::access::expr::caller::is_fleet_admitted())
         }
         BuiltinPredicate::AttestedLocalSubnet => {
-            quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet())
+            if let Some(argument) = decoded {
+                quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet_argument(&#argument))
+            } else {
+                quote!(compile_error!(
+                    "role-attestation guard requires a decoded first argument"
+                ))
+            }
         }
         BuiltinPredicate::ServiceAuthority { service } => match service {
             AuthScopeArg::Literal(service) => quote!(

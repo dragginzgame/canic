@@ -178,6 +178,7 @@ fn restore_run_prepare_next_operation(
         .ok_or_else(|| restore_command_unavailable_error(&preview))?;
     let sequence = operation.sequence;
     let mut command_lock = restore_command_lock(config, journal, &operation)?;
+    enforce_load_settlement(journal, &operation)?;
     let attempt = journal
         .operation_receipts
         .iter()
@@ -465,6 +466,39 @@ mod verification_tests {
         ));
         assert!(!verification_json_matches("not json", Some("abcd")));
     }
+}
+
+// An ICP exit or a stopped target cannot establish whether snapshot load committed.
+// Only a recorded precondition refusal proves that a failed load was not dispatched.
+pub(super) fn enforce_load_settlement(
+    journal: &RestoreApplyJournal,
+    operation: &crate::restore::RestoreApplyJournalOperation,
+) -> Result<(), RestoreRunnerError> {
+    if operation.operation != RestoreApplyOperationKind::LoadSnapshot {
+        return Ok(());
+    }
+    let mut receipts = journal
+        .operation_receipts
+        .iter()
+        .filter(|receipt| receipt.sequence == operation.sequence)
+        .peekable();
+    let missing_failure_evidence =
+        operation.state == super::RestoreApplyOperationState::Failed && receipts.peek().is_none();
+    let uncertain_dispatch = receipts.any(|receipt| {
+        receipt
+            .command
+            .as_ref()
+            .is_none_or(|command| command.mutates)
+    });
+    if operation.state == super::RestoreApplyOperationState::Pending
+        || missing_failure_evidence
+        || uncertain_dispatch
+    {
+        return Err(RestoreRunnerError::SnapshotLoadUnsettled {
+            sequence: operation.sequence,
+        });
+    }
+    Ok(())
 }
 
 fn reconcile_restore_operation(

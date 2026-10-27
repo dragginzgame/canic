@@ -16,13 +16,11 @@ use canic_core::{
     api::fleet_activation::FleetActivationApi,
     cdk::types::Principal,
     control_plane_support::{
-        error::InternalError,
-        ops::ic::IcOps,
-        view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget},
+        error::InternalError, ops::ic::IcOps, view::state_cascade::StateCascadeTarget,
         workflow::state::execute_fleet_command_to,
     },
 };
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 #[derive(Clone, Copy)]
 enum RootChildAuthority {
@@ -32,14 +30,14 @@ enum RootChildAuthority {
 
 struct RootStateCascadeTargets {
     root: Principal,
-    canisters: BTreeMap<Principal, StateCascadeEndpoint>,
+    canisters: BTreeSet<Principal>,
 }
 
 impl RootStateCascadeTargets {
     fn current() -> Result<Self, InternalError> {
         let mut targets = Self {
             root: IcOps::canister_self(),
-            canisters: BTreeMap::new(),
+            canisters: BTreeSet::new(),
         };
         for store in RootWasmStoreStateOps::wasm_stores() {
             targets.insert(store.pid, RootChildAuthority::StoreInventory)?;
@@ -64,27 +62,20 @@ impl RootStateCascadeTargets {
                 "equals the Fleet Subnet Root",
             ));
         }
-        if self.canisters.contains_key(&canister) {
+        if self.canisters.contains(&canister) {
             return Err(invalid_root_child(
                 authority,
                 "appears in more than one root-owned inventory",
             ));
         }
-        let endpoint = match authority {
-            RootChildAuthority::ComponentRegistry => StateCascadeEndpoint::Component,
-            RootChildAuthority::StoreInventory => StateCascadeEndpoint::Store,
-        };
-        self.canisters.insert(canister, endpoint);
+        self.canisters.insert(canister);
         Ok(())
     }
 
     fn into_vec(self) -> Vec<StateCascadeTarget> {
         self.canisters
             .into_iter()
-            .map(|(canister_id, endpoint)| StateCascadeTarget {
-                canister_id,
-                endpoint,
-            })
+            .map(|canister_id| StateCascadeTarget { canister_id })
             .collect()
     }
 }
@@ -141,7 +132,7 @@ mod tests {
     fn root_state_targets_are_canonical_and_reject_invalid_authority() {
         let mut targets = RootStateCascadeTargets {
             root: p(1),
-            canisters: BTreeMap::new(),
+            canisters: BTreeSet::new(),
         };
         targets
             .insert(p(3), RootChildAuthority::StoreInventory)
@@ -160,20 +151,14 @@ mod tests {
         assert_eq!(
             targets.into_vec(),
             vec![
-                StateCascadeTarget {
-                    canister_id: p(2),
-                    endpoint: StateCascadeEndpoint::Component
-                },
-                StateCascadeTarget {
-                    canister_id: p(3),
-                    endpoint: StateCascadeEndpoint::Store
-                },
+                StateCascadeTarget { canister_id: p(2) },
+                StateCascadeTarget { canister_id: p(3) },
             ]
         );
 
         let mut invalid_targets = RootStateCascadeTargets {
             root: p(1),
-            canisters: BTreeMap::new(),
+            canisters: BTreeSet::new(),
         };
         let anonymous = invalid_targets
             .insert(Principal::anonymous(), RootChildAuthority::StoreInventory)

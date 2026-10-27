@@ -151,8 +151,8 @@ pub struct BackupExecutionResumeSummary {
 ///
 /// BackupExecutionJournalError
 ///
-/// Typed execution journal validation or transition failure.
-/// Owned by backup execution and returned before mutating invalid state.
+/// Typed execution journal validation failure.
+/// Owned by backup evidence readers and record initialization.
 ///
 
 #[derive(Debug, ThisError)]
@@ -180,17 +180,8 @@ pub enum BackupExecutionJournalError {
     #[error("restart_required does not match execution operation state")]
     RestartRequiredMismatch,
 
-    #[error("preflight already accepted as {existing}, cannot accept {attempted}")]
-    PreflightAlreadyAccepted { existing: String, attempted: String },
-
-    #[error("preflight receipt plan id {actual} does not match execution journal plan {expected}")]
-    PreflightPlanMismatch { expected: String, actual: String },
-
     #[error("mutating operation {sequence} is ready before preflight acceptance")]
     MutationReadyBeforePreflight { sequence: usize },
-
-    #[error("mutating operation {sequence} cannot run before preflight acceptance")]
-    MutationBeforePreflightAccepted { sequence: usize },
 
     #[error("operation {0} is missing a blocking or failure reason")]
     OperationMissingReason(usize),
@@ -207,28 +198,6 @@ pub enum BackupExecutionJournalError {
         snapshot_id: String,
     },
 
-    #[error("operation {0} was not found")]
-    OperationNotFound(usize),
-
-    #[error("operation {sequence} cannot transition from {from:?} to {to:?}")]
-    InvalidOperationTransition {
-        sequence: usize,
-        from: BackupExecutionOperationState,
-        to: BackupExecutionOperationState,
-    },
-
-    #[error("operation {requested} cannot advance before operation {next}")]
-    OutOfOrderOperationTransition { requested: usize, next: usize },
-
-    #[error("no operation can be advanced")]
-    NoTransitionableOperation,
-
-    #[error("operation {0} is not failed")]
-    OperationNotFailed(usize),
-
-    #[error("operation {0} is not an eligible failure-containment start")]
-    OperationNotFailureContainmentStart(usize),
-
     #[error("operation receipt references missing operation {0}")]
     ReceiptOperationNotFound(usize),
 
@@ -240,7 +209,4 @@ pub enum BackupExecutionJournalError {
 
     #[error("operation receipt does not match accepted preflight {sequence}")]
     ReceiptPreflightMismatch { sequence: usize },
-
-    #[error("operation receipt {sequence} has no pending operation")]
-    ReceiptWithoutPendingOperation { sequence: usize },
 }

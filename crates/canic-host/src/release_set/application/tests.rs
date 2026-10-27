@@ -10,7 +10,7 @@ use crate::{
         PlannedFleetSubnetRootTopologyInput, RootComponentAdmissionInput,
         plan_initial_fleet_topology,
     },
-    release_set::{WASM_MAGIC, fixture::FixtureArtifactEntry},
+    release_set::fixture::FixtureArtifactEntry,
 };
 use canic_contracts::{
     cycles::Cycles,
@@ -155,9 +155,7 @@ fn root(
 }
 
 fn wasm(role: &str) -> Vec<u8> {
-    let mut bytes = WASM_MAGIC.to_vec();
-    bytes.extend_from_slice(role.as_bytes());
-    bytes
+    crate::test_support::wire_wasm(role.as_bytes())
 }
 
 fn gzip(bytes: &[u8]) -> Vec<u8> {
@@ -188,6 +186,7 @@ fn output(role: &str, release_build_id: ReleaseBuildId) -> ApplicationArtifactBu
         wasm_gz_relative_path: target.wasm_gz_relative_path,
         wasm_gz: gzip(&wasm),
         wasm,
+        wire_schema: crate::test_support::WIRE_SCHEMA.to_vec(),
         candid_sha256: [3; 32],
         protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
             [4; 32],
@@ -285,7 +284,7 @@ fn compiler_freezes_one_canonical_qualified_topology_union() {
     );
     assert_eq!(
         hex_bytes(union.digest(&topology).expect("frozen union digest")),
-        "bcb0f06a36f15c5d15507552ed9f59937012f3df47f6a5974ff0e6d858d3c58e"
+        "9a74a4991fed2a953086a48b7c987ca3819c2af900db2104e7429c4c714bd601"
     );
 }
 
@@ -447,7 +446,7 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
                 .expect("frozen manifest digest")
                 .into_bytes()
         ),
-        "2152a0c5390a1b27df7e7f66a933e68784da9bf18910d17dfd0c775b74d63edf"
+        "33a691c881ccde2b83ada2408aea8937863152b34eaf7c6884fd2797fa5a6f3f"
     );
 }
 

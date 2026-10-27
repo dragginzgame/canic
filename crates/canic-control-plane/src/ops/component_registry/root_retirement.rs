@@ -56,10 +56,8 @@ use canic_contracts::{
     ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
 };
 use canic_core::{cdk::types::Principal, control_plane_support::error::InternalError};
-use ic_platform::candid::contract::CandidType;
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootStoreFinalCatalogHashAuthority<'a> {
     fleet_subnet_root: Principal,
     wasm_store: Principal,
@@ -71,8 +69,7 @@ struct RootStoreFinalCatalogHashAuthority<'a> {
     gc_prepared_at_secs: u64,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootFleetSubnetFinalInventoryHashAuthority<'a> {
     operation_id: [u8; 32],
     fleet_subnet_root: Principal,
@@ -94,8 +91,7 @@ struct RootFleetSubnetFinalInventoryHashAuthority<'a> {
     finalized_at_ns: u64,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootFleetSubnetStoreReclamationHashAuthority {
     operation_id: [u8; 32],
     fleet_subnet_root: Principal,
@@ -112,8 +108,7 @@ struct RootFleetSubnetStoreReclamationHashAuthority {
     completed_at_ns: u64,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootFleetSubnetStoreBindingFinalizationHashAuthority<'a> {
     operation_id: [u8; 32],
     fleet_subnet_root: Principal,
@@ -127,8 +122,7 @@ struct RootFleetSubnetStoreBindingFinalizationHashAuthority<'a> {
     completed_at_ns: u64,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootFleetSubnetStoreDeletionHashAuthority<'a> {
     operation_id: [u8; 32],
     fleet_subnet_root: Principal,
@@ -200,17 +194,18 @@ pub(super) fn root_store_final_inventory_evidence(
 
     let mut catalog = store.catalog.clone();
     catalog.sort();
-    let payload = ic_platform::candid::contract::encode_one(RootStoreFinalCatalogHashAuthority {
-        fleet_subnet_root: store.fleet_subnet_root,
-        wasm_store: store.wasm_store,
-        release_set: store.release_set,
-        catalog: &catalog,
-        occupied_store_bytes: status.occupied_store_bytes,
-        template_count: status.template_count,
-        release_count: status.release_count,
-        gc_prepared_at_secs,
-    })
-    .map_err(|_error| InternalError::invariant())?;
+    let payload =
+        canic_contracts::protocol::authority::encode(RootStoreFinalCatalogHashAuthority {
+            fleet_subnet_root: store.fleet_subnet_root,
+            wasm_store: store.wasm_store,
+            release_set: store.release_set,
+            catalog: &catalog,
+            occupied_store_bytes: status.occupied_store_bytes,
+            template_count: status.template_count,
+            release_count: status.release_count,
+            gc_prepared_at_secs,
+        })
+        .map_err(|_error| InternalError::invariant())?;
     Ok(RootStoreFinalInventoryEvidence {
         catalog_hash: domain_hash(ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN, &payload),
         catalog_entries,
@@ -273,7 +268,7 @@ pub(super) fn root_final_inventory_hash(
     inventory: &RootFleetSubnetFinalInventoryRecord,
 ) -> Result<[u8; 32], InternalError> {
     let payload =
-        ic_platform::candid::contract::encode_one(RootFleetSubnetFinalInventoryHashAuthority {
+        canic_contracts::protocol::authority::encode(RootFleetSubnetFinalInventoryHashAuthority {
             operation_id: inventory.operation_id,
             fleet_subnet_root: inventory.fleet_subnet_root,
             placement_subnet: inventory.placement_subnet,
@@ -350,8 +345,8 @@ pub(super) fn root_store_reclamation_record(
 pub(super) fn root_store_reclamation_hash(
     reclamation: &RootFleetSubnetStoreReclamationRecord,
 ) -> Result<[u8; 32], InternalError> {
-    let payload =
-        ic_platform::candid::contract::encode_one(RootFleetSubnetStoreReclamationHashAuthority {
+    let payload = canic_contracts::protocol::authority::encode(
+        RootFleetSubnetStoreReclamationHashAuthority {
             operation_id: reclamation.operation_id,
             fleet_subnet_root: reclamation.fleet_subnet_root,
             wasm_store: reclamation.wasm_store,
@@ -365,8 +360,9 @@ pub(super) fn root_store_reclamation_hash(
             gc_completed_at_secs: reclamation.gc_completed_at_secs,
             gc_runs_completed: reclamation.gc_runs_completed,
             completed_at_ns: reclamation.completed_at_ns,
-        })
-        .map_err(|_error| InternalError::invariant())?;
+        },
+    )
+    .map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(ROOT_STORE_RECLAMATION_HASH_DOMAIN, &payload))
 }
 
@@ -416,7 +412,7 @@ pub(super) fn root_store_binding_finalization_record(
 pub(super) fn root_store_binding_finalization_hash(
     finalization: &RootFleetSubnetStoreBindingFinalizationRecord,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = ic_platform::candid::contract::encode_one(
+    let payload = canic_contracts::protocol::authority::encode(
         RootFleetSubnetStoreBindingFinalizationHashAuthority {
             operation_id: finalization.operation_id,
             fleet_subnet_root: finalization.fleet_subnet_root,
@@ -494,7 +490,7 @@ pub(super) fn root_store_deletion_hash(
     deletion: &RootFleetSubnetStoreDeletionRecord,
 ) -> Result<[u8; 32], InternalError> {
     let payload =
-        ic_platform::candid::contract::encode_one(RootFleetSubnetStoreDeletionHashAuthority {
+        canic_contracts::protocol::authority::encode(RootFleetSubnetStoreDeletionHashAuthority {
             operation_id: deletion.operation_id,
             fleet_subnet_root: deletion.fleet_subnet_root,
             wasm_store: deletion.wasm_store,

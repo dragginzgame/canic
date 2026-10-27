@@ -71,15 +71,19 @@ Use `"asset": null` when no asset canister has been selected. Choose each role
 instance explicitly; the exporter does not guess an instance from a role name.
 
 ```sh
-canic --environment ic frontend export demo --input frontend-ic.json --out frontend/canic --json
+canic --environment ic frontend export demo --input frontend-ic.json --out frontend/canic --node /absolute/path/to/node --typescript /absolute/path/to/node_modules/typescript --json
 canic frontend verify frontend/canic --sha256 <independently-retained-digest>
 ```
 
-The directory contains `canic-frontend.json`, exact `.did` sidecars, generated
-`.did.mjs` JavaScript factories, `.did.d.ts` TypeScript declarations and
-`.well-known/ii-alternative-origins`. Candid is resolved from the selected
-environment's build artifacts and checked against each retained release/profile
-hash. Public canister metadata is unnecessary. Missing or stale sidecars fail.
+The directory contains `canic-frontend.json`, the sealed Wire schema, TypeScript
+source modules, compiled JavaScript modules, declarations and
+`.well-known/ii-alternative-origins`. Schema bytes and the installed module must
+match the selected finalized release. The producer's retained Wire runtime and
+supplier validators are compiled without substitution or a Candid fallback.
+Prepare the pinned tools from the independent frontend consumer package separately;
+export checks Node/TypeScript versions and never invokes npm or downloads packages.
+The compiler cache binds its executable, entire package, source bytes and strict
+ES2022 configuration. Every emitted file belongs to the manifest inventory.
 
 The manifest binds App/Fleet/network, source plan digest, role Principals,
 module/release identities, origins, local trust and every listed artifact's
@@ -100,14 +104,14 @@ its exact protocol binding.
 ## Agent And Internet Identity Integration
 
 The [independent SDK consumer](../../../crates/canic-host/examples/frontend-consumer/README.md)
-provides manifest verification and actor construction. Mainnet uses the SDK's
+provides manifest verification and Wire client construction. Mainnet uses the SDK's
 compiled root key. Local export includes only the exact explicitly enrolled DER
 root key, and the consumer verifies that it derives the manifest's network ID.
 It never fetches a replacement trust key from the gateway.
 
 Use the selected provider origin for the Internet Identity login and the
 retained derivation origin for its `derivationOrigin`. The frontend owns login,
-delegation renewal and its actor identity. Provider identity and origin are
+delegation renewal and its authenticated IC identity. Provider identity and origin are
 operator-supplied configuration, not a Canic certification of that provider.
 
 Origins must be canonical HTTPS origins with no path, trailing slash, userinfo,
@@ -158,9 +162,9 @@ the tree-entry bound is eight times its file bound plus the root.
 
 Native tests cover origin/admission binding, exact publication/retry, conflicting
 bytes, explicit payload bounds, local trust and the independent SDK verifier.
-The focused real-Fleet/SDK journey passes: fresh convergence, exact public CLI
-export, TypeScript compilation, an authenticated call observing the exact user,
-denial of another user, missing-journal/stale-sidecar/origin rejection and an
+The focused real-Fleet/SDK journey checks fresh convergence, exact public CLI
+export, TypeScript compilation, authenticated query and update calls observing
+the exact user, denial of another user on both paths, missing-journal/stale-sidecar/origin rejection and an
 insufficient native-cycle failure. It uses a browser-owned signing identity to exercise
 the admission contract, not an Internet Identity UI ceremony or a real asset
 upload. Toko adoption and certified external delivery remain downstream work.
@@ -168,14 +172,16 @@ upload. Toko adoption and certified external delivery remain downstream work.
 Run the focused qualification after installing the example's pinned npm inputs:
 
 ```sh
+CANIC_FRONTEND_NODE=/absolute/path/to/node \
+CANIC_FRONTEND_TYPESCRIPT=/absolute/path/to/node_modules/typescript \
 make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::frontend_handoff_public_cli_and_sdk_preserve_admission_and_local_trust
 ```
 
 This opt-in case is ignored by ordinary Rust unit runs because it additionally
-requires Node.js and the example's npm dependencies. The recorded final run takes
-148.27 seconds (174 seconds including the runner); its frontend/SDK phase takes
-4.01 seconds. The one-role fixture's complete bundle is 136,858 bytes. These are
-controlled qualification measurements, not a Toko workload or asset-upload cost.
+requires the pinned Node.js and prepared example npm dependencies. The current
+handoff records qualification against the selected release graph; earlier Candid
+bundle timings and sizes do not qualify the Wire delivery path. This proof does
+not establish live-IC delivery, Internet Identity UI behavior or asset-upload cost.
 
 ## Verify The Uploaded Handoff After Sync
 

@@ -8,19 +8,11 @@ use canic::{
         role::OperationStatusRequest, runtime::ReadinessStatus,
     },
 };
-use canic_contracts::dto::wire::projection::{
-    component_registry::CanisterOperationStatusFragment as CanisterOperationStatusResponse,
-    fixture_canic::RootStatusRequestFragment as CanisterStatusRequest,
-    fixture_lifecycle_boundary::CanisterStatusResponse,
-};
 use canic_testing_internal::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
     lifecycle_participant_trap_wasm, managed_test_init_identity, upgrade_args,
 };
-use ic_platform::{
-    candid::{contract::encode_args, decoder::decode_args},
-    principal::ExternalPrincipal as Principal,
-};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{any::Any, time::Duration};
 use {
     ic_platform::pocket_ic::PocketIc,
@@ -240,13 +232,14 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
     let fixture = install_lifecycle_boundary_fixture();
     let uninstalled = fixture.create_uninstalled_canic_canister();
     let (mut payload, application_args): (CanisterInitPayload, Option<Vec<u8>>) =
-        decode_args(&uninstalled.init_args).expect("fixture init payload");
+        canic_contracts::protocol::initialization::decode(&uninstalled.init_args)
+            .expect("fixture init payload");
     assert!(payload.admission.take().is_some());
     let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         fixture.pic.install_canister(
             uninstalled.canister_id,
             fixture.canic_wasm.clone(),
-            encode_args((payload, application_args)).unwrap(),
+            canic_contracts::protocol::initialization::encode((payload, application_args)).unwrap(),
             None,
         );
     }));
@@ -286,61 +279,42 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
 }
 
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {
-    let status: Result<CanisterStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                CanisterStatusRequest::Operation(OperationStatusRequest {
-                    operation_id: [0x43; 32],
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister_id,
-                    root,
-                    canic_contracts::protocol::CANIC_CONTROL_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query Prepared Fleet activation status");
-    let CanisterStatusResponse::Operation(operation) = status.expect("Prepared activation status")
-    else {
-        panic!("managed Canister returned a differently correlated operation status");
-    };
-    let CanisterOperationStatusResponse::ConfigureRuntime(status) = *operation;
+    let status: Result<canic::dto::runtime_reporting::ComponentRuntimeOperationStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            canister_id,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::runtime_reporting::METHOD,
+                method_id: canic::protocol::runtime_reporting::METHOD_ID,
+                request_limits: canic::protocol::runtime_reporting::REQUEST_LIMITS,
+                response_limits: canic::protocol::runtime_reporting::RESPONSE_LIMITS,
+            },
+            &OperationStatusRequest {
+                operation_id: [0x43; 32],
+            },
+        )
+        .expect("native Prepared runtime transport");
+    let status = status.expect("Prepared activation status");
     assert_eq!(
         status.fleet_activation.phase,
         FleetActivationPhase::Prepared
     );
-    let readiness: Result<CanisterStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((CanisterStatusRequest::Readiness,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister_id,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    canic_contracts::protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query managed Canister readiness");
-    let CanisterStatusResponse::Readiness(readiness) =
-        readiness.expect("Prepared readiness status")
-    else {
-        panic!("managed Canister returned a differently correlated readiness status");
-    };
+    let readiness: Result<canic::dto::runtime_observation::CanicReadinessStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            canister_id,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_readiness::METHOD,
+                method_id: canic::protocol::protected_readiness::METHOD_ID,
+                request_limits: canic::protocol::protected_readiness::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_readiness::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("managed readiness Wire transport");
+    let readiness = readiness.expect("Prepared readiness status");
     assert_ne!(readiness.status, ReadinessStatus::Ready);
 }
 

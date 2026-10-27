@@ -4,21 +4,12 @@
 //! Does not own: domain retry policy, authority, or durable effect intent.
 //! Boundary: callers persist authority before invoking this mechanical transport adapter.
 
+use super::binary_arguments::{cleanup_binary_argument_file, write_binary_argument_file};
 use crate::icp::{IcpCli, IcpCommandError, IcpJsonResponseError};
 use ic_platform::candid::contract::CandidType;
 use serde::de::DeserializeOwned;
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
-use std::{
-    fs::{self, OpenOptions},
-    io::{self, Write},
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::{io, path::Path};
 use thiserror::Error as ThisError;
-
-const MAX_ARGUMENT_FILE_ATTEMPTS: usize = 32;
-static NEXT_ARGUMENT_FILE: AtomicU64 = AtomicU64::new(0);
 
 /// Typed transport or codec failure for a raw Candid update.
 
@@ -82,7 +73,7 @@ impl IcpCli {
     {
         let bytes =
             ic_platform::candid::contract::encode_one(input).map_err(IcpCandidCallError::Encode)?;
-        let path = write_candid_argument_file(&bytes).map_err(IcpCandidCallError::File)?;
+        let path = write_binary_argument_file(&bytes).map_err(IcpCandidCallError::File)?;
         let output = if query {
             self.canister_query_binary_args_output_with_candid(
                 canister,
@@ -100,56 +91,10 @@ impl IcpCli {
                 candid_path,
             )
         };
-        cleanup_candid_argument_file(&path);
+        cleanup_binary_argument_file(&path);
         let output = output?;
         crate::icp::response::decode_json_response(&output).map_err(IcpCandidCallError::Response)
     }
-}
-
-/// Remove invocation scratch without changing the observed remote-call outcome.
-pub fn cleanup_candid_argument_file(path: &Path) {
-    if let Err(error) = fs::remove_file(path)
-        && error.kind() != io::ErrorKind::NotFound
-    {
-        eprintln!(
-            "warning: could not remove Candid argument file {}: {error}",
-            path.display()
-        );
-    }
-}
-
-/// Write private invocation scratch, closing it before the child opens it.
-///
-/// Completed writes provide process visibility without a durable disk flush.
-/// Recovery recreates these arguments from caller-owned durable intent.
-pub fn write_candid_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
-    for _ in 0..MAX_ARGUMENT_FILE_ATTEMPTS {
-        let sequence = NEXT_ARGUMENT_FILE.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "canic-raw-candid-{}-{sequence}.bin",
-            std::process::id()
-        ));
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.mode(0o600);
-        match options.open(&path) {
-            Ok(mut file) => {
-                if let Err(source) = file.write_all(bytes) {
-                    drop(file);
-                    let _ = fs::remove_file(&path);
-                    return Err(source);
-                }
-                return Ok(path);
-            }
-            Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(source) => return Err(source),
-        }
-    }
-    Err(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        "could not allocate a unique Candid argument file",
-    ))
 }
 
 // -----------------------------------------------------------------------------
@@ -160,7 +105,7 @@ pub fn write_candid_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
 mod tests {
     use super::*;
     use canic_core::cdk::utils::hash::hex_bytes;
-    use std::{collections::BTreeSet, os::unix::fs::PermissionsExt};
+    use std::{collections::BTreeSet, fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
     #[test]
     fn child_reads_complete_arguments_and_cleanup_preserves_transport_outcomes() {

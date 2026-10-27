@@ -2,7 +2,7 @@
 //!
 //! Responsibility: execution operation receipt validation tests.
 //! Does not own: generic transition ordering.
-//! Boundary: receipt-required fields and failed mutation rollback.
+//! Boundary: required fields in retained receipt evidence.
 
 use super::*;
 
@@ -42,9 +42,9 @@ fn operation_receipt_requires_exact_current_optional_fields() {
 fn snapshot_completion_requires_snapshot_id() {
     let mut journal = accepted_journal();
     complete_operation(&mut journal, 4);
-    journal
-        .mark_snapshot_create_pending_at(5, Some("unix:30".to_string()), Vec::new())
-        .expect("mark snapshot pending");
+    journal.operations[5].state = BackupExecutionOperationState::Pending;
+    journal.operations[5].state_updated_at = Some("unix:30".to_string());
+    journal.operations[5].snapshot_ids_before = Some(Vec::new());
     let operation = journal.operations[5].clone();
     let receipt = BackupExecutionOperationReceipt::completed(
         &journal,
@@ -53,8 +53,8 @@ fn snapshot_completion_requires_snapshot_id() {
     );
     let receipt_count = journal.operation_receipts.len();
 
-    let err = journal
-        .record_operation_receipt(receipt)
+    let err = receipt
+        .validate_against(&journal)
         .expect_err("missing snapshot id rejects");
 
     assert!(
@@ -76,14 +76,13 @@ fn snapshot_completion_requires_snapshot_id() {
 #[test]
 fn operation_receipts_require_updated_at() {
     let mut journal = accepted_journal();
-    journal
-        .mark_operation_pending_at(4, Some("unix:40".to_string()))
-        .expect("mark stop pending");
+    journal.operations[4].state = BackupExecutionOperationState::Pending;
+    journal.operations[4].state_updated_at = Some("unix:40".to_string());
     let operation = journal.operations[4].clone();
     let receipt = BackupExecutionOperationReceipt::completed(&journal, &operation, None);
 
-    let err = journal
-        .record_operation_receipt(receipt)
+    let err = receipt
+        .validate_against(&journal)
         .expect_err("missing receipt timestamp rejects");
 
     assert!(

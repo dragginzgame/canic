@@ -201,7 +201,7 @@ fn completed_import_is_history_without_decoding_its_receipts() {
         "plan": {"sources": [{"binding": {"canister_id": "opaque recorded ID"}}]},
         "handoffs": [{"canister_id": "opaque recorded ID", "effect": {"state": "applied"}}],
         "operation": {"publication_started": true, "publication_complete": true,
-            "settled_status_candid_hex": "aa", "released_status_candid_hex": "bb"}
+            "settled_status_wire_hex": "aa", "released_status_wire_hex": "bb"}
     });
     write_current(&path, &record).unwrap();
     let original = fs::read(&path).unwrap();

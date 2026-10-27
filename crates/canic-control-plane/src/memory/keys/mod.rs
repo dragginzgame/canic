@@ -11,6 +11,8 @@ macro_rules! keys {
 }
 
 keys! {
+    #[cfg(feature = "root-control-plane")]
+    ROOT_APPLICATION_CHECKPOINT_V1 = "canic.control_plane.root.application_checkpoint.v1";
     #[cfg(feature = "wasm-store-canister")]
     FIXTURE_STORE_V1 = "canic.control_plane.fixture_store.v1";
     #[cfg(feature = "fleet-coordinator-canister")]

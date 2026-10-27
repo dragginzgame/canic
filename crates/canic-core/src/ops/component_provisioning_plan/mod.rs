@@ -60,9 +60,6 @@ pub const MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES: usize =
     MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS;
 /// Maximum canonical bytes accepted for one root's exact batch.
 pub const MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES: usize = 8_388_608;
-/// Maximum Candid payload bytes for the batch plus its fixed acceptance authority.
-pub const MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES: usize =
-    MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES + 65_536;
 /// Validated local capacity and artifact facts derived from one exact root batch.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentProvisioningBatchValidation {

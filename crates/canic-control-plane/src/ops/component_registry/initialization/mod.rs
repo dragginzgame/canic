@@ -16,7 +16,7 @@ impl ComponentRegistryOps {
     ) -> Result<Option<[u8; 32]>, InternalError> {
         initialization
             .map(|initialization| {
-                let encoded = ic_platform::candid::contract::encode_one(initialization)
+                let encoded = canic_contracts::protocol::authority::encode(initialization)
                     .map_err(|_| InternalError::invalid_input())?;
                 Ok(Sha256::digest(encoded).into())
             })

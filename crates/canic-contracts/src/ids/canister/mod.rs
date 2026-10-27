@@ -4,7 +4,6 @@
 //! Does not own: role authorization policy or canister registry state.
 //! Boundary: provides stable, bounded role names for storage and DTOs.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::{Borrow, Cow},
@@ -23,11 +22,12 @@ const WASM_STORE_ROLE: &str = "wasm_store";
 /// Owned by ids and shared across config, storage, DTOs, and workflows.
 ///
 
-#[derive(
-    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CanisterRole(pub Cow<'static, str>);
 
 impl CanisterRole {

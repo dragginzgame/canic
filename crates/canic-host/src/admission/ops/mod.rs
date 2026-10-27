@@ -14,11 +14,8 @@ use crate::{
         },
         view::AdmissionRootReport,
     },
-    call_canister_with_arg,
     fleet_ensure::CurrentFleetResolution,
     icp::IcpCli,
-    protocol_binding::{ResolvedProtocolBinding, resolve_release_registry_protocol_binding},
-    query_canister_with_arg,
 };
 use canic_contracts::{
     dto::{
@@ -26,15 +23,10 @@ use canic_contracts::{
             FleetAdmissionMutationAction, FleetAdmissionMutationRequest,
             FleetAdmissionOperationPhase, FleetAdmissionRootParticipantPhase,
             FleetAdmissionRootParticipantStatus, FleetAdmissionRootStatusResponse,
-            FleetAdmissionRootTransitionPhase, FleetAdmissionStatusRequest,
-            FleetAdmissionStatusResponse,
+            FleetAdmissionRootTransitionPhase, FleetAdmissionStatusResponse,
         },
         fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootStatus},
         page::PageRequest,
-        wire::projection::admission::{
-            RemoteCoordinatorCommand, RemoteCoordinatorCommandResponse,
-            RemoteCoordinatorStatusRequest, RemoteCoordinatorStatusResponse,
-        },
     },
     ids::{FleetAdmissionPolicy, FleetAdmissionSelector, ManagedCanisterBinding},
 };
@@ -56,37 +48,6 @@ use canic_core::{
     },
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
-
-pub(super) fn current_binding(
-    current: &CurrentFleetResolution,
-    root: &std::path::Path,
-    principal: &Principal,
-    fleet: &str,
-) -> Result<ResolvedProtocolBinding, AdmissionError> {
-    let principal = principal.to_text();
-    let entry = current
-        .registry
-        .entries
-        .iter()
-        .find(|entry| entry.pid == principal)
-        .ok_or_else(|| {
-            authority_error(format!(
-                "Fleet {fleet} omits current participant {principal}"
-            ))
-        })?;
-    let release_build_id = current
-        .plan
-        .reviewed_desired
-        .as_ref()
-        .and_then(|reviewed| reviewed.desired().bootstrap.as_ref())
-        .map(|bootstrap| bootstrap.release_build_id)
-        .ok_or_else(|| authority_error("terminal Fleet plan has no selected release"))?;
-    Ok(resolve_release_registry_protocol_binding(
-        root,
-        release_build_id,
-        entry,
-    )?)
-}
 
 pub(super) fn validate_plan_file(
     fleet: &str,
@@ -255,68 +216,68 @@ pub(super) fn validate_live_authority(
 
 pub(super) fn query_coordinator_registry(
     icp: &IcpCli,
-    binding: &ResolvedProtocolBinding,
     coordinator: Principal,
 ) -> Result<FleetRegistry, AdmissionError> {
-    let response: RemoteCoordinatorStatusResponse = query_canister_with_arg(
-        icp,
-        binding,
-        coordinator,
-        canic_contracts::protocol::CANIC_COORDINATOR_REGISTRY,
-        &RemoteCoordinatorStatusRequest::Registry,
-    )?;
-    match response {
-        RemoteCoordinatorStatusResponse::Registry(registry) => Ok(registry),
-        _ => Err(authority_error(
-            "Coordinator returned the wrong Registry status variant",
-        )),
-    }
+    Ok(crate::registry_discovery::snapshot(icp, coordinator)?)
 }
 
 pub(super) fn query_coordinator_registry_version(
     icp: &IcpCli,
-    binding: &ResolvedProtocolBinding,
+    current: &CurrentFleetResolution,
+    root: &std::path::Path,
     coordinator: Principal,
 ) -> Result<FleetRegistryVersion, AdmissionError> {
-    let response: RemoteCoordinatorStatusResponse = query_canister_with_arg(
+    let entry = current
+        .registry
+        .entries
+        .iter()
+        .find(|entry| entry.pid == coordinator.to_text())
+        .ok_or_else(|| authority_error("current inventory omits Coordinator"))?;
+    let schema =
+        crate::protocol_binding::resolve_current_registry_wire_schema(root, current, entry)?;
+    Ok(crate::registry_discovery::version(
         icp,
-        binding,
+        &schema,
         coordinator,
-        canic_contracts::protocol::CANIC_OBSERVABILITY,
-        &RemoteCoordinatorStatusRequest::RegistryVersion,
-    )?;
-    match response {
-        RemoteCoordinatorStatusResponse::RegistryVersion(version) => Ok(version),
-        _ => Err(authority_error(
-            "Coordinator returned the wrong Registry-version variant",
-        )),
-    }
+    )?)
+}
+
+pub(super) fn current_admission_schema(
+    current: &CurrentFleetResolution,
+    root: &std::path::Path,
+    principal: Principal,
+) -> Result<crate::release_set::BuiltWireSchema, AdmissionError> {
+    let entry = current
+        .registry
+        .entries
+        .iter()
+        .find(|entry| entry.pid == principal.to_text())
+        .ok_or_else(|| authority_error("current inventory omits admission participant"))?;
+    Ok(crate::protocol_binding::resolve_current_registry_wire_schema(root, current, entry)?)
 }
 
 pub(super) fn query_coordinator_admission(
     icp: &IcpCli,
-    binding: &ResolvedProtocolBinding,
+    _schema: &crate::release_set::BuiltWireSchema,
     coordinator: Principal,
 ) -> Result<FleetAdmissionStatusResponse, AdmissionError> {
-    let response: RemoteCoordinatorStatusResponse = query_canister_with_arg(
+    use canic_contracts::{dto::admission_control, protocol::admission_control as protocol};
+    let response: admission_control::StatusResponse = crate::canister_protocol::query_wire(
         icp,
-        binding,
         coordinator,
-        canic_contracts::protocol::CANIC_OBSERVABILITY,
-        &RemoteCoordinatorStatusRequest::Admission(FleetAdmissionStatusRequest {
-            selector: FleetAdmissionSelector::Fleet,
+        protocol::status::METHOD,
+        protocol::status::METHOD_ID,
+        &admission_control::StatusRequest {
+            selector: canic_contracts::dto::fleet_snapshot::FleetAdmissionSelector::Fleet,
             page: PageRequest {
                 limit: 1,
                 offset: 0,
             },
-        }),
+        },
+        protocol::REQUEST_LIMITS,
+        protocol::RESPONSE_LIMITS,
     )?;
-    match response {
-        RemoteCoordinatorStatusResponse::Admission(status) => Ok(status),
-        _ => Err(authority_error(
-            "Coordinator returned the wrong admission status variant",
-        )),
-    }
+    Ok(response.into())
 }
 
 pub(super) fn participant_catalog_authorities(
@@ -651,14 +612,17 @@ pub(super) fn submit(
     connection: &AdmissionConnection,
     plan: &AdmissionPlanRecord,
 ) -> Result<canic_contracts::dto::fleet_admission::FleetAdmissionMutationResponse, AdmissionError> {
-    let response: RemoteCoordinatorCommandResponse = call_canister_with_arg(
-        &connection.icp,
-        &connection.coordinator_binding,
-        connection.coordinator,
-        canic_contracts::protocol::CANIC_COORDINATOR_COMMAND,
-        &RemoteCoordinatorCommand::MutateAdmission(plan.request.clone()),
-    )?;
-    let RemoteCoordinatorCommandResponse::MutateAdmission(response) = response;
+    use canic_contracts::protocol::admission_control as protocol;
+    let response: canic_contracts::dto::fleet_admission::FleetAdmissionMutationResponse =
+        crate::canister_protocol::call_wire(
+            &connection.icp,
+            connection.coordinator,
+            protocol::mutate::METHOD,
+            protocol::mutate::METHOD_ID,
+            &canic_contracts::dto::admission_control::MutationRequest::from(plan.request.clone()),
+            protocol::REQUEST_LIMITS,
+            protocol::RESPONSE_LIMITS,
+        )?;
     if response.operation_id != plan.request.operation_id
         || response.generation != plan.successor_policy.generation
         || response.policy_digest != plan.successor_policy.policy_digest
@@ -709,4 +673,25 @@ pub(super) fn project_participant_catalog(
         participant_catalog_digest: fleet_admission_root_participant_catalog_digest(&projections),
         participants: targets,
     })
+}
+
+/// Read a page only after its Root has been admitted against the retained release.
+pub(super) fn query_root_admission(
+    icp: &IcpCli,
+    _schema: &crate::release_set::BuiltWireSchema,
+    root: Principal,
+    page: PageRequest,
+) -> Result<FleetAdmissionRootStatusResponse, AdmissionError> {
+    use canic_contracts::protocol::admission_control as protocol;
+    let response: canic_contracts::dto::admission_control::RootStatus =
+        crate::canister_protocol::query_wire(
+            icp,
+            root,
+            protocol::root_status::METHOD,
+            protocol::root_status::METHOD_ID,
+            &page,
+            protocol::REQUEST_LIMITS,
+            protocol::RESPONSE_LIMITS,
+        )?;
+    Ok(response.into())
 }

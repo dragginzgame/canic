@@ -268,10 +268,10 @@ fn genesis_is_revision_one_with_complete_specs_and_no_roots() {
         vec!["alpha", "beta"]
     );
 
-    let bytes =
-        ic_platform::candid::contract::encode_one(&registry).expect("encode Fleet Registry Candid");
+    let bytes = canic_contracts::protocol::authority::encode(&registry)
+        .expect("encode Fleet Registry Candid");
     let decoded: FleetRegistry =
-        ic_platform::candid::decoder::decode_one(&bytes).expect("decode Fleet Registry Candid");
+        canic_contracts::protocol::authority::decode(&bytes).expect("decode Fleet Registry Candid");
     assert_eq!(decoded, registry);
 }
 

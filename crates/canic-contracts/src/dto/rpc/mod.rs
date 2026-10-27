@@ -6,8 +6,7 @@
 
 use crate::dto::prelude::*;
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub enum Request {
     AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest),
     AllocatePlacementChild(CreateCanisterRequest),
@@ -66,8 +65,11 @@ impl Request {
 // Placement-receipt acknowledgement payload.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct AcknowledgePlacementReceiptRequest {
     pub operation_id: [u8; 32],
     pub metadata: Option<RootRequestMetadata>,
@@ -79,8 +81,11 @@ pub struct AcknowledgePlacementReceiptRequest {
 // Replay metadata.
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RootRequestMetadata {
     pub request_id: [u8; 32],
     pub ttl_ns: u64,
@@ -92,8 +97,7 @@ pub struct RootRequestMetadata {
 // Create-canister payload.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct CreateCanisterRequest {
     pub canister_role: CanisterRole,
     pub parent: CreateCanisterParent,
@@ -107,8 +111,7 @@ pub struct CreateCanisterRequest {
 // Parent selection.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub enum CreateCanisterParent {
     Root,
     // Use the requesting canister.
@@ -125,8 +128,7 @@ pub enum CreateCanisterParent {
 // Recycle-one-child payload.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct RecycleCanisterRequest {
     pub allocation_operation_id: [u8; 32],
     pub canister_pid: Principal,
@@ -139,8 +141,11 @@ pub struct RecycleCanisterRequest {
 // Cycles payload.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CyclesRequest {
     pub cycles: u128,
     pub metadata: Option<RootRequestMetadata>,
@@ -152,8 +157,7 @@ pub struct CyclesRequest {
 // Root response payload.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Response {
     AcknowledgePlacementReceipt,
     CreateCanister(CreateCanisterResponse),
@@ -166,8 +170,7 @@ pub enum Response {
 // Result of creating and installing a new canister.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
@@ -177,8 +180,11 @@ pub struct CreateCanisterResponse {
 // Typed caller-owned context for a request rejected before any cycles transfer.
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum CyclesFundingPreflightResponse {
     ChildBudgetExhausted {
         remaining_child_budget: u128,
@@ -197,8 +203,11 @@ pub enum CyclesFundingPreflightResponse {
 // Typed outcome of requesting cycles from the current parent.
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum CyclesResponse {
     PreflightRejected(CyclesFundingPreflightResponse),
     Transferred { cycles_transferred: u128 },

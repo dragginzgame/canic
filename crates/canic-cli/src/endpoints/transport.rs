@@ -6,8 +6,8 @@ use crate::{
     },
 };
 use canic_host::{
-    candid_endpoints::parse_candid_service_endpoints, icp_config::resolve_current_canic_icp_root,
-    protocol_binding::load_installed_candid, release_set::load_built_candid,
+    icp_config::resolve_current_canic_icp_root, protocol_binding::load_installed_wire_schema,
+    release_set::load_built_wire_schema,
 };
 use std::path::Path;
 
@@ -23,7 +23,7 @@ pub(super) fn endpoint_report_at(
 ) -> Result<EndpointReport, EndpointsCommandError> {
     let (built, source_kind) = if let Some(id) = options.release_build {
         (
-            load_built_candid(root, id, &options.canister)?,
+            load_built_wire_schema(root, id, &options.canister)?,
             EndpointSourceKind::Built,
         )
     } else {
@@ -32,14 +32,16 @@ pub(super) fn endpoint_report_at(
             .clone()
             .unwrap_or_else(local_environment);
         (
-            load_installed_candid(root, &environment, &options.fleet, &options.canister)?,
+            load_installed_wire_schema(root, &environment, &options.fleet, &options.canister)?,
             EndpointSourceKind::Installed,
         )
     };
+    let schema = crate::endpoints::model::read_schema(&built.schema)?;
     Ok(EndpointReport {
         source: built.path.display().to_string(),
         source_kind,
         release_build_id: Some(built.release_build_id),
-        endpoints: parse_candid_service_endpoints(&built.candid)?,
+        endpoints: schema.methods,
+        types: schema.types,
     })
 }

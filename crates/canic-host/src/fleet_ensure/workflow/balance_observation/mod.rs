@@ -78,7 +78,6 @@ fn observation(cycles: u128) -> FleetObservation {
         estate_funding_domains: BTreeMap::new(),
         ledger_fee_cycles: 0,
         operator_cycles: 1_000,
-        protocol_ready: BTreeMap::new(),
     }
 }
 

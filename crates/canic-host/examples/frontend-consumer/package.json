@@ -3,10 +3,16 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@icp-sdk/auth": "8.0.3",
-    "@icp-sdk/core": "5.4.0"
+    "@tokostudios/ic-platform": "0.1.0"
   },
   "devDependencies": {
     "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": "24.21.0"
+  },
+  "packageManager": "npm@12.2.0",
+  "scripts": {
+    "check:boundary": "node check-boundary.mjs"
   }
 }

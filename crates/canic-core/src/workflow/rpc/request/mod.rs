@@ -13,7 +13,6 @@ use crate::{
     ops::rpc::request::RequestOps,
 };
 use canic_contracts::ids::CanisterRole;
-use ic_platform::candid::contract::CandidType;
 
 ///
 /// RpcRequestWorkflow
@@ -32,7 +31,7 @@ impl RpcRequestWorkflow {
         extra: Option<A>,
     ) -> Result<CreateCanisterResponse, InternalError>
     where
-        A: CandidType + Send + Sync,
+        A: serde::Serialize + Send + Sync,
     {
         if operation_id == [0; 32] {
             return Err(InternalError::invalid_input());

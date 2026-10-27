@@ -118,7 +118,7 @@ pub(in crate::fleet_ensure::ops::capacity_import) fn fixture_with_controllers(
 #[test]
 fn recovery_controller_order_preserves_destination_authority_hashes() {
     let (plan, context, registry) = fixture_with_controllers(vec![principal(8), principal(7)]);
-    let retained = ic_platform::candid::contract::encode_one(&context).unwrap();
+    let retained = canic_contracts::protocol::authority::encode(&context).unwrap();
     let reviewed = serde_json::to_vec(&plan).unwrap();
     assert_eq!(
         plan.authority.recovery_controllers,
@@ -126,7 +126,7 @@ fn recovery_controller_order_preserves_destination_authority_hashes() {
     );
     validate_destination_authority(&plan, &context, &registry).unwrap();
     assert_eq!(
-        ic_platform::candid::contract::encode_one(&context).unwrap(),
+        canic_contracts::protocol::authority::encode(&context).unwrap(),
         retained
     );
     assert_eq!(serde_json::to_vec(&plan).unwrap(), reviewed);

@@ -7,7 +7,7 @@
 use crate::{
     dispatch::icrc21::Icrc21Dispatcher,
     domain::icrc::icrc10::supported_standards,
-    dto::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
+    dto::icrc21::{ConsentInfo, ConsentMessageRequest, Icrc21Error},
     ops::config::ConfigOps,
 };
 
@@ -31,8 +31,7 @@ impl Icrc10Query {
 pub struct Icrc21Query;
 
 impl Icrc21Query {
-    #[must_use]
-    pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
+    pub fn consent_message(req: ConsentMessageRequest) -> Result<ConsentInfo, Icrc21Error> {
         Icrc21Dispatcher::consent_message(req)
     }
 }

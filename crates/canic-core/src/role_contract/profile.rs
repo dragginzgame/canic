@@ -1,8 +1,8 @@
 //! Module: role_contract::profile
 //!
 //! Responsibility: derive and parse the immutable compiled protocol-profile identity.
-//! Does not own: Candid extraction, artifact persistence, binding selection, or endpoint dispatch.
-//! Boundary: hashes exact build-owned release, role, capability, and generated-Candid evidence.
+//! Does not own: native schema production, artifact persistence, binding selection, or endpoint dispatch.
+//! Boundary: hashes exact build-owned release, role, capability, and native-Wire evidence.
 
 use super::RoleCapabilityKey;
 use canic_contracts::ids::CanisterRole;
@@ -17,24 +17,43 @@ pub use canic_contracts::protocol::profile::{
 
 pub const PROTOCOL_PROFILE_DIGEST_ENV: &str = "CANIC_PROTOCOL_PROFILE_DIGEST";
 
-const PROTOCOL_PROFILE_DOMAIN: &[u8] = b"canic.protocol-profile.v1";
+const PROTOCOL_PROFILE_DOMAIN: &[u8] = b"canic.wire-protocol-profile.v1";
 
-/// Pair of generated-Candid and complete protocol-profile hashes from one authority.
+/// Pair of native-Wire and complete protocol-profile hashes from one authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProtocolProfileHashes {
-    pub candid_sha256: [u8; 32],
+    pub wire_schema_sha256: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
-/// Derive the accepted `canic.protocol-profile.v1` identity encoding.
+/// Derive the accepted `canic.wire-protocol-profile.v1` identity encoding.
 #[must_use]
 pub fn derive_protocol_profile_hashes(
     release_identity: &str,
     role: &CanisterRole,
     capabilities: &BTreeSet<RoleCapabilityKey>,
-    canonical_candid: &[u8],
+    canonical_wire_schema: &[u8],
 ) -> ProtocolProfileHashes {
-    let candid_sha256 = sha256_array(canonical_candid);
+    let wire_schema_sha256 = sha256_array(canonical_wire_schema);
+    ProtocolProfileHashes {
+        wire_schema_sha256,
+        protocol_profile_digest: derive_protocol_profile_digest(
+            release_identity,
+            role,
+            capabilities,
+            wire_schema_sha256,
+        ),
+    }
+}
+
+/// Bind retained metadata to its exact artifact hash without reopening the sidecar.
+#[must_use]
+pub fn derive_protocol_profile_digest(
+    release_identity: &str,
+    role: &CanisterRole,
+    capabilities: &BTreeSet<RoleCapabilityKey>,
+    wire_schema_sha256: [u8; 32],
+) -> ProtocolProfileDigest {
     let mut hasher = Sha256::new();
     hasher.update(PROTOCOL_PROFILE_DOMAIN);
     update_length_prefixed(&mut hasher, release_identity.as_bytes());
@@ -47,12 +66,9 @@ pub fn derive_protocol_profile_hashes(
     for capability in capabilities {
         update_length_prefixed(&mut hasher, capability.manifest_name().as_bytes());
     }
-    hasher.update(candid_sha256);
+    hasher.update(wire_schema_sha256);
 
-    ProtocolProfileHashes {
-        candid_sha256,
-        protocol_profile_digest: ProtocolProfileDigest::from_bytes(hasher.finalize().into()),
-    }
+    ProtocolProfileDigest::from_bytes(hasher.finalize().into())
 }
 
 fn update_length_prefixed(hasher: &mut Sha256, bytes: &[u8]) {
@@ -82,7 +98,7 @@ mod tests {
             "0.103.0",
             &CanisterRole::new("app"),
             &capabilities,
-            b"service : {}\n",
+            b"native-schema-a",
         );
         let reordered = BTreeSet::from([
             RoleCapabilityKey::AutomaticTopup,
@@ -94,7 +110,7 @@ mod tests {
                 "0.103.0",
                 &CanisterRole::new("app"),
                 &reordered,
-                b"service : {}\n",
+                b"native-schema-a",
             )
         );
         assert_ne!(
@@ -103,13 +119,45 @@ mod tests {
                 "0.103.1",
                 &CanisterRole::new("app"),
                 &capabilities,
-                b"service : {}\n",
+                b"native-schema-a",
             )
         );
         assert_eq!(
             ProtocolProfileDigest::from_hex(&first.protocol_profile_digest.to_string())
                 .expect("parse rendered digest"),
             first.protocol_profile_digest
+        );
+    }
+
+    #[test]
+    fn native_profile_binds_role_capabilities_and_exact_schema_bytes() {
+        let role = CanisterRole::new("app");
+        let capabilities = BTreeSet::from([RoleCapabilityKey::Runtime]);
+        let original = derive_protocol_profile_hashes("release", &role, &capabilities, b"schema");
+        for changed in [
+            derive_protocol_profile_hashes(
+                "release",
+                &CanisterRole::ROOT,
+                &capabilities,
+                b"schema",
+            ),
+            derive_protocol_profile_hashes("release", &role, &BTreeSet::new(), b"schema"),
+            derive_protocol_profile_hashes("release", &role, &capabilities, b"changed schema"),
+        ] {
+            assert_ne!(
+                original.protocol_profile_digest,
+                changed.protocol_profile_digest
+            );
+        }
+        assert_eq!(original.wire_schema_sha256, sha256_array(b"schema"));
+        assert_eq!(
+            original.protocol_profile_digest,
+            derive_protocol_profile_digest(
+                "release",
+                &role,
+                &capabilities,
+                original.wire_schema_sha256,
+            )
         );
     }
 

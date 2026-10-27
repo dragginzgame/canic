@@ -8,214 +8,180 @@
 #[macro_export]
 macro_rules! canic_emit_fleet_coordinator_endpoints {
     () => {
-        #[doc(hidden)]
-        const fn __canic_fleet_coordinator_payload_max_bytes(
-            command: &::canic::dto::fleet_coordinator::CoordinatorCommand,
-        ) -> usize {
-            match command {
-                ::canic::dto::fleet_coordinator::CoordinatorCommand::ProvisionComponents(_) => {
-                    ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES
-                }
-                ::canic::dto::fleet_coordinator::CoordinatorCommand::RequestRootFunding(_) => {
-                    ::canic::dto::fleet_funding::MAX_FLEET_ROOT_FUNDING_COMMAND_PAYLOAD_BYTES
-                }
-                _ => {
-                    ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES
-                }
-            }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::batch_control::prepare::METHOD_ID, request = ::canic::protocol::batch_control::PLAN_LIMITS, response = ::canic::protocol::batch_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_provision_components(request: ::canic::dto::batch_control::PrepareRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::provision_components(request.into())
         }
 
-        #[doc(hidden)]
-        fn __canic_inspect_fleet_coordinator_update_message() {
-            if $crate::__internal::core::ingress::payload::current_method_name()
-                != $crate::__internal::contracts::protocol::CANIC_COORDINATOR_COMMAND
-            {
-                $crate::__internal::core::ingress::payload::inspect_update_message();
-                return;
-            }
-
-            let bytes = $crate::__internal::core::ingress::payload::current_payload_bytes();
-            if bytes.len()
-                > ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES
-            {
-                return;
-            }
-            let Ok(command) = ::canic::__internal::ic_platform::candid::decoder::decode_one::<
-                ::canic::dto::fleet_coordinator::CoordinatorCommand,
-            >(&bytes) else {
-                return;
-            };
-            if $crate::__internal::core::ingress::payload::payload_within_limit(
-                bytes.len(),
-                __canic_fleet_coordinator_payload_max_bytes(&command),
-            ) {
-                $crate::__internal::core::ingress::payload::accept_current_message();
-            }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::retirement_control::remove::METHOD_ID, request = ::canic::protocol::retirement_control::REQUEST_LIMITS, response = ::canic::protocol::retirement_control::RESPONSE_LIMITS))]
+        async fn canic_coordinator_remove_root(request: ::canic::dto::retirement_control::RemovalRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::remove_root(request.into()).await
+        }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::retirement_control::retire::METHOD_ID, request = ::canic::protocol::retirement_control::REQUEST_LIMITS, response = ::canic::protocol::retirement_control::RESPONSE_LIMITS))]
+        async fn canic_coordinator_retire(request: ::canic::dto::retirement_control::RetirementRequest) -> Result<::canic::dto::retirement_control::RetirementStatus, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::retire(request.into()).await.map(Into::into)
         }
 
-        #[$crate::canic_update(
-            public,
-            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES)
-        )]
-        async fn canic_coordinator_command(
-            command: ::canic::dto::fleet_coordinator::CoordinatorCommand,
-        ) -> Result<::canic::dto::fleet_coordinator::CoordinatorCommandResponse, ::canic::Error> {
-            use ::canic::dto::fleet_coordinator::CoordinatorCommand;
+        #[$crate::canic_update(public, wire(id = ::canic::protocol::funding_control::request::METHOD_ID, request = ::canic::protocol::funding_control::REQUEST_LIMITS, response = ::canic::protocol::funding_control::RESPONSE_LIMITS))]
+        async fn canic_coordinator_request_root_funding(request: ::canic::dto::funding_control::Request) -> Result<::canic::dto::funding_control::Response, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_funding()?;
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::request_calling_root_funding(request.into()).await.map(Into::into)
+        }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::funding_control::begin::METHOD_ID, request = ::canic::protocol::funding_control::REQUEST_LIMITS, response = ::canic::protocol::funding_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_begin_funding_policy_rotation(request: ::canic::dto::funding_control::BeginRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
 
-            if !$crate::__internal::core::ingress::payload::payload_within_limit(
-                $crate::__internal::cdk::raw::msg_arg_data_size(),
-                __canic_fleet_coordinator_payload_max_bytes(&command),
-            ) {
-                return Err(::canic::Error::from_registered(
-                    $crate::__internal::contracts::diagnostics::codes::REQUEST_CAPACITY,
-                ));
-            }
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::begin_funding_policy_rotation(request.into())
+        }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::funding_control::stage::METHOD_ID, request = ::canic::protocol::funding_control::REQUEST_LIMITS, response = ::canic::protocol::funding_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_stage_funding_policy_rotation_root(request: ::canic::dto::funding_control::StageRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
 
-            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-            if matches!(&command, CoordinatorCommand::AcknowledgeRootSnapshot(_)) {
-                $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_snapshot()?;
-            }
-            if matches!(&command, CoordinatorCommand::RequestRootFunding(_)) {
-                $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_funding()?;
-            }
-            let controller_command = matches!(
-                &command,
-                CoordinatorCommand::ActivateRegistry(_)
-                    | CoordinatorCommand::ApplyFundingPolicyRotation(_)
-                    | CoordinatorCommand::BeginFundingPolicyRotation(_)
-                    | CoordinatorCommand::CompleteRootDeletion(_)
-                    | CoordinatorCommand::JoinRoot(_)
-                    | CoordinatorCommand::MutateAdmission(_)
-                    | CoordinatorCommand::PrepareAuthoritySnapshot(_)
-                    | CoordinatorCommand::PrepareRootDeletionExecution(_)
-                    | CoordinatorCommand::ProvisionComponents(_)
-                    | CoordinatorCommand::RemoveRoot(_)
-                    | CoordinatorCommand::Retire(_)
-                    | CoordinatorCommand::ResumeAuthoritySnapshot(_)
-                    | CoordinatorCommand::SetRootFunding(_)
-                    | CoordinatorCommand::StageFundingPolicyRotationRoot(_)
-            );
-            if controller_command {
-                $crate::__internal::core::access::auth::is_controller(caller)
-                    .map_err(::canic::Error::from)?;
-            }
-            let recovery_command = matches!(
-                &command,
-                CoordinatorCommand::PrepareAuthoritySnapshot(_)
-                    | CoordinatorCommand::ResumeAuthoritySnapshot(_)
-            );
-            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
-                recovery_command,
-            )?;
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::command(
-                command,
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::stage_funding_policy_rotation_root(request.into())
+        }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::funding_control::apply::METHOD_ID, request = ::canic::protocol::funding_control::REQUEST_LIMITS, response = ::canic::protocol::funding_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_apply_funding_policy_rotation(request: ::canic::dto::fleet_funding::FleetFundingPolicyRotationApplyRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::apply_funding_policy_rotation(request)
+        }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::funding_control::set_enabled::METHOD_ID, request = ::canic::protocol::funding_control::REQUEST_LIMITS, response = ::canic::protocol::funding_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_set_root_funding(request: ::canic::dto::state::SetCyclesFundingRequest) -> Result<::canic::dto::state::SetStateResponse<bool>, ::canic::Error> {
+
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::set_root_funding(request)
+        }
+
+        #[$crate::canic_update(public, wire(id = ::canic::protocol::coordinator_acknowledgements::acknowledge::METHOD_ID, request = ::canic::protocol::coordinator_acknowledgements::acknowledge::REQUEST_LIMITS, response = ::canic::protocol::coordinator_acknowledgements::RESPONSE_LIMITS))]
+        fn canic_coordinator_acknowledge_root_snapshot(request: ::canic::dto::coordinator_acknowledgements::AcknowledgeRequest) -> Result<::canic::dto::coordinator_acknowledgements::RootAcknowledgement, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_snapshot()?;
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::acknowledge_calling_root_snapshot(request.into()).map(Into::into)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::root_deletion::prepare::METHOD_ID, request = ::canic::protocol::root_deletion::REQUEST_LIMITS, response = ::canic::protocol::root_deletion::RESPONSE_LIMITS))]
+        fn canic_coordinator_prepare_root_deletion(request: ::canic::dto::root_deletion::PrepareRequest) -> Result<::canic::dto::root_deletion::Execution, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::begin_root_deletion_execution(request.into()).map(Into::into)
+        }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::root_deletion::complete::METHOD_ID, request = ::canic::protocol::root_deletion::REQUEST_LIMITS, response = ::canic::protocol::root_deletion::RESPONSE_LIMITS))]
+        fn canic_coordinator_complete_root_deletion(request: ::canic::dto::root_deletion::CompleteRequest) -> Result<::canic::dto::root_deletion::Receipt, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::complete_root_deletion(request.into()).map(Into::into)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::registry_control::join::METHOD_ID, request = ::canic::protocol::registry_control::REQUEST_LIMITS, response = ::canic::protocol::registry_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_join_root(request: ::canic::dto::registry_control::JoinRequest) -> Result<::canic::dto::registry_control::JoinResponse, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::join_root(request.into()).map(Into::into)
+        }
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::registry_control::activate::METHOD_ID, request = ::canic::protocol::registry_control::REQUEST_LIMITS, response = ::canic::protocol::registry_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_activate_registry(request: ::canic::dto::registry_control::ActivateRequest) -> Result<::canic::dto::registry_control::ActivateResponse, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::activate_registry(request.into()).map(Into::into)
+        }
+
+
+
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::admission_control::status::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_admission(request: ::canic::dto::admission_control::StatusRequest) -> Result<::canic::dto::admission_control::StatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::admission_status(request.into()).map(Into::into)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()), wire(id = ::canic::protocol::admission_control::mutate::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_admission_mutate(request: ::canic::dto::admission_control::MutationRequest) -> Result<::canic::dto::fleet_admission::FleetAdmissionMutationResponse, ::canic::Error> {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::mutate_admission(request.into())
+        }
+
+        $crate::__canic_emit_public_health_endpoint!();
+
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_overview::METHOD_ID, request = ::canic::protocol::public_overview::REQUEST_LIMITS, response = ::canic::protocol::public_overview::RESPONSE_LIMITS))]
+        fn canic_public_overview() -> Result<::canic::dto::role::RoleOverviewResponse, ::canic::Error> {
+            let capabilities = ::std::collections::BTreeSet::from([
+                $crate::__internal::core::role_contract::RoleCapabilityKey::FleetCoordinator,
+            ]);
+            Ok(
+                $crate::__internal::core::api::role::RoleOverviewApi::overview(
+                    $crate::__internal::contracts::ids::CanisterRole::from("fleet_coordinator"),
+                    &capabilities,
+                    $crate::__canic_protocol_profile_digest!(),
+                    $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
+                        env!("CARGO_PKG_NAME"),
+                        env!("CARGO_PKG_VERSION"),
+                        env!("CARGO_PKG_DESCRIPTION"),
+                        $crate::VERSION,
+                        $crate::__internal::cdk::api::canister_version(),
+                    ),
+                    $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
+                ),
             )
-            .await
         }
 
-        ::canic::__internal::contracts::__canic_coordinator_wire_types! {
-            serde_crate = "::canic::__internal::serde",
+        $crate::__canic_emit_release_evidence_endpoints!(before = []);
 
+        $crate::__canic_emit_authority_snapshot_endpoints!(
+            before = [],
+            prepare = $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_authority_snapshot,
+            resume = $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::resume_authority_snapshot
+        );
+
+        $crate::__canic_emit_authority_restore_status_endpoint!(before = []);
+
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::registry_discovery::manifest::METHOD_ID, request = ::canic::protocol::registry_discovery::REQUEST_LIMITS, response = ::canic::protocol::registry_discovery::RESPONSE_LIMITS))]
+        fn canic_coordinator_registry_manifest() -> Result<::canic::dto::registry_discovery::RegistryManifest, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::manifest().map(Into::into)
         }
 
-        #[$crate::canic_query(public)]
-        fn canic_public_status(
-            request: PublicStatusRequest,
-        ) -> Result<PublicStatusResponse, ::canic::Error> {
-            match request {
-                PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(
-                    ::canic::__internal::core::api::public_status::PublicStatusApi::health(),
-                )),
-                PublicStatusRequest::Overview => {
-                    let capabilities = ::std::collections::BTreeSet::from([
-                        $crate::__internal::core::role_contract::RoleCapabilityKey::FleetCoordinator,
-                    ]);
-                    Ok(PublicStatusResponse::Overview(
-                        $crate::__internal::core::api::role::RoleOverviewApi::overview(
-                            $crate::__internal::contracts::ids::CanisterRole::from("fleet_coordinator"),
-                            &capabilities,
-                            $crate::__canic_protocol_profile_digest!(),
-                            $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
-                                env!("CARGO_PKG_NAME"),
-                                env!("CARGO_PKG_VERSION"),
-                                env!("CARGO_PKG_DESCRIPTION"),
-                                $crate::VERSION,
-                                $crate::__internal::cdk::api::canister_version(),
-                            ),
-                            $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
-                        ),
-                    ))
-                }
-            }
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::registry_discovery::version::METHOD_ID, request = ::canic::protocol::registry_discovery::REQUEST_LIMITS, response = ::canic::protocol::registry_discovery::RESPONSE_LIMITS))]
+        fn canic_coordinator_registry_version() -> Result<::canic::dto::registry_discovery::RegistryVersion, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::version().map(Into::into)
         }
 
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        fn canic_observability(
-            request: CoordinatorObservabilityRequest,
-        ) -> Result<CoordinatorObservabilityResponse, ::canic::Error> {
-            match request {
-                CoordinatorObservabilityRequest::Admission(request) => {
-                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::admission_status(request)
-                        .map(CoordinatorObservabilityResponse::Admission)
-                }
-                CoordinatorObservabilityRequest::AuthorityRestore => {
-                    $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
-                        .map(CoordinatorObservabilityResponse::AuthorityRestore)
-                }
-                CoordinatorObservabilityRequest::Funding => {
-                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_funding_status()
-                        .map(CoordinatorObservabilityResponse::Funding)
-                }
-                CoordinatorObservabilityRequest::RegistryManifest => {
-                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::manifest()
-                        .map(CoordinatorObservabilityResponse::RegistryManifest)
-                }
-                CoordinatorObservabilityRequest::RegistryVersion => {
-                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::version()
-                        .map(CoordinatorObservabilityResponse::RegistryVersion)
-                }
-                CoordinatorObservabilityRequest::IntentRelease(start_after) => {
-                    $crate::__internal::core::api::observability::ObservabilityApi::release_intents(start_after)
-                        .map(CoordinatorObservabilityResponse::IntentRelease)
-                }
-                CoordinatorObservabilityRequest::ReplayRelease(start_after) => {
-                    $crate::__internal::core::api::observability::ObservabilityApi::release_receipts(start_after)
-                        .map(CoordinatorObservabilityResponse::ReplayRelease)
-                }
-                CoordinatorObservabilityRequest::RootAcknowledgements => {
-                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_snapshot_acknowledgements()
-                        .map(CoordinatorObservabilityResponse::RootAcknowledgements)
-                }
-                        }
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::funding_read::coordinator_status::METHOD_ID, request = ::canic::protocol::funding_read::REQUEST_LIMITS, response = ::canic::protocol::funding_read::RESPONSE_LIMITS))]
+        fn canic_coordinator_funding() -> Result<::canic::dto::funding_read::CoordinatorStatus, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_funding_status().map(Into::into)
         }
 
-
-        #[$crate::canic_query(public)]
-        fn canic_coordinator_operation_status(
-            request: CoordinatorOperationReadRequest,
-        ) -> Result<CoordinatorOperationReadResponse, ::canic::Error> {
-            match request {
-                CoordinatorOperationReadRequest::Operation(request) => {
-                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::operation_status(
-                        request.operation_id,
-                    )
-                    .map(CoordinatorOperationReadResponse::Operation)
-                }
-            }
+        #[$crate::canic_query(requires(caller::is_controller()), wire(id = ::canic::protocol::coordinator_acknowledgements::METHOD_ID, request = ::canic::protocol::coordinator_acknowledgements::REQUEST_LIMITS, response = ::canic::protocol::coordinator_acknowledgements::RESPONSE_LIMITS))]
+        fn canic_coordinator_root_acknowledgements() -> Result<Vec<::canic::dto::coordinator_acknowledgements::RootAcknowledgement>, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_snapshot_acknowledgements()
+                .map(|values| values.into_iter().map(Into::into).collect())
         }
 
-
-        #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorRegistryCallerPredicate)))]
-        fn canic_coordinator_registry(
-            request: CoordinatorRegistryRequest,
-        ) -> Result<CoordinatorRegistryResponse, ::canic::Error> {
-            match request {
-                CoordinatorRegistryRequest::Registry => {
-                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::registry_for_calling_status()
-                        .map(CoordinatorRegistryResponse::Registry)
-                }
-            }
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::admission_control::operation::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_admission_operation(operation_id: [u8; 32]) -> Result<::canic::dto::admission_control::OperationStatus, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::admission_operation_status(operation_id).map(Into::into)
         }
+
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::funding_read::rotation::METHOD_ID, request = ::canic::protocol::funding_read::REQUEST_LIMITS, response = ::canic::protocol::funding_read::RESPONSE_LIMITS))]
+        fn canic_coordinator_funding_rotation(operation_id: [u8; 32]) -> Result<::canic::dto::funding_read::RotationStatus, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::funding_rotation_status(operation_id).map(Into::into)
+        }
+
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::retirement_control::status::METHOD_ID, request = ::canic::protocol::retirement_control::REQUEST_LIMITS, response = ::canic::protocol::retirement_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_retirement_status(operation_id: [u8; 32]) -> Result<::canic::dto::retirement_control::RetirementStatus, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::retirement_operation_status(operation_id).map(Into::into)
+        }
+
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::retirement_control::removal_status::METHOD_ID, request = ::canic::protocol::retirement_control::REQUEST_LIMITS, response = ::canic::protocol::retirement_control::RESPONSE_LIMITS))]
+        fn canic_coordinator_root_removal(operation_id: [u8; 32]) -> Result<::canic::dto::retirement_control::RemovalStatus, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_removal_operation_status(operation_id).map(Into::into)
+        }
+
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::component_read::coordinator_provisioning::METHOD_ID, request = ::canic::protocol::component_read::REQUEST_LIMITS, response = ::canic::protocol::component_read::RESPONSE_LIMITS))]
+        fn canic_coordinator_component_provisioning(operation_id: [u8; 32]) -> Result<::canic::dto::component_read::CoordinatorProvisioning, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::provisioning_operation_status(operation_id).map(Into::into)
+        }
+
+        #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorRegistryCallerPredicate)), wire(id = ::canic::protocol::registry_discovery::snapshot::METHOD_ID, request = ::canic::protocol::registry_discovery::REQUEST_LIMITS, response = ::canic::protocol::registry_discovery::RESPONSE_LIMITS))]
+        fn canic_coordinator_registry() -> Result<::canic::dto::fleet_snapshot::FleetRegistry, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::registry_for_calling_status().map(Into::into)
+        }
+
     };
 }

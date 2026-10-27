@@ -39,8 +39,8 @@ collects only functions for which `is_local()` is true before applying
 sets the default to 50,000. The binding quantity is therefore the function-
 section/code-body count, not `ic-wasm`'s imports-plus-definitions total.
 
-The repository-owned `scripts/ci/wasm-replica-function-count.rs` counter
-freezes that interpretation. The ablation runner compiles it into private
+The [frozen function counter](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci/wasm-replica-function-count.rs)
+preserves that interpretation. The historical ablation runner compiled it into private
 invocation scratch, records source and executable hashes plus its exact
 identity, runs it only after `wasm-validate`, and rejects disagreement with the
 builder's independent optimizer-defined count.

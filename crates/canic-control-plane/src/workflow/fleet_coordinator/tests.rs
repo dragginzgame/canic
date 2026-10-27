@@ -168,7 +168,7 @@ fn maximum_production_root_prepare_command_fits_update_envelope() {
     let successor =
         compile_installed_fleet_admission_policy(fleet.clone(), u64::MAX, principals, rules)
             .expect("maximum successor policy");
-    let command = RemoteRootCommand::PrepareFleetAdmission(FleetAdmissionPrepareRootRequest {
+    let original = FleetAdmissionPrepareRootRequest {
         authority: FleetCoordinatorBinding {
             fleet,
             coordinator_subnet: SubnetId::from_principal(principal(1)),
@@ -180,14 +180,23 @@ fn maximum_production_root_prepare_command_fits_update_envelope() {
         expected_policy_digest: [0xe3; 32],
         successor,
         stage: FleetAdmissionPrepareRootStage::Reserve,
-    });
-
-    let bytes =
-        ic_platform::candid::contract::encode_one(command).expect("production Root command Candid");
-    eprintln!(
-        "maximum production Root prepare command bytes: {}",
-        bytes.len()
-    );
+    };
+    let command =
+        canic_contracts::dto::admission_control::PrepareRootRequest::from(original.clone());
+    let bytes = ic_wire::native::encode_request(
+        canic_contracts::protocol::admission_control::root_prepare::METHOD_ID,
+        &command,
+        canic_contracts::protocol::admission_control::REQUEST_LIMITS,
+    )
+    .expect("production native Root prepare");
+    let decoded: canic_contracts::dto::admission_control::PrepareRootRequest =
+        ic_wire::native::decode_request(
+            canic_contracts::protocol::admission_control::root_prepare::METHOD_ID,
+            &bytes,
+            canic_contracts::protocol::admission_control::REQUEST_LIMITS,
+        )
+        .unwrap();
+    assert_eq!(FleetAdmissionPrepareRootRequest::from(decoded), original);
     assert!(
         bytes.len() <= canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
         "maximum production Root command must fit the frozen 16 KiB envelope"
@@ -894,18 +903,12 @@ fn rootless_coordinator_initializes_an_empty_disabled_capable_funding_ledger() {
 fn coordinator_operation_status_resolves_the_durable_domain_from_one_id() {
     let (_config, plan_hash) = prepare_two_root_acceptance_plan();
 
-    let status = FleetCoordinatorWorkflow::operation_status([101; 32])
+    let status = FleetCoordinatorWorkflow::provisioning_operation_status([101; 32])
         .expect("resolve active Component provisioning operation");
-    let crate::dto::fleet_coordinator::CoordinatorOperationStatusResponse::ComponentProvisioning(
-        status,
-    ) = status
-    else {
-        panic!("expected Component provisioning status");
-    };
     assert_eq!(status.operation_id, [101; 32]);
     assert_eq!(status.plan_hash, plan_hash);
 
-    let Err(invalid) = FleetCoordinatorWorkflow::operation_status([0; 32]) else {
+    let Err(invalid) = FleetCoordinatorWorkflow::provisioning_operation_status([0; 32]) else {
         panic!("zero operation ID must be rejected");
     };
     assert_eq!(
@@ -922,15 +925,22 @@ fn coordinator_root_removal_status_exists_from_the_accepted_reservation() {
     let reservation = FleetCoordinatorWorkflow::prepare_root_draining_reservation(request)
         .expect("accept root-removal reservation");
 
-    let status = FleetCoordinatorWorkflow::operation_status([103; 32])
-        .expect("resolve accepted root-removal operation");
-    let crate::dto::fleet_coordinator::CoordinatorOperationStatusResponse::RootRemoval(status) =
-        status
-    else {
-        panic!("expected Root removal status");
-    };
+    let status = FleetCoordinatorWorkflow::root_removal_operation_status(
+        [103; 32],
+        root.fleet_subnet_root,
+        false,
+    )
+    .expect("resolve accepted root-removal operation");
+    let denied =
+        FleetCoordinatorWorkflow::root_removal_operation_status([103; 32], principal(250), false)
+            .expect_err("unrelated caller cannot observe retained authority");
+    assert_eq!(
+        denied.public_error().code(),
+        InternalError::forbidden().public_error().code()
+    );
     assert_eq!(status.operation_id, [103; 32]);
     assert_eq!(status.reservation, reservation);
+    assert!(FleetCoordinatorOps::retains_operation_id([103; 32]).unwrap());
     assert_eq!(status.readiness_intent, None);
     assert_eq!(status.readiness, None);
     assert_eq!(status.execution, None);
@@ -7062,7 +7072,7 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
         dependency: Some(
             canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
                 target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
-                method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                method: canic_contracts::protocol::store_publication::inspect::METHOD.into(),
                 step: "inspect_template".into(),
                 rejection_code: Some(5),
                 rejection_detail: Some("Store stopped".into()),
@@ -7123,4 +7133,20 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
     assert_eq!(origin.retry_category, provisioning_failure.retry_category);
     assert_eq!(origin.retry_at_ns, provisioning_failure.retry_at_ns);
     assert_eq!(origin.dependency, provisioning_failure.dependency);
+}
+
+#[test]
+fn typed_operation_reads_reject_zero_ids_before_domain_lookup() {
+    let caller = principal(102);
+    let errors = [
+        FleetCoordinatorWorkflow::admission_operation_status([0; 32], caller, true).err(),
+        FleetCoordinatorWorkflow::funding_rotation_status([0; 32], caller, true).err(),
+        FleetCoordinatorWorkflow::retirement_operation_status([0; 32], caller, true).err(),
+    ];
+    for error in errors {
+        assert_eq!(
+            error.expect("zero operation ID").public_error().code(),
+            canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
+        );
+    }
 }

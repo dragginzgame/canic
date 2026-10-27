@@ -1,11 +1,13 @@
 //! Passive protocol classifications; runtime decisions remain with Core.
 
-use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, serde::Serialize)]
 #[remain::sorted]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum MetricsKind {
     Core,
     Placement,

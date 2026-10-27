@@ -9,4 +9,4 @@ root="$(cd "$(dirname "$0")/../.." && pwd -P)"
 source "$root/tool-versions.env"
 exec bash "$root/scripts/dev/install-rust-tools.sh" --consumer "$root" \
     --package ic-build --version "$CANIC_RELEASE_METADATA_VERSION" \
-    --bin ic-build-release-metadata --profile debug "$@"
+    --bin ic-build-release-metadata --profile debug --features cli "$@"

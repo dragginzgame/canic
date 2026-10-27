@@ -1,4 +1,5 @@
 mod balance;
+mod binary_arguments;
 mod candid;
 mod canister;
 mod command;
@@ -15,11 +16,12 @@ mod run;
 mod snapshot;
 mod timing;
 mod version;
+mod wire;
 pub use timing::{IcpRequestKind, IcpRequestTiming};
 
 pub use balance::IcpBalanceError;
+pub(crate) use binary_arguments::{cleanup_binary_argument_file, write_binary_argument_file};
 pub use candid::IcpCandidCallError;
-pub(crate) use candid::{cleanup_candid_argument_file, write_candid_argument_file};
 pub use command::{
     CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV, add_target_args, command_display,
     existing_local_canister_candid_path, local_canister_candid_path,
@@ -34,10 +36,13 @@ pub use model::{
     IcpCanisterVisibility, IcpCli, IcpRawOutput, IcpSnapshot, LocalReplicaTarget,
 };
 pub use query::IcpQueryError;
+pub use response::IcpJsonResponseError;
 pub(crate) use response::response_bytes;
-pub use response::{IcpJsonResponseError, decode_json_result_response};
 pub(crate) use run::run_status;
 pub use run::{run_output_with_stderr, run_raw_output};
+pub use wire::IcpWireQueryError;
+#[cfg(test)]
+pub(crate) use wire::decode_wire_response;
 
 #[cfg(test)]
 mod tests;

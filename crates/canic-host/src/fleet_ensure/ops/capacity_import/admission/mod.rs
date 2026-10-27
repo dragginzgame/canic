@@ -50,12 +50,12 @@ pub fn validate(plan: &CapacityImportPlanRecord) -> Result<(), CapacityImportRev
 pub(super) fn registry(
     admission: &CapacityImportAdmissionRecord,
 ) -> Result<FleetRegistry, CapacityImportReviewError> {
-    if admission.registry_candid_hex.len() > MAXIMUM_REGISTRY_BYTES * 2 {
+    if admission.registry_wire_hex.len() > MAXIMUM_REGISTRY_BYTES * 2 {
         return Err(CapacityImportReviewError::AdmissionInvalid);
     }
-    let bytes = decode_hex(&admission.registry_candid_hex)
+    let bytes = decode_hex(&admission.registry_wire_hex)
         .map_err(|_| CapacityImportReviewError::AdmissionInvalid)?;
-    ic_platform::candid::decoder::decode_one(&bytes)
+    canic_contracts::protocol::authority::decode(&bytes)
         .map_err(|_| CapacityImportReviewError::AdmissionInvalid)
 }
 

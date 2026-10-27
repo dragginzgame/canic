@@ -447,8 +447,8 @@ fn canonical_plan_binds_exact_roots_placements_members_and_limits() {
         hash
     );
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<FleetComponentProvisioningPlan>(
-            &ic_platform::candid::contract::encode_one(&plan).expect("encode plan")
+        canic_contracts::protocol::authority::decode::<FleetComponentProvisioningPlan>(
+            &canic_contracts::protocol::authority::encode(&plan).expect("encode plan")
         )
         .expect("decode plan"),
         plan
@@ -588,8 +588,9 @@ fn assert_root_batch_candid_contracts(
     component_count: u32,
 ) {
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningAcceptanceRequest>(
-            &ic_platform::candid::contract::encode_one(request).expect("encode acceptance request")
+        canic_contracts::protocol::authority::decode::<RootComponentProvisioningAcceptanceRequest>(
+            &canic_contracts::protocol::authority::encode(request)
+                .expect("encode acceptance request")
         )
         .expect("decode acceptance request"),
         *request
@@ -599,8 +600,8 @@ fn assert_root_batch_candid_contracts(
         plan_hash: request.plan_hash,
     };
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningStatusRequest>(
-            &ic_platform::candid::contract::encode_one(status_request)
+        canic_contracts::protocol::authority::decode::<RootComponentProvisioningStatusRequest>(
+            &canic_contracts::protocol::authority::encode(status_request)
                 .expect("encode status request")
         )
         .expect("decode status request"),
@@ -615,8 +616,8 @@ fn assert_root_batch_candid_contracts(
         expected_registry_committed_component_count: 0,
     };
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningAdvanceRequest>(
-            &ic_platform::candid::contract::encode_one(advance_request)
+        canic_contracts::protocol::authority::decode::<RootComponentProvisioningAdvanceRequest>(
+            &canic_contracts::protocol::authority::encode(advance_request)
                 .expect("encode advance request")
         )
         .expect("decode advance request"),
@@ -651,8 +652,9 @@ fn assert_root_batch_candid_contracts(
         receipt_content_hash: [15; 32],
     };
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningStatusResponse>(
-            &ic_platform::candid::contract::encode_one(&response).expect("encode status response")
+        canic_contracts::protocol::authority::decode::<RootComponentProvisioningStatusResponse>(
+            &canic_contracts::protocol::authority::encode(&response)
+                .expect("encode status response")
         )
         .expect("decode status response"),
         response

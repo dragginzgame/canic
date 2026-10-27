@@ -12,7 +12,7 @@ use crate::{
         policy::pure::icp_refill::{IcpRefillPolicyViolation, automatic_refill_amount_e8s},
     },
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
-    infra::ic::icp_refill::Icrc1Account,
+    infra::ic::icp_refill::Account,
     ops::{
         ic::{IcOps, build_network::BuildNetworkOps, icp_refill::IcpRefillOps},
         storage::{icp_refill::IcpRefillStoreOps, state::fleet::FleetStateOps},
@@ -158,7 +158,7 @@ async fn prepare_automatic_refill(
         "icrc1_balance_of",
         IcpRefillOps::icrc1_balance_of(
             canisters.ledger_canister_id,
-            Icrc1Account {
+            Account {
                 owner: root_canister,
                 subaccount: None,
             },

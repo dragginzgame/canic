@@ -290,87 +290,45 @@ fn malformed_or_partial_pages_never_become_complete_and_stop_reading() {
     );
 }
 
-#[cfg(unix)]
 #[test]
-fn complete_membership_is_query_only_and_rechecked_after_collection() {
-    use std::os::unix::fs::PermissionsExt as _;
+fn complete_membership_is_rechecked_after_collection() {
     let fixture = fixture();
-    let path = crate::test_support::temp_dir("funding-inventory");
-    std::fs::create_dir_all(&path).unwrap();
-    let executable = path.join("icp");
-    std::fs::write(
-        &executable,
-        crate::test_support::tool_script(
-            r#"#!/bin/sh
-case "$*" in
-  --version) printf 'icp @ICP_VERSION@\n' ;;
-  *canic_root_status*--query*)
-    count=0
-    if [ -f count ]; then count=$(cat count); fi
-    count=$((count + 1))
-    printf '%s' "$count" > count
-    cat "$count.json" ;;
-  *) exit 1 ;;
-esac
-"#,
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let candid = path.join("root.did");
-    std::fs::write(&candid, "service : {}").unwrap();
-    let write = |index, bytes: Vec<u8>| {
-        std::fs::write(path.join(format!("{index}.json")), serde_json::json!({ "response_bytes": canic_core::cdk::utils::hash::hex_bytes(&bytes) }).to_string()).unwrap();
-    };
-    let partition_bytes = |partition| {
-        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-            Response::ComponentRegistryPartition(Box::new(partition)),
-        ))
-        .unwrap()
-    };
-    let directory_bytes =
-        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-            Response::ComponentDirectoryHead(Box::new(fixture.directory.clone())),
-        ))
-        .unwrap();
-    write(1, partition_bytes(fixture.partition.clone()));
-    write(2, directory_bytes.clone());
-    write(
-        3,
-        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-            canic_contracts::dto::wire::projection::startup_pages::Response::ComponentDirectoryPage(
-                page(&fixture, &[1, 2], None),
-            ),
-        ))
-        .unwrap(),
-    );
-    write(4, partition_bytes(fixture.partition.clone()));
-    write(5, directory_bytes);
-    let mut changed = fixture.partition;
-    changed.head.revision += 1;
-    write(6, partition_bytes(changed));
-    let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(path.clone());
-    let root = fixture.members[0].parent;
-    let evidence = observe(
-        &icp,
-        &candid,
-        root,
-        &fixture.placement,
-        &fixture.topology,
-        StartupRootInventory { workloads: 3 },
-        &fixture.members.iter().collect::<Vec<_>>(),
-    )
-    .unwrap();
-    assert_eq!(
-        recheck(&icp, &candid, root, &evidence),
-        Ok(StartupInventoryCoverage {
+    let evidence = FundingInventoryObservation {
+        components: vec![ComponentInventory {
+            partition: fixture.partition.clone(),
+            directory: fixture.directory.clone(),
+        }],
+        coverage: StartupInventoryCoverage {
             components: 1,
-            descendants: 2
-        })
-    );
+            descendants: 2,
+        },
+    };
     assert_eq!(
-        recheck(&icp, &candid, root, &evidence),
+        recheck_with(
+            &evidence,
+            |_| Ok(fixture.partition.clone()),
+            |_| Ok(fixture.directory.clone())
+        ),
+        Ok(evidence.coverage)
+    );
+    let mut changed_partition = fixture.partition.clone();
+    changed_partition.head.revision += 1;
+    assert_eq!(
+        recheck_with(
+            &evidence,
+            |_| Ok(changed_partition.clone()),
+            |_| panic!("a changed partition stops the read")
+        ),
         Err(StartupUsageUnavailable::PolicyTransition)
     );
-    std::fs::remove_dir_all(path).unwrap();
+    let mut changed_directory = fixture.directory;
+    changed_directory.provenance.component_registry_revision += 1;
+    assert_eq!(
+        recheck_with(
+            &evidence,
+            |_| Ok(fixture.partition.clone()),
+            |_| Ok(changed_directory.clone())
+        ),
+        Err(StartupUsageUnavailable::PolicyTransition)
+    );
 }

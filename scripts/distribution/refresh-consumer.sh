@@ -14,6 +14,7 @@ MANIFEST_PATH=".shared-tooling.snapshot"
 STAGING_DIR=""
 replacement=""
 preview=false
+impact=false
 requested_files=()
 added_files=()
 takeover_roots=()
@@ -25,7 +26,7 @@ takeover_payload_states=()
 
 usage() {
     cat >&2 <<'USAGE'
-usage: refresh-consumer.sh [--preview] [--source <shared-tooling-checkout>] --consumer <repository> [--manifest <relative-path>] [--entrypoint <relative-path>]... [--add-entrypoint <relative-path>]... [--takeover-snapshot <relative-root|.> <relative-manifest>]...
+usage: refresh-consumer.sh [--preview | --impact] [--source <shared-tooling-checkout>] --consumer <repository> [--manifest <relative-path>] [--entrypoint <relative-path>]... [--add-entrypoint <relative-path>]... [--takeover-snapshot <relative-root|.> <relative-manifest>]...
 
 Use --entrypoint to select the complete set of roots, initially or on refresh.
 Otherwise refresh reuses the manifest's recorded entrypoints. --add-entrypoint
@@ -33,6 +34,8 @@ extends that selection. Required companions and integrity tools are derived.
 --preview leaves the consumer untouched and reports additions, updates and
 retirements. Refresh automatically removes unchanged, previously owned files
 outside the new closure. Select directly used helpers as entrypoints to keep them.
+--impact implies preview and adds affected current entrypoints and path-filtered
+commit history. The clean source checkout HEAD is the selected comparison commit.
 USAGE
 }
 
@@ -170,7 +173,8 @@ check_index_unchanged() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    --preview)
+    --preview|--impact)
+        [[ "$1" != --impact ]] || impact=true
         preview=true
         export GIT_OPTIONAL_LOCKS=0
         shift
@@ -263,6 +267,7 @@ manifest="$CONSUMER_ROOT/$MANIFEST_PATH"
 check_consumer_parent "$MANIFEST_PATH"
 [[ ! -L "$manifest" ]] || fail "consumer manifest may not be a symlink"
 if [[ "$preview" == true ]]; then
+    changed_files=()
     preview_tmp="$(resolve_directory "${TMPDIR:-/tmp}")"
     case "$preview_tmp/" in
         "$SOURCE_ROOT/"*|"$CONSUMER_ROOT/"*) fail "preview temporary directory must be outside source and consumer" ;;
@@ -608,6 +613,7 @@ if [[ "$preview" == true ]]; then
             [[ "$path" != "$entrypoint" ]] || selection=selected
         done
         printf '%s\t%s\t%s\n' "$action" "$selection" "$path"
+        [[ "$action" == KEEP ]] || changed_files+=("$path")
     done
     for path in ${obsolete[@]+"${obsolete[@]}"}; do
         printf 'REMOVE\tobsolete\t%s\n' "$path"
@@ -615,6 +621,40 @@ if [[ "$preview" == true ]]; then
     for path in ${takeover_paths[@]+"${takeover_paths[@]}"}; do
         printf 'REMOVE\ttakeover-manifest\t%s\n' "$path"
     done
+    if [[ "$impact" == true ]]; then
+        for entrypoint in "${entrypoints[@]}"; do
+            reachable=("$entrypoint")
+            for required in scripts/ci/verify-file-checksum.sh scripts/ci/verify-shared-tooling-snapshot.sh; do
+                [[ "$required" == "$entrypoint" ]] || reachable+=("$required")
+            done
+            cursor=0
+            while [[ "$cursor" -lt "${#reachable[@]}" ]]; do
+                path="${reachable[$cursor]}"
+                for changed in ${changed_files[@]+"${changed_files[@]}"}; do
+                    [[ "$path" != "$changed" ]] || printf 'AFFECTS\t%s\t%s\n' "$entrypoint" "$path"
+                done
+                read_shared_companions "$staged_files/$path" "$path"
+                for companion in ${shared_companions[@]+"${shared_companions[@]}"}; do
+                    selected=false
+                    for existing in "${reachable[@]}"; do [[ "$existing" != "$companion" ]] || selected=true; done
+                    [[ "$selected" == true ]] || reachable+=("$companion")
+                done
+                cursor=$((cursor + 1))
+            done
+        done
+        history_paths=(${changed_files[@]+"${changed_files[@]}"} ${obsolete[@]+"${obsolete[@]}"})
+        if [[ -z "${manifest_revision:-}" ]]; then
+            printf 'HISTORY\tfirst adoption; no recorded base\n'
+        elif [[ "$manifest_revision" == "$source_revision" || ${#history_paths[@]} == 0 ]]; then
+            printf 'HISTORY\tno changed payload history\n'
+        elif git -C "$SOURCE_ROOT" merge-base --is-ancestor "$manifest_revision" "$source_revision"; then
+            git -C "$SOURCE_ROOT" --literal-pathspecs log --format='COMMIT%x09%H%x09%s' \
+                "$manifest_revision..$source_revision" -- "${history_paths[@]}" || fail 'cannot read impact history'
+        else
+            printf 'HISTORY\tunavailable: base is missing or not an ancestor\n'
+        fi
+        printf 'SCOPE\tcurrent companion reachability; retirements listed separately; no consumer behavior qualification\n'
+    fi
     exit 0
 fi
 

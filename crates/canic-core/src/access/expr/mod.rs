@@ -10,8 +10,6 @@ use crate::{
     access,
     access::{AccessError, metrics::AccessMetrics},
     cdk::types::Principal,
-    log,
-    log::Topic,
 };
 use canic_contracts::ids::{AccessMetricKind, EndpointCall};
 use std::sync::Arc;
@@ -90,7 +88,6 @@ pub enum BuiltinPredicate {
     Fleet(FleetPredicate),
     Caller(CallerPredicate),
     Environment(EnvironmentPredicate),
-    AttestedLocalSubnet,
     AttestedLocalSubnetArgument(Arc<crate::dto::auth::SignedRoleAttestation>),
     ServiceAuthority { service: &'static str },
 }
@@ -293,20 +290,17 @@ pub mod env {
 
 pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
-    use crate::dto::auth::SignedRoleAttestation;
+    use crate::dto::role_attestation::SignedRoleAttestation;
     use std::sync::Arc;
 
     /// Verify an already decoded role attestation without reading the message again.
+    /// The receiver must authorize `attestation.payload.role` against its allowed
+    /// roles before performing application effects.
     #[must_use]
     pub fn attested_local_subnet_argument(attestation: &SignedRoleAttestation) -> AccessExpr {
         builtin(BuiltinPredicate::AttestedLocalSubnetArgument(Arc::new(
-            attestation.clone(),
+            attestation.clone().into(),
         )))
-    }
-
-    #[must_use]
-    pub const fn attested_local_subnet() -> AccessExpr {
-        builtin(BuiltinPredicate::AttestedLocalSubnet)
     }
 }
 
@@ -330,7 +324,6 @@ pub fn eval_application_startup(call: EndpointCall) -> Result<(), AccessError> {
                 error,
                 metric_kind: AccessMetricKind::Auth,
                 predicate: "application_startup",
-                context: None,
                 terminal: true,
             },
         )
@@ -396,28 +389,26 @@ fn eval_access_inner<const FLEET_ADMISSION: bool>(
     match expr {
         AccessExpr::All(exprs) => {
             if exprs.is_empty() {
-                return Err(AccessFailure::no_predicates("all"));
+                return Err(AccessFailure::no_predicates());
             }
             for expr in exprs {
-                if let Err(failure) = eval_access_inner::<FLEET_ADMISSION>(expr, ctx) {
-                    return Err(failure.with_context("all"));
-                }
+                eval_access_inner::<FLEET_ADMISSION>(expr, ctx)?;
             }
             Ok(())
         }
         AccessExpr::Any(exprs) => {
             if exprs.is_empty() {
-                return Err(AccessFailure::no_predicates("any"));
+                return Err(AccessFailure::no_predicates());
             }
             let mut last = None;
             for expr in exprs {
                 match eval_access_inner::<FLEET_ADMISSION>(expr, ctx) {
                     Ok(()) => return Ok(()),
                     Err(failure) if failure.terminal => return Err(failure),
-                    Err(failure) => last = Some(failure.with_context("any")),
+                    Err(failure) => last = Some(failure),
                 }
             }
-            Err(last.unwrap_or_else(|| AccessFailure::no_predicates("any")))
+            Err(last.unwrap_or_else(AccessFailure::no_predicates))
         }
         AccessExpr::Not(expr) => match eval_access_inner::<FLEET_ADMISSION>(expr, ctx) {
             Ok(()) => Err(AccessFailure::negated()),
@@ -457,7 +448,6 @@ struct AccessFailure {
     error: AccessError,
     metric_kind: AccessMetricKind,
     predicate: &'static str,
-    context: Option<&'static str>,
     terminal: bool,
 }
 
@@ -471,7 +461,6 @@ impl AccessFailure {
             error,
             metric_kind: pred.metric_kind(),
             predicate: pred.name(),
-            context: None,
         }
     }
 
@@ -491,16 +480,14 @@ impl AccessFailure {
             error,
             metric_kind: AccessMetricKind::Custom,
             predicate: name,
-            context: None,
         }
     }
 
-    const fn no_predicates(context: &'static str) -> Self {
+    const fn no_predicates() -> Self {
         Self {
             error: AccessError::ExpressionRuleRequired,
             metric_kind: AccessMetricKind::Auth,
             predicate: "no_rules",
-            context: Some(context),
             terminal: false,
         }
     }
@@ -510,41 +497,13 @@ impl AccessFailure {
             error: AccessError::NegatedPredicateMatched,
             metric_kind: AccessMetricKind::Auth,
             predicate: "not",
-            context: Some("not"),
             terminal: false,
         }
-    }
-
-    fn with_context(mut self, context: &'static str) -> Self {
-        self.context.get_or_insert(context);
-        self
     }
 }
 
 fn record_access_failure(call: EndpointCall, failure: AccessFailure) -> AccessError {
     AccessMetrics::increment(call, failure.metric_kind, failure.predicate);
-    if let Some(codes) = failure.error.diagnostic_codes() {
-        log!(
-            Topic::Auth,
-            Warn,
-            "access denied code={} public_code={} kind={} predicate={} context={:?}",
-            codes.exact,
-            codes.public,
-            failure.metric_kind.as_str(),
-            failure.predicate,
-            failure.context,
-        );
-    } else {
-        log!(
-            Topic::Auth,
-            Warn,
-            "access denied kind={} predicate={} context={:?}: {}",
-            failure.metric_kind.as_str(),
-            failure.predicate,
-            failure.context,
-            failure.error,
-        );
-    }
     failure.error
 }
 
@@ -557,12 +516,17 @@ mod tests {
     use super::*;
     use crate::{
         access,
+        config::schema::CanisterKind,
         ops::runtime::metrics::access::AccessMetrics as MetricStore,
         storage::stable::{
             env::{Env, EnvData, EnvRecord},
+            log::{Log, LogEntryRecord},
             state::fleet::{FleetMode, FleetState, FleetStateData, FleetStateRecord},
         },
-        test::seams,
+        test::{
+            config::{ConfigTestBuilder, install_model_for_role},
+            seams,
+        },
     };
     use canic_contracts::ids::{EndpointCall, EndpointCallKind, EndpointId};
     use std::sync::Mutex;
@@ -703,6 +667,76 @@ mod tests {
             endpoint: EndpointId::new("test"),
             kind: EndpointCallKind::Update,
         }
+    }
+
+    #[test]
+    fn denial_bursts_preserve_operator_log_entries_and_exact_metrics() {
+        let _guard = seams::lock();
+        let role = canic_contracts::ids::CanisterRole::new("app");
+        let mut config = ConfigTestBuilder::new()
+            .with_default_canister_kind(role.clone(), CanisterKind::Service)
+            .build();
+        config.log.max_entries = 2;
+        let _config = install_model_for_role(config, role);
+        crate::log::set_ready();
+        Log::reset_for_tests();
+        for (created_at, message) in [(1, "bootstrap failure"), (2, "funding recovery")] {
+            Log::append(
+                2,
+                1_024,
+                LogEntryRecord {
+                    crate_name: "operator".into(),
+                    created_at,
+                    level: crate::log::Level::Error,
+                    topic: None,
+                    message: message.into(),
+                },
+            )
+            .unwrap();
+        }
+        let retained = Log::snapshot();
+        let _restore = EnvRestore(Env::export());
+        Env::import(EnvData {
+            record: EnvRecord {
+                parent_pid: Some(seams::p(1)),
+                ..EnvRecord::default()
+            },
+        });
+        let ctx = AccessContext {
+            caller: seams::p(2),
+            call: test_call(),
+        };
+        MetricStore::reset();
+        for _ in 0..32 {
+            assert!(matches!(
+                eval_access(&caller::is_parent(), &ctx),
+                Err(AccessError::ParentRequired)
+            ));
+        }
+        assert_eq!(Log::snapshot(), retained);
+        let metrics = MetricStore::snapshot().entries;
+        assert_eq!(metrics.len(), 1);
+        let (key, count) = &metrics[0];
+        assert_eq!(key.endpoint, ctx.call.endpoint.name);
+        assert_eq!(key.kind, AccessMetricKind::Auth);
+        assert_eq!(key.predicate, "caller_is_parent");
+        assert_eq!(*count, 32);
+        Log::append(
+            2,
+            1_024,
+            LogEntryRecord {
+                crate_name: "operator".into(),
+                created_at: 3,
+                level: crate::log::Level::Info,
+                topic: None,
+                message: "ordinary operator log".into(),
+            },
+        )
+        .unwrap();
+        let logs = Log::snapshot();
+        assert_eq!(logs.len(), 2);
+        assert_eq!(logs[1].message, "ordinary operator log");
+        Log::reset_for_tests();
     }
 
     #[test]

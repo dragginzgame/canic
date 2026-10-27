@@ -2,6 +2,8 @@
 
 mod content;
 mod history;
+mod pagination;
+pub(in crate::pic::blob_service) use pagination::qualify as qualify_pagination;
 
 use super::{PocketIc, Principal, UploadAdmissionRequest, contracts, decode_blob};
 use contracts::dto::{

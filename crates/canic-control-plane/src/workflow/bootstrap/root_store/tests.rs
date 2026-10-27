@@ -41,6 +41,7 @@ fn release_set_entry(package: &str) -> RootStoreReleaseSetEntry {
             wasm_gz_relative_path: ".icp/local/canisters/app/app.wasm.gz".to_string(),
             wasm_gz_size_bytes: 1,
             wasm_gz_sha256_hex: "02".repeat(32),
+            wire_schema_sha256: [7; 32],
             candid_sha256: [3; 32],
             protocol_profile_digest: ProtocolProfileDigest::from_bytes([4; 32]),
         },
@@ -79,6 +80,7 @@ fn live_catalog_must_equal_the_complete_ordered_release_set() {
             first.role.clone(),
             RootArtifactIdentity {
                 raw_module_hash: [3; 32],
+                wire_schema_sha256: [7; 32],
                 candid_sha256: [5; 32],
                 protocol_profile_digest: ProtocolProfileDigest::from_bytes([7; 32]),
             },
@@ -87,6 +89,7 @@ fn live_catalog_must_equal_the_complete_ordered_release_set() {
             second.role.clone(),
             RootArtifactIdentity {
                 raw_module_hash: [4; 32],
+                wire_schema_sha256: [7; 32],
                 candid_sha256: [6; 32],
                 protocol_profile_digest: ProtocolProfileDigest::from_bytes([8; 32]),
             },
@@ -142,4 +145,15 @@ fn expected_artifact_metadata_is_derived_without_local_staging_state() {
         .expect("exact artifact metadata");
     assert_eq!(metadata.len(), 1);
     assert_eq!(metadata[0].store_binding, WasmStoreBinding::new("store"));
+}
+
+#[test]
+fn release_artifact_requires_wire_identity() {
+    let mut entry = release_set_entry("app");
+    validate_artifact_shape(&entry).unwrap();
+    entry.artifact.wire_schema_sha256 = [0; 32];
+    assert_eq!(
+        validate_artifact_shape(&entry).unwrap_err().code(),
+        InternalError::invalid_input().code()
+    );
 }

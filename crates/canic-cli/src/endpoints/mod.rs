@@ -12,11 +12,7 @@ use crate::{
     version_text,
 };
 use canic_contracts::ids::ReleaseBuildId;
-#[cfg(test)]
-use canic_host::candid_endpoints::{
-    EndpointCardinality, EndpointEntry, EndpointMode, EndpointType,
-};
-use canic_host::{candid_endpoints::CandidEndpointError, icp_config::IcpConfigError};
+use canic_host::icp_config::IcpConfigError;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -37,13 +33,13 @@ pub enum EndpointsCommandError {
     Usage(String),
 
     #[error(transparent)]
-    BuiltCandid(#[from] canic_host::release_set::BuiltCandidError),
+    BuiltSchema(#[from] canic_host::release_set::BuiltDeclarationError),
+
+    #[error("invalid retained Wire endpoint schema")]
+    Schema,
 
     #[error(transparent)]
-    CandidEndpoint(#[from] CandidEndpointError),
-
-    #[error(transparent)]
-    Installed(#[from] canic_host::protocol_binding::InstalledCandidError),
+    Installed(#[from] canic_host::protocol_binding::InstalledDeclarationError),
 
     #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
@@ -140,7 +136,7 @@ fn endpoint_command(
     ClapCommand::new("endpoints")
         .bin_name(bin_name)
         .disable_help_flag(true)
-        .about("List callable methods exposed by a canister Candid interface")
+        .about("List methods and codec budgets from the retained Wire schema")
         .arg(
             value_arg(target_arg)
                 .value_name(target_arg)

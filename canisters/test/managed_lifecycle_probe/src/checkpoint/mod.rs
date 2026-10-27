@@ -1,17 +1,15 @@
 //! Application-owned durable freeze and counter used to qualify the checkpoint SDK.
 //! No Root sequencing, snapshot authority or production application policy lives here.
 
+mod ops;
+mod protocol;
+
 use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::api::application_checkpoint::{
     ApplicationCheckpointPhase as Phase, ApplicationCheckpointRecord as Record,
     ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition as Transition,
 };
 use canic::{Error, prelude::*};
-use canic::{
-    dto::application_checkpoint::ApplicationCheckpointParticipantStatus,
-    ids::ApplicationCheckpointBinding,
-};
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -28,10 +26,13 @@ struct BusinessRecord {
 }
 
 /// Read-only evidence of business admission and exactly-once completed hooks.
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct CheckpointView {
-    retained: Option<ApplicationCheckpointParticipantStatus>,
+#[derive(Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
+pub struct CheckpointView {
+    retained: Option<protocol::ParticipantStatus>,
     counter: u64,
     prepare_runs: u64,
     release_runs: u64,
@@ -44,13 +45,13 @@ thread_local! {
 pub fn open() {
     let memory = canic::memory::open(KEY);
     let mut initial = Vec::new();
-    ciborium::ser::into_writer(&BusinessRecord::default(), &mut initial).unwrap();
+    serde_cbor::to_writer(&mut initial, &BusinessRecord::default()).unwrap();
     STORAGE.with_borrow_mut(|storage| *storage = Some(Cell::init(memory, initial)));
 }
 
 fn read() -> BusinessRecord {
     STORAGE.with_borrow(|storage| {
-        ciborium::de::from_reader(
+        serde_cbor::from_reader(
             storage
                 .as_ref()
                 .expect("restored checkpoint")
@@ -63,7 +64,7 @@ fn read() -> BusinessRecord {
 
 fn commit(record: &BusinessRecord) {
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(record, &mut bytes).unwrap();
+    serde_cbor::to_writer(&mut bytes, record).unwrap();
     STORAGE.with_borrow_mut(|storage| {
         storage.as_mut().expect("restored checkpoint").set(bytes);
     });
@@ -79,11 +80,10 @@ fn selected(transition: Transition) -> Record {
     }
 }
 
-#[canic_update(requires(custom(ApplicationCheckpointRootPredicate::new(binding.clone()))))]
-fn checkpoint_transition(
-    binding: ApplicationCheckpointBinding,
-    phase: Phase,
-) -> Result<Phase, Error> {
+#[canic_update(requires(custom(ApplicationCheckpointRootPredicate::new(request.binding.clone().into()))), wire(id = protocol::TRANSITION, request = protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
+fn checkpoint_transition(request: protocol::TransitionRequest) -> Result<Phase, Error> {
+    let binding = request.binding.into();
+    let phase = request.phase;
     let mut state = read();
     let previous = state.checkpoint.as_ref();
     let record = match phase {
@@ -114,11 +114,10 @@ fn checkpoint_transition(
     Ok(phase)
 }
 
-#[canic_update(requires(custom(ApplicationCheckpointRootPredicate::new(binding.clone()))))]
-fn checkpoint_restore(
-    captured: ApplicationCheckpointBinding,
-    binding: ApplicationCheckpointBinding,
-) -> Result<Phase, Error> {
+#[canic_update(requires(custom(ApplicationCheckpointRootPredicate::new(request.binding.clone().into()))), wire(id = protocol::RESTORE, request = protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
+fn checkpoint_restore(request: protocol::RestoreRequest) -> Result<Phase, Error> {
+    let captured = request.captured.into();
+    let binding = request.binding.into();
     let mut state = read();
     let previous = state.checkpoint.as_ref().ok_or_else(invalid)?;
     let record = selected(Record::restore(previous, &captured, binding).map_err(|_| invalid())?);
@@ -128,7 +127,7 @@ fn checkpoint_restore(
     Ok(phase)
 }
 
-#[canic_update(public)]
+#[canic_update(public, wire(id = protocol::INCREMENT, request = crate::protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
 fn checkpoint_increment() -> Result<u64, Error> {
     let mut state = read();
     if state
@@ -143,18 +142,56 @@ fn checkpoint_increment() -> Result<u64, Error> {
     Ok(state.counter)
 }
 
-#[canic_query(public)]
-fn checkpoint_view() -> Result<CheckpointView, Error> {
+#[canic_query(public, wire(id = protocol::VIEW, request = crate::protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+fn checkpoint_view() -> Result<crate::checkpoint::CheckpointView, Error> {
     let state = read();
     Ok(CheckpointView {
-        retained: state
-            .checkpoint
-            .map(|record| ApplicationCheckpointParticipantStatus {
-                binding: record.binding().clone(),
-                phase: record.phase(),
-            }),
+        retained: state.checkpoint.map(|record| protocol::ParticipantStatus {
+            binding: record.binding().clone().into(),
+            phase: record.phase(),
+        }),
         counter: state.counter,
         prepare_runs: state.prepare_runs,
         release_runs: state.release_runs,
     })
+}
+
+/// Application-owned synchronous business freeze and idempotent release hook.
+#[canic_update(
+    requires(custom(canic::api::application_checkpoint::ApplicationCheckpointCommandPredicate::new(request.clone()))),
+    wire(id = canic::protocol::application_checkpoint::PARTICIPANT,
+         request = canic::protocol::application_checkpoint::LIMITS,
+         response = canic::protocol::application_checkpoint::LIMITS)
+)]
+fn canic_application_checkpoint(
+    request: canic::dto::application_checkpoint::ApplicationCheckpointCommand,
+) -> Result<canic::dto::application_checkpoint::ApplicationCheckpointCommand, Error> {
+    let binding = canic::api::application_checkpoint::binding_from_command(&request)?;
+    let mut state = read();
+    let previous = state.checkpoint.as_ref();
+    let record = match request.phase {
+        Phase::Preparing => {
+            selected(Record::prepare(previous, binding.clone()).map_err(|_| invalid())?)
+        }
+        Phase::Releasing => {
+            selected(Record::release(previous, binding.clone()).map_err(|_| invalid())?)
+        }
+        _ => return Err(invalid()),
+    };
+    let next = match record.phase() {
+        Phase::Preparing => {
+            state.prepare_runs += 1;
+            record.acknowledge_prepared(&binding)
+        }
+        Phase::Releasing => {
+            state.release_runs += 1;
+            record.acknowledge_released(&binding)
+        }
+        Phase::Prepared | Phase::Released => Ok(record),
+    }
+    .map_err(|_| invalid())?;
+    let phase = next.phase();
+    state.checkpoint = Some(next);
+    commit(&state);
+    Ok(canic::dto::application_checkpoint::ApplicationCheckpointCommand { phase, ..request })
 }

@@ -1017,13 +1017,19 @@ fn reject_package_feature_forwarding(
     let strong_prefix = format!("{dependency_key}/");
     let weak_prefix = format!("{dependency_key}?/");
     let optional_dependency = format!("dep:{dependency_key}");
-    if package.features.values().flatten().any(|member| {
-        member.starts_with(&strong_prefix)
-            || member.starts_with(&weak_prefix)
-            || member == &optional_dependency
+    let schema_forward = format!("{dependency_key}/wire-schema");
+    if package.features.iter().any(|(feature, members)| {
+        members.iter().any(|member| {
+            let forwards_canic = member.starts_with(&strong_prefix)
+                || member.starts_with(&weak_prefix)
+                || member == &optional_dependency;
+            // Native schema production adds no deployed role capability.
+            let native_schema = feature == "wire-schema" && member == &schema_forward;
+            forwards_canic && !native_schema
+        })
     }) {
         return Err(unsupported_finding(
-            "package features must not forward features into the Canic dependency",
+            "package features may only forward wire-schema into the Canic dependency",
         ));
     }
     Ok(())

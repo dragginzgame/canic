@@ -158,7 +158,7 @@ impl LocalFleetSession {
         self.require_active()?;
         let mut preparation =
             ops::prepare::begin(&self.directory, workspace, &self.record, source)?;
-        ops::bindings::stage(workspace, source)?;
+        ops::bindings::verify(workspace, source)?;
         for configured in &source.canisters {
             let input = ops::prepare::allocation_input(&self.record, source, &configured.name)?;
             self.allocate(&input)?;

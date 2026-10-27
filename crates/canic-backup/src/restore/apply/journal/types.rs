@@ -318,11 +318,14 @@ pub enum RestoreApplyJournalError {
         actual: usize,
     },
 
-    #[error("restore apply journal has duplicate operation sequence {0}")]
-    DuplicateSequence(usize),
+    #[error(transparent)]
+    EffectGraph(#[from] ic_backup::model::effect_graph::EffectGraphError),
 
-    #[error("restore apply journal is missing operation sequence {0}")]
-    MissingSequence(usize),
+    #[error("completed restore operation {operation_sequence} has unmet dependency {dependency}")]
+    UnmetCompletedDependency {
+        operation_sequence: u64,
+        dependency: u64,
+    },
 
     #[error("ready restore apply journal cannot include blocked reasons or blocked operations")]
     ReadyJournalHasBlockingState,
@@ -447,27 +450,6 @@ pub(super) const fn validate_apply_journal_count(
         reported,
         actual,
     })
-}
-
-pub(super) fn validate_apply_journal_sequences(
-    operations: &[RestoreApplyJournalOperation],
-) -> Result<(), RestoreApplyJournalError> {
-    let mut sequences = BTreeSet::new();
-    for operation in operations {
-        if !sequences.insert(operation.sequence) {
-            return Err(RestoreApplyJournalError::DuplicateSequence(
-                operation.sequence,
-            ));
-        }
-    }
-
-    for expected in 0..operations.len() {
-        if !sequences.contains(&expected) {
-            return Err(RestoreApplyJournalError::MissingSequence(expected));
-        }
-    }
-
-    Ok(())
 }
 
 pub(super) fn restore_apply_blocked_reasons(dry_run: &RestoreApplyDryRun) -> Vec<String> {

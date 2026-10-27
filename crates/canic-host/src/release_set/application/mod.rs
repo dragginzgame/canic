@@ -67,6 +67,7 @@ pub struct ApplicationArtifactBuildOutput {
     pub wasm: Vec<u8>,
     pub wasm_gz_relative_path: String,
     pub wasm_gz: Vec<u8>,
+    pub wire_schema: Vec<u8>,
     pub candid_sha256: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
 }
@@ -89,6 +90,7 @@ pub struct ApplicationArtifactEntry {
     pub wasm_gz_relative_path: String,
     pub wasm_gz_size_bytes: u64,
     pub wasm_gz_sha256_hex: String,
+    pub wire_schema_sha256: [u8; 32],
     pub candid_sha256: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
 }
@@ -346,6 +348,7 @@ impl FleetSubnetRootReleaseSetManifest {
                         wasm_gz_relative_path: entry.artifact.wasm_gz_relative_path.clone(),
                         wasm_gz_size_bytes: entry.artifact.wasm_gz_size_bytes,
                         wasm_gz_sha256_hex: entry.artifact.wasm_gz_sha256_hex.clone(),
+                        wire_schema_sha256: entry.artifact.wire_schema_sha256,
                         candid_sha256: entry.artifact.candid_sha256,
                         protocol_profile_digest: entry.artifact.protocol_profile_digest,
                     },
@@ -554,6 +557,12 @@ impl FleetSubnetRootReleaseSetManifest {
 
 #[derive(Debug, ThisError)]
 pub enum ApplicationReleaseSetError {
+    #[error("artifact {role:?} failed final Wire schema admission: {source}")]
+    WireSchema {
+        role: CanisterRole,
+        #[source]
+        source: crate::artifact_io::WireArtifactError,
+    },
     #[error(transparent)]
     Fixture(#[from] FixtureArtifactError),
 
@@ -732,6 +741,12 @@ fn compile_entry(
     target: &ApplicationArtifactBuildTarget,
     output: &ApplicationArtifactBuildOutput,
 ) -> Result<ApplicationArtifactEntry, ApplicationReleaseSetError> {
+    if output.wire_schema.is_empty() {
+        return Err(ApplicationReleaseSetError::EmptyArtifact {
+            role: output.role.clone(),
+            kind: "Wire schema",
+        });
+    }
     if output.package != target.package {
         return Err(ApplicationReleaseSetError::BuildOutputPackageMismatch {
             role: output.role.clone(),
@@ -792,6 +807,13 @@ fn compile_entry(
             }
         })?;
 
+    let wire_schema_sha256 =
+        crate::release_set::artifact::qualify_wire_schema(&output.wasm, &output.wire_schema)
+            .map_err(|source| ApplicationReleaseSetError::WireSchema {
+                role: output.role.clone(),
+                source,
+            })?;
+
     let entry = ApplicationArtifactEntry {
         role: output.role.clone(),
         package: output.package.clone(),
@@ -802,6 +824,7 @@ fn compile_entry(
         wasm_gz_relative_path: output.wasm_gz_relative_path.clone(),
         wasm_gz_size_bytes: qualified.wasm_gz_size_bytes,
         wasm_gz_sha256_hex: qualified.wasm_gz_sha256_hex,
+        wire_schema_sha256,
         candid_sha256: output.candid_sha256,
         protocol_profile_digest: output.protocol_profile_digest,
     };

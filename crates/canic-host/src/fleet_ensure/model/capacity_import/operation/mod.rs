@@ -50,9 +50,9 @@ pub struct CapacityImportOperationRecord {
     pub submissions: BTreeMap<String, u32>,
     pub inspections: BTreeMap<String, u32>,
     #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
-    pub settled_status_candid_hex: Option<String>,
+    pub settled_status_wire_hex: Option<String>,
     pub publication_started: bool,
     pub publication_complete: bool,
     #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
-    pub released_status_candid_hex: Option<String>,
+    pub released_status_wire_hex: Option<String>,
 }

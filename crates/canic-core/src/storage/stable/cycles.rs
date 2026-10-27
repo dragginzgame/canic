@@ -562,6 +562,19 @@ mod tests {
     use crate::test::seams;
 
     #[test]
+    fn funding_ledger_roundtrip_preserves_full_range_amount_within_bound() {
+        for amount in [0, u128::from(u64::MAX) + 1, u128::MAX] {
+            let record = CyclesFundingLedgerRecord {
+                granted_total: Cycles::new(amount),
+                last_granted_at: u64::MAX,
+            };
+            let bytes = record.to_bytes();
+            assert!(bytes.len() <= CyclesFundingLedgerRecord::STORABLE_MAX_SIZE as usize);
+            assert_eq!(CyclesFundingLedgerRecord::from_bytes(bytes), record);
+        }
+    }
+
+    #[test]
     fn cycle_balance_record_preserves_fixed_width_bytes() {
         for amount in [0, 1, u128::MAX] {
             let record = CycleTrackerBalanceRecord(Cycles::new(amount));

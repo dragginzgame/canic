@@ -118,7 +118,14 @@ mod tests {
             }],
         )
         .unwrap();
-        crate::perf::record_checkpoint(&"a".repeat(128), "accepted_checkpoint", 42);
+        // Checkpoints account for invalid names as overflow before publication.
+        crate::perf::record(
+            crate::perf::PerfKey::Endpoint {
+                kind: canic_contracts::ids::EndpointCallKind::Update,
+                name: "a".repeat(128),
+            },
+            42,
+        );
         let result = PublicMetricsWorkflow::sample_selected(
             BTreeSet::from([performance, PublicMetricFamily::ShardOccupancy]),
             20,

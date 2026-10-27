@@ -174,8 +174,8 @@ fn inspect(
                 }
                 if protocol.target_kind() == DesiredCanisterKind::Store {
                     let EnsureAction::FleetProtocol {
-                        candid,
-                        candid_sha256,
+                        wire_schema,
+                        wire_schema_sha256,
                         principal,
                         ..
                     } = &action
@@ -183,8 +183,8 @@ fn inspect(
                         return Err(invalid());
                     };
                     let binding = FleetProtocolReadRecord {
-                        candid: candid.clone(),
-                        candid_sha256: candid_sha256.clone(),
+                        wire_schema: wire_schema.clone(),
+                        wire_schema_sha256: wire_schema_sha256.clone(),
                         principal: principal.clone(),
                     };
                     if let Some(previous) = stores.insert(principal.clone(), binding.clone())

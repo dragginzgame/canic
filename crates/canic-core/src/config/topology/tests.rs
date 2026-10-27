@@ -5,7 +5,10 @@
 //! Boundary: exercises the complete validated-config to protected-topology transition.
 
 use super::*;
-use crate::{cdk::utils::hash::hex_bytes, config::Config};
+use crate::{
+    cdk::utils::hash::hex_bytes,
+    config::{Config, schema::Validate},
+};
 use canic_contracts::{
     cycles::Cycles,
     ids::{
@@ -436,6 +439,10 @@ fn provisioning_grants_reject_unknown_self_zero_and_cyclic_edges() {
         ComponentTopology::compile(&unknown),
         Err(ComponentTopologyError::UnknownProvisioningGrantTarget { .. })
     );
+    std::assert_matches!(
+        unknown.validate(),
+        Err(crate::config::schema::ConfigSchemaError::ValidationError(_))
+    );
 
     let mut self_target = config.clone();
     self_target
@@ -447,6 +454,10 @@ fn provisioning_grants_reject_unknown_self_zero_and_cyclic_edges() {
     std::assert_matches!(
         ComponentTopology::compile(&self_target),
         Err(ComponentTopologyError::SelfProvisioningGrant { .. })
+    );
+    std::assert_matches!(
+        self_target.validate(),
+        Err(crate::config::schema::ConfigSchemaError::ValidationError(_))
     );
 
     let mut zero = config.clone();
@@ -471,7 +482,28 @@ fn provisioning_grants_reject_unknown_self_zero_and_cyclic_edges() {
         .insert(component_spec("projects"), grant(1));
     std::assert_matches!(
         ComponentTopology::compile(&cyclic),
-        Err(ComponentTopologyError::CyclicProvisioningGrant { .. })
+        Err(ComponentTopologyError::CyclicProvisioningGrant { component_spec: spec })
+            if spec == component_spec("projects")
+    );
+    std::assert_matches!(
+        cyclic.validate(),
+        Err(crate::config::schema::ConfigSchemaError::ValidationError(_))
+    );
+
+    // Projected records are independently admitted after decoding; they must
+    // reject the same cycle even when no source configuration is available.
+    let mut projected = topology();
+    projected
+        .provisioning_grants
+        .push(ComponentProvisioningGrant {
+            requester_component_spec: component_spec("users"),
+            target_component_spec: component_spec("projects"),
+            maximum_instances_per_requester_per_root: 1,
+        });
+    std::assert_matches!(
+        projected.canonical_bytes(),
+        Err(ComponentTopologyError::CyclicProvisioningGrant { component_spec: spec })
+            if spec == component_spec("projects")
     );
 }
 
@@ -604,9 +636,9 @@ fn canonical_encoding_rejects_oversized_role_package_identity() {
 fn compiled_topology_roundtrips_at_the_candid_boundary() {
     let topology = topology();
     let bytes =
-        ic_platform::candid::contract::encode_one(&topology).expect("encode Component Topology");
+        canic_contracts::protocol::authority::encode(&topology).expect("encode Component Topology");
     let decoded: ComponentTopology =
-        ic_platform::candid::decoder::decode_one(&bytes).expect("decode Component Topology");
+        canic_contracts::protocol::authority::decode(&bytes).expect("decode Component Topology");
 
     assert_eq!(decoded, topology);
 }
@@ -710,13 +742,14 @@ fn protected_binding_contracts_roundtrip_at_the_candid_boundary() {
         canister_id: Principal::from_slice(&[11; 29]),
     };
 
-    let root_bytes = ic_platform::candid::contract::encode_one(&root).expect("encode root binding");
+    let root_bytes =
+        canic_contracts::protocol::authority::encode(&root).expect("encode root binding");
     let child_bytes =
-        ic_platform::candid::contract::encode_one(&child).expect("encode child binding");
+        canic_contracts::protocol::authority::encode(&child).expect("encode child binding");
     let decoded_root: FleetSubnetRootBinding =
-        ic_platform::candid::decoder::decode_one(&root_bytes).expect("decode root binding");
+        canic_contracts::protocol::authority::decode(&root_bytes).expect("decode root binding");
     let decoded_child: ComponentChildBinding =
-        ic_platform::candid::decoder::decode_one(&child_bytes).expect("decode child binding");
+        canic_contracts::protocol::authority::decode(&child_bytes).expect("decode child binding");
 
     assert_eq!(decoded_root, root);
     assert_eq!(decoded_child, child);

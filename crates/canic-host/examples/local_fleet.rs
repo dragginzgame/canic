@@ -38,6 +38,8 @@ enum Command {
         fleet: String,
         input: PathBuf,
         out: PathBuf,
+        node: PathBuf,
+        typescript: PathBuf,
     },
     Generate {
         app_config: PathBuf,
@@ -162,7 +164,13 @@ fn execute(
             emit(&session.converge_fleet(root, &desired, icp)?)
         }
         Command::Discover { fleet } => emit(&session.discover(root, &fleet)?),
-        Command::Frontend { fleet, input, out } => {
+        Command::Frontend {
+            fleet,
+            input,
+            out,
+            node,
+            typescript,
+        } => {
             let input: FrontendEnvironmentInput = serde_json::from_slice(
                 &ic_host_fs::read::read_file_no_follow(&root.join(input), 65_536)
                     .map_err(std::io::Error::from)?,
@@ -180,6 +188,7 @@ fn execute(
                 &fleet,
                 &input,
                 &root.join(out),
+                &frontend::ops::compiler::BrowserCompiler { node, typescript },
             )?)
         }
         Command::Generate {

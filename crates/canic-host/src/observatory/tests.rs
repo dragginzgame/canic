@@ -446,6 +446,7 @@ fn exhausted_collection_never_launches_a_query_or_version_probe() {
     let mut transport = ops::transport::IcpObservatoryTransport {
         icp: &icp,
         root: std::path::Path::new("/does-not-exist"),
+        fleet: "local",
         environment: "local",
         maximum_response_bytes: 1024,
         attempted_queries: 0,
@@ -479,6 +480,7 @@ fn coordinator_metric_selectors_are_unsupported_without_transport_effects() {
     let mut transport = ops::transport::IcpObservatoryTransport {
         icp: &icp,
         root: std::path::Path::new("/does-not-exist"),
+        fleet: "local",
         environment: "local",
         maximum_response_bytes: 1024,
         attempted_queries: 0,
@@ -495,7 +497,7 @@ fn coordinator_metric_selectors_are_unsupported_without_transport_effects() {
             release_identity: "selected-release".into(),
             role: CanisterRole::FLEET_COORDINATOR,
             capabilities: built_in_role_capabilities(BuiltInRoleKind::FleetCoordinator),
-            candid_sha256: [0; 32],
+            wire_schema_sha256: [0; 32],
             protocol_profile_digest: ProtocolProfileDigest::from_bytes([0; 32]),
         }),
     };
@@ -527,6 +529,7 @@ fn metric_and_history_capabilities_are_independent() {
     let mut transport = ops::transport::IcpObservatoryTransport {
         icp: &icp,
         root: std::path::Path::new("/does-not-exist"),
+        fleet: "local",
         environment: "local",
         maximum_response_bytes: 1024,
         attempted_queries: 0,
@@ -562,7 +565,7 @@ fn metric_and_history_capabilities_are_independent() {
                 release_identity: "selected-release".into(),
                 role: CanisterRole::new("configured_component"),
                 capabilities,
-                candid_sha256: [0; 32],
+                wire_schema_sha256: [0; 32],
                 protocol_profile_digest: ProtocolProfileDigest::from_bytes([0; 32]),
             });
             let expected_metrics = if metrics {

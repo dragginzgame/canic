@@ -3,8 +3,8 @@
 //! Root readiness waits retain one child and its exact operation on exhaustion.
 
 use super::*;
-use canic::dto::placement::index::PlacementIndexStatusResponse;
-use canic_contracts::dto::root::RootComponentChildOperationStatus;
+use crate::pic::application_probe::{self, IndexStatus};
+use canic_contracts::dto::component_registry::RootComponentChildAllocationResponse;
 
 #[test]
 pub(super) fn runtime_index_child_waits_for_startup_and_preserves_bounded_retry() {
@@ -80,13 +80,24 @@ fn qualify_automatic_startup_continuation(
                 parent,
                 root,
                 "test_create_startup_child",
-                ic_platform::candid::contract::encode_args((operation_id, rounds)).unwrap(),
+                ic_wire::native::encode_request(
+                    application_probe::CREATE_STARTUP_CHILD.method_id,
+                    &application_probe::StartupRequest {
+                        operation_id,
+                        rounds,
+                    },
+                    application_probe::CREATE_STARTUP_CHILD.request_limits,
+                )
+                .unwrap(),
             )
             .unwrap();
-        ic_platform::candid::decoder::decode_one::<Result<Principal, Error>>(&complete_ingress(
-            pic, message,
-        ))
+        ic_wire::native::decode_response::<Result<ic_platform::Principal, Error>>(
+            application_probe::CREATE_STARTUP_CHILD.method_id,
+            &complete_ingress(pic, message),
+            application_probe::CREATE_STARTUP_CHILD.response_limits,
+        )
         .unwrap()
+        .map(Principal::from)
     };
     assert_eq!(
         request(256_u32),
@@ -95,13 +106,8 @@ fn qualify_automatic_startup_continuation(
         ))
     );
     let pending = child_operation(pic, root, operation_id);
-    let child = pending
-        .allocation
-        .creation
-        .as_ref()
-        .unwrap()
-        .canister
-        .unwrap();
+    let child = pending.creation.as_ref().unwrap().canister.unwrap();
+    assert_child_read_authority(pic, root, parent, child, operation_id, &pending);
     assert_eq!(root_pool_status(pic, root).workload, before + 1);
     assert_eq!(
         request(255_u32),
@@ -112,8 +118,8 @@ fn qualify_automatic_startup_continuation(
     assert_eq!(child_operation(pic, root, operation_id), pending);
     for _ in 0..2048 {
         let current = child_operation(pic, root, operation_id);
-        if current.allocation.last_failure.is_none()
-            && current.allocation.creation.as_ref().unwrap().canister == Some(child)
+        if current.last_failure.is_none()
+            && current.creation.as_ref().unwrap().canister == Some(child)
         {
             break;
         }
@@ -121,7 +127,7 @@ fn qualify_automatic_startup_continuation(
         pic.tick();
     }
     let complete = child_operation(pic, root, operation_id);
-    assert!(complete.allocation.last_failure.is_none());
+    assert!(complete.last_failure.is_none());
     assert_eq!(startup_calls(pic, root, child), 256);
     assert_eq!(request(256_u32).unwrap(), child);
     assert_eq!(request(256_u32).unwrap(), child);
@@ -129,42 +135,43 @@ fn qualify_automatic_startup_continuation(
     assert_eq!(root_pool_status(pic, root).workload, before + 1);
 }
 
-fn resolve(
-    pic: &PocketIc,
-    parent: Principal,
-    key: &str,
-) -> Result<PlacementIndexStatusResponse, Error> {
+fn resolve(pic: &PocketIc, parent: Principal, key: &str) -> Result<IndexStatus, Error> {
     let message = pic
         .submit_call(
             parent,
             Principal::anonymous(),
             "resolve_item",
-            ic_platform::candid::contract::encode_args((key.to_owned(),)).unwrap(),
+            ic_wire::native::encode_request(
+                application_probe::RESOLVE_ITEM.method_id,
+                &key.to_owned(),
+                application_probe::RESOLVE_ITEM.request_limits,
+            )
+            .unwrap(),
         )
         .expect("submit placement");
-    ic_platform::candid::decoder::decode_one(&complete_ingress(pic, message))
-        .expect("placement response")
+    ic_wire::native::decode_response(
+        application_probe::RESOLVE_ITEM.method_id,
+        &complete_ingress(pic, message),
+        application_probe::RESOLVE_ITEM.response_limits,
+    )
+    .expect("placement response")
 }
 
-fn bound_child(status: &PlacementIndexStatusResponse) -> Principal {
-    let PlacementIndexStatusResponse::Bound { instance_pid, .. } = status else {
+fn bound_child(status: &IndexStatus) -> Principal {
+    let IndexStatus::Bound { instance_pid, .. } = status else {
         panic!("runtime placement must bind during its first request")
     };
-    *instance_pid
+    (*instance_pid).into()
 }
 
 fn startup_calls(pic: &PocketIc, root: Principal, child: Principal) -> u32 {
-    (|| -> Result<(Result<u32, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(child, root, "test_startup_calls", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::query_wire::<_, Result<u32, Error>>(
+        pic,
+        child,
+        root,
+        application_probe::STARTUP_CALLS,
+        &(),
+    )
     .unwrap()
     .unwrap()
 }
@@ -173,18 +180,9 @@ fn child_operation(
     pic: &PocketIc,
     root: Principal,
     operation_id: [u8; 32],
-) -> RootComponentChildOperationStatus {
-    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::ProvisionChild(status)) =
-        root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-        )
-        .unwrap()
-    else {
-        panic!("exact child operation")
-    };
-    status
+) -> RootComponentChildAllocationResponse {
+    crate::pic::canic::root_child_allocation(pic, root, Principal::anonymous(), operation_id)
+        .expect("native child allocation status")
 }
 
 fn qualify_bounded_startup_retry(pic: &PocketIc, root: Principal, parent: Principal, before: u32) {
@@ -195,13 +193,24 @@ fn qualify_bounded_startup_retry(pic: &PocketIc, root: Principal, parent: Princi
                 parent,
                 root,
                 "test_create_startup_child",
-                ic_platform::candid::contract::encode_args((operation_id, rounds)).unwrap(),
+                ic_wire::native::encode_request(
+                    application_probe::CREATE_STARTUP_CHILD.method_id,
+                    &application_probe::StartupRequest {
+                        operation_id,
+                        rounds,
+                    },
+                    application_probe::CREATE_STARTUP_CHILD.request_limits,
+                )
+                .unwrap(),
             )
             .unwrap();
-        ic_platform::candid::decoder::decode_one::<Result<Principal, Error>>(&complete_ingress(
-            pic, message,
-        ))
+        ic_wire::native::decode_response::<Result<ic_platform::Principal, Error>>(
+            application_probe::CREATE_STARTUP_CHILD.method_id,
+            &complete_ingress(pic, message),
+            application_probe::CREATE_STARTUP_CHILD.response_limits,
+        )
         .unwrap()
+        .map(Principal::from)
     };
     let blocked = request(256_u32);
     assert_eq!(
@@ -211,24 +220,10 @@ fn qualify_bounded_startup_retry(pic: &PocketIc, root: Principal, parent: Princi
         ))
     );
     let pending = child_operation(pic, root, operation_id);
+    assert_eq!(pending.phase, RootComponentAllocationPhase::Committed);
+    let child = pending.creation.as_ref().unwrap().canister.unwrap();
     assert_eq!(
-        pending.allocation.phase,
-        RootComponentAllocationPhase::Committed
-    );
-    let child = pending
-        .allocation
-        .creation
-        .as_ref()
-        .unwrap()
-        .canister
-        .unwrap();
-    assert_eq!(
-        pending
-            .allocation
-            .last_failure
-            .as_ref()
-            .unwrap()
-            .diagnostic_code,
+        pending.last_failure.as_ref().unwrap().diagnostic_code,
         canic_contracts::diagnostics::codes::STATE_UNAVAILABLE
             .raw_code()
             .raw()
@@ -266,7 +261,7 @@ fn qualify_bounded_startup_retry(pic: &PocketIc, root: Principal, parent: Princi
     pic.tick();
     assert_eq!(request(256_u32).unwrap(), child);
     let complete = child_operation(pic, root, operation_id);
-    assert!(complete.allocation.last_failure.is_none());
+    assert!(complete.last_failure.is_none());
     assert_eq!(request(256_u32).unwrap(), child);
     assert_eq!(child_operation(pic, root, operation_id), complete);
     assert_eq!(root_pool_status(pic, root).workload, before + 1);
@@ -287,4 +282,35 @@ fn complete_ingress(
         }
     }
     panic!("startup request must reach a bounded transport outcome");
+}
+
+/// Controller and exact parent observe the same retained evidence without advancing it.
+fn assert_child_read_authority(
+    pic: &PocketIc,
+    root: Principal,
+    parent: Principal,
+    child: Principal,
+    operation_id: [u8; 32],
+    expected: &RootComponentChildAllocationResponse,
+) {
+    assert_eq!(
+        crate::pic::canic::root_child_allocation(pic, root, parent, operation_id).unwrap(),
+        *expected,
+    );
+    for caller in [child, Principal::from_slice(&[0x93; 29])] {
+        let refused = crate::pic::canic::root_child_allocation(pic, root, caller, operation_id)
+            .expect_err("child and unrelated callers cannot substitute for the registered parent");
+        assert_eq!(
+            refused.code(),
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        );
+    }
+    let absent =
+        crate::pic::canic::root_child_allocation(pic, root, Principal::anonymous(), [0xee; 32])
+            .expect_err("an unissued operation has no allocation evidence");
+    assert_eq!(
+        absent.code(),
+        canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
+    );
+    assert_eq!(child_operation(pic, root, operation_id), *expected);
 }

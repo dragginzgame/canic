@@ -13,10 +13,8 @@ use super::*;
 use crate::{
     manifest::IdentityMode,
     plan::{
-        AuthorityEvidence, BackupExecutionPreflightReceipts, BackupPlanBuildInput, BackupScopeKind,
-        ControlAuthority, QuiescencePreflightReceipt, QuiescencePreflightTarget,
-        SnapshotReadAuthority, TopologyPreflightReceipt, TopologyPreflightTarget,
-        build_backup_plan,
+        AuthorityEvidence, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
+        SnapshotReadAuthority, build_backup_plan,
     },
     registry::RegistryEntry,
 };
@@ -31,9 +29,18 @@ fn journal() -> BackupExecutionJournal {
 
 fn accepted_journal() -> BackupExecutionJournal {
     let mut journal = journal();
-    journal
-        .accept_preflight_bundle_at(PREFLIGHT_ID.to_string(), Some("unix:10".to_string()))
-        .expect("accept preflight");
+    journal.preflight_id = Some(PREFLIGHT_ID.to_string());
+    journal.preflight_accepted = true;
+    for operation in &mut journal.operations {
+        operation.blocking_reasons.clear();
+        if validation::operation_kind_is_preflight(&operation.kind) {
+            operation.state = BackupExecutionOperationState::Completed;
+            operation.state_updated_at = Some("unix:10".to_string());
+        } else {
+            operation.state = BackupExecutionOperationState::Ready;
+        }
+    }
+    journal.validate().expect("retained preflight fixture");
     journal
 }
 
@@ -79,20 +86,13 @@ fn execution_journal_requires_exact_current_optional_fields() {
 }
 
 fn complete_operation(journal: &mut BackupExecutionJournal, sequence: usize) {
-    if journal.operations[sequence].kind == BackupOperationKind::CreateSnapshot {
-        journal
-            .mark_snapshot_create_pending_at(
-                sequence,
-                Some(format!("unix:{sequence}0")),
-                Vec::new(),
-            )
-            .expect("mark snapshot pending");
-    } else {
-        journal
-            .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))
-            .expect("mark pending");
+    let operation = &mut journal.operations[sequence];
+    operation.state = BackupExecutionOperationState::Completed;
+    operation.state_updated_at = Some(format!("unix:{sequence}1"));
+    if operation.kind == BackupOperationKind::CreateSnapshot {
+        operation.snapshot_ids_before = Some(Vec::new());
     }
-    let operation = journal.operations[sequence].clone();
+    let operation = operation.clone();
     let mut receipt = BackupExecutionOperationReceipt::completed(
         journal,
         &operation,
@@ -108,9 +108,11 @@ fn complete_operation(journal: &mut BackupExecutionJournal, sequence: usize) {
         receipt.checksum =
             Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string());
     }
+    journal.operation_receipts.push(receipt);
+    journal.restart_required = journal.derived_restart_required();
     journal
-        .record_operation_receipt(receipt)
-        .expect("record receipt");
+        .validate()
+        .expect("retained completed operation fixture");
 }
 
 fn plan() -> BackupPlan {
@@ -134,47 +136,6 @@ fn plan() -> BackupPlan {
         identity_mode: IdentityMode::Relocatable,
     })
     .expect("backup plan")
-}
-
-fn preflight_receipts(plan: &BackupPlan) -> BackupExecutionPreflightReceipts {
-    let targets = plan
-        .targets
-        .iter()
-        .map(TopologyPreflightTarget::from)
-        .collect::<Vec<_>>();
-    let quiescence_targets = plan
-        .targets
-        .iter()
-        .map(QuiescencePreflightTarget::from)
-        .collect::<Vec<_>>();
-    BackupExecutionPreflightReceipts {
-        plan_id: plan.plan_id.clone(),
-        preflight_id: PREFLIGHT_ID.to_string(),
-        validated_at: "unix:10".to_string(),
-        expires_at: "unix:20".to_string(),
-        topology: TopologyPreflightReceipt {
-            plan_id: plan.plan_id.clone(),
-            preflight_id: PREFLIGHT_ID.to_string(),
-            topology_hash_before_quiesce: plan.topology_hash_before_quiesce.clone(),
-            topology_hash_at_preflight: plan.topology_hash_before_quiesce.clone(),
-            targets,
-            validated_at: "unix:10".to_string(),
-            expires_at: "unix:20".to_string(),
-            message: None,
-        },
-        control_authority: Vec::new(),
-        snapshot_read_authority: Vec::new(),
-        quiescence: QuiescencePreflightReceipt {
-            plan_id: plan.plan_id.clone(),
-            preflight_id: PREFLIGHT_ID.to_string(),
-            quiescence_policy: plan.quiescence_policy.clone(),
-            accepted: true,
-            targets: quiescence_targets,
-            validated_at: "unix:10".to_string(),
-            expires_at: "unix:20".to_string(),
-            message: None,
-        },
-    }
 }
 
 fn registry() -> Vec<RegistryEntry> {

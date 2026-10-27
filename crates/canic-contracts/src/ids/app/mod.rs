@@ -4,7 +4,6 @@
 //! Does not own: live Fleet identity, deployment labels, or filesystem paths.
 //! Boundary: configuration validation admits the wrapped source name before use.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -16,6 +15,10 @@ use std::fmt;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct AppId(String);
 
 impl AppId {
@@ -39,19 +42,6 @@ impl AsRef<str> for AppId {
 impl fmt::Display for AppId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
-    }
-}
-
-impl CandidType for AppId {
-    fn _ty() -> ic_platform::candid::contract::types::Type {
-        ic_platform::candid::contract::types::TypeInner::Text.into()
-    }
-
-    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-    where
-        S: ic_platform::candid::contract::types::Serializer,
-    {
-        serializer.serialize_text(self.as_str())
     }
 }
 

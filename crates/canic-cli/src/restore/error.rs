@@ -17,6 +17,10 @@ use thiserror::Error as ThisError;
 pub enum RestoreCommandError {
     #[error("restore operation {sequence} omits original issued command custody")]
     RestoreMissingOriginalCommandCustody { sequence: usize },
+    #[error(
+        "snapshot load operation {sequence} has an unsettled outcome; preserve the original journal and backup because automatic retry cannot establish whether the load committed"
+    )]
+    RestoreSnapshotLoadUnsettled { sequence: usize },
 
     #[error(transparent)]
     RestoreCommandCustody(#[from] canic_backup::persistence::CommandLifetimeLockError),
@@ -238,6 +242,9 @@ impl From<RestoreRunnerError> for RestoreCommandError {
     )]
     fn from(error: RestoreRunnerError) -> Self {
         match error {
+            RestoreRunnerError::SnapshotLoadUnsettled { sequence } => {
+                Self::RestoreSnapshotLoadUnsettled { sequence }
+            }
             RestoreRunnerError::MissingOriginalCommandCustody { sequence } => {
                 Self::RestoreMissingOriginalCommandCustody { sequence }
             }

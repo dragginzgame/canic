@@ -6,19 +6,20 @@ use super::{
 };
 use crate::{
     cli::defaults::local_environment,
-    support::{candid::registry_entry_candid_path, registry_tree::visible_entries},
+    support::{parallel::collect_ordered_reports, registry_tree::visible_entries},
 };
 use canic_contracts::dto::observability::{
     CanisterObservabilityRequest, CanisterObservabilityResponse,
 };
 use canic_host::{
     canic_metadata::query_canic_metadata_version,
-    canister_ready::{query_canister_ready, query_local_canister_ready},
+    canister_ready::query_canister_ready,
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     observability::observe_fleet_canister,
+    protocol_binding::resolve_current_registry_wire_schema,
     registry::RegistryEntry,
     release_set::artifact_root_path,
     replica_query,
@@ -27,8 +28,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
-    thread,
 };
 
 const OBSERVATION_ERROR: &str = "error";
@@ -46,20 +45,21 @@ pub(super) fn load_registry_entries(
 
 pub(super) fn list_ready_statuses(
     options: &ListOptions,
-    registry: &[RegistryEntry],
+    fleet: &CurrentFleetResolution,
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
+    let registry = fleet.registry.entries.clone();
     let icp_root = resolve_live_icp_root()?;
     if replica_query::uses_local_replica_transport(options.environment.as_deref(), Some(&icp_root))?
     {
-        return local_ready_statuses(options, registry, canister, &icp_root);
+        return local_ready_statuses(options, fleet, canister, &icp_root);
     }
 
     let mut statuses = BTreeMap::new();
-    for entry in visible_entries(registry, canister)? {
+    for entry in visible_entries(&registry, canister)? {
         statuses.insert(
             entry.pid.clone(),
-            check_ready_status(options, Some(&icp_root), entry),
+            check_ready_status(options, &icp_root, fleet, entry),
         );
     }
     Ok(statuses)
@@ -87,18 +87,20 @@ pub(super) fn list_cycle_balances(
 
 pub(super) fn list_canic_versions(
     options: &ListOptions,
-    registry: &[RegistryEntry],
+    fleet: &CurrentFleetResolution,
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
     let environment = options.environment.clone();
+    let registry = fleet.registry.entries.clone();
     let icp_root = resolve_live_icp_root()?;
+    let fleet = fleet.clone();
     collect_visible_entry_values(
-        registry,
+        &registry,
         canister,
         OBSERVATION_ERROR.to_string(),
         move |entry| {
-            canic_version_label_endpoint(&icp, environment.clone(), Some(&icp_root), &entry)
+            canic_version_label_endpoint(&icp, environment.clone(), &icp_root, &fleet, &entry)
         },
     )
 }
@@ -149,55 +151,42 @@ pub(super) fn resolve_wasm_sizes(
 
 fn check_ready_status(
     options: &ListOptions,
-    icp_root: Option<&Path>,
+    icp_root: &Path,
+    fleet: &CurrentFleetResolution,
     entry: &RegistryEntry,
 ) -> ReadyStatus {
-    let icp = live_icp(&options.icp, options.environment.clone(), icp_root);
-    let Ok(binding) = registry_entry_candid_path(icp_root, &state_environment(options), entry)
-    else {
+    if resolve_current_registry_wire_schema(icp_root, fleet, entry).is_err() {
+        return ReadyStatus::Error;
+    }
+    let Some(binding) = entry.protocol_binding.as_ref() else {
         return ReadyStatus::Error;
     };
-    let Ok(ready) = query_canister_ready(
+    let icp = live_icp(&options.icp, options.environment.clone(), Some(icp_root));
+    match query_canister_ready(
         &icp,
         &entry.pid,
         &state_environment(options),
-        icp_root,
-        &binding,
-    ) else {
-        return ReadyStatus::Error;
-    };
-    if ready {
-        ReadyStatus::Ready
-    } else {
-        ReadyStatus::NotReady
+        Some(icp_root),
+        binding,
+    ) {
+        Ok(true) => ReadyStatus::Ready,
+        Ok(false) => ReadyStatus::NotReady,
+        Err(_) => ReadyStatus::Error,
     }
 }
 
 fn local_ready_statuses(
     options: &ListOptions,
-    registry: &[RegistryEntry],
+    fleet: &CurrentFleetResolution,
     canister: Option<&str>,
     icp_root: &Path,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
-    let environment = options.environment.clone();
+    let options = options.clone();
     let icp_root = icp_root.to_path_buf();
-    collect_visible_entry_values(registry, canister, ReadyStatus::Error, move |entry| {
-        let Ok(_binding) = registry_entry_candid_path(
-            Some(&icp_root),
-            environment.as_deref().unwrap_or("local"),
-            &entry,
-        ) else {
-            return ReadyStatus::Error;
-        };
-        match query_local_canister_ready(
-            environment.as_deref().unwrap_or("local"),
-            &entry.pid,
-            Some(&icp_root),
-        ) {
-            Ok(true) => ReadyStatus::Ready,
-            Ok(false) => ReadyStatus::NotReady,
-            Err(_) => ReadyStatus::Error,
-        }
+    let registry = fleet.registry.entries.clone();
+    let fleet = fleet.clone();
+    collect_visible_entry_values(&registry, canister, ReadyStatus::Error, move |entry| {
+        check_ready_status(&options, &icp_root, &fleet, &entry)
     })
 }
 
@@ -211,21 +200,17 @@ where
     T: Clone + Send + 'static,
     F: Fn(RegistryEntry) -> T + Send + Sync + 'static,
 {
-    let query = Arc::new(query);
-    let mut handles = Vec::new();
-    for entry in visible_entries(registry, canister)? {
-        let entry = entry.clone();
-        let pid = entry.pid.clone();
-        let query = Arc::clone(&query);
-        handles.push((pid, thread::spawn(move || query(entry))));
-    }
-
-    let mut values = BTreeMap::new();
-    for (pid, handle) in handles {
-        let value = handle.join().unwrap_or_else(|_| worker_panic_value.clone());
-        values.insert(pid, value);
-    }
-    Ok(values)
+    let entries = visible_entries(registry, canister)?;
+    let values = collect_ordered_reports(
+        &entries,
+        |entry| query((**entry).clone()),
+        |_| worker_panic_value.clone(),
+    );
+    Ok(entries
+        .into_iter()
+        .map(|entry| entry.pid.clone())
+        .zip(values)
+        .collect())
 }
 
 fn cycle_balance_label_endpoint(
@@ -236,11 +221,10 @@ fn cycle_balance_label_endpoint(
     entry: &RegistryEntry,
 ) -> String {
     let environment = environment.unwrap_or_else(local_environment);
-    let icp = live_icp(icp, Some(environment.clone()), Some(icp_root));
+    let icp = live_icp(icp, Some(environment), Some(icp_root));
     let Ok(CanisterObservabilityResponse::CycleBalance(response)) = observe_fleet_canister(
         &icp,
         icp_root,
-        &environment,
         fleet,
         entry,
         CanisterObservabilityRequest::CycleBalance,
@@ -253,15 +237,19 @@ fn cycle_balance_label_endpoint(
 fn canic_version_label_endpoint(
     icp: &str,
     environment: Option<String>,
-    icp_root: Option<&Path>,
+    icp_root: &Path,
+    fleet: &CurrentFleetResolution,
     entry: &RegistryEntry,
 ) -> String {
     let environment = environment.unwrap_or_else(local_environment);
-    let Ok(binding) = registry_entry_candid_path(icp_root, &environment, entry) else {
+    if resolve_current_registry_wire_schema(icp_root, fleet, entry).is_err() {
+        return OBSERVATION_ERROR.to_string();
+    }
+    let Some(binding) = entry.protocol_binding.as_ref() else {
         return OBSERVATION_ERROR.to_string();
     };
-    let icp = live_icp(icp, Some(environment), icp_root);
-    query_canic_metadata_version(&icp, &entry.pid, &binding)
+    let icp = live_icp(icp, Some(environment), Some(icp_root));
+    query_canic_metadata_version(&icp, &entry.pid, binding)
         .unwrap_or_else(|_| OBSERVATION_ERROR.to_string())
 }
 

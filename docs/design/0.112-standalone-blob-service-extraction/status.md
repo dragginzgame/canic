@@ -1,5 +1,38 @@
 # Upstream Integration Implementation Status
 
+Current execution follows the [consolidated push-readiness checklist](../../audits/working/0.112-push-readiness/plan.md). Dated sections below retain historical evidence; they do not override that checklist or establish current qualification.
+
+## Selected release scope — 2026-10-26
+
+The [current delivery decision](0.112-design.md#accepted-release-scope--blob-and-wire--2026-10-26)
+limits remaining push-readiness work to Blob storage and Wire. Production Auth and
+live Backup completion are deferred; their unavailable paths and activation gates
+stay closed. Historical Auth/Backup acceptance obligations below are future work,
+not blockers for this selected release. Existing pending changes are preserved.
+
+## Backup convergence implementation boundary — 2026-10-24
+
+Current-source inspection confirms published Backup 0.40.0 coordinator/attempt
+APIs are available. Canic's active restore runner still owns scheduling and
+mutable apply journals. Its ICP configuration does not supply the upstream exact
+network/caller/release/request authority. Root checkpoint storage, authenticated
+bounded Wire dispatch and the shared catalogue mutation guard are now connected. Installed Root/two-participant
+qualification and paid snapshot composition remain pending.
+See the [implementation contract](0.112-design.md#backup-execution-convergence--2026-10-24).
+
+| Batch | Outcome and owner | Required qualification | Current state |
+| --- | --- | --- | --- |
+| B5 | Production Root checkpoint ownership: existing model, control-plane storage, authenticated commands, complete participant discovery and topology exclusion | Native exact-unit/replay tests plus actual Root/two-participant interruption and release | Storage/commands/guard connected; installed Root qualification pending |
+| B1 | Backup original host workflow composed with Root-paid effects; one owner per effect class | Exact identity, finite attempts, changed/missing original refusal, unknown-result recovery and cold replay | Custody foundations integrated; stage/attempt engine adoption pending |
+| B5 | Complete capture and same-release restore with application acceptance and terminal release | Complete artifact bytes, stopped restore, outstanding external obligations, accepted start and effect-free terminal replay | Participant fixture evidence only; production path pending |
+
+The dormant capture mutation cleanup is complete (248 Backup and 52 CLI backup
+library tests, strict affected Clippy). It does not qualify these pending outcomes.
+The previous Auth 0.6 failure below is historical evidence, not the current Backup
+implementation blocker. Live creation remains unavailable; the complete 0.112
+batch remains not push-ready. Current checkpoint evidence is retained under `/tmp/canic-root-checkpoint/`;
+no production snapshot effects or deployments were run.
+
 ## Capture executor retirement — 2026-10-18
 
 The unused injected Canic capture runner is removed in favor of the IC Backup

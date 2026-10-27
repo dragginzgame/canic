@@ -2,12 +2,13 @@
 //!
 //! Responsibility: compile and execute current Canic Fleet choreography from typed App topology.
 //! Does not own: journal sequencing, generic canister convergence, or historical recovery.
-//! Boundary: the reviewed action binds one exact Coordinator, Candid contract, Registry, and plan.
+//! Boundary: the reviewed action binds one exact Coordinator, Wire schema, Registry, and plan.
 
 mod component_progress;
 mod fixture;
 mod fresh;
 mod inactive_activation;
+mod schema;
 #[cfg(test)]
 mod tests;
 
@@ -16,7 +17,7 @@ use super::{
 };
 use crate::{
     MAX_ARTIFACT_READ_BYTES,
-    canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
+    canister_protocol::{CanisterProtocolError, call_wire, query_wire_cli},
     component_topology::{
         RootPoolCapacityError, RootPoolCapacityInput, validate_root_pool_capacity,
     },
@@ -47,11 +48,6 @@ use canic_contracts::{
         component_registry::{
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
         },
-        fleet_coordinator::{
-            CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationReadRequest,
-            CoordinatorOperationReadResponse, CoordinatorOperationStatusResponse,
-            CoordinatorRegistryRequest, CoordinatorRegistryResponse,
-        },
         fleet_registry::{
             FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootRegistryMirrorActivationResponse,
             FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
@@ -59,20 +55,14 @@ use canic_contracts::{
         },
         fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetWasmStoreAdoptionRequest},
         role::OperationStatusRequest,
-        root::RootOperationStatusResponse,
         root_store::{
             ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
             ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX, RootStoreBootstrapRequest,
             RootStoreBootstrapResponse, RootStoreCatalogEntry,
         },
         template::{
-            StoreCatalogRequest, StoreCatalogResponse, StoreStatusRequest, StoreStatusResponse,
             TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateLookupRequest,
             TemplateManifestInput, TemplateManifestResponse, TemplateStagingStatusResponse,
-        },
-        wire::projection::fleet_setup::{
-            RootCommandFragment, RootCommandResponseFragment, RootStatusRequestFragment,
-            RootStatusResponseFragment,
         },
     },
     ids::{
@@ -89,7 +79,7 @@ use canic_core::control_plane_support::{
     },
 };
 use ic_host_artifacts::artifact::chunk_digests;
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -293,10 +283,13 @@ pub enum CurrentProtocolError {
     ProtocolSidecarNotRegular { path: PathBuf },
 
     #[error(transparent)]
+    WireSchema(#[from] crate::artifact_io::WireArtifactError),
+
+    #[error(transparent)]
     ComponentPoolCapacity(#[from] RootPoolCapacityError),
 
-    #[error("failed to read current Fleet protocol Candid {}: {source}", path.display())]
-    ReadCandid {
+    #[error("failed to read current Fleet protocol artifact {}: {source}", path.display())]
+    ReadArtifact {
         path: PathBuf,
         #[source]
         source: std::io::Error,
@@ -430,10 +423,9 @@ pub(super) fn compile(
         .ok_or(CurrentProtocolError::CoordinatorUnavailable)?;
     let coordinator_text = retained_principal(desired, state, &coordinator.name)
         .ok_or(CurrentProtocolError::CoordinatorUnavailable)?;
-    let coordinator_candid_path = resolve_path(root, &protocol_intent.coordinator_candid);
     let coordinator_principal = Principal::from_text(&coordinator_text)
         .map_err(|_| CurrentProtocolError::CoordinatorUnavailable)?;
-    let registry = query_registry(icp, &coordinator_candid_path, coordinator_principal)?;
+    let registry = query_registry(icp, coordinator_principal)?;
     let operation_id = operation_bytes(operation_id)?;
     let app_config_path = resolve_path(root, &protocol_intent.app_config);
     if !app_config_path.is_file() {
@@ -444,9 +436,7 @@ pub(super) fn compile(
         .model()
         .compile_component_deployment_configuration()
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
-    let store_candid_path = resolve_path(root, &protocol_intent.store_candid);
-    let mut root_authorities =
-        query_current_root_authorities(icp, desired, state, &store_candid_path)?;
+    let mut root_authorities = query_current_root_authorities(icp, desired, state)?;
     root_authorities.sort_unstable_by_key(|authority| authority.binding.placement_subnet);
     let component_status = query_operation(icp, coordinator_principal, operation_id)?;
     let registry_sequence = compile_current_registry_sequence_with_status(
@@ -865,37 +855,38 @@ pub(super) fn query_current_root_authorities(
     icp: &IcpCli,
     desired: &DesiredFleet,
     state: &FleetEnsureStateRecord,
-    store_candid: &Path,
 ) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
     read_root_authorities(
         desired,
         state,
-        |root| {
-            crate::canister_protocol::query_authenticated(
-                icp,
-                root,
-                protocol::CANIC_ROOT_STATUS,
-                &RootStatusRequestFragment::FleetAuthority,
-            )
-        },
-        |store| {
-            query_with_candid(
-                icp,
-                store_candid,
-                store,
-                protocol::CANIC_WASM_STORE_STATUS,
-                &StoreStatusRequest::Authority,
-            )
-        },
+        |root| crate::canister_protocol::root_authority::query(icp, root),
+        |store| query_store_authority(icp, store),
     )
+}
+
+fn query_store_authority(
+    icp: &IcpCli,
+    store: Principal,
+) -> Result<FleetSubnetWasmStoreAuthority, CanisterProtocolError> {
+    let authority: canic_contracts::dto::store_status::Authority = query_wire_cli(
+        icp,
+        store,
+        protocol::store_status::authority::METHOD,
+        protocol::store_status::authority::METHOD_ID,
+        &(),
+        protocol::store_status::REQUEST_LIMITS,
+        protocol::store_status::RESPONSE_LIMITS,
+    )?;
+    Ok(authority.into())
 }
 
 // Keep bounded scheduling separate from the transport; neither owner caches authority.
 fn read_root_authorities(
     desired: &DesiredFleet,
     state: &FleetEnsureStateRecord,
-    read_root: impl Fn(Principal) -> Result<RootStatusResponseFragment, CanisterProtocolError> + Sync,
-    read_store: impl Fn(Principal) -> Result<StoreStatusResponse, CanisterProtocolError> + Sync,
+    read_root: impl Fn(Principal) -> Result<FleetSubnetRootAuthority, CanisterProtocolError> + Sync,
+    read_store: impl Fn(Principal) -> Result<FleetSubnetWasmStoreAuthority, CanisterProtocolError>
+    + Sync,
 ) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
     let roots = desired
         .canisters
@@ -914,14 +905,8 @@ fn read_root_authorities(
                 kind: DesiredCanisterKind::Root,
                 name: configured.name.clone(),
             })?;
-        let response = read_root(principal)?;
-        let RootStatusResponseFragment::FleetAuthority(authority) = response else {
-            return Err(CurrentProtocolError::ResponseMismatch);
-        };
-        let store_response = read_store(authority.wasm_store_authority.wasm_store)?;
-        let StoreStatusResponse::Authority(store_authority) = store_response else {
-            return Err(CurrentProtocolError::ResponseMismatch);
-        };
+        let authority = read_root(principal)?;
+        let store_authority = read_store(authority.wasm_store_authority.wasm_store)?;
         if store_authority != authority.wasm_store_authority {
             return Err(CurrentProtocolError::RegistrySequenceConflict(format!(
                 "Root {} and Store retain different authority",
@@ -984,10 +969,10 @@ fn bind_action(
                 "typed protocol target {target} is not one exact configured {target_kind:?}"
             ))
         })?;
-    let candid = match configured.kind {
-        DesiredCanisterKind::Coordinator => &protocol_intent.coordinator_candid,
-        DesiredCanisterKind::Root => &protocol_intent.root_candid,
-        DesiredCanisterKind::Store => &protocol_intent.store_candid,
+    let wire_schema = match configured.kind {
+        DesiredCanisterKind::Coordinator => &protocol_intent.coordinator_wire_schema,
+        DesiredCanisterKind::Root => &protocol_intent.root_wire_schema,
+        DesiredCanisterKind::Store => &protocol_intent.store_wire_schema,
         DesiredCanisterKind::Auxiliary
         | DesiredCanisterKind::Component
         | DesiredCanisterKind::Pool => {
@@ -996,11 +981,11 @@ fn bind_action(
             ));
         }
     };
-    let candid_sha256 = read_sha256(&resolve_path(root, candid))?;
+    let wire_schema_sha256 = read_sha256(&resolve_path(root, wire_schema))?;
     Ok(EnsureAction::FleetProtocol {
         action: Box::new(action),
-        candid: candid.clone(),
-        candid_sha256,
+        wire_schema: wire_schema.clone(),
+        wire_schema_sha256,
         maximum_execution_burn_cycles,
         name,
         principal: target.to_text(),
@@ -1043,21 +1028,14 @@ pub(super) fn observe_with_staging(
         } => {
             let mut start_after = None;
             for _ in 0..crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS {
-                let response: RootStatusResponseFragment =
-                    crate::canister_protocol::query_authenticated(
-                        icp,
-                        resolved.target,
-                        protocol::CANIC_ROOT_STATUS,
-                        &RootStatusRequestFragment::Pool(
-                            canic_contracts::dto::pool::CanisterPoolStatusRequest {
-                                start_after,
-                                limit: 256,
-                            },
-                        ),
-                    )?;
-                let RootStatusResponseFragment::Pool(page) = response else {
-                    return Err(CurrentProtocolError::ResponseMismatch);
-                };
+                let page = crate::canister_protocol::pool_inventory::query(
+                    icp,
+                    resolved.target,
+                    &canic_contracts::dto::pool::CanisterPoolStatusRequest {
+                        start_after,
+                        limit: 256,
+                    },
+                )?;
                 if let Some(asset) = page
                     .entries
                     .iter()
@@ -1085,52 +1063,31 @@ pub(super) fn observe_with_staging(
         | CurrentFleetProtocolAction::JoinRoot {
             expected_registry, ..
         } => {
-            let live = query_registry(icp, &resolved.candid_path, resolved.target)?;
+            let live = query_registry(icp, resolved.target)?;
             observation(live == *expected_registry, &live)
         }
         CurrentFleetProtocolAction::ActivateRegistryMirror { expected, request } => {
-            let Some(status) = query_root_operation(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                request.operation_id,
-            )?
+            let Some(status) =
+                query_root_registry_synchronization(icp, resolved.target, request.operation_id)?
             else {
                 return Ok(unavailable_observation());
-            };
-            let RootOperationStatusResponse::SynchronizeRegistry(status) = status else {
-                return Err(CurrentProtocolError::ResponseMismatch);
             };
             observation(status.activation.as_ref() == Some(expected), &status)
         }
         CurrentFleetProtocolAction::AdoptStore { request } => {
-            let Some(status) = query_root_operation(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                request.operation_id,
-            )?
+            let Some(status) =
+                query_root_store_adoption(icp, resolved.target, request.operation_id)?
             else {
                 return Ok(unavailable_observation());
-            };
-            let RootOperationStatusResponse::AdoptStore(status) = status else {
-                return Err(CurrentProtocolError::ResponseMismatch);
             };
             let applied = store_adoption_applied(request, Some(&status));
             observation(applied, &status)
         }
         CurrentFleetProtocolAction::BootstrapStore { expected, request } => {
-            let Some(status) = query_root_operation(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                request.operation_id,
-            )?
+            let Some(status) =
+                query_root_store_bootstrap(icp, resolved.target, request.operation_id)?
             else {
                 return Ok(unavailable_observation());
-            };
-            let RootOperationStatusResponse::BootstrapStore(status) = status else {
-                return Err(CurrentProtocolError::ResponseMismatch);
             };
             observation(status == *expected, &status)
         }
@@ -1143,13 +1100,11 @@ pub(super) fn observe_with_staging(
             ..
         } => fixture::observe_upload(icp, &resolved, expected, *source_bytes),
         CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
-            let response: Result<RootStatusResponseFragment, CanisterProtocolError> =
-                crate::canister_protocol::query_authenticated(
-                    icp,
-                    resolved.target,
-                    protocol::CANIC_ROOT_STATUS,
-                    &RootStatusRequestFragment::ComponentRegistry(request.clone()),
-                );
+            let response = crate::canister_protocol::registry_read::status(
+                icp,
+                resolved.target,
+                request.clone(),
+            );
             let response = match response {
                 Ok(response) => response,
                 Err(error) if component_registry_status_unavailable(&error) => {
@@ -1157,9 +1112,7 @@ pub(super) fn observe_with_staging(
                 }
                 Err(error) => return Err(error.into()),
             };
-            let RootStatusResponseFragment::ComponentRegistry(status) = response else {
-                return Err(CurrentProtocolError::ResponseMismatch);
-            };
+            let status = response;
             observation(component_registry_progresses(expected, &status), &status)
         }
         CurrentFleetProtocolAction::ProvisionComponents { request, plan_hash } => {
@@ -1192,17 +1145,10 @@ pub(super) fn observe_with_staging(
             observation(chunk_applied && preparation_applied, &status)
         }
         CurrentFleetProtocolAction::SynchronizeRegistry { expected, request } => {
-            let Some(status) = query_root_operation(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                request.operation_id,
-            )?
+            let Some(status) =
+                query_root_registry_synchronization(icp, resolved.target, request.operation_id)?
             else {
                 return Ok(unavailable_observation());
-            };
-            let RootOperationStatusResponse::SynchronizeRegistry(status) = status else {
-                return Err(CurrentProtocolError::ResponseMismatch);
             };
             observation(status.synchronization == *expected, &status)
         }
@@ -1289,30 +1235,34 @@ pub(super) fn apply(
     action: &EnsureAction,
 ) -> Result<EffectOutcome, CurrentProtocolError> {
     let resolved = ResolvedProtocolAction::from_action(root, action)?;
+    schema::admit_mutation(resolved.action, &resolved.wire_schema_bytes)?;
     let receipt = match resolved.action {
         CurrentFleetProtocolAction::ObservePoolReadiness { .. } => Vec::new(),
         CurrentFleetProtocolAction::MaintainPoolReadiness { .. } => {
-            let response: RootCommandResponseFragment = call_with_candid(
+            let _: canic_contracts::dto::pool_control::MaintenanceResponse = call_wire(
                 icp,
-                &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_ROOT_COMMAND,
-                &RootCommandFragment::MaintainPool,
+                protocol::pool_control::maintain::METHOD,
+                protocol::pool_control::maintain::METHOD_ID,
+                &(),
+                protocol::pool_control::REQUEST_LIMITS,
+                protocol::pool_control::RESPONSE_LIMITS,
             )?;
-            let RootCommandResponseFragment::MaintainPool(_) = response else {
-                return Err(CurrentProtocolError::ResponseMismatch);
-            };
             Vec::new()
         }
         CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } => {
-            let response: RootCommandResponseFragment = call_with_candid(
+            let response: canic_contracts::dto::pool::PoolImportResponse = call_wire(
                 icp,
-                &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_ROOT_COMMAND,
-                &RootCommandFragment::ImportPoolCanister(*request),
+                protocol::pool_control::import::METHOD,
+                protocol::pool_control::import::METHOD_ID,
+                &canic_contracts::dto::pool_control::ImportRequest {
+                    canister_id: request.canister_id.into(),
+                },
+                protocol::pool_control::REQUEST_LIMITS,
+                protocol::pool_control::RESPONSE_LIMITS,
             )?;
-            if !matches!(response, RootCommandResponseFragment::ImportPoolCanister(canic_contracts::dto::pool::PoolImportResponse::Imported { canister_id }) if canister_id == request.canister_id)
+            if !matches!(response, canic_contracts::dto::pool::PoolImportResponse::Imported { canister_id } if canister_id == ic_platform::Principal::from(request.canister_id))
             {
                 return Err(CurrentProtocolError::ResponseMismatch);
             }
@@ -1323,16 +1273,17 @@ pub(super) fn apply(
             request,
             ..
         } => {
-            let response: CoordinatorCommandResponse = call_with_candid(
+            let response: canic_contracts::dto::registry_control::ActivateResponse = call_wire(
                 icp,
-                &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COORDINATOR_COMMAND,
-                &CoordinatorCommand::ActivateRegistry(request.clone()),
+                protocol::registry_control::activate::METHOD,
+                protocol::registry_control::activate::METHOD_ID,
+                &canic_contracts::dto::registry_control::ActivateRequest::from(request.clone()),
+                protocol::registry_control::REQUEST_LIMITS,
+                protocol::registry_control::RESPONSE_LIMITS,
             )?;
-            let CoordinatorCommandResponse::ActivateRegistry(response) = response else {
-                return Err(CurrentProtocolError::ResponseMismatch);
-            };
+            let response: canic_contracts::dto::fleet_registry::FleetRegistryActivationResponse =
+                response.into();
             if response.previous_version != request.expected_registry
                 || response.version != *expected_version
             {
@@ -1345,71 +1296,102 @@ pub(super) fn apply(
             request,
             ..
         } => {
-            let response: CoordinatorCommandResponse = call_with_candid(
+            let response: canic_contracts::dto::registry_control::JoinResponse = call_wire(
                 icp,
-                &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COORDINATOR_COMMAND,
-                &CoordinatorCommand::JoinRoot(request.clone()),
+                protocol::registry_control::join::METHOD,
+                protocol::registry_control::join::METHOD_ID,
+                &canic_contracts::dto::registry_control::JoinRequest::from(request.clone()),
+                protocol::registry_control::REQUEST_LIMITS,
+                protocol::registry_control::RESPONSE_LIMITS,
             )?;
-            let CoordinatorCommandResponse::JoinRoot(response) = response else {
-                return Err(CurrentProtocolError::ResponseMismatch);
-            };
+            let response: canic_contracts::dto::fleet_registry::FleetSubnetRootJoinResponse =
+                response.into();
             if response.entry != request.entry || response.version != *expected_version {
                 return Err(CurrentProtocolError::ResponseMismatch);
             }
             expected_version.content_hash.to_vec()
         }
         CurrentFleetProtocolAction::ProvisionComponents { request, .. } => {
-            let response: CoordinatorCommandResponse = call_with_candid(
+            let receipt: canic_contracts::dto::role::OperationReceipt = call_wire(
                 icp,
-                &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COORDINATOR_COMMAND,
-                &CoordinatorCommand::ProvisionComponents(request.clone()),
+                protocol::batch_control::prepare::METHOD,
+                protocol::batch_control::prepare::METHOD_ID,
+                &canic_contracts::dto::batch_control::PrepareRequest::from(request.clone()),
+                protocol::batch_control::PLAN_LIMITS,
+                protocol::batch_control::RESPONSE_LIMITS,
             )?;
-            operation_receipt(response, request.operation_id)?.to_vec()
-        }
-        CurrentFleetProtocolAction::AdoptStore { request } => root_operation_call(
-            icp,
-            &resolved,
-            &RootCommandFragment::AdoptStore(request.clone()),
-            request.operation_id,
-        )?
-        .to_vec(),
-        CurrentFleetProtocolAction::BootstrapStore { request, .. } => root_operation_call(
-            icp,
-            &resolved,
-            &RootCommandFragment::BootstrapStore(request.clone()),
-            request.operation_id,
-        )?
-        .to_vec(),
-        CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
-            let response: RootCommandResponseFragment = call_with_candid(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                protocol::CANIC_ROOT_COMMAND,
-                &RootCommandFragment::PrepareComponentRegistry(request.clone()),
-            )?;
-            let RootCommandResponseFragment::PrepareComponentRegistry(response) = response else {
+            if receipt.operation_id != request.operation_id {
                 return Err(CurrentProtocolError::ResponseMismatch);
-            };
+            }
+            receipt.operation_id.to_vec()
+        }
+        CurrentFleetProtocolAction::AdoptStore { request } => {
+            let receipt: canic_contracts::dto::role::OperationReceipt = call_wire(
+                icp,
+                resolved.target,
+                protocol::root_store_control::adopt::METHOD,
+                protocol::root_store_control::adopt::METHOD_ID,
+                &canic_contracts::dto::root_store_control::AdoptRequest::from(request.clone()),
+                protocol::root_store_control::REQUEST_LIMITS,
+                protocol::root_store_control::RESPONSE_LIMITS,
+            )?;
+            if receipt.operation_id != request.operation_id {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            receipt.operation_id.to_vec()
+        }
+        CurrentFleetProtocolAction::BootstrapStore { request, .. } => {
+            let receipt: canic_contracts::dto::role::OperationReceipt = call_wire(
+                icp,
+                resolved.target,
+                protocol::root_store_control::bootstrap::METHOD,
+                protocol::root_store_control::bootstrap::METHOD_ID,
+                request,
+                protocol::root_store_control::REQUEST_LIMITS,
+                protocol::root_store_control::RESPONSE_LIMITS,
+            )?;
+            if receipt.operation_id != request.operation_id {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            receipt.operation_id.to_vec()
+        }
+        CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
+            let response: canic_contracts::dto::component_control::RegistryStatus = call_wire(
+                icp,
+                resolved.target,
+                protocol::component_control::prepare::METHOD,
+                protocol::component_control::prepare::METHOD_ID,
+                &canic_contracts::dto::component_control::PreparationRequest::from(request.clone()),
+                protocol::component_control::REQUEST_LIMITS,
+                protocol::component_control::RESPONSE_LIMITS,
+            )?;
+            let response =
+                canic_contracts::dto::component_registry::RootComponentRegistryStatusResponse::from(
+                    response,
+                );
             if !component_registry_progresses(expected, &response) {
                 return Err(CurrentProtocolError::ResponseMismatch);
             }
-            ic_platform::candid::contract::encode_one(response)
+            canic_contracts::protocol::authority::encode(response)
                 .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?
         }
         CurrentFleetProtocolAction::SynchronizeRegistry { request, .. }
         | CurrentFleetProtocolAction::ActivateRegistryMirror { request, .. } => {
-            root_operation_call(
+            let receipt: canic_contracts::dto::role::OperationReceipt = call_wire(
                 icp,
-                &resolved,
-                &RootCommandFragment::SynchronizeRegistry(request.clone()),
-                request.operation_id,
-            )?
-            .to_vec()
+                resolved.target,
+                protocol::registry_control::synchronize::METHOD,
+                protocol::registry_control::synchronize::METHOD_ID,
+                &canic_contracts::dto::registry_control::SynchronizeRequest::from(request.clone()),
+                protocol::registry_control::REQUEST_LIMITS,
+                protocol::registry_control::RESPONSE_LIMITS,
+            )?;
+            if receipt.operation_id != request.operation_id {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            receipt.operation_id.to_vec()
         }
         CurrentFleetProtocolAction::PrepareStoreFixture {
             request, source, ..
@@ -1421,12 +1403,14 @@ pub(super) fn apply(
             ..
         } => fixture::upload(icp, &resolved, request, expected, *source_bytes)?,
         CurrentFleetProtocolAction::PublishStoreChunk { request } => {
-            call_with_candid::<_, ()>(
+            call_wire::<_, ()>(
                 icp,
-                &resolved.candid_path,
                 resolved.target,
                 WASM_STORE_PUBLISH_CHUNK,
-                request,
+                protocol::template_bytes::METHOD_ID,
+                &canic_contracts::dto::template_bytes::PublishRequestRef::from(request),
+                protocol::template_bytes::REQUEST_LIMITS,
+                protocol::template_bytes::RESPONSE_LIMITS,
             )?;
             canic_core::cdk::utils::hash::wasm_hash(&request.bytes)
         }
@@ -1440,8 +1424,9 @@ pub(super) fn apply(
 
 struct ResolvedProtocolAction<'a> {
     action: &'a CurrentFleetProtocolAction,
-    candid_path: PathBuf,
-    candid_sha256: &'a str,
+    wire_schema_path: PathBuf,
+    wire_schema_bytes: Vec<u8>,
+    wire_schema_sha256: &'a str,
     target: Principal,
 }
 
@@ -1449,24 +1434,28 @@ impl<'a> ResolvedProtocolAction<'a> {
     fn from_action(root: &Path, action: &'a EnsureAction) -> Result<Self, CurrentProtocolError> {
         let EnsureAction::FleetProtocol {
             action,
-            candid,
-            candid_sha256,
+            wire_schema,
+            wire_schema_sha256,
             principal,
             ..
         } = action
         else {
             return Err(CurrentProtocolError::ResponseMismatch);
         };
-        let candid_path = resolve_path(root, candid);
-        if read_sha256(&candid_path)? != *candid_sha256 {
+        let wire_schema_path = resolve_path(root, wire_schema);
+        let wire_schema_bytes = read_schema(&wire_schema_path)?;
+        if canic_core::cdk::utils::hash::hex_bytes(Sha256::digest(&wire_schema_bytes))
+            != *wire_schema_sha256
+        {
             return Err(CurrentProtocolError::ResponseMismatch);
         }
         let target = Principal::from_text(principal)
             .map_err(|_| CurrentProtocolError::CoordinatorUnavailable)?;
         Ok(Self {
             action,
-            candid_path,
-            candid_sha256,
+            wire_schema_path,
+            wire_schema_bytes,
+            wire_schema_sha256,
             target,
         })
     }
@@ -1482,20 +1471,14 @@ fn observe_pool_readiness(
     let mut assets = Vec::new();
     let mut identities = std::collections::BTreeSet::new();
     for _ in 0..crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS {
-        let response: RootStatusResponseFragment = crate::canister_protocol::query_authenticated(
+        let page = crate::canister_protocol::pool_inventory::query(
             icp,
             resolved.target,
-            protocol::CANIC_ROOT_STATUS,
-            &RootStatusRequestFragment::Pool(
-                canic_contracts::dto::pool::CanisterPoolStatusRequest {
-                    start_after,
-                    limit: 256,
-                },
-            ),
+            &canic_contracts::dto::pool::CanisterPoolStatusRequest {
+                start_after,
+                limit: 256,
+            },
         )?;
-        let RootStatusResponseFragment::Pool(page) = response else {
-            return Err(CurrentProtocolError::ResponseMismatch);
-        };
         if page.config.minimum_size != minimum_ready
             || page.config.canister_cycles != readiness_floor
         {
@@ -1581,11 +1564,11 @@ fn pool_funding_required(
     )
 }
 
-fn observation<T: CandidType>(
+fn observation<T: serde::Serialize>(
     applied: bool,
     value: &T,
 ) -> Result<EffectObservation, CurrentProtocolError> {
-    let bytes = ic_platform::candid::contract::encode_one(value)
+    let bytes = canic_contracts::protocol::authority::encode(value)
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     Ok(EffectObservation {
         provisioning_progress: None,
@@ -1649,7 +1632,9 @@ impl<'a> From<&'a RootComponentRegistryStatusResponse> for ComponentRegistryAuth
     }
 }
 
-fn prepared_store_status_matches(
+/// Compare retained Store content, allowing admission-time timestamps requested as zero.
+#[must_use]
+pub fn prepared_store_status_matches(
     request: &TemplateChunkSetPrepareInput,
     status: &TemplateStagingStatusResponse,
 ) -> bool {
@@ -1660,10 +1645,32 @@ fn prepared_store_status_matches(
         && status.expected_chunk_hashes == request.chunk_hashes
         && status.payload_hash.as_deref() == Some(request.payload_hash.as_slice())
         && status.payload_size_bytes == Some(request.payload_size_bytes)
-        && request
-            .manifest
-            .as_ref()
-            .is_none_or(|manifest| status.manifest.as_ref() == Some(&manifest_response(manifest)))
+        && request.manifest.as_ref().is_none_or(|manifest| {
+            status
+                .manifest
+                .as_ref()
+                .is_some_and(|actual| stamped_manifest_matches(manifest, actual))
+        })
+}
+
+fn stamped_manifest_matches(
+    request: &TemplateManifestInput,
+    actual: &TemplateManifestResponse,
+) -> bool {
+    let mut expected = manifest_response(request);
+    if request.created_at == 0 {
+        if actual.created_at == 0 {
+            return false;
+        }
+        expected.created_at = actual.created_at;
+    }
+    if request.approved_at == Some(0) {
+        if actual.approved_at.is_none_or(|time| time == 0) {
+            return false;
+        }
+        expected.approved_at = actual.approved_at;
+    }
+    expected == *actual
 }
 
 fn manifest_response(request: &TemplateManifestInput) -> TemplateManifestResponse {
@@ -1684,8 +1691,8 @@ fn manifest_response(request: &TemplateManifestInput) -> TemplateManifestRespons
 /// Exact query identity within one read-only protocol observation pass.
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
 struct StoreStagingAuthority {
-    candid_path: PathBuf,
-    candid_sha256: String,
+    wire_schema_path: PathBuf,
+    wire_schema_sha256: String,
     target: Principal,
     template_id: TemplateId,
     version: TemplateVersion,
@@ -1711,8 +1718,8 @@ impl StoreStagingObservations {
         version: &TemplateVersion,
     ) -> Result<TemplateStagingStatusResponse, CurrentProtocolError> {
         let authority = StoreStagingAuthority {
-            candid_path: resolved.candid_path.clone(),
-            candid_sha256: resolved.candid_sha256.to_string(),
+            wire_schema_path: resolved.wire_schema_path.clone(),
+            wire_schema_sha256: resolved.wire_schema_sha256.to_string(),
             target: resolved.target,
             template_id: template_id.clone(),
             version: version.clone(),
@@ -1733,86 +1740,22 @@ fn query_store_staging(
     template_id: &TemplateId,
     version: &TemplateVersion,
 ) -> Result<TemplateStagingStatusResponse, CurrentProtocolError> {
-    let response: StoreCatalogResponse = query_with_candid(
+    let status: TemplateStagingStatusResponse = query_wire_cli(
         icp,
-        &resolved.candid_path,
         resolved.target,
-        protocol::CANIC_WASM_STORE_CATALOG,
-        &StoreCatalogRequest::Template(TemplateLookupRequest {
+        protocol::store_catalog::template::METHOD,
+        protocol::store_catalog::template::METHOD_ID,
+        &TemplateLookupRequest {
             template_id: template_id.clone(),
             version: version.clone(),
-        }),
+        },
+        protocol::store_catalog::REQUEST_LIMITS,
+        protocol::store_catalog::RESPONSE_LIMITS,
     )?;
-    let StoreCatalogResponse::Template(status) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
     if (&status.template_id, &status.version) != (template_id, version) {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
     Ok(status)
-}
-
-fn query_root_operation(
-    icp: &IcpCli,
-    candid_path: &Path,
-    root: Principal,
-    operation_id: [u8; 32],
-) -> Result<Option<RootOperationStatusResponse>, CurrentProtocolError> {
-    let response: Result<RootStatusResponseFragment, CanisterProtocolError> = query_with_candid(
-        icp,
-        candid_path,
-        root,
-        protocol::CANIC_ROOT_OPERATION_STATUS,
-        &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-    );
-    let response = match response {
-        Ok(response) => response,
-        Err(error)
-            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
-        {
-            return Ok(None);
-        }
-        Err(error) => return Err(error.into()),
-    };
-    let RootStatusResponseFragment::Operation(status) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
-    Ok(Some(status))
-}
-
-fn root_operation_call(
-    icp: &IcpCli,
-    resolved: &ResolvedProtocolAction<'_>,
-    command: &RootCommandFragment,
-    operation_id: [u8; 32],
-) -> Result<[u8; 32], CurrentProtocolError> {
-    let response: RootCommandResponseFragment = call_with_candid(
-        icp,
-        &resolved.candid_path,
-        resolved.target,
-        protocol::CANIC_ROOT_COMMAND,
-        command,
-    )?;
-    let RootCommandResponseFragment::OperationAccepted(receipt) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
-    if receipt.operation_id != operation_id {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    }
-    Ok(operation_id)
-}
-
-fn operation_receipt(
-    response: CoordinatorCommandResponse,
-    expected_operation_id: [u8; 32],
-) -> Result<[u8; 32], CurrentProtocolError> {
-    let CoordinatorCommandResponse::OperationAccepted(receipt) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
-    if receipt.operation_id != expected_operation_id {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    }
-    Ok(expected_operation_id)
 }
 
 pub(super) fn resolve_placements(
@@ -2388,9 +2331,12 @@ fn append_chunk_actions(
             })?,
             bytes: bytes.to_vec(),
         };
-        let encoded = ic_platform::candid::contract::encode_one(&request)
-            .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
-        if encoded.len() > canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES {
+        let encoded_bytes = ic_wire::native::encoded_frame_len(
+            &canic_contracts::dto::template_bytes::PublishRequestRef::from(&request),
+            protocol::template_bytes::REQUEST_LIMITS,
+        )
+        .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+        if encoded_bytes > canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES {
             return Err(CurrentProtocolError::Configuration(
                 "Store publication exceeds the bounded chunk request envelope".into(),
             ));
@@ -2612,18 +2558,9 @@ fn root_binding(registry: &FleetRegistry, root: &FleetSubnetRootEntry) -> FleetS
 
 pub(super) fn query_registry(
     icp: &IcpCli,
-    candid: &Path,
     coordinator: Principal,
 ) -> Result<FleetRegistry, CurrentProtocolError> {
-    let response: CoordinatorRegistryResponse = query_with_candid(
-        icp,
-        candid,
-        coordinator,
-        protocol::CANIC_COORDINATOR_REGISTRY,
-        &CoordinatorRegistryRequest::Registry,
-    )?;
-    let CoordinatorRegistryResponse::Registry(registry) = response;
-    Ok(registry)
+    Ok(crate::registry_discovery::snapshot(icp, coordinator)?)
 }
 
 pub(super) fn query_operation(
@@ -2634,12 +2571,16 @@ pub(super) fn query_operation(
     Option<canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse>,
     CurrentProtocolError,
 > {
-    let response: Result<CoordinatorOperationReadResponse, CanisterProtocolError> =
-        crate::canister_protocol::query_authenticated(
+    use canic_contracts::{dto::component_read, protocol::component_read as wire};
+    let response: Result<component_read::CoordinatorProvisioning, CanisterProtocolError> =
+        crate::canister_protocol::query_wire_cli(
             icp,
             coordinator,
-            protocol::CANIC_COORDINATOR_OPERATION_STATUS,
-            &CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+            wire::coordinator_provisioning::METHOD,
+            wire::coordinator_provisioning::METHOD_ID,
+            &operation_id,
+            wire::REQUEST_LIMITS,
+            wire::RESPONSE_LIMITS,
         );
     let response = match response {
         Ok(response) => response,
@@ -2650,13 +2591,7 @@ pub(super) fn query_operation(
         }
         Err(error) => return Err(error.into()),
     };
-    let CoordinatorOperationReadResponse::Operation(
-        CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-    ) = response
-    else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
-    Ok(Some(status))
+    Ok(Some(response.into()))
 }
 
 pub(super) fn operation_bytes(operation_id: &str) -> Result<[u8; 32], CurrentProtocolError> {
@@ -2686,13 +2621,30 @@ fn retained_principal(
 }
 
 fn read_sha256(path: &Path) -> Result<String, CurrentProtocolError> {
-    let bytes = std::fs::read(path).map_err(|source| CurrentProtocolError::ReadCandid {
-        path: path.to_path_buf(),
-        source,
-    })?;
     Ok(canic_core::cdk::utils::hash::hex_bytes(Sha256::digest(
-        bytes,
+        read_schema(path)?,
     )))
+}
+
+/// Read bounded regular schema bytes once; the same bytes authorize the effect.
+pub(super) fn read_schema(path: &Path) -> Result<Vec<u8>, CurrentProtocolError> {
+    use ic_host_artifacts::artifact::ArtifactError;
+    match ic_host_fs::read::read_optional_file_no_follow(path, crate::MAX_DOCUMENT_READ_BYTES) {
+        Ok(Some(bytes)) => Ok(bytes),
+        Ok(None) => Err(CurrentProtocolError::ReadArtifact {
+            path: path.to_path_buf(),
+            source: std::io::Error::from(std::io::ErrorKind::NotFound),
+        }),
+        Err(ArtifactError::NotRegularFile) => {
+            Err(CurrentProtocolError::ProtocolSidecarNotRegular {
+                path: path.to_path_buf(),
+            })
+        }
+        Err(source) => Err(CurrentProtocolError::ReadArtifact {
+            path: path.to_path_buf(),
+            source: source.into(),
+        }),
+    }
 }
 
 fn resolve_path(root: &Path, configured: &str) -> PathBuf {
@@ -2707,7 +2659,6 @@ fn resolve_path(root: &Path, configured: &str) -> PathBuf {
 /// Prove generated Root activation authority before a dependent Store install can run.
 pub(super) fn require_store_installation_binding(
     icp: &IcpCli,
-    candid_path: &Path,
     root_name: &str,
     authority: &FleetSubnetRootAuthority,
     operation_id: &str,
@@ -2718,9 +2669,8 @@ pub(super) fn require_store_installation_binding(
         operation_id: canic_init::install_id(operation_id, "root", root_name),
         release_build_id: authority.initial_release_set.release_build_id,
     };
-    let observed = query_root_operation(icp, candid_path, root, expected.operation_id)?;
-    if !matches!(observed, Some(RootOperationStatusResponse::FleetActivation(ref status)) if status.identity == expected)
-    {
+    let observed = query_root_activation(icp, root, expected.operation_id)?;
+    if !matches!(observed, Some(ref status) if status.identity == expected) {
         return Err(CurrentProtocolError::ActivationBindingMismatch {
             root,
             root_operation: canic_core::cdk::utils::hash::hex_bytes(expected.operation_id),
@@ -2731,15 +2681,159 @@ pub(super) fn require_store_installation_binding(
             )),
         });
     }
-    let response: RootStatusResponseFragment = crate::canister_protocol::query_authenticated(
-        icp,
-        root,
-        protocol::CANIC_ROOT_STATUS,
-        &RootStatusRequestFragment::FleetAuthority,
-    )?;
-    if !matches!(response, RootStatusResponseFragment::FleetAuthority(ref observed) if observed == authority)
-    {
+    let observed = crate::canister_protocol::root_authority::query(icp, root)?;
+    if &observed != authority {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
     Ok(())
+}
+
+fn query_root_store_adoption(
+    icp: &IcpCli,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    Option<canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse>,
+    CurrentProtocolError,
+> {
+    use canic_contracts::{dto::root_store_control, protocol::root_store_control as wire};
+    let response: Result<root_store_control::Adoption, CanisterProtocolError> =
+        crate::canister_protocol::query_wire_cli(
+            icp,
+            root,
+            wire::adoption::METHOD,
+            wire::adoption::METHOD_ID,
+            &operation_id,
+            wire::REQUEST_LIMITS,
+            wire::RESPONSE_LIMITS,
+        );
+    match response {
+        Ok(value) => Ok(Some(value.into())),
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn query_root_store_bootstrap(
+    icp: &IcpCli,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    Option<canic_contracts::dto::root_store::RootStoreBootstrapResponse>,
+    CurrentProtocolError,
+> {
+    use canic_contracts::{dto::root_store_control, protocol::root_store_control as wire};
+    let response: Result<root_store_control::Bootstrap, CanisterProtocolError> =
+        crate::canister_protocol::query_wire_cli(
+            icp,
+            root,
+            wire::bootstrap_status::METHOD,
+            wire::bootstrap_status::METHOD_ID,
+            &operation_id,
+            wire::REQUEST_LIMITS,
+            wire::RESPONSE_LIMITS,
+        );
+    match response {
+        Ok(value) => Ok(Some(value.into())),
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn query_root_activation(
+    icp: &IcpCli,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    Option<canic_contracts::dto::fleet_activation::FleetActivationStatusResponse>,
+    CurrentProtocolError,
+> {
+    use canic_contracts::{dto::runtime_reporting, protocol::root_activation as wire};
+    let response: Result<runtime_reporting::FleetActivationStatusResponse, CanisterProtocolError> =
+        crate::canister_protocol::query_wire_cli(
+            icp,
+            root,
+            wire::status::METHOD,
+            wire::status::METHOD_ID,
+            &operation_id,
+            wire::REQUEST_LIMITS,
+            wire::RESPONSE_LIMITS,
+        );
+    match response {
+        Ok(value) => Ok(Some(value.into())),
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn query_root_registry_synchronization(
+    icp: &IcpCli,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    Option<canic_contracts::dto::root::RootRegistrySynchronizationOperationStatus>,
+    CurrentProtocolError,
+> {
+    use canic_contracts::{dto::registry_control, protocol::registry_control as wire};
+    let response: Result<registry_control::SynchronizationStatus, CanisterProtocolError> =
+        crate::canister_protocol::query_wire_cli(
+            icp,
+            root,
+            wire::synchronization_status::METHOD,
+            wire::synchronization_status::METHOD_ID,
+            &operation_id,
+            wire::REQUEST_LIMITS,
+            wire::RESPONSE_LIMITS,
+        );
+    match response {
+        Ok(value) => Ok(Some(value.into())),
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn query_root_provisioning(
+    icp: &IcpCli,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    Option<canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse>,
+    CurrentProtocolError,
+> {
+    use canic_contracts::{dto::component_read, protocol::component_read as wire};
+    let response: Result<component_read::Provisioning, CanisterProtocolError> =
+        crate::canister_protocol::query_wire_cli(
+            icp,
+            root,
+            wire::provisioning::METHOD,
+            wire::provisioning::METHOD_ID,
+            &operation_id,
+            wire::REQUEST_LIMITS,
+            wire::RESPONSE_LIMITS,
+        );
+    match response {
+        Ok(value) => Ok(Some(value.into())),
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
 }

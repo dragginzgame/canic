@@ -127,10 +127,10 @@ fn bind_kind(
         review,
         submissions: BTreeMap::new(),
         inspections: BTreeMap::new(),
-        settled_status_candid_hex: None,
+        settled_status_wire_hex: None,
         publication_started: false,
         publication_complete: false,
-        released_status_candid_hex: None,
+        released_status_wire_hex: None,
     });
     validate(&result)?;
     Ok(result)
@@ -199,7 +199,7 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
             return Err(conflict());
         }
     }
-    if let Some(bytes) = &operation.settled_status_candid_hex {
+    if let Some(bytes) = &operation.settled_status_wire_hex {
         let status = status(journal, bytes)?;
         if status.phase != PoolImportPhase::Ready
             || status.root_receipt.is_none()
@@ -211,13 +211,13 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
         }
     }
     let unreceipted_publication =
-        operation.publication_started && operation.settled_status_candid_hex.is_none();
+        operation.publication_started && operation.settled_status_wire_hex.is_none();
     let missing_publication_intent =
         operation.publication_complete && !operation.publication_started;
     if unreceipted_publication || missing_publication_intent {
         return Err(conflict());
     }
-    if let Some(bytes) = &operation.released_status_candid_hex {
+    if let Some(bytes) = &operation.released_status_wire_hex {
         let released = status(journal, bytes)?;
         let expected = PoolImportPhase::Released {
             publication_sha256: publication_digest(journal)?,
@@ -225,7 +225,7 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
         let mut settled = status(
             journal,
             operation
-                .settled_status_candid_hex
+                .settled_status_wire_hex
                 .as_deref()
                 .ok_or_else(conflict)?,
         )?;
@@ -371,15 +371,15 @@ pub fn retain_settled(
     let mut result = journal.clone();
     let operation = result.operation.as_mut().ok_or_else(conflict)?;
     let encoded =
-        hex_bytes(ic_platform::candid::contract::encode_one(observed).map_err(|_| conflict())?);
+        hex_bytes(canic_contracts::protocol::authority::encode(observed).map_err(|_| conflict())?);
     if operation
-        .settled_status_candid_hex
+        .settled_status_wire_hex
         .as_ref()
         .is_some_and(|old| old != &encoded)
     {
         return Err(conflict());
     }
-    operation.settled_status_candid_hex = Some(encoded);
+    operation.settled_status_wire_hex = Some(encoded);
     validate(&result)?;
     Ok(result)
 }
@@ -395,7 +395,7 @@ pub fn publish(
     if operation.publication_complete {
         return Ok(journal);
     }
-    if operation.settled_status_candid_hex.is_none() {
+    if operation.settled_status_wire_hex.is_none() {
         return Err(conflict());
     }
     verify_inputs(paths, &journal, operation.publication_started)?;
@@ -464,7 +464,7 @@ pub fn publication_digest(
 ) -> Result<[u8; 32], CapacityImportJournalError> {
     let operation = journal.operation.as_ref().ok_or_else(conflict)?;
     let settled = operation
-        .settled_status_candid_hex
+        .settled_status_wire_hex
         .as_ref()
         .ok_or_else(conflict)?;
     let mut hash = Sha256::new();
@@ -484,8 +484,8 @@ pub fn retain_released(
         .operation
         .as_mut()
         .ok_or_else(conflict)?
-        .released_status_candid_hex = Some(hex_bytes(
-        ic_platform::candid::contract::encode_one(observed).map_err(|_| conflict())?,
+        .released_status_wire_hex = Some(hex_bytes(
+        canic_contracts::protocol::authority::encode(observed).map_err(|_| conflict())?,
     ));
     validate(&result)?;
     Ok(result)
@@ -497,7 +497,7 @@ pub fn completed(journal: &CapacityImportJournalRecord) -> bool {
     journal
         .operation
         .as_ref()
-        .is_some_and(|operation| operation.released_status_candid_hex.is_some())
+        .is_some_and(|operation| operation.released_status_wire_hex.is_some())
 }
 
 pub(super) fn monotonic(
@@ -517,11 +517,11 @@ pub(super) fn monotonic(
                     .inspections
                     .iter()
                     .all(|(key, value)| new.inspections.get(key).is_some_and(|next| next >= value))
-                && (old.settled_status_candid_hex.is_none()
-                    || old.settled_status_candid_hex == new.settled_status_candid_hex)
+                && (old.settled_status_wire_hex.is_none()
+                    || old.settled_status_wire_hex == new.settled_status_wire_hex)
                 && (!old.publication_started || new.publication_started)
                 && (!old.publication_complete || new.publication_complete)
-                && (old.released_status_candid_hex.is_none() || old == new)
+                && (old.released_status_wire_hex.is_none() || old == new)
         }
         _ => false,
     }
@@ -535,7 +535,7 @@ fn status(
         return Err(conflict());
     }
     let bytes = decode_hex(value).map_err(|_| conflict())?;
-    let status = ic_platform::candid::decoder::decode_one(&bytes).map_err(|_| conflict())?;
+    let status = canic_contracts::protocol::authority::decode(&bytes).map_err(|_| conflict())?;
     validate_root_status(&journal.plan, &status)?;
     Ok(status)
 }

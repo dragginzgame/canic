@@ -9,24 +9,18 @@ use super::{
     ComponentRegistryPartitionResponse, ComponentTopology, CurrentProtocolError, DescendantParent,
     FleetRegistry, FleetSubnetRootEntry, IcpCli, Principal, ProtocolCatalog, ProtocolEntry,
     RegistryEntry, RoleCapabilityKey, RootComponentAllocationPhase, TerminalWorkloadAuthority,
-    inspect_root_controlled_canister, inventory_error, observed_cycle_balance, query_with_candid,
+    inspect_root_controlled_canister, inventory_error, observed_cycle_balance,
     require_terminal_component_authority, terminal_field_exact, terminal_nonzero_hash,
     terminal_observation,
 };
 use canic_contracts::{
     dto::{
-        component_registry::ComponentRegistryPartitionRequest,
-        role::OperationStatusRequest,
-        root::{RootComponentOperationStatus, RootOperationStatusResponse},
-        wire::projection::ordinary_inventory::{Request, Response},
+        component_registry::ComponentRegistryPartitionRequest, root::RootComponentOperationStatus,
     },
     protocol,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 ///
 /// OrdinaryComponentObservation
@@ -82,15 +76,14 @@ pub(super) fn observe(
     }
     let mut output = Vec::with_capacity(candidates.len());
     for component in candidates {
-        let Response::ComponentRegistryPartition(partition) = read(
-            icp,
-            &protocols.root.candid_path,
-            root.fleet_subnet_root,
-            &Request::ComponentRegistryPartition(ComponentRegistryPartitionRequest { component }),
-        )?
-        else {
-            return Err(CurrentProtocolError::ResponseMismatch);
-        };
+        let partition = terminal_observation(
+            "ordinary_component",
+            crate::canister_protocol::registry_read::partition(
+                icp,
+                root.fleet_subnet_root,
+                ComponentRegistryPartitionRequest { component },
+            ),
+        )?;
         terminal_field_exact(
             "ordinary.component",
             &component,
@@ -100,22 +93,7 @@ pub(super) fn observe(
         let workload = pool
             .get(&binding.canister_id)
             .ok_or_else(|| inventory_error("ordinary Component has no top-level pool claim"))?;
-        let Response::Operation(operation) = read(
-            icp,
-            &protocols.root.candid_path,
-            root.fleet_subnet_root,
-            &Request::Operation(OperationStatusRequest {
-                operation_id: workload.operation_id,
-            }),
-        )?
-        else {
-            return Err(CurrentProtocolError::ResponseMismatch);
-        };
-        let RootOperationStatusResponse::ProvisionComponent(operation) = *operation else {
-            return Err(inventory_error(
-                "ordinary Component pool claim names another operation kind",
-            ));
-        };
+        let operation = read(icp, root.fleet_subnet_root, workload.operation_id)?;
         let protocol = protocols
             .child(&binding.role)
             .ok_or_else(|| inventory_error("ordinary Component has no current role protocol"))?;
@@ -148,12 +126,8 @@ pub(super) fn observe(
                 "ordinary Component partition exceeds Spec capacity",
             ));
         }
-        let observed = inspect_root_controlled_canister(
-            icp,
-            &protocols.root.candid_path,
-            root.fleet_subnet_root,
-            binding.canister_id,
-        )?;
+        let observed =
+            inspect_root_controlled_canister(icp, root.fleet_subnet_root, binding.canister_id)?;
         require_terminal_component_authority(
             root.fleet_subnet_root,
             binding.canister_id,
@@ -168,7 +142,7 @@ pub(super) fn observe(
                 pid: binding.canister_id.to_text(),
                 role: Some(binding.role.to_string()),
                 parent_pid: Some(root.fleet_subnet_root.to_text()),
-                module_hash: Some(protocol.installed_module_hash.clone()),
+                module_hash: Some(protocol.raw_module_hash.clone()),
                 protocol_binding: Some(protocol.binding.clone()),
             },
             parent: protocol
@@ -177,7 +151,6 @@ pub(super) fn observe(
                 .contains(&RoleCapabilityKey::ChildProvisioning)
                 .then(|| DescendantParent {
                     canister_id: binding.canister_id,
-                    candid_path: protocol.candid_path.clone(),
                     maximum_children: u64::from(spec.limits.maximum_descendants),
                     release_set: root.active_release_set,
                     role: binding.role.clone(),
@@ -191,18 +164,22 @@ pub(super) fn observe(
 
 fn read(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
-    request: &Request,
-) -> Result<Response, CurrentProtocolError> {
-    let method = match request {
-        Request::ComponentRegistryPartition(_) => protocol::CANIC_ROOT_STATUS,
-        Request::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
-    };
-    terminal_observation(
+    operation_id: [u8; 32],
+) -> Result<RootComponentOperationStatus, CurrentProtocolError> {
+    let response: canic_contracts::dto::component_read::ComponentAllocation = terminal_observation(
         "ordinary_component",
-        query_with_candid(icp, candid, root, method, request),
-    )
+        crate::canister_protocol::query_wire_cli(
+            icp,
+            root,
+            protocol::component_read::allocation::METHOD,
+            protocol::component_read::allocation::METHOD_ID,
+            &operation_id,
+            protocol::component_read::REQUEST_LIMITS,
+            protocol::component_read::RESPONSE_LIMITS,
+        ),
+    )?;
+    Ok(response.into())
 }
 
 pub(super) fn validate(
@@ -346,3 +323,6 @@ fn validate_allocation(
     terminal_field_exact("ordinary.complete", &true, &operation.complete)?;
     Ok(())
 }
+
+#[cfg(all(test, unix))]
+mod tests;

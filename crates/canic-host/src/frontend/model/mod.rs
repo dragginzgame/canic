@@ -89,7 +89,9 @@ pub struct FrontendRoleRecord {
     pub canister_id: Principal,
     pub release_identity: String,
     pub module_sha256: String,
-    pub candid: FrontendFileRecord,
+    pub wire_schema: FrontendFileRecord,
+    pub compiler_identity: String,
+    pub modules: Vec<FrontendFileRecord>,
     pub javascript: FrontendFileRecord,
     pub typescript: FrontendFileRecord,
 }

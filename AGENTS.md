@@ -89,14 +89,21 @@ as explicitly approved by the maintainer for this adoption
 These exceptions preserve existing paths and dependency boundaries; they do not
 authorize additional independent workspaces, package renames or dependency changes.
 
-## Scoped 0.112 codec exception
+## Accepted 0.112 Wire hard cut — 2026-10-22
 
-The maintainer selected shipping 0.112 without the Candid-to-Wire migration.
-For this release batch, existing Canic Candid contracts may remain on Platform's
-explicit Candid codecs and external principal identity. Preserve their wire
-formats, bounds and semantics; existing Wire protocols remain on Wire.
-This exception to Shared Tooling's application-encoding rule does not authorize
-new Candid protocols or extend to a later release batch.
+The maintainer selected implementing #613's coordinated Wire hard cut in the
+current batch, superseding the earlier decision to ship owned Candid contracts.
+Follow [the migration contract](docs/design/0.112-standalone-blob-service-extraction/wire-hard-cut.md).
+Migrate owned endpoints, their callers, generated bindings and release identities
+together. Do not reconstruct Wire schemas from DID, keep fallback codecs, or
+reinterpret Candid hashes as Wire hashes. Required external IC/provider protocols
+retain their specified Candid encoding. The 2026-10-26 completion decision in that contract also removes Canic-owned
+`CandidType` derives/implementations: owned initialization payloads and hash inputs
+move with their producers and validators. Required external types come from their
+upstream owner, including `ic-platform` for IC contracts. Generic external-Candid
+adapter bounds may remain. Storage representation follows its separately accepted
+serde_cbor hard cut; lifecycle safety is unchanged. No next-minor work or release
+execution is implied.
 
 ## Pre-1.0 Hard Cuts
 

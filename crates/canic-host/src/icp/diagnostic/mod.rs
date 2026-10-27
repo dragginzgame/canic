@@ -4,6 +4,8 @@
 //! Does not own: process execution, domain policy, command hints, or exit codes.
 //! Boundary: the host ICP adapter is the only production owner of this wording.
 
+use ic_platform::principal::ExternalPrincipal as Principal;
+
 ///
 /// IcpDiagnostic
 ///
@@ -73,22 +75,23 @@ pub fn classify_icp_diagnostic(message: &str) -> Option<IcpDiagnostic> {
 }
 
 fn replica_canister_not_found(message: &str) -> Option<String> {
-    const CANISTER_PREFIX: &str = "Canister ";
-    const SUFFIX: &str = " not found";
-
-    if !message.contains("IC0301") && !message.contains("code=3 message=Canister ") {
-        return None;
-    }
-    let start = message.find(CANISTER_PREFIX)? + CANISTER_PREFIX.len();
-    let rest = &message[start..];
-    let end = rest.find(SUFFIX)?;
-    let canister = &rest[..end];
+    let message = message.trim_end();
+    let rest = if let Some((_, rest)) =
+        message.split_once("reject code DestinationInvalid, reject message Canister ")
+    {
+        rest.strip_suffix(", error code Some(\"IC0301\")")?
+    } else {
+        message
+            .split_once("IC0301: Canister ")
+            .or_else(|| message.split_once("code=3 message=Canister "))?
+            .1
+    };
+    let canister = rest.strip_suffix(" not found")?;
     valid_canister_token(canister)
 }
 
 fn valid_canister_token(canister: &str) -> Option<String> {
-    (!canister.is_empty() && !canister.chars().any(char::is_whitespace))
-        .then(|| canister.to_string())
+    Principal::from_text(canister).ok().map(|pid| pid.to_text())
 }
 
 fn foreign_local_replica_owner(message: &str) -> Option<(String, String)> {
@@ -132,7 +135,7 @@ mod tests {
                 IcpDiagnostic::LocalNetworkNotRunning,
             ),
             (
-                "Canister has no query method 'canic_observability'",
+                "Canister has no query method 'canic_coordinator_funding'",
                 IcpDiagnostic::MethodMissing,
             ),
             (
@@ -159,6 +162,12 @@ mod tests {
             ),
             (
                 "replica rejected management status: IC0301: Canister uxrrr-q7777-77774-qaaaq-cai not found",
+                IcpDiagnostic::CanisterNotFound {
+                    canister: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+                },
+            ),
+            (
+                "Error: The replica returned a rejection error: reject code DestinationInvalid, reject message Canister uxrrr-q7777-77774-qaaaq-cai not found, error code Some(\"IC0301\")",
                 IcpDiagnostic::CanisterNotFound {
                     canister: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
                 },
@@ -207,5 +216,34 @@ mod tests {
             classify_icp_diagnostic("Error: Canister uxrrr-q7777-77774-qaaaq-cai was not found."),
             None
         );
+    }
+
+    #[test]
+    fn canister_absence_requires_a_complete_error_record_and_valid_principal() {
+        let target = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let other = "r7inp-6aaaa-aaaaa-aaabq-cai";
+        let message = format!(
+            "referenced Canister {other} not found; replica error IC0301: Canister {target} not found"
+        );
+        assert_eq!(
+            classify_icp_diagnostic(&message),
+            Some(IcpDiagnostic::CanisterNotFound {
+                canister: target.to_string()
+            })
+        );
+        for message in [
+            format!("IC0301 is referenced here; Canister {target} not found"),
+            "IC0301: Canister invalid-principal not found".to_string(),
+            format!("IC0301: Canister {target} not found in a nested diagnostic"),
+            format!("IC0301: Canister {target} not found\nIC0301: Canister {other} not found"),
+            format!(
+                "reject code CanisterError, reject message Canister {target} not found, error code Some(\"IC0301\")"
+            ),
+            format!(
+                "reject code DestinationInvalid, reject message Canister {target} not found, error code Some(\"IC0503\")"
+            ),
+        ] {
+            assert_eq!(classify_icp_diagnostic(&message), None);
+        }
     }
 }

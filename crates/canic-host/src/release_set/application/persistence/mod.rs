@@ -269,6 +269,12 @@ fn materialize_build_output(
         );
     }
     let wasm_gz = materialize_artifact(root, &output.role, "gzip Wasm", &output.wasm_gz_path)?;
+    let wire_schema = materialize_artifact(
+        root,
+        &output.role,
+        "Wire schema",
+        &output.wasm_path.with_extension("wire.json"),
+    )?;
     Ok(ApplicationArtifactBuildOutput {
         role: output.role.clone(),
         package: output.package.clone(),
@@ -277,6 +283,7 @@ fn materialize_build_output(
         wasm: wasm.bytes,
         wasm_gz_relative_path: wasm_gz.relative_path,
         wasm_gz: wasm_gz.bytes,
+        wire_schema: wire_schema.bytes,
         candid_sha256: output.candid_sha256,
         protocol_profile_digest: output.protocol_profile_digest,
     })

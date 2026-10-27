@@ -308,7 +308,7 @@ const fn planned_response(
 
 fn mutate_fleet_membership(
     fleet_principals: &mut Vec<Principal>,
-    rules: &mut [FleetAdmissionRule],
+    rules: &mut Vec<FleetAdmissionRule>,
     action: FleetAdmissionMutationActionModel,
     principal: Principal,
 ) -> Result<bool, FleetAdmissionMutationPolicyError> {
@@ -328,11 +328,12 @@ fn mutate_fleet_membership(
                 return Err(FleetAdmissionMutationPolicyError::EmptyFleet);
             }
             fleet_principals.remove(index);
-            for rule in rules {
+            for rule in rules.iter_mut() {
                 if let Ok(index) = rule.principals.binary_search(&principal) {
                     rule.principals.remove(index);
                 }
             }
+            rules.retain(|rule| rule.principals != *fleet_principals);
             Ok(true)
         }
     }

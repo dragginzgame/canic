@@ -191,11 +191,9 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
     input.pic.stop_progress();
     assert!(!input.pic.auto_progress_enabled());
     for attempt in 0..240 {
-        let response: Result<RootStatusResponseFragment, Error> =
-            root_operation_status_as(input.pic, input.root, operator, operation_id);
-        if let Ok(RootStatusResponseFragment::Operation(
-            RootOperationStatusResponse::ProvisionComponents(status),
-        )) = response
+        let response =
+            crate::pic::canic::root_provisioning(input.pic, input.root, operator, operation_id);
+        if let Ok(status) = response
             && status.component_count > 0
             && status.activated_component_count == status.component_count
         {

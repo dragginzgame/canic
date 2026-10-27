@@ -4,17 +4,11 @@
 //! Boundary: the audit Root only prepares balance; maintained commands execute all funding.
 
 use super::*;
-use canic::dto::observability::CanisterObservabilityRequest;
-use canic::dto::observability::CanisterObservabilityResponse;
 use canic::dto::observability::ChildFundingUsage;
 use canic::dto::rpc::CyclesFundingPreflightResponse;
 use canic::dto::rpc::CyclesResponse;
 use canic::dto::runtime::CanisterTimerStatus;
 use canic::dto::state::SetCyclesFundingRequest;
-
-use canic_contracts::dto::wire::projection::fixture_baseline_funding_deadline::Command;
-
-use canic_contracts::dto::wire::projection::fixture_baseline_funding_deadline::Response;
 
 #[test]
 #[expect(
@@ -62,44 +56,29 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
         .expect("managed Hub with the configured 2T request cap and 3T total allowance");
     let initial_usage = child_usage(&pic, root, child);
     assert_eq!(initial_usage.accounted_cycles.to_u128(), 0);
-    let denied: Result<CanisterObservabilityResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                CanisterObservabilityRequest::ChildFunding(child),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    Principal::from_slice(&[99; 29]),
-                    canic::protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+    let denied: Result<canic::dto::child_funding::ChildFundingUsage, Error> =
+        ic_testkit::pic::query_wire(
+            &pic,
+            root,
+            Principal::from_slice(&[99; 29]),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::child_funding::METHOD,
+                method_id: canic::protocol::child_funding::METHOD_ID,
+                request_limits: canic::protocol::child_funding::REQUEST_LIMITS,
+                response_limits: canic::protocol::child_funding::RESPONSE_LIMITS,
+            },
+            &ic_platform::Principal::from(child),
+        )
         .unwrap();
     assert!(denied.is_err());
     funding(&pic, root, false);
-    let burned: u128 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((11_000_000_000_000_u128,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                root,
-                Principal::anonymous(),
-                "audit_recovery_balance",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let burned: u128 = ic_testkit::pic::update_wire(
+        &pic,
+        root,
+        Principal::anonymous(),
+        crate::pic::application_probe::AUDIT_ROOT_BALANCE,
+        &11_000_000_000_000_u128,
+    )
     .expect("update Candid harness call");
     assert!(burned > 0);
     // The unchanged pause records the prepared sample. Restoration therefore
@@ -119,11 +98,7 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
     assert_eq!(usage.pending_operations, 0);
     assert_eq!(usage.reserved_cycles, Some(0.into()));
     super::replay_release::assert_funding_receipt(&pic, root, child, request.metadata.request_id);
-    let _ = super::replay_release::collect_intents(
-        &pic,
-        coordinator,
-        canic::protocol::CANIC_OBSERVABILITY,
-    );
+    let _ = super::replay_release::collect_intents(&pic, coordinator);
     assert!(pic.cycle_balance(child) > balance_before);
     let after = timer(&pic, root);
     assert!(
@@ -193,66 +168,40 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
 }
 
 fn child_usage(pic: &PocketIc, parent: Principal, child: Principal) -> ChildFundingUsage {
-    let response: Result<CanisterObservabilityResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                CanisterObservabilityRequest::ChildFunding(child),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    parent,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
-    let CanisterObservabilityResponse::ChildFunding(value) = response.unwrap() else {
-        panic!("exact child funding observation");
-    };
+    let response: Result<canic::dto::child_funding::ChildFundingUsage, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            parent,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::child_funding::METHOD,
+                method_id: canic::protocol::child_funding::METHOD_ID,
+                request_limits: canic::protocol::child_funding::REQUEST_LIMITS,
+                response_limits: canic::protocol::child_funding::RESPONSE_LIMITS,
+            },
+            &ic_platform::Principal::from(child),
+        )
+        .expect("child funding Wire transport");
+    let value: ChildFundingUsage = response.expect("child funding application result").into();
     assert_eq!((value.parent, value.child), (parent, child));
     value
 }
 
 fn funding(pic: &PocketIc, root: Principal, enabled: bool) {
-    let response: Result<Response, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::SetCyclesFunding(SetCyclesFundingRequest { enabled }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
-    let Response::SetCyclesFunding(response) = response.unwrap();
+    let response = crate::pic::protected_state::set_funding(
+        pic,
+        root,
+        Principal::anonymous(),
+        SetCyclesFundingRequest { enabled },
+    )
+    .unwrap();
     assert_eq!(response.change.current, enabled);
     assert!(response.reconciliation_error.is_none());
     assert_eq!(response.propagation.unconfirmed_targets, 0);
 }
 
 fn timer(pic: &PocketIc, root: Principal) -> CanisterTimerStatus {
-    let RootStatusResponseFragment::Runtime(runtime) =
-        root_status(pic, root, RootStatusRequestFragment::Runtime).unwrap()
-    else {
-        panic!("runtime response");
-    };
+    let runtime = root_runtime(pic, root);
     runtime
         .timers
         .into_iter()

@@ -2,6 +2,8 @@
 //!
 //! The CLI owns build, generation, review and execution; the harness owns only the test network.
 
+mod protocol;
+
 use super::*;
 use canic_core::cdk::utils::hash::sha256_hex;
 use canic_host::fleet_ensure::model::DesiredCanisterKind;
@@ -133,22 +135,13 @@ fn installed_package_build_deploy_recover_and_replay() {
     verify_installed_artifacts(&consumer, &pic, operator, &desired, &infrastructure);
     verify_workload(&consumer, &pic, root, operator, &desired);
     let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
-    let requests: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                ledger,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "request_count",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let requests: u64 = ic_testkit::pic::query_wire(
+        &pic,
+        ledger,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+        &(),
+    )
     .unwrap();
     let mutations = mutation_counts(&consumer.root);
     let mut offline_replay = replay_args;
@@ -158,22 +151,13 @@ fn installed_package_build_deploy_recover_and_replay() {
     assert_eq!(replay["effects_applied"], 0);
     assert_eq!(mutation_counts(&consumer.root), mutations);
     assert_eq!(
-        (|| -> Result<(u64,), Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "request_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::query_wire::<_, u64>(
+            &pic,
+            ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+            &()
+        )
         .unwrap(),
         requests
     );
@@ -488,17 +472,18 @@ fn verify_workload(
         hex_bytes(status.module_hash.unwrap()),
         artifact.wasm_gz_sha256_hex
     );
-    let reply: Result<u64, Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(workload.canister_id, root, "packaged_probe", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let reply: Result<u64, Error> = ic_testkit::pic::query_wire(
+        pic,
+        workload.canister_id,
+        root,
+        ic_testkit::pic::WireCallSpec {
+            method: protocol::METHOD,
+            method_id: protocol::METHOD_ID,
+            request_limits: protocol::LIMITS,
+            response_limits: protocol::LIMITS,
+        },
+        &(),
+    )
     .unwrap();
     assert_eq!(reply.unwrap(), 7);
 }

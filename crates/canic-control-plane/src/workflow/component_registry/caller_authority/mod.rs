@@ -18,9 +18,6 @@ use canic_contracts::{
         caller_authority::{CallerAuthorityChange, CallerAuthorityCommand, CallerAuthorityStatus},
         error::Error,
         role::OperationStatusRequest,
-        wire::projection::caller_authority::{
-            Command, CommandResponse, StatusRequest, StatusResponse,
-        },
     },
     ids::{
         CallerInstallation, CallerReceiverAuthority, CallerRootAuthority, ManagedCanisterBinding,
@@ -246,14 +243,11 @@ pub(super) async fn release_startup(
             .ok_or_else(InternalError::invariant)?;
         let release_id = release.operation_id;
         let target = recipient.authority.receiver.canister();
-        match command(
-            target,
-            Command::ReleaseApplicationStartup(CallerAuthorityOps::publication_to_dto(release)),
-        )
-        .await
-        .map_err(|error| startup_failure("release_command", operation, error))?
+        match send_startup_release(target, CallerAuthorityOps::publication_to_dto(release))
+            .await
+            .map_err(|error| startup_failure("release_command", operation, error))?
         {
-            CommandResponse::OperationAccepted(receipt) if receipt.operation_id == release_id => {}
+            receipt if receipt.operation_id == release_id => {}
             _ => return Err(InternalError::conflict()),
         }
         RootCallerOps::mark_startup_released(operation, ordinal)?;
@@ -296,15 +290,14 @@ async fn require_applications_ready(
             let release = RootCallerOps::release_receipt(operation, ordinal)?
                 .ok_or_else(InternalError::invariant)?;
             let release_id = release.operation_id;
-            match command(
+            match send_startup_release(
                 recipient.authority.receiver.canister(),
-                Command::ReleaseApplicationStartup(CallerAuthorityOps::publication_to_dto(release)),
+                CallerAuthorityOps::publication_to_dto(release),
             )
             .await
             .map_err(|error| startup_failure("repeat_release", operation, error))?
             {
-                CommandResponse::OperationAccepted(receipt)
-                    if receipt.operation_id == release_id => {}
+                receipt if receipt.operation_id == release_id => {}
                 _ => return Err(InternalError::conflict()),
             }
             // Query and release callbacks can share one round. Consensus yields
@@ -378,19 +371,13 @@ async fn drive(operation: [u8; 32], publish: bool) -> Result<(), InternalError> 
                     }
                     Some(CallerReceiptPhase::Complete) => return Err(InternalError::invariant()),
                 };
-                let CommandResponse::CallerAuthority(receipt) = command(
-                    recipient.authority.receiver.canister(),
-                    Command::CallerAuthority(request),
-                )
-                .await?
-                else {
-                    return Err(InternalError::conflict());
-                };
+                let receipt =
+                    send_publication(recipient.authority.receiver.canister(), request).await?;
                 RootCallerOps::acknowledge(
                     operation,
                     current.cursor,
                     recipient.completed_steps,
-                    *receipt,
+                    receipt,
                 )?;
             }
         }
@@ -402,37 +389,88 @@ async fn status(
     target: Principal,
     operation_id: [u8; 32],
 ) -> Result<CallerAuthorityStatus, InternalError> {
-    let response = CallOps::bounded_wait(target, protocol::CANIC_CONTROL_STATUS)
-        .with_arg(StatusRequest::CallerAuthority(OperationStatusRequest {
-            operation_id,
-        }))?
+    let bytes = ic_wire::native::encode_request(
+        protocol::caller_authority_status::METHOD_ID,
+        &OperationStatusRequest { operation_id },
+        protocol::caller_authority_status::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let response = CallOps::bounded_wait(target, protocol::caller_authority_status::METHOD)
+        .with_raw_args(bytes)
         .execute()
         .await
-        .map_err(|_| InternalError::unavailable())?;
-    let result: Result<StatusResponse, Error> =
-        response.candid().map_err(|_| InternalError::invariant())?;
-    let StatusResponse::CallerAuthority(status) = result.map_err(InternalError::observed_public)?;
-    Ok(status)
+        .map_err(|_| InternalError::unavailable())?
+        .into_bytes();
+    let result: Result<
+        canic_contracts::dto::caller_authority_status::CallerAuthorityStatus,
+        Error,
+    > = ic_wire::native::decode_response(
+        protocol::caller_authority_status::METHOD_ID,
+        &response,
+        protocol::caller_authority_status::RESPONSE_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    result
+        .map(Into::into)
+        .map_err(InternalError::observed_public)
 }
 
-async fn command(target: Principal, command: Command) -> Result<CommandResponse, InternalError> {
-    let response = CallOps::bounded_wait(target, protocol::CANIC_COMMAND)
-        .with_arg(command)?
-        .execute()
-        .await
-        .map_err(|error| {
-            canic_core::log!(
-                canic_core::log::Topic::Rpc,
-                Error,
-                "Caller command transport failed target={target} diagnostic={} platform_rejection={:?}",
-                error.code(),
-                error.platform_rejection()
-            );
+async fn send_publication(
+    target: Principal,
+    command: CallerAuthorityCommand,
+) -> Result<canic_contracts::dto::caller_authority::CallerAuthorityReceipt, InternalError> {
+    let request = canic_contracts::ops::caller_authority_status::publication_request(command);
+    let receipt: canic_contracts::dto::caller_authority_status::CallerAuthorityReceipt = update(
+        target,
+        request.method,
+        request.method_id,
+        request.publication,
+    )
+    .await?;
+    Ok(receipt.into())
+}
+
+async fn send_startup_release(
+    target: Principal,
+    publication: canic_contracts::dto::caller_authority::CallerAuthorityPublication,
+) -> Result<canic_contracts::dto::role::OperationReceipt, InternalError> {
+    update(
+        target,
+        protocol::caller_authority::RELEASE,
+        protocol::caller_authority::RELEASE_ID,
+        publication.into(),
+    )
+    .await
+}
+
+fn update<T: serde::de::DeserializeOwned>(
+    target: Principal,
+    method: &'static str,
+    method_id: u64,
+    publication: canic_contracts::dto::caller_authority_status::CallerAuthorityPublication,
+) -> impl std::future::Future<Output = Result<T, InternalError>> {
+    let bytes = ic_wire::native::encode_request(
+        method_id,
+        &publication,
+        protocol::caller_authority::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant());
+    async move {
+        let bytes = bytes?;
+        let response = CallOps::bounded_wait(target, method)
+        .with_raw_args(bytes).execute().await.map_err(|error| {
+            canic_core::log!(canic_core::log::Topic::Rpc, Error,
+                "Caller command transport failed target={target} diagnostic={} platform_rejection={:?}", error.code(), error.platform_rejection());
             InternalError::unavailable()
-        })?;
-    let result: Result<CommandResponse, Error> =
-        response.candid().map_err(|_| InternalError::invariant())?;
-    result.map_err(InternalError::observed_public)
+        })?.into_bytes();
+        let result: Result<T, Error> = ic_wire::native::decode_response(
+            method_id,
+            &response,
+            protocol::caller_authority::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+        result.map_err(InternalError::observed_public)
+    }
 }
 
 /// Publish exact group or subtree denial while Registry membership still remains active.

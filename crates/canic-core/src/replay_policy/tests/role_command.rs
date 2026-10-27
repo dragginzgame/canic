@@ -7,161 +7,91 @@
 use super::*;
 
 #[test]
-fn root_command_variants_have_one_exact_replay_policy_each() {
-    assert_command_manifest_matches(
-        ROOT_COMMAND_REPLAY_POLICY_MANIFEST,
-        root_command_variant_names(),
-        "Root",
-    );
-}
-
-#[test]
-fn coordinator_command_variants_have_one_exact_replay_policy_each() {
-    assert_command_manifest_matches(
-        COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST,
-        coordinator_command_variant_names(),
-        "Coordinator",
-    );
-}
-
-#[test]
-fn managed_command_variants_have_one_exact_replay_policy_each() {
-    assert_command_manifest_matches(
-        MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
-        managed_command_variant_names(),
-        "managed",
-    );
-}
-
-#[test]
-fn store_command_variants_have_one_exact_replay_policy_each() {
-    assert_command_manifest_matches(
-        STORE_COMMAND_REPLAY_POLICY_MANIFEST,
-        store_command_variant_names(),
-        "Store",
-    );
-}
-
-#[test]
-fn asynchronous_root_intents_are_replay_protected_by_operation_id() {
-    for variant in [
-        "AcceptFunding",
-        "ActivateFundingPolicyRotation",
-        "AdoptStore",
-        "BootstrapStore",
-        "ImportPoolCapacity",
-        "PrepareFundingPolicyRotation",
-        "ProvisionChild",
-        "ProvisionComponent",
-        "ProvisionPeer",
-        "RefillCycles",
-        "RemoveComponent",
-        "RemoveRoot",
-        "RemoveSubtree",
-        "SynchronizeRegistry",
-    ] {
-        let entry = command_entry(ROOT_COMMAND_REPLAY_POLICY_MANIFEST, variant);
-        assert!(
-            matches!(
-                entry.replay_policy,
-                ReplayPolicy::ReplayProtected {
-                    requires_operation_id: true,
-                    ..
-                }
-            ),
-            "Root command {variant} must own replay through its operation ID"
-        );
-    }
-}
-
-#[test]
-fn query_like_root_commands_do_not_acquire_mutation_replay_policy() {
-    for variant in [
-        "InspectCanister",
-        "InspectCanisterHistory",
-        "ObserveCanister",
-        "PreviewCycleRefill",
-    ] {
-        assert_eq!(
-            command_entry(ROOT_COMMAND_REPLAY_POLICY_MANIFEST, variant).replay_policy,
-            ReplayPolicy::QueryOrReadOnly
-        );
-    }
-}
-
-#[test]
 fn managed_observability_does_not_acquire_mutation_replay_policy() {
-    assert_eq!(
-        command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "Observe").replay_policy,
-        ReplayPolicy::QueryOrReadOnly
-    );
+    for method in [
+        crate::protocol::observability_relay::child_funding::METHOD,
+        crate::protocol::observability_relay::cycle_balance::METHOD,
+        crate::protocol::observability_relay::cycle_history::METHOD,
+        crate::protocol::observability_relay::cycle_topups::METHOD,
+        crate::protocol::observability_relay::memory_allocations::METHOD,
+        crate::protocol::observability_relay::metrics::METHOD,
+        crate::protocol::root_observation::child_funding::METHOD,
+        crate::protocol::root_observation::cycle_balance::METHOD,
+        crate::protocol::root_observation::cycle_history::METHOD,
+        crate::protocol::root_observation::cycle_topups::METHOD,
+        crate::protocol::root_observation::memory_allocations::METHOD,
+        crate::protocol::root_observation::metrics::METHOD,
+    ] {
+        let entry = crate::replay_policy::endpoint_manifest::ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == method)
+            .expect("replicated observation policy");
+        assert_eq!(entry.endpoint_kind, EndpointKind::Update);
+        assert_eq!(entry.replay_policy, ReplayPolicy::QueryOrReadOnly);
+        assert_eq!(entry.cost_class, CostClass::None);
+    }
 }
 
 #[test]
 fn managed_publication_and_startup_retain_their_exact_replay_owners() {
-    let publication = command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "CallerAuthority");
+    use crate::protocol::caller_authority as protocol;
+    let entry = |name| {
+        crate::replay_policy::endpoint_manifest::ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == name)
+            .unwrap()
+    };
+    for method in [protocol::PREPARE, protocol::COMMIT, protocol::COMPLETE] {
+        let publication = entry(method);
+        assert_eq!(
+            publication.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                command_kind: replay_command_kind("caller_authority.publication.v1"),
+                requires_operation_id: true,
+            }
+        );
+        assert_eq!(publication.cost_class, CostClass::None);
+    }
     assert_eq!(
-        publication.replay_policy,
-        ReplayPolicy::ReplayProtected {
-            command_kind: replay_command_kind("caller_authority.publication.v1"),
-            requires_operation_id: true,
-        }
-    );
-    let startup = command_entry(
-        MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
-        "ReleaseApplicationStartup",
-    );
-    assert_eq!(
-        startup.replay_policy,
+        entry(protocol::RELEASE).replay_policy,
         ReplayPolicy::ResponseIdempotent {
             command_kind: replay_command_kind("application_startup.release.v1"),
         }
     );
-    assert_eq!(publication.cost_class, CostClass::None);
-    assert_eq!(startup.cost_class, CostClass::None);
+    assert_eq!(entry(protocol::RELEASE).cost_class, CostClass::None);
 }
 
 #[test]
-fn root_capability_variant_delegates_to_its_nested_command_manifest() {
-    let entry = command_entry(ROOT_COMMAND_REPLAY_POLICY_MANIFEST, "RespondCapability");
-    assert_eq!(
-        entry.replay_policy,
-        ReplayPolicy::CommandDispatch {
-            command_kind: replay_command_kind("root.capability_rpc.v1"),
-            command_manifest: replay_command_manifest("root.capability.command_manifest.v1"),
-        }
-    );
-}
-
-#[test]
-fn coordinator_long_running_intents_are_operation_replay_protected() {
-    for variant in [
-        "ApplyFundingPolicyRotation",
-        "BeginFundingPolicyRotation",
-        "MutateAdmission",
-        "ProvisionComponents",
-        "RemoveRoot",
-        "RequestRootFunding",
-        "Retire",
-        "StageFundingPolicyRotationRoot",
+fn root_capability_methods_keep_the_exact_existing_replay_contracts() {
+    use crate::protocol::root_capability as wire;
+    for (method, variant) in [
+        (wire::acknowledge::METHOD, "AcknowledgePlacementReceipt"),
+        (wire::allocate::METHOD, "AllocatePlacementChild"),
+        (wire::create::METHOD, "ProvisionCanister"),
+        (wire::recycle::METHOD, "RecycleCanister"),
+        (wire::cycles::METHOD, "RequestCycles"),
     ] {
-        let entry = command_entry(COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST, variant);
-        assert!(matches!(
-            entry.replay_policy,
-            ReplayPolicy::ReplayProtected {
-                requires_operation_id: true,
-                ..
-            }
-        ));
+        let endpoint = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == method)
+            .unwrap();
+        let capability = command_entry(ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST, variant);
+        assert_eq!(endpoint.replay_policy, capability.replay_policy);
+        assert_eq!(endpoint.cost_class, capability.cost_class);
+        assert_eq!(endpoint.quota_policy, capability.quota_policy);
+        assert_eq!(
+            endpoint.cycle_reserve_policy,
+            capability.cycle_reserve_policy
+        );
     }
 }
 
 #[test]
 fn managed_auth_effects_own_exact_replay_contracts() {
-    let install = command_entry(
-        MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
-        "InstallDelegationProof",
-    );
+    let install = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == crate::protocol::issuer_proof::INSTALL)
+        .unwrap();
     assert!(matches!(
         install.replay_policy,
         ReplayPolicy::IntentionallyNonIdempotent { .. }
@@ -170,12 +100,15 @@ fn managed_auth_effects_own_exact_replay_contracts() {
 
 #[test]
 fn managed_admission_transitions_are_operation_replay_protected() {
-    for variant in [
-        "ActivateFleetAdmission",
-        "OpenFleetAdmission",
-        "PrepareFleetAdmission",
+    for method in [
+        crate::protocol::admission_control::target_prepare::METHOD,
+        crate::protocol::admission_control::target_activate::METHOD,
+        crate::protocol::admission_control::target_open::METHOD,
     ] {
-        let entry = command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, variant);
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == method)
+            .unwrap();
         assert!(matches!(
             entry.replay_policy,
             ReplayPolicy::ReplayProtected {
@@ -189,12 +122,15 @@ fn managed_admission_transitions_are_operation_replay_protected() {
 
 #[test]
 fn root_admission_transitions_are_operation_replay_protected() {
-    for variant in [
-        "ActivateFleetAdmission",
-        "OpenFleetAdmission",
-        "PrepareFleetAdmission",
+    for method in [
+        crate::protocol::admission_control::root_prepare::METHOD,
+        crate::protocol::admission_control::root_activate::METHOD,
+        crate::protocol::admission_control::root_open::METHOD,
     ] {
-        let entry = command_entry(ROOT_COMMAND_REPLAY_POLICY_MANIFEST, variant);
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == method)
+            .unwrap();
         assert!(matches!(
             entry.replay_policy,
             ReplayPolicy::ReplayProtected {
@@ -208,10 +144,10 @@ fn root_admission_transitions_are_operation_replay_protected() {
 
 #[test]
 fn store_effect_variants_preserve_cost_and_convergence() {
-    let reclaim = command_entry(
-        STORE_COMMAND_REPLAY_POLICY_MANIFEST,
-        "ReclaimDeletionCycles",
-    );
+    let reclaim = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == crate::protocol::store_control::reclaim::METHOD)
+        .unwrap();
     assert!(matches!(
         reclaim.replay_policy,
         ReplayPolicy::SnapshotConvergent { .. }
@@ -223,9 +159,16 @@ fn store_effect_variants_preserve_cost_and_convergence() {
         Some(VALUE_TRANSFER_RESERVE_V1)
     );
 
-    for variant in ["SynchronizeState", "SynchronizeTopology"] {
+    for method in [
+        crate::protocol::cascade::state::METHOD,
+        crate::protocol::cascade::topology::METHOD,
+    ] {
         assert!(matches!(
-            command_entry(STORE_COMMAND_REPLAY_POLICY_MANIFEST, variant).replay_policy,
+            ENDPOINT_REPLAY_POLICY_MANIFEST
+                .iter()
+                .find(|entry| entry.endpoint == method)
+                .unwrap()
+                .replay_policy,
             ReplayPolicy::SnapshotConvergent { .. }
         ));
     }
@@ -241,18 +184,79 @@ fn command_entry(
         .unwrap_or_else(|| panic!("missing command replay policy for {variant}"))
 }
 
-fn assert_command_manifest_matches(
-    manifest: &[CommandReplayPolicy],
-    expected: BTreeSet<&'static str>,
-    role: &str,
-) {
-    let mut actual = BTreeSet::new();
-    for entry in manifest {
-        assert!(
-            actual.insert(entry.variant),
-            "duplicate {role} command replay policy for {}",
-            entry.variant
-        );
+#[test]
+fn pool_retry_methods_preserve_convergence_and_spending_policy() {
+    use crate::replay_policy::quota::{DEPLOYMENT_QUOTA_V1, DEPLOYMENT_RESERVE_V1};
+    for (method, cost, quota, reserve) in [
+        (
+            crate::protocol::pool_retry::refill::METHOD,
+            CostClass::ValueTransfer,
+            VALUE_TRANSFER_QUOTA_V1,
+            VALUE_TRANSFER_RESERVE_V1,
+        ),
+        (
+            crate::protocol::pool_retry::reset::METHOD,
+            CostClass::ManagementDeployment,
+            DEPLOYMENT_QUOTA_V1,
+            DEPLOYMENT_RESERVE_V1,
+        ),
+    ] {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == method)
+            .unwrap();
+        assert!(matches!(
+            entry.replay_policy,
+            ReplayPolicy::SnapshotConvergent { .. }
+        ));
+        assert_eq!(entry.cost_class, cost);
+        assert_eq!(entry.quota_policy, Some(quota));
+        assert_eq!(entry.cycle_reserve_policy, Some(reserve));
     }
-    assert_eq!(actual, expected, "{role} command replay-policy drift");
+}
+
+#[test]
+fn fleet_state_methods_retain_response_idempotence_without_paid_effect_authority() {
+    for method in [
+        crate::protocol::store_activation::activate::METHOD,
+        crate::protocol::component_initialization::METHOD,
+        crate::protocol::fleet_state_control::funding::METHOD,
+        crate::protocol::fleet_state_control::status::METHOD,
+    ] {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == method)
+            .unwrap();
+        assert!(matches!(
+            entry.replay_policy,
+            ReplayPolicy::ResponseIdempotent { .. }
+        ));
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(entry.quota_policy, None);
+        assert_eq!(entry.cycle_reserve_policy, None);
+    }
+}
+
+#[test]
+fn store_controls_keep_existing_monotonic_authority_without_paid_effects() {
+    for method in [
+        crate::protocol::store_control::grant::METHOD,
+        crate::protocol::store_activation::prepare::METHOD,
+        crate::protocol::store_publication::prepare::METHOD,
+        crate::protocol::store_publication::stage::METHOD,
+        crate::protocol::store_publication::fixture_prepare::METHOD,
+        crate::protocol::store_gc::METHOD,
+    ] {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == method)
+            .unwrap();
+        assert!(matches!(
+            entry.replay_policy,
+            ReplayPolicy::MonotonicTransition { .. }
+        ));
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(entry.quota_policy, None);
+        assert_eq!(entry.cycle_reserve_policy, None);
+    }
 }

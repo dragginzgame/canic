@@ -112,7 +112,7 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         state,
         &observed,
     )?;
-    if normalized_plan(plan) != normalized_plan(&current) {
+    if !same_plan_authority(plan, &current) {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     Ok((
@@ -353,7 +353,7 @@ fn verify_reset<P: EnsurePlatform>(
     complete(&prepared, &journal, state, platform)?;
     let observed = inventory(&activation.source, state, platform)?;
     let current = compile_reset(root, desired, &prepared, state, evidence.clone(), &observed)?;
-    if normalized_plan(plan) != normalized_plan(&current) {
+    if !same_plan_authority(plan, &current) {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     Ok((
@@ -414,7 +414,7 @@ fn verify_full<P: EnsurePlatform>(
         &plan.operation_id,
         plan.reinstall.as_deref(),
     )?;
-    if normalized_plan(plan) != normalized_plan(&current) {
+    if !same_plan_authority(plan, &current) {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     Ok((observation, current.conservation.observed_controlled_cycles))

@@ -22,7 +22,7 @@ use crate::{
         },
     },
     dto::icp_refill::IcpRefillRequest,
-    infra::ic::icp_refill::{IcpRefillCanisterOverrides, Icrc1Account},
+    infra::ic::icp_refill::{Account, IcpRefillCanisterOverrides},
     ops::{
         ic::{IcOps, build_network::BuildNetworkOps, icp_refill::IcpRefillOps},
         storage::{
@@ -268,7 +268,7 @@ async fn prepare_context(
         "icrc1_balance_of",
         IcpRefillOps::icrc1_balance_of(
             canisters.ledger_canister_id,
-            Icrc1Account {
+            Account {
                 owner: root_canister,
                 subaccount: request.source_subaccount,
             },

@@ -12,8 +12,8 @@ use canic_contracts::ids::{TemplateId, TemplateVersion};
 
 #[derive(Eq, PartialEq)]
 struct ChunkAuthority<'a> {
-    candid: &'a str,
-    candid_sha256: &'a str,
+    wire_schema: &'a str,
+    wire_schema_sha256: &'a str,
     principal: &'a str,
     template_id: &'a TemplateId,
     version: &'a TemplateVersion,
@@ -22,8 +22,8 @@ struct ChunkAuthority<'a> {
 fn authority(action: &EnsureAction) -> Option<ChunkAuthority<'_>> {
     let EnsureAction::FleetProtocol {
         action,
-        candid,
-        candid_sha256,
+        wire_schema,
+        wire_schema_sha256,
         principal,
         ..
     } = action
@@ -34,8 +34,8 @@ fn authority(action: &EnsureAction) -> Option<ChunkAuthority<'_>> {
         return None;
     };
     Some(ChunkAuthority {
-        candid,
-        candid_sha256,
+        wire_schema,
+        wire_schema_sha256,
         principal,
         template_id: &request.template_id,
         version: &request.version,
@@ -133,16 +133,16 @@ pub(in crate::fleet_ensure) fn batch_len(
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct PoolAuthority<'a> {
-    candid: &'a str,
-    candid_sha256: &'a str,
+    wire_schema: &'a str,
+    wire_schema_sha256: &'a str,
     principal: &'a str,
 }
 
 fn pool_authority(action: &EnsureAction) -> Option<PoolAuthority<'_>> {
     let EnsureAction::FleetProtocol {
         action,
-        candid,
-        candid_sha256,
+        wire_schema,
+        wire_schema_sha256,
         principal,
         ..
     } = action
@@ -154,8 +154,8 @@ fn pool_authority(action: &EnsureAction) -> Option<PoolAuthority<'_>> {
         CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
     )
     .then_some(PoolAuthority {
-        candid,
-        candid_sha256,
+        wire_schema,
+        wire_schema_sha256,
         principal,
     })
 }

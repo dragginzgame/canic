@@ -2,11 +2,11 @@
 //!
 //! Fleet selection and immutable build validation remain with their existing owners.
 
-use super::{ProtocolBindingError, verify_protocol_binding};
+use super::{ReleaseProtocolBindingError, resolve_release_registry_wire_schema};
 use crate::{
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
     registry::RegistryEntry,
-    release_set::{BuiltCandid, BuiltCandidError, load_built_candid},
+    release_set::BuiltWireSchema,
 };
 use std::path::Path;
 use thiserror::Error;
@@ -16,26 +16,34 @@ mod tests;
 
 /// Failure to select an installed declaration without substituting another build.
 #[derive(Debug, Error)]
-pub enum InstalledCandidError {
+pub enum InstalledDeclarationError {
     #[error(transparent)]
     Fleet(#[from] CurrentFleetInventoryError),
-    #[error(transparent)]
-    Build(#[from] BuiltCandidError),
-    #[error(transparent)]
-    Binding(#[from] ProtocolBindingError),
     #[error("Fleet has no exact retained release build")]
     MissingRelease,
     #[error("Fleet has no unique target {0}; use an exact canister Principal")]
     Target(String),
+    #[error(transparent)]
+    Release(#[from] ReleaseProtocolBindingError),
 }
 
-/// Load a deployed role's declaration using retained release and protocol authority.
-pub fn load_installed_candid(
+/// Resolve a schema only when retained release authority matches the installed module.
+pub fn load_installed_wire_schema(
     root: &Path,
     environment: &str,
     fleet: &str,
     target: &str,
-) -> Result<BuiltCandid, InstalledCandidError> {
+) -> Result<BuiltWireSchema, InstalledDeclarationError> {
+    let (entry, release) = resolve_target(root, environment, fleet, target)?;
+    Ok(resolve_release_registry_wire_schema(root, release, &entry)?)
+}
+
+fn resolve_target(
+    root: &Path,
+    environment: &str,
+    fleet: &str,
+    target: &str,
+) -> Result<(RegistryEntry, canic_contracts::ids::ReleaseBuildId), InstalledDeclarationError> {
     let current = resolve_current_fleet(root, environment, fleet)?;
     let entry = select_entry(&current.registry.entries, target)?;
     let release = current
@@ -43,32 +51,15 @@ pub fn load_installed_candid(
         .reviewed_desired
         .as_ref()
         .and_then(|reviewed| reviewed.desired().bootstrap.as_ref())
-        .ok_or(InstalledCandidError::MissingRelease)?
+        .ok_or(InstalledDeclarationError::MissingRelease)?
         .release_build_id;
-    let binding =
-        entry
-            .protocol_binding
-            .clone()
-            .ok_or_else(|| ProtocolBindingError::MissingBinding {
-                canister: entry.pid.clone(),
-            })?;
-    if entry.role.as_deref() != Some(binding.role.as_str()) {
-        return Err(ProtocolBindingError::RoleMismatch {
-            canister: entry.pid.clone(),
-            registry_role: entry.role.clone().unwrap_or_default(),
-            protocol_role: binding.role.to_string(),
-        }
-        .into());
-    }
-    let built = load_built_candid(root, release, binding.role.as_str())?;
-    verify_protocol_binding(&entry.pid, &binding, built.candid.as_bytes())?;
-    Ok(built)
+    Ok((entry.clone(), release))
 }
 
 fn select_entry<'a>(
     entries: &'a [RegistryEntry],
     target: &str,
-) -> Result<&'a RegistryEntry, InstalledCandidError> {
+) -> Result<&'a RegistryEntry, InstalledDeclarationError> {
     let principal = ic_platform::principal::ExternalPrincipal::from_text(target).ok();
     let mut matches = entries.iter().filter(|entry| match principal {
         Some(principal) => entry.pid == principal.to_text(),
@@ -76,9 +67,9 @@ fn select_entry<'a>(
     });
     let entry = matches
         .next()
-        .ok_or_else(|| InstalledCandidError::Target(target.into()))?;
+        .ok_or_else(|| InstalledDeclarationError::Target(target.into()))?;
     if matches.next().is_some() {
-        return Err(InstalledCandidError::Target(target.into()));
+        return Err(InstalledDeclarationError::Target(target.into()));
     }
     Ok(entry)
 }

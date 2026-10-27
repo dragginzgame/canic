@@ -34,9 +34,13 @@ network, Fleet, Root/subnet, release, module/Candid, controller, Spec and role.
 
 Applying reserves one submission before sending Root's existing command.
 The command polls for up to 60 seconds by default. `--wait-secs 0` advances
-once; the maximum selectable polling window is 3,600 seconds. A successful
-incomplete response is pending work, not a ready Component. Check
-`progress.complete` in JSON before using its Principal.
+once; the maximum selectable polling window is 3,600 seconds. If the result is
+still incomplete, apply exits nonzero and reports the exact resume command.
+The command retains the selected environment, ICP executable, local name,
+review digest and wait bound, with shell quoting for each string argument.
+`--json` still emits the operation record before this nonzero result; check
+`progress.complete` before using its Principal. Plan and status observations
+remain successful while work is pending.
 
 ## Interruption And Export
 

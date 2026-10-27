@@ -22,42 +22,10 @@ fn target_selection_requires_unique_role_or_exact_principal() {
     );
     assert!(matches!(
         select_entry(&entries, "worker-pool"),
-        Err(InstalledCandidError::Target(_))
+        Err(InstalledDeclarationError::Target(_))
     ));
     assert!(matches!(
         select_entry(&entries, "missing"),
-        Err(InstalledCandidError::Target(_))
-    ));
-}
-
-#[test]
-fn retained_declaration_bytes_must_match_the_installed_profile() {
-    use super::super::{RegistryProtocolBinding, verify_protocol_binding};
-    use canic_core::role_contract::{RoleCapabilityKey, derive_protocol_profile_hashes};
-    let bytes = b"service : { current : () -> (); }";
-    let role = canic_contracts::ids::CanisterRole::from("app");
-    let capabilities = [RoleCapabilityKey::Runtime].into();
-    let hashes = derive_protocol_profile_hashes("release", &role, &capabilities, bytes);
-    let mut binding = RegistryProtocolBinding {
-        release_identity: "release".into(),
-        role,
-        capabilities,
-        candid_sha256: hashes.candid_sha256,
-        protocol_profile_digest: hashes.protocol_profile_digest,
-    };
-    verify_protocol_binding("target", &binding, bytes).unwrap();
-    assert!(matches!(
-        verify_protocol_binding("target", &binding, b"service : {}"),
-        Err(ProtocolBindingError::CandidHashMismatch { .. })
-    ));
-    binding.capabilities.clear();
-    assert!(matches!(
-        verify_protocol_binding("target", &binding, bytes),
-        Err(ProtocolBindingError::ProfileDigestMismatch { .. })
-    ));
-    binding.release_identity.clear();
-    assert!(matches!(
-        verify_protocol_binding("target", &binding, bytes),
-        Err(ProtocolBindingError::MissingReleaseIdentity { .. })
+        Err(InstalledDeclarationError::Target(_))
     ));
 }

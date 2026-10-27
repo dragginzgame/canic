@@ -1,18 +1,12 @@
 //! Own the generic fixture's initialization evidence in application memory.
 
 use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, Memory, StableCell as Cell};
-use canic::{dto::abi::v1::CanisterInitPayload, endpoint::ArgumentLimits};
+use canic::dto::abi::v1::CanisterInitPayload;
 use std::cell::RefCell;
 
 type Evidence = Cell<Vec<u8>, DefaultMemoryImpl>;
 const KEY: &str = "managed_probe.initialization.v1";
-pub const LIMITS: ArgumentLimits = ArgumentLimits {
-    max_bytes: 65_536,
-    decoding_quota: 2_000_000,
-    skipping_quota: 1024,
-    max_type_len: 512,
-    max_header_len: 16_384,
-};
+pub const LIMITS: ic_wire::Limits = canic::__internal::contracts::protocol::initialization::LIMITS;
 
 canic::memory::memory_allocation_pool!(
     provider = memory_pool,
@@ -38,7 +32,7 @@ thread_local! {
 pub fn install() {
     super::checkpoint::open();
     let (_, args): (CanisterInitPayload, Option<Vec<u8>>) =
-        LIMITS.read().expect("bounded init envelope");
+        canic::endpoint::read_initialization(LIMITS).expect("bounded init envelope");
     let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0);
     EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, args.unwrap_or_default())));

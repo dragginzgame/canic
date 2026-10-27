@@ -449,9 +449,7 @@ mod current_resource_contract {
     use super::*;
 
     fn encoded<T: Serialize>(value: &T) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        ciborium::ser::into_writer(value, &mut bytes).expect("CBOR encoding");
-        bytes
+        crate::cdk::serialize::serialize(value).expect("CBOR encoding")
     }
 
     fn principal(id: u64) -> Principal {

@@ -1,28 +1,37 @@
+pub mod application_checkpoint;
+pub mod component_directory;
+pub mod cycle_balance;
+pub mod cycle_history;
+pub mod cycle_topups;
 pub mod limits;
 pub mod profile;
+pub mod protected_health;
+pub mod public_children;
+pub mod public_health;
+pub mod public_history;
+pub mod public_metrics;
+pub mod public_overview;
+pub mod wasm_store_chunk;
+pub mod wire_declaration;
 
 /// Canonical wire-level endpoint names used by endpoints and inter-canister callers.
 ///
 /// Endpoint emitters and ordinary callers consume these exact names.
 
-pub const CANIC_COMMAND: &str = "canic_command";
-pub const CANIC_COORDINATOR_COMMAND: &str = "canic_coordinator_command";
-pub const CANIC_COORDINATOR_OPERATION_STATUS: &str = "canic_coordinator_operation_status";
-pub const CANIC_COORDINATOR_REGISTRY: &str = "canic_coordinator_registry";
-pub const CANIC_WASM_STORE_CATALOG: &str = "canic_wasm_store_catalog";
-pub const CANIC_ROOT_COMMAND: &str = "canic_root_command";
 pub const CANIC_ROOT_FIXTURE_STATUS: &str = "canic_root_fixture_status";
-pub const CANIC_ROOT_STATUS: &str = "canic_root_status";
 pub const CANIC_ROOT_MEMBERSHIP: &str = "canic_root_membership";
-pub const CANIC_PUBLIC_STATUS: &str = "canic_public_status";
-pub const CANIC_OBSERVABILITY: &str = "canic_observability";
-pub const CANIC_AUTH_STATUS: &str = "canic_auth_status";
-pub const CANIC_CONTROL_STATUS: &str = "canic_control_status";
+/// Bounded direct-child inventory.
+pub const CANIC_PUBLIC_CHILDREN: &str = "canic_public_children";
+/// Immutable role identity and current bootstrap readiness.
+pub const CANIC_PUBLIC_OVERVIEW: &str = "canic_public_overview";
+/// Bounded cached public history query.
+pub const CANIC_PUBLIC_HISTORY: &str = "canic_public_history";
+
+/// Cached metrics endpoint.
+pub const CANIC_PUBLIC_METRICS: &str = "canic_public_metrics";
+
+pub const CANIC_PUBLIC_HEALTH: &str = "canic_public_health";
 pub const CANIC_ADMISSION_STATUS: &str = "canic_admission_status";
-pub const CANIC_ROOT_AUTH_STATUS: &str = "canic_root_auth_status";
-pub const CANIC_ROOT_OPERATION_STATUS: &str = "canic_root_operation_status";
-pub const CANIC_WASM_STORE_COMMAND: &str = "canic_wasm_store_command";
-pub const CANIC_WASM_STORE_STATUS: &str = "canic_wasm_store_status";
 pub const CANIC_WASM_STORE_FIXTURE_CHUNK: &str = "canic_wasm_store_fixture_chunk";
 pub const CANIC_WASM_STORE_PUBLISH_FIXTURE: &str = "canic_wasm_store_publish_fixture";
 
@@ -35,48 +44,134 @@ pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
 /// Upstream consent-message query.
 pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";
 
-/// Return the exact command endpoint owned by one Canic role.
-#[must_use]
-pub fn command_endpoint_for_role(role: &crate::ids::CanisterRole) -> &'static str {
-    if role.is_fleet_coordinator() {
-        CANIC_COORDINATOR_COMMAND
-    } else if role.is_root() {
-        CANIC_ROOT_COMMAND
-    } else if role.is_wasm_store() {
-        CANIC_WASM_STORE_COMMAND
-    } else {
-        CANIC_COMMAND
-    }
-}
-
 /// Maximum encoded payload accepted by state and topology cascade endpoints.
 pub const CASCADE_SNAPSHOT_MAX_BYTES: usize = 16_384;
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND, CANIC_WASM_STORE_COMMAND,
-        command_endpoint_for_role,
-    };
-    use crate::ids::CanisterRole;
-    use std::collections::BTreeSet;
+pub mod protected_logs;
 
-    #[test]
-    fn built_in_roles_own_distinct_command_endpoints() {
-        let ordinary = CanisterRole::new("ordinary");
-        let roles = [
-            (&ordinary, CANIC_COMMAND),
-            (&CanisterRole::FLEET_COORDINATOR, CANIC_COORDINATOR_COMMAND),
-            (&CanisterRole::ROOT, CANIC_ROOT_COMMAND),
-            (&CanisterRole::WASM_STORE, CANIC_WASM_STORE_COMMAND),
-        ];
-        for (role, command) in roles {
-            assert_eq!(command_endpoint_for_role(role), command);
-        }
-        let commands = roles
-            .iter()
-            .map(|(_, command)| *command)
-            .collect::<BTreeSet<_>>();
-        assert_eq!(commands.len(), roles.len());
-    }
-}
+pub mod protected_metrics;
+
+pub mod protected_memory_allocations;
+
+pub mod child_funding;
+
+pub mod protected_readiness;
+
+pub mod protected_runtime;
+
+pub mod protected_binding;
+
+pub mod caller_authority_status;
+
+pub mod root_config;
+
+pub mod caller_authority;
+
+pub mod inspection_reserve;
+
+pub mod coordinator_acknowledgements;
+
+pub mod observability_relay;
+pub mod root_authority;
+pub mod root_observation;
+
+pub mod protected_state;
+
+pub mod registry_discovery;
+pub mod registry_read;
+
+pub mod release_evidence;
+
+pub mod admission_control;
+
+pub mod pool_retry;
+
+pub mod fleet_state_control;
+
+pub mod cascade;
+
+pub mod runtime_configuration;
+
+pub mod runtime_reporting;
+
+pub mod issuer_proof;
+
+pub mod cycles_capability;
+
+pub mod root_capability;
+
+pub mod issuer_renewal;
+
+pub mod role_attestation;
+
+pub mod issuer_control;
+
+pub mod component_initialization;
+
+pub mod store_inventory;
+
+pub mod store_publication;
+
+pub mod store_gc;
+
+pub mod store_activation;
+
+pub mod store_control;
+
+pub mod store_catalog;
+
+pub mod fixture_bytes;
+
+pub mod store_status;
+
+pub mod template_bytes;
+
+pub mod fixture_reply;
+
+pub mod root_store_reporting;
+
+pub mod provisioning_census;
+
+pub mod pool_census;
+pub mod pool_inventory;
+
+pub mod pool_import_read;
+
+pub mod root_activation;
+
+pub mod funding_control;
+
+pub mod cycle_refill;
+
+pub mod component_control;
+pub mod component_read;
+
+pub mod root_deletion;
+
+pub mod pool_control;
+
+pub mod registry_control;
+
+pub mod root_store_control;
+
+pub mod retirement_control;
+
+pub mod batch_control;
+
+pub mod inspection_history;
+
+pub mod import_control;
+
+pub mod inspection;
+
+pub mod funding_read;
+
+pub mod subtree_read;
+
+pub mod component_removal_read;
+
+pub mod root_removal_read;
+
+pub mod authority;
+
+pub mod initialization;

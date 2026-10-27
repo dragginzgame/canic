@@ -56,10 +56,9 @@ fn prepared(binding: &ApplicationCheckpointBinding) -> Record {
         .unwrap()
 }
 
-fn roundtrip(record: &Record) -> Result<Record, ciborium::de::Error<std::io::Error>> {
-    let mut bytes = Vec::new();
-    ciborium::ser::into_writer(record, &mut bytes).unwrap();
-    ciborium::de::from_reader(bytes.as_slice())
+fn roundtrip(record: &Record) -> Result<Record, canic_contracts::serialization::SerializeError> {
+    let bytes = canic_contracts::serialization::serialize(record).unwrap();
+    canic_contracts::serialization::deserialize(&bytes)
 }
 
 #[test]

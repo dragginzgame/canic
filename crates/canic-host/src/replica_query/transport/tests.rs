@@ -1,6 +1,6 @@
 use super::{
-    LOCAL_HTTP_TIMEOUT, get_http_status, http_request, local_query_with_endpoint,
-    local_query_with_timeout, local_replica_endpoint_with_port,
+    LOCAL_HTTP_RESPONSE_BYTES, LOCAL_HTTP_TIMEOUT, get_http_status, http_request,
+    local_query_with_endpoint, local_query_with_timeout, local_replica_endpoint_with_port,
 };
 use crate::replica_query::ReplicaQueryError;
 use reqwest::Method;
@@ -53,6 +53,110 @@ fn status_reads_chunked_http_on_the_selected_origin() {
 }
 
 #[test]
+fn status_accepts_the_exact_response_ceiling() {
+    for chunked in [false, true] {
+        let (endpoint, server) = serve(move |stream| {
+            if chunked {
+                write!(stream, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n{LOCAL_HTTP_RESPONSE_BYTES:x}\r\n").unwrap();
+            } else {
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {LOCAL_HTTP_RESPONSE_BYTES}\r\n\r\n"
+                )
+                .unwrap();
+            }
+            stream
+                .write_all(&vec![b'x'; LOCAL_HTTP_RESPONSE_BYTES])
+                .unwrap();
+            if chunked {
+                stream.write_all(b"\r\n0\r\n\r\n").unwrap();
+            }
+        });
+        assert_eq!(
+            get_http_status(&endpoint).unwrap(),
+            vec![b'x'; LOCAL_HTTP_RESPONSE_BYTES]
+        );
+        server.join().unwrap();
+    }
+}
+
+#[test]
+fn status_refuses_oversized_bodies_without_waiting_for_eof() {
+    for framing in ["length", "chunked", "close"] {
+        let (release, wait) = mpsc::channel();
+        let (endpoint, server) = serve(move |stream| {
+            let length = LOCAL_HTTP_RESPONSE_BYTES + 1;
+            match framing {
+                "length" => write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {length}\r\n\r\n"
+                )
+                .unwrap(),
+                "chunked" => write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n{length:x}\r\n"
+                )
+                .unwrap(),
+                _ => stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap(),
+            }
+            stream.write_all(&vec![b'x'; length]).unwrap();
+            let _ = wait.recv_timeout(Duration::from_secs(5));
+        });
+        let result = http_request(
+            &endpoint,
+            "/api/v2/status",
+            Method::GET,
+            None,
+            Duration::from_secs(2),
+        );
+        let _ = release.send(());
+        server.join().unwrap();
+        assert!(
+            matches!(result, Err(ReplicaQueryError::Io(error)) if error.kind() == std::io::ErrorKind::InvalidData)
+        );
+    }
+}
+
+#[test]
+fn query_refuses_oversized_envelopes_without_waiting_for_eof() {
+    for chunked in [false, true] {
+        let (release, wait) = mpsc::channel();
+        let (endpoint, server) = serve(move |stream| {
+            let length = LOCAL_HTTP_RESPONSE_BYTES + 1;
+            if chunked {
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n{length:x}\r\n"
+                )
+                .unwrap();
+            } else {
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {length}\r\n\r\n"
+                )
+                .unwrap();
+            }
+            // The agent may disconnect as soon as it observes the limit.
+            let _ = stream.write_all(&vec![b'x'; length]);
+            let _ = wait.recv_timeout(Duration::from_secs(5));
+        });
+        let result = local_query_with_timeout(
+            &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
+            "fixture_query",
+            b"DIDL",
+            &endpoint,
+            Duration::from_secs(2),
+        );
+        let _ = release.send(());
+        server.join().unwrap();
+        assert!(
+            matches!(&result, Err(ReplicaQueryError::Agent(error)) if matches!(**error, ic_platform::agent::AgentError::TransportError(ic_platform::agent::TransportError::Generic(_)))),
+            "expected a bounded body transport refusal, got {result:?}"
+        );
+    }
+}
+
+#[test]
 fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
     // The canonical codec golden reply contains the four DIDL bytes.
     let reply = b"\xa2\x66status\x67replied\x65reply\xa1\x63arg\x44DIDL";
@@ -65,8 +169,7 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
     let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]);
     let arg = [0x44, 0x49, 0x44, 0x4c];
     assert_eq!(
-        local_query_with_endpoint(&canister.to_text(), "canic_public_status", &arg, endpoint)
-            .unwrap(),
+        local_query_with_endpoint(&canister.to_text(), "fixture_query", &arg, endpoint).unwrap(),
         arg
     );
     let request = server.join().unwrap();
@@ -85,12 +188,11 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
             .to_ascii_lowercase()
             .contains("authorization:")
     );
-    let envelope: ciborium::value::Value =
-        ciborium::de::from_reader(request.body.as_slice()).unwrap();
+    let envelope: serde_cbor::Value = serde_cbor::from_reader(request.body.as_slice()).unwrap();
     let content = field(&envelope, "content");
     assert_eq!(
         field(content, "sender"),
-        &ciborium::value::Value::Bytes(
+        &serde_cbor::Value::Bytes(
             ic_platform::principal::ExternalPrincipal::anonymous()
                 .as_slice()
                 .to_vec()
@@ -98,15 +200,15 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
     );
     assert_eq!(
         field(content, "canister_id"),
-        &ciborium::value::Value::Bytes(canister.as_slice().to_vec())
+        &serde_cbor::Value::Bytes(canister.as_slice().to_vec())
     );
     assert_eq!(
         field(content, "arg"),
-        &ciborium::value::Value::Bytes(arg.to_vec())
+        &serde_cbor::Value::Bytes(arg.to_vec())
     );
     assert_eq!(
         field(content, "method_name"),
-        &ciborium::value::Value::Text("canic_public_status".into())
+        &serde_cbor::Value::Text("fixture_query".into())
     );
 }
 
@@ -124,7 +226,7 @@ fn query_preserves_replica_rejection_without_another_request() {
     });
     let result = local_query_with_endpoint(
         &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
-        "canic_public_status",
+        "fixture_query",
         b"DIDL",
         endpoint,
     );
@@ -150,7 +252,7 @@ fn query_http_refusal_does_not_retry_or_follow_redirects() {
         let (endpoint, server) = serve(move |stream| stream.write_all(response).unwrap());
         let result = local_query_with_endpoint(
             &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
-            "canic_public_status",
+            "fixture_query",
             b"DIDL",
             endpoint,
         );
@@ -175,7 +277,7 @@ fn malformed_query_reply_preserves_the_agent_codec_failure() {
     });
     let result = local_query_with_endpoint(
         &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
-        "canic_public_status",
+        "fixture_query",
         b"DIDL",
         endpoint,
     );
@@ -196,7 +298,7 @@ fn query_deadline_retains_a_typed_timeout() {
     });
     let result = local_query_with_timeout(
         &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
-        "canic_public_status",
+        "fixture_query",
         b"DIDL",
         &endpoint,
         Duration::from_secs(1),
@@ -333,17 +435,14 @@ fn serve(
     (endpoint, server)
 }
 
-fn field<'a>(value: &'a ciborium::value::Value, name: &str) -> &'a ciborium::value::Value {
-    let value = if let ciborium::value::Value::Tag(_, value) = value {
+fn field<'a>(value: &'a serde_cbor::Value, name: &str) -> &'a serde_cbor::Value {
+    let value = if let serde_cbor::Value::Tag(_, value) = value {
         value.as_ref()
     } else {
         value
     };
-    value
-        .as_map()
-        .unwrap()
-        .iter()
-        .find(|(key, _)| key.as_text() == Some(name))
-        .map(|(_, value)| value)
-        .unwrap()
+    let serde_cbor::Value::Map(fields) = value else {
+        panic!("CBOR map")
+    };
+    fields.get(&serde_cbor::Value::Text(name.into())).unwrap()
 }

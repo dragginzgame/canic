@@ -11,7 +11,7 @@ use crate::{
         FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, SubnetId,
     },
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Execution balance retained while a removed root completes its deletion handoff.
@@ -27,8 +27,7 @@ pub const FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000
 /// Exact immutable root binding, initial release set, and installed module identity.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetSubnetRootAuthority {
     pub binding: FleetSubnetRootBinding,
     pub initial_release_set: FleetSubnetRootReleaseSet,
@@ -42,16 +41,14 @@ pub struct FleetSubnetRootAuthority {
 /// Fresh-install operation identity plus one complete sibling Store authority.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetSubnetWasmStoreInitArgs {
     pub authority: FleetSubnetWasmStoreAuthority,
     pub install_id: [u8; 32],
 }
 
 /// Request the one planned sibling Store controller handoff during root preparation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetWasmStoreAdoptionRequest {
     pub operation_id: [u8; 32],
@@ -59,8 +56,7 @@ pub struct FleetSubnetWasmStoreAdoptionRequest {
 }
 
 /// Terminal root-observed receipt for one sibling Store controller handoff.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetWasmStoreAdoptionResponse {
     pub operation_id: [u8; 32],
@@ -75,8 +71,7 @@ pub struct FleetSubnetWasmStoreAdoptionResponse {
 /// Compact live inventory bound to one root's exact active Fleet Registry mirror.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootCanisterSummary {
     pub fleet_registry: FleetRegistryVersion,
     pub placement_subnet: SubnetId,
@@ -94,8 +89,7 @@ pub struct FleetSubnetRootCanisterSummary {
 /// Controller command fencing new top-level Component allocation under exact active authority.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDrainingRequest {
     pub operation_id: [u8; 32],
     pub expected_registry: FleetRegistryVersion,
@@ -107,8 +101,7 @@ pub struct FleetSubnetRootDrainingRequest {
 /// Read-only lookup key for one durable root-draining fence.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDrainingStatusRequest {
     pub operation_id: [u8; 32],
 }
@@ -119,8 +112,7 @@ pub struct FleetSubnetRootDrainingStatusRequest {
 /// Durable root-local admission cutoff and exact active authority frozen at that boundary.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDrainingResponse {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -144,8 +136,7 @@ pub struct FleetSubnetRootDrainingResponse {
 /// Controller command freezing one exact terminal root-local inventory.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootFinalInventoryRequest {
     pub operation_id: [u8; 32],
     pub expected_registry: FleetRegistryVersion,
@@ -157,8 +148,7 @@ pub struct FleetSubnetRootFinalInventoryRequest {
 /// Read-only lookup key for one durable terminal root-local inventory.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootFinalInventoryStatusRequest {
     pub operation_id: [u8; 32],
 }
@@ -169,16 +159,14 @@ pub struct FleetSubnetRootFinalInventoryStatusRequest {
 /// Controller command revalidating terminal Store authority before logical root removal.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootRemovalRequest {
     pub operation_id: [u8; 32],
     pub expected_registry: FleetRegistryVersion,
 }
 
 /// Read-only lookup key for one durable logical root-removal publication.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootRemovalStatusRequest {
     pub operation_id: [u8; 32],
 }
@@ -189,16 +177,14 @@ pub struct FleetSubnetRootRemovalStatusRequest {
 /// Controller command reclaiming the retained Store after exact logical root removal.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreReclamationRequest {
     pub operation_id: [u8; 32],
     pub expected_final_inventory_hash: [u8; 32],
 }
 
 /// Read-only lookup key for one durable root Store-reclamation receipt.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreReclamationStatusRequest {
     pub operation_id: [u8; 32],
 }
@@ -209,8 +195,7 @@ pub struct FleetSubnetRootStoreReclamationStatusRequest {
 /// Durable proof that the logically removed root's retained Store completed exact GC.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreReclamationResponse {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -229,23 +214,20 @@ pub struct FleetSubnetRootStoreReclamationResponse {
 }
 
 /// Controller command finalizing the reclaimed Store's root-local binding.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreBindingFinalizationRequest {
     pub operation_id: [u8; 32],
     pub expected_reclamation_hash: [u8; 32],
 }
 
 /// Read-only lookup key for one durable Store-binding finalization receipt.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreBindingFinalizationStatusRequest {
     pub operation_id: [u8; 32],
 }
 
 /// Durable proof that the reclaimed Store no longer occupies a publication binding slot.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreBindingFinalizationResponse {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -260,23 +242,20 @@ pub struct FleetSubnetRootStoreBindingFinalizationResponse {
 }
 
 /// Controller command physically deleting the reclaimed and unbound Store.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreDeletionRequest {
     pub operation_id: [u8; 32],
     pub expected_binding_finalization_hash: [u8; 32],
 }
 
 /// Read-only lookup key for one durable Store-deletion receipt.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreDeletionStatusRequest {
     pub operation_id: [u8; 32],
 }
 
 /// Durable proof that the root's reclaimed and unbound Store is physically absent.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootStoreDeletionResponse {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -295,8 +274,7 @@ pub struct FleetSubnetRootStoreDeletionResponse {
 }
 
 /// Controller command preparing a removed root for external physical deletion.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDeletionPreparationRequest {
     pub operation_id: [u8; 32],
     pub expected_store_deletion_hash: [u8; 32],
@@ -307,15 +285,13 @@ pub struct FleetSubnetRootDeletionPreparationRequest {
 }
 
 /// Read-only lookup key for the root's durable external-deletion readiness receipt.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDeletionPreparationStatusRequest {
     pub operation_id: [u8; 32],
 }
 
 /// Durable proof that a removed root returned excess cycles and is ready for its executor.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDeletionPreparationResponse {
     pub ledger_receipt: crate::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
@@ -342,8 +318,7 @@ pub struct FleetSubnetRootDeletionPreparationResponse {
 /// Exact terminal Component history and retained write-fenced Store authority.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootFinalInventoryResponse {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -372,8 +347,7 @@ pub struct FleetSubnetRootFinalInventoryResponse {
 /// Fresh-install authority plus the reinstall-local activation operation identity.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetSubnetRootInitArgs {
     /// Fence allocation until the exact externally controlled capacity has been imported.
     #[serde(deserialize_with = "crate::serialization::required_option")]
@@ -394,12 +368,11 @@ mod tests {
     };
 
     #[test]
-    fn canister_summary_and_root_lifecycle_contracts_round_trip_through_candid() {
+    fn canister_summary_and_root_lifecycle_contracts_round_trip_through_wire() {
         let summary = canister_summary();
-        let candid =
-            ic_platform::candid::contract::encode_one(&summary).expect("encode Canister summary");
+        let wire = crate::protocol::authority::encode(&summary).expect("encode Canister summary");
         let decoded: FleetSubnetRootCanisterSummary =
-            ic_platform::candid::decoder::decode_one(&candid).expect("decode Canister summary");
+            crate::protocol::authority::decode(&wire).expect("decode Canister summary");
 
         assert_eq!(decoded, summary);
 
@@ -411,31 +384,27 @@ mod tests {
         let status = FleetSubnetRootDrainingStatusRequest {
             operation_id: draining.operation_id,
         };
-        let request_bytes = ic_platform::candid::contract::encode_one(&request)
-            .expect("encode root draining request");
+        let request_bytes =
+            crate::protocol::authority::encode(&request).expect("encode root draining request");
         let status_bytes =
-            ic_platform::candid::contract::encode_one(status).expect("encode root draining status");
-        let response_bytes = ic_platform::candid::contract::encode_one(&draining)
-            .expect("encode root draining response");
+            crate::protocol::authority::encode(status).expect("encode root draining status");
+        let response_bytes =
+            crate::protocol::authority::encode(&draining).expect("encode root draining response");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<FleetSubnetRootDrainingRequest>(
-                &request_bytes
-            )
-            .expect("decode root draining request"),
+            crate::protocol::authority::decode::<FleetSubnetRootDrainingRequest>(&request_bytes)
+                .expect("decode root draining request"),
             request
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<FleetSubnetRootDrainingStatusRequest>(
+            crate::protocol::authority::decode::<FleetSubnetRootDrainingStatusRequest>(
                 &status_bytes
             )
             .expect("decode root draining status"),
             status
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<FleetSubnetRootDrainingResponse>(
-                &response_bytes
-            )
-            .expect("decode root draining response"),
+            crate::protocol::authority::decode::<FleetSubnetRootDrainingResponse>(&response_bytes)
+                .expect("decode root draining response"),
             draining
         );
 
@@ -447,28 +416,28 @@ mod tests {
         let inventory_status = FleetSubnetRootFinalInventoryStatusRequest {
             operation_id: inventory.operation_id,
         };
-        let request_bytes = ic_platform::candid::contract::encode_one(&inventory_request)
+        let request_bytes = crate::protocol::authority::encode(&inventory_request)
             .expect("encode root inventory request");
-        let status_bytes = ic_platform::candid::contract::encode_one(inventory_status)
+        let status_bytes = crate::protocol::authority::encode(inventory_status)
             .expect("encode root inventory status");
-        let response_bytes = ic_platform::candid::contract::encode_one(&inventory)
-            .expect("encode root inventory response");
+        let response_bytes =
+            crate::protocol::authority::encode(&inventory).expect("encode root inventory response");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<FleetSubnetRootFinalInventoryRequest>(
+            crate::protocol::authority::decode::<FleetSubnetRootFinalInventoryRequest>(
                 &request_bytes
             )
             .expect("decode root inventory request"),
             inventory_request
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<FleetSubnetRootFinalInventoryStatusRequest>(
+            crate::protocol::authority::decode::<FleetSubnetRootFinalInventoryStatusRequest>(
                 &status_bytes
             )
             .expect("decode root inventory status"),
             inventory_status
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<FleetSubnetRootFinalInventoryResponse>(
+            crate::protocol::authority::decode::<FleetSubnetRootFinalInventoryResponse>(
                 &response_bytes
             )
             .expect("decode root inventory response"),
@@ -477,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn draining_publication_contracts_round_trip_through_candid() {
+    fn draining_publication_contracts_round_trip_through_wire() {
         let draining = draining_response(&canister_summary());
         let publication = crate::dto::fleet_registry::FleetSubnetRootDrainingPublicationRequest {
             expected_registry: draining.active_registry.clone(),
@@ -493,20 +462,19 @@ mod tests {
                     content_hash: [19; 32],
                 },
             };
-        let publication_bytes = ic_platform::candid::contract::encode_one(&publication)
+        let publication_bytes = crate::protocol::authority::encode(&publication)
             .expect("encode root draining publication");
-        let publication_response_bytes =
-            ic_platform::candid::contract::encode_one(&publication_response)
-                .expect("encode root draining publication response");
+        let publication_response_bytes = crate::protocol::authority::encode(&publication_response)
+            .expect("encode root draining publication response");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<
+            crate::protocol::authority::decode::<
                 crate::dto::fleet_registry::FleetSubnetRootDrainingPublicationRequest,
             >(&publication_bytes)
             .expect("decode root draining publication"),
             publication
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<
+            crate::protocol::authority::decode::<
                 crate::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
             >(&publication_response_bytes)
             .expect("decode root draining publication response"),
@@ -536,10 +504,10 @@ mod tests {
                     content_hash: [29; 32],
                 },
             };
-        assert_candid_round_trip(&removal_request);
-        assert_candid_round_trip(&removal_status);
-        assert_candid_round_trip(&coordinator_request);
-        assert_candid_round_trip(&coordinator_response);
+        assert_wire_round_trip(&removal_request);
+        assert_wire_round_trip(&removal_status);
+        assert_wire_round_trip(&coordinator_request);
+        assert_wire_round_trip(&coordinator_response);
 
         let reclamation_request = FleetSubnetRootStoreReclamationRequest {
             operation_id: coordinator_response.final_inventory.operation_id,
@@ -574,9 +542,9 @@ mod tests {
             completed_at_ns: 32,
             reclamation_hash: [33; 32],
         };
-        assert_candid_round_trip(&reclamation_request);
-        assert_candid_round_trip(&reclamation_status);
-        assert_candid_round_trip(&reclamation_response);
+        assert_wire_round_trip(&reclamation_request);
+        assert_wire_round_trip(&reclamation_status);
+        assert_wire_round_trip(&reclamation_response);
 
         let finalization =
             assert_store_binding_finalization_contract_round_trip(&reclamation_response);
@@ -605,9 +573,9 @@ mod tests {
             completed_at_ns: 35,
             finalization_hash: [36; 32],
         };
-        assert_candid_round_trip(&request);
-        assert_candid_round_trip(&status);
-        assert_candid_round_trip(&response);
+        assert_wire_round_trip(&request);
+        assert_wire_round_trip(&status);
+        assert_wire_round_trip(&response);
         response
     }
 
@@ -637,9 +605,9 @@ mod tests {
             completed_at_ns: 40,
             deletion_hash: [41; 32],
         };
-        assert_candid_round_trip(&request);
-        assert_candid_round_trip(&status);
-        assert_candid_round_trip(&response);
+        assert_wire_round_trip(&request);
+        assert_wire_round_trip(&status);
+        assert_wire_round_trip(&response);
         assert_root_deletion_handoff_contract_round_trip(
             &response,
             finalization.final_inventory_hash,
@@ -739,13 +707,13 @@ mod tests {
             completed_at_ns: 56,
         };
 
-        assert_candid_round_trip(&preparation_request);
-        assert_candid_round_trip(&preparation_status);
-        assert_candid_round_trip(&preparation);
-        assert_candid_round_trip(&intent_request);
-        assert_candid_round_trip(&intent);
-        assert_candid_round_trip(&readiness_request);
-        assert_candid_round_trip(&readiness);
+        assert_wire_round_trip(&preparation_request);
+        assert_wire_round_trip(&preparation_status);
+        assert_wire_round_trip(&preparation);
+        assert_wire_round_trip(&intent_request);
+        assert_wire_round_trip(&intent);
+        assert_wire_round_trip(&readiness_request);
+        assert_wire_round_trip(&readiness);
     }
 
     fn assert_root_deletion_execution_contract_round_trip(
@@ -800,21 +768,20 @@ mod tests {
             completed_at_ns: 54,
             deletion_hash: [55; 32],
         };
-        assert_candid_round_trip(&execution_request);
-        assert_candid_round_trip(&execution);
-        assert_candid_round_trip(&completion_request);
-        assert_candid_round_trip(&status);
-        assert_candid_round_trip(&deletion);
+        assert_wire_round_trip(&execution_request);
+        assert_wire_round_trip(&execution);
+        assert_wire_round_trip(&completion_request);
+        assert_wire_round_trip(&status);
+        assert_wire_round_trip(&deletion);
     }
 
-    fn assert_candid_round_trip<T>(value: &T)
+    fn assert_wire_round_trip<T>(value: &T)
     where
-        T: CandidType + for<'de> serde::Deserialize<'de> + Eq + std::fmt::Debug,
+        T: serde::Serialize + for<'de> serde::Deserialize<'de> + Eq + std::fmt::Debug,
     {
-        let bytes =
-            ic_platform::candid::contract::encode_one(value).expect("encode Candid contract");
+        let bytes = crate::protocol::authority::encode(value).expect("encode Wire contract");
         assert_eq!(
-            &ic_platform::candid::decoder::decode_one::<T>(&bytes).expect("decode Candid contract"),
+            &crate::protocol::authority::decode::<T>(&bytes).expect("decode Wire contract"),
             value,
         );
     }

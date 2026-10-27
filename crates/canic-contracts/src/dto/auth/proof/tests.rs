@@ -3,17 +3,17 @@ use serde::de::DeserializeOwned;
 
 fn assert_transport<T, U>(value: &T)
 where
-    T: CandidType + Serialize + DeserializeOwned + Eq + std::fmt::Debug,
+    T: Serialize + DeserializeOwned + Eq + std::fmt::Debug,
     U: Serialize + DeserializeOwned,
 {
-    let bytes = ic_platform::candid::contract::encode_one(value).unwrap();
-    let decoded: T = ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+    let bytes = crate::protocol::authority::encode(value).unwrap();
+    let decoded: T = crate::protocol::authority::decode(&bytes).unwrap();
     assert_eq!(&decoded, value);
     let mut canic_bytes = Vec::new();
-    ciborium::into_writer(value, &mut canic_bytes).unwrap();
-    let protocol: U = ciborium::from_reader(canic_bytes.as_slice()).unwrap();
+    serde_cbor::to_writer(&mut canic_bytes, value).unwrap();
+    let protocol: U = serde_cbor::from_reader(canic_bytes.as_slice()).unwrap();
     let mut protocol_bytes = Vec::new();
-    ciborium::into_writer(&protocol, &mut protocol_bytes).unwrap();
+    serde_cbor::to_writer(&mut protocol_bytes, &protocol).unwrap();
     assert_eq!(canic_bytes, protocol_bytes);
 }
 

@@ -122,8 +122,6 @@ fn root_release_artifact_cache_spec(
     let mut environment = vec![("ICP_ENVIRONMENT", spec.build_network.as_str())];
     environment.extend_from_slice(build_env);
     let cargo_build = root_release_cargo_build_spec(spec, &environment);
-    let cargo_inputs =
-        resolve_cargo_build_inputs(&cargo_build).expect("resolve root release Cargo build inputs");
     let mut cache = ArtifactCacheSpec::new(
         &spec
             .workspace_root
@@ -139,7 +137,6 @@ fn root_release_artifact_cache_spec(
     ])
     .with_environment(environment.iter().copied())
     .with_input("build-config", &spec.build_config_path)
-    .with_cargo_build_inputs("root-release-cargo", &cargo_build, &cargo_inputs)
     .with_prune_policy_at_most_every(
         internal_test_artifact_prune_policy(),
         internal_test_artifact_maintenance_interval(),
@@ -151,6 +148,11 @@ fn root_release_artifact_cache_spec(
         spec.build_profile,
         &environment,
     );
+    // Materialize the generated Root package before capturing the application
+    // package inputs: fixture configurations may live inside that package.
+    let cargo_inputs =
+        resolve_cargo_build_inputs(&cargo_build).expect("resolve root release Cargo build inputs");
+    cache = cache.with_cargo_build_inputs("root-release-cargo", &cargo_build, &cargo_inputs);
 
     for relative in spec.artifact_watch_paths {
         cache = cache.with_input(relative, &spec.workspace_root.join(relative));
@@ -195,6 +197,7 @@ fn root_release_cargo_build_spec(
         &spec.workspace_root.join("target/icp-build"),
         &packages,
         crate::workspace::wasm_build_environment(),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_cargo_selection(spec.build_profile.cargo_selection())
     .with_environment(crate::workspace::wasm_build_environment().chain(

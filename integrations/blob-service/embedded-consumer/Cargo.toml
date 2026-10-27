@@ -12,10 +12,12 @@ license = "MIT"
 [workspace.dependencies]
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
-ic-memory = "0.50.10"
+ic-blob-storage = "0.49.1"
+ic-memory = "0.51.4"
 # Tests and tooling only
-ic-platform = { version = "0.6.7", default-features = false }
-ic-storage = "0.50.10"
+ic-platform = { version = "0.6.19", default-features = false }
+ic-storage = "0.51.4"
+ic-wire = { version = "0.7.17", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 
 [package]
@@ -31,16 +33,18 @@ app = "embedded-app"
 role = "backend"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 test = false
 doctest = false
 
 [dependencies]
 canic = { workspace = true, features = [] }
 canic-blob-service.workspace = true
+ic-blob-storage.workspace = true
 ic-memory.workspace = true
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-storage.workspace = true
+ic-wire.workspace = true
 serde.workspace = true
 
 [build-dependencies]
@@ -57,3 +61,10 @@ inherits = "release"
 lto = "thin"
 codegen-units = 8
 incremental = false
+
+[features]
+wire-schema = ["canic-blob-service/wire-schema"]
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]

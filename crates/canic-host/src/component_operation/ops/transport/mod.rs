@@ -3,7 +3,7 @@
 //! Selection reuses terminal Fleet inventory and its exact protocol sidecars.
 
 use crate::{
-    canister_protocol::{call_with_arg, query_with_arg},
+    canister_protocol::{call_wire, query_wire_cli},
     component_operation::{
         ComponentOperationError,
         model::{ComponentAuthorityRecord, ComponentPlanRecord},
@@ -15,18 +15,14 @@ use crate::{
         resolve_current_fleet,
     },
     icp::IcpCli,
-    protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
+    protocol_binding::resolve_release_registry_wire_schema,
 };
 use canic_contracts::{
     diagnostics::codes::STATE_UNAVAILABLE,
     dto::{
-        component_registry::RootComponentAllocationRequest,
-        fleet_coordinator::{CoordinatorRegistryRequest, CoordinatorRegistryResponse},
-        fleet_registry::FleetSubnetRootStatus,
-        pool::CanisterPoolStatusRequest,
-        role::{OperationAcceptedResponse as RootCommandResponse, OperationStatusRequest},
-        root::RootOperationStatusResponse,
-        wire::projection::component_operation::{RootCommand, RootRead, RootResponse},
+        component_registry::RootComponentAllocationRequest, fleet_registry::FleetSubnetRootStatus,
+        pool::CanisterPoolStatusRequest, role::OperationReceipt,
+        root::RootComponentOperationStatus,
     },
     ids::{ComponentSpecId, FleetSubnetRootBinding},
     protocol,
@@ -111,7 +107,11 @@ impl IcpComponentTransport {
             .iter()
             .find(|entry| entry.pid == *principal)
             .ok_or(ComponentOperationError::Missing)?;
-        let protocol = resolve_registry_protocol_binding(&self.root, environment, entry)?;
+        let protocol = resolve_release_registry_wire_schema(
+            &self.root,
+            root.active_release_set.release_build_id,
+            entry,
+        )?;
         let mut controllers = configured.controllers.clone();
         for name in &configured.controller_canisters {
             controllers.push(
@@ -124,13 +124,7 @@ impl IcpComponentTransport {
         }
         controllers.sort();
         controllers.dedup();
-        let operator = Principal::from_text(self.icp.identity_principal_text()?)
-            .map_err(|_| ComponentOperationError::Authority { field: "operator" })?;
-        if !controllers.contains(&operator.to_text()) {
-            return Err(ComponentOperationError::Authority {
-                field: "operator controller",
-            });
-        }
+        let operator = self.require_operator_controller(&controllers)?;
         Ok(ComponentAuthorityRecord {
             environment: environment.to_string(),
             fleet: fleet.to_string(),
@@ -150,7 +144,7 @@ impl IcpComponentTransport {
                 .module_hash
                 .clone()
                 .ok_or(ComponentOperationError::Integrity)?,
-            root_candid_sha256: protocol.binding().candid_sha256,
+            root_wire_schema_sha256: protocol.schema_sha256,
             root_controllers: controllers,
             registry_sha256: Sha256::digest(serde_json::to_vec(registry)?).into(),
             operator,
@@ -158,6 +152,20 @@ impl IcpComponentTransport {
             spec_hash: selected.spec_hash,
             role: selected.component_role.clone(),
         })
+    }
+
+    fn require_operator_controller(
+        &self,
+        controllers: &[String],
+    ) -> Result<Principal, ComponentOperationError> {
+        let operator = Principal::from_text(self.icp.identity_principal_text()?)
+            .map_err(|_| ComponentOperationError::Authority { field: "operator" })?;
+        if !controllers.contains(&operator.to_text()) {
+            return Err(ComponentOperationError::Authority {
+                field: "operator controller",
+            });
+        }
+        Ok(operator)
     }
 
     fn current_fleet(
@@ -186,7 +194,7 @@ impl IcpComponentTransport {
         &self,
         plan: &ComponentPlanRecord,
         principal: Principal,
-    ) -> Result<ResolvedProtocolBinding, ComponentOperationError> {
+    ) -> Result<crate::release_set::BuiltWireSchema, ComponentOperationError> {
         let current = resolve_current_fleet(
             &self.root,
             &plan.authority.environment,
@@ -198,29 +206,45 @@ impl IcpComponentTransport {
             .iter()
             .find(|entry| entry.pid == principal.to_text())
             .ok_or(ComponentOperationError::Missing)?;
-        Ok(resolve_registry_protocol_binding(
+        let schema = resolve_release_registry_wire_schema(
             &self.root,
-            &plan.authority.environment,
+            plan.authority.release_set.release_build_id,
             entry,
-        )?)
+        )?;
+        if principal == plan.authority.binding.fleet_subnet_root
+            && schema.schema_sha256 != plan.authority.root_wire_schema_sha256
+        {
+            return Err(ComponentOperationError::Authority {
+                field: "Root Wire schema",
+            });
+        }
+        Ok(schema)
     }
 
     fn query(
         &self,
         plan: &ComponentPlanRecord,
-        request: &RootRead,
-    ) -> Result<RootResponse, ComponentOperationError> {
+    ) -> Result<RootComponentOperationStatus, ComponentOperationError> {
         let principal = plan.authority.binding.fleet_subnet_root;
-        Ok(query_with_arg(
+        let binding = self.binding(plan, principal)?;
+        crate::artifact_io::require_wire_method(
+            &binding.schema,
+            protocol::component_read::allocation::METHOD,
+            protocol::component_read::allocation::METHOD_ID,
+            protocol::wire_declaration::MethodKind::Query,
+            protocol::component_read::REQUEST_LIMITS,
+            protocol::component_read::RESPONSE_LIMITS,
+        )?;
+        let status: canic_contracts::dto::component_read::ComponentAllocation = query_wire_cli(
             &self.icp,
-            &self.binding(plan, principal)?,
             principal,
-            match request {
-                RootRead::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
-                _ => protocol::CANIC_ROOT_STATUS,
-            },
-            request,
-        )?)
+            protocol::component_read::allocation::METHOD,
+            protocol::component_read::allocation::METHOD_ID,
+            &plan.operation_id,
+            protocol::component_read::REQUEST_LIMITS,
+            protocol::component_read::RESPONSE_LIMITS,
+        )?;
+        Ok(status.into())
     }
 }
 
@@ -237,10 +261,9 @@ impl ComponentTransport for IcpComponentTransport {
             &expected.component_spec,
         )?;
         crate::component_operation::policy::validate_authority(expected, &authority)?;
-        let RootResponse::FleetAuthority(root) = self.query(plan, &RootRead::FleetAuthority)?
-        else {
-            return Err(ComponentOperationError::Progress);
-        };
+        let principal = plan.authority.binding.fleet_subnet_root;
+        let _binding = self.binding(plan, principal)?;
+        let root = crate::canister_protocol::root_authority::query(&self.icp, principal)?;
         let matching_binding = root.binding == authority.binding;
         let matching_release = root.initial_release_set == authority.release_set;
         let matching_module = canic_core::cdk::utils::hash::hex_bytes(root.expected_module_hash)
@@ -251,13 +274,9 @@ impl ComponentTransport for IcpComponentTransport {
             });
         }
         let coordinator = authority.binding.authority.binding.coordinator;
-        let CoordinatorRegistryResponse::Registry(registry) = query_with_arg(
-            &self.icp,
-            &self.binding(plan, coordinator)?,
-            coordinator,
-            protocol::CANIC_COORDINATOR_REGISTRY,
-            &CoordinatorRegistryRequest::Registry,
-        )?;
+        // Validate the selected participant before using live registry evidence.
+        self.binding(plan, coordinator)?;
+        let registry = crate::registry_discovery::snapshot(&self.icp, coordinator)?;
         let registry_sha256: [u8; 32] = Sha256::digest(serde_json::to_vec(&registry)?).into();
         if registry_sha256 != authority.registry_sha256 {
             return Err(ComponentOperationError::Authority {
@@ -283,16 +302,14 @@ impl ComponentTransport for IcpComponentTransport {
                 field: "Root management",
             });
         }
-        let RootResponse::Pool(pool) = self.query(
-            plan,
-            &RootRead::Pool(CanisterPoolStatusRequest {
+        let pool = crate::canister_protocol::pool_inventory::query(
+            &self.icp,
+            authority.binding.fleet_subnet_root,
+            &CanisterPoolStatusRequest {
                 start_after: None,
                 limit: 1,
-            }),
-        )?
-        else {
-            return Err(ComponentOperationError::Progress);
-        };
+            },
+        )?;
         Ok(ComponentObservation {
             authority,
             ready_assets: pool.ready,
@@ -303,12 +320,7 @@ impl ComponentTransport for IcpComponentTransport {
         &mut self,
         plan: &ComponentPlanRecord,
     ) -> Result<ComponentProgressObservation, ComponentOperationError> {
-        let response = self.query(
-            plan,
-            &RootRead::Operation(OperationStatusRequest {
-                operation_id: plan.operation_id,
-            }),
-        );
+        let response = self.query(plan);
         let response = match response {
             Err(ComponentOperationError::Protocol(error))
                 if error.is_rejected_with(STATE_UNAVAILABLE) =>
@@ -317,26 +329,31 @@ impl ComponentTransport for IcpComponentTransport {
             }
             other => other?,
         };
-        let RootResponse::Operation(status) = response else {
-            return Err(ComponentOperationError::Progress);
-        };
-        let RootOperationStatusResponse::ProvisionComponent(status) = *status else {
-            return Err(ComponentOperationError::Progress);
-        };
-        crate::component_operation::ops::project_progress(plan, status)
+        crate::component_operation::ops::project_progress(plan, response)
     }
 
     fn submit(&mut self, plan: &ComponentPlanRecord) -> Result<(), ComponentOperationError> {
         let principal = plan.authority.binding.fleet_subnet_root;
-        let RootCommandResponse::OperationAccepted(receipt) = call_with_arg(
+        let binding = self.binding(plan, principal)?;
+        crate::artifact_io::require_wire_method(
+            &binding.schema,
+            protocol::component_control::provision::METHOD,
+            protocol::component_control::provision::METHOD_ID,
+            protocol::wire_declaration::MethodKind::Update,
+            protocol::component_control::REQUEST_LIMITS,
+            protocol::component_control::RESPONSE_LIMITS,
+        )?;
+        let receipt: OperationReceipt = call_wire(
             &self.icp,
-            &self.binding(plan, principal)?,
             principal,
-            protocol::CANIC_ROOT_COMMAND,
-            &RootCommand::ProvisionComponent(RootComponentAllocationRequest {
+            protocol::component_control::provision::METHOD,
+            protocol::component_control::provision::METHOD_ID,
+            &RootComponentAllocationRequest {
                 operation_id: plan.operation_id,
                 component_spec: plan.authority.component_spec.clone(),
-            }),
+            },
+            protocol::component_control::REQUEST_LIMITS,
+            protocol::component_control::RESPONSE_LIMITS,
         )?;
         if receipt.operation_id != plan.operation_id {
             return Err(ComponentOperationError::Progress);

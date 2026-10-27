@@ -13,12 +13,12 @@ use crate::{
     entropy::{EntropyError, random_bytes_32},
 };
 use canic_contracts::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
-use ciborium::Value;
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes},
     read::read_optional_file_no_follow,
 };
+use serde_cbor::Value;
 use sha2_host::{Digest, Sha256};
 use std::{
     io,
@@ -405,7 +405,7 @@ fn encode_record(record: &ReleaseBuildPlanRecord) -> Vec<u8> {
         state,
     ]);
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(&value, &mut bytes)
+    serde_cbor::to_writer(&mut bytes, &value)
         .expect("serializing a fixed release-build CBOR value cannot fail");
     bytes
 }
@@ -415,7 +415,7 @@ fn decode_record(
     bytes: &[u8],
 ) -> Result<ReleaseBuildPlanRecord, ReleaseBuildPlanError> {
     let value: Value =
-        ciborium::de::from_reader(bytes).map_err(|error| invalid(path, error.to_string()))?;
+        serde_cbor::from_reader(bytes).map_err(|error| invalid(path, error.to_string()))?;
     let fields = exact_array(path, value, 6, "record")?;
     let nonce = ReleaseBuildNonce::from_random_bytes(exact_digest(path, &fields[0], "nonce")?);
     let release_build_id = exact_digest(path, &fields[1], "release_build_id")?
@@ -427,33 +427,32 @@ fn decode_record(
         })
         .parse()
         .expect("lowercase digest text is a canonical release-build ID");
-    let builder_version = fields[2]
-        .as_text()
+    let builder_version = text(&fields[2])
         .filter(|version| !version.trim().is_empty())
         .ok_or_else(|| invalid(path, "builder_version must be nonempty text"))?
         .to_string();
-    let build_profile = fields[3]
-        .as_text()
+    let build_profile = text(&fields[3])
         .ok_or_else(|| invalid(path, "build_profile must be text"))?
         .parse()
         .map_err(|error| invalid(path, error))?;
-    let build_network = match fields[4]
-        .as_text()
-        .ok_or_else(|| invalid(path, "build_network must be text"))?
-    {
-        "ic" => BuildNetwork::Ic,
-        "local" => BuildNetwork::Local,
-        value => {
-            return Err(invalid(
-                path,
-                format!("build_network must be `ic` or `local`, found {value}"),
-            ));
-        }
-    };
+    let build_network =
+        match text(&fields[4]).ok_or_else(|| invalid(path, "build_network must be text"))? {
+            "ic" => BuildNetwork::Ic,
+            "local" => BuildNetwork::Local,
+            value => {
+                return Err(invalid(
+                    path,
+                    format!("build_network must be `ic` or `local`, found {value}"),
+                ));
+            }
+        };
     let state_fields = exact_array_ref(path, &fields[5], "state")?;
     let discriminant = state_fields
         .first()
-        .and_then(Value::as_integer)
+        .and_then(|value| match value {
+            Value::Integer(value) => Some(*value),
+            _ => None,
+        })
         .and_then(|value| u8::try_from(value).ok())
         .ok_or_else(|| invalid(path, "state discriminant must be an unsigned integer"))?;
     let state = match (discriminant, state_fields) {
@@ -475,6 +474,13 @@ fn decode_record(
         return Err(invalid(path, "CBOR bytes are not canonical"));
     }
     Ok(record)
+}
+
+fn text(value: &Value) -> Option<&str> {
+    match value {
+        Value::Text(value) => Some(value),
+        _ => None,
+    }
 }
 
 fn exact_array(

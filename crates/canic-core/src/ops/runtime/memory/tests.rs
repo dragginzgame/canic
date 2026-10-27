@@ -132,9 +132,12 @@ fn allocation_snapshot_preserves_unopened_memories_and_ledger_generation() {
         report.allocated_bucket_bytes,
         report.virtual_extent.bytes + report.bucket_slack_bytes
     );
-    let bytes = ic_platform::candid::contract::encode_one(&report).expect("encode bounded report");
+    use canic_contracts::protocol::protected_memory_allocations::{METHOD_ID, RESPONSE_LIMITS};
+    let bytes = ic_wire::native::encode_response(METHOD_ID, &report, RESPONSE_LIMITS)
+        .expect("encode bounded report");
     let decoded: MemoryAllocationsResponse =
-        ic_platform::candid::decoder::decode_one(&bytes).expect("decode bounded report");
+        ic_wire::native::decode_response(METHOD_ID, &bytes, RESPONSE_LIMITS)
+            .expect("decode bounded report");
     assert_eq!(decoded, report);
 }
 
@@ -481,14 +484,10 @@ fn receipt_capacity_growth_exhaustion_preserves_store_and_typed_ops_failure() {
 }
 
 #[test]
-fn ledger_snapshot_preserves_anchor_commit_evidence_over_candid() {
+fn ledger_snapshot_preserves_anchor_commit_evidence() {
     MemoryRegistryOps::init_registry().expect("bootstrap canonical memory runtime");
     let source = ledger::try_snapshot().unwrap();
-    let response = MemoryRegistryOps::ledger_snapshot().unwrap();
-    let bytes =
-        ic_platform::candid::contract::encode_one(&response).expect("ledger response Candid");
-    let decoded: MemoryLedgerResponse =
-        ic_platform::candid::decoder::decode_one(&bytes).expect("current Candid");
+    let decoded = MemoryRegistryOps::ledger_snapshot().unwrap();
     assert_eq!(decoded.current_generation, source.export.current_generation);
     assert_eq!(
         decoded.ledger_memory_manager_id,

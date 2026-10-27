@@ -4,21 +4,27 @@
 //! Does not own: authentication, settlement, cleanup or effect admission.
 //! Boundary: original local and receipt-backed identities remain distinct.
 
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
-use serde::Deserialize;
+use ic_platform::Principal;
+use serde::{Deserialize, Serialize};
 
 /// Canonical scan order: local accounting first, then receipt-backed reservations.
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum IntentReleaseKey {
     Local(u64),
     ReceiptBacked([u8; 32]),
 }
 
 /// Retained terminal evidence, without interpreting it as a new authorization.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct IntentReleaseEvidence {
     pub source_canister: Principal,
     pub schema_version: u32,
@@ -26,8 +32,11 @@ pub struct IntentReleaseEvidence {
 }
 
 /// Exact receipt-backed state, independent of retention deadlines.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum IntentReleaseReceiptState {
     Pending,
     Committed(IntentReleaseEvidence),
@@ -35,8 +44,11 @@ pub enum IntentReleaseReceiptState {
 }
 
 /// One canonical receipt-backed reservation, including application retention.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct IntentReleaseReceipt {
     pub operation_id: [u8; 32],
     pub payload_hash_schema_version: u32,
@@ -51,8 +63,11 @@ pub struct IntentReleaseReceipt {
 }
 
 /// One original accounting row; local records need not have a linked replay receipt.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum IntentReleaseEntry {
     Local {
         intent_id: u64,
@@ -62,8 +77,11 @@ pub enum IntentReleaseEntry {
 }
 
 /// One bounded row with key-only lookahead; discovery never expires or settles work.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct IntentReleaseResponse {
     pub owner: Principal,
     pub entry: Option<IntentReleaseEntry>,

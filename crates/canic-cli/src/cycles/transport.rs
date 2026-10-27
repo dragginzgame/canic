@@ -15,7 +15,10 @@ use crate::{
         options::CyclesOptions,
         parse::{cycle_tracker_page, topup_event_page},
     },
-    support::registry_tree::{RegistryRow, visible_rows},
+    support::{
+        parallel::collect_ordered_reports,
+        registry_tree::{RegistryRow, visible_rows},
+    },
 };
 use canic_contracts::{
     dto::{
@@ -35,7 +38,6 @@ use canic_host::{
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
-    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
@@ -49,7 +51,6 @@ const CYCLES_WORKER_PANIC: &str = "cycles query worker panicked";
 struct CycleQueryTarget {
     icp: IcpCli,
     entry: RegistryEntry,
-    environment: String,
     icp_root: PathBuf,
     fleet: Arc<CurrentFleetResolution>,
 }
@@ -115,57 +116,37 @@ fn collect_cycle_tracker_reports(
     requested_since_secs: u64,
     generated_at_secs: u64,
 ) -> Result<Vec<CyclesCanisterReport>, CyclesCommandError> {
-    let query = Arc::new(options.clone());
-    let mut handles = Vec::new();
     let rows = visible_rows(&fleet.registry.entries, options.subtree.as_deref())?;
-    for row in rows {
-        let RegistryRow { entry, tree_prefix } = row;
-        let entry = entry.clone();
-        let worker_entry = entry.clone();
-        let worker_tree_prefix = tree_prefix.clone();
-        let query = Arc::clone(&query);
-        let fleet = Arc::clone(&fleet);
-        handles.push((
-            worker_entry,
-            worker_tree_prefix,
-            thread::spawn(move || {
-                cycle_tracker_report(
-                    &query,
-                    fleet,
-                    &entry,
-                    tree_prefix,
-                    requested_since_secs,
-                    generated_at_secs,
-                )
-            }),
-        ));
-    }
-
-    Ok(collect_cycle_worker_reports(handles, requested_since_secs))
+    Ok(collect_cycle_row_reports(
+        &rows,
+        requested_since_secs,
+        |row| {
+            cycle_tracker_report(
+                options,
+                Arc::clone(&fleet),
+                row.entry,
+                row.tree_prefix.clone(),
+                requested_since_secs,
+                generated_at_secs,
+            )
+        },
+    ))
 }
 
-fn collect_cycle_worker_reports(
-    handles: Vec<(
-        RegistryEntry,
-        String,
-        thread::JoinHandle<CyclesCanisterReport>,
-    )>,
+fn collect_cycle_row_reports(
+    rows: &[RegistryRow<'_>],
     requested_since_secs: u64,
+    query: impl Fn(&RegistryRow<'_>) -> CyclesCanisterReport + Sync,
 ) -> Vec<CyclesCanisterReport> {
-    handles
-        .into_iter()
-        .map(|(entry, tree_prefix, handle)| {
-            handle.join().unwrap_or_else(|_| {
-                cycles_error_report(
-                    &entry,
-                    tree_prefix,
-                    requested_since_secs,
-                    None,
-                    CYCLES_WORKER_PANIC.to_string(),
-                )
-            })
-        })
-        .collect()
+    collect_ordered_reports(rows, query, |row| {
+        cycles_error_report(
+            row.entry,
+            row.tree_prefix.clone(),
+            requested_since_secs,
+            None,
+            CYCLES_WORKER_PANIC.to_string(),
+        )
+    })
 }
 
 fn cycle_tracker_report(
@@ -502,7 +483,6 @@ fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, CycleObse
     let response = observe_fleet_canister(
         &target.icp,
         &target.icp_root,
-        &target.environment,
         &target.fleet,
         &target.entry,
         CanisterObservabilityRequest::CycleBalance,
@@ -564,7 +544,6 @@ fn query_topup_event_page(
     let response = observe_fleet_canister(
         &target.icp,
         &target.icp_root,
-        &target.environment,
         &target.fleet,
         &target.entry,
         CanisterObservabilityRequest::CycleTopups(PageRequest { offset, limit }),
@@ -595,7 +574,6 @@ fn query_cycle_tracker_page(
     let response = observe_fleet_canister(
         &target.icp,
         &target.icp_root,
-        &target.environment,
         &target.fleet,
         &target.entry,
         CanisterObservabilityRequest::CycleHistory(PageRequest { offset, limit }),
@@ -615,7 +593,6 @@ fn cycle_query_target(
     Ok(CycleQueryTarget {
         icp: cycles_icp(options, Some(&root)),
         entry: entry.clone(),
-        environment: options.environment.clone(),
         icp_root: root,
         fleet,
     })
@@ -701,13 +678,13 @@ mod tests {
             module_hash: None,
             protocol_binding: None,
         };
-        let reports = collect_cycle_worker_reports(
-            vec![(
-                entry.clone(),
-                "root".to_string(),
-                thread::spawn(|| panic!("simulated cycles worker panic")),
-            )],
+        let reports = collect_cycle_row_reports(
+            &[RegistryRow {
+                entry: &entry,
+                tree_prefix: "root".to_string(),
+            }],
             100,
+            |_| panic!("simulated cycles worker panic"),
         );
 
         assert_eq!(reports.len(), 1);
@@ -808,8 +785,12 @@ mod tests {
         let error = CycleObservationError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Response {
                 canister: ic_platform::principal::ExternalPrincipal::management_canister(),
-                method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
-                source: canic_host::icp::decode_json_result_response::<u64>("{}").unwrap_err(),
+                method: canic_contracts::protocol::inspection::METHOD,
+                source: IcpJsonResponseError::Rejected(
+                    canic_contracts::dto::error::Error::from_registered(
+                        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+                    ),
+                ),
             },
         ));
         let mut source = std::error::Error::source(&error);
@@ -817,7 +798,8 @@ mod tests {
         while let Some(cause) = source {
             if matches!(
                 cause.downcast_ref::<IcpJsonResponseError>(),
-                Some(IcpJsonResponseError::Envelope(_))
+                Some(IcpJsonResponseError::Rejected(error))
+                    if error.code() == canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
             ) {
                 preserved = true;
                 break;

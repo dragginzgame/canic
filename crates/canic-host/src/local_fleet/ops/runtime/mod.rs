@@ -10,7 +10,6 @@ use crate::{
         model::{LocalAllocationIntentRecord, LocalFleetConfig},
     },
 };
-use canic_contracts::dto::wire::projection::local_authority::{Request, Response};
 use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 use std::{path::Path, time::Duration};
 use {
@@ -35,6 +34,9 @@ pub fn server(config: &LocalFleetConfig) -> Result<PocketIcManagedServer, LocalF
 }
 
 /// Load the owned state directory or create the explicit bounded subnet topology.
+///
+/// # Panics
+/// Panics if Testkit connect mode unexpectedly acquires server ownership.
 pub fn instance(
     config: &LocalFleetConfig,
     directory: &Path,
@@ -70,7 +72,12 @@ pub fn instance(
         timeout: Duration::from_secs(u64::from(config.request_timeout_secs)),
     }
     .build_instance(builder)
-    .map(|owned| owned.instance)
+    .map(|owned| {
+        // Connect borrows the caller-owned server; no server custody is transferred.
+        let (instance, server) = owned.into_parts();
+        assert!(server.is_none(), "Connect must not acquire server custody");
+        instance
+    })
     .map_err(|source| {
         let output = server.output();
         LocalFleetError::InstanceStartup {
@@ -201,23 +208,18 @@ pub fn verify_root_authority(
     pic: &PocketIc,
     target: &crate::local_fleet::view::LocalRootInstallationView,
 ) -> Result<(), LocalFleetError> {
-    let request = ic_platform::candid::contract::encode_one(Request::FleetAuthority)
+    use canic_contracts::{dto::root_authority::Authority, protocol::root_authority as wire};
+    let request = ic_wire::native::encode_request(wire::METHOD_ID, &(), wire::REQUEST_LIMITS)
         .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
-    let bytes = guarded(|| {
-        pic.query_call(
-            target.canister_id,
-            target.operator,
-            canic_contracts::protocol::CANIC_ROOT_STATUS,
-            request,
-        )
-    })?
-    .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
-    let response = ic_platform::candid::decoder::decode_one::<
-        Result<Response, canic_contracts::dto::error::Error>,
-    >(&bytes)
-    .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
-    let Response::FleetAuthority(actual) = response.map_err(LocalFleetError::Root)?;
-    if *actual != target.authority {
+    let bytes =
+        guarded(|| pic.query_call(target.canister_id, target.operator, wire::METHOD, request))?
+            .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
+    let response: Result<Authority, canic_contracts::dto::error::Error> =
+        ic_wire::native::decode_response(wire::METHOD_ID, &bytes, wire::RESPONSE_LIMITS)
+            .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
+    let actual: canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority =
+        response.map_err(LocalFleetError::Root)?.into();
+    if actual != target.authority {
         return Err(LocalFleetError::Identity);
     }
     Ok(())

@@ -920,3 +920,24 @@ fn assert_metric_u128(
         _ => panic!("metric entry should use U128"),
     }
 }
+
+#[test]
+fn inter_canister_call_overflow_projection_keeps_real_targets_distinct() {
+    InterCanisterCallMetrics::reset();
+    let target = Principal::anonymous();
+    InterCanisterCallMetrics::record_call(target, "overflow");
+    InterCanisterCallMetrics::record_call(target, &"x".repeat(129));
+    let rows = prefix_entries("inter_canister_call", inter_canister_call_entries());
+    assert_eq!(rows.len(), 2);
+    let retained = rows
+        .iter()
+        .find(|row| row.principal == Some(target))
+        .unwrap();
+    assert_eq!(retained.labels, ["inter_canister_call", "overflow"]);
+    assert!(matches!(retained.value, MetricValue::Count(1)));
+    let overflow = rows.iter().find(|row| row.principal.is_none()).unwrap();
+    assert_eq!(overflow.labels, ["inter_canister_call", "overflow"]);
+    assert!(matches!(overflow.value, MetricValue::Count(1)));
+    InterCanisterCallMetrics::reset();
+    assert!(inter_canister_call_entries().is_empty());
+}

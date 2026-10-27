@@ -45,7 +45,7 @@ pub(super) fn increment() -> u64 {
 pub(super) fn metric() -> PublicMetric {
     PublicMetric {
         name: "app.count".into(),
-        canister_id: Some(ic_platform::cdk::api::canister_self().into()),
+        canister_id: Some(ic_platform::cdk::api::canister_self()),
         value: u128::from(count()),
         unit: "count".into(),
         observed_at_ns: ic_platform::cdk::api::time(),

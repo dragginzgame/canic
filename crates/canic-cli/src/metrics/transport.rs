@@ -4,14 +4,17 @@
 //! Does not own: metric DTOs, report rendering, or Fleet registry authority.
 //! Boundary: preserves query causes until projecting per-canister report diagnostics.
 
-use crate::metrics::{
-    MetricsCommandError,
-    model::{
-        MetricValue, MetricsCanisterReport, MetricsCanisterStatus, MetricsKind, MetricsPage,
-        MetricsReport,
+use crate::{
+    metrics::{
+        MetricsCommandError,
+        model::{
+            MetricValue, MetricsCanisterReport, MetricsCanisterStatus, MetricsKind, MetricsPage,
+            MetricsReport,
+        },
+        options::MetricsOptions,
+        parse::metric_page,
     },
-    options::MetricsOptions,
-    parse::metric_page,
+    support::parallel::collect_ordered_reports,
 };
 use canic_contracts::dto::observability::{
     CanisterObservabilityRequest, CanisterObservabilityResponse,
@@ -19,12 +22,12 @@ use canic_contracts::dto::observability::{
 use canic_host::{
     CanisterProtocolError,
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
-    icp::{IcpCli, IcpDiagnostic},
+    icp::{IcpCli, IcpDiagnostic, IcpWireQueryError},
     icp_config::resolve_current_canic_icp_root,
     observability::{FleetObservabilityError, observe_fleet_canister},
     registry::RegistryEntry,
 };
-use std::{path::Path, sync::Arc, thread};
+use std::path::Path;
 use thiserror::Error as ThisError;
 
 const METRICS_UNAVAILABLE_HINT: &str =
@@ -78,40 +81,26 @@ fn collect_metrics_reports(
     fleet: &CurrentFleetResolution,
     icp_root: &Path,
 ) -> Vec<MetricsCanisterReport> {
-    let query = Arc::new(options.clone());
-    let fleet = Arc::new(fleet.clone());
-    let mut handles = Vec::new();
-    for entry in fleet
+    let entries = fleet
         .registry
         .entries
         .iter()
         .filter(|entry| matches_metrics_filter(options, entry))
-    {
-        let entry = entry.clone();
-        let worker_entry = entry.clone();
-        let query = Arc::clone(&query);
-        let fleet = Arc::clone(&fleet);
-        let icp_root = icp_root.to_path_buf();
-        handles.push((
-            worker_entry,
-            thread::spawn(move || metrics_canister_report(&query, &fleet, &icp_root, &entry)),
-        ));
-    }
-
-    collect_metrics_worker_reports(handles)
+        .collect::<Vec<_>>();
+    collect_metrics_entry_reports(&entries, |entry| {
+        metrics_canister_report(options, fleet, icp_root, entry)
+    })
 }
 
-fn collect_metrics_worker_reports(
-    handles: Vec<(RegistryEntry, thread::JoinHandle<MetricsCanisterReport>)>,
+fn collect_metrics_entry_reports(
+    entries: &[&RegistryEntry],
+    query: impl Fn(&RegistryEntry) -> MetricsCanisterReport + Sync,
 ) -> Vec<MetricsCanisterReport> {
-    handles
-        .into_iter()
-        .map(|(entry, handle)| {
-            handle
-                .join()
-                .unwrap_or_else(|_| metrics_message_error_report(&entry, METRICS_WORKER_PANIC))
-        })
-        .collect()
+    collect_ordered_reports(
+        entries,
+        |entry| query(entry),
+        |entry| metrics_message_error_report(entry, METRICS_WORKER_PANIC),
+    )
 }
 
 fn metrics_canister_report(
@@ -167,7 +156,8 @@ fn metrics_query_error_report(
     if matches!(
         error,
         MetricsQueryError::Observability(FleetObservabilityError::Protocol(
-            CanisterProtocolError::Invocation { source, .. },
+            CanisterProtocolError::WireUpdate { source: IcpWireQueryError::Icp(source), .. }
+                | CanisterProtocolError::WireQuery { source: IcpWireQueryError::Icp(source), .. },
         )) if matches!(source.diagnostic(), Some(IcpDiagnostic::MethodMissing))
     ) {
         return metrics_failure_report(
@@ -245,7 +235,6 @@ fn query_metrics(
         let response = observe_fleet_canister(
             &icp,
             icp_root,
-            &options.environment,
             fleet,
             entry,
             CanisterObservabilityRequest::Metrics(request),
@@ -317,13 +306,13 @@ mod tests {
     #[test]
     fn shortens_metrics_unavailable_errors() {
         let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
-            CanisterProtocolError::Invocation {
+            CanisterProtocolError::WireUpdate {
                 canister: ic_platform::principal::ExternalPrincipal::management_canister(),
-                method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
-                source: IcpCommandError::Failed {
+                method: canic_contracts::protocol::inspection::METHOD,
+                source: IcpWireQueryError::Icp(IcpCommandError::Failed {
                     command: "icp canister call".to_string(),
-                    stderr: "Canister has no query method 'canic_observability'.".to_string(),
-                },
+                    stderr: "Canister has no query method 'canic_coordinator_funding'.".to_string(),
+                }),
             },
         ));
         let report = metrics_query_error_report(&registry_entry(), &error);
@@ -390,10 +379,8 @@ mod tests {
     #[test]
     fn panicked_metrics_worker_becomes_an_explicit_canister_error() {
         let entry = registry_entry();
-        let reports = collect_metrics_worker_reports(vec![(
-            entry.clone(),
-            thread::spawn(|| panic!("simulated metrics worker panic")),
-        )]);
+        let reports =
+            collect_metrics_entry_reports(&[&entry], |_| panic!("simulated metrics worker panic"));
 
         assert_eq!(reports.len(), 1);
         assert_eq!(reports[0].canister_id, entry.pid);
@@ -406,8 +393,12 @@ mod tests {
         let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Response {
                 canister: ic_platform::principal::ExternalPrincipal::management_canister(),
-                method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
-                source: canic_host::icp::decode_json_result_response::<u64>("{}").unwrap_err(),
+                method: canic_contracts::protocol::inspection::METHOD,
+                source: IcpJsonResponseError::Rejected(
+                    canic_contracts::dto::error::Error::from_registered(
+                        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+                    ),
+                ),
             },
         ));
         let mut source = std::error::Error::source(&error);
@@ -415,7 +406,8 @@ mod tests {
         while let Some(cause) = source {
             if matches!(
                 cause.downcast_ref::<IcpJsonResponseError>(),
-                Some(IcpJsonResponseError::Envelope(_))
+                Some(IcpJsonResponseError::Rejected(error))
+                    if error.code() == canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
             ) {
                 preserved = true;
                 break;
@@ -527,13 +519,13 @@ mod tests {
     fn metrics_pagination_preserves_typed_failures_and_enforces_cap() {
         let error = collect_metric_pages(4, |_| {
             Err(MetricsQueryError::Observability(
-                FleetObservabilityError::Protocol(CanisterProtocolError::Invocation {
+                FleetObservabilityError::Protocol(CanisterProtocolError::WireUpdate {
                     canister: ic_platform::principal::ExternalPrincipal::management_canister(),
-                    method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
-                    source: IcpCommandError::Failed {
+                    method: canic_contracts::protocol::inspection::METHOD,
+                    source: IcpWireQueryError::Icp(IcpCommandError::Failed {
                         command: "query".into(),
                         stderr: String::new(),
-                    },
+                    }),
                 }),
             ))
         });

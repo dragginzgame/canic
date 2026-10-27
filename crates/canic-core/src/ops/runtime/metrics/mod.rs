@@ -417,7 +417,8 @@ fn lifecycle_entries_from(snapshot: Vec<(lifecycle::LifecycleMetricKey, u64)>) -
 /// Project inter-canister call counters into the unified public metrics row shape.
 #[must_use]
 fn inter_canister_call_entries() -> Vec<MetricEntry> {
-    InterCanisterCallMetrics::snapshot()
+    let snapshot = InterCanisterCallMetrics::snapshot();
+    let mut entries: Vec<_> = snapshot
         .entries
         .into_iter()
         .map(|(key, count)| MetricEntry {
@@ -425,7 +426,15 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
             principal: Some(key.target),
             value: MetricValue::Count(count),
         })
-        .collect()
+        .collect();
+    if snapshot.overflow != 0 {
+        entries.push(MetricEntry {
+            labels: vec!["overflow".to_string()],
+            principal: None,
+            value: MetricValue::Count(snapshot.overflow),
+        });
+    }
+    entries
 }
 
 /// Project timer counters into the unified public metrics row shape.
@@ -589,8 +598,14 @@ fn perf_entries_from(
     let mut entries = snapshot
         .into_iter()
         .filter_map(|entry| {
-            let total_instructions = u64::try_from(entry.total_instructions).ok()?;
             let labels = match entry.key {
+                PerfKey::CheckpointOverflow => {
+                    return Some(MetricEntry {
+                        labels: vec!["checkpoint_overflow".into(), "calls".into()],
+                        principal: None,
+                        value: MetricValue::Count(entry.count),
+                    });
+                }
                 PerfKey::Endpoint { kind, name } => vec![
                     "endpoint".to_string(),
                     kind.metric_label().to_string(),
@@ -606,7 +621,7 @@ fn perf_entries_from(
                 principal: None,
                 value: MetricValue::CountAndU64 {
                     count: entry.count,
-                    value_u64: total_instructions,
+                    value_u64: u64::try_from(entry.total_instructions).ok()?,
                 },
             })
         })

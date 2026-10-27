@@ -38,7 +38,7 @@ pub(super) fn sign(tree: HashTree, key: &PrivateKey) -> Certificate {
 
 pub(super) fn cbor(value: &impl Serialize) -> Vec<u8> {
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(value, &mut bytes).unwrap();
+    serde_cbor::to_writer(&mut bytes, value).unwrap();
     bytes
 }
 

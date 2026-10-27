@@ -53,6 +53,7 @@ impl RootCallerOps {
     }
 
     pub fn require_mutation_allowed(operation: Option<[u8; 32]>) -> Result<(), InternalError> {
+        crate::ops::application_checkpoint::RootCheckpointOps::require_catalog_mutation_allowed()?;
         if RootComponentRegistryStore::caller_pending()
             .is_some_and(|pending| Some(pending) != operation)
         {

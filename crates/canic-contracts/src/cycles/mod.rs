@@ -4,7 +4,7 @@
 //! Does not own: billing policy, cycle transfer workflows, or ledger calls.
 //! Boundary: provides stable serialization and display behavior for cycle values.
 
-use ic_platform::candid::contract::{CandidType, Nat};
+use ic_platform::candid::contract::Nat;
 use serde::{
     Deserialize, Serialize,
     de::{Deserializer, Visitor},
@@ -31,12 +31,11 @@ pub const QC: u128 = 1_000_000_000_000_000;
 /// helpers for cycle balances.
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Cycles(u128);
 
 // Human-readable boundaries retain all 128 bits as decimal text. Binary formats
-// keep the newtype's numeric representation; Candid is owned by CandidType.
+// keep the newtype's numeric representation.
 impl Serialize for Cycles {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -370,18 +369,22 @@ mod tests {
             let json = serde_json::to_value(&cycles).unwrap();
             assert_eq!(json, serde_json::Value::String(amount.to_string()));
             assert_eq!(serde_json::from_value::<Cycles>(json).unwrap(), cycles);
-            let mut numeric = Vec::new();
-            let mut wrapped = Vec::new();
-            ciborium::ser::into_writer(&amount, &mut numeric).unwrap();
-            ciborium::ser::into_writer(&cycles, &mut wrapped).unwrap();
+            let limits = ic_wire::Limits {
+                bytes: 128,
+                allocation: 1024,
+                nodes: 16,
+                depth: 8,
+            };
+            let numeric = ic_wire::native::encode_request(1, &amount, limits).unwrap();
+            let wrapped = ic_wire::native::encode_request(1, &cycles, limits).unwrap();
             assert_eq!(wrapped, numeric);
             assert_eq!(
-                ciborium::de::from_reader::<Cycles, _>(wrapped.as_slice()).unwrap(),
+                ic_wire::native::decode_request::<Cycles>(1, &wrapped, limits).unwrap(),
                 cycles
             );
             assert_eq!(
-                ic_platform::candid::contract::encode_one(&cycles).unwrap(),
-                ic_platform::candid::contract::encode_one(amount).unwrap()
+                crate::protocol::authority::encode(&cycles).unwrap(),
+                crate::protocol::authority::encode(amount).unwrap()
             );
         }
     }
@@ -389,9 +392,8 @@ mod tests {
     #[test]
     fn candid_cycle_amount_remains_an_exact_u128() {
         let expected = Cycles::new(u128::MAX);
-        let encoded =
-            ic_platform::candid::contract::encode_one(&expected).expect("encode Candid Cycles");
-        let decoded = ic_platform::candid::decoder::decode_one::<Cycles>(&encoded)
+        let encoded = crate::protocol::authority::encode(&expected).expect("encode Candid Cycles");
+        let decoded = crate::protocol::authority::decode::<Cycles>(&encoded)
             .expect("decode exact Candid Cycles");
 
         assert_eq!(decoded, expected);
@@ -495,7 +497,7 @@ mod tests {
     }
 
     #[test]
-    fn converts_candid_nat_only_when_it_fits() {
+    fn converts_wire_nat_only_when_it_fits() {
         assert_eq!(
             Cycles::try_from(Nat::from(u128::MAX)),
             Ok(Cycles::new(u128::MAX))
@@ -521,3 +523,6 @@ mod tests {
         ));
     }
 }
+
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+mod schema;

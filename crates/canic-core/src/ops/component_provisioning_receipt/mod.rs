@@ -17,7 +17,6 @@ use crate::{
     },
 };
 use canic_contracts::ids::{ComponentDeploymentConfigurationDigest, FleetSubnetRootBinding};
-use ic_platform::candid::contract::CandidType;
 use sha2::{Digest, Sha256};
 
 const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acceptance-receipt/v1";
@@ -34,8 +33,7 @@ const DIRECTORY_SYNCHRONIZATION_RECEIPT_DOMAIN: &[u8] =
     b"canic/root-component-directory-synchronization/v1";
 
 /// Exact immutable fields covered by one root's initial `Accepted` receipt.
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 pub struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -48,8 +46,7 @@ pub struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
 }
 
 /// Exact immutable fields covered by one root's terminal `Provisioned` receipt.
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 pub struct RootComponentProvisioningProvisionedReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -62,8 +59,7 @@ pub struct RootComponentProvisioningProvisionedReceiptAuthority<'a> {
 }
 
 /// Exact immutable fields covered by one root's terminal `Published` receipt.
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 pub struct RootComponentProvisioningPublishedReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -77,8 +73,7 @@ pub struct RootComponentProvisioningPublishedReceiptAuthority<'a> {
 }
 
 /// Exact immutable fields covered by one root's terminal `RuntimesActive` receipt.
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 pub struct RootComponentProvisioningRuntimesActiveReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -90,8 +85,7 @@ pub struct RootComponentProvisioningRuntimesActiveReceiptAuthority<'a> {
     pub runtimes_activated_at_ns: u64,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentGroupPlacementReceiptAuthority<'a> {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -200,10 +194,10 @@ impl RootComponentProvisioningReceiptOps {
 
 fn receipt_content_hash(
     domain: &[u8],
-    authority: impl CandidType,
+    authority: impl serde::Serialize,
     _label: &str,
 ) -> Result<[u8; 32], InternalError> {
-    let bytes = ic_platform::candid::contract::encode_one(authority)
+    let bytes = canic_contracts::protocol::authority::encode(authority)
         .map_err(|_error| InternalError::invariant())?;
     let byte_count = u64::try_from(bytes.len()).map_err(|_| InternalError::resource_exhausted())?;
     let mut hasher = Sha256::new();

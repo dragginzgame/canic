@@ -167,6 +167,7 @@ struct MaterializedBuildOutput {
     wasm: Vec<u8>,
     wasm_gz_relative_path: String,
     wasm_gz: Vec<u8>,
+    wire_schema: Vec<u8>,
     candid_sha256: [u8; 32],
     protocol_profile_digest: ProtocolProfileDigest,
 }
@@ -184,6 +185,7 @@ impl MaterializedBuildOutput {
             wasm: &self.wasm,
             wasm_gz_relative_path: &self.wasm_gz_relative_path,
             wasm_gz: &self.wasm_gz,
+            wire_schema: &self.wire_schema,
             candid_sha256: self.candid_sha256,
             protocol_profile_digest: self.protocol_profile_digest,
         }
@@ -304,6 +306,12 @@ fn materialize_build_output(
         );
     }
     let wasm_gz = materialize_artifact(root, role, "gzip Wasm", &output.wasm_gz_path)?;
+    let wire_schema = materialize_artifact(
+        root,
+        role,
+        "Wire schema",
+        &output.wasm_path.with_extension("wire.json"),
+    )?;
 
     Ok(MaterializedBuildOutput {
         role,
@@ -316,6 +324,7 @@ fn materialize_build_output(
         wasm: wasm.bytes,
         wasm_gz_relative_path: wasm_gz.relative_path,
         wasm_gz: wasm_gz.bytes,
+        wire_schema: wire_schema.bytes,
         candid_sha256: output.candid_sha256,
         protocol_profile_digest: output.protocol_profile_digest,
     })

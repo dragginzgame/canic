@@ -24,7 +24,7 @@ use crate::{
 use canic_contracts::dto::pool::CanisterPoolAssetStatus;
 use canic_core::bootstrap::compiled::ConfigModel;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 /// Observe Root-funded Workloads and explicitly separate assets requiring a parent relay.
 
@@ -37,9 +37,9 @@ pub(super) fn observe_children(
     local_replica: Option<&LocalReplicaTarget>,
     forecast: &mut StartupFundingForecast,
 ) {
-    let Some(protocol) = &desired.protocol else {
+    if desired.protocol.is_none() {
         return;
-    };
+    }
     let icp = IcpCli::new(request.icp_executable, Some(request.environment.to_owned()))
         .with_identity(request.signing_identity)
         .with_cwd(request.root.to_path_buf())
@@ -73,13 +73,12 @@ pub(super) fn observe_children(
             .get(&parent.to_text())
             .and_then(|canister| canister.module_sha256.as_deref())
             == Some(selected_module);
-        let root_candid = request.root.join(&protocol.root_candid);
         let root_registry = if installed {
             registry
                 .as_ref()
                 .map_err(|reason| *reason)
-                .and_then(|registry| {
-                    let summary = registry::observe_root(&icp, &root_candid, parent, registry)?;
+                .and_then(|(registry, _)| {
+                    let summary = registry::observe_root(&icp, parent, registry)?;
                     Ok((registry, summary))
                 })
         } else {
@@ -87,7 +86,6 @@ pub(super) fn observe_children(
         };
         observe_root_children(
             &icp,
-            &root_candid,
             desired,
             observed,
             root,
@@ -95,18 +93,14 @@ pub(super) fn observe_children(
             root_registry.map(|(registry, _)| registry),
         );
         root.inventory = root_registry.and_then(|(registry, summary)| {
-            qualify_and_observe_usage(&icp, &root_candid, desired, root, parent, registry, summary)
+            qualify_and_observe_usage(&icp, desired, root, parent, registry, summary)
         });
         if let Err(reason) = root.inventory {
             invalidate_children(&mut root.child_usage, reason);
         }
     }
-    if let Ok(registry) = registry
-        && let Err(reason) = registry::recheck(
-            &icp,
-            &request.root.join(&protocol.coordinator_candid),
-            &registry,
-        )
+    if let Ok((registry, schema)) = registry
+        && let Err(reason) = registry::recheck(&icp, &schema, &registry)
     {
         for root in &mut forecast.roots {
             root.inventory = Err(reason);
@@ -125,7 +119,6 @@ fn invalidate_children(children: &mut [StartupChildFundingUsage], reason: Startu
 
 fn observe_root_children(
     icp: &IcpCli,
-    candid: &Path,
     desired: &DesiredFleet,
     observed: &BTreeMap<String, ObservedCanister>,
     root: &mut StartupRootFunding,
@@ -152,7 +145,6 @@ fn observe_root_children(
                 let registry = registry?;
                 let binding = binding::observe(
                     icp,
-                    candid,
                     parent,
                     child
                         .parse()
@@ -183,7 +175,6 @@ fn observe_root_children(
 
 fn qualify_and_observe_usage(
     icp: &IcpCli,
-    candid: &Path,
     desired: &DesiredFleet,
     root: &mut StartupRootFunding,
     parent: Principal,
@@ -225,19 +216,18 @@ fn qualify_and_observe_usage(
         .roots
         .get(&parent)
         .ok_or(StartupUsageUnavailable::AuthorityMismatch)?;
-    let evidence =
-        inventory::observe(icp, candid, parent, placement, topology, summary, &bindings)?;
+    let evidence = inventory::observe(icp, parent, placement, topology, summary, &bindings)?;
     for child in &mut root.child_usage {
         if let Some(binding) = &child.binding {
             child.usage = if binding.parent == parent {
-                observation::observe_child(icp, candid, parent, binding.canister_id)
+                observation::observe_child(icp, parent, binding.canister_id)
             } else {
                 Err(StartupUsageUnavailable::ParentRelayRequired)
             };
         }
     }
-    let coverage = inventory::recheck(icp, candid, parent, &evidence)?;
-    if registry::observe_root(icp, candid, parent, registry)? != summary {
+    let coverage = inventory::recheck(icp, parent, &evidence)?;
+    if registry::observe_root(icp, parent, registry)? != summary {
         return Err(StartupUsageUnavailable::PolicyTransition);
     }
     Ok(coverage)
@@ -249,13 +239,10 @@ fn observe_registry(
     observed: &BTreeMap<String, ObservedCanister>,
     selected_module: &str,
     icp: &IcpCli,
-) -> Result<StartupFundingRegistry, StartupUsageUnavailable> {
+) -> Result<(StartupFundingRegistry, crate::release_set::BuiltWireSchema), StartupUsageUnavailable>
+{
     let bootstrap = desired
         .bootstrap
-        .as_ref()
-        .ok_or(StartupUsageUnavailable::NotObserved)?;
-    let protocol = desired
-        .protocol
         .as_ref()
         .ok_or(StartupUsageUnavailable::NotObserved)?;
     let coordinator = desired
@@ -271,16 +258,25 @@ fn observe_registry(
     {
         return Err(StartupUsageUnavailable::SelectedBuildNotInstalled);
     }
-    registry::observe(
+    let schema = crate::release_set::load_built_wire_schema(
+        request.root,
+        bootstrap.release_build_id,
+        "fleet_coordinator",
+    )
+    .map_err(|_| StartupUsageUnavailable::AuthorityMismatch)?;
+    if schema.wasm_sha256 != selected_module {
+        return Err(StartupUsageUnavailable::SelectedBuildNotInstalled);
+    }
+    let registry = registry::observe(
         icp,
-        &request.root.join(&protocol.coordinator_candid),
         coordinator
             .parse()
             .map_err(|_| StartupUsageUnavailable::AuthorityMismatch)?,
         &bootstrap
             .component_deployment_configuration
             .component_topology,
-    )
+    )?;
+    Ok((registry, schema))
 }
 
 /// Interpret live charges only through the exact selected release and compiled Spec policy.
@@ -360,7 +356,7 @@ pub(super) fn observe_usage(
     local_replica: Option<&LocalReplicaTarget>,
 ) -> StartupCoordinatorUsage {
     let unavailable = StartupCoordinatorUsage::Unavailable;
-    let (Some(bootstrap), Some(protocol)) = (&desired.bootstrap, &desired.protocol) else {
+    let (Some(bootstrap), Some(_protocol)) = (&desired.bootstrap, &desired.protocol) else {
         return unavailable(StartupUsageUnavailable::NotObserved);
     };
     let Some(policy) = bootstrap.root_funding.as_ref() else {
@@ -406,13 +402,7 @@ pub(super) fn observe_usage(
     {
         return unavailable(StartupUsageUnavailable::AuthorityMismatch);
     }
-    observation::observe(
-        &icp,
-        &request.root.join(&protocol.coordinator_candid),
-        coordinator,
-        &roots,
-        policy,
-    )
+    observation::observe(&icp, coordinator, &roots, policy)
 }
 
 pub(super) fn forecast(

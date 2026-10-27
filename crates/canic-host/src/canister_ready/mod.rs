@@ -5,19 +5,15 @@
 //! Boundary: selects one transport and decodes the canonical boolean response.
 
 use crate::{
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::IcpConfigError,
-    protocol_binding::ResolvedProtocolBinding,
+    protocol_binding::RegistryProtocolBinding,
     replica_query,
     replica_query::ReplicaQueryError,
 };
-use canic_contracts::{
-    dto::wire::projection::overview::RoleStatusResponse, protocol::CANIC_PUBLIC_STATUS,
-};
+use canic_contracts::protocol::CANIC_PUBLIC_OVERVIEW;
 use std::path::Path;
 use thiserror::Error as ThisError;
-
-const ICP_JSON_OUTPUT: &str = "json";
 
 ///
 /// CanisterReadyQueryError
@@ -32,6 +28,9 @@ pub enum CanisterReadyQueryError {
     Icp(#[from] IcpCommandError),
 
     #[error(transparent)]
+    Overview(#[from] crate::canic_metadata::CanicMetadataQueryError),
+
+    #[error(transparent)]
     Replica(#[from] ReplicaQueryError),
 
     #[error(transparent)]
@@ -44,7 +43,7 @@ pub fn query_canister_ready(
     canister_id: &str,
     environment: &str,
     icp_root: Option<&Path>,
-    binding: &ResolvedProtocolBinding,
+    binding: &RegistryProtocolBinding,
 ) -> Result<bool, CanisterReadyQueryError> {
     if replica_query::uses_local_replica_transport(Some(environment), icp_root)? {
         return query_local_canister_ready(environment, canister_id, icp_root).map_err(Into::into);
@@ -62,7 +61,7 @@ pub fn query_local_canister_ready(
     replica_query::query_ready(
         Some(environment),
         canister_id,
-        CANIC_PUBLIC_STATUS,
+        CANIC_PUBLIC_OVERVIEW,
         icp_root,
     )
 }
@@ -70,16 +69,11 @@ pub fn query_local_canister_ready(
 fn query_canister_ready_with_icp(
     icp: &IcpCli,
     canister_id: &str,
-    binding: &ResolvedProtocolBinding,
+    binding: &RegistryProtocolBinding,
 ) -> Result<bool, CanisterReadyQueryError> {
-    let output = icp.canister_query_arg_output_with_candid(
-        canister_id,
-        CANIC_PUBLIC_STATUS,
-        "(variant { Overview })",
-        Some(ICP_JSON_OUTPUT),
-        Some(&binding.candid_path),
-    )?;
-    let response = decode_json_result_response::<RoleStatusResponse>(&output)?;
-    let RoleStatusResponse::Overview(response) = response;
-    Ok(response.bootstrap.ready)
+    Ok(
+        crate::canic_metadata::query_canic_overview(icp, canister_id, binding)?
+            .bootstrap
+            .ready,
+    )
 }

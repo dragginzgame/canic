@@ -107,10 +107,10 @@ fn compiles_canonical_mode_compatible_targets_and_revalidates_candid() {
         FleetServiceTargetMode::AuthorityReplica { .. }
     ));
 
-    let encoded = ic_platform::candid::contract::encode_one(&topology)
+    let encoded = canic_contracts::protocol::authority::encode(&topology)
         .expect("encode Fleet-service topology");
-    let decoded: FleetServiceTopology =
-        ic_platform::candid::decoder::decode_one(&encoded).expect("decode Fleet-service topology");
+    let decoded: FleetServiceTopology = canic_contracts::protocol::authority::decode(&encoded)
+        .expect("decode Fleet-service topology");
     assert_eq!(decoded, topology);
     decoded
         .validate(

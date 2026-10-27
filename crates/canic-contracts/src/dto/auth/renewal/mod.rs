@@ -11,8 +11,7 @@
 use super::{DelegatedRoleGrant, DelegationAudience, DelegationProof};
 use crate::dto::prelude::*;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootDelegationProofBatchProof {
     pub issuer_pid: Principal,
     pub cert_hash: [u8; 32],
@@ -23,8 +22,7 @@ pub struct RootDelegationProofBatchProof {
 // RootIssuerConfigureRequest
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerConfigureRequest {
     pub issuer_pid: Principal,
     pub enabled: bool,
@@ -38,8 +36,7 @@ pub struct RootIssuerConfigureRequest {
 // RootIssuerPolicyView
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerPolicyView {
     pub issuer_pid: Principal,
     pub enabled: bool,
@@ -53,8 +50,7 @@ pub struct RootIssuerPolicyView {
 // RootIssuerConfigureResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerConfigureResponse {
     pub issuer: RootIssuerPolicyView,
     pub template: RootIssuerRenewalTemplateView,
@@ -64,8 +60,7 @@ pub struct RootIssuerConfigureResponse {
 // RootIssuerRenewalTemplateView
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerRenewalTemplateView {
     pub issuer_pid: Principal,
     pub enabled: bool,
@@ -78,8 +73,7 @@ pub struct RootIssuerRenewalTemplateView {
 // RootIssuerRenewalStatusRequest
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerRenewalStatusRequest {
     pub issuer_pid: Principal,
 }
@@ -88,8 +82,11 @@ pub struct RootIssuerRenewalStatusRequest {
 // RootIssuerRenewalBatchStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum RootIssuerRenewalBatchStatus {
     Prepared,
     Signing,
@@ -103,8 +100,11 @@ pub enum RootIssuerRenewalBatchStatus {
 // RootIssuerRenewalBatchView
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RootIssuerRenewalBatchView {
     pub batch_id: [u8; 32],
     pub status: RootIssuerRenewalBatchStatus,
@@ -121,8 +121,7 @@ pub struct RootIssuerRenewalBatchView {
 // RootIssuerRenewalStateView
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerRenewalStateView {
     pub issuer_pid: Principal,
     pub template_fingerprint: [u8; 32],
@@ -137,8 +136,7 @@ pub struct RootIssuerRenewalStateView {
 // RootIssuerRenewalStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerRenewalStatusResponse {
     pub template: Option<RootIssuerRenewalTemplateView>,
     pub state: Option<RootIssuerRenewalStateView>,

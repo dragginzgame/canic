@@ -4,31 +4,17 @@
 //! Does not own: Fleet discovery, metric interpretation, or report rendering.
 //! Boundary: Root observations query the Root directly; descendants use its protected relay.
 
+pub(crate) mod relay;
+
 use crate::{
-    CanisterProtocolError, call_canister_with_arg,
+    CanisterProtocolError,
     fleet_ensure::CurrentFleetResolution,
     icp::IcpCli,
-    protocol_binding::{ProtocolBindingError, resolve_registry_protocol_binding},
-    query_canister_with_arg,
+    protocol_binding::{ReleaseProtocolBindingError, resolve_release_registry_wire_schema},
     registry::RegistryEntry,
 };
 use canic_contracts::{
-    dto::{
-        canister::CanisterInspectionRequest,
-        observability::{
-            CanisterObservabilityRequest, CanisterObservabilityResponse,
-            FleetCanisterObservabilityRequest,
-        },
-        wire::projection::{
-            funding_observation::{
-                Command as RootCommandFragment, Response as RootCommandResponseFragment,
-            },
-            protected_observability::{
-                RootStatusRequestFragment, RootStatusResponseFragment, StoreStatusRequestFragment,
-                StoreStatusResponseFragment,
-            },
-        },
-    },
+    dto::observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
     ids::CanisterRole,
     protocol,
 };
@@ -59,7 +45,10 @@ pub enum FleetObservabilityError {
     Protocol(#[from] CanisterProtocolError),
 
     #[error(transparent)]
-    ProtocolBinding(#[from] ProtocolBindingError),
+    ProtocolBinding(#[from] ReleaseProtocolBindingError),
+
+    #[error("terminal Fleet plan has no selected release for protected observations")]
+    MissingRelease,
 
     #[error("Fleet Subnet Root does not expose cycle top-up history")]
     RootCycleTopupsUnsupported,
@@ -87,50 +76,30 @@ pub enum FleetObservabilityError {
 pub fn observe_fleet_canister(
     icp: &IcpCli,
     icp_root: &Path,
-    environment: &str,
     fleet: &CurrentFleetResolution,
     entry: &RegistryEntry,
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
     if entry.role.as_deref() == Some(CanisterRole::ROOT.as_str()) {
-        return observe_root(icp, icp_root, environment, entry, request);
+        return observe_root(icp, entry, request);
     }
 
     let root = fleet_subnet_root_entry(&fleet.registry.entries, entry)?;
-    let binding = resolve_registry_protocol_binding(icp_root, environment, root)?;
+    let release = fleet
+        .plan
+        .reviewed_desired
+        .as_ref()
+        .and_then(|reviewed| reviewed.desired().bootstrap.as_ref())
+        .ok_or(FleetObservabilityError::MissingRelease)?
+        .release_build_id;
     let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
     let target = parse_principal("observability target", &entry.pid)?;
     if matches!(&request, CanisterObservabilityRequest::CycleBalance) {
+        let _schema = resolve_release_registry_wire_schema(icp_root, release, root)?;
         return icp.measure_canister_inspection(root_canister, target, || {
-            crate::canister_protocol::inspection::preflight_inspection(
-                icp,
-                &binding.candid_path,
-                root_canister,
-                target,
-            )?;
-            let response: RootCommandResponseFragment = call_canister_with_arg(
-                icp,
-                &binding,
-                root_canister,
-                protocol::CANIC_ROOT_COMMAND,
-                &RootCommandFragment::InspectCanister(CanisterInspectionRequest {
-                    canister_id: target,
-                }),
-            )?;
-            let response = match response {
-                RootCommandResponseFragment::InspectCanister(response) => response,
-                RootCommandResponseFragment::InspectionReserveRequired(evidence) => {
-                    return Err(CanisterProtocolError::inspection_reserve(
-                        root_canister,
-                        target,
-                        evidence,
-                    )
-                    .into());
-                }
-                RootCommandResponseFragment::ObserveCanister(_) => {
-                    return Err(FleetObservabilityError::UnexpectedRootResponse);
-                }
-            };
+            crate::canister_protocol::inspection::preflight_inspection(icp, root_canister, target)?;
+            let response =
+                crate::canister_protocol::inspection::inspect_status(icp, root_canister, target)?;
             let cycles = u128::try_from(response.cycles.0).map_err(|_| {
                 FleetObservabilityError::CycleBalanceOverflow {
                     canister: entry.pid.clone(),
@@ -141,119 +110,129 @@ pub fn observe_fleet_canister(
             ))
         });
     }
+    let schema = resolve_release_registry_wire_schema(icp_root, release, root)?;
     if entry.role.as_deref() == Some(CanisterRole::WASM_STORE.as_str()) {
-        return observe_store(icp, icp_root, environment, entry, request);
+        return observe_store(icp, entry, request);
     }
     let expected_child = child_funding_target(&request);
-    let response: RootCommandResponseFragment = call_canister_with_arg(
-        icp,
-        &binding,
-        root_canister,
-        protocol::CANIC_ROOT_COMMAND,
-        &RootCommandFragment::ObserveCanister(FleetCanisterObservabilityRequest {
-            canister_id: target,
-            request,
-        }),
-    )?;
-    let RootCommandResponseFragment::ObserveCanister(response) = response else {
-        return Err(FleetObservabilityError::UnexpectedRootResponse);
-    };
+    let response = relay::observe(icp, &schema, root_canister, target, request)?;
     verify_child_funding_response(response, target, expected_child)
 }
 
 fn observe_store(
     icp: &IcpCli,
-    icp_root: &Path,
-    environment: &str,
     store: &RegistryEntry,
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
-    let request = match request {
-        CanisterObservabilityRequest::ChildFunding(_) => {
-            return Err(FleetObservabilityError::StoreChildFundingUnsupported);
-        }
+    match request {
         CanisterObservabilityRequest::CycleHistory(page) => {
-            StoreStatusRequestFragment::CycleHistory(page)
+            observe_cycle_history(icp, parse_principal("Wasm Store", &store.pid)?, page)
+        }
+        CanisterObservabilityRequest::ChildFunding(_) => {
+            Err(FleetObservabilityError::StoreChildFundingUnsupported)
         }
         CanisterObservabilityRequest::CycleTopups(_) => {
-            return Err(FleetObservabilityError::StoreCycleTopupsUnsupported);
+            Err(FleetObservabilityError::StoreCycleTopupsUnsupported)
         }
         CanisterObservabilityRequest::Metrics(_) => {
-            return Err(FleetObservabilityError::StoreMetricsUnsupported);
+            Err(FleetObservabilityError::StoreMetricsUnsupported)
         }
         CanisterObservabilityRequest::MemoryAllocations => {
-            return Err(FleetObservabilityError::StoreMemoryAllocationsUnsupported);
+            Err(FleetObservabilityError::StoreMemoryAllocationsUnsupported)
         }
         CanisterObservabilityRequest::CycleBalance => {
-            unreachable!("Store CycleBalance uses Root management inspection");
+            unreachable!("Store CycleBalance uses Root management inspection")
         }
-    };
-    let binding = resolve_registry_protocol_binding(icp_root, environment, store)?;
-    let store_canister = parse_principal("Wasm Store", &store.pid)?;
-    let response: StoreStatusResponseFragment = query_canister_with_arg(
+    }
+}
+
+fn observe_cycle_history(
+    icp: &IcpCli,
+    canister: Principal,
+    page: canic_contracts::dto::page::PageRequest,
+) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
+    let history = crate::canister_protocol::query_wire(
         icp,
-        &binding,
-        store_canister,
-        protocol::CANIC_OBSERVABILITY,
-        &request,
+        canister,
+        protocol::cycle_history::METHOD,
+        protocol::cycle_history::METHOD_ID,
+        &page,
+        protocol::cycle_history::REQUEST_LIMITS,
+        protocol::cycle_history::RESPONSE_LIMITS,
     )?;
-    let StoreStatusResponseFragment::CycleHistory(page) = response;
-    Ok(CanisterObservabilityResponse::CycleHistory(page))
+    Ok(CanisterObservabilityResponse::CycleHistory(history))
 }
 
 fn observe_root(
     icp: &IcpCli,
-    icp_root: &Path,
-    environment: &str,
     root: &RegistryEntry,
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
-    let expected_child = child_funding_target(&request);
-    let request = match request {
+    match request {
         CanisterObservabilityRequest::ChildFunding(child) => {
-            RootStatusRequestFragment::ChildFunding(child)
+            let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
+            let response: canic_contracts::dto::child_funding::ChildFundingUsage =
+                crate::canister_protocol::query_wire(
+                    icp,
+                    root_canister,
+                    protocol::child_funding::METHOD,
+                    protocol::child_funding::METHOD_ID,
+                    &ic_platform::Principal::from(child),
+                    protocol::child_funding::REQUEST_LIMITS,
+                    protocol::child_funding::RESPONSE_LIMITS,
+                )?;
+            verify_child_funding_response(
+                CanisterObservabilityResponse::ChildFunding(response.into()),
+                root_canister,
+                Some(child),
+            )
         }
-        CanisterObservabilityRequest::CycleBalance => RootStatusRequestFragment::CycleBalance,
+        CanisterObservabilityRequest::CycleBalance => {
+            let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
+            let balance = crate::canister_protocol::query_wire(
+                icp,
+                root_canister,
+                protocol::cycle_balance::METHOD,
+                protocol::cycle_balance::METHOD_ID,
+                &(),
+                protocol::cycle_balance::REQUEST_LIMITS,
+                protocol::cycle_balance::RESPONSE_LIMITS,
+            )?;
+            Ok(CanisterObservabilityResponse::CycleBalance(balance))
+        }
         CanisterObservabilityRequest::CycleHistory(page) => {
-            RootStatusRequestFragment::CycleHistory(page)
+            observe_cycle_history(icp, parse_principal("Fleet Subnet Root", &root.pid)?, page)
         }
         CanisterObservabilityRequest::CycleTopups(_) => {
-            return Err(FleetObservabilityError::RootCycleTopupsUnsupported);
+            Err(FleetObservabilityError::RootCycleTopupsUnsupported)
         }
         CanisterObservabilityRequest::Metrics(request) => {
-            RootStatusRequestFragment::Metrics(request)
+            let response: canic_contracts::dto::page::Page<
+                canic_contracts::dto::metric_page::MetricEntry,
+            > = crate::canister_protocol::query_wire(
+                icp,
+                parse_principal("Fleet Subnet Root", &root.pid)?,
+                protocol::protected_metrics::METHOD,
+                protocol::protected_metrics::METHOD_ID,
+                &request,
+                protocol::protected_metrics::REQUEST_LIMITS,
+                protocol::protected_metrics::RESPONSE_LIMITS,
+            )?;
+            Ok(CanisterObservabilityResponse::Metrics(response.into()))
         }
         CanisterObservabilityRequest::MemoryAllocations => {
-            RootStatusRequestFragment::MemoryAllocations
+            let response = crate::canister_protocol::query_wire(
+                icp,
+                parse_principal("Fleet Subnet Root", &root.pid)?,
+                protocol::protected_memory_allocations::METHOD,
+                protocol::protected_memory_allocations::METHOD_ID,
+                &(),
+                protocol::protected_memory_allocations::REQUEST_LIMITS,
+                protocol::protected_memory_allocations::RESPONSE_LIMITS,
+            )?;
+            Ok(CanisterObservabilityResponse::MemoryAllocations(response))
         }
-    };
-    let binding = resolve_registry_protocol_binding(icp_root, environment, root)?;
-    let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
-    let response: RootStatusResponseFragment = query_canister_with_arg(
-        icp,
-        &binding,
-        root_canister,
-        protocol::CANIC_OBSERVABILITY,
-        &request,
-    )?;
-    let response = match response {
-        RootStatusResponseFragment::ChildFunding(response) => {
-            CanisterObservabilityResponse::ChildFunding(response)
-        }
-        RootStatusResponseFragment::CycleBalance(response) => {
-            CanisterObservabilityResponse::CycleBalance(response)
-        }
-        RootStatusResponseFragment::CycleHistory(response) => {
-            CanisterObservabilityResponse::CycleHistory(response)
-        }
-        RootStatusResponseFragment::Metrics(response) => {
-            CanisterObservabilityResponse::Metrics(response)
-        }
-        RootStatusResponseFragment::MemoryAllocations(response) => {
-            CanisterObservabilityResponse::MemoryAllocations(response)
-        }
-    };
-    verify_child_funding_response(response, root_canister, expected_child)
+    }
 }
 
 const fn child_funding_target(request: &CanisterObservabilityRequest) -> Option<Principal> {

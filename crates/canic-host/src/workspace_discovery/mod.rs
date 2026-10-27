@@ -57,28 +57,32 @@ pub fn discover_workspace_root_from(
     let start = discovery_start(path)?;
 
     for candidate in start.ancestors() {
-        let manifest_path = candidate.join(WORKSPACE_MANIFEST_RELATIVE);
-        if !project_file_exists(&manifest_path)? {
-            continue;
-        }
-
-        let manifest = fs::read_to_string(&manifest_path).map_err(|source| {
-            WorkspaceDiscoveryError::ReadManifest {
-                path: manifest_path.clone(),
-                source,
-            }
-        })?;
-        if manifest_declares_workspace(&manifest).map_err(|source| {
-            WorkspaceDiscoveryError::ParseManifest {
-                path: manifest_path,
-                source: Box::new(source),
-            }
-        })? {
+        if has_workspace_manifest(candidate)? {
             return Ok(Some(candidate.to_path_buf()));
         }
     }
 
     Ok(None)
+}
+
+/// Inspect one candidate with the same manifest admission used by Cargo root discovery.
+pub fn has_workspace_manifest(root: &Path) -> Result<bool, WorkspaceDiscoveryError> {
+    let manifest_path = root.join(WORKSPACE_MANIFEST_RELATIVE);
+    if !project_file_exists(&manifest_path)? {
+        return Ok(false);
+    }
+    let manifest = fs::read_to_string(&manifest_path).map_err(|source| {
+        WorkspaceDiscoveryError::ReadManifest {
+            path: manifest_path.clone(),
+            source,
+        }
+    })?;
+    manifest_declares_workspace(&manifest).map_err(|source| {
+        WorkspaceDiscoveryError::ParseManifest {
+            path: manifest_path,
+            source: Box::new(source),
+        }
+    })
 }
 
 fn manifest_declares_workspace(source: &str) -> Result<bool, toml::de::Error> {
@@ -101,7 +105,7 @@ pub fn discover_icp_root_from(path: &Path) -> Result<Option<PathBuf>, WorkspaceD
     Ok(None)
 }
 
-fn discovery_start(path: &Path) -> Result<PathBuf, WorkspaceDiscoveryError> {
+pub fn discovery_start(path: &Path) -> Result<PathBuf, WorkspaceDiscoveryError> {
     let metadata = fs::metadata(path).map_err(|source| WorkspaceDiscoveryError::Inspect {
         path: path.to_path_buf(),
         source,

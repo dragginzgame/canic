@@ -21,7 +21,7 @@ pub struct ComponentAuthorityRecord {
     pub binding: FleetSubnetRootBinding,
     pub release_set: FleetSubnetRootReleaseSet,
     pub root_module_sha256: String,
-    pub root_candid_sha256: [u8; 32],
+    pub root_wire_schema_sha256: [u8; 32],
     pub root_controllers: Vec<String>,
     pub registry_sha256: [u8; 32],
     pub operator: Principal,

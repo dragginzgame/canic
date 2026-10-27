@@ -166,6 +166,12 @@ pub struct CallResult {
 }
 
 impl CallResult {
+    /// Return the raw reply for an explicitly selected protocol decoder.
+    #[must_use]
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.inner.into_bytes()
+    }
+
     pub fn candid<R>(&self) -> Result<R, InternalError>
     where
         R: CandidType + DeserializeOwned,

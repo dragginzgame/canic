@@ -539,12 +539,10 @@ The normal complete patch path is `make patch`, followed by
 one-shot form is `make release-patch`. Minor and major releases use their
 corresponding commands.
 The standard commands use the [Shared Tooling runner](shared-tooling.md).
-Preflight and validation-only failures restart through the same standard target
-against the current committed source, repeating both gates. Preparation-free
-plans retained by the earlier runner are archived unchanged after checking
-their base, destination and absence of preparation effects. Once preparation
-begins, use `make release-resume VERSION=X.Y.Z` to reconcile the exact saved
-release; never delete its intent or increment from its prepared version.
+Normal release increments start fresh from current committed metadata and repeat
+preflight and validation. Historical plans do not block that fresh attempt.
+Use `make release-resume VERSION=X.Y.Z` only to reconcile the exact saved
+release, with its original source, payload and destination checks.
 Before patch validation and version mutation, `make patch` prints the
 read-only `make release-cadence` advisory. The advisory reports when the next
 release would exceed the soft 12-release minor-line guideline but never blocks
@@ -717,6 +715,15 @@ Tags are immutable.
 
 The dependency-risk inventory also runs on a weekly read-only schedule so a
 new advisory is visible even when the repository receives no source push.
+
+The maintainer approved direct `serde_cbor` 0.11.2 use on 2026-10-26 to retain
+the IC Rust stack's selected CBOR implementation. The inventory's
+`approved-direct` field admits only the exact advisory, kind, package, version
+and checksum recorded there. This exception accepts the known unmaintained
+advisory; it does not admit vulnerabilities, yanked versions or other direct
+unmaintained dependencies. Canic's storage boundary preserves full-range
+unsigned 128-bit values as 16 big-endian bytes; external IC CBOR and Wire retain
+their separately owned representations.
 
 ## Environment Selection
 

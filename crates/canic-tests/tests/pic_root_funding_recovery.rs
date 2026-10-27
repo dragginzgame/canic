@@ -47,31 +47,27 @@ enum ProbeInit {
     Cmc,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct GrantRequest {
     operation_id: [u8; 32],
     amount: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct GrantReceipt {
     operation_id: [u8; 32],
-    coordinator: Principal,
-    root: Principal,
+    coordinator: ic_platform::Principal,
+    root: ic_platform::Principal,
     amount: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct AcceptanceObservation {
     balance_before_accept: u128,
     balance_after_accept: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct RootRequestObservation {
     result: IssueResult,
     call_cost: u128,
@@ -79,12 +75,11 @@ struct RootRequestObservation {
     balance_after_request: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct EmergencyTransferRequest {
     operation_id: [u8; 32],
     from_subaccount: Option<[u8; 32]>,
-    to_owner: Principal,
+    to_owner: ic_platform::Principal,
     to_subaccount: [u8; 32],
     amount_e8s: u64,
     fee_e8s: u64,
@@ -92,41 +87,36 @@ struct EmergencyTransferRequest {
     created_at_time_ns: u64,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 enum EmergencyRefillPhase {
     Prepared,
     Transferred { block_index: u64 },
     Completed { block_index: u64, cycles_sent: u128 },
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct EmergencyRefillOperation {
     transfer: EmergencyTransferRequest,
     max_call_cost: u128,
     phase: EmergencyRefillPhase,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 enum IntentState {
     Prepared,
     Committed { receipt: GrantReceipt },
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct GrantIntent {
-    root: Principal,
+    root: ic_platform::Principal,
     request: GrantRequest,
     call_cost: u128,
     call_reservation: u128,
     state: IntentState,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 enum IssueResult {
     Committed {
         receipt: GrantReceipt,
@@ -322,44 +312,30 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     );
     let balance_before = pic.cycle_balance(root);
 
-    let transfer_loss: Result<EmergencyRefillOperation, _> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "root_funding_probe_emergency_refill_transfer_then_trap",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply);
+    let transfer_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_wire(
+        &pic,
+        root,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec(
+            "root_funding_probe_emergency_refill_transfer_then_trap",
+            0x5445535400000d04,
+        ),
+        &(),
+    );
     assert!(transfer_loss.is_err());
     let prepared = emergency_operation(&pic, root).expect("prepared emergency operation");
     assert_eq!(prepared.phase, EmergencyRefillPhase::Prepared);
 
-    let notify_loss: Result<EmergencyRefillOperation, _> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "root_funding_probe_emergency_refill_notify_then_trap",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply);
+    let notify_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_wire(
+        &pic,
+        root,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec(
+            "root_funding_probe_emergency_refill_notify_then_trap",
+            0x5445535400000d05,
+        ),
+        &(),
+    );
     assert!(notify_loss.is_err());
     let transferred = emergency_operation(&pic, root).expect("transferred emergency operation");
     assert_eq!(
@@ -367,24 +343,14 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         EmergencyRefillPhase::Transferred { block_index: 77 }
     );
 
-    let completed: EmergencyRefillOperation =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "root_funding_probe_emergency_refill",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+    let completed: EmergencyRefillOperation = ic_testkit::pic::update_wire(
+        &pic,
+        root,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_emergency_refill", 0x5445535400000d03),
+        &(),
+    )
+    .expect("update Wire harness call");
     assert_eq!(
         completed.phase,
         EmergencyRefillPhase::Completed {
@@ -477,29 +443,19 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
 
     let coordinator_before_fresh = pic.cycle_balance(coordinator);
     let root_before_fresh = pic.cycle_balance(root);
-    let trapped: Result<IssueResult, _> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    coordinator,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "root_funding_probe_issue_then_trap",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply);
+    let trapped: Result<IssueResult, _> = ic_testkit::pic::update_wire(
+        &pic,
+        coordinator,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_issue_then_trap", 0x5445535400000d09),
+        &(),
+    );
     assert!(trapped.is_err(), "receipt-boundary callback must trap");
 
     let expected_receipt = GrantReceipt {
         operation_id: OPERATION_ID,
-        coordinator,
-        root,
+        coordinator: coordinator.into(),
+        root: root.into(),
         amount: GRANT_CYCLES,
     };
     assert_eq!(receipt(&pic, root), Some(expected_receipt.clone()));
@@ -638,164 +594,101 @@ fn install_probe(pic: &PocketIc, wasm: Vec<u8>, init: ProbeInit, cycles: u128) -
 }
 
 fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantIntent {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes =
-            ic_platform::candid::contract::encode_args((root, OPERATION_ID, GRANT_CYCLES))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                coordinator,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_prepare",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call")
+    ic_testkit::pic::update_wire(
+        pic,
+        coordinator,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_prepare", 0x5445535400000d00),
+        &PrepareRequest {
+            root: root.into(),
+            operation_id: OPERATION_ID,
+            amount: GRANT_CYCLES,
+        },
+    )
+    .expect("update Wire harness call")
 }
 
 fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                coordinator,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_issue",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call")
+    ic_testkit::pic::update_wire(
+        pic,
+        coordinator,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_issue", 0x5445535400000d07),
+        &(),
+    )
+    .expect("update Wire harness call")
 }
 
 fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                coordinator,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_issue_root_accept_then_trap",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call")
+    ic_testkit::pic::update_wire(
+        pic,
+        coordinator,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec(
+            "root_funding_probe_issue_root_accept_then_trap",
+            0x5445535400000d08,
+        ),
+        &(),
+    )
+    .expect("update Wire harness call")
 }
 
 fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                root,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_request",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call")
+    ic_testkit::pic::update_wire(
+        pic,
+        root,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_request", 0x5445535400000d02),
+        &(),
+    )
+    .expect("update Wire harness call")
 }
 
 fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                coordinator,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_intent",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("query Candid harness call")
+    ic_testkit::pic::query_wire(
+        pic,
+        coordinator,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_intent", 0x5445535400000d0a),
+        &(),
+    )
+    .expect("query Wire harness call")
 }
 
 fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                root,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_receipt",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("query Candid harness call")
+    ic_testkit::pic::query_wire(
+        pic,
+        root,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_receipt", 0x5445535400000d0b),
+        &(),
+    )
+    .expect("query Wire harness call")
 }
 
 fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceObservation> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                root,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_acceptance_observation",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("query Candid harness call")
+    ic_testkit::pic::query_wire(
+        pic,
+        root,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec(
+            "root_funding_probe_acceptance_observation",
+            0x5445535400000d0c,
+        ),
+        &(),
+    )
+    .expect("query Wire harness call")
 }
 
 fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefillOperation> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                root,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "root_funding_probe_emergency_operation",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("query Candid harness call")
+    ic_testkit::pic::query_wire(
+        pic,
+        root,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        funding_spec("root_funding_probe_emergency_operation", 0x5445535400000d06),
+        &(),
+    )
+    .expect("query Wire harness call")
 }
 
 fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
@@ -813,4 +706,27 @@ fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
 fn workspace_root() -> PathBuf {
     canic_testing_internal::workspace::discover()
         .expect("discover Canic test workspace through Cargo")
+}
+
+/// Exact native preparation authority, independent of IC installation encoding.
+#[derive(serde::Serialize)]
+struct PrepareRequest {
+    root: ic_platform::Principal,
+    operation_id: [u8; 32],
+    amount: u128,
+}
+
+fn funding_spec(method: &'static str, method_id: u64) -> ic_testkit::pic::WireCallSpec {
+    let limits = ic_wire::Limits {
+        bytes: 16_384,
+        allocation: 65_536,
+        nodes: 4096,
+        depth: 32,
+    };
+    ic_testkit::pic::WireCallSpec {
+        method,
+        method_id,
+        request_limits: limits,
+        response_limits: limits,
+    }
 }

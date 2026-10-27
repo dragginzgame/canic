@@ -26,6 +26,9 @@ pub mod format {
 }
 
 pub mod model {
+    pub mod application_checkpoint {
+        pub use crate::model::application_checkpoint::root::*;
+    }
     pub mod caller_authority {
         pub use crate::model::caller_authority::{
             CallerChangeRecord, CallerPublicationRecord, CallerReceiptPhase,
@@ -87,6 +90,9 @@ pub mod policy {
 }
 
 pub mod ops {
+    pub mod application_checkpoint {
+        pub use crate::ops::application_checkpoint::{authority_digest, command};
+    }
     pub mod caller_authority {
         pub use crate::ops::caller_authority::CallerAuthorityOps;
     }
@@ -112,7 +118,6 @@ pub mod ops {
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS,
-            MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES,
             MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES,
             RootComponentProvisioningBatchValidation,
         };
@@ -159,7 +164,7 @@ pub mod ops {
             pub use crate::{
                 infra::ic::cycles_ledger::{
                     CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess,
-                    CyclesLedgerTransferError,
+                    TransferError,
                 },
                 ops::ic::cycles_ledger::CyclesLedgerOps,
             };
@@ -173,7 +178,7 @@ pub mod ops {
         }
 
         pub mod icp_refill {
-            pub use crate::ops::ic::icp_refill::{IcpRefillOps, Icrc1Account};
+            pub use crate::ops::ic::icp_refill::{Account, IcpRefillOps};
         }
 
         pub mod nns {
@@ -218,7 +223,7 @@ pub mod view {
     }
 
     pub mod state_cascade {
-        pub use crate::view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget};
+        pub use crate::view::state_cascade::StateCascadeTarget;
     }
     pub mod fleet_activation {
         pub use crate::view::fleet_activation::{

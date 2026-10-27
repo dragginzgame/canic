@@ -99,8 +99,7 @@ as described below. Disposable fixture balances are not sizing recommendations.
 ## Inspection reserve failures
 
 Before an uncached protected status inspection, the host queries the selected
-Root's controller-only `canic_observability(InspectionReserve(target))` surface
-when that selector is declared in the exact bound Candid contract.
+Root's controller-only native Wire `canic_root_inspection_reserve(target)` query.
 It reports the Root's native/liquid balances and the exact encoded management
 call's current reserve requirement. This query is also available while the Root
 is prepared. An invalid response or observed shortfall stops before the update;
@@ -113,12 +112,9 @@ sample therefore cannot guarantee admission. No host-defined minimum call fee,
 automatic transfer or reserve-policy reduction is introduced. A Root that cannot
 serve the query returns its transport failure, not an invented zero balance.
 
-Source-bound recovery may inspect a retained Root whose reviewed contract has no
-reserve selector. The host preserves that contract's protected inspection without
-requesting a newer selector. This supplies no ahead-of-call reserve estimate.
-The current generated Root contract declares the selector and requires preflight;
-invalid contracts or failed declared queries never permit bypassing it. Source
-artifact, controller and conservation checks still govern recovery admission.
+The current Root contract requires this preflight. Missing or invalid evidence
+refuses protected inspection. Source artifact, controller and conservation checks
+still govern recovery admission.
 
 `E162 PLATFORM_INSUFFICIENT_LIQUID_CYCLES` identifies an SDK outbound-call
 admission failure, separate from the deployment guard above. The protected Root
@@ -198,7 +194,7 @@ For an installed Root matching the selected artifact, generation also queries
 the allocation behind each seeded pool Workload claim. A committed allocation
 must match the operation, Component, Root and child; its installed binding
 supplies the immediate funding parent and role. Only a Root-funded Workload
-uses `canic_observability(ChildFunding(child))` on Root. Pool custody alone is
+uses the native Wire `canic_child_funding(child)` query on Root. Pool custody alone is
 not a funding relationship: nested shards may be funded by their hubs.
 Ready assets are marked `NotWorkload`; unresolved or conflicting allocation
 evidence remains unavailable. Descendants show their exact parent with
@@ -243,7 +239,7 @@ binding and release. Unfiltered directory pages must contain every exact child
 and funding-parent edge once, within the Spec's registry bounds. Partial pages,
 missing members and duplicate identities never establish complete coverage.
 
-The controller-only `canic_root_status(ComponentDirectoryPage(...))` query
+The controller-only native Wire `canic_root_directory_page` query
 uses the same bounded reader as registered members' public directory queries.
 Generation reads at most 100 entries per page and requires progress on every
 continuation. It rechecks each partition and directory head after ledger reads;
@@ -310,8 +306,8 @@ telemetry can succeed.
 Review and collect within an existing in-progress Ensure operation:
 
 ```sh
-canic fleet ensure staging --environment local --observe-funding root-a
-canic fleet ensure staging --environment local --observe-funding root-a --apply <observation-review-sha256>
+canic --environment local fleet ensure staging --observe-funding root-a
+canic --environment local fleet ensure staging --observe-funding root-a --apply <observation-review-sha256>
 ```
 
 Use the same desired-file and ICP selectors as the retained operation when they

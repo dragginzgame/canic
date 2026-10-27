@@ -9,9 +9,10 @@ manifests, topology hashing, download journals, durable artifact integrity,
 backup layout validation, restore planning, restore apply journals, and native
 runner summaries.
 
-Published `ic-backup` owns file/tree checksums, descriptor no-follow traversal and
-create-new private artifact staging. Canic projects its checksum records into the
-maintained manifest shape and preserves native I/O failures. Other traversal
+Published `ic-backup` owns checksum identities. IC Host supplies streaming hashes,
+descriptor no-follow traversal and deterministic directory checksum framing.
+Canic maps those results into Backup checksum records, retains its staging/fsync
+policy and manifest checks, and preserves native I/O failures. Other traversal
 failures use `ArtifactChecksumError::Artifact(ic_backup::ops::artifacts::ArtifactError)`.
 Tree names must be UTF-8 so checksum paths retain exact identity.
 
@@ -28,9 +29,9 @@ engine after serialization succeeds. The existing `PersistenceError::Io` kind
 is retained; its source carries typed publication visibility, native filesystem
 failure and any independent staging-cleanup failure. A failure after publication
 requires reconciliation against the retained document before retrying.
-Its publication walk synchronizes admitted descriptors and computes the existing
-directory framing before the no-replace rename; a path-based checksum cannot
-replace that walk without losing its descriptor and barrier guarantees.
+Restore artifact staging copies admitted source descriptors into create-new
+private destinations and synchronizes staged files and directories. Host computes
+the digest and directory framing; Canic admits the result against retained evidence.
 
 Backup creation/execution, restore preparation/run and prune share a parent-side
 layout lock. Restore journal publication requires a `BackupLayoutGuard` and
@@ -38,10 +39,26 @@ durably retains the source layout before publishing recovery authority. Paused
 or failed restores retain that reference; terminal runner replay releases it
 after verifying command quiescence. Custom external journals use the same contract.
 
-Fresh CLI backup execution currently rejects because Component Registry topology
-preflight is unimplemented. The runner and same-release recovery contracts remain
-maintained; the accepted 0.112 completion batch includes the missing capture
-workflow and its actual same-release recovery proof. See the
+Live CLI backup creation returns `LiveCreateUnavailable` before local or remote
+effects. Dry-run creation initializes passive plans and journals; capture preflight
+application, execution transitions and download-state mutation APIs are removed.
+Retained evidence validation and status projections remain available.
+
+Restore parent ordering and operation-identity validation use IC Backup effect
+graphs. Canic maps Fleet parent edges and serial restore phases into those graphs;
+identifiers need not be contiguous. Backup graph bounds apply before execution.
+The existing Canic runner validates its own serial journal completion ordering;
+those states are not Backup Applied receipts. Backup 0.42 removes the former
+caller-declared readiness API; completion without completed prerequisites still
+returns a typed refusal before dispatch.
+
+Canic still owns the active restore runner, apply journal and ICP subprocess
+adapter. Adopting Backup’s execution coordinator and original plan/stage/attempt
+authority remains separate work in [#513](https://github.com/dragginzgame/canic/issues/513),
+requiring qualified recovery and subprocess custody. Retained failed states must
+not become fresh spending authority. Application checkpoints and live capture
+remain tracked by [#550](https://github.com/dragginzgame/canic/issues/550) and
+[#394](https://github.com/dragginzgame/canic/issues/394). See the
 [availability boundary](../../docs/features/backup-and-restore/README.md#current-availability).
 
 `DeploymentBackupManifest::validate()` enforces the hard manifest contract.

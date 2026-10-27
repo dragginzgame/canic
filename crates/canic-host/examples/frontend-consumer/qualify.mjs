@@ -1,33 +1,24 @@
+import './check-boundary.mjs';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { Ed25519KeyIdentity } from '@icp-sdk/core/identity';
+import { Ed25519KeyIdentity } from '@tokostudios/ic-platform/identity';
 import ts from 'typescript';
-import { createCanicActor, verifyHandoff } from './handoff.mjs';
+import { Principal } from '@tokostudios/ic-platform/principal';
+import { createCanicClient, verifyHandoff } from './handoff.mjs';
 
 Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
 
 async function checkDeclarations(bundle, manifest) {
-  const virtual = new Map();
   const consumer = dirname(fileURLToPath(import.meta.url));
-  for (const [index, role] of manifest.roles.entries()) {
-    virtual.set(join(consumer, `verified-${index}.d.ts`), await readFile(join(bundle, role.typescript.path), 'utf8'));
-  }
-  const options = { strict: true, noEmit: true, skipLibCheck: false,
-    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext };
-  const host = ts.createCompilerHost(options);
-  const read = host.readFile;
-  const exists = host.fileExists;
-  const source = host.getSourceFile;
-  host.readFile = file => virtual.get(file) ?? read(file);
-  host.fileExists = file => virtual.has(file) || exists(file);
-  host.getSourceFile = (file, version, onError, create) => virtual.has(file)
-    ? ts.createSourceFile(file, virtual.get(file), version, true)
-    : source(file, version, onError, create);
-  const program = ts.createProgram([...virtual.keys()], options, host);
+  const paths = manifest.roles.flatMap(role => [role.typescript, ...role.modules])
+    .filter(file => file.path.endsWith('.d.ts')).map(file => join(bundle, file.path));
+  const options = { strict: true, noEmit: true, skipLibCheck: false, types: [], typeRoots: [],
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022,
+    moduleResolution: ts.ModuleResolutionKind.Bundler };
+  const program = ts.createProgram(paths, options);
   const errors = ts.getPreEmitDiagnostics(program);
   assert.equal(errors.length, 0, ts.formatDiagnostics(errors, {
     getCurrentDirectory: () => consumer, getCanonicalFileName: file => file, getNewLine: () => '\n',
@@ -53,16 +44,16 @@ if (action === 'identity') {
   if (action === 'call') await checkDeclarations(bundle, handoff.manifest);
   const selected = handoff.manifest.roles.find(role => role.canister_id === canisterId);
   assert.ok(selected, 'exact selected role');
-  const { idlFactory } = await import(pathToFileURL(join(bundle, selected.javascript.path)));
+  const bindings = await import(pathToFileURL(join(bundle, selected.javascript.path)));
   const identity = Ed25519KeyIdentity.fromJSON(await readFile(process.env.CANIC_FRONTEND_IDENTITY, 'utf8'));
-  const actor = await createCanicActor(handoff, canisterId, idlFactory, identity);
-  const response = await actor[method]();
+  const client = await createCanicClient(handoff, canisterId, bindings, identity);
+  const response = await client.call(method);
   if (action === 'denied') {
-    assert.ok(Object.hasOwn(response, 'Err'), 'unadmitted identity is denied');
+    assert.ok(Object.hasOwn(response, 'err'), 'unadmitted identity is denied');
     process.stdout.write('Unadmitted application caller denied\n');
   } else {
-    assert.ok(Object.hasOwn(response, 'Ok'), 'authenticated application call returns typed success');
-    assert.equal(response.Ok.toText(), identity.getPrincipal().toText(), 'application observes the browser-owned caller');
+    assert.ok(Object.hasOwn(response, 'ok'), 'authenticated application call returns typed success');
+    assert.equal(Principal.fromUint8Array(response.ok).toText(), identity.getPrincipal().toText(), 'application observes the browser-owned caller');
     process.stdout.write(`Authenticated application call succeeded for ${identity.getPrincipal().toText()}\n`);
   }
 } else {

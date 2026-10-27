@@ -231,9 +231,9 @@ fn retained_child_failure_does_not_change_work_or_capacity() {
         response.platform_rejection.as_deref(),
         Some(detail.as_str())
     );
-    let encoded = ic_platform::candid::contract::encode_one(&response).unwrap();
+    let encoded = canic_contracts::protocol::authority::encode(&response).unwrap();
     let decoded: canic_contracts::dto::component_registry::RootComponentChildAllocationFailure =
-        ic_platform::candid::decoder::decode_one(&encoded).unwrap();
+        canic_contracts::protocol::authority::decode(&encoded).unwrap();
     assert_eq!(decoded, response);
     let record = retained.child_allocations[0].last_failure.clone().unwrap();
     let mut json = serde_json::to_value(&record).unwrap();

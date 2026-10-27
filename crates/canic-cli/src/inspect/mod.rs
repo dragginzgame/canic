@@ -13,25 +13,19 @@ use crate::{
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
-    output,
-    support::candid::registry_entry_candid_path,
-    version_text,
+    output, version_text,
 };
 use canic_contracts::{
-    dto::{
-        runtime::{
-            CanicRuntimeStatus, RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeFeatureStatus,
-            RuntimeStatus,
-        },
-        wire::projection::runtime_inspection::RoleStatusResponse,
+    dto::runtime::{
+        CanicRuntimeStatus, RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeFeatureStatus,
+        RuntimeStatus,
     },
-    protocol::CANIC_OBSERVABILITY,
+    protocol::protected_runtime,
 };
 use canic_host::{
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
+    icp::{IcpCli, IcpCommandError, IcpWireQueryError},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    protocol_binding::ResolvedProtocolBinding,
 };
 use clap::{Arg, Command as ClapCommand};
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -42,13 +36,13 @@ use thiserror::Error as ThisError;
 
 const INSPECT_SCHEMA_VERSION: u32 = 1;
 const RUNTIME_OBSERVED_SOURCE: &str = "runtime_observed";
-const CANDID_RESPONSE_FORMAT: &str = "candid";
+const WIRE_RESPONSE_FORMAT: &str = "wire";
 const INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic inspect fleet demo-local --role root
   canic inspect management <principal> --json
 
-Runtime inspection queries the guarded role-owned Runtime selector for
+Runtime inspection queries the controller-authenticated `canic_runtime` Wire endpoint for
 one explicit target. Management inspection reports visibility and query counters. Use
 the Fleet form only after one current `fleet ensure` operation converges.";
 
@@ -73,7 +67,10 @@ pub enum InspectCommandError {
     Icp(#[from] IcpCommandError),
 
     #[error("invalid role-owned Runtime status response: {0}")]
-    InvalidResponse(#[source] IcpJsonResponseError),
+    Wire(#[from] IcpWireQueryError),
+
+    #[error("runtime observation refused: {0}")]
+    Canic(canic_contracts::dto::error::Error),
 
     #[error(
         "unsupported {subject} schema version {actual}; expected {RUNTIME_INTROSPECTION_SCHEMA_VERSION}"
@@ -99,7 +96,8 @@ impl InspectCommandError {
             | Self::Target(_)
             | Self::CurrentFleet(_)
             | Self::Icp(_)
-            | Self::InvalidResponse(_)
+            | Self::Wire(_)
+            | Self::Canic(_)
             | Self::UnsupportedRuntimeSchema { .. }
             | Self::IcpRoot(_)
             | Self::Json(_) => 2,
@@ -133,7 +131,6 @@ struct ResolvedInspectTarget {
     environment: String,
     icp: String,
     source: InspectSource,
-    protocol_binding: ResolvedProtocolBinding,
     icp_root: Option<PathBuf>,
     json: bool,
 }
@@ -283,8 +280,6 @@ fn resolve_fleet_target(
     };
     validate_principal(&entry.pid)?;
 
-    let protocol_binding = registry_entry_candid_path(Some(root.as_path()), environment, entry)
-        .map_err(|error| InspectCommandError::Target(error.to_string()))?;
     Ok(ResolvedInspectTarget {
         command: InspectCommandKind::Fleet,
         fleet: Some(fleet.to_string()),
@@ -293,7 +288,6 @@ fn resolve_fleet_target(
         environment: environment.to_string(),
         icp: icp.to_string(),
         source: InspectSource::CurrentEnsureInventory,
-        protocol_binding,
         icp_root: Some(root),
         json,
     })
@@ -304,15 +298,20 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     if let Some(root) = &target.icp_root {
         icp = icp.with_cwd(root);
     }
-    let endpoint = CANIC_OBSERVABILITY;
-    let output = icp.canister_query_arg_output_with_candid(
+    let endpoint = protected_runtime::METHOD;
+    let response: Result<
+        canic_contracts::dto::runtime_observation::CanicRuntimeStatus,
+        canic_contracts::dto::error::Error,
+    > = icp.canister_query_wire(
         &target.canister_id,
         endpoint,
-        "(variant { Runtime })",
-        Some("json"),
-        Some(target.protocol_binding.candid_path()),
+        protected_runtime::METHOD_ID,
+        &(),
+        protected_runtime::REQUEST_LIMITS,
+        protected_runtime::RESPONSE_LIMITS,
     )?;
-    let runtime_status = runtime_response_payload(&output)?;
+    let runtime_status =
+        runtime_response_payload(response.map_err(InspectCommandError::Canic)?.into())?;
     let status = runtime_status.status.status;
 
     Ok(InspectReport {
@@ -331,16 +330,15 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     })
 }
 
-fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
-    let response = decode_json_result_response::<RoleStatusResponse>(output)
-        .map_err(InspectCommandError::InvalidResponse)?;
-    let RoleStatusResponse::Runtime(status) = response;
+fn runtime_response_payload(
+    status: CanicRuntimeStatus,
+) -> Result<RuntimeStatusPayload, InspectCommandError> {
     require_current_runtime_schema(&status)?;
 
     Ok(RuntimeStatusPayload {
         source: RUNTIME_OBSERVED_SOURCE,
         status,
-        response_format: CANDID_RESPONSE_FORMAT,
+        response_format: WIRE_RESPONSE_FORMAT,
     })
 }
 
@@ -568,8 +566,6 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::cdk::utils::hash::hex_bytes;
-    use ic_platform::candid::contract::Encode;
 
     #[test]
     fn parses_fleet_role_target() {
@@ -621,52 +617,28 @@ mod tests {
     fn usage_binds_fleet_inspection_to_terminal_current_ensure() {
         let text = usage();
 
-        assert!(text.contains("guarded role-owned Runtime selector"));
+        assert!(text.contains("controller-authenticated `canic_runtime` Wire endpoint"));
         assert!(text.contains("current `fleet ensure` operation converges"));
         assert!(!text.contains("canic deploy inspect"));
     }
 
     #[test]
-    fn response_without_response_bytes_is_rejected() {
-        let err = runtime_response_payload("{}").expect_err("typed response bytes are required");
-
-        assert!(matches!(
-            err,
-            InspectCommandError::InvalidResponse(IcpJsonResponseError::Envelope(_))
-        ));
-    }
-
-    #[test]
-    fn decodes_runtime_status_from_response_bytes() {
+    fn native_runtime_projection_preserves_observed_report() {
         let status = sample_runtime_status(RuntimeStatus::Ok);
-        let response = Ok::<_, canic_contracts::dto::error::Error>(RoleStatusResponse::Runtime(
-            status.clone(),
-        ));
-        let output = format!(
-            r#"{{"response_bytes":"{}"}}"#,
-            hex_bytes(Encode!(&response).expect("encode runtime status response"))
-        );
-        let payload = runtime_response_payload(&output).expect("decode runtime status");
-
+        let native: canic_contracts::dto::runtime_observation::CanicRuntimeStatus =
+            status.clone().into();
+        let payload = runtime_response_payload(native.into()).unwrap();
         assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
         assert_eq!(payload.status, status);
-        assert_eq!(payload.response_format, CANDID_RESPONSE_FORMAT);
-        assert_eq!(payload.status.status, RuntimeStatus::Ok);
+        assert_eq!(payload.response_format, WIRE_RESPONSE_FORMAT);
     }
 
     #[test]
     fn rejects_unsupported_runtime_schema() {
         let mut status = sample_runtime_status(RuntimeStatus::Ok);
         status.schema_version = RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1;
-        let response =
-            Ok::<_, canic_contracts::dto::error::Error>(RoleStatusResponse::Runtime(status));
-        let output = format!(
-            r#"{{"response_bytes":"{}"}}"#,
-            hex_bytes(Encode!(&response).expect("encode unsupported runtime status response"))
-        );
-
         assert!(matches!(
-            runtime_response_payload(&output),
+            runtime_response_payload(status),
             Err(InspectCommandError::UnsupportedRuntimeSchema {
                 subject: "runtime introspection",
                 actual,
@@ -678,30 +650,12 @@ mod tests {
     fn rejects_unsupported_readiness_schema() {
         let mut status = sample_runtime_status(RuntimeStatus::Ok);
         status.readiness.schema_version = RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1;
-        let response =
-            Ok::<_, canic_contracts::dto::error::Error>(RoleStatusResponse::Runtime(status));
-        let output = format!(
-            r#"{{"response_bytes":"{}"}}"#,
-            hex_bytes(Encode!(&response).expect("encode unsupported readiness response"))
-        );
-
         assert!(matches!(
-            runtime_response_payload(&output),
+            runtime_response_payload(status),
             Err(InspectCommandError::UnsupportedRuntimeSchema {
                 subject: "runtime readiness",
                 actual,
             }) if actual == RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1
-        ));
-    }
-
-    #[test]
-    fn invalid_response_bytes_hex_is_rejected() {
-        let err = runtime_response_payload(r#"{"response_bytes":"not-hex"}"#)
-            .expect_err("invalid hex rejected");
-
-        assert!(matches!(
-            err,
-            InspectCommandError::InvalidResponse(IcpJsonResponseError::Envelope(_))
         ));
     }
 
@@ -717,8 +671,8 @@ mod tests {
                 .any(|line| line == "source: current_ensure_inventory")
         );
         assert!(rendered.contains("source: runtime_observed"));
-        assert!(rendered.contains("endpoint: canic_observability"));
-        assert!(rendered.contains("response_format: candid"));
+        assert!(rendered.contains("endpoint: canic_runtime"));
+        assert!(rendered.contains("response_format: wire"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
         assert!(rendered.contains("schema_version: 1"));
@@ -757,7 +711,7 @@ mod tests {
             value["target_resolution"]["source"],
             "current_ensure_inventory"
         );
-        assert_eq!(value["endpoint"], CANIC_OBSERVABILITY);
+        assert_eq!(value["endpoint"], protected_runtime::METHOD);
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], "runtime_observed");
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
@@ -790,7 +744,7 @@ mod tests {
             value["runtime_status"]["status"]["recent_failures"][0]["redacted"],
             true
         );
-        assert_eq!(value["runtime_status"]["response_format"], "candid");
+        assert_eq!(value["runtime_status"]["response_format"], "wire");
         assert!(value.get("health_status").is_none());
         assert!(value.get("readiness_status").is_none());
         assert!(value.get("warnings").is_none());
@@ -861,12 +815,12 @@ mod tests {
                 environment: "local".to_string(),
                 source: InspectSource::CurrentEnsureInventory,
             },
-            endpoint: CANIC_OBSERVABILITY,
+            endpoint: protected_runtime::METHOD,
             status: RuntimeStatus::Ok,
             runtime_status: RuntimeStatusPayload {
                 source: RUNTIME_OBSERVED_SOURCE,
                 status: sample_runtime_status(RuntimeStatus::Ok),
-                response_format: CANDID_RESPONSE_FORMAT,
+                response_format: WIRE_RESPONSE_FORMAT,
             },
         }
     }

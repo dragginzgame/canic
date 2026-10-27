@@ -20,25 +20,6 @@ fn validates_execution_preflight_receipts() {
     .expect("valid execution preflights");
 }
 
-// Ensure the full preflight bundle upgrades authority and validates execution gates.
-#[test]
-fn applies_execution_preflight_receipt_bundle() {
-    let mut plan = subtree_plan();
-    plan.targets[0].control_authority =
-        ControlAuthority::root_controller(AuthorityEvidence::Declared);
-    plan.targets[0].snapshot_read_authority =
-        SnapshotReadAuthority::root_configured_read(AuthorityEvidence::Declared);
-    let receipts = execution_preflight_receipts(&subtree_plan());
-
-    plan.apply_execution_preflight_receipts(&receipts, AS_OF)
-        .expect("apply execution preflight bundle");
-
-    assert_eq!(plan.targets[0].control_authority, proven_root_control());
-    assert_eq!(plan.targets[0].snapshot_read_authority, proven_root_read());
-    plan.validate_for_execution()
-        .expect("bundle makes plan executable");
-}
-
 // Ensure nullable receipt messages are explicit parts of the current evidence envelope.
 #[test]
 fn preflight_receipts_require_exact_current_optional_fields() {
@@ -61,41 +42,6 @@ fn preflight_receipts_require_exact_current_optional_fields() {
     assert!(serde_json::from_value::<QuiescencePreflightReceipt>(values[1].clone()).is_err());
     assert!(serde_json::from_value::<ControlAuthorityReceipt>(values[2].clone()).is_err());
     assert!(serde_json::from_value::<SnapshotReadAuthorityReceipt>(values[3].clone()).is_err());
-}
-
-// Ensure stale preflight bundles cannot authorize later mutation.
-#[test]
-fn rejects_expired_execution_preflight_bundle() {
-    let mut plan = subtree_plan();
-    let receipts = execution_preflight_receipts(&plan);
-
-    let err = plan
-        .apply_execution_preflight_receipts(&receipts, "unix:250")
-        .expect_err("expired preflight bundle rejects");
-
-    std::assert_matches!(
-        err,
-        BackupPlanError::PreflightReceiptExpired { preflight_id, expires_at, as_of }
-            if preflight_id == PREFLIGHT_ID && expires_at == EXPIRES_AT && as_of == "unix:250"
-    );
-}
-
-// Ensure receipt bundles cannot mix proofs from a different preflight run.
-#[test]
-fn rejects_mismatched_preflight_id_in_bundle_receipts() {
-    let mut plan = subtree_plan();
-    let mut receipts = execution_preflight_receipts(&plan);
-    receipts.topology.preflight_id = "preflight-other".to_string();
-
-    let err = plan
-        .apply_execution_preflight_receipts(&receipts, AS_OF)
-        .expect_err("mismatched preflight receipt rejects");
-
-    std::assert_matches!(
-        err,
-        BackupPlanError::PreflightReceiptIdMismatch { expected, actual }
-            if expected == PREFLIGHT_ID && actual == "preflight-other"
-    );
 }
 
 // Ensure topology drift fails before mutation.

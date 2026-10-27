@@ -7,6 +7,7 @@ fn make_args(requires: Vec<AccessExprAst>) -> ValidatedArgs {
         export_name: None,
         payload_max_bytes: None,
         decode: None,
+        wire: None,
         reject_access: false,
         requires,
         internal: false,
@@ -16,25 +17,38 @@ fn make_args(requires: Vec<AccessExprAst>) -> ValidatedArgs {
 
 #[test]
 fn bounded_guards_consume_decoded_proofs_and_keep_the_fleet_guard() {
-    let mut args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-        BuiltinPredicate::AttestedLocalSubnet,
-    ))]);
-    args.decode = Some(quote!(LIMITS));
-    args.reject_access = true;
-    let function: ItemFn = syn::parse_quote!(
-        fn read(token: SignedRoleAttestation) -> u64 {
-            1
+    for wire in [false, true] {
+        let mut args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::AttestedLocalSubnet,
+        ))]);
+        if wire {
+            args.wire = Some(crate::endpoint::WireArgs {
+                id: quote!(7),
+                request: quote!(REQUEST),
+                response: quote!(RESPONSE),
+            });
+        } else {
+            args.decode = Some(quote!(LIMITS));
         }
-    );
-    let expansion = expand(EndpointKind::Query, args, function).to_string();
-    let compact = expansion.split_whitespace().collect::<String>();
-    assert!(compact.contains("attested_local_subnet_argument(&token)"));
-    assert!(compact.contains("fleet::is_queryable()"));
-    assert!(compact.contains("in_tracking_query_executor_context"));
-    assert!(compact.contains("msg_reject"));
-    assert!(compact.contains("candid_method(query,rename=\"read\")"));
-    assert!(compact.contains("__canic_impl_read(token)"));
-    assert!(!compact.contains("__canic_impl_read(token).await"));
+        args.reject_access = true;
+        let function: ItemFn = syn::parse_quote!(
+            fn read(token: SignedRoleAttestation) -> u64 {
+                1
+            }
+        );
+        let expansion = expand(EndpointKind::Query, args, function).to_string();
+        let compact = expansion.split_whitespace().collect::<String>();
+        assert!(compact.contains("attested_local_subnet_argument(&token)"));
+        assert!(compact.contains("fleet::is_queryable()"));
+        assert!(compact.contains("in_tracking_query_executor_context"));
+        assert!(compact.contains("msg_reject"));
+        assert_eq!(
+            compact.contains("candid_method(query,rename=\"read\")"),
+            !wire
+        );
+        assert!(compact.contains("__canic_impl_read(token)"));
+        assert!(!compact.contains("__canic_impl_read(token).await"));
+    }
 }
 
 #[test]
@@ -218,10 +232,11 @@ fn access_stage_default_guard_skips_the_unused_transport_caller() {
 }
 
 #[test]
-fn store_data_endpoint_expansion_selects_store_only_preflight() {
-    let args = make_args(Vec::new());
+fn exported_store_endpoint_uses_the_role_checked_preflight() {
+    let mut args = make_args(Vec::new());
+    args.export_name = Some(syn::parse_quote!("canic_wasm_store_publish_chunk"));
     let func: ItemFn = syn::parse_quote!(
-        fn canic_wasm_store_publish_chunk(bytes: Vec<u8>) -> Result<(), ::canic::Error> {
+        fn publish_chunk(bytes: Vec<u8>) -> Result<(), ::canic::Error> {
             let _ = bytes;
             Ok(())
         }
@@ -232,18 +247,23 @@ fn store_data_endpoint_expansion_selects_store_only_preflight() {
         .split_whitespace()
         .collect::<String>();
 
-    assert!(compact.contains("preflight_store_data_endpoint(__canic_call)"));
-    assert!(!compact.contains("preflight_endpoint(__canic_call)"));
+    assert!(compact.contains("preflight_endpoint(__canic_call)"));
+    assert!(compact.contains("EndpointId::new(\"canic_wasm_store_publish_chunk\")"));
 }
 
 #[test]
 fn attested_local_subnet_expands_to_the_local_proof_guard() {
-    let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+    let mut args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
         BuiltinPredicate::AttestedLocalSubnet,
     ))]);
+    args.wire = Some(crate::endpoint::WireArgs {
+        id: quote!(7),
+        request: quote!(REQUEST),
+        response: quote!(RESPONSE),
+    });
     let func: ItemFn = syn::parse_quote!(
         async fn local_call(
-            attestation: ::canic::dto::auth::SignedRoleAttestation,
+            attestation: ::canic::dto::role_attestation::SignedRoleAttestation,
         ) -> Result<(), ::canic::Error> {
             Ok(())
         }
@@ -252,7 +272,7 @@ fn attested_local_subnet_expands_to_the_local_proof_guard() {
     let expanded = expand(EndpointKind::Update, args, func).to_string();
     let compact = expanded.split_whitespace().collect::<String>();
 
-    assert!(compact.contains("access::expr::auth::attested_local_subnet()"));
+    assert!(compact.contains("access::expr::auth::attested_local_subnet_argument(&attestation)"));
     assert!(compact.contains("let_=&attestation"));
 }
 
@@ -350,4 +370,62 @@ fn application_startup_gate_precedes_boolean_guards_and_internal_dispatch() {
             assert!(mandatory < predicate);
         }
     }
+}
+
+#[test]
+fn wire_adapter_keeps_guards_and_checks_size_before_copy() {
+    let parsed = crate::endpoint::parse::parse_args(quote!(
+        requires(caller::is_controller()),
+        on_access_denied = "reject",
+        wire(id = 7, request = REQUEST, response = RESPONSE)
+    ))
+    .unwrap();
+    let function: ItemFn = syn::parse_quote!(
+        fn native(value: Principal) -> Principal {
+            value
+        }
+    );
+    let args =
+        crate::endpoint::validate::validate(EndpointKind::Update, parsed, &function.sig).unwrap();
+    let expansion = expand(EndpointKind::Update, args, function);
+    syn::parse2::<syn::File>(expansion.clone()).unwrap();
+    let text = expansion.to_string();
+    for required in [
+        "decode_request",
+        "encode_response",
+        "preflight_endpoint",
+        "eval_application_startup",
+        "register_update_limit",
+        "in_tracking_executor_context",
+        "msg_reject",
+    ] {
+        assert!(text.contains(required));
+    }
+    assert!(text.find("msg_arg_data_size").unwrap() < text.find("msg_arg_data_copy").unwrap());
+    assert!(!text.contains("candid"));
+    assert!(!text.contains("futures :: spawn"));
+}
+
+#[test]
+fn wire_result_endpoint_selects_native_io_without_transport_rejection() {
+    let parsed = crate::endpoint::parse::parse_args(quote!(
+        requires(caller::is_controller()),
+        wire(id = 9, request = REQUEST, response = RESPONSE)
+    ))
+    .unwrap();
+    let function: ItemFn = syn::parse_quote!(
+        fn native(value: u64) -> Result<u64, ::canic::Error> {
+            Ok(value)
+        }
+    );
+    let args =
+        crate::endpoint::validate::validate(EndpointKind::Update, parsed, &function.sig).unwrap();
+    let expansion = expand(EndpointKind::Update, args, function);
+    syn::parse2::<syn::File>(expansion.clone()).unwrap();
+    let text = expansion.to_string();
+    assert!(text.contains("decode_request"));
+    assert!(text.contains("encode_response"));
+    assert!(text.contains("eval_access_selected"));
+    assert!(!text.contains("candid"));
+    assert!(!text.contains("msg_reject"));
 }

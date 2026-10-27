@@ -97,6 +97,9 @@ pub fn validate_fleet_admission_policy(
         {
             return Err(FleetAdmissionPolicyValidationError::RuleWidensFleet);
         }
+        if rule.principals == input.fleet_principals {
+            return Err(FleetAdmissionPolicyValidationError::RulePrincipalsNonCanonical);
+        }
         count
             .checked_add(rule.principals.len())
             .ok_or(FleetAdmissionPolicyValidationError::RulePrincipalReferenceCountExceeded)

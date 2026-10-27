@@ -1,9 +1,14 @@
-//! Public argument bounds for generated endpoint and lifecycle entrypoints.
+//! Application endpoints use native Wire; external Candid and lifecycle bounds remain distinct.
+//!
+//! Use `wire(id = METHOD_ID, request = REQUEST_LIMITS, response = RESPONSE_LIMITS)`
+//! for Canic-owned application methods. See the native Wire section below for
+//! framing, generated schemas and caller behavior. The following `ArgumentLimits`
+//! examples describe the external Candid adapter only.
 //!
 //! The artifact selects all five limits. Transport size is checked before the
 //! argument buffer is allocated; Candid then decodes under one shared budget.
 //!
-//! # Guarded plain replies
+//! # External Candid adapter: guarded plain replies
 //!
 //! `on_access_denied = "reject"` sends an IC rejection on access refusal and
 //! preserves the handler's declared Candid success shape. Default Fleet guards,
@@ -16,21 +21,17 @@
 //!     max_bytes: 32 * 1024, decoding_quota: 100_000, skipping_quota: 10_000,
 //!     max_type_len: 128, max_header_len: 4096,
 //! };
-//! #[derive(ic_platform::candid::contract::CandidType)]
-//! #[candid_path("ic_platform::candid::contract")]
-//! struct Receipt { accepted_bytes: u64 }
 //! #[canic::canic_update(requires(caller::is_controller()),
 //!     on_access_denied = "reject", decode = LIMITS)]
-//! fn accept(bytes: Vec<u8>) -> Receipt {
-//!     Receipt { accepted_bytes: bytes.len() as u64 }
-//! }
-//! #[canic::canic_query(public, decode = LIMITS)]
-//! fn size(bytes: Vec<u8>) -> Result<u64, canic::Error> { Ok(bytes.len() as u64) }
+//! fn accept(bytes: Vec<u8>) -> u64 { bytes.len() as u64 }
+//! #[canic::canic_query(public, on_access_denied = "reject", decode = LIMITS)]
+//! fn size(bytes: Vec<u8>) -> u64 { bytes.len() as u64 }
 //! ```
 //!
-//! Select `argument_limits = LIMITS,` first in the owning `canic::start!` or
+//! Select a separate `ic_wire::Limits` value with `argument_limits = LIMITS,`
+//! first in the owning `canic::start!` or
 //! `canic::start_local!` invocation to bound the initial init/post-upgrade
-//! envelope before restoration or participants. Opaque nested application bytes
+//! native Wire envelope before restoration or participants. Opaque nested application bytes
 //! still require their own semantic checks and bounded decoding.
 //!
 //! # Invalid combinations
@@ -84,6 +85,41 @@
 //! #[canic::canic_query(public, decode = LIMITS, decode = LIMITS)]
 //! fn duplicate_limits() -> Result<(), canic::Error> { Ok(()) }
 //! ```
+
+//! # Native Wire endpoints
+//!
+//! Select `wire(id = 7001, request = REQUEST_LIMITS, response = RESPONSE_LIMITS)`
+//! to retain ordinary Result-based access denials, or additionally select
+//! `on_access_denied = "reject"` for transport rejection. An ID may name its owner
+//! constant (for example `protocol::READ_ID`); calls and arithmetic are rejected.
+//! Rust checks the constant is a u64 in both the codec and compiled declaration.
+//! Both budget constants are `ic_wire::Limits`.
+//! The explicit u64 ID binds request and response frames; request bytes are bounded
+//! before copying. A handler accepts one Serde request value (or no arguments for
+//! unit) and returns a Serde response. Access/startup checks and instrumentation
+//! use the ordinary endpoint path. Reply encoding failure traps; synchronous
+//! mutations therefore roll back. Async callbacks retain ordinary IC transaction
+//! boundaries. This selection emits no Candid registration or fallback codec.
+//! Native builds with Canic's `wire-schema` feature register these exact signatures
+//! and budgets. `endpoint::schema::snapshot(&compiled)` requires declarations read
+//! from the final Wasm and refuses inventory, identity, mode or budget drift.
+//! Request/reply types must implement Wire metadata; deployed Wasm acquires no
+//! registry or JSON dependency. Target-specific type-layout parity, release
+//! artifact binding and frontend delivery remain pending.
+//!
+//! Raw endpoints may select the same `wire(...)` contract instead of `payload(...)`.
+//! Canic emits its compiled declaration and enforces the request byte allowance
+//! before raw IO. The codec owner still enforces framing, traversal/allocation
+//! and reply limits; Canic does not add another decoder or encoder.
+//! Native schema producers must register the owner's actual payload projections;
+//! the raw zero-argument/unit signature is never inferred as a payload schema.
+//! Supplier adapters contribute those projections through the same native registry
+//! as typed methods; snapshot admission validates the combined final-Wasm inventory.
+//!
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+pub mod schema;
+
+mod registration;
 
 use ic_platform::candid::contract::ArgumentDecoder;
 use ic_platform::candid::decoder::DecoderConfig;
@@ -190,6 +226,20 @@ impl ArgumentLimits {
         let bytes = ic_platform::cdk::api::msg_arg_data();
         self.decode(&bytes)
     }
+}
+
+/// Read a managed lifecycle envelope only after admitting its byte length.
+/// IC Wire owns value decoding and all structural resource admission.
+#[doc(hidden)]
+pub fn read_initialization<T: serde::de::DeserializeOwned>(
+    limits: ic_wire::Limits,
+) -> Result<T, ic_wire::Error> {
+    let size = ic_platform::ic0::msg_arg_data_size();
+    if size > limits.bytes {
+        return Err(ic_wire::Error::Limit);
+    }
+    let bytes = ic_platform::cdk::api::msg_arg_data();
+    ic_wire::native::decode(&bytes, limits)
 }
 
 // -----------------------------------------------------------------------------

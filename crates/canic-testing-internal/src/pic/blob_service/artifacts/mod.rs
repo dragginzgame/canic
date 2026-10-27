@@ -47,6 +47,27 @@ impl Composition {
     }
 }
 
+/// Expected contract release from the independently locked consumer under test.
+pub(super) fn blob_contract_release(composition: Composition) -> String {
+    let (consumer, _) = composition.paths();
+    let lock: toml::Value =
+        toml::from_str(&std::fs::read_to_string(consumer.join("Cargo.lock")).unwrap()).unwrap();
+    let mut contracts = lock["package"]
+        .as_array()
+        .expect("consumer lock packages")
+        .iter()
+        .filter(|package| package["name"].as_str() == Some("ic-blob-storage-contracts"));
+    let contract = contracts.next().expect("selected consumer Blob contract");
+    assert!(
+        contracts.next().is_none(),
+        "one consumer Blob contract identity"
+    );
+    contract["version"]
+        .as_str()
+        .expect("locked Blob contract version")
+        .to_owned()
+}
+
 /// Execute only artifact construction when reentered by the isolated worker.
 pub(in crate::pic) fn write_worker_result(composition: Composition) -> bool {
     if std::env::var_os(BUILD_WORKER).is_none() {

@@ -98,7 +98,8 @@ pub fn publish_bundle(directory: &Path, bundle: &FrontendBundleView) -> Result<(
 pub(super) fn manifest_files(manifest: &FrontendManifestRecord) -> Vec<&FrontendFileRecord> {
     let mut files = vec![&manifest.alternative_origins];
     for role in &manifest.roles {
-        files.extend([&role.candid, &role.javascript, &role.typescript]);
+        files.extend([&role.wire_schema, &role.javascript, &role.typescript]);
+        files.extend(&role.modules);
     }
     files
 }

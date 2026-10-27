@@ -6,16 +6,8 @@
 
 use crate::cdk::types::Principal;
 
-/// Current command surface owned by a state-cascade recipient.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StateCascadeEndpoint {
-    Component,
-    Store,
-}
-
-/// One exact recipient and its current role-owned command surface.
+/// One exact recipient and its validated inventory membership.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StateCascadeTarget {
     pub canister_id: Principal,
-    pub endpoint: StateCascadeEndpoint,
 }

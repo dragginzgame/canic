@@ -59,3 +59,19 @@ an application token into controller or Fleet authority.
 - [Choose another feature](../README.md)
 - [Browse all documentation](../../README.md)
 - [Back to the main README](../../../README.md)
+
+## Root proof administration transport
+
+Root proof administration uses separate typed Wire methods:
+`canic_root_configure_issuer`, `canic_root_chain_key_public_key`,
+`canic_root_delegation_proof`, `canic_root_issuer_renewal`,
+`canic_root_prepare_role_attestation` and `canic_root_role_attestation`.
+Configuration, key discovery and renewal reporting require a controller;
+proof retrieval and attestation preparation require an active Component member.
+Attestation retrieval is public. Existing restore and Prepared-state fences apply.
+The renewal CLI checks the installed release's exact schema before querying Root.
+
+These transport changes preserve canonical signed payloads and the existing proof
+mechanisms. They do not qualify issuer custody, TEE hardware, session persistence
+or the production clock-skew bound. Current source changes await the deferred
+native, Wasm and installed acceptance checks recorded in the handoff.

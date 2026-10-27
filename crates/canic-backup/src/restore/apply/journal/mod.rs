@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 
 use types::{
     restore_apply_blocked_reasons, validate_apply_journal_count, validate_apply_journal_nonempty,
-    validate_apply_journal_sequences, validate_apply_journal_version,
+    validate_apply_journal_version,
 };
 
 ///
@@ -193,7 +193,7 @@ impl RestoreApplyJournal {
             return Err(RestoreApplyJournalError::ReadyJournalHasBlockingState);
         }
 
-        validate_apply_journal_sequences(&self.operations)?;
+        self.next_effect_sequence()?;
         for operation in &self.operations {
             operation.validate()?;
         }
@@ -235,17 +235,10 @@ impl RestoreApplyJournal {
     pub(in crate::restore) fn next_transition_operation(
         &self,
     ) -> Option<&RestoreApplyJournalOperation> {
-        self.operations
-            .iter()
-            .filter(|operation| {
-                matches!(
-                    operation.state,
-                    RestoreApplyOperationState::Ready
-                        | RestoreApplyOperationState::Pending
-                        | RestoreApplyOperationState::Failed
-                )
-            })
-            .min_by_key(|operation| operation.sequence)
+        let sequence = self.next_effect_sequence().ok().flatten()?;
+        self.operations.iter().find(|operation| {
+            operation.sequence == sequence && operation.state != RestoreApplyOperationState::Blocked
+        })
     }
 
     /// Render the next transitionable operation with a configured command preview.
@@ -277,7 +270,7 @@ impl RestoreApplyJournal {
         updated_at: Option<String>,
     ) -> Result<(), RestoreApplyJournalError> {
         let sequence = self
-            .next_transition_sequence()
+            .next_effect_sequence()?
             .ok_or(RestoreApplyJournalError::NoTransitionableOperation)?;
         self.mark_operation_pending_at(sequence, updated_at)
     }
@@ -397,7 +390,17 @@ impl RestoreApplyJournal {
             });
         }
 
-        self.validate_operation_transition_order(operation, &next_state)?;
+        if operation.state != next_state {
+            let next = self
+                .next_effect_sequence()?
+                .ok_or(RestoreApplyJournalError::NoTransitionableOperation)?;
+            if sequence != next {
+                return Err(RestoreApplyJournalError::OutOfOrderOperationTransition {
+                    requested: sequence,
+                    next,
+                });
+            }
+        }
 
         let operation = &mut self.operations[index];
         operation.state = next_state;
@@ -407,34 +410,39 @@ impl RestoreApplyJournal {
         self.validate()
     }
 
-    // Ensure fresh operation transitions advance in journal order.
-    fn validate_operation_transition_order(
-        &self,
-        operation: &RestoreApplyJournalOperation,
-        next_state: &RestoreApplyOperationState,
-    ) -> Result<(), RestoreApplyJournalError> {
-        if operation.state == *next_state {
-            return Ok(());
+    // Validate the existing runner's serial journal; these states are not upstream receipts.
+    fn next_effect_sequence(&self) -> Result<Option<usize>, RestoreApplyJournalError> {
+        let Some(graph) = crate::restore::ordering::serial_effect_graph(
+            self.operations.iter().map(|operation| operation.sequence),
+        )?
+        else {
+            return Ok(None);
+        };
+        let completed: BTreeSet<_> = self
+            .operations
+            .iter()
+            .filter(|operation| operation.state == RestoreApplyOperationState::Completed)
+            .map(|operation| operation.sequence as u64)
+            .collect();
+        let mut next = None;
+        for node in graph.ordered_nodes() {
+            let sequence = node.operation_sequence();
+            if completed.contains(&sequence) {
+                if let Some(&dependency) =
+                    node.depends_on().iter().find(|id| !completed.contains(id))
+                {
+                    return Err(RestoreApplyJournalError::UnmetCompletedDependency {
+                        operation_sequence: sequence,
+                        dependency,
+                    });
+                }
+            } else if next.is_none() {
+                next = Some(
+                    usize::try_from(sequence).expect("operation identity originated as usize"),
+                );
+            }
         }
-
-        let next_sequence = self
-            .next_transition_sequence()
-            .ok_or(RestoreApplyJournalError::NoTransitionableOperation)?;
-
-        if operation.sequence == next_sequence {
-            return Ok(());
-        }
-
-        Err(RestoreApplyJournalError::OutOfOrderOperationTransition {
-            requested: operation.sequence,
-            next: next_sequence,
-        })
-    }
-
-    // Return the next operation sequence that can be advanced by a runner.
-    fn next_transition_sequence(&self) -> Option<usize> {
-        self.next_transition_operation()
-            .map(|operation| operation.sequence)
+        Ok(next)
     }
 
     // Recompute operation counts after a journal operation state change.

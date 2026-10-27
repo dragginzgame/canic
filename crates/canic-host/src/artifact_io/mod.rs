@@ -1,5 +1,6 @@
 mod raw;
 mod wasm;
+mod wire;
 
 use crate::{
     binaryen::BinaryenExecutable,
@@ -30,6 +31,8 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
+
+pub use wire::{WireArtifactError, WireBindings, generate_wire_bindings, require_wire_method};
 
 pub use wasm::enforce_wasm_install_limits;
 pub use wasm::wasm_artifact_metrics;
@@ -109,6 +112,8 @@ pub fn finalize_wasm_artifact(
         write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
         if finalization.validate_sidecar_only {
             validate_sidecar_only_candid_artifact(&staged.wasm_path, &staged.did_path)?;
+        } else {
+            validate_wasm_endpoints(&staged.wasm_path, &staged.did_path)?;
         }
         eprintln!(
             "Build phase finalization {}: shrink={:.2}s candid={:.2}s binaryen={:.2}s gzip/validation={:.2}s total={:.2}s",
@@ -244,7 +249,8 @@ pub fn validate_sidecar_only_candid_artifact(
 /// Verify exact exports against Candid plus declared protocol-neutral methods.
 ///
 /// Lifecycle and IC CDK internal exports are outside the public method inventory.
-/// This compares endpoint names and modes; release-bound Candid hashes retain the type authority.
+/// This compares names and modes across the selected codecs. Native type authority
+/// is admitted separately from the exact Wire schema and compiled profile.
 pub fn validate_wasm_endpoints(
     wasm_path: &Path,
     did_path: &Path,
@@ -274,6 +280,12 @@ fn validate_candid_methods(
         .map(|method| method.as_export())
         .collect::<BTreeSet<_>>();
     declared.extend(raw::methods(&snapshot.facts, &declared)?);
+    for method in wire::declarations(&snapshot.facts)?.into_values() {
+        if declared.iter().any(|other| other.name == method.name) {
+            return Err("Wire declaration overlaps another endpoint codec".into());
+        }
+        declared.insert(wire::exported(method));
+    }
     let exported = interface::exported_methods(&snapshot.facts)
         .filter(|method| {
             let cdk_internal = method.name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX);
@@ -320,6 +332,8 @@ fn shrink_wasm_artifact(
     tool: &IcWasmExecutable,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
+    let original = read_file_no_follow(wasm_path, crate::MAX_ARTIFACT_READ_BYTES)?;
+    let before = wasm::wasm_contract_snapshot(&original)?;
     write_named_with(
         wasm_path,
         WriteOptions {
@@ -347,7 +361,8 @@ fn shrink_wasm_artifact(
                     .into());
                 }
                 let bytes = read_file_no_follow(shrunk_path, crate::MAX_ARTIFACT_READ_BYTES)?;
-                wasm::wasm_contract_snapshot(&bytes)?;
+                let after = wasm::wasm_contract_snapshot(&bytes)?;
+                wire::validate_transform(&before.facts, &after.facts)?;
                 Ok(transform_output(
                     ArtifactTransformKind::Shrink,
                     Some(tool.version_identity().to_string()),
@@ -615,6 +630,7 @@ fn validate_optimized_wasm(
         )
         .into());
     }
+    wire::validate_transform(&before_contract.facts, &after_contract.facts)?;
 
     let after_features = derive_wasm_features(command_path, optimized_path)?;
     if after_features != before_features {

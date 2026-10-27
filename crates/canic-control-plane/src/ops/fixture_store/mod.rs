@@ -7,7 +7,6 @@
 mod tests;
 
 use crate::{
-    dto::template::StoreCommand,
     ops::fixture_content::{content_id, verify_chunk},
     storage::stable::{
         fixture_store::{FixtureSourceRecord, FixtureStore, FixtureStoreEntryRecord},
@@ -22,7 +21,6 @@ use canic_contracts::{
     },
     ids::{FleetSubnetWasmStoreAuthority, ManagedCanisterBinding},
 };
-use canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
 use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Read the existing executable-template allocation counters for shared admission.
@@ -209,15 +207,12 @@ fn validate_authority(
     {
         return Err(FixtureStoreError::Authority);
     }
-    if ic_platform::candid::contract::encode_one(StoreCommand::SetFixtureGrant(Box::new(
-        request.clone(),
-    )))
-    .map_err(|_| FixtureStoreError::Bounds)?
-    .len()
-        > DEFAULT_UPDATE_INGRESS_MAX_BYTES
-    {
-        return Err(FixtureStoreError::Bounds);
-    }
+    ic_wire::native::encode_request(
+        canic_contracts::protocol::store_control::grant::METHOD_ID,
+        &canic_contracts::dto::store_control::FixtureGrantRequest::from(request.clone()),
+        canic_contracts::protocol::store_control::REQUEST_LIMITS,
+    )
+    .map_err(|_| FixtureStoreError::Bounds)?;
     Ok(())
 }
 

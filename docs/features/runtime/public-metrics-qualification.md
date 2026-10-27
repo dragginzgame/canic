@@ -27,7 +27,7 @@ Use separate output/evidence directories and separate finalized release IDs.
    or select an empty array. Keep that source unchanged for the complete build
    and test. Copy its exact bytes into the run's evidence directory and record
    `sha256sum` before building.
-2. Run the normal complete `canic build <app> --environment local --profile
+2. Run the normal complete `canic --environment local build <app> --profile
    release`. Retain its printed finalized release-build ID and logs. Do not reuse
    the other run's Wasms, release ID or build cache entries that were not
    validated against this run's configuration input.

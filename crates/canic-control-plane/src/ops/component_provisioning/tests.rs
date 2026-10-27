@@ -96,9 +96,22 @@ fn release_census_discovers_both_journals_without_admission_or_mutation() {
         Phase::DirectorySynchronized
     );
     assert_eq!(second.next_after, None);
-    let bytes = ic_platform::candid::contract::encode_one(&second).unwrap();
+    let native = canic_contracts::dto::provisioning_census::Page::from(second.clone());
+    let bytes = ic_wire::native::encode_response(
+        canic_contracts::protocol::provisioning_census::METHOD_ID,
+        &native,
+        canic_contracts::protocol::provisioning_census::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    let decoded: canic_contracts::dto::provisioning_census::Page =
+        ic_wire::native::decode_response(
+            canic_contracts::protocol::provisioning_census::METHOD_ID,
+            &bytes,
+            canic_contracts::protocol::provisioning_census::RESPONSE_LIMITS,
+        )
+        .unwrap();
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<crate::dto::root::RootProvisioningReleaseResponse>(&bytes).unwrap(),
+        crate::dto::root::RootProvisioningReleaseResponse::from(decoded),
         second
     );
     assert_eq!(
@@ -789,11 +802,13 @@ fn reservation_advance_is_cursor_bound_and_response_loss_safe() {
     );
     let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
         .expect("next member reservation");
+    // SHA-256(domain || BE64(108) || native authority payload):
+    // principal [7;29], operation [11;32], plan [12;32], placement (cells,0), path [alpha].
     assert_eq!(
         member.member_operation_id,
         [
-            171, 220, 109, 38, 164, 5, 152, 44, 236, 134, 217, 253, 36, 55, 213, 121, 56, 239, 238,
-            30, 99, 196, 36, 234, 206, 2, 149, 236, 72, 124, 86, 131,
+            200, 198, 35, 0, 10, 110, 166, 198, 51, 108, 115, 241, 68, 208, 29, 67, 30, 85, 76,
+            153, 9, 253, 253, 60, 26, 93, 101, 89, 53, 207, 17, 37,
         ]
     );
     let (_request, _allocation, advanced) = reserve_single_member(&fixture);
@@ -1911,7 +1926,7 @@ fn provisioning_failure_rejects_unbounded_or_incomplete_dependency_without_mutat
     let before = RootComponentProvisioningStore::export();
     let valid = ProvisioningDependencyFailure {
         target: principal(8),
-        method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+        method: canic_contracts::protocol::store_publication::inspect::METHOD.into(),
         step: "inspect_template".into(),
         rejection_code: Some(5),
         rejection_detail: Some("Store stopped".into()),
@@ -1958,7 +1973,7 @@ fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts(
         dependency: Some(
             canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
                 target: principal(8),
-                method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                method: canic_contracts::protocol::store_publication::inspect::METHOD.into(),
                 step: "inspect_template".into(),
                 rejection_code: Some(5),
                 rejection_detail: Some("Wasm Store is stopped".into()),

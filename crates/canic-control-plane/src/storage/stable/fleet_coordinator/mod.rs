@@ -48,7 +48,7 @@ use canic_core::{
     cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     impl_storable_bounded,
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "fleet-coordinator-canister")]
 use std::cell::RefCell;
@@ -328,8 +328,7 @@ pub struct FleetComponentGroupDeploymentRecord {
 /// Exact root and terminal receipt authority for one committed group placement.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetComponentGroupPlacementRecord {
     pub placement: ComponentGroupPlacementId,
     pub fleet_subnet_root: Principal,
@@ -344,8 +343,7 @@ pub struct FleetComponentGroupPlacementRecord {
 /// Compact terminal replay and committed-placement authority for one retired scale-out journal.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetComponentScaleOutReceiptRecord {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],

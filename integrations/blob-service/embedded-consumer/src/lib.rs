@@ -1,13 +1,14 @@
 //! An application with its own endpoints, durable state and embedded blob management.
 
 mod app;
+mod funding;
+mod protocol;
 
 use canic::api::public_status::{ApplicationMetricsSampler, PublicStatusApi};
 use canic_blob_service::{dto::configuration::ServiceInstallationInput, lifecycle};
 
 /// This application's nested init contract, delivered after the protected Canic payload.
-#[derive(ic_platform::candid::contract::CandidType, serde::Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct InstallationInput {
     initial_count: u64,
     blob: Vec<u8>,
@@ -45,18 +46,18 @@ fn memory() -> canic::memory::MemoryBootstrap {
 
 fn install() {
     let (_, application): (canic::dto::abi::v1::CanisterInitPayload, Option<Vec<u8>>) =
-        lifecycle::ENVELOPE_LIMITS
-            .read()
+        canic::endpoint::read_initialization(lifecycle::ENVELOPE_LIMITS)
             .expect("bounded application envelope");
-    let (input,): (InstallationInput,) = canic::endpoint::ArgumentLimits {
-        max_bytes: 16_384,
-        skipping_quota: 0,
-        ..lifecycle::REQUEST_LIMITS
-    }
-    .decode(
+    let input: InstallationInput = canic::__internal::ic_wire::native::decode(
         application
             .as_deref()
             .expect("application installation arguments"),
+        canic::__internal::ic_wire::Limits {
+            bytes: 16_384,
+            allocation: 262_144,
+            nodes: 16_384,
+            depth: 32,
+        },
     )
     .expect("bounded application configuration");
     app::install(input.initial_count);
@@ -90,12 +91,12 @@ fn sample() -> Result<Vec<canic::dto::public_status::PublicMetric>, canic::Error
     Ok(rows)
 }
 
-#[canic::canic_query(public, on_access_denied = "reject")]
+#[canic::canic_query(public, on_access_denied = "reject", wire(id = protocol::COUNT_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 fn application_count() -> u64 {
     app::count()
 }
 
-#[canic::canic_update(public, on_access_denied = "reject")]
+#[canic::canic_update(public, on_access_denied = "reject", wire(id = protocol::INCREMENT_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 fn application_increment() -> u64 {
     app::increment()
 }

@@ -301,7 +301,6 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
             estate_funding_domains: BTreeMap::new(),
             ledger_fee_cycles: 0,
             operator_cycles: 0,
-            protocol_ready: BTreeMap::new(),
         },
         1,
         &"36".repeat(32),
@@ -1106,7 +1105,7 @@ fn json_workflow_errors_resume_exact_approved_provisioning_with_dependency_evide
         options.reinstall = reinstall;
         let dependency = ProvisioningDependencyFailure {
             target: ic_platform::principal::ExternalPrincipal::from_slice(&[2]),
-            method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+            method: canic_contracts::protocol::store_publication::inspect::METHOD.into(),
             step: "inspect_template".into(),
             rejection_code: Some(5),
             rejection_detail: Some("Store is stopped".into()),

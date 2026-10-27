@@ -3,9 +3,10 @@
 //! Responsibility: render delegated-auth command results for operators.
 //! Does not own: command parsing, transport, or response decoding.
 
-use super::{
+use crate::auth::{
     AuthCommandError, AuthIssuerObservation, AuthRenewalBatchStatus, AuthRenewalStatusCode,
     AuthRenewalStatusResult, AuthRenewalTemplateStatus,
+    codec::{issuer_status_label, renewal_batch_status_label},
 };
 
 pub(super) fn write_renewal_status_result(
@@ -130,7 +131,7 @@ fn append_issuer_observation_lines(lines: &mut Vec<String>, result: &AuthRenewal
                 .unwrap_or("-")
         ));
     } else if let Some(reason) = &result.issuer_observation.reason {
-        lines.push(format!("Issuer observation reason: {reason}"));
+        lines.push(format!("Issuer observation reason: {}", reason.label()));
     }
 }
 
@@ -145,7 +146,10 @@ const fn render_template_status(template: &AuthRenewalTemplateStatus) -> &'stati
 
 fn render_batch_status(batch: &AuthRenewalBatchStatus) -> &str {
     if batch.present {
-        batch.status.as_deref().unwrap_or("present")
+        batch
+            .status
+            .as_ref()
+            .map_or("present", renewal_batch_status_label)
     } else {
         "none"
     }
@@ -156,9 +160,9 @@ pub(super) fn render_issuer_observation(observation: &AuthIssuerObservation) -> 
         format!(
             "{} ({})",
             AuthRenewalStatusCode::DriftDetected.label(),
-            observation.status
+            issuer_status_label(observation.status.as_ref())
         )
     } else {
-        observation.status.clone()
+        issuer_status_label(observation.status.as_ref()).to_string()
     }
 }

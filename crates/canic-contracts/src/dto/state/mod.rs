@@ -3,15 +3,21 @@ use crate::dto::prelude::*;
 pub use crate::values::state::{FleetMode, FleetStatus};
 
 /// Explicit input for changing automatic cycles funding.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct SetCyclesFundingRequest {
     pub enabled: bool,
 }
 
 /// Explicit input for changing the Fleet's public status.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct SetFleetStatusRequest {
     pub status: FleetStatus,
 }
@@ -20,8 +26,7 @@ pub struct SetFleetStatusRequest {
 // FleetCommand
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum FleetCommand {
     SetStatus(FleetStatus),
     SetCyclesFundingEnabled(bool),
@@ -31,8 +36,7 @@ pub enum FleetCommand {
 // FleetCommandResponse
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum FleetCommandResponse {
     Status(SetStateResponse<FleetStatus>),
     CyclesFundingEnabled(SetStateResponse<bool>),
@@ -42,8 +46,11 @@ pub enum FleetCommandResponse {
 // SetStateResponse
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct SetStateResponse<T> {
     pub previous: T,
     pub current: T,
@@ -51,8 +58,7 @@ pub struct SetStateResponse<T> {
 }
 
 /// Local mutation receipt and the independently observed downstream results.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetStateCommandResult<T> {
     pub change: SetStateResponse<T>,
     pub propagation: crate::dto::cascade::StateCascadeReport,
@@ -60,8 +66,7 @@ pub struct FleetStateCommandResult<T> {
 }
 
 /// Workflow result before the endpoint selects its command-specific response.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetCommandExecutionResponse {
     pub change: FleetCommandResponse,
     pub propagation: crate::dto::cascade::StateCascadeReport,
@@ -72,8 +77,11 @@ pub struct FleetCommandExecutionResponse {
 // FleetStateInput
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetStateInput {
     pub mode: FleetMode,
     pub cycles_funding_enabled: bool,
@@ -83,8 +91,11 @@ pub struct FleetStateInput {
 // FleetStateResponse
 //
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetStateResponse {
     pub mode: FleetMode,
     pub cycles_funding_enabled: bool,
@@ -94,8 +105,11 @@ pub struct FleetStateResponse {
 // BootstrapStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct BootstrapStatusResponse {
     pub ready: bool,
     pub phase: String,
@@ -105,26 +119,26 @@ pub struct BootstrapStatusResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_platform::candid::contract::{Decode, Encode};
+
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 
     #[test]
-    fn fleet_mode_roundtrips_candid_through_dto_path() {
-        assert_enum_candid_contract(FleetMode::Readonly);
+    fn fleet_mode_roundtrips_wire_through_dto_path() {
+        assert_enum_wire_contract(FleetMode::Readonly);
     }
 
     #[test]
-    fn fleet_status_roundtrips_candid_through_dto_path() {
-        assert_enum_candid_contract(FleetStatus::Readonly);
+    fn fleet_status_roundtrips_wire_through_dto_path() {
+        assert_enum_wire_contract(FleetStatus::Readonly);
     }
 
-    fn assert_enum_candid_contract<T>(value: T)
+    fn assert_enum_wire_contract<T>(value: T)
     where
-        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
+        T: serde::Serialize + Clone + Debug + DeserializeOwned + Eq,
     {
-        let bytes = Encode!(&value).expect("encode state enum");
-        let decoded = Decode!(&bytes, T).expect("decode state enum");
+        let bytes = crate::protocol::authority::encode(&value).expect("encode state enum");
+        let decoded = crate::protocol::authority::decode::<T>(&bytes).expect("decode state enum");
 
         assert_eq!(decoded, value);
     }

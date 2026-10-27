@@ -105,7 +105,7 @@ mod tests {
         fs::create_dir_all(&root).expect("create temp dir");
         let canonical = root.join("canonical.did");
         fs::write(&canonical, "service : {}\n").expect("write existing DID");
-        let compiled = b"service : { canic_public_status : () -> () query }\n";
+        let compiled = b"service : { fixture_query : () -> () query }\n";
         let candid = resolve_infrastructure_candid(
             "test_role",
             &canonical,

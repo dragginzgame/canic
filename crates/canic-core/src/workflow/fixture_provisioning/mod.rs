@@ -16,9 +16,9 @@ use crate::{
     ops::{
         fixture_content,
         fixture_importer::{self, FixtureImporter, ImportLease},
+        ic::call::CallOps,
         runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
     },
-    workflow::ic::call::CallWorkflow,
 };
 
 pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImportError> {
@@ -86,22 +86,46 @@ pub(super) async fn advance_owned(
         fixture_importer::validate_step(importer, &assignment);
         return fixture_importer::status(&assignment, importer);
     }
-    let bytes = CallWorkflow::bounded_wait(
+    let request = canic_contracts::dto::fixture_bytes::ReadRequest::from(FixtureChunkRead {
+        grant: assignment.grant.clone(),
+        index: before.next_chunk,
+    });
+    let payload = ic_wire::native::encode_request(
+        crate::protocol::fixture_bytes::read::METHOD_ID,
+        &request,
+        crate::protocol::fixture_bytes::READ_REQUEST_LIMITS,
+    )
+    .map_err(|_| {
+        FixtureImportError::Codec(Error::from_registered(
+            crate::diagnostics::codes::CODEC_FAILED,
+        ))
+    })?;
+    let reply = CallOps::bounded_wait(
         assignment.store,
         crate::protocol::CANIC_WASM_STORE_FIXTURE_CHUNK,
     )
-    .with_arg(FixtureChunkRead {
-        grant: assignment.grant.clone(),
-        index: before.next_chunk,
-    })
-    .map_err(|error| FixtureImportError::Codec(error.into()))?
+    .with_raw_args(payload)
     .execute()
     .await
     .map_err(|error| FixtureImportError::Transport(error.into()))?
-    .candid::<Result<Result<Vec<u8>, FixtureStoreError>, Error>>()
-    .map_err(|error| FixtureImportError::Codec(error.into()))?
-    .map_err(FixtureImportError::SourceRejected)?
-    .map_err(FixtureImportError::Source)?;
+    .into_bytes();
+    let reply: Result<
+        Result<canic_contracts::dto::fixture_bytes::ChunkResponse, FixtureStoreError>,
+        Error,
+    > = ic_wire::native::decode_response(
+        crate::protocol::fixture_bytes::read::METHOD_ID,
+        &reply,
+        crate::protocol::fixture_bytes::CHUNK_LIMITS,
+    )
+    .map_err(|_| {
+        FixtureImportError::Codec(Error::from_registered(
+            crate::diagnostics::codes::CODEC_INVALID,
+        ))
+    })?;
+    let bytes = reply
+        .map_err(FixtureImportError::SourceRejected)?
+        .map_err(FixtureImportError::Source)?
+        .bytes;
     lease.require_current()?;
     if !crate::ops::storage::async_job_recovery::AsyncJobRecoveryOps::is_current(attempt) {
         return Err(FixtureImportError::Authority);

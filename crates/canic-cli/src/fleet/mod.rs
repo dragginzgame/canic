@@ -27,6 +27,7 @@ use crate::{
         defaults::default_icp,
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
+        render::quote_review_argument,
     },
     output, version_text,
 };
@@ -709,10 +710,6 @@ fn next_review_command(
     command
 }
 
-fn quote_review_argument(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
-}
-
 fn load_ensure_authority(
     root: &std::path::Path,
     desired_path: &std::path::Path,
@@ -1312,7 +1309,6 @@ const fn action_label(action: &EnsureAction) -> &'static str {
             mode: InstallMode::Reinstall,
             ..
         } => "reinstall",
-        EnsureAction::Protocol { .. } => "protocol",
         EnsureAction::SetControllers { .. } => "set_controllers",
         EnsureAction::Start { .. } => "start",
         EnsureAction::Stop { .. } => "stop",

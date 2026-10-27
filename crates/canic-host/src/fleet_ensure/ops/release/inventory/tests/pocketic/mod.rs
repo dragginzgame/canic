@@ -14,9 +14,6 @@ use canic_contracts::{
             CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
             CanisterPoolResponse,
         },
-        wire::projection::capacity_inventory::{
-            CoordinatorResponse as RegistryReply, RootResponse as PoolReply,
-        },
     },
     ids::{CanonicalNetworkId, SubnetId},
 };
@@ -140,13 +137,19 @@ fn governed_pocketic_release_inventory_binds_complete_ownership() {
     registry.authority.binding.recovery_controllers = vec![operator];
     registry.fleet_subnet_roots[0].fleet_subnet_root = ids[1];
     registry.fleet_subnet_roots[0].placement_subnet = review.sources[1].binding.subnet;
-    let registry_reply = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
-        RegistryReply::Registry(Box::new(registry.clone())),
-    ))
+    let registry_reply = ic_wire::native::encode_response(
+        canic_contracts::protocol::registry_discovery::snapshot::METHOD_ID,
+        &Ok::<canic_contracts::dto::fleet_snapshot::FleetRegistry, Error>(registry.clone().into()),
+        canic_contracts::protocol::registry_discovery::RESPONSE_LIMITS,
+    )
     .unwrap();
-    let pool_reply = ic_platform::candid::contract::encode_one(Ok::<_, Error>(PoolReply::Pool(
-        Box::new(pool(&review, &registry)),
-    )))
+    let pool_reply = ic_wire::native::encode_response(
+        canic_contracts::protocol::pool_inventory::METHOD_ID,
+        &Ok::<_, Error>(canic_contracts::dto::pool_inventory::Page::from(pool(
+            &review, &registry,
+        ))),
+        canic_contracts::protocol::pool_inventory::RESPONSE_LIMITS,
+    )
     .unwrap();
     for (index, id) in ids.iter().enumerate() {
         let reply = if index == 0 {

@@ -63,8 +63,11 @@ pub struct RootComponentMembershipApi;
 impl RootComponentMembershipApi {
     /// Inspect a subject after endpoint authorization, preserving authority failures.
     pub fn lookup(request: RootMembershipRequest) -> Result<RootMembershipResponse, Error> {
-        crate::workflow::component_auth::lookup_active_member(request.subject)
-            .map(|member| RootMembershipResponse { member })
+        crate::workflow::component_auth::lookup_active_member(request.subject.into()).map(
+            |member| RootMembershipResponse {
+                member: member.map(Into::into),
+            },
+        )
     }
 
     /// Resolve an exact active local Component Registry member by Canister principal.

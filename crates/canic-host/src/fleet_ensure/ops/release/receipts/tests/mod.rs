@@ -9,16 +9,15 @@ use canic_contracts::dto::release_receipts::{
     ReplayReleaseIntentState, ReplayReleasePhase, ReplayReleaseRecoveryReason,
     ReplayReleaseSettlement,
 };
-use ic_platform::candid::contract::CandidType;
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> ReplayReleaseResponse {
     ReplayReleaseResponse {
-        owner,
+        owner: owner.into(),
         entry: Some(ReplayReleaseEntry {
             slot: [1; 32],
             command_kind: "root.request_cycles.v1".into(),
             operation_id: [2; 32],
-            actor: Principal::from_slice(&[3]),
+            actor: Principal::from_slice(&[3]).into(),
             authentication: ReplayReleaseAuthentication::DirectCaller,
             payload_hash_schema_version: 1,
             payload_hash: [4; 32],
@@ -47,7 +46,7 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> Replay
                 }),
             }),
             effect: Some(ReplayReleaseEffect::ManagementCall {
-                canister: Principal::from_slice(&[7]),
+                canister: Principal::from_slice(&[7]).into(),
                 method: "deposit_cycles".into(),
             }),
         }),
@@ -56,8 +55,12 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> Replay
 }
 
 pub(in crate::fleet_ensure::ops::release) fn wire(page: ReplayReleaseResponse) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::ReplayRelease(page)))
-        .unwrap()
+    ic_wire::native::encode_response(
+        protocol::METHOD_ID,
+        &Ok::<_, CanicError>(page),
+        RESPONSE_LIMITS,
+    )
+    .unwrap()
 }
 
 #[test]
@@ -83,7 +86,7 @@ fn assessment_preserves_wire_evidence_and_separates_completion_from_accounting_d
     entry.phase = ReplayReleasePhase::Committed;
     entry.cost_guard_settlement.as_mut().unwrap().quota = None;
     let empty = ReplayReleaseResponse {
-        owner: empty_owner,
+        owner: empty_owner.into(),
         entry: None,
         next_after: None,
     };
@@ -202,12 +205,7 @@ fn exact_record_allowance_requires_a_terminal_page() {
 }
 
 #[test]
-fn rejects_raw_aggregate_and_skipping_budget_exhaustion() {
-    #[derive(CandidType)]
-    #[candid_path("ic_platform::candid::contract")]
-    enum Extended {
-        ReplayRelease { owner: Principal, extra: Vec<()> },
-    }
+fn rejects_aggregate_overflow_and_invalid_native_frames() {
     let owner = Principal::from_slice(&[1]);
     let bytes = wire(fixture(owner));
     assert!(matches!(
@@ -217,19 +215,24 @@ fn rejects_raw_aggregate_and_skipping_budget_exhaustion() {
             ..
         })
     ));
-    let skipped =
-        ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Extended::ReplayRelease {
-            owner,
-            extra: vec![(); RESPONSE_BYTES * 8 + 1],
-        }))
-        .unwrap();
-    assert!(skipped.len() < RESPONSE_BYTES);
-    assert!(
-        ic_platform::candid::decoder::decode_one::<Result<Response, CanicError>>(&skipped)
-            .unwrap()
-            .is_ok()
-    );
-    for bytes in [b"DIDL".to_vec(), vec![0; RESPONSE_BYTES + 1], skipped] {
+    let wrong_method = ic_wire::native::encode_response(
+        protocol::METHOD_ID + 1,
+        &Ok::<_, CanicError>(fixture(owner)),
+        RESPONSE_LIMITS,
+    )
+    .unwrap();
+    let wrong_direction =
+        ic_wire::native::encode_request(protocol::METHOD_ID, &None::<[u8; 32]>, REQUEST_LIMITS)
+            .unwrap();
+    let mut trailing = bytes;
+    trailing.push(0);
+    for bytes in [
+        vec![0],
+        vec![0; RESPONSE_BYTES + 1],
+        wrong_method,
+        wrong_direction,
+        trailing,
+    ] {
         let mut remaining = MAXIMUM_CENSUS_BYTES;
         assert!(matches!(
             decode_response(owner, &bytes, &mut remaining),
@@ -245,7 +248,7 @@ fn rejects_raw_aggregate_and_skipping_budget_exhaustion() {
 fn distinguishes_empty_inventory_from_typed_refusal() {
     let owner = Principal::from_slice(&[1]);
     let empty = ReplayReleaseResponse {
-        owner,
+        owner: owner.into(),
         entry: None,
         next_after: None,
     };
@@ -257,7 +260,12 @@ fn distinguishes_empty_inventory_from_typed_refusal() {
     );
     let rejected =
         CanicError::from_registered(canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE);
-    let bytes = ic_platform::candid::contract::encode_one(Err::<Response, _>(rejected)).unwrap();
+    let bytes = ic_wire::native::encode_response(
+        protocol::METHOD_ID,
+        &Err::<ReplayReleaseResponse, _>(rejected),
+        RESPONSE_LIMITS,
+    )
+    .unwrap();
     assert!(
         matches!(decode_response(owner, &bytes, &mut remaining), Err(ReleaseReceiptsError::Rejected { rejection, .. }) if rejection.code() == rejected.code())
     );

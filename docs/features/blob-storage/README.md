@@ -37,6 +37,31 @@ separately; `remaining_bytes` is their minimum. Consumers must rebuild against
 the selected Blob contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
 same-release restoration and the upstream mutation fence remain required.
 
+## Retained browser sources
+
+The native producer embeds Wire's runtime, Canic's network validator and Blob's
+published decimal adapter in the same schema document as the mounted methods.
+The release schema hash covers these sources. Host preserves them verbatim;
+frontend delivery must not replace them with its own dependency versions.
+Multiple browser-adapter registrations are refused; composition is not inferred.
+
+The dedicated managed proof checks exact source retention. The
+[retained-codec check](../../../crates/canic-testing-internal/examples/wire_composition/retained.mjs)
+exercises compiled generated bindings and both owners' validators. This is local
+codec qualification. Normal frontend export now compiles these retained sources
+with pinned tools and binds all emitted modules to its manifest. Installed-client
+qualification of the shared delivery path passes on the selected Blob 0.45 graph:
+the installed Fleet SDK query/update proof exercises admitted calls and caller
+denials (451s; `/tmp/canic-blob-browser-current/`). That case calls a framework
+application probe, not Blob methods. Blob-specific browser upload/download and
+live provider access remain unqualified.
+
+The opt-in `pic::blob_service::tests::managed_browser_compositions` now qualifies
+generated Blob tenant query/update codecs against actual installed dedicated and
+embedded endpoints on Blob 0.46/Wire 0.7.3. It checks exact scope, caller denial
+and unchanged mutation replay, using the normal compiler on retained supplier
+modules. PocketIC supplies transport; this is not an HTTP/browser UI proof.
+
 ## Framework completion boundary
 
 Canic qualifies the dedicated service and an embedded application through the
@@ -57,15 +82,28 @@ and completed local qualification, rather than treating this scope as evidence.
 
 ## Qualified framework integration and remaining deployment evidence
 
-Published Blob/contracts 0.41 use trusted registration: issuing the one-shot
+Published Blob/contracts **0.47.0** with Tooling/Testkit **0.68.1**, Platform
+**0.6.15**, Wire **0.7.5**, Auth **0.16**, Memory/Storage **0.51.0** and Timers
+**0.31** pass the two-composition generated-client proof (536s) and all five
+embedded profiles (255s). Fresh Wasm/schema builds and retained supplier bindings
+pass, including caller/service-binding refusal, malformed frames and mutation replay.
+Logs are retained in `/tmp/canic-blob047-installed/`; dependency admission,
+strict adapter/consumer Clippy and adapter Wasm evidence is in
+`/tmp/canic-blob047/`. This is Linux/PocketIC framework evidence,
+not live-provider, browser UI or installed-IC acceptance. Earlier dated results
+retain their original version scope.
+
+Published Blob/contracts 0.43 use trusted registration: issuing the one-shot
 certificate atomically registers retention intent and the first live reference.
 `Registered` does not prove uploaded bytes, provider availability or retention.
 The adapter has no completion verifier, attestation endpoint or worker.
-Installation and owned Wire schemas change; use clean retirement/reinstall,
-without carrying old installation state or retry bytes into this release.
+Tenant messages use the upstream native Serde codec with method IDs `0043/001a`
+and `0043/001b` and zero-based failure tags. Other method bytes and persisted
+records are unchanged by upstream 0.43. Canic deployments still use clean
+retirement/reinstall, without carrying predecessor state or retry bytes forward.
 
-Both dedicated and embedded managed PocketIC cases pass on the selected 0.41
-packages. They cover exact endpoint declarations, bounded installation decoding,
+Both dedicated and embedded managed PocketIC cases pass on selected 0.43.0
+packages, Tooling 0.65.0 and Wire 0.6.5. They cover exact endpoint declarations, bounded installation decoding,
 tenant and uploader isolation, two uploads, preparation, certificate issuance,
 uncollected certificate replies, retained first references, reference replay and
 release, download-descriptor authority, expired/revoked permissions and
@@ -84,7 +122,7 @@ selection. Controlled fixture bytes do not establish provider availability.
 These journeys invoke every mounted method but do not establish exhaustive
 behavioral coverage. The
 [0.41.1 ownership and coverage audit](../../audits/working/blob-0411-adoption.md)
-tracks the remaining gateway/account and receipt/history acceptance branches under
+records the mounted gateway/account and receipt/history acceptance evidence under
 [#622](https://github.com/dragginzgame/canic/issues/622). Export parity alone is
 not complete behavioral coverage.
 The first follow-through adds admission/manifest, content/headroom, history and
@@ -98,8 +136,24 @@ unchanged and the pending gateway sequence remains available for exact cancellat
 Payment-relationship inspection also covers exact service/payer bindings, signed
 figures and wide counters, absent relationships, structured provider errors and
 malformed/oversized responses without changing local funding state.
-All current methods have direct calls; delayed callback races, populated
-pagination and paid-funding acceptance are not implied by that method coverage.
+Populated tenant upload history crosses both result and scan bounds, preserves
+ordered complete continuation, and rejects tenant/filter cursor reuse without
+changing stable memory.
+Operator service-wide pagination also matches the union of both independently
+authorized tenant histories, with caller and cursor scope checks across pages.
+The three GC callbacks also have mounted checks for liveness, gateway authority,
+malformed roots, atomic batch refusal, idempotent acknowledgment and restore fences.
+Malformed and over-limit acknowledgment batches preserve eligible deletion entries;
+a maximum-size valid repeated-root batch succeeds. Acknowledgment preserves
+physical and liability accounting.
+The embedded fixture also inspects two original refunded funding records through
+history and exact-outcome queries, including cursor boundaries, altered-intent
+conflicts, caller isolation and stable-memory preservation across restore fences.
+This does not qualify accepted or credited outcomes.
+All current methods have direct calls. Published Testkit 0.64.1 additionally
+qualifies cancellation/revocation before held gateway callbacks in both shapes:
+released stale replies return Conflict without replacing committed membership.
+Paid-funding acceptance is separate under #494.
 
 End-to-end production readiness still needs upstream/provider evidence:
 [serving](https://github.com/dragginzgame/ic-blob-storage/issues/5),
@@ -223,7 +277,8 @@ and restoration. This preserves both families rather than replacing either
 sampler; Canic retains the timer, limits and cache. Export blob endpoints in the
 owning canister alongside application endpoints, and avoid duplicate method names.
 Blob-owned methods use method-bound IC Wire frames, and the external
-provider certificate retains Candid. Canic framework endpoints retain Candid.
+provider certificate retains Candid. Canic-owned framework endpoints use native
+Wire; lifecycle arguments retain their declared installation encoding.
 
 The complete [embedded example](../../../integrations/blob-service/embedded-consumer/src/lib.rs)
 has its own persistent counter, endpoints, combined installation input and metrics
@@ -299,7 +354,7 @@ union for installation proof.
 
 Installation requires `canic_blob_service::dto::configuration::ServiceInstallationInput`
 as a Wire request from `ic_blob_storage_contracts::wire::encode_request("blob_install", input)`, nested
-after Canic's protected Candid init payload. Its configured
+after Canic's protected native Wire init payload. Its configured
 service Principal must equal the actual allocated canister ID; the adapter
 validates this before publishing the installed service. Construct these bytes
 after allocation, without rewriting that identity inside the adapter. The public
@@ -312,9 +367,9 @@ installation. Controller-visible pool status supplies the allocated Principal
 and its claim operation ID; controller-authorized Root operation status exposes
 that member allocation and retained binding, including Component Group members.
 Then encode the application's `ServiceInstallationInput` for that Principal.
-The controller submits `RootCommand::BindComponentInitialization` containing
+The controller submits `canic_root_bind_component_initialization` containing
 that operation ID, exact target and 1–16,384 opaque application bytes. Host's
-`component_initialization::encode_command` encodes the complete Root command;
+`component_initialization::encode_command` encodes the exact native Wire frame;
 retain those command bytes for reconciliation and exact retries.
 
 Root atomically retains and charges the binding before installation and includes
@@ -353,7 +408,7 @@ provider-readiness verdict.
 The consuming App selects Fleet admission and public metrics in its own config.
 The library's normal dependency graph contains no App-specific compiled topology.
 The owning shell compiles its exact topology. Raw Blob endpoints carry retained
-method declarations; the provider certificate joins Canic's Candid declaration
+method declarations; provider certificate and GC callbacks join Canic's Candid declaration
 scope. Artifact admission compares both declarations with callable Wasm exports.
 
 ## Browser and per-project adoption
@@ -366,12 +421,14 @@ to the consumer. The adapter delegates this contract to
 [Blob #31](https://github.com/dragginzgame/ic-blob-storage/issues/31); it does not
 relay an ingress response certificate to another user.
 
-The adapter does not export `_immutableObjectStorageBlobsAreLive`,
+The adapter exports `_immutableObjectStorageBlobsAreLive`,
 `_immutableObjectStorageBlobsToDelete` or
-`_immutableObjectStorageConfirmBlobDeletion`. Provider behavior when those
-callbacks are absent is unqualified; logical release alone cannot establish
-provider deletion. [Blob #32](https://github.com/dragginzgame/ic-blob-storage/issues/32)
-owns that gateway contract. Certificate issuance records trusted retention intent,
+`_immutableObjectStorageConfirmBlobDeletion` through the shared catalog and GC
+decoders. Liveness conservatively protects unknown roots; deletion listing and
+acknowledgment require current gateway membership and active owners. Acknowledgment
+is retained through same-release restoration but does not settle physical bytes
+or billing liabilities. [Blob #32](https://github.com/dragginzgame/ic-blob-storage/issues/32)
+owns the provider contract. Certificate issuance records trusted retention intent,
 not completion evidence. Applications decide when to publish an asset and must
 handle unavailable provider bytes. Verified download remains a separate shared
 Blob operation; no operator-controlled attestation or verifier deployment is
@@ -386,11 +443,113 @@ bind target-dependent bytes. [Canic #493](https://github.com/dragginzgame/canic/
 tracks that future authority path. The selected 0.112 shared Blob deployment
 uses the controller route and does not require dynamic parent provisioning.
 A configured project `payment_account` also does not
-establish provider linkage or attributable external top-up credit. The current
-passive funding views do not dispatch payments; provider funding evidence and
-its adapter composition remain separate prerequisites
+establish provider linkage or attributable external top-up credit. The mounted
+funding views remain passive; the opt-in application Rust API described below
+uses the installed shared journal to compose guarded payments. Blob distinguishes matching
+successful provider acknowledgment from independently confirmed credit; neither
+refunds spent attachments. Controlled acknowledged-payment and uncertain-outcome
+qualification passes. The Canic adapter exposes no independent-credit
+reconciliation API; live-provider payer linkage remains unqualified
 ([Blob #34](https://github.com/dragginzgame/ic-blob-storage/issues/34),
 [Canic #494](https://github.com/dragginzgame/canic/issues/494)).
+
+## Opt-in application funding
+
+`canic_blob_service::funding` connects the published Blob funding workflows to
+this adapter's installed journal. It mounts no endpoint and starts no timer.
+Applications use upstream `ic-blob-storage` types directly and decide whether to
+expose an authenticated update or trigger a payment from their own workflow.
+The actual IC caller must be the installed Blob operator; controller status or
+an application-supplied principal does not substitute for that caller.
+
+- `prepare` authenticates the original scope before invoking the application's
+  synchronous evidence callback, then rechecks shared preparation policy before
+  reserving the exact intent. Preparation alone does not authorize dispatch.
+- `dispatch` obtains fresh application evidence on first polling and delegates
+  marking, actual platform liquidity checks, one call and original callback
+  settlement to Blob. The installed journal borrow is released before awaits.
+- `renew` delegates operator-authorized local budget increases within the
+  installed ceiling, original accepted amount and retained history constraints.
+  It sends no cycles, releases no restore fence and creates no new lifetime slots.
+
+Evidence callbacks are trusted application Rust, never deserialized ingress
+assertions. The application must establish provider/payer linkage, exact scope,
+current account-wide activity, recovery and complete other liabilities. Local
+journal clearance and a balance alone cannot establish those facts. Leave
+unknown fields as `None` and provider qualification false; the shared engine
+returns blockers without authorizing payment. Never default missing liabilities
+to zero or reuse a pre-await observation as current spending authority.
+Application-owned evidence acquisition and economic policy remain outside Canic.
+Independent-credit reconciliation is unavailable through this adapter. The
+provider-acknowledged success profile does not require it. Uncertain accepted
+payments retain their original obligations and block renewal and subsequent
+payment; neither a balance delta nor a fabricated receipt can clear them.
+
+Every journal access refreshes the installed platform-version fence, including
+callback settlement. Stable traps propagate. After a lost reply inspect the
+original operation using the mounted funding views; do not issue a replacement
+or resend an attempted intent. Same-release restoration retains history and
+requires the existing authenticated continuity recovery.
+
+The framework's private embedded fixture qualifies caller/scope refusal, missing
+evidence, two known-refunded dispatches, attempted-identity replay refusal,
+renewal refusal without acceptance, uncollected ingress replies and
+same-release journal restoration. It is an isolated synthetic account with no
+external competing activity, not a production evidence source. Published Testkit
+0.65 supplies bounded cycle acceptance. The installed embedded case now qualifies
+two acknowledged payments (100 offered, 75 accepted and 25 refunded each),
+amount-bounded renewal and immutable grant replay before and after restoration.
+Acknowledgment leaves the accepted amount uncredited; it is not an independent
+receipt. A third partially accepted malformed reply remains unresolved, blocks
+renewal and subsequent payment, and retains its facts across restoration.
+Missing independent evidence changes nothing. A stale read-only continuity proof
+is reacquired on typed `Binding` refusal at most twice; other refusals fail.
+
+A separate fresh installation holds a provider response after bounded acceptance.
+Two concurrent ingresses cannot repeat the intent or reserve a subsequent payment;
+the exact pending provider request and journal summary remain unchanged. Releasing
+a structured account-overflow error retains accepted/refunded totals separately
+from response classification. The original ingress reply remains uncollected;
+mounted status recovers settlement and restoration retains uncertainty. This is
+separate from settlement-callback failure.
+
+A third fresh installation deliberately traps after shared settlement writes in
+the real IC callback. PocketIC reports `CanisterCalledTrap`; callback writes roll
+back while the provider's earlier acceptance remains committed. The journal keeps
+the entire original offer uncertain, leaves recorded acceptance/refund totals
+unchanged, and activates its recovery fence. Authenticated same-release recovery
+clears that fence without clearing the reservation or permitting either payment.
+This qualifies callback rollback, not every possible platform outage.
+
+The installed liquidity profile offers the full 9,900-cycle journal allowance.
+It refuses when operating reserve consumes observed liquidity, when other
+liabilities are `u128::MAX`, and when the apparent room covers the attachment but
+not platform call costs plus final journal-write charges. Each refusal records
+`NotDispatched` with a positive platform call-cost bound. The three original
+attempts restore the full allocation, preserve the configured reserve, and remain
+non-repeatable after restoration. This does not infer actual provider spendability
+or independently measure every replica callback-cost component.
+
+The installed budget profile reaches the cumulative renewal ceiling, then makes
+two additional acknowledged payments within remaining allocation. A one-cycle
+increase returns `RenewalCeiling`; exhausted lifetime history returns `JournalFull`.
+Exact older grant replay remains effect-free and cannot replenish lifetime slots.
+Mounted accounting and both refusals survive restoration/recovery.
+
+Mounted per-operation outcomes are qualified separately from aggregate totals.
+Successful callbacks return `ProviderAcknowledged(75)` with exact reported balance
+and renewal amount. Accepted malformed/provider-error replies return
+`CreditRequired(75)` with their distinct response classes; callback traps return
+`TransferUnknown(100)` with no retained response. Original requests and fence
+states remain exact through recovery. Repeated reads, caller refusals and changed
+offer conflicts do not change stable memory.
+
+Any future independent-credit integration needs authenticated evidence from the
+application/provider owner and installed confirmation/replay qualification
+(Blob #34). IC Blob Storage retains ownership of that contract and journal;
+Canic does not expose an unqualified wrapper. Real-provider payer linkage and
+deployment acceptance remain separate under
+[Canic #494](https://github.com/dragginzgame/canic/issues/494).
 
 ## Usage reporting
 
@@ -438,7 +597,7 @@ Each private `roles[]` entry carries the storage canister ID and
 `application_metrics`; numeric values are exact decimal strings. Public
 JSON/HTML reports show these metrics under their role instance, including source
 state, time and truncation. See [Fleet Observatory](../operations/fleet-observatory.md#application-metrics).
-The collector reads the generic `canic_public_status` cache and has no blob
+The collector reads the generic typed Wire `canic_public_metrics` cache and has no blob
 dependency. It does not enumerate service canisters outside the retained Fleet
 inventory, enable metrics remotely, or make paid calls.
 

@@ -12,8 +12,7 @@ pub use crate::values::metrics::MetricsKind;
 // Unified metrics row.
 //
 
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize)]
 pub struct MetricEntry {
     // Ordered labels.
     pub labels: Vec<String>,
@@ -29,8 +28,11 @@ pub struct MetricEntry {
 // MetricValue
 //
 
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum MetricValue {
     Count(u64),
     CountAndU64 { count: u64, value_u64: u64 },
@@ -43,28 +45,15 @@ pub enum MetricValue {
 // Same-call query performance sample.
 //
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct QueryPerfSample<T> {
     // Query result returned by the probe.
     pub value: T,
 
     // Local instruction counter observed in the same query call context.
     pub local_instructions: u64,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reexported_metrics_kind_roundtrips_through_candid() {
-        let kind = crate::values::metrics::MetricsKind::Security;
-
-        let bytes = ic_platform::candid::contract::encode_one(kind).expect("encode metrics kind");
-        let decoded: MetricsKind =
-            ic_platform::candid::decoder::decode_one(&bytes).expect("decode metrics kind");
-
-        assert!(matches!(decoded, MetricsKind::Security));
-    }
 }

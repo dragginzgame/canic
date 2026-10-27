@@ -6,8 +6,11 @@ Most downstream users should access these macros through `canic`, not by
 depending on `canic-macros` directly.
 
 This crate provides `#[canic_query]` and `#[canic_update]`, which are thin wrappers
-around the IC CDK `#[query]` / `#[update]` attributes and route through Canic's
-pipeline (requires -> dispatch).
+that marshal requests, enforce access and route through Canic's pipeline
+(requires -> dispatch). Owned application endpoints select native Wire with
+explicit method IDs and budgets. Declare `ic-wire` in the owning workspace
+catalog and inherit it in each endpoint package. External IC protocols retain
+their required Candid encoding.
 Use `all(...)`, `any(...)`, and `not(...)` inside `requires(...)` for composition.
 Every endpoint declares `public` or `requires(...)`. Public endpoints retain
 the default Fleet guard and use a fallible reply unless they select
@@ -16,17 +19,24 @@ the default Fleet guard and use a fallible reply unless they select
 ```rust
 use canic::{Error, canic_query, canic_update};
 
-#[canic_query(public)]
+const LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
+};
+
+#[canic_query(public,
+    wire(id = 0x4150_5000_0000_0001, request = LIMITS, response = LIMITS))]
 fn ping() -> Result<String, Error> {
     Ok("ok".to_string())
 }
 
-#[canic_update(requires(fleet::allows_updates(), caller::is_controller()))]
+#[canic_update(requires(fleet::allows_updates(), caller::is_controller()),
+    wire(id = 0x4150_5000_0000_0002, request = LIMITS, response = LIMITS))]
 async fn admin_only_expr() -> Result<(), canic::Error> {
     Ok(())
 }
 
-#[canic_update(internal, requires(caller::is_parent()))]
+#[canic_update(internal, requires(caller::is_parent()),
+    wire(id = 0x4150_5000_0000_0003, request = LIMITS, response = LIMITS))]
 async fn sync_state() -> Result<(), canic::Error> {
     Ok(())
 }

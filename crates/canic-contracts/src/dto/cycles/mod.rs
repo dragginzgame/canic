@@ -10,8 +10,11 @@ pub use crate::{
 // CycleTrackerEntry
 //
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CycleTrackerEntry {
     pub timestamp_secs: u64,
     pub cycles: Cycles,
@@ -21,8 +24,7 @@ pub struct CycleTrackerEntry {
 // CycleTopupEvent
 //
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize, serde::Serialize)]
 pub struct CycleTopupEvent {
     pub timestamp_secs: u64,
     pub sequence: u32,
@@ -34,8 +36,7 @@ pub struct CycleTopupEvent {
 }
 
 /// Exact parent funding failure; its containing event supplies the failure time.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CycleTopupFailure {
     pub parent: Principal,
     pub operation_id: [u8; 32],
@@ -48,7 +49,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reexported_topup_status_roundtrips_through_candid() {
+    fn reexported_topup_status_roundtrips_through_wire() {
         let event = CycleTopupEvent {
             timestamp_secs: 42,
             sequence: 7,
@@ -59,10 +60,9 @@ mod tests {
             parent_failure: None,
         };
 
-        let bytes =
-            ic_platform::candid::contract::encode_one(&event).expect("encode cycle top-up event");
+        let bytes = crate::protocol::authority::encode(&event).expect("encode cycle top-up event");
         let decoded: CycleTopupEvent =
-            ic_platform::candid::decoder::decode_one(&bytes).expect("decode cycle top-up event");
+            crate::protocol::authority::decode(&bytes).expect("decode cycle top-up event");
 
         let dto_status: CycleTopupEventStatus =
             crate::values::cycles::CycleTopupEventStatus::RequestOk;

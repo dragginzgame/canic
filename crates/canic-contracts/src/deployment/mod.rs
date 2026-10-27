@@ -3,14 +3,16 @@
 pub mod label;
 
 use crate::ids::{CanisterRole, ComponentSpecId, FleetServiceId};
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 pub use label::*;
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetServiceMemberPurpose {
     #[serde(rename = "authority")]
     Authority,
@@ -20,8 +22,11 @@ pub enum FleetServiceMemberPurpose {
     PoolMember,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum ComponentDeploymentPurpose {
     Ordinary,
     FleetServiceMember {
@@ -30,35 +35,43 @@ pub enum ComponentDeploymentPurpose {
     },
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentDeploymentSpawnGrantLimit {
     pub parent_role: CanisterRole,
     pub child_role: CanisterRole,
     pub maximum_instances_per_parent: u32,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentDeploymentLimits {
     pub maximum_descendants: u32,
     pub maximum_registry_bytes: u64,
     pub spawn_grant_reductions: Vec<ComponentDeploymentSpawnGrantLimit>,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentProvisioningGrant {
     pub requester_component_spec: ComponentSpecId,
     pub target_component_spec: ComponentSpecId,
     pub maximum_instances_per_requester_per_root: u32,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ComponentChildKind {
     #[serde(rename = "singleton")]
     Singleton,
@@ -73,9 +86,12 @@ pub enum ComponentChildKind {
     Instance,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetServicePlacementPolicy {
     pub maximum_members_per_root: u32,
     pub minimum_distinct_roots: u32,
@@ -92,3 +108,6 @@ impl std::fmt::Display for ComponentChildKind {
         formatter.write_str(label)
     }
 }
+
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+mod schema;

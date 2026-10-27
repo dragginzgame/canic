@@ -24,7 +24,6 @@ pub struct PayloadContract {
     pub schema_version: u8,
     pub default_update_ingress_max_bytes: u64,
     pub update_overrides: Vec<UpdatePayloadDescriptor>,
-    pub variant_dependent_methods: Vec<String>,
 }
 
 ///
@@ -45,18 +44,14 @@ pub struct UpdatePayloadDescriptor {
 /// # Panics
 /// Panics on duplicate runtime registrations or an impossible in-memory encoding failure.
 #[must_use]
-pub fn annotate_candid(mut candid: String, variant_dependent_methods: &[&str]) -> String {
+pub fn annotate_candid(mut candid: String) -> String {
     let contract = PayloadContract {
         schema_version: 1,
         default_update_ingress_max_bytes: super::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES as u64,
         update_overrides: super::payload::declaration_limits(),
-        variant_dependent_methods: variant_dependent_methods
-            .iter()
-            .map(|method| (*method).into())
-            .collect(),
     };
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(&contract, &mut bytes).expect("compiled payload contract encodes");
+    serde_cbor::to_writer(&mut bytes, &contract).expect("compiled payload contract encodes");
     candid.push('\n');
     candid.push_str(CANDID_PAYLOAD_CONTRACT_PREFIX);
     candid.push_str(&crate::cdk::utils::hash::hex_bytes(&bytes));

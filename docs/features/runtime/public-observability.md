@@ -14,7 +14,7 @@ metrics = false
 
 All four options default to `true`. Selection is per role, applies to managed
 and standalone-local endpoints, and participates in the compiled capability
-and protocol-profile identity. Rebuild and regenerate consumer Candid bindings.
+and protocol-profile identity. Rebuild and regenerate consumer bindings for each method's current codec.
 Canonical Store and Coordinator retain their fixed infrastructure surfaces.
 
 | Option | Optional generated reads |
@@ -27,10 +27,11 @@ Canonical Store and Coordinator retain their fixed infrastructure surfaces.
 Health, readiness, discovery, binding, current cycle balance and child funding
 accounting remain available. The authenticated Root relay remains usable for
 those financial observations. Its request vocabulary is shared; a disabled
-optional observation returns `REQUEST_INVALID`. Workload relay replies contain
-only the selected response variants, so omitted providers and serializers are
-not retained by the relay. Root still carries the shared remote response contract
-needed to observe independently configured children.
+optional observation returns `REQUEST_INVALID`. The Root-to-workload hop uses separate typed `canic_observe_*` Wire updates.
+Each method has a fixed response shape across capability profiles. Disabled
+providers return `REQUEST_INVALID` without invoking their collectors. The outer
+operator-to-Root hop uses the corresponding typed `canic_root_observe_*` Wire
+updates, with the target principal included in each request.
 
 When both metrics and history are disabled, generated lifecycle code does not
 select automatic public sampling. Public family publication settings still
@@ -45,20 +46,39 @@ does not grant observability access.
 
 | Method | Access | Contents |
 | --- | --- | --- |
-| `canic_public_status` | Public | Local responsiveness, role/build discovery, existing public topology discovery and explicitly selected cached aggregate metrics and chart history |
-| `canic_observability` | Observer | Role-supported detailed runtime, readiness, logs, cycles and metrics, or infrastructure diagnostics |
+| `canic_public_health` | Public | Typed Wire responsiveness and local identity |
+| `canic_public_history` | Public | Typed Wire query for one bounded cached series |
+| `canic_public_metrics` | Public | Typed Wire query for selected cached aggregate metrics |
+| `canic_public_overview` | Public | Typed Wire role/build identity and bootstrap readiness |
+| `canic_public_children` | Public | Typed Wire bounded direct-child inventory |
+| `canic_component_directory_page` | Registered Component member | Typed Wire page under exact current Component authority |
+| `canic_root_directory_head`, `canic_root_directory_page` | Controller | Typed Wire directory authority and pages |
+| `canic_cycle_balance` | Controller | Typed Wire current canister balance |
+| `canic_cycle_history` | Controller | Typed Wire bounded cycle samples; optional on application roles |
+| `canic_logs` | Controller | Typed Wire filtered logs; requires log capability |
+| `canic_metrics` | Controller | Typed Wire exact metric pages; requires metrics capability |
+| `canic_memory_allocations` | Controller | Typed Wire current allocation diagnostics; Root/managed diagnostics capability |
+| `canic_child_funding` | Controller | Typed Wire exact child accounting; available to Root while Prepared |
+| `canic_readiness` | Controller | Typed Wire readiness and exact fixture evidence; Root refuses while Prepared |
+| `canic_runtime` | Controller | Typed Wire runtime/timer diagnostics; requires diagnostic capability |
+| `canic_binding` | Controller | Typed Wire Registry-issued identity; managed roles only |
+| `canic_health` | Controller | Typed Wire runtime health diagnostics; Root refuses while Prepared |
+| `canic_cycle_topups` | Controller | Typed Wire funding history; requires history and automatic-topup capabilities |
+| `canic_root_inspection_reserve` | Controller | Typed Wire indicative management-inspection reserve; available while Prepared |
+| `canic_coordinator_root_acknowledgements` | Controller | Typed Wire retained Root acknowledgements under exact registry authority |
+| `canic_coordinator_funding` | Controller | Typed Wire Coordinator treasury and Root funding evidence |
 
 Observer access uses the existing controller predicate. Operators observe
 Root-controlled workload metrics through the existing authenticated Root relay;
 this does not grant the operator lifecycle control over those workloads. There
 is no independent observer identity store or admission-based observer grant.
-Every request variant within `canic_observability` uses that same controller
-rule. Enabling public publication leaves it unchanged.
+The protected cycle, metric and funding methods use that same controller rule.
+Enabling public publication leaves it unchanged.
 
 Authentication/session reads, operation receipts, Store catalog access and
 Coordinator Registry synchronization keep their existing protocol owners and
 caller contracts on separate methods. Lifecycle, funding and admission mutations
-remain in their control APIs. Consumers must regenerate Candid bindings and
+remain in their control APIs. Consumers must regenerate bindings for each method's current codec and
 route each read to its current owner. The mixed workload status endpoint and
 Coordinator status endpoint are removed without aliases.
 
@@ -69,27 +89,46 @@ not grant general diagnostic access:
 
 | Method | Existing caller contract |
 | --- | --- |
-| `canic_auth_status` | Public authentication discovery and caller-bound session/token reads |
+| `canic_active_delegation_proof` (Wire) | Public issuer-local proof status; no credentials or secret material |
 | `canic_admission_status` | Controller or bound Root |
-| `canic_control_status` | Bound Root |
-| `canic_root_auth_status` | Public role-attestation reads |
+| `canic_runtime_operation` (Wire) | Bound Root; complete retained runtime operation evidence |
+| `canic_caller_authority_status` (Wire) | Bound Root; original publication receipt and receiver authority |
+| `canic_root_role_attestation` | Public role-attestation reads |
 | `canic_root_membership` | Root controller or active local managed member; read-only update for inter-canister discovery |
-| `canic_root_operation_status` | Existing operation owner |
-| `canic_root_status` | Controller |
-| `canic_coordinator_operation_status` | Existing operation owner |
-| `canic_coordinator_registry` | Controller or registered Root |
-| `canic_wasm_store_catalog` | Existing Store Root/controller predicate |
-| `canic_wasm_store_status` | Controller |
+| `canic_root_removal`, `canic_root_component_provisioning` (Wire) | Coordinator or controller; exact retained operation |
+| `canic_root_component_allocation`, `canic_root_child_allocation` (Wire) | Existing allocation authority; exact retained operation |
+| `canic_root_component_removal`, `canic_root_subtree_removal`, `canic_root_store_adoption`, `canic_root_store_bootstrap`, `canic_root_activation_status`, `canic_root_cycle_refill_status`, `canic_root_registry_synchronization` (Wire) | Controller; exact retained operation |
+| `canic_root_config` (Wire) | Controller; Root must be active |
+| `canic_root_fleet_state` (Wire) | Controller; Root must be active |
+| `canic_authority_restore_status` (Wire) | Root/Coordinator controller; Root must be active |
+| `canic_root_inventory` (Wire) | Controller; typed retained Root inventory |
+| `canic_coordinator_component_provisioning`, `canic_coordinator_root_removal`, `canic_coordinator_admission_operation`, `canic_coordinator_funding_rotation`, `canic_coordinator_retirement_status` | Existing operation owner |
+| `canic_coordinator_registry` (Wire) | Controller or registered Root; typed Fleet registry snapshot |
+| `canic_wasm_store_fixture_status` | Existing Store Root/controller predicate; typed fixture progress |
+| `canic_wasm_store_fixture_grant` | Existing Store Root/controller predicate; exact retained grant or absence |
+| `canic_wasm_store_template_status` | Existing Store Root/controller predicate; manifest and per-chunk evidence |
+| `canic_wasm_store_inventory` (Wire) | Existing Store Root/controller predicate; template inventory |
+| `canic_wasm_store_storage` (Wire) | Existing Store Root/controller predicate; storage/GC inventory |
+| `canic_wasm_store_authority` | Controller; complete retained Store installation authority |
+| `canic_wasm_store_activation_status` | Controller; exact activation operation |
+| `canic_wasm_store_gc_status` | Controller; exact GC operation |
+
+Caller-authority mutations use the separate Wire updates
+`canic_caller_authority_prepare`, `canic_caller_authority_commit`,
+`canic_caller_authority_complete` and `canic_application_startup_release`.
+Each requires the bound Root after the Fleet update admission check and retains
+the original operation identity and replay behavior.
 
 Methods and variants remain profile-specific. The two observability access
 labels refer to the common public and protected methods above.
 
-`Health` returns `PublicHealth.health = responding`. This establishes only that
+`canic_public_health` is a typed Wire query with a unit request and a direct
+`PublicHealth` reply. It returns `PublicHealth.health = Responding`. This establishes only that
 the canister answered the query at `observed_at_ns`; it does not assess runtime
 diagnostics, authority restoration or Fleet readiness. Present it as
 "Responding" in public interfaces. Use the protected readiness diagnostics and
 Fleet convergence evidence for readiness decisions. Regenerate bindings for the
-current public enum; protected diagnostic health retains its own contract.
+current typed public-health contract; protected diagnostic health retains its own contract.
 
 The Coordinator, Root, Wasm Store and managed roles expose the public
 `icrc10_supported_standards` query through the shared standards endpoint bundle.
@@ -104,11 +143,15 @@ without the refresh flag to verify the ordinary materialization path as well.
 
 ## Current Memory Allocations
 
-Root and managed-canister `canic_observability` accept `MemoryAllocations` under
-the existing controller predicate. For a controlled Workload, send
-`canic_root_command(ObserveCanister { canister_id, request = MemoryAllocations })`
-through its Root. The host's `observe_fleet_canister` uses these same owners.
-Store does not expose this selector. There is no public memory-ledger endpoint.
+Root and managed canisters expose the typed Wire `canic_memory_allocations` query
+under the existing controller predicate. For a controlled Workload, send
+`canic_root_observe_memory_allocations({ canister_id, input: () })` through its
+Root. Root uses the replicated Wire `canic_observe_memory_allocations` update for
+the managed target. Host telemetry verifies the native schema from the terminal
+Fleet’s finalized release, checking Root’s installed module and protocol identity
+before transport. No Candid sidecar or local preparation is required for this
+read. Paid balance inspection retains its separate management/reserve contract.
+Store does not expose memory allocations. There is no public memory-ledger endpoint.
 
 The response reports the committed generation, actual persisted bucket size,
 manager capacity and allocation totals, and all 255 usable manager IDs in order.
@@ -158,6 +201,15 @@ Storage collections use `ic_storage::adapter` and consume exclusive
 collection owner’s API; they do not open a second handle to its allocation.
 
 ## Optional Public Metrics
+
+Metrics-capable artifacts expose `canic_public_metrics` as a typed Wire query:
+`PublicMetricsRequest` returns `PublicMetricsSnapshot` directly. The request selects
+one family and page; querying never refreshes the cache. Use the method identity
+and request/reply budgets from `canic::protocol::public_metrics`. Metric dimensions
+use native `ic_platform::Principal`; application samplers return that type too.
+The endpoint is absent when the artifact lacks the metrics capability. An enabled
+capability with publication disabled returns the existing `Disabled` snapshot.
+History uses the independent typed Wire `canic_public_history` query.
 
 One top-level setting in `canic.toml` selects the public aggregate families
 for App-configured canisters. The independent Fleet Coordinator exposes public
@@ -289,8 +341,20 @@ An unscoped checkpoint produces no sample. A measured zero remains distinct from
 missing interval evidence.
 
 The complete public series name, including family prefix and suffix, must fit
-128 bytes. Oversized checkpoint/role labels remain valid internal instrumentation
-but reject that family's public sample without cloning unbounded text. The
+128 bytes. Checkpoint admission checks the complete `perf.checkpoint` name,
+including its `.calls` suffix, before retaining scope or label text. Use static,
+low-cardinality labels rather than user, canister or partition identifiers.
+The recorder retains at most 128 distinct checkpoint identities in lexicographic
+order; existing retained counters continue updating at capacity. Samples with an
+oversized identity, or outside that retained prefix, contribute to the explicit
+`perf.checkpoint_overflow` instruction total and its `.calls` sample count.
+The public overflow total retains its full `u128` width; a wide total does not
+hide the sample count. Runtime-tier diagnostics expose the overflow sample count.
+Eviction moves all prior samples into that aggregate once, preserving accounting
+without merging distinct retained names. The overflow counter is selected before
+ordinary counters so a bounded Performance sample can report admission loss.
+Checkpoint counters remain ephemeral heap state. Oversized role labels
+still reject their family's public sample without cloning unbounded text. The
 application publisher processes only its first 257 supplied rows, retaining up
 to 256; applications remain responsible for bounding their own collection and
 input construction and disposal. The timer records its cost through existing
@@ -340,7 +404,7 @@ against 20M is not a new product-cost requirement.
 
 ## Bounded chart history
 
-`History(PublicHistoryRequest)` selects one exact family/name/canister series
+`canic_public_history(PublicHistoryRequest)` selects one exact family/name/canister series
 and a page. Each admitted series has 288 fixed slots (24 hours). Multiple samples
 in a slot coalesce to the latest source observation. Missing slots remain gaps;
 there is no interpolation or catch-up queue. Reads filter expired slots without
@@ -485,3 +549,41 @@ measuring enabled versus disabled publication or an application participant.
 - [Browse runtime features](README.md)
 - [Browse all documentation](../../README.md)
 - [Back to the main README](../../../README.md)
+
+Store publication controls use native updates `canic_wasm_store_inspect_template`,
+`canic_wasm_store_prepare_chunk_set`, `canic_wasm_store_stage_manifest`,
+`canic_wasm_store_prepare_fixture` and `canic_wasm_store_run_gc`.
+Inspection, fixture preparation and GC require Root; chunk-set preparation and
+manifest staging retain the Store publication-caller predicate. These operations
+remain available to a Prepared Store under their existing monotonic/replay rules.
+They do not change the chunk upload contract or grant deletion authority.
+
+Store credential preparation (`canic_wasm_store_prepare_credential`) and activation
+(`canic_wasm_store_activate`) are separate Root-authorized native updates. Both
+retain the operation ID in their receipt; activation also validates the retained
+credential generation and cascade evidence before scheduling initialization once.
+These transitions remain available to Prepared Stores and do not grant admission
+policy mutation authority. Their status reconciliation retains its existing read
+contract until that read surface completes the coordinated transport cut.
+
+The Store's remaining mutations are typed native updates:
+`canic_wasm_store_set_fixture_grant` compares the exact installation binding and
+expected grant revision, and `canic_wasm_store_reclaim_deletion_cycles` returns
+observed transfer evidence under the existing controlled-destination, quota and
+reserve rules. Both require the Root caller. The Store no longer exports a
+command dispatcher. Status reads and publication byte lanes retain their current transports pending
+the rest of the coordinated cut. The three catalog queries use typed native Wire.
+
+Fixture byte transfer uses native Wire on `canic_wasm_store_publish_fixture` and
+`canic_wasm_store_fixture_chunk`. Publication retains the existing Root/controller
+predicate. Pulls are bounded replicated updates authenticated against the complete
+caller-bound grant and revision; they return opaque bytes or a typed Store refusal.
+The importer rechecks its installed assignment and recovery lease after the await,
+then verifies each chunk against the retained descriptor before applying it.
+The native envelope permits the existing 1 MiB chunk plus framing; storage and
+content-hash encodings are unchanged. Template publication and Store status reads
+remain separate transport migration work.
+
+Store authority and operation queries use native Wire. The operation methods take
+an explicit operation ID and reject zero or unavailable identities; they do not
+return a polymorphic status union. Prepared Store reads retain controller protection.

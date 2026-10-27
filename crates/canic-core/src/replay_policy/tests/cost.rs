@@ -50,36 +50,10 @@ fn costed_root_capability_command_entries_declare_guards() {
 }
 
 #[test]
-fn costed_role_command_entries_declare_guards() {
-    for entry in ROOT_COMMAND_REPLAY_POLICY_MANIFEST
+fn root_release_publication_keeps_its_durable_publish_cost() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
-        .chain(COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST)
-        .chain(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST)
-        .chain(STORE_COMMAND_REPLAY_POLICY_MANIFEST)
-    {
-        if entry.cost_class == CostClass::None {
-            continue;
-        }
-        assert!(
-            entry.quota_policy.is_some(),
-            "costed role command {} missing quota policy",
-            entry.variant
-        );
-        assert!(
-            entry.cost_class == CostClass::RootCanisterSignaturePrepare
-                || entry.cost_class == CostClass::RootChainKeySigning
-                || entry.cycle_reserve_policy.is_some(),
-            "costed role command {} missing cycle-reserve policy",
-            entry.variant
-        );
-    }
-}
-
-#[test]
-fn root_release_publication_is_the_role_owned_durable_publish_command() {
-    let entry = ROOT_COMMAND_REPLAY_POLICY_MANIFEST
-        .iter()
-        .find(|entry| entry.variant == "PublishReleaseSet")
+        .find(|entry| entry.endpoint == crate::protocol::root_store_control::publish::METHOD)
         .expect("Root release-publication command entry");
 
     assert_eq!(entry.cost_class, CostClass::DurablePublish);
@@ -93,9 +67,9 @@ fn root_release_publication_is_the_role_owned_durable_publish_command() {
 
 #[test]
 fn coordinator_retirement_declares_guarded_value_transfer() {
-    let entry = COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
-        .find(|entry| entry.variant == "Retire")
+        .find(|entry| entry.endpoint == crate::protocol::retirement_control::retire::METHOD)
         .expect("Coordinator retirement replay policy");
 
     assert_eq!(entry.cost_class, CostClass::ValueTransfer);
@@ -105,10 +79,10 @@ fn coordinator_retirement_declares_guarded_value_transfer() {
 
 #[test]
 fn store_deletion_cycle_reclamation_is_guarded_and_convergent() {
-    let entry = STORE_COMMAND_REPLAY_POLICY_MANIFEST
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
-        .find(|entry| entry.variant == "ReclaimDeletionCycles")
-        .expect("Store deletion cycle-reclamation variant");
+        .find(|entry| entry.endpoint == crate::protocol::store_control::reclaim::METHOD)
+        .expect("Store deletion cycle-reclamation endpoint");
 
     assert!(matches!(
         entry.replay_policy,

@@ -10,7 +10,8 @@ cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROO
 cp "$ROOT/ci/tool-versions.env" "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
 cp "$ROOT/scripts/ci/check-make-execution.sh" "$ROOT/scripts/ci/check-format-tools.sh" \
     "$ROOT/scripts/ci/run-formatting.sh" "$ROOT/scripts/ci/run-canic-formatters.sh" \
-    "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
+    "$ROOT/scripts/ci/ic-tool-pins.sh" "$ROOT/scripts/ci/tool-catalog-records.pl" \
+    "$ROOT/scripts/ci/StableVersion.pm" "$fixture/scripts/ci/"
 mkdir -p "$fixture/integrations/blob-service/consumer" "$fixture/integrations/blob-service/embedded-consumer"
 cat > "$fixture/.tools/rust/common/bin/cargo" <<'CARGO'
 #!/usr/bin/env bash

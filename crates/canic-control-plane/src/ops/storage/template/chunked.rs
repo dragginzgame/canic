@@ -203,7 +203,10 @@ impl TemplateChunkedOps {
         limits: WasmStoreLimits,
         first_chunk: Option<TemplateChunkInput>,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        let manifest = input.manifest.take();
+        let manifest = input.manifest.take().map(|mut manifest| {
+            stamp_prepared_manifest(&mut manifest, created_at);
+            manifest
+        });
         if let Some(manifest) = &manifest {
             validate_prepared_manifest(manifest, &input)?;
         }
@@ -384,6 +387,25 @@ impl TemplateChunkedOps {
             cleared_chunk_count: chunk_count,
             cleared_chunk_store_hash_count: chunk_store_hash_count,
         })
+    }
+}
+
+// Zero timestamps request admission-time stamping; retries retain stored times.
+fn stamp_prepared_manifest(manifest: &mut TemplateManifestInput, now_secs: u64) {
+    let release = TemplateReleaseKey::new(manifest.template_id.clone(), manifest.version.clone());
+    let existing = TemplateManifestStateStore::export()
+        .entries
+        .into_iter()
+        .find(|entry| entry.release == release);
+    if manifest.created_at == 0 {
+        manifest.created_at = existing
+            .as_ref()
+            .map_or(now_secs, |entry| entry.record.created_at);
+    }
+    if manifest.approved_at == Some(0) {
+        manifest.approved_at = existing
+            .as_ref()
+            .map_or(Some(now_secs), |entry| entry.record.approved_at);
     }
 }
 
@@ -825,6 +847,40 @@ mod tests {
         request.payload_size_bytes = chunk_ceiling;
         limits.max_store_bytes = chunk_ceiling;
         TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request, 10, limits).unwrap();
+    }
+
+    #[test]
+    fn bootstrap_manifest_stamps_once_and_preserves_conflict_checks() {
+        reset_store();
+        let (mut request, limits) = combined_preparation();
+        let manifest = request.manifest.as_mut().unwrap();
+        manifest.created_at = 0;
+        manifest.approved_at = Some(0);
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request.clone(), 100, limits)
+            .unwrap();
+        let before =
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+        let stored = before.manifest.as_ref().unwrap();
+        assert_eq!(stored.created_at, 100);
+        assert_eq!(stored.approved_at, Some(100));
+        assert_eq!(stored.manifest_state, TemplateManifestState::Approved);
+        assert_eq!(stored.payload_hash, request.payload_hash);
+        assert_eq!(stored.payload_size_bytes, request.payload_size_bytes);
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request.clone(), 200, limits)
+            .unwrap();
+        assert_eq!(
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version),
+            before
+        );
+        request.manifest.as_mut().unwrap().store_binding = WasmStoreBinding::new("changed");
+        let error =
+            TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request.clone(), 300, limits)
+                .unwrap_err();
+        assert_eq!(error.code(), InternalError::conflict().code());
+        assert_eq!(
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version),
+            before
+        );
     }
 
     #[test]

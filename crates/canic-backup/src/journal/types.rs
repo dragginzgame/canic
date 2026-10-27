@@ -1,10 +1,8 @@
 //! Module: journal::types
 //!
-//! Responsibility: define durable artifact journal state and transitions.
+//! Responsibility: define durable artifact journal records.
 //! Does not own: persistence, resume reporting, or full journal validation.
 //! Boundary: exposes typed journal records consumed by backup workflows.
-
-use crate::journal::JournalValidationError;
 
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +49,7 @@ pub struct DownloadOperationMetrics {
 /// ArtifactJournalEntry
 ///
 /// Durable journal entry for one snapshot artifact.
-/// Owned by backup journaling and advanced by snapshot download workflows.
+/// Owned by backup journaling and inspected by status and integrity readers.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -84,24 +82,6 @@ impl ArtifactJournalEntry {
             ArtifactState::Durable => ResumeAction::Skip,
         }
     }
-
-    /// Advance this artifact through the next canonical journal state.
-    pub fn advance_to(
-        &mut self,
-        next_state: ArtifactState,
-        updated_at: String,
-    ) -> Result<(), JournalValidationError> {
-        if !self.state.can_advance_to(next_state) {
-            return Err(JournalValidationError::InvalidStateTransition {
-                from: self.state,
-                to: next_state,
-            });
-        }
-
-        self.state = next_state;
-        self.updated_at = updated_at;
-        Ok(())
-    }
 }
 
 ///
@@ -117,19 +97,6 @@ pub enum ArtifactState {
     Downloaded,
     ChecksumVerified,
     Durable,
-}
-
-impl ArtifactState {
-    /// Return whether `next` is the canonical immediate successor.
-    #[must_use]
-    pub const fn can_advance_to(self, next: Self) -> bool {
-        matches!(
-            (self, next),
-            (Self::Created, Self::Downloaded)
-                | (Self::Downloaded, Self::ChecksumVerified)
-                | (Self::ChecksumVerified, Self::Durable)
-        )
-    }
 }
 
 ///

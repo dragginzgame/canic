@@ -73,3 +73,6 @@ pub use subnet::SubnetId;
 
 pub mod template;
 pub use template::*;
+
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+pub mod wire_schema;

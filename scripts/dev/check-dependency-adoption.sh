@@ -29,7 +29,7 @@ if [[ "$mode" != fixtures-only ]]; then
         manifest="${manifests[$index]}"
         echo "==> locked dependency admission: $manifest"
         cargo metadata --locked --offline --format-version 1 --manifest-path "$manifest" > /dev/null
-        bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$ROOT/$(dirname "$manifest")"
+        bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$ROOT/$(dirname "$manifest")" --external-ic
         # Normal Wasm dependencies only: host build tools and dev dependencies are
         # separate graphs. Cargo owns package identities, aliases and target filtering.
         tree="$(cargo tree --locked --offline --manifest-path "$manifest" \

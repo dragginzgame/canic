@@ -135,7 +135,7 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
 // Public facade features that do not participate in a compiled canister role.
 // Keep this closed so a host-only support surface cannot silently become role
 // authority, while Cargo/catalog parity still detects an unclassified feature.
-const NON_ROLE_PUBLIC_FEATURES: &[&str] = &["testing"];
+const NON_ROLE_PUBLIC_FEATURES: &[&str] = &["testing", "wire-schema"];
 
 const DEFAULT_FEATURES: &[CanicFeatureKey] = &[];
 

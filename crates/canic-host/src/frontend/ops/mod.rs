@@ -4,6 +4,7 @@
 
 mod bundle;
 mod capacity;
+pub mod compiler;
 mod uploaded;
 mod validation;
 
@@ -15,17 +16,13 @@ use crate::{
             FrontendEnvironmentInput, FrontendFileRecord, FrontendManifestRecord,
             FrontendRoleRecord,
         },
-        view::{FrontendAuthorityView, FrontendBindingsView, FrontendBundleView},
+        view::{FrontendAuthorityView, FrontendBundleView},
     },
     network::{frontend_root_key, resolve_canonical_network_id_from_root},
-    protocol_binding::resolve_registry_protocol_binding,
+    protocol_binding::resolve_release_registry_wire_schema,
 };
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use ic_host_fs::read::read_file_no_follow;
-use ic_platform::candid::contract::TypeEnv;
-use ic_platform::candid_parser::{
-    Dec, IDLMergedProg, IDLProg, compile_javascript, compile_typescript,
-};
 use std::{collections::BTreeMap, path::Path};
 
 pub use bundle::{manifest_digest, publish_bundle, verify_bundle};
@@ -74,7 +71,15 @@ pub fn authority(
         .as_deref()
         .and_then(|review| review.desired().bootstrap.as_ref())
         .and_then(|bootstrap| bootstrap.admission_identity_origin.clone());
+    let release_build_id = current
+        .plan
+        .reviewed_desired
+        .as_ref()
+        .and_then(|review| review.desired().bootstrap.as_ref())
+        .ok_or(FrontendError::Integrity)?
+        .release_build_id;
     Ok(FrontendAuthorityView {
+        release_build_id,
         app: registry.authority.binding.fleet.app.to_string(),
         fleet: fleet.to_string(),
         fleet_id: registry.authority.binding.fleet.fleet.fleet_id.to_string(),
@@ -88,45 +93,6 @@ pub fn authority(
                 .any(|rule| !rule.principals.is_empty()),
         admission_origin,
         entries: current.registry.entries,
-    })
-}
-
-/// Produce browser bindings from a self-contained, type-checked Candid sidecar.
-pub fn bindings(candid: &[u8]) -> Result<FrontendBindingsView, FrontendError> {
-    if candid.len() > MAX_FRONTEND_FILE_BYTES {
-        return Err(FrontendError::Bound("Candid bytes"));
-    }
-    let source =
-        std::str::from_utf8(candid).map_err(|error| FrontendError::Candid(error.to_string()))?;
-    let program: IDLProg = source
-        .parse()
-        .map_err(|error: ic_platform::candid_parser::Error| {
-            FrontendError::Candid(error.to_string())
-        })?;
-    if program
-        .decs
-        .iter()
-        .any(|declaration| matches!(declaration, Dec::ImportType(_) | Dec::ImportServ(_)))
-    {
-        return Err(FrontendError::Candid(
-            "sidecar imports are not release-bound".to_string(),
-        ));
-    }
-    let mut environment = TypeEnv::new();
-    let actor = ic_platform::candid_parser::check_prog(&mut environment, &program)
-        .map_err(|error| FrontendError::Candid(error.to_string()))?;
-    if actor.is_none() {
-        return Err(FrontendError::Candid("missing service".to_string()));
-    }
-    let javascript = compile_javascript(&environment, &actor).into_bytes();
-    let typescript =
-        compile_typescript(&environment, &actor, &IDLMergedProg::new(program)).into_bytes();
-    if javascript.len().max(typescript.len()) > MAX_FRONTEND_FILE_BYTES {
-        return Err(FrontendError::Bound("generated binding bytes"));
-    }
-    Ok(FrontendBindingsView {
-        javascript,
-        typescript,
     })
 }
 
@@ -157,6 +123,7 @@ pub fn prepare_bundle(
     root: &Path,
     input: &FrontendEnvironmentInput,
     authority: FrontendAuthorityView,
+    compiler: &compiler::BrowserCompiler,
 ) -> Result<FrontendBundleView, FrontendError> {
     let mut files = BTreeMap::new();
     let mut roles = Vec::new();
@@ -174,30 +141,31 @@ pub fn prepare_bundle(
         let [entry] = matches.as_slice() else {
             return Err(FrontendError::Role(selected.role.to_string()));
         };
-        let protocol = resolve_registry_protocol_binding(root, &input.environment, entry)?;
-        let candid = read_file_no_follow(protocol.candid_path(), MAX_FRONTEND_FILE_BYTES)
-            .map_err(std::io::Error::from)?;
-        if sha256_hex(&candid) != hex_bytes(protocol.binding().candid_sha256) {
-            return Err(FrontendError::Integrity);
-        }
-        let generated = bindings(&candid)?;
+        let built = resolve_release_registry_wire_schema(root, authority.release_build_id, entry)?;
+        let generated = compile_role(root, compiler, &built, selected.role.as_str())?;
         let prefix = format!("roles/{}/{}", selected.role, selected.canister_id);
+        let compiler_identity = generated.acquisition.record().key().to_string();
+        let mut retained = BTreeMap::new();
+        for (name, bytes) in generated.files {
+            retained.insert(
+                name.clone(),
+                insert_file(&mut files, format!("{prefix}/{name}"), bytes.into_bytes())?,
+            );
+        }
         roles.push(FrontendRoleRecord {
             role: selected.role.clone(),
             canister_id: selected.canister_id,
-            release_identity: protocol.binding().release_identity.clone(),
-            module_sha256: entry.module_hash.clone().ok_or(FrontendError::Integrity)?,
-            candid: insert_file(&mut files, format!("{prefix}.did"), candid)?,
-            javascript: insert_file(
-                &mut files,
-                format!("{prefix}.did.mjs"),
-                generated.javascript,
-            )?,
-            typescript: insert_file(
-                &mut files,
-                format!("{prefix}.did.d.ts"),
-                generated.typescript,
-            )?,
+            release_identity: built.release_build_id.to_string(),
+            module_sha256: built.wasm_sha256,
+            wire_schema: insert_file(&mut files, format!("{prefix}/schema.json"), built.schema)?,
+            compiler_identity,
+            javascript: retained
+                .remove("bindings.js")
+                .ok_or(FrontendError::Integrity)?,
+            typescript: retained
+                .remove("bindings.d.ts")
+                .ok_or(FrontendError::Integrity)?,
+            modules: retained.into_values().collect(),
         });
     }
     let alternative_origins = insert_file(
@@ -234,4 +202,41 @@ pub fn prepare_bundle(
     };
     manifest.manifest_sha256 = manifest_digest(&manifest)?;
     Ok(FrontendBundleView { manifest, files })
+}
+
+fn compile_role(
+    root: &Path,
+    compiler: &compiler::BrowserCompiler,
+    built: &crate::release_set::BuiltWireSchema,
+    role: &str,
+) -> Result<compiler::CompiledBrowserBindings, FrontendError> {
+    let wasm = read_file_no_follow(
+        &built.path.with_extension("").with_extension("wasm"),
+        crate::MAX_ARTIFACT_READ_BYTES,
+    )
+    .map_err(std::io::Error::from)?;
+    if sha256_hex(&wasm) != built.wasm_sha256 {
+        return Err(FrontendError::Integrity);
+    }
+    let facts = ic_host_artifacts::wasm::inspect(
+        &wasm,
+        ic_host_artifacts::wasm::InspectionLimits {
+            module_bytes: crate::MAX_ARTIFACT_READ_BYTES,
+            sections: 1024,
+            exports: 4096,
+            custom_sections: 1024,
+        },
+    )
+    .map_err(|_| FrontendError::Integrity)?;
+    let bindings =
+        crate::artifact_io::generate_wire_bindings(&facts, &built.schema, "./wire-adapter.js")?;
+    Ok(compiler::compile(
+        &root.join(".canic/cache/browser"),
+        &root
+            .join(".canic/frontend-builds")
+            .join(built.release_build_id.to_string())
+            .join(format!("{role}.json")),
+        compiler,
+        &bindings,
+    )?)
 }

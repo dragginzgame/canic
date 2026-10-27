@@ -33,9 +33,8 @@ fn begin(previous: Option<&Record>, expected: u64, operation: u8) -> Result<Reco
 }
 
 fn roundtrip(record: &Record) -> Record {
-    let mut bytes = Vec::new();
-    ciborium::ser::into_writer(record, &mut bytes).unwrap();
-    ciborium::de::from_reader(bytes.as_slice()).unwrap()
+    let bytes = canic_contracts::serialization::serialize(record).unwrap();
+    canic_contracts::serialization::deserialize(&bytes).unwrap()
 }
 
 fn acknowledge_all(mut record: Record, phase: ApplicationCheckpointPhase) -> Record {
@@ -168,8 +167,13 @@ fn decoding_cannot_claim_release_without_acknowledgements() {
     let mut invalid = record.clone();
     invalid.phase = Phase::Released;
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(&invalid, &mut bytes).unwrap();
-    let decoded: Result<Record, _> = ciborium::de::from_reader(bytes.as_slice());
-    assert!(matches!(decoded, Err(ciborium::de::Error::Semantic(..))));
+    serde_cbor::to_writer(&mut bytes, &invalid).unwrap();
+    let decoded: Result<Record, _> = canic_contracts::serialization::deserialize(&bytes);
+    assert!(matches!(
+        decoded,
+        Err(canic_contracts::serialization::SerializeError::Deserialize(
+            _
+        ))
+    ));
     assert_eq!(roundtrip(&record), record);
 }

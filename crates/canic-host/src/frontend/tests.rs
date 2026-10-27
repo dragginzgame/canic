@@ -156,70 +156,54 @@ fn alternative_origins_follow_the_current_ii_bound_and_asset_binding() {
     .unwrap();
 }
 
-#[test]
-#[ignore = "requires Node.js; run explicitly for frontend consumer qualification"]
-fn generated_bindings_are_valid_javascript_and_reject_unbound_imports() {
-    let bindings = ops::bindings(b"service : { whoami : () -> (principal) query; }").unwrap();
-    let root = temp_dir("frontend-bindings");
-    fs::create_dir_all(&root).unwrap();
-    let javascript = root.join("service.mjs");
-    fs::write(&javascript, bindings.javascript).unwrap();
-    let checked = std::process::Command::new("node")
-        .arg("--check")
-        .arg(javascript)
-        .output()
-        .unwrap();
-    assert!(
-        checked.status.success(),
-        "{}",
-        String::from_utf8_lossy(&checked.stderr)
-    );
-    assert!(!bindings.typescript.is_empty());
-    assert!(matches!(
-        ops::bindings(b"import \"outside.did\"; service : {};"),
-        Err(FrontendError::Candid(_))
-    ));
-    fs::remove_dir_all(root).unwrap();
-}
-
 fn prepared_bundle(root: &std::path::Path) -> super::view::FrontendBundleView {
     let configuration = input();
     fs::create_dir_all(root).unwrap();
-    let candid = b"service : { whoami : () -> (principal) query; }";
-    let sidecar = crate::icp::local_canister_candid_path(root, "ic", "app");
-    fs::create_dir_all(sidecar.parent().unwrap()).unwrap();
-    fs::write(sidecar, candid).unwrap();
-    let capabilities = std::collections::BTreeSet::new();
-    let role = CanisterRole::from("app");
-    let hashes = canic_core::role_contract::derive_protocol_profile_hashes(
-        "fixture-release",
-        &role,
-        &capabilities,
-        candid,
-    );
-    let authority = super::view::FrontendAuthorityView {
-        app: "fixture".to_string(),
-        fleet: "fixture".to_string(),
+    let mut files = std::collections::BTreeMap::new();
+    let mut file = |path: &str, bytes: &[u8]| {
+        files.insert(path.to_owned(), bytes.to_vec());
+        FrontendFileRecord {
+            path: path.into(),
+            sha256: canic_core::cdk::utils::hash::sha256_hex(bytes),
+            bytes: bytes.len() as u64,
+        }
+    };
+    let role = FrontendRoleRecord {
+        role: "app".into(),
+        canister_id: configuration.roles[0].canister_id,
+        release_identity: "41".repeat(32),
+        module_sha256: "43".repeat(32),
+        compiler_identity: "44".repeat(32),
+        wire_schema: file("roles/app/schema.json", b"{}"),
+        javascript: file("roles/app/bindings.js", b"export const fixture = 1;"),
+        typescript: file(
+            "roles/app/bindings.d.ts",
+            b"export declare const fixture: number;",
+        ),
+        modules: vec![file("roles/app/package.json", br#"{"type":"module"}"#)],
+    };
+    let mut manifest = FrontendManifestRecord {
+        schema_version: 1,
+        manifest_sha256: String::new(),
+        generator: "fixture".into(),
+        app: "fixture".into(),
+        fleet: "fixture".into(),
         fleet_id: "41".repeat(32),
         source_plan_sha256: "42".repeat(32),
-        network: CanonicalNetworkId::ic_mainnet(),
-        admission_nonempty: true,
-        admission_origin: Some(configuration.identity.derivation_origin.clone()),
-        entries: vec![crate::registry::RegistryEntry {
-            pid: configuration.roles[0].canister_id.to_text(),
-            role: Some(role.to_string()),
-            parent_pid: None,
-            module_hash: Some("43".repeat(32)),
-            protocol_binding: Some(crate::protocol_binding::RegistryProtocolBinding {
-                release_identity: "fixture-release".to_string(),
-                role,
-                capabilities,
-                candid_sha256: hashes.candid_sha256,
-                protocol_profile_digest: hashes.protocol_profile_digest,
-            }),
-        }],
+        environment: configuration.environment,
+        canonical_network_id: configuration.canonical_network_id,
+        api_origin: configuration.api_origin,
+        local_root_key_der_hex: None,
+        identity: configuration.identity,
+        asset: configuration.asset,
+        roles: vec![role],
+        alternative_origins: file(
+            ".well-known/ii-alternative-origins",
+            br#"{"alternativeOrigins":["https://app.example.com"]}"#,
+        ),
     };
-    ops::prepare_bundle(root, &configuration, authority).unwrap()
+    manifest.manifest_sha256 = ops::manifest_digest(&manifest).unwrap();
+    super::view::FrontendBundleView { manifest, files }
 }
 
 #[test]
@@ -278,7 +262,7 @@ fn tampered_files_and_conflicting_publication_do_not_replace_browser_assets() {
 fn invalid_prepared_bundle_never_publishes_a_manifest() {
     let root = temp_dir("frontend-invalid-prepared");
     let mut bundle = prepared_bundle(&root);
-    bundle.manifest.roles[0].candid.path = "../outside.did".to_string();
+    bundle.manifest.roles[0].wire_schema.path = "../outside.json".to_string();
     bundle.manifest.manifest_sha256 = ops::manifest_digest(&bundle.manifest).unwrap();
     let destination = root.join("browser");
     assert!(matches!(
@@ -533,8 +517,8 @@ fn prepared_and_published_bundles_share_manifest_rejections() {
         match case {
             0 => manifest.schema_version = 0,
             1 => manifest.roles.clear(),
-            2 => manifest.roles[0].javascript.path = manifest.roles[0].candid.path.clone(),
-            3 => manifest.roles[0].candid.sha256 = "00".repeat(32),
+            2 => manifest.roles[0].javascript.path = manifest.roles[0].wire_schema.path.clone(),
+            3 => manifest.roles[0].wire_schema.sha256 = "00".repeat(32),
             _ => unreachable!(),
         }
         manifest.manifest_sha256 = ops::manifest_digest(&manifest).unwrap();

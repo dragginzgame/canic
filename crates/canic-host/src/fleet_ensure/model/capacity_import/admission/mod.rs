@@ -30,7 +30,7 @@ pub enum CapacityImportInfrastructureKind {
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportAdmissionRecord {
     pub infrastructure: Vec<CapacityImportInfrastructureRecord>,
-    pub registry_candid_hex: String,
+    pub registry_wire_hex: String,
     pub declarations_toml: String,
     pub declarations_sha256: [u8; 32],
 }

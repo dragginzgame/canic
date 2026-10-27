@@ -10,6 +10,7 @@ pub mod diagnostics;
 pub mod dto;
 pub mod ids;
 pub mod log;
+pub mod ops;
 pub mod protocol;
 pub mod serialization;
 pub mod values;

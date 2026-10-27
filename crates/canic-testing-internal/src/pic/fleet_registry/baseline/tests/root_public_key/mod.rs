@@ -4,35 +4,31 @@
 
 use super::*;
 use canic::dto::auth::RootChainKeyPublicKeyRequest;
-
-use canic_contracts::dto::wire::projection::fixture_baseline_root_public_key::Command;
-
-use canic_contracts::dto::wire::projection::fixture_baseline_root_public_key::Response;
+use canic_contracts::protocol::issuer_control::{self, public_key};
 
 pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
-    let key = |caller, path: Vec<Vec<u8>>| {
-        (|| -> Result<(Result<Response, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::GetChainKeyPublicKey(RootChainKeyPublicKeyRequest {
-                    key_id: "key_1".into(),
-                    derivation_path: path,
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    caller,
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Root public-key command transport")
+    let key = |caller, path: Vec<Vec<u8>>| -> Result<Vec<u8>, Error> {
+        let request = RootChainKeyPublicKeyRequest {
+            key_id: "key_1".into(),
+            derivation_path: path,
+        };
+        let bytes = ic_wire::native::encode_request(
+            public_key::METHOD_ID,
+            &request,
+            issuer_control::REQUEST_LIMITS,
+        )
+        .unwrap();
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            pic.update_call(root, caller, public_key::METHOD, bytes)
+        })
+        .unwrap()
+        .unwrap();
+        ic_wire::native::decode_response(
+            public_key::METHOD_ID,
+            &reply,
+            issuer_control::RESPONSE_LIMITS,
+        )
+        .unwrap()
     };
     let outsider = Principal::self_authenticating(b"uncontrolled public-key requester");
     let Err(rejected) = key(outsider, vec![b"canic".to_vec()]) else {
@@ -43,7 +39,7 @@ pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
         Error::from(canic_core::access::AccessError::ControllerRequired).code()
     );
     let path = vec![b"canic".to_vec(), b"delegation".to_vec()];
-    let Response::GetChainKeyPublicKey(first) = key(Principal::anonymous(), path.clone()).unwrap();
+    let first = key(Principal::anonymous(), path.clone()).unwrap();
     let source = format!(
         r#"
 [app]
@@ -81,9 +77,8 @@ max_revocation_latency_ns = 60000000000
     );
     assert_eq!(first.len(), 33, "compressed secp256k1 public key");
     assert!(matches!(first[0], 2 | 3));
-    let Response::GetChainKeyPublicKey(replay) = key(Principal::anonymous(), path).unwrap();
+    let replay = key(Principal::anonymous(), path).unwrap();
     assert_eq!(first, replay);
-    let Response::GetChainKeyPublicKey(other_path) =
-        key(Principal::anonymous(), vec![b"other".to_vec()]).unwrap();
+    let other_path = key(Principal::anonymous(), vec![b"other".to_vec()]).unwrap();
     assert_ne!(first, other_path);
 }

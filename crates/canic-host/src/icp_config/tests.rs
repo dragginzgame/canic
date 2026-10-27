@@ -292,7 +292,7 @@ fn nested_commands_discover_outer_project_root_with_apps() {
 }
 
 #[test]
-fn outer_project_root_wins_over_nested_apps() {
+fn nearest_app_root_discovery_ignores_enclosing_icp_config() {
     let root = temp_dir("canic-icp-root-outer-wins");
     let outer_config = root.join("apps/toko/canic.toml");
     let nested_config = root.join("services/apps/toko/canic.toml");
@@ -310,7 +310,12 @@ fn outer_project_root_wins_over_nested_apps() {
         .expect("discover project root")
         .expect("project root is present");
 
-    assert_eq!(icp_root, root.canonicalize().expect("canonical root"));
+    assert_eq!(
+        icp_root,
+        root.join("services")
+            .canonicalize()
+            .expect("canonical config root")
+    );
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 

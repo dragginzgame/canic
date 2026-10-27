@@ -14,7 +14,7 @@ use canic_core::control_plane_support::{
     error::InternalError,
     ops::ic::{
         IcOps,
-        cycles_ledger::{CyclesLedgerOps, CyclesLedgerTransferError},
+        cycles_ledger::{CyclesLedgerOps, TransferError},
     },
 };
 
@@ -65,10 +65,10 @@ pub(super) async fn evacuate(
         };
         let block = match response {
             Ok(block)
-            | Err(CyclesLedgerTransferError::Duplicate {
+            | Err(TransferError::Duplicate {
                 duplicate_of: block,
             }) => block,
-            Err(CyclesLedgerTransferError::TemporarilyUnavailable) => {
+            Err(TransferError::TemporarilyUnavailable) => {
                 return Err(InternalError::unavailable());
             }
             Err(_) => return Err(InternalError::conflict()),

@@ -112,7 +112,6 @@ use canic_core::{
     ids::IntentId,
     role_contract::ProtocolProfileDigest,
 };
-use ic_platform::candid::contract::CandidType;
 use root_retirement::{
     root_store_binding_finalization_hash, root_store_deletion_hash, root_store_reclamation_hash,
 };
@@ -216,8 +215,7 @@ pub struct RootFleetSubnetFinalInventoryPlan {
     pub root_registry_encoded_bytes: u64,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootTerminalComponentHistoryHashEntry {
     allocation_sequence: u64,
     component: ComponentInstanceId,
@@ -226,8 +224,7 @@ struct RootTerminalComponentHistoryHashEntry {
     membership_removal_hash: [u8; 32],
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentInitialInventoryHashEntry {
     operation_id: [u8; 32],
     allocation_sequence: u64,
@@ -248,8 +245,7 @@ struct RootComponentInitialInventoryHashEntry {
     active_directory_authority_hash: [u8; 32],
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentFinalInventoryHashAuthority {
     binding: ComponentBinding,
     provisioning_origin: ComponentProvisioningOrigin,
@@ -267,8 +263,7 @@ struct RootComponentFinalInventoryHashAuthority {
     finalized_at_ns: u64,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentMembershipRemovalHashAuthority {
     operation_id: [u8; 32],
     component: ComponentInstanceId,
@@ -1807,7 +1802,7 @@ const fn removed_component_membership_receipt(
 fn terminal_component_history_hash(
     entries: &[RootTerminalComponentHistoryHashEntry],
 ) -> Result<[u8; 32], InternalError> {
-    let payload = ic_platform::candid::contract::encode_one(entries)
+    let payload = canic_contracts::protocol::authority::encode(entries)
         .map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(
         ROOT_TERMINAL_COMPONENT_HISTORY_HASH_DOMAIN,
@@ -5294,7 +5289,7 @@ fn component_membership_removal_hash(
     receipt: &RootComponentMembershipRemovedRecord,
 ) -> Result<[u8; 32], InternalError> {
     let payload =
-        ic_platform::candid::contract::encode_one(RootComponentMembershipRemovalHashAuthority {
+        canic_contracts::protocol::authority::encode(RootComponentMembershipRemovalHashAuthority {
             operation_id: draining.operation_id,
             component: draining.component,
             final_inventory_hash: receipt.deleted.deletion.final_inventory.inventory_hash,
@@ -6211,7 +6206,7 @@ fn component_partition_content_hash(
     committed_descendants: u32,
 ) -> Result<[u8; 32], InternalError> {
     const DOMAIN: &[u8] = b"canic.component-registry.partition.v1";
-    let payload = ic_platform::candid::contract::encode_one((
+    let payload = canic_contracts::protocol::authority::encode((
         binding.clone(),
         protocol_profile_digest,
         provisioning_origin.clone(),
@@ -6242,7 +6237,7 @@ fn component_final_inventory_hash(
     inventory: &RootComponentFinalInventoryRecord,
 ) -> Result<[u8; 32], InternalError> {
     let payload =
-        ic_platform::candid::contract::encode_one(RootComponentFinalInventoryHashAuthority {
+        canic_contracts::protocol::authority::encode(RootComponentFinalInventoryHashAuthority {
             binding: partition.binding.clone(),
             provisioning_origin: partition.provisioning_origin.clone(),
             release_set: partition.release_set,
@@ -6291,7 +6286,7 @@ fn committed_component_descendant_content_hash(
     if previous == [0; 32] || child.status != ComponentLifecycleStatus::Prepared {
         return Err(InternalError::invariant());
     }
-    let payload = ic_platform::candid::contract::encode_one((
+    let payload = canic_contracts::protocol::authority::encode((
         previous,
         previous_committed_descendants,
         revision,
@@ -6325,7 +6320,7 @@ fn activated_component_descendant_content_hash(
     {
         return Err(InternalError::invariant());
     }
-    let payload = ic_platform::candid::contract::encode_one((
+    let payload = canic_contracts::protocol::authority::encode((
         previous,
         previous_revision,
         revision,
@@ -6367,7 +6362,7 @@ fn removed_component_descendant_content_hash(
     if previous_committed_descendants == 1 {
         return Ok(empty_component_descendant_content_hash(component));
     }
-    let payload = ic_platform::candid::contract::encode_one((
+    let payload = canic_contracts::protocol::authority::encode((
         previous,
         previous_revision,
         previous_committed_descendants,

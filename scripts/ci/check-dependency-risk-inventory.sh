@@ -114,16 +114,21 @@ if ! diff -u "$expected" "$actual" >/dev/null; then
     warn "informational advisory inventory changed; review additions, removals, and package identities"
 fi
 
-while IFS=$'\t' read -r _advisory_id kind package _version _checksum; do
+while IFS=$'\t' read -r advisory_id kind package version checksum; do
     [ -n "$package" ] || continue
     [ "$kind" = "unmaintained" ] ||
         fail "$package has blocking cargo-audit warning kind $kind"
     if rg -x -F "$package" "$direct_dependencies" >/dev/null; then
-        fail "$package is an unmaintained direct workspace dependency"
+        awk -F '\t' -v advisory="$advisory_id" -v kind="$kind" \
+            -v package="$package" -v version="$version" -v checksum="$checksum" '
+            $1 == advisory && $2 == kind && $3 == package && $4 == version &&
+                $5 == checksum && $7 == "approved-direct" { approved = 1 }
+            END { exit !approved }
+        ' "$INVENTORY" || fail "$package is an unmaintained direct workspace dependency without an exact approval"
     fi
 done <"$actual"
 
-while IFS=$'\t' read -r advisory_id kind package version _checksum introducers; do
+while IFS=$'\t' read -r advisory_id kind package version _checksum introducers _direct_use; do
     case "$advisory_id" in
     '' | \#*) continue ;;
     esac
@@ -158,4 +163,4 @@ while IFS=$'\t' read -r advisory_id kind package version _checksum introducers; 
 done <"$INVENTORY"
 
 warning_count="$(wc -l <"$actual")"
-echo "dependency risk gate passed: zero vulnerabilities; $warning_count transitive warning(s) reviewed"
+echo "dependency risk gate passed: zero vulnerabilities; $warning_count informational warning(s) reviewed"

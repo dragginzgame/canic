@@ -13,12 +13,6 @@ use canic_contracts::{
             FleetRegistry, FleetSubnetRootSnapshotAcknowledgement,
             FleetSubnetRootSnapshotAcknowledgementRequest,
         },
-        role::OperationStatusRequest,
-        wire::projection::coordinator_client::{
-            CoordinatorCommandFragment, CoordinatorCommandResponseFragment,
-            CoordinatorOperationStatusFragment, CoordinatorStatusRequestFragment,
-            CoordinatorStatusResponseFragment,
-        },
     },
     protocol,
 };
@@ -26,81 +20,108 @@ use canic_core::control_plane_support::{error::InternalError, ops::ic::call::Cal
 use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) async fn registry(coordinator: Principal) -> Result<FleetRegistry, InternalError> {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_REGISTRY)
-        .with_arg(CoordinatorStatusRequestFragment::Registry)?
-        .execute()
-        .await?;
-    let result: Result<CoordinatorStatusResponseFragment, Error> = call.candid()?;
-    match result.map_err(InternalError::observed_public)? {
-        CoordinatorStatusResponseFragment::Registry(registry) => Ok(*registry),
-        CoordinatorStatusResponseFragment::Operation(_) => Err(InternalError::conflict()),
-    }
+    let wire = protocol::registry_discovery::snapshot::METHOD_ID;
+    let bytes =
+        ic_wire::native::encode_request(wire, &(), protocol::registry_discovery::REQUEST_LIMITS)
+            .map_err(|_| InternalError::invariant())?;
+    let reply =
+        CallOps::unbounded_wait(coordinator, protocol::registry_discovery::snapshot::METHOD)
+            .with_raw_args(bytes)
+            .execute()
+            .await?
+            .into_bytes();
+    let response: Result<canic_contracts::dto::fleet_snapshot::FleetRegistry, Error> =
+        ic_wire::native::decode_response(
+            wire,
+            &reply,
+            protocol::registry_discovery::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+    response
+        .map(Into::into)
+        .map_err(InternalError::observed_public)
 }
 
 pub(super) async fn root_removal_status(
     coordinator: Principal,
     operation_id: [u8; 32],
 ) -> Result<CoordinatorRootRemovalOperationStatus, InternalError> {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_OPERATION_STATUS)
-        .with_arg(CoordinatorStatusRequestFragment::Operation(
-            OperationStatusRequest { operation_id },
-        ))?
+    use canic_contracts::{dto::retirement_control, protocol::retirement_control as wire};
+    let bytes = ic_wire::native::encode_request(
+        wire::removal_status::METHOD_ID,
+        &operation_id,
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::unbounded_wait(coordinator, wire::removal_status::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let result: Result<CoordinatorStatusResponseFragment, Error> = call.candid()?;
-    match result.map_err(InternalError::observed_public)? {
-        CoordinatorStatusResponseFragment::Operation(status) => match *status {
-            CoordinatorOperationStatusFragment::RootRemoval(status)
-                if status.operation_id == operation_id =>
-            {
-                Ok(status)
-            }
-            CoordinatorOperationStatusFragment::RootRemoval(_) => Err(InternalError::conflict()),
-        },
-        CoordinatorStatusResponseFragment::Registry(_) => Err(InternalError::conflict()),
+        .await?
+        .into_bytes();
+    let response: Result<retirement_control::RemovalStatus, Error> =
+        ic_wire::native::decode_response(
+            wire::removal_status::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+    let status = response.map_err(InternalError::observed_public)?;
+    if status.operation_id != operation_id {
+        return Err(InternalError::conflict());
     }
+    Ok(status.into())
 }
 
 pub(super) async fn acknowledge_root_snapshot(
     coordinator: Principal,
     request: FleetSubnetRootSnapshotAcknowledgementRequest,
 ) -> Result<FleetSubnetRootSnapshotAcknowledgement, InternalError> {
-    match call(
-        coordinator,
-        CoordinatorCommandFragment::AcknowledgeRootSnapshot(request),
+    use canic_contracts::{
+        dto::coordinator_acknowledgements, protocol::coordinator_acknowledgements as wire,
+    };
+    let bytes = ic_wire::native::encode_request(
+        wire::acknowledge::METHOD_ID,
+        &coordinator_acknowledgements::AcknowledgeRequest::from(request),
+        wire::acknowledge::REQUEST_LIMITS,
     )
-    .await?
-    {
-        CoordinatorCommandResponseFragment::AcknowledgeRootSnapshot(response) => Ok(response),
-        CoordinatorCommandResponseFragment::RequestRootFunding(_) => Err(InternalError::conflict()),
-    }
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::unbounded_wait(coordinator, wire::acknowledge::METHOD)
+        .with_raw_args(bytes)
+        .execute()
+        .await?
+        .into_bytes();
+    let response: Result<coordinator_acknowledgements::RootAcknowledgement, Error> =
+        ic_wire::native::decode_response(
+            wire::acknowledge::METHOD_ID,
+            &reply,
+            wire::RESPONSE_LIMITS,
+        )
+        .map_err(|_| InternalError::invariant())?;
+    response
+        .map(Into::into)
+        .map_err(InternalError::observed_public)
 }
 
 pub(super) async fn request_root_funding(
     coordinator: Principal,
     request: FleetRootFundingRequest,
 ) -> Result<FleetRootFundingResponse, InternalError> {
-    let call = CallOps::bounded_wait(coordinator, protocol::CANIC_COORDINATOR_COMMAND)
-        .with_arg(CoordinatorCommandFragment::RequestRootFunding(request))?
+    use canic_contracts::{dto::funding_control, protocol::funding_control as wire};
+    let bytes = ic_wire::native::encode_request(
+        wire::request::METHOD_ID,
+        &funding_control::Request::from(request),
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = CallOps::bounded_wait(coordinator, wire::request::METHOD)
+        .with_raw_args(bytes)
         .execute()
-        .await?;
-    let result: Result<CoordinatorCommandResponseFragment, Error> = call.candid()?;
-    match result.map_err(InternalError::observed_public)? {
-        CoordinatorCommandResponseFragment::RequestRootFunding(response) => Ok(response),
-        CoordinatorCommandResponseFragment::AcknowledgeRootSnapshot(_) => {
-            Err(InternalError::conflict())
-        }
-    }
-}
-
-async fn call(
-    coordinator: Principal,
-    command: CoordinatorCommandFragment,
-) -> Result<CoordinatorCommandResponseFragment, InternalError> {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_COMMAND)
-        .with_arg(command)?
-        .execute()
-        .await?;
-    let result: Result<CoordinatorCommandResponseFragment, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
+        .await?
+        .into_bytes();
+    let response: Result<funding_control::Response, Error> =
+        ic_wire::native::decode_response(wire::request::METHOD_ID, &reply, wire::RESPONSE_LIMITS)
+            .map_err(|_| InternalError::invariant())?;
+    response
+        .map(Into::into)
+        .map_err(InternalError::observed_public)
 }

@@ -19,7 +19,7 @@ use canic_contracts::dto::{
     fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
 };
 use canic_core::control_plane_support::error::InternalError;
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -524,12 +524,12 @@ fn validate_root_deletion_execution_request(
     Ok(())
 }
 
-fn response_hash<T: CandidType + Serialize>(
+fn response_hash<T: Serialize>(
     domain: &[u8],
     response_with_zero_hash: &T,
     _label: &str,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = ic_platform::candid::contract::encode_one(response_with_zero_hash)
+    let payload = canic_contracts::protocol::authority::encode(response_with_zero_hash)
         .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(domain);

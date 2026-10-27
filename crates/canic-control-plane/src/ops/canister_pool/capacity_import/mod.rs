@@ -71,7 +71,7 @@ impl CanisterPoolImportOps {
     pub fn authority_hash(
         binding: &canic_contracts::ids::FleetSubnetRootBinding,
     ) -> Result<[u8; 32], InternalError> {
-        let bytes = ic_platform::candid::contract::encode_one(binding)
+        let bytes = canic_contracts::protocol::authority::encode(binding)
             .map_err(|_| InternalError::invariant())?;
         let mut hash = Sha256::new();
         hash.update(b"canic:capacity-import:root-authority:v1\0");
@@ -127,7 +127,7 @@ impl CanisterPoolImportOps {
             canister_id,
         )
         .await?;
-        if response.canister_id != canister_id {
+        if response.canister_id != canister_id.into() {
             return Err(InternalError::conflict());
         }
         history::decode(canister_id, &response.history_candid)

@@ -344,6 +344,7 @@ fn plan_scaffold_app_at(
         app_dir.join("Cargo.toml"),
         app_dir.join("build.rs"),
         app_dir.join("src/lib.rs"),
+        app_dir.join("examples/wire_schema/main.rs"),
     ];
 
     validate_workspace_member_update(
@@ -385,6 +386,7 @@ fn scaffold_app_at(
         )?;
         write_new_file(&result.app_dir.join("build.rs"), APP_BUILD_RS)?;
         write_new_file(&app_src_dir.join("lib.rs"), APP_LIB_RS)?;
+        write_schema_example(&result.app_dir, &format!("canister_{}_app", options.name))?;
         append_workspace_member(
             workspace_root,
             &display_workspace_path(workspace_root, &result.app_dir),
@@ -475,6 +477,7 @@ fn scaffold_canister_at(
         )?;
         write_new_file(&plan.canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
         write_new_file(&src_dir.join("lib.rs"), CANISTER_LIB_RS)?;
+        write_schema_example(&plan.canister_dir, &plan.result.package_name)?;
         append_workspace_member(workspace_root, &plan.workspace_member)?;
         declare_app_role(
             &plan.config_path,
@@ -853,7 +856,8 @@ fn render_canister_scaffold_plan(plan: &CanisterScaffoldPlan) -> String {
         format!("  config: {}", plan.result.config_path.display()),
         format!("  workspace_member: {}", plan.workspace_member),
         format!("  would_write_workspace: {workspace}"),
-        "  would_write_role_files: Cargo.toml, build.rs, src/lib.rs".to_string(),
+        "  would_write_role_files: Cargo.toml, build.rs, src/lib.rs, examples/wire_schema/main.rs"
+            .to_string(),
     ];
     append_dry_run_footer(&mut lines);
     lines.join("\n")
@@ -953,6 +957,16 @@ fn write_new_file(path: &Path, contents: &str) -> Result<(), ScaffoldCommandErro
     fs::write(path, contents).map_err(ScaffoldCommandError::from)
 }
 
+fn write_schema_example(directory: &Path, package: &str) -> Result<(), ScaffoldCommandError> {
+    let crate_name = package.replace('-', "_");
+    write_new_file(
+        &directory.join("examples/wire_schema/main.rs"),
+        &format!(
+            "//! Native schema producer for this application.\n\nuse {crate_name} as _;\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {{\n    canic::endpoint::schema::producer::run()\n}}\n"
+        ),
+    )
+}
+
 fn canister_cargo_toml(app: &str, role: &str) -> String {
     let canic_version = env!("CARGO_PKG_VERSION");
     let package_name = canister_package_name(app, role);
@@ -969,7 +983,14 @@ app = "{app}"
 role = "{role}"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [dependencies]
 # Add runtime Canic features here when canic.toml enables auth settings.
@@ -1023,7 +1044,14 @@ app = "{name}"
 role = "app"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [dependencies]
 # Add runtime Canic features here when canic.toml enables auth settings.

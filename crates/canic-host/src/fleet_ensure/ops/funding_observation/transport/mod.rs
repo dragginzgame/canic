@@ -7,7 +7,6 @@
 mod tests;
 
 use crate::{
-    canister_protocol::call_with_candid,
     fleet_ensure::{
         model::{
             CanisterRuntimeStatus, FleetEnsurePlan, MAX_FLEET_ENSURE_CANISTERS,
@@ -27,17 +26,10 @@ use crate::{
     },
     release_set::AppConfigSnapshot,
 };
-use canic_contracts::{
-    dto::{
-        canister::{CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType},
-        observability::{
-            CanisterObservabilityRequest, CanisterObservabilityResponse,
-            FleetCanisterObservabilityRequest,
-        },
-        pool::CanisterPoolAssetStatus,
-        wire::projection::funding_observation::{Command, Response},
-    },
-    protocol,
+use canic_contracts::dto::{
+    canister::{CanisterStatusResponse, CanisterStatusType},
+    observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
+    pool::CanisterPoolAssetStatus,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -63,28 +55,20 @@ impl FundingObservationPlatform for IcpEnsurePlatform {
         let root_id = principal(desired, root_name)?;
         qualify_owner(self, desired, &bootstrap.coordinator, &catalog.coordinator)?;
         let balance = qualify_owner(self, desired, root_name, &catalog.root)?;
-        let registry = registry::observe(
-            &self.icp,
-            &catalog.coordinator.candid_path,
-            coordinator,
-            config.component_topology(),
-        )
-        .map_err(unavailable)?;
-        let summary =
-            registry::observe_root(&self.icp, &catalog.root.candid_path, root_id, &registry)
-                .map_err(unavailable)?;
+        let registry = registry::observe(&self.icp, coordinator, config.component_topology())
+            .map_err(unavailable)?;
+        let summary = registry::observe_root(&self.icp, root_id, &registry).map_err(unavailable)?;
         let placement = registry
             .roots
             .get(&root_id)
             .ok_or(FundingObservationError::AuthorityMismatch)?;
-        let children = children(self, desired, root_name, root_id, &catalog.root, &registry)?;
+        let children = children(self, desired, root_name, root_id, &registry)?;
         let bindings = children
             .iter()
             .filter_map(|child| child.binding.as_ref())
             .collect::<Vec<_>>();
         let evidence = inventory::observe(
             &self.icp,
-            &catalog.root.candid_path,
             root_id,
             placement,
             config.component_topology(),
@@ -92,16 +76,20 @@ impl FundingObservationPlatform for IcpEnsurePlatform {
             &bindings,
         )
         .map_err(unavailable)?;
-        let coverage = inventory::recheck(&self.icp, &catalog.root.candid_path, root_id, &evidence)
-            .map_err(unavailable)?;
-        if registry::observe_root(&self.icp, &catalog.root.candid_path, root_id, &registry)
-            .map_err(unavailable)?
-            != summary
-        {
+        let coverage = inventory::recheck(&self.icp, root_id, &evidence).map_err(unavailable)?;
+        if registry::observe_root(&self.icp, root_id, &registry).map_err(unavailable)? != summary {
             return Err(FundingObservationError::AuthorityMismatch.into());
         }
-        registry::recheck(&self.icp, &catalog.coordinator.candid_path, &registry)
-            .map_err(unavailable)?;
+        let schema = crate::release_set::load_built_wire_schema(
+            &self.root,
+            bootstrap.release_build_id,
+            "fleet_coordinator",
+        )
+        .map_err(|_| FundingObservationError::AuthorityMismatch)?;
+        if schema.wasm_sha256 != catalog.coordinator.raw_module_hash {
+            return Err(FundingObservationError::AuthorityMismatch.into());
+        }
+        registry::recheck(&self.icp, &schema, &registry).map_err(unavailable)?;
         Ok(FundingObservationSnapshot {
             configuration_source: config.source().to_owned(),
             authority: FundingObservationAuthorityRecord {
@@ -137,19 +125,11 @@ impl FundingObservationPlatform for IcpEnsurePlatform {
         require_plan(self, plan)?;
         let (_, catalog) = catalog(self)?;
         let root = request.component.fleet_subnet_root;
-        let path = &catalog.root.candid_path;
         // Native inspection precedes a ledger relay and qualifies exact installed code/controllers.
         // A failure consumes the whole attempt; neither call is retried here.
-        let response: Response = call_with_candid(
-            &self.icp,
-            path,
-            root,
-            protocol::CANIC_ROOT_COMMAND,
-            &Command::InspectCanister(CanisterInspectionRequest {
-                canister_id: request.child,
-            }),
-        )
-        .map_err(crate::fleet_ensure::ops::current_protocol::CurrentProtocolError::from)?;
+        let response =
+            crate::canister_protocol::inspection::inspect_outcome(&self.icp, root, request.child)
+                .map_err(crate::fleet_ensure::ops::current_protocol::CurrentProtocolError::from)?;
         let status = inspection_response(response, root, request.child)?;
         let entry = catalog
             .child(&request.role)
@@ -159,9 +139,7 @@ impl FundingObservationPlatform for IcpEnsurePlatform {
         observed_controllers.sort_unstable();
         if status.status != CanisterStatusType::Running
             || observed_controllers != request.component.authority.binding.root_controllers(root)
-            || !hash.as_ref().is_some_and(|hash| {
-                hash == &entry.raw_module_hash || hash == &entry.installed_module_hash
-            })
+            || hash.as_ref() != Some(&entry.raw_module_hash)
         {
             return Err(FundingObservationError::AuthorityMismatch.into());
         }
@@ -180,24 +158,37 @@ impl FundingObservationPlatform for IcpEnsurePlatform {
         require_plan(self, plan)?;
         let (_, catalog) = catalog(self)?;
         let root = request.component.fleet_subnet_root;
-        let path = &catalog.root.candid_path;
         let usage = if request.parent == root {
-            observation::observe_child(&self.icp, path, root, request.child).map_err(unavailable)?
+            observation::observe_child(&self.icp, root, request.child).map_err(unavailable)?
         } else {
-            let response: Response = call_with_candid(
+            let release = self
+                .desired
+                .bootstrap
+                .as_ref()
+                .ok_or(FundingObservationError::Unavailable)?
+                .release_build_id;
+            let root_entry = crate::registry::RegistryEntry {
+                pid: root.to_text(),
+                role: Some(catalog.root.binding.role.to_string()),
+                parent_pid: None,
+                module_hash: Some(catalog.root.raw_module_hash.clone()),
+                protocol_binding: Some(catalog.root.binding),
+            };
+            let schema = crate::protocol_binding::resolve_release_registry_wire_schema(
+                &self.root,
+                release,
+                &root_entry,
+            )
+            .map_err(|_| FundingObservationError::AuthorityMismatch)?;
+            let response = crate::observability::relay::observe(
                 &self.icp,
-                path,
+                &schema,
                 root,
-                protocol::CANIC_ROOT_COMMAND,
-                &Command::ObserveCanister(FleetCanisterObservabilityRequest {
-                    canister_id: request.parent,
-                    request: CanisterObservabilityRequest::ChildFunding(request.child),
-                }),
+                request.parent,
+                CanisterObservabilityRequest::ChildFunding(request.child),
             )
             .map_err(crate::fleet_ensure::ops::current_protocol::CurrentProtocolError::from)?;
-            let Response::ObserveCanister(CanisterObservabilityResponse::ChildFunding(value)) =
-                response
-            else {
+            let CanisterObservabilityResponse::ChildFunding(value) = response else {
                 return Err(FundingObservationError::AuthorityMismatch.into());
             };
             observation::project_child(value, request.parent, request.child).map_err(unavailable)?
@@ -266,9 +257,7 @@ fn qualify_owner(
     controllers.sort();
     if observed.controllers != controllers
         || observed.status != CanisterRuntimeStatus::Running
-        || !observed.module_sha256.as_ref().is_some_and(|hash| {
-            hash == &protocol.raw_module_hash || hash == &protocol.installed_module_hash
-        })
+        || observed.module_sha256.as_ref() != Some(&protocol.raw_module_hash)
     {
         return Err(FundingObservationError::AuthorityMismatch.into());
     }
@@ -304,9 +293,9 @@ fn catalog(
         &config_path,
         &config,
         bootstrap.release_build_id,
-        &platform.root.join(&protocol.coordinator_candid),
-        &platform.root.join(&protocol.root_candid),
-        &platform.root.join(&protocol.store_candid),
+        &platform.root.join(&protocol.coordinator_wire_schema),
+        &platform.root.join(&protocol.root_wire_schema),
+        &platform.root.join(&protocol.store_wire_schema),
     )?;
     Ok((config, catalog))
 }
@@ -316,7 +305,6 @@ fn children(
     desired: &crate::fleet_ensure::model::DesiredFleet,
     root_name: &str,
     root: Principal,
-    protocol: &ProtocolEntry,
     registry: &StartupFundingRegistry,
 ) -> Result<Vec<StartupChildFundingUsage>, IcpEnsurePlatformError> {
     let mut cursor = None;
@@ -331,14 +319,8 @@ fn children(
             if !matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }) {
                 continue;
             }
-            let binding = binding::observe(
-                &platform.icp,
-                &protocol.candid_path,
-                root,
-                entry.canister_id,
-                &entry.status,
-            )
-            .map_err(unavailable)?;
+            let binding = binding::observe(&platform.icp, root, entry.canister_id, &entry.status)
+                .map_err(unavailable)?;
             live_binding::current(desired, root_name, &binding, registry).map_err(unavailable)?;
             children.push(StartupChildFundingUsage {
                 allowance: Err(StartupUsageUnavailable::NotObserved),
@@ -362,19 +344,21 @@ fn children(
 }
 
 fn inspection_response(
-    response: Response,
+    response: canic_contracts::dto::canister::CanisterInspectionOutcome,
     root: Principal,
     child: Principal,
 ) -> Result<Box<CanisterStatusResponse>, FundingObservationError> {
     match response {
-        Response::InspectCanister(status) => Ok(status),
-        Response::InspectionReserveRequired(evidence)
+        canic_contracts::dto::canister::CanisterInspectionOutcome::Status(status) => Ok(status),
+        canic_contracts::dto::canister::CanisterInspectionOutcome::ReserveRequired(evidence)
             if evidence.caller == root
                 && evidence.canister_id == child
                 && evidence.available_liquid_cycles <= evidence.native_cycles =>
         {
             Err(FundingObservationError::Underfunded)
         }
-        _ => Err(FundingObservationError::AuthorityMismatch),
+        canic_contracts::dto::canister::CanisterInspectionOutcome::ReserveRequired(_) => {
+            Err(FundingObservationError::AuthorityMismatch)
+        }
     }
 }

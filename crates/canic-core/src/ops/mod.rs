@@ -11,6 +11,7 @@
 //!
 //! The use of `*Ops` types does **not** imply ownership of state or additional
 //! abstraction; they are zero-cost namespaces over free functions.
+pub mod application_checkpoint;
 
 mod access;
 pub mod auth;
@@ -49,7 +50,6 @@ use thiserror::Error as ThisError;
 pub mod prelude {
     pub use crate::{cdk::types::Principal, log, log::Topic};
     pub use canic_contracts::{cycles::Cycles, ids::CanisterRole};
-    pub use ic_platform::candid::contract::CandidType;
 }
 
 ///
@@ -104,3 +104,5 @@ impl From<OpsError> for InternalError {
         }
     }
 }
+
+pub mod observability_relay;

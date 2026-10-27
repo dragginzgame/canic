@@ -7,131 +7,27 @@
 use crate::{
     cycles::Cycles,
     dto::{
-        authority_restore::{AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest},
-        component_provisioning::{
-            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
-        },
-        fleet_admission::{
-            FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
-            FleetAdmissionOperationStatusResponse, FleetAdmissionStatusRequest,
-            FleetAdmissionStatusResponse,
-        },
         fleet_funding::{
-            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
-            FleetFundingPolicyRotationReceipt, FleetFundingPolicyRotationStageRootRequest,
-            FleetRootFundingRequest, FleetRootFundingResponse,
+            FleetFundingPolicyRotationReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
         },
         fleet_registry::{
-            FleetRegistryActivationRequest, FleetRegistryActivationResponse, FleetRegistryManifest,
-            FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
-            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
+            FleetRegistryVersion, FleetSubnetRootDeletionExecutionResponse,
             FleetSubnetRootDeletionReadinessIntentResponse,
             FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
-            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootDrainingReservationRequest,
-            FleetSubnetRootDrainingReservationResponse, FleetSubnetRootJoinRequest,
-            FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationResponse,
-            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootRemovalPublicationResponse,
         },
-        role::{OperationReceipt, OperationStatusRequest},
-        state::{SetCyclesFundingRequest, SetStateResponse},
     },
     ids::{FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingPolicy},
 };
-use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
-///
-/// FleetCoordinatorInitArgs
-///
-/// Exact authority and compiled provisioning configuration installed into a fresh Coordinator.
-///
-
-/// Closed controller command union for the Fleet Coordinator.
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorCommand {
-    AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgementRequest),
-    ActivateRegistry(FleetRegistryActivationRequest),
-    ApplyFundingPolicyRotation(FleetFundingPolicyRotationApplyRequest),
-    BeginFundingPolicyRotation(FleetFundingPolicyRotationBeginRequest),
-    CompleteRootDeletion(FleetSubnetRootDeletionCompletionRequest),
-    JoinRoot(FleetSubnetRootJoinRequest),
-    MutateAdmission(FleetAdmissionMutationRequest),
-    PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
-    PrepareRootDeletionExecution(FleetSubnetRootDeletionExecutionRequest),
-    ProvisionComponents(FleetComponentProvisioningPrepareRequest),
-    RemoveRoot(FleetSubnetRootDrainingReservationRequest),
-    RequestRootFunding(FleetRootFundingRequest),
-    ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
-    Retire(crate::dto::fleet_registry::FleetRetirementRequest),
-    SetRootFunding(SetCyclesFundingRequest),
-    StageFundingPolicyRotationRoot(FleetFundingPolicyRotationStageRootRequest),
-}
-
-/// Closed correlated success union for Fleet Coordinator commands.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorCommandResponse {
-    AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgement),
-    ActivateRegistry(FleetRegistryActivationResponse),
-    CompleteRootDeletion(FleetSubnetRootDeletionResponse),
-    JoinRoot(FleetSubnetRootJoinResponse),
-    MutateAdmission(FleetAdmissionMutationResponse),
-    OperationAccepted(OperationReceipt),
-    PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
-    PrepareRootDeletionExecution(FleetSubnetRootDeletionExecutionResponse),
-    RequestRootFunding(FleetRootFundingResponse),
-    ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
-    Retire(crate::dto::fleet_registry::FleetRetirementStatus),
-    SetRootFunding(SetStateResponse<bool>),
-}
-
-/// Registry reads use the existing Coordinator registry-caller authority.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorRegistryRequest {
-    Registry,
-}
-
-/// Registry snapshot returned to an authorized registry caller.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorRegistryResponse {
-    Registry(crate::dto::fleet_registry::FleetRegistry),
-}
-
-/// Operation reads delegate authorization to the durable operation owner.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorOperationReadRequest {
-    Operation(OperationStatusRequest),
-}
-
-/// One durable operation result under its existing exact caller contract.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorOperationReadResponse {
-    Operation(CoordinatorOperationStatusResponse),
-}
-
-/// Coordinator diagnostics selected under one observer authorization rule.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorObservabilityRequest {
-    Admission(FleetAdmissionStatusRequest),
-    AuthorityRestore,
-    Funding,
-    RegistryManifest,
-    RegistryVersion,
-    IntentRelease(Option<crate::dto::release_intents::IntentReleaseKey>),
-    ReplayRelease(Option<[u8; 32]>),
-    RootAcknowledgements,
-}
-
 /// Current spent and reserved cycles in one exact epoch-anchored funding window.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CoordinatorFundingWindowStatusResponse {
     pub window_start_secs: u64,
     pub spent_cycles: Cycles,
@@ -139,8 +35,7 @@ pub struct CoordinatorFundingWindowStatusResponse {
 }
 
 /// Controller-only funding usage and operation state for one registered Root.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CoordinatorRootFundingStatusResponse {
     pub fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
     pub lifecycle_status: crate::dto::fleet_registry::FleetSubnetRootStatus,
@@ -157,8 +52,7 @@ pub struct CoordinatorRootFundingStatusResponse {
 }
 
 /// Controller-only Coordinator treasury policy, headroom and per-Root usage.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CoordinatorFundingStatusResponse {
     pub coordinator: ic_platform::principal::ExternalPrincipal,
     pub current_cycles: Cycles,
@@ -178,24 +72,8 @@ pub struct CoordinatorFundingStatusResponse {
     pub roots: Vec<CoordinatorRootFundingStatusResponse>,
 }
 
-/// Coordinator-owned durable operation detail selected by one operation ID.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the accepted Candid union keeps each existing status DTO as its direct payload"
-)]
-pub enum CoordinatorOperationStatusResponse {
-    Admission(FleetAdmissionOperationStatusResponse),
-    ComponentProvisioning(FleetComponentProvisioningStatusResponse),
-    FundingPolicyRotation(FleetFundingPolicyRotationStatusResponse),
-    Retirement(crate::dto::fleet_registry::FleetRetirementStatus),
-    RootRemoval(CoordinatorRootRemovalOperationStatus),
-}
-
 /// Protected durable phase of one Coordinator-owned policy rotation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum FleetFundingPolicyRotationStatusPhase {
     Staging {
         staged_root_count: u32,
@@ -214,8 +92,7 @@ pub enum FleetFundingPolicyRotationStatusPhase {
 }
 
 /// Controller-only status of one exact current or terminal rotation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetFundingPolicyRotationStatusResponse {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -225,8 +102,7 @@ pub struct FleetFundingPolicyRotationStatusResponse {
 }
 
 /// Coordinator-owned progress across the existing durable root-removal boundaries.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CoordinatorRootRemovalOperationStatus {
     pub operation_id: [u8; 32],
     pub reservation: FleetSubnetRootDrainingReservationResponse,
@@ -236,60 +112,4 @@ pub struct CoordinatorRootRemovalOperationStatus {
     pub readiness: Option<FleetSubnetRootDeletionReadinessResponse>,
     pub execution: Option<FleetSubnetRootDeletionExecutionResponse>,
     pub completion: Option<FleetSubnetRootDeletionResponse>,
-}
-
-/// Operational diagnostics returned only to authorized observers.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CoordinatorObservabilityResponse {
-    Admission(FleetAdmissionStatusResponse),
-    AuthorityRestore(AuthorityRestoreFenceStatusResponse),
-    Funding(CoordinatorFundingStatusResponse),
-    RegistryManifest(FleetRegistryManifest),
-    RegistryVersion(FleetRegistryVersion),
-    IntentRelease(crate::dto::release_intents::IntentReleaseResponse),
-    ReplayRelease(crate::dto::release_receipts::ReplayReleaseResponse),
-    RootAcknowledgements(Vec<FleetSubnetRootSnapshotAcknowledgement>),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ic_platform::candid::contract::{Decode, Encode};
-
-    #[test]
-    fn coordinator_status_request_is_one_closed_candid_variant() {
-        let requests = [
-            CoordinatorObservabilityRequest::Admission(FleetAdmissionStatusRequest {
-                selector: crate::ids::FleetAdmissionSelector::Fleet,
-                page: crate::dto::page::PageRequest {
-                    limit: 128,
-                    offset: 0,
-                },
-            }),
-            CoordinatorObservabilityRequest::AuthorityRestore,
-            CoordinatorObservabilityRequest::Funding,
-            CoordinatorObservabilityRequest::RegistryManifest,
-            CoordinatorObservabilityRequest::RegistryVersion,
-            CoordinatorObservabilityRequest::IntentRelease(None),
-            CoordinatorObservabilityRequest::IntentRelease(Some(
-                crate::dto::release_intents::IntentReleaseKey::Local(u64::MAX),
-            )),
-            CoordinatorObservabilityRequest::IntentRelease(Some(
-                crate::dto::release_intents::IntentReleaseKey::ReceiptBacked([0; 32]),
-            )),
-            CoordinatorObservabilityRequest::ReplayRelease(None),
-            CoordinatorObservabilityRequest::ReplayRelease(Some([7; 32])),
-            CoordinatorObservabilityRequest::RootAcknowledgements,
-        ];
-
-        for request in requests {
-            let bytes = Encode!(&request).expect("encode Coordinator status request");
-            assert_eq!(
-                Decode!(&bytes, CoordinatorObservabilityRequest)
-                    .expect("decode Coordinator status request"),
-                request
-            );
-        }
-    }
 }

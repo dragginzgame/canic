@@ -39,12 +39,17 @@ impl ObservabilityApi {
     }
 
     /// Observe one canister that independently recognizes this Root as a controller.
-    pub async fn observe_root_controlled_canister(
+    pub async fn observe_root_controlled_canister<R>(
         canister_id: Principal,
         request: CanisterObservabilityRequest,
-    ) -> Result<CanisterObservabilityResponse, Error> {
+    ) -> Result<R, Error>
+    where
+        R: TryFrom<CanisterObservabilityResponse, Error = CanisterObservabilityResponse>,
+    {
         observability::observe_root_controlled_canister(canister_id, request)
             .await
-            .map_err(Into::into)
+            .map_err(Error::from)?
+            .try_into()
+            .map_err(|_| crate::InternalError::invariant().into())
     }
 }

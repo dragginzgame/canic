@@ -8,7 +8,6 @@ use crate::ids::{
     ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
     ComponentGroupPlacementId, ComponentGroupSpecId,
 };
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 pub use crate::deployment::{
@@ -23,8 +22,7 @@ pub use crate::deployment::{
 /// Plan-derived deployment identity and policy retained by one managed Component-tree runtime.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     target_pointer_width = "64",

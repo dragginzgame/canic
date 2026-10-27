@@ -5,6 +5,10 @@
 //! recovery costs without adding a production funding surface.
 
 mod codec;
+mod ops;
+mod protocol;
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+mod schema;
 
 use ic_platform::cdk::api::canister_cycle_balance;
 use ic_platform::cdk::api::{msg_cycles_accept, msg_cycles_available};
@@ -25,8 +29,6 @@ use std::cell::RefCell;
 const ROOT_ACCEPT_METHOD: &str = "root_funding_probe_accept";
 const ROOT_ACCEPT_THEN_TRAP_METHOD: &str = "root_funding_probe_accept_then_trap";
 const COORDINATOR_HANDLE_REQUEST_METHOD: &str = "root_funding_probe_handle_request";
-const COORDINATOR_FUNDING_COMMAND_METHOD: &str = "canic_coordinator_command";
-const ROOT_FUNDING_COMMAND_METHOD: &str = "canic_root_command";
 const FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES: u64 = 16_384;
 const LEDGER_FEE_METHOD: &str = "icrc1_fee";
 const LEDGER_DECIMALS_METHOD: &str = "icrc1_decimals";
@@ -63,31 +65,43 @@ enum ProbeRole {
     Cmc,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct GrantRequest {
     operation_id: [u8; 32],
     amount: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct GrantReceipt {
     operation_id: [u8; 32],
-    coordinator: Principal,
-    root: Principal,
+    coordinator: ic_platform::Principal,
+    root: ic_platform::Principal,
     amount: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct AcceptanceObservation {
     balance_before_accept: u128,
     balance_after_accept: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct RootRequestObservation {
     result: IssueResult,
     call_cost: u128,
@@ -136,16 +150,18 @@ struct CmcNotifyReceipt {
     cycles_sent: u128,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum EmergencyRefillPhase {
     Prepared,
     Transferred { block_index: u64 },
     Completed { block_index: u64, cycles_sent: u128 },
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct EmergencyRefillOperation {
     transfer: EmergencyTransferRequest,
     max_call_cost: u128,
@@ -159,25 +175,34 @@ enum EmergencyTrapPoint {
     NotifyCallback,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum IntentState {
     Prepared,
     Committed { receipt: GrantReceipt },
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct GrantIntent {
-    root: Principal,
+    root: ic_platform::Principal,
     request: GrantRequest,
     call_cost: u128,
     call_reservation: u128,
     state: IntentState,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum RootAcceptResult {
     Accepted {
         receipt: GrantReceipt,
@@ -189,8 +214,11 @@ enum RootAcceptResult {
     BindingConflict,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum IssueResult {
     Committed {
         receipt: GrantReceipt,
@@ -220,13 +248,18 @@ fn init(arg: ProbeInit) {
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_prepare",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::prepare::decode",
+    encode_with = "codec::prepare::encode"
 )]
-fn prepare(root: Principal, operation_id: [u8; 32], amount: u128) -> GrantIntent {
+fn prepare(request: protocol::PrepareRequest) -> GrantIntent {
+    let protocol::PrepareRequest {
+        root,
+        operation_id,
+        amount,
+    } = request;
     require_controller();
     require_coordinator_role();
-    prepare_intent(root, operation_id, amount)
+    prepare_intent(root.into(), operation_id, amount)
 }
 
 fn prepare_intent(root: Principal, operation_id: [u8; 32], amount: u128) -> GrantIntent {
@@ -238,19 +271,20 @@ fn prepare_intent(root: Principal, operation_id: [u8; 32], amount: u128) -> Gran
         operation_id,
         amount,
     };
-    let payload = encode_one(&request).unwrap_or_else(|_| trap("encode grant request"));
+    let payload = ic_wire::native::encode_request(protocol::ACCEPT, &request, protocol::LIMITS)
+        .unwrap_or_else(|_| trap("encode grant request"));
     if payload.len() as u64 > FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES {
         trap("grant request exceeds final command payload bound");
     }
     let call_cost = cost_call(
-        ROOT_FUNDING_COMMAND_METHOD.len() as u64,
+        canic_contracts::protocol::funding_control::root_accept::METHOD.len() as u64,
         FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES,
     );
     let call_reservation = amount
         .checked_add(call_cost)
         .unwrap_or_else(|| trap("grant call reservation overflow"));
     let candidate = GrantIntent {
-        root,
+        root: root.into(),
         request,
         call_cost,
         call_reservation,
@@ -276,8 +310,8 @@ fn prepare_intent(root: Principal, operation_id: [u8; 32], amount: u128) -> Gran
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_handle_request",
-    decode_with = "codec::decode_one",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::handle_request::decode",
+    encode_with = "codec::handle_request::encode"
 )]
 async fn handle_request(request: GrantRequest) -> IssueResult {
     require_coordinator_role();
@@ -288,30 +322,36 @@ async fn handle_request(request: GrantRequest) -> IssueResult {
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_request",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::request::decode",
+    encode_with = "codec::request::encode"
 )]
-async fn request() -> RootRequestObservation {
+async fn request(_request: ()) -> RootRequestObservation {
     let coordinator = require_root_role();
     let request = GrantRequest {
         operation_id: [0x17; 32],
         amount: 1_000_000_000_000,
     };
-    let payload = encode_one(&request).unwrap_or_else(|_| trap("encode root grant request"));
+    let payload =
+        ic_wire::native::encode_request(protocol::HANDLE_REQUEST, &request, protocol::LIMITS)
+            .unwrap_or_else(|_| trap("encode root grant request"));
     if payload.len() as u64 > FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES {
         trap("root grant request exceeds final command payload bound");
     }
     let call_cost = cost_call(
-        COORDINATOR_FUNDING_COMMAND_METHOD.len() as u64,
+        canic_contracts::protocol::funding_control::request::METHOD.len() as u64,
         FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES,
     );
     let balance_before_request = canister_cycle_balance();
     let result = match Call::bounded_wait(coordinator.into(), COORDINATOR_HANDLE_REQUEST_METHOD)
-        .take_raw_args(encode_one(request).unwrap_or_else(|error| trap(error.to_string())))
+        .take_raw_args(payload)
         .await
     {
-        Ok(response) => decode_one::<IssueResult>(&response.into_bytes())
-            .unwrap_or(IssueResult::RootBindingConflict),
+        Ok(response) => ic_wire::native::decode_response::<IssueResult>(
+            protocol::HANDLE_REQUEST,
+            &response.into_bytes(),
+            protocol::LIMITS,
+        )
+        .unwrap_or(IssueResult::RootBindingConflict),
         Err(_) => IssueResult::CallFailed,
     };
     RootRequestObservation {
@@ -324,42 +364,48 @@ async fn request() -> RootRequestObservation {
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_emergency_refill",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::emergency_refill::decode",
+    encode_with = "codec::emergency_refill::encode"
 )]
-async fn emergency_refill() -> EmergencyRefillOperation {
+async fn emergency_refill(_request: ()) -> protocol::EmergencyOperation {
     require_controller();
-    advance_emergency_refill(EmergencyTrapPoint::None).await
+    advance_emergency_refill(EmergencyTrapPoint::None)
+        .await
+        .into()
 }
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_emergency_refill_transfer_then_trap",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::emergency_refill_transfer_then_trap::decode",
+    encode_with = "codec::emergency_refill_transfer_then_trap::encode"
 )]
-async fn emergency_refill_transfer_then_trap() -> EmergencyRefillOperation {
+async fn emergency_refill_transfer_then_trap(_request: ()) -> protocol::EmergencyOperation {
     require_controller();
-    advance_emergency_refill(EmergencyTrapPoint::TransferCallback).await
+    advance_emergency_refill(EmergencyTrapPoint::TransferCallback)
+        .await
+        .into()
 }
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_emergency_refill_notify_then_trap",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::emergency_refill_notify_then_trap::decode",
+    encode_with = "codec::emergency_refill_notify_then_trap::encode"
 )]
-async fn emergency_refill_notify_then_trap() -> EmergencyRefillOperation {
+async fn emergency_refill_notify_then_trap(_request: ()) -> protocol::EmergencyOperation {
     require_controller();
-    advance_emergency_refill(EmergencyTrapPoint::NotifyCallback).await
+    advance_emergency_refill(EmergencyTrapPoint::NotifyCallback)
+        .await
+        .into()
 }
 
 #[ic_platform::cdk::query(
     name = "root_funding_probe_emergency_operation",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::emergency_operation::decode",
+    encode_with = "codec::emergency_operation::encode"
 )]
-fn emergency_operation() -> Option<EmergencyRefillOperation> {
+fn emergency_operation(_request: ()) -> Option<protocol::EmergencyOperation> {
     require_emergency_root_role();
-    EMERGENCY_OPERATION.with_borrow(Clone::clone)
+    EMERGENCY_OPERATION.with_borrow(|value| value.clone().map(Into::into))
 }
 
 #[ic_platform::cdk::update(
@@ -571,10 +617,10 @@ fn store_emergency_operation(operation: &EmergencyRefillOperation) {
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_issue",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::issue::decode",
+    encode_with = "codec::issue::encode"
 )]
-async fn issue() -> IssueResult {
+async fn issue(_request: ()) -> IssueResult {
     require_controller();
     require_coordinator_role();
     issue_prepared(ROOT_ACCEPT_METHOD).await
@@ -582,10 +628,10 @@ async fn issue() -> IssueResult {
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_issue_root_accept_then_trap",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::issue_root_accept_then_trap::decode",
+    encode_with = "codec::issue_root_accept_then_trap::encode"
 )]
-async fn issue_root_accept_then_trap() -> IssueResult {
+async fn issue_root_accept_then_trap(_request: ()) -> IssueResult {
     require_controller();
     require_coordinator_role();
     issue_prepared(ROOT_ACCEPT_THEN_TRAP_METHOD).await
@@ -593,10 +639,10 @@ async fn issue_root_accept_then_trap() -> IssueResult {
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_issue_then_trap",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::issue_then_trap::decode",
+    encode_with = "codec::issue_then_trap::encode"
 )]
-async fn issue_then_trap() -> IssueResult {
+async fn issue_then_trap(_request: ()) -> IssueResult {
     require_controller();
     require_coordinator_role();
     let result = issue_prepared(ROOT_ACCEPT_METHOD).await;
@@ -608,38 +654,38 @@ async fn issue_then_trap() -> IssueResult {
 
 #[ic_platform::cdk::query(
     name = "root_funding_probe_intent",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::intent::decode",
+    encode_with = "codec::intent::encode"
 )]
-fn intent() -> Option<GrantIntent> {
+fn intent(_request: ()) -> Option<GrantIntent> {
     require_coordinator_role();
     INTENT.with_borrow(Clone::clone)
 }
 
 #[ic_platform::cdk::query(
     name = "root_funding_probe_receipt",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::receipt::decode",
+    encode_with = "codec::receipt::encode"
 )]
-fn receipt() -> Option<GrantReceipt> {
+fn receipt(_request: ()) -> Option<GrantReceipt> {
     require_root_role();
     RECEIPT.with_borrow(Clone::clone)
 }
 
 #[ic_platform::cdk::query(
     name = "root_funding_probe_acceptance_observation",
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::acceptance_observation::decode",
+    encode_with = "codec::acceptance_observation::encode"
 )]
-fn acceptance_observation() -> Option<AcceptanceObservation> {
+fn acceptance_observation(_request: ()) -> Option<AcceptanceObservation> {
     require_root_role();
     ACCEPTANCE_OBSERVATION.with_borrow(Clone::clone)
 }
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_accept",
-    decode_with = "codec::decode_one",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::accept::decode",
+    encode_with = "codec::accept::encode"
 )]
 fn accept(request: GrantRequest) -> RootAcceptResult {
     accept_request(request)
@@ -647,8 +693,8 @@ fn accept(request: GrantRequest) -> RootAcceptResult {
 
 #[ic_platform::cdk::update(
     name = "root_funding_probe_accept_then_trap",
-    decode_with = "codec::decode_one",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::accept_then_trap::decode",
+    encode_with = "codec::accept_then_trap::encode"
 )]
 fn accept_then_trap(request: GrantRequest) -> RootAcceptResult {
     let _ = accept_request(request);
@@ -668,8 +714,8 @@ fn accept_request(request: GrantRequest) -> RootAcceptResult {
         if let Some(receipt) = stored.as_ref() {
             if receipt.operation_id != request.operation_id
                 || receipt.amount != request.amount
-                || receipt.coordinator != coordinator
-                || receipt.root != Principal::from(canister_self())
+                || receipt.coordinator != coordinator.into()
+                || receipt.root != canister_self()
             {
                 return RootAcceptResult::BindingConflict;
             }
@@ -688,8 +734,8 @@ fn accept_request(request: GrantRequest) -> RootAcceptResult {
         let balance_after_accept = canister_cycle_balance();
         let receipt = GrantReceipt {
             operation_id: request.operation_id,
-            coordinator,
-            root: Principal::from(canister_self()),
+            coordinator: coordinator.into(),
+            root: canister_self(),
             amount: request.amount,
         };
         *stored = Some(receipt.clone());
@@ -715,16 +761,26 @@ async fn issue_prepared(root_method: &str) -> IssueResult {
         return IssueResult::AlreadyCommitted { receipt };
     }
 
-    let Ok(response) = Call::bounded_wait(intent.root.into(), root_method)
+    let method_id = match root_method {
+        ROOT_ACCEPT_METHOD => protocol::ACCEPT,
+        ROOT_ACCEPT_THEN_TRAP_METHOD => protocol::ACCEPT_THEN_TRAP,
+        _ => trap("unknown grant acceptance method"),
+    };
+    let Ok(response) = Call::bounded_wait(intent.root, root_method)
         .take_raw_args(
-            encode_one(intent.request.clone()).unwrap_or_else(|error| trap(error.to_string())),
+            ic_wire::native::encode_request(method_id, &intent.request, protocol::LIMITS)
+                .unwrap_or_else(|error| trap(error.to_string())),
         )
         .with_cycles(intent.request.amount)
         .await
     else {
         return IssueResult::CallFailed;
     };
-    let Ok(root_result) = decode_one::<RootAcceptResult>(&response.into_bytes()) else {
+    let Ok(root_result) = ic_wire::native::decode_response::<RootAcceptResult>(
+        method_id,
+        &response.into_bytes(),
+        protocol::LIMITS,
+    ) else {
         return IssueResult::RootBindingConflict;
     };
     let RootAcceptResult::Accepted {
@@ -743,7 +799,7 @@ async fn issue_prepared(root_method: &str) -> IssueResult {
     };
     if receipt.operation_id != intent.request.operation_id
         || receipt.amount != intent.request.amount
-        || receipt.coordinator != Principal::from(canister_self())
+        || receipt.coordinator != canister_self()
         || receipt.root != intent.root
         || (replay && accepted_cycles != 0)
         || (!replay && accepted_cycles != intent.request.amount)

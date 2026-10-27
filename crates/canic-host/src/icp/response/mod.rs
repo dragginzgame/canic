@@ -43,17 +43,6 @@ where
     ic_platform::candid::decoder::decode_one(&bytes).map_err(IcpJsonResponseError::Candid)
 }
 
-/// Decode a `Result<T, canic_contracts::dto::error::Error>` from the canonical envelope.
-pub fn decode_json_result_response<T>(output: &str) -> Result<T, IcpJsonResponseError>
-where
-    T: CandidType + DeserializeOwned,
-{
-    let bytes = response_bytes(output)?;
-    let response = ic_platform::candid::decoder::decode_one::<Result<T, CanicError>>(&bytes)
-        .map_err(IcpJsonResponseError::Candid)?;
-    response.map_err(IcpJsonResponseError::Rejected)
-}
-
 pub fn response_bytes(output: &str) -> Result<Vec<u8>, IcpJsonResponseError> {
     // Capture admission belongs to the command owner. Hex cannot produce more
     // than half the captured input; the codec owns validation and allocation.

@@ -7,9 +7,19 @@ Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runt
 Baseline authority: immutable `v0.110.5` at
 `50f40171d6177c3d1e490b1fdb5f6163323b2cd5`
 
+## Retained Evidence
+
+B1 execution is complete. Its obsolete runner, regression script, build driver,
+function counter and executable catalogs are retired from maintained tooling.
+The [frozen execution sources](https://github.com/dragginzgame/canic/tree/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci)
+remain available at their exact committed revision. Retained reports, measured
+vectors and experiment patches keep their original identities and hashes.
+The method descriptions below explain those historical results; they do not
+authorize another build or qualify current runtime behavior.
+
 ## Verdict
 
-B1 now has one machine-checked catalog for all eighteen required experiments,
+B1 acceptance used one machine-checked catalog for all eighteen required experiments,
 including the exact SHA-256 of every runnable or specified patch,
 and one artifact roster for the eleven canonical roles plus four Canic-owned
 capability fixtures. The runner accepts qualified `ready` switches for retained
@@ -66,8 +76,8 @@ measurement source.
 
 ## Canic-Owned Qualification Matrix
 
-The binding artifact manifest is
-`scripts/ci/wasm-ablation-artifacts.tsv`:
+The historical artifact roster is retained in the
+[frozen artifact manifest](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci/wasm-ablation-artifacts.tsv):
 
 | Group | Artifacts | Purpose |
 | --- | --- | --- |
@@ -84,7 +94,8 @@ downstream observation remains non-binding pressure evidence only.
 
 ## Experiment Catalog
 
-The executable source is `scripts/ci/wasm-ablation-experiments.tsv`. Every row
+The [frozen experiment catalog](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci/wasm-ablation-experiments.tsv)
+records the retained catalog at tooling retirement. Every row
 names its switch identity, immediate baseline, artifact selectors, instruction
 disposition and exact source owners. A runnable or specified patch must match
 the row's exact SHA-256 before the runner accepts the catalog. Preflight checks
@@ -561,7 +572,7 @@ For every selected artifact and condition, the runner records:
   record with typed transform and outcome values.
 
 `wasm-validate` and `didc check` must also accept every artifact. The runner
-compiles `scripts/ci/wasm-replica-function-count.rs` into invocation-local
+compiled the [frozen function counter](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci/wasm-replica-function-count.rs) into invocation-local
 scratch and rejects any identity that is not tied to DFINITY `ic` commit
 `2f8dc21e2e5c37a4cae7f65d2a4230ac8f143e5a` and the 50,000 local-function
 limit. That IC validator filters `module.functions` with `is_local()`; imported
@@ -595,72 +606,28 @@ entries without an exact, separately accepted compiler explanation; the
 generic cohort reports its intentional nonlinear growth rather than applying
 that allowance.
 
-## Commands
+## Historical Execution Source
 
-Manifest-only validation is targeted and build-free:
+The [runner](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci/wasm-ablation-report.sh),
+[regression script](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci/test-wasm-ablation-report.sh)
+and [artifact driver](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/scripts/ci/wasm-ablation-build-artifact.rs)
+are historical method evidence. Individual retained runs also carry their own
+exact method copies and resolved locks. Their source identities, rather than
+the later pruned catalog, determine how to interpret those measurements.
+No B1 execution command remains in the maintained tool surface.
 
-```text
-bash scripts/ci/wasm-ablation-report.sh --check
-bash scripts/ci/test-wasm-ablation-report.sh
-```
-
-Before spending the full deterministic all-role budget, use the explicitly
-non-retainable development smoke against one representative artifact. Patch
-experiments build the variant first so a compile failure stops before baseline
-measurement; the smoke performs one repetition and uses sccache when its exact
-compiler-wrapper invocation succeeds:
-
-```text
-bash scripts/ci/wasm-ablation-report.sh --smoke \
-  --experiment b1-03-activation-record-codecs \
-  --artifact canonical_app \
-  --source <candidate-commit> \
-  --product-root <clean-linked-worktree> \
-  --output-root <temporary-output-directory>
-```
-
-Smoke output records `retention_eligible=no` and cannot satisfy an immutable
-B1 evidence row. Its purpose is to reject a broken switch quickly and preserve
-the expensive two-repetition, all-selected-artifact run for qualified inputs.
-
-A `specified` patch becomes `ready` only after the non-retainable qualification
-lane builds and validates every selected artifact once:
-
-```text
-bash scripts/ci/wasm-ablation-report.sh --qualify \
-  --experiment <specified-experiment> \
-  --source <candidate-commit> \
-  --product-root <clean-linked-worktree> \
-  --output-root <temporary-output-directory>
-```
-
-Qualification records `retention_eligible=no` and no determinism claim. Ordinary
-patches build their variant; prepared pairs/matrices build every declared
-condition once. Historical helpers exist only in the control. None of these
-qualification results satisfies the repeated measurement requirement.
-
-A retained run will use an exact clean linked worktree and external output
-root; the runner owns and compiles the frozen counter:
-
-```text
-bash scripts/ci/wasm-ablation-report.sh \
-  --experiment b1-01-current-baseline \
-  --source <candidate-commit> \
-  --product-root <clean-linked-worktree> \
-  --output-root <external-evidence-directory>
-```
-
-## Next Step
+## Accepted B1 Outcome
 
 The required footprint evidence is complete. Review the
 [B1 acceptance packet](b1-input-evidence.md#complete-b1-review--accepted-2026-09-23);
 do not repeat completed builds. All five generic widths and their canonical
 symbol mappings are retained.
-Measured row 2 confirms the direct hypothesis
-behind B2 but does not supply its required lifecycle parity; measured row 3
-provides inclusive activation-persistence pressure while measured rows 4 and
-5 provide differently scoped and intentionally overlapping
-persistence/codec attribution needed to choose B3 work; row 6 isolates the
+Measured row 2 confirmed the direct hypothesis
+behind B2 without supplying its required lifecycle parity; measured row 3
+provided inclusive activation-persistence pressure while measured rows 4 and
+5 provided differently scoped and intentionally overlapping
+persistence/codec attribution used to choose B3 work; row 6 isolated the
 recovery dispatch rooted by shared
-watchdog registration. None is a behavior-preserving result. Keep B2 blocked
-until the full immutable B1 ledger, generic mapping and allowances are accepted.
+watchdog registration. None is a behavior-preserving result. The accepted B1
+ledger, generic mapping and allowances remain historical measurement evidence,
+separate from later production parity and current release qualification.

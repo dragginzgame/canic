@@ -14,15 +14,23 @@ app = "test"
 role = "test"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
 
 [dependencies]
 canic = { workspace = true, features = ["auth-delegated-token-verify"] }
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-timers = { workspace = true }
+ic-wire = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [lints]
 workspace = true

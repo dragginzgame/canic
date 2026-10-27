@@ -344,10 +344,15 @@ fn restoration_rejects_login_binding_mismatch_and_revoked_live_session() {
     let mut budget = SessionAdmissionBudget::new(32, 1, 0).unwrap();
     let mut revoked = original.clone();
     ledger
-        .with_revocation(&mut budget, session.caller(), NOW, |change| {
-            revoked.logins[0].1.bytes = change.encode()?;
-            Ok(())
-        })
+        .with_revocation::<ic_auth::portable::LoginRevocationError>(
+            &mut budget,
+            session.caller(),
+            NOW,
+            |change| {
+                revoked.logins[0].1.bytes = change.encode()?;
+                Ok(())
+            },
+        )
         .unwrap();
     assert!(matches!(
         build_indexes(&revoked),
@@ -711,7 +716,12 @@ fn logout_record(
     let mut ledger = MemoryLoginRevocations::new(audience, 4096, 256, 1_000_000_000, 0).unwrap();
     let mut budget = SessionAdmissionBudget::new(1, 1, 0).unwrap();
     ledger
-        .with_revocation(&mut budget, caller.into(), NOW, |_| Ok(()))
+        .with_revocation::<ic_auth::portable::LoginRevocationError>(
+            &mut budget,
+            caller.into(),
+            NOW,
+            |_| Ok(()),
+        )
         .unwrap();
     crate::storage::stable::auth::LocalApplicationLoginRecord {
         bytes: ledger.records().next().unwrap().encode().unwrap(),

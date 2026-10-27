@@ -4,7 +4,6 @@
 //! Does not own: production plan construction or validation.
 //! Boundary: fixtures for backup plan unit tests.
 
-mod authority;
 mod builder;
 mod execution_preflight;
 mod requests;

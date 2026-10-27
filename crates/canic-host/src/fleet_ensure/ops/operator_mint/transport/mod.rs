@@ -334,7 +334,7 @@ impl OperatorMintTransport {
                 match status {
                     RequestStatusResponse::Replied(_) => {
                         let mut bytes = Vec::new();
-                        ciborium::into_writer(&certificate, &mut bytes)
+                        serde_cbor::to_writer(&mut bytes, &certificate)
                             .map_err(|_| OperatorMintTransportError::Serialization)?;
                         return Ok(icp::verify_read(&self.agent, read, &bytes, ICP_LIMITS)?);
                     }

@@ -63,17 +63,17 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
         &features,
     );
     let raw = declaration_wasms.path("root_probe");
-    let candid = Command::new("candid-extractor").arg(raw).output().unwrap();
-    assert!(
-        candid.status.success(),
-        "{}",
-        String::from_utf8_lossy(&candid.stderr)
-    );
+    let candid = extract_declaration(raw);
+    let wire_schema = canic_host::canister_build::build_native_wire_contract(
+        context,
+        audit_schema_recipe(context, &base_env, &features),
+    )
+    .expect("produce audit Root native contract");
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
         &evidence.canic_version,
         &CanisterRole::ROOT,
         &contract.capabilities,
-        &candid.stdout,
+        &wire_schema,
     );
     let digest = profile.protocol_profile_digest.to_string();
     let mut runtime = base_env.to_vec();
@@ -108,12 +108,26 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
         wasm_path,
         wasm_gz_path: role_path("wasm.gz"),
         did_path: role_path("did"),
-        candid_sha256: profile.candid_sha256,
+        candid_sha256: canic_core::cdk::utils::hash::sha256_bytes(&candid)
+            .try_into()
+            .unwrap(),
+        wire_schema_sha256: profile.wire_schema_sha256,
         protocol_profile_digest: profile.protocol_profile_digest,
         transforms: Vec::new(),
     };
-    finalize_audit_root(&output, runtime_wasms.path("root_probe"), &candid.stdout);
+    finalize_audit_root(&output, runtime_wasms.path("root_probe"), &candid);
+    build_audit_schema(context, &output, &runtime, &features);
     output
+}
+
+fn extract_declaration(wasm: &Path) -> Vec<u8> {
+    let output = Command::new("candid-extractor").arg(wasm).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output.stdout
 }
 
 fn admitted_root_package(
@@ -175,4 +189,72 @@ fn gzip(bytes: &[u8]) -> Vec<u8> {
     ic_host_artifacts::artifact::encode_gzip(bytes, &mut encoded, 6, u64::MAX)
         .expect("gzip fixture Wasm");
     encoded
+}
+
+/// Reuse the exact audit runtime selection, not the canonical Root package recipe.
+fn build_audit_schema(
+    context: &WorkspaceBuildContext,
+    output: &CanisterArtifactBuildOutput,
+    runtime: &[(&str, &str)],
+    features: &[String],
+) {
+    let retained = canic_host::canister_build::build_native_wire_schema(
+        context,
+        audit_schema_recipe(context, runtime, features),
+        &output.wasm_path,
+        &output.wasm_path.with_extension("wire.json"),
+    )
+    .expect("build and admit actual audit Root native schema");
+    assert_eq!(retained.bindings.schema_sha256, output.wire_schema_sha256);
+}
+
+fn audit_schema_recipe(
+    context: &WorkspaceBuildContext,
+    runtime: &[(&str, &str)],
+    features: &[String],
+) -> canic_host::canister_build::NativeSchemaBuildRecipe {
+    use canic_host::canister_build::NativeSchemaBuildRecipe;
+    use ic_build::cargo::execution::{CargoInvocation, CargoRecipe};
+    let manifest = context
+        .workspace_root
+        .join("canisters/audit/root_probe/Cargo.toml");
+    let mut selection = CanicWasmBuildProfile::Fast.cargo_selection();
+    selection.features.features = features.iter().cloned().collect();
+    let mut environment =
+        crate::workspace::wasm_build_environment().collect::<std::collections::BTreeMap<_, _>>();
+    for (key, value) in [
+        ("CARGO_INCREMENTAL", "0"),
+        ("ICP_ENVIRONMENT", "local"),
+        (
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+        ),
+    ]
+    .into_iter()
+    .chain(runtime.iter().copied())
+    {
+        environment.insert(key.into(), value.into());
+    }
+    environment
+        .entry("RUSTC".into())
+        .or_insert_with(|| "rustc".into());
+    let invocation = CargoInvocation {
+        cargo_program: std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()),
+        working_directory: context.workspace_root.clone(),
+        environment,
+        target: "wasm32-unknown-unknown".into(),
+        selection,
+        packages: vec!["root_probe".to_owned()],
+        manifest_path: Some(manifest.clone()),
+        recipe: CargoRecipe::Library,
+        configurations: Vec::new(),
+        render_diagnostics: true,
+        keep_going: true,
+    };
+    NativeSchemaBuildRecipe {
+        manifest,
+        workspace: context.workspace_root.clone(),
+        package: "root_probe".to_owned(),
+        invocation,
+    }
 }

@@ -589,8 +589,9 @@ fn compiles_complete_mode_compatible_initial_services_in_canonical_order() {
         ]
     );
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<Vec<FleetServiceBinding>>(
-            &ic_platform::candid::contract::encode_one(&services).expect("encode service bindings")
+        canic_contracts::protocol::authority::decode::<Vec<FleetServiceBinding>>(
+            &canic_contracts::protocol::authority::encode(&services)
+                .expect("encode service bindings")
         )
         .expect("decode service bindings"),
         services

@@ -5,7 +5,6 @@
 //! Boundary: the host derives this digest from validated canonical manifest bytes.
 
 use crate::ids::ReleaseBuildId;
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display};
 
@@ -15,11 +14,12 @@ use std::{fmt, fmt::Display};
 /// SHA-256 identity of one canonical Fleet Subnet Root release-set manifest.
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ReleaseSetDigest([u8; 32]);
 
 impl ReleaseSetDigest {
@@ -54,9 +54,12 @@ impl Display for ReleaseSetDigest {
 /// Exact release-build and manifest identity admitted for one Fleet Subnet Root.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetSubnetRootReleaseSet {
     pub release_build_id: ReleaseBuildId,
     pub manifest_digest: ReleaseSetDigest,
@@ -72,17 +75,16 @@ mod tests {
     use crate::ids::ReleaseBuildNonce;
 
     #[test]
-    fn digest_has_exact_bytes_text_and_candid_representation() {
+    fn digest_has_exact_bytes_text_and_wire_representation() {
         let digest = ReleaseSetDigest::from_bytes([0xab; 32]);
 
         assert_eq!(digest.as_bytes(), &[0xab; 32]);
         assert_eq!(digest.into_bytes(), [0xab; 32]);
         assert_eq!(digest.to_string(), "ab".repeat(32));
 
-        let bytes =
-            ic_platform::candid::contract::encode_one(digest).expect("encode Release Set digest");
+        let bytes = crate::protocol::authority::encode(digest).expect("encode Release Set digest");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<ReleaseSetDigest>(&bytes)
+            crate::protocol::authority::decode::<ReleaseSetDigest>(&bytes)
                 .expect("decode Release Set digest"),
             digest
         );
@@ -93,10 +95,10 @@ mod tests {
             )),
             manifest_digest: digest,
         };
-        let bytes = ic_platform::candid::contract::encode_one(release_set)
+        let bytes = crate::protocol::authority::encode(release_set)
             .expect("encode root Release Set identity");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<FleetSubnetRootReleaseSet>(&bytes)
+            crate::protocol::authority::decode::<FleetSubnetRootReleaseSet>(&bytes)
                 .expect("decode root Release Set identity"),
             release_set
         );

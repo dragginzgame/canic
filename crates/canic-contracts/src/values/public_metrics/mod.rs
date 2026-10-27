@@ -4,15 +4,14 @@
 //! Does not own: caller authorization, collection, or snapshot storage.
 //! Boundary: shared selectors for configuration and read contracts.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
+
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+mod schema;
 
 /// Aggregate families an App may explicitly publish to every caller.
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum PublicMetricFamily {
     #[serde(rename = "application")]
     Application,
@@ -27,8 +26,11 @@ pub enum PublicMetricFamily {
 }
 
 /// Interpretation of a sampled value. Counter windows must change on every reset.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum PublicMetricKind {
     Gauge,
     Counter {
@@ -42,8 +44,11 @@ pub enum PublicMetricKind {
 }
 
 /// Source-owned counter lifetime, scoped to one canister's observed runtime history.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TimerMetricRegistration {
     pub canister_version: u64,
     pub started_at_ns: u64,

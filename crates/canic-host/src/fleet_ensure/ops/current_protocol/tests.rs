@@ -184,7 +184,7 @@ method="$3"
 printf '%s\n' "$id" >> calls
 if [ -f latency ]; then sleep 0.02; fi
 case "$method" in
-  canic_root_status)
+  canic_root_authority)
     touch "$id.started"
     if [ -f "$id.gated" ]; then
       for peer in $(cat gate); do
@@ -198,10 +198,10 @@ case "$method" in
     elif [ -f gate ]; then
       for peer in $(cat gate); do [ -f "$peer.done" ] || exit 5; done
     fi;;
-  canic_wasm_store_status) touch "$(cat "$id.owner").done";;
+  canic_wasm_store_authority) touch "$(cat "$id.owner").done"; cat "$id.hex"; exit 0;;
   *) exit 6;;
 esac
-cat "$id.json"
+cat "$id.hex"
 "#,
             ),
         )
@@ -227,16 +227,8 @@ cat "$id.json"
                 None,
                 subnet(6),
             ));
-            Self::respond(
-                &root,
-                root_id,
-                RootStatusResponseFragment::FleetAuthority(authority.clone()),
-            );
-            Self::respond(
-                &root,
-                store_id,
-                StoreStatusResponse::Authority(authority.wasm_store_authority.clone()),
-            );
+            Self::respond(&root, root_id, authority.clone());
+            Self::respond_store(&root, store_id, authority.wasm_store_authority.clone());
             fs::write(root.join(format!("{store_id}.owner")), root_id.to_text()).unwrap();
             if overlap_gate
                 && usize::from(index) < super::super::bounded_observations::MAX_IN_FLIGHT
@@ -257,11 +249,37 @@ cat "$id.json"
         }
     }
 
-    fn respond(root: &Path, id: Principal, response: impl CandidType) {
-        let response = Ok::<_, canic_contracts::dto::error::Error>(response);
-        fs::write(root.join(format!("{id}.json")), serde_json::json!({
-            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
-        }).to_string()).unwrap();
+    fn respond(root: &Path, id: Principal, authority: FleetSubnetRootAuthority) {
+        let native = canic_contracts::dto::root_authority::Authority::from(authority.clone());
+        assert_eq!(FleetSubnetRootAuthority::from(native.clone()), authority);
+        let bytes = ic_wire::native::encode_response(
+            protocol::root_authority::METHOD_ID,
+            &Ok::<_, canic_contracts::dto::error::Error>(native),
+            protocol::root_authority::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        fs::write(
+            root.join(format!("{id}.hex")),
+            canic_core::cdk::utils::hash::hex_bytes(bytes),
+        )
+        .unwrap();
+    }
+
+    fn respond_store(root: &Path, id: Principal, authority: FleetSubnetWasmStoreAuthority) {
+        let reply = Ok::<_, canic_contracts::dto::error::Error>(
+            canic_contracts::dto::store_status::Authority::from(authority),
+        );
+        let bytes = ic_wire::native::encode_response(
+            protocol::store_status::authority::METHOD_ID,
+            &reply,
+            protocol::store_status::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        fs::write(
+            root.join(format!("{id}.hex")),
+            canic_core::cdk::utils::hash::hex_bytes(bytes),
+        )
+        .unwrap();
     }
 
     fn read(&self) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
@@ -275,24 +293,8 @@ cat "$id.json"
         read_root_authorities(
             desired,
             &state(),
-            |root| {
-                query_with_candid(
-                    &self.icp,
-                    &self.root.join("root.did"),
-                    root,
-                    protocol::CANIC_ROOT_STATUS,
-                    &RootStatusRequestFragment::FleetAuthority,
-                )
-            },
-            |store| {
-                query_with_candid(
-                    &self.icp,
-                    &self.root.join("store.did"),
-                    store,
-                    protocol::CANIC_WASM_STORE_STATUS,
-                    &StoreStatusRequest::Authority,
-                )
-            },
+            |root| crate::canister_protocol::root_authority::query(&self.icp, root),
+            |store| query_store_authority(&self.icp, store),
         )
     }
 }
@@ -322,11 +324,7 @@ fn root_authority_reads_fail_closed_drain_and_retry_fresh() {
     let authority = &fixture.authorities[1];
     let mut conflicting = authority.wasm_store_authority.clone();
     conflicting.wasm_module_hash[0] ^= 1;
-    AuthorityReadsFixture::respond(
-        &fixture.root,
-        conflicting.wasm_store,
-        StoreStatusResponse::Authority(conflicting),
-    );
+    AuthorityReadsFixture::respond_store(&fixture.root, conflicting.wasm_store, conflicting);
     assert!(
         matches!(fixture.read(), Err(CurrentProtocolError::RegistryPrincipalMissing { name, .. }) if name == "root-0")
     );
@@ -347,11 +345,7 @@ fn root_authority_reads_fail_closed_drain_and_retry_fresh() {
     ));
     assert_eq!(fixture.icp.remote_call_count(), 14);
     let authority = &fixture.authorities[1].wasm_store_authority;
-    AuthorityReadsFixture::respond(
-        &fixture.root,
-        authority.wasm_store,
-        StoreStatusResponse::Authority(authority.clone()),
-    );
+    AuthorityReadsFixture::respond_store(&fixture.root, authority.wasm_store, authority.clone());
     assert_eq!(fixture.read().unwrap(), fixture.authorities);
     assert_eq!(fixture.icp.remote_call_count(), 24);
 }
@@ -407,7 +401,11 @@ impl StoreStagingFixture {
         use std::os::unix::fs::PermissionsExt as _;
         let root = crate::test_support::temp_dir("store-staging-observations");
         fs::create_dir_all(&root).unwrap();
-        fs::write(root.join("store.did"), "service : {}").unwrap();
+        fs::write(
+            root.join("store.wire.json"),
+            crate::test_support::WIRE_SCHEMA,
+        )
+        .unwrap();
         let executable = root.join("icp");
         fs::write(
             &executable,
@@ -416,10 +414,10 @@ impl StoreStagingFixture {
 set -eu
 case " $* " in
   *" --version "*) echo 'icp @ICP_VERSION@'; exit 0;;
-  *" canic_wasm_store_catalog "*" --query "*)
+  *" canic_wasm_store_template_status "*" --query "*)
     printf 'query\n' >> calls
     if [ -e fail ]; then exit 1; fi
-    cat response.json;;
+    cat response.hex;;
   *) exit 2;;
 esac
 "#,
@@ -458,7 +456,11 @@ esac
         let status = TemplateStagingStatusResponse {
             template_id: manifest.template_id.clone(),
             version: manifest.version.clone(),
-            manifest: Some(manifest_response(&manifest)),
+            manifest: Some(TemplateManifestResponse {
+                created_at: 100,
+                approved_at: Some(100),
+                ..manifest_response(&manifest)
+            }),
             chunk_set_present: true,
             expected_chunk_count: 3,
             expected_chunk_hashes: hashes.to_vec(),
@@ -492,12 +494,19 @@ esac
     }
 
     fn respond(&self) {
-        let response = Ok::<_, canic_contracts::dto::error::Error>(StoreCatalogResponse::Template(
-            self.status.clone(),
-        ));
-        fs::write(self.root.join("response.json"), serde_json::json!({
-            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
-        }).to_string()).unwrap();
+        let response = Ok::<_, canic_contracts::dto::error::Error>(self.status.clone());
+        fs::write(
+            self.root.join("response.hex"),
+            canic_core::cdk::utils::hash::hex_bytes(
+                ic_wire::native::encode_response(
+                    protocol::store_catalog::template::METHOD_ID,
+                    &response,
+                    protocol::store_catalog::RESPONSE_LIMITS,
+                )
+                .unwrap(),
+            ),
+        )
+        .unwrap();
     }
 
     fn pending(&self) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
@@ -705,7 +714,7 @@ fn combined_store_preparation_requires_exact_manifest_and_chunk_evidence() {
 
 #[cfg(unix)]
 #[test]
-fn store_staging_failures_are_not_reused_and_candid_is_revalidated() {
+fn store_staging_failures_are_not_reused_and_schema_is_revalidated() {
     let fixture = StoreStagingFixture::new();
     let desired = desired(Vec::new());
     let action = bind_action(
@@ -732,8 +741,8 @@ fn store_staging_failures_are_not_reused_and_candid_is_revalidated() {
             .applied
     );
     fs::write(
-        fixture.root.join("store.did"),
-        "service : { changed : () -> () }",
+        fixture.root.join("store.wire.json"),
+        b"changed schema bytes",
     )
     .unwrap();
     assert!(matches!(
@@ -754,7 +763,7 @@ fn store_staging_observations_bind_each_query_identity() {
         (
             1,
             principal(21),
-            "store.did",
+            "store.wire.json",
             "first",
             template.clone(),
             version.clone(),
@@ -762,7 +771,7 @@ fn store_staging_observations_bind_each_query_identity() {
         (
             2,
             principal(11),
-            "store.did",
+            "store.wire.json",
             "first",
             template.clone(),
             version.clone(),
@@ -770,7 +779,7 @@ fn store_staging_observations_bind_each_query_identity() {
         (
             3,
             principal(21),
-            "other.did",
+            "other.wire.json",
             "first",
             template.clone(),
             version.clone(),
@@ -778,7 +787,7 @@ fn store_staging_observations_bind_each_query_identity() {
         (
             4,
             principal(21),
-            "store.did",
+            "store.wire.json",
             "changed",
             template.clone(),
             version.clone(),
@@ -786,7 +795,7 @@ fn store_staging_observations_bind_each_query_identity() {
         (
             5,
             principal(21),
-            "store.did",
+            "store.wire.json",
             "first",
             TemplateId::new("other"),
             version.clone(),
@@ -794,7 +803,7 @@ fn store_staging_observations_bind_each_query_identity() {
         (
             6,
             principal(21),
-            "store.did",
+            "store.wire.json",
             "first",
             template.clone(),
             TemplateVersion::new("other"),
@@ -809,8 +818,9 @@ fn store_staging_observations_bind_each_query_identity() {
         let resolved = ResolvedProtocolAction {
             action: &fixture.actions[0],
             target,
-            candid_path: fixture.root.join(path),
-            candid_sha256: digest,
+            wire_schema_path: fixture.root.join(path),
+            wire_schema_bytes: crate::test_support::WIRE_SCHEMA.to_vec(),
+            wire_schema_sha256: digest,
         };
         for _ in 0..2 {
             observations
@@ -833,7 +843,7 @@ fn activation_source_thirty_rows_without_publication_counters_reach_review() {
 }
 
 #[test]
-fn activation_source_completed_bootstrap_without_fixtures_remains_receipt_only() {
+fn activation_source_completed_bootstrap_remains_receipt_only() {
     assert_activation_source_review(29, None, true);
 }
 
@@ -905,8 +915,8 @@ fn assert_activation_source_review(
         .enumerate()
         .map(|(index, action)| EnsureAction::FleetProtocol {
             action: Box::new(action),
-            candid: "root.did".to_string(),
-            candid_sha256: "a".repeat(64),
+            wire_schema: "root.wire.json".to_string(),
+            wire_schema_sha256: "a".repeat(64),
             maximum_execution_burn_cycles: 1,
             name: format!("action-{index}"),
             principal: root.fleet_subnet_root.to_text(),
@@ -947,7 +957,7 @@ fn assert_activation_source_review(
     source_desired.fleet = "source".to_string();
     source_desired.canisters = vec![source_root];
     source_desired.treasury = "source-root".to_string();
-    let mut plan = serde_json::json!({
+    let plan = serde_json::json!({
         "schema_version": 1, "scope": "full", "fleet": "source", "environment": "local",
         "operation_id": canic_core::cdk::utils::hash::hex_bytes([42; 32]),
         "plan_sha256": digest, "canisters": [{"actions": []}],
@@ -974,21 +984,6 @@ fn assert_activation_source_review(
         for effect in journal["effects"].as_array_mut().expect("effects") {
             effect["publication_attempts"] = attempts.into();
         }
-    }
-    if completed_bootstrap {
-        // Freeze the completed source bytes before the fixture field existed.
-        // Hash that independent serialized fixture, never a default-filled action.
-        let current =
-            String::from_utf8(serde_json::to_vec(&actions[0]).expect("bootstrap fixture"))
-                .expect("JSON UTF-8");
-        assert_eq!(current.matches(",\"fixtures\":[]").count(), 1);
-        let source = current.replace(",\"fixtures\":[]", "");
-        journal["effects"][0]["action_sha256"] =
-            canic_core::cdk::utils::hash::sha256_hex(source.as_bytes()).into();
-        plan["protocol_actions"][0]["action"]["expected"]
-            .as_object_mut()
-            .expect("bootstrap receipt")
-            .remove("fixtures");
     }
     let paths = EnsurePaths::under(&temp, "local", "source");
     fs::create_dir_all(paths.plan.parent().expect("parent")).expect("directory");
@@ -1169,7 +1164,7 @@ fn assert_unreadable_activation_review(
 fn fresh_fleet_registry_prepare_classifies_typed_unavailable_status() {
     let error = CanisterProtocolError::Response {
         canister: Principal::anonymous(),
-        method: protocol::CANIC_ROOT_STATUS,
+        method: protocol::registry_read::status::METHOD,
         source: crate::icp::IcpJsonResponseError::Rejected(
             canic_contracts::dto::error::Error::from_registered(
                 canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
@@ -1470,6 +1465,8 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
             runtimes_activated_at_ns: Some(6),
         };
 
+    #[cfg(unix)]
+    qualify_native_coordinator_provisioning(&status);
     component_progress::tests::qualify(&compiled.request.plan, &status);
     assert_retry_timestamp_is_not_durable_progress(&status);
     assert_provisioning_progress_is_bounded(&status);
@@ -1555,7 +1552,7 @@ fn assert_retry_timestamp_is_not_durable_progress(
             origin: Some(canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
         dependency: Some(canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
                     target: principal(11),
-                    method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                    method: canic_contracts::protocol::store_publication::inspect::METHOD.into(),
                     step: "inspect_template".into(),
                     rejection_code: Some(5),
                     rejection_detail: Some("Store stopped".into()),
@@ -1607,7 +1604,7 @@ fn assert_retry_timestamp_is_not_durable_progress(
         canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
         dependency: Some(canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
                     target: principal(11),
-                    method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                    method: canic_contracts::protocol::store_publication::inspect::METHOD.into(),
                     step: "inspect_template".into(),
                     rejection_code: Some(5),
                     rejection_detail: Some("Store stopped".into()),
@@ -1725,6 +1722,8 @@ fn store_authority_without_operation_receipt_does_not_complete_adoption() {
         adopted_at_ns: 1,
     };
     assert!(store_adoption_applied(&request, Some(&exact)));
+    #[cfg(unix)]
+    qualify_native_root_store_reads(&exact);
 
     let mut conflicting = exact;
     conflicting.operation_id[0] ^= 1;
@@ -1814,8 +1813,12 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
     fs::create_dir_all(&artifact_root).expect("create artifact root");
     let wasm_path = artifact_root.join("alpha.wasm");
     let wasm_gz_path = artifact_root.join("alpha.wasm.gz");
-    let mut wasm = vec![0x00, 0x61, 0x73, 0x6d, 7];
-    wasm.extend_from_slice(release_build_id.to_string().as_bytes());
+    let wasm = crate::test_support::wire_wasm(release_build_id.to_string().as_bytes());
+    fs::write(
+        artifact_root.join("alpha.wire.json"),
+        crate::test_support::WIRE_SCHEMA,
+    )
+    .unwrap();
     fs::write(&wasm_path, &wasm).expect("write Wasm");
     let mut encoder = GzBuilder::new()
         .mtime(0)
@@ -1999,6 +2002,7 @@ fn persist_infrastructure_manifest(root: &Path, release_build_id: ReleaseBuildId
             wasm_gz_relative_path: format!("{base}.wasm.gz"),
             wasm_gz_size_bytes: gzip.len() as u64,
             wasm_gz_sha256_hex: canic_core::cdk::utils::hash::sha256_hex(&gzip),
+            wire_schema_sha256: [7; 32],
             candid_sha256: [3; 32],
             protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
                 [4; 32],
@@ -2076,11 +2080,11 @@ fn desired(placements: Vec<DesiredComponentGroupPlacement>) -> DesiredFleet {
         protocol: Some(DesiredFleetProtocol {
             app_config: "canic.toml".to_string(),
             component_group_placements: placements,
-            coordinator_candid: "coordinator.did".to_string(),
-            root_candid: "root.did".to_string(),
-            store_candid: "store.did".to_string(),
+            coordinator_wire_schema: "coordinator.wire.json".to_string(),
+            root_wire_schema: "root.wire.json".to_string(),
+            store_wire_schema: "store.wire.json".to_string(),
         }),
-        protocol_steps: Vec::new(),
+
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         treasury: "coordinator".to_string(),
     }
@@ -2281,7 +2285,11 @@ fn fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow()
     use canic_contracts::dto::fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus};
     let root = crate::test_support::temp_dir("fixture-publication-budget");
     fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("store.did"), "service : {};").unwrap();
+    fs::write(
+        root.join("store.wire.json"),
+        crate::test_support::WIRE_SCHEMA,
+    )
+    .unwrap();
     let mut desired = desired(Vec::new());
     let upload = CurrentFleetProtocolAction::PublishStoreFixtureChunk {
         maximum_attempts: 1,
@@ -2374,9 +2382,13 @@ fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope()
             assert_eq!(preparation.chunk_hashes, expected_hashes);
         }
         assert!(
-            ic_platform::candid::contract::encode_one(request)
-                .unwrap()
-                .len()
+            ic_wire::native::encode_request(
+                protocol::template_bytes::METHOD_ID,
+                &canic_contracts::dto::template_bytes::PublishRequestRef::from(request),
+                protocol::template_bytes::REQUEST_LIMITS,
+            )
+            .unwrap()
+            .len()
                 <= canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES
         );
     }
@@ -2440,4 +2452,448 @@ fn store_chunk_compilation_binds_the_upload_representation_not_the_raw_module() 
     );
     assert_ne!(preparation.payload_hash, Sha256::digest(wasm).to_vec());
     assert_eq!(preparation.payload_size_bytes, compressed.len() as u64);
+}
+
+#[test]
+fn bootstrap_manifest_observation_requires_stamped_times_and_exact_content() {
+    let (actions, status) = StoreStagingFixture::subject();
+    let CurrentFleetProtocolAction::PublishStoreChunk { request } = &actions[0] else {
+        panic!("chunk");
+    };
+    let request = request.preparation.as_ref().unwrap();
+    assert!(prepared_store_status_matches(request, &status));
+    for field in 0..3 {
+        let mut changed = status.clone();
+        let manifest = changed.manifest.as_mut().unwrap();
+        match field {
+            0 => manifest.created_at = 0,
+            1 => manifest.approved_at = Some(0),
+            _ => manifest.payload_hash[0] ^= 1,
+        }
+        assert!(!prepared_store_status_matches(request, &changed));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn native_store_staging_rejects_wrong_frames_and_preserves_remote_refusals() {
+    let fixture = StoreStagingFixture::new();
+    let response = Ok::<_, canic_contracts::dto::error::Error>(fixture.status.clone());
+    let frame = ic_wire::native::encode_response(
+        protocol::store_catalog::fixture::METHOD_ID,
+        &response,
+        protocol::store_catalog::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    fs::write(
+        fixture.root.join("response.hex"),
+        canic_core::cdk::utils::hash::hex_bytes(frame),
+    )
+    .unwrap();
+    assert!(matches!(
+        fixture.pending(),
+        Err(CurrentProtocolError::Transport(
+            CanisterProtocolError::WireQuery {
+                source: crate::icp::IcpWireQueryError::Wire(ic_wire::Error::Identity),
+                ..
+            }
+        ))
+    ));
+    let rejected = canic_contracts::dto::error::Error::from_registered(
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE,
+    );
+    let response: Result<TemplateStagingStatusResponse, _> = Err(rejected);
+    let frame = ic_wire::native::encode_response(
+        protocol::store_catalog::template::METHOD_ID,
+        &response,
+        protocol::store_catalog::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    fs::write(
+        fixture.root.join("response.hex"),
+        canic_core::cdk::utils::hash::hex_bytes(frame),
+    )
+    .unwrap();
+    assert!(
+        matches!(fixture.pending(), Err(CurrentProtocolError::Transport(CanisterProtocolError::Response { source: crate::icp::IcpJsonResponseError::Rejected(actual), .. })) if actual == rejected)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn store_authority_observation_rejects_wrong_native_method_identity() {
+    let fixture = AuthorityReadsFixture::new(1, false);
+    let authority = &fixture.authorities[0].wasm_store_authority;
+    let reply = Ok::<_, canic_contracts::dto::error::Error>(
+        canic_contracts::dto::store_status::Authority::from(authority.clone()),
+    );
+    let bytes = ic_wire::native::encode_response(
+        protocol::store_status::activation::METHOD_ID,
+        &reply,
+        protocol::store_status::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    fs::write(
+        fixture.root.join(format!("{}.hex", authority.wasm_store)),
+        canic_core::cdk::utils::hash::hex_bytes(bytes),
+    )
+    .unwrap();
+    assert!(matches!(
+        fixture.read(),
+        Err(CurrentProtocolError::Transport(
+            CanisterProtocolError::WireQuery {
+                source: crate::icp::IcpWireQueryError::Wire(ic_wire::Error::Identity),
+                ..
+            }
+        ))
+    ));
+    AuthorityReadsFixture::respond_store(&fixture.root, authority.wasm_store, authority.clone());
+    assert_eq!(fixture.read().unwrap(), fixture.authorities);
+}
+
+#[cfg(unix)]
+#[test]
+fn root_authority_observation_rejects_wrong_native_method_identity() {
+    let fixture = AuthorityReadsFixture::new(1, false);
+    let authority = &fixture.authorities[0];
+    let reply = Ok::<_, canic_contracts::dto::error::Error>(
+        canic_contracts::dto::root_authority::Authority::from(authority.clone()),
+    );
+    let bytes = ic_wire::native::encode_response(
+        protocol::store_status::authority::METHOD_ID,
+        &reply,
+        protocol::root_authority::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    fs::write(
+        fixture
+            .root
+            .join(format!("{}.hex", authority.binding.fleet_subnet_root)),
+        canic_core::cdk::utils::hash::hex_bytes(bytes),
+    )
+    .unwrap();
+    assert!(matches!(
+        fixture.read(),
+        Err(CurrentProtocolError::Transport(
+            CanisterProtocolError::WireQuery {
+                source: crate::icp::IcpWireQueryError::Wire(ic_wire::Error::Identity),
+                ..
+            }
+        ))
+    ));
+    AuthorityReadsFixture::respond(
+        &fixture.root,
+        authority.binding.fleet_subnet_root,
+        authority.clone(),
+    );
+    assert_eq!(fixture.read().unwrap(), fixture.authorities);
+}
+
+#[cfg(unix)]
+fn qualify_native_coordinator_provisioning(
+    status: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+) {
+    use canic_contracts::{dto::component_read, protocol::component_read as wire};
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = crate::test_support::temp_dir("coordinator-provisioning-observation");
+    fs::create_dir_all(&root).unwrap();
+    let executable = root.join("icp");
+    fs::write(
+        &executable,
+        crate::test_support::tool_script(
+            r#"#!/bin/sh
+set -eu
+case " $* " in
+  *" --version "*) echo 'icp @ICP_VERSION@';;
+  *" canic_coordinator_component_provisioning "*" --query "*) cat response.hex;;
+  *) exit 2;;
+esac
+"#,
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(root.clone());
+    let native = component_read::CoordinatorProvisioning::from(status.clone());
+    let response = Ok::<_, canic_contracts::dto::error::Error>(native);
+    let respond = |method_id,
+                   response: &Result<
+        component_read::CoordinatorProvisioning,
+        canic_contracts::dto::error::Error,
+    >| {
+        let bytes =
+            ic_wire::native::encode_response(method_id, response, wire::RESPONSE_LIMITS).unwrap();
+        fs::write(
+            root.join("response.hex"),
+            canic_core::cdk::utils::hash::hex_bytes(bytes),
+        )
+        .unwrap();
+    };
+    respond(wire::coordinator_provisioning::METHOD_ID, &response);
+    let target = Principal::from_slice(&[42]);
+    assert_eq!(
+        query_operation(&icp, target, status.operation_id).unwrap(),
+        Some(status.clone())
+    );
+    respond(wire::provisioning::METHOD_ID, &response);
+    assert!(matches!(
+        query_operation(&icp, target, status.operation_id),
+        Err(CurrentProtocolError::Transport(
+            CanisterProtocolError::WireQuery {
+                source: crate::icp::IcpWireQueryError::Wire(ic_wire::Error::Identity),
+                ..
+            }
+        ))
+    ));
+    let unavailable = Err(canic_contracts::dto::error::Error::from_registered(
+        canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
+    ));
+    respond(wire::coordinator_provisioning::METHOD_ID, &unavailable);
+    assert_eq!(
+        query_operation(&icp, target, status.operation_id).unwrap(),
+        None
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+fn qualify_native_root_store_reads(
+    adoption: &canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
+) {
+    use canic_contracts::{dto::root_store_control, protocol::root_store_control as wire};
+    use std::os::unix::fs::PermissionsExt as _;
+    let scratch = crate::test_support::temp_dir("native-root-store-reads");
+    fs::create_dir_all(&scratch).unwrap();
+    let executable = scratch.join("icp");
+    fs::write(&executable, crate::test_support::tool_script(r#"#!/bin/sh
+set -eu
+case " $* " in
+  *" --version "*) echo 'icp @ICP_VERSION@';;
+  *" canic_root_store_adoption "*" --query "*|*" canic_root_store_bootstrap "*" --query "*) cat response.hex;;
+  *) exit 2;;
+esac
+"#)).unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(scratch.clone());
+    let target = adoption.authority.fleet_subnet_root;
+    let reply = Ok::<_, canic_contracts::dto::error::Error>(root_store_control::Adoption::from(
+        adoption.clone(),
+    ));
+    let bytes =
+        ic_wire::native::encode_response(wire::adoption::METHOD_ID, &reply, wire::RESPONSE_LIMITS)
+            .unwrap();
+    fs::write(
+        scratch.join("response.hex"),
+        canic_core::cdk::utils::hash::hex_bytes(bytes),
+    )
+    .unwrap();
+    assert_eq!(
+        query_root_store_adoption(&icp, target, adoption.operation_id).unwrap(),
+        Some(adoption.clone())
+    );
+    let bootstrap = canic_contracts::dto::root_store::RootStoreBootstrapResponse {
+        fleet_subnet_root: target,
+        wasm_store: adoption.authority.wasm_store,
+        release_set: canic_contracts::ids::FleetSubnetRootReleaseSet {
+            release_build_id: adoption.authority.release_build_id,
+            manifest_digest: canic_contracts::ids::ReleaseSetDigest::from_bytes([21; 32]),
+        },
+        catalog: Vec::new(),
+        fixtures: Vec::new(),
+    };
+    let reply = Ok::<_, canic_contracts::dto::error::Error>(root_store_control::Bootstrap::from(
+        bootstrap.clone(),
+    ));
+    let bytes = ic_wire::native::encode_response(
+        wire::bootstrap_status::METHOD_ID,
+        &reply,
+        wire::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    fs::write(
+        scratch.join("response.hex"),
+        canic_core::cdk::utils::hash::hex_bytes(bytes),
+    )
+    .unwrap();
+    assert_eq!(
+        query_root_store_bootstrap(&icp, target, [22; 32]).unwrap(),
+        Some(bootstrap)
+    );
+    assert!(matches!(
+        query_root_store_adoption(&icp, target, adoption.operation_id),
+        Err(CurrentProtocolError::Transport(
+            CanisterProtocolError::WireQuery {
+                source: crate::icp::IcpWireQueryError::Wire(ic_wire::Error::Identity),
+                ..
+            }
+        ))
+    ));
+    let absent: Result<root_store_control::Bootstrap, _> =
+        Err(canic_contracts::dto::error::Error::from_registered(
+            canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
+        ));
+    let bytes = ic_wire::native::encode_response(
+        wire::bootstrap_status::METHOD_ID,
+        &absent,
+        wire::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    fs::write(
+        scratch.join("response.hex"),
+        canic_core::cdk::utils::hash::hex_bytes(bytes),
+    )
+    .unwrap();
+    assert_eq!(
+        query_root_store_bootstrap(&icp, target, [22; 32]).unwrap(),
+        None
+    );
+    fs::remove_dir_all(scratch).unwrap();
+}
+
+#[cfg(unix)]
+fn synchronization_evidence() -> canic_contracts::dto::registry_control::SynchronizationStatus {
+    use canic_contracts::dto::{
+        coordinator_acknowledgements, registry_control, runtime_configuration,
+    };
+    let config = parse_config_model(CONFIG).unwrap();
+    let registry = active_registry(&config);
+    let topology = config.compile_component_topology().unwrap();
+    let version = registry_version(&topology, &registry).unwrap();
+    let root = registry.fleet_subnet_roots[0].fleet_subnet_root;
+    let mut successor = version.clone();
+    successor.revision += 1;
+    successor.content_hash = [25; 32];
+    registry_control::SynchronizationStatus {
+        synchronization: registry_control::Synchronization {
+            fleet_subnet_root: root.into(),
+            version: version.clone().into(),
+            acknowledgement: coordinator_acknowledgements::RootAcknowledgement {
+                fleet_subnet_root: root.into(),
+                version: version.clone().into(),
+            },
+        },
+        activation: Some(registry_control::MirrorActivation {
+            fleet_subnet_root: root.into(),
+            previous_registry: version.into(),
+            version: successor.clone().into(),
+            directory: runtime_configuration::FleetDirectorySnapshot {
+                provenance: runtime_configuration::FleetDirectoryProvenance {
+                    registry: successor.into(),
+                    source_fleet_subnet_root: root.into(),
+                },
+                fleet_subnet_roots: registry
+                    .fleet_subnet_roots
+                    .iter()
+                    .map(
+                        |entry| runtime_configuration::FleetSubnetRootDirectoryEntry {
+                            placement_subnet: entry.placement_subnet.into_principal().into(),
+                            fleet_subnet_root: entry.fleet_subnet_root.into(),
+                            status: entry.status,
+                        },
+                    )
+                    .collect(),
+                services: Vec::new(),
+            },
+        }),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn native_registry_synchronization_observes_both_phases_and_rejects_wrong_frames() {
+    use canic_contracts::{dto::registry_control, protocol::registry_control as wire};
+    use std::os::unix::fs::PermissionsExt as _;
+    let scratch = crate::test_support::temp_dir("native-registry-synchronization");
+    fs::create_dir_all(&scratch).unwrap();
+    let executable = scratch.join("icp");
+    fs::write(
+        &executable,
+        crate::test_support::tool_script(
+            r#"#!/bin/sh
+set -eu
+case " $* " in
+  *" --version "*) echo 'icp @ICP_VERSION@';;
+  *" canic_root_registry_synchronization "*" --query "*) cat response.hex;;
+  *) exit 2;;
+esac
+"#,
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(scratch.clone());
+    let mut native = synchronization_evidence();
+    let activation = native.activation.take();
+    let root = native.synchronization.fleet_subnet_root.into();
+    let respond = |method,
+                   response: &Result<
+        registry_control::SynchronizationStatus,
+        canic_contracts::dto::error::Error,
+    >| {
+        let bytes =
+            ic_wire::native::encode_response(method, response, wire::RESPONSE_LIMITS).unwrap();
+        fs::write(
+            scratch.join("response.hex"),
+            canic_core::cdk::utils::hash::hex_bytes(bytes),
+        )
+        .unwrap();
+    };
+    for phase in [None, activation] {
+        native.activation = phase;
+        respond(wire::synchronization_status::METHOD_ID, &Ok(native.clone()));
+        let observed = query_root_registry_synchronization(&icp, root, [24; 32])
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            registry_control::SynchronizationStatus::from(observed),
+            native
+        );
+    }
+    respond(wire::synchronize::METHOD_ID, &Ok(native));
+    assert!(matches!(
+        query_root_registry_synchronization(&icp, root, [24; 32]),
+        Err(CurrentProtocolError::Transport(
+            CanisterProtocolError::WireQuery {
+                source: crate::icp::IcpWireQueryError::Wire(ic_wire::Error::Identity),
+                ..
+            }
+        ))
+    ));
+    respond(
+        wire::synchronization_status::METHOD_ID,
+        &Err(canic_contracts::dto::error::Error::from_registered(
+            canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
+        )),
+    );
+    assert_eq!(
+        query_root_registry_synchronization(&icp, root, [24; 32]).unwrap(),
+        None
+    );
+    fs::remove_dir_all(scratch).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn paid_mutation_refuses_unmatched_retained_schema_without_a_call() {
+    let fixture = StoreStagingFixture::new();
+    let desired = desired(Vec::new());
+    let action = bind_action(
+        &fixture.root,
+        &desired,
+        &state(),
+        desired.protocol.as_ref().unwrap(),
+        fixture.actions[0].clone(),
+        principal(21),
+        "schema-admission".into(),
+        0,
+    )
+    .unwrap();
+    fs::write(fixture.root.join("calls"), []).unwrap();
+    assert!(matches!(
+        apply(&fixture.icp, &fixture.root, &action),
+        Err(CurrentProtocolError::WireSchema(
+            crate::artifact_io::WireArtifactError::Contract
+        ))
+    ));
+    assert_eq!(fixture.calls(), 0);
 }

@@ -11,9 +11,9 @@ use crate::{
 #[must_use]
 pub(super) fn record_to_info(pid: Principal, record: CanisterRecord) -> CanisterInfo {
     CanisterInfo {
-        pid,
+        pid: pid.into(),
         role: record.role,
-        parent_pid: record.parent_pid,
+        parent_pid: record.parent_pid.map(Into::into),
         module_hash: record.module_hash,
         created_at: record.created_at,
     }

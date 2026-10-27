@@ -1,5 +1,7 @@
 #![expect(clippy::unused_async)]
 
+mod protocol;
+
 use canic::{Error, prelude::*};
 use std::cell::Cell;
 
@@ -61,7 +63,7 @@ fn assert_restored_lifecycle_context() {
         .expect("Canic must initialize the shared timer provider before the lifecycle participant");
 }
 
-#[canic_query(requires(caller::is_fleet_admitted()))]
+#[canic_query(requires(caller::is_fleet_admitted()), wire(id = protocol::ADMISSION, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn test_fleet_admission_probe() -> Result<(), Error> {
     Ok(())
 }

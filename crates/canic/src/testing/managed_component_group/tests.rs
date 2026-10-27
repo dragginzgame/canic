@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn application_init_binds_the_actual_canister_without_changing_static_bytes() {
     fn encode(canister: Principal) -> Vec<u8> {
-        encode_one(canister).expect("Principal argument")
+        canic_contracts::protocol::initialization::encode(canister).expect("Principal argument")
     }
     let first = Principal::self_authenticating([1]);
     let second = Principal::self_authenticating([2]);
@@ -255,4 +255,42 @@ fn app_failure_projection_retains_decoder_limits_and_transport_classification() 
         panic!("operation failure must retain its typed source");
     };
     assert_eq!(actual, source);
+}
+
+#[test]
+fn allocation_reply_keeps_settlement_and_acknowledgement_slots_distinct() {
+    let parent = ic_platform::Principal::self_authenticating([1]);
+    let child = ic_platform::Principal::self_authenticating([2]);
+    let role = CanisterRole::from("shard_child");
+    let spec = child_control_spec("testing_component_child_allocations", 0x5445_5354_0000_0b00);
+    for settled in [false, true] {
+        for acknowledged in [false, true] {
+            // Independent positional producer shape includes both trailing booleans.
+            let payload = vec![(
+                [9_u8; 32],
+                parent,
+                role.clone(),
+                Some(vec![7_u8]),
+                child,
+                settled,
+                acknowledged,
+            )];
+            let bytes =
+                ic_wire::native::encode_response(spec.method_id, &payload, spec.response_limits)
+                    .unwrap();
+            let mut decoded: Vec<WireChildAllocation> =
+                ic_wire::native::decode_response(spec.method_id, &bytes, spec.response_limits)
+                    .unwrap();
+            let observation = decoded.pop().unwrap();
+            assert!(decoded.is_empty());
+            assert_eq!(observation._settled, settled);
+            let allocation = FixtureChildAllocation::from(observation);
+            assert_eq!(allocation.acknowledged, acknowledged);
+            assert_eq!(allocation.request_id, [9; 32]);
+            assert_eq!(allocation.parent, parent.into());
+            assert_eq!(allocation.child, child.into());
+            assert_eq!(allocation.canister_role, role);
+            assert_eq!(allocation.extra_arg, Some(vec![7]));
+        }
+    }
 }

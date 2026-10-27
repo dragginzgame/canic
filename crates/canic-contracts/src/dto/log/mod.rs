@@ -4,8 +4,11 @@
 
 use crate::{dto::prelude::*, log::Level};
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct LogEntry {
     pub crate_name: String,
     pub created_at: u64,

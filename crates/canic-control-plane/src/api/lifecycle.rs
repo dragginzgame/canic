@@ -1,8 +1,6 @@
-use crate::dto::root::RootOperationStatusResponse;
 use canic_contracts::dto::{
     component_registry::{
-        ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentDirectoryPageRequest,
-        ComponentDirectoryPageResponse, ComponentRegistryActivePartitionRequest,
+        ComponentDirectoryHeadRequest, ComponentRegistryActivePartitionRequest,
         ComponentRegistryActivePartitionResponse, ComponentRegistryPartitionRequest,
         ComponentRegistryPartitionResponse, RootComponentAllocationRequest,
         RootComponentAllocationResponse, RootComponentChildAllocationRequest,
@@ -164,13 +162,93 @@ impl LifecycleApi {
         Ok(status)
     }
 
-    /// Resolve one indexed Root-owned durable operation for the consolidated status lane.
-    pub fn root_operation_status(
+    /// Return exact Store evidence under the original operation observer authority.
+    pub fn root_store_adoption_status(
         operation_id: [u8; 32],
         caller: ic_platform::principal::ExternalPrincipal,
         caller_is_controller: bool,
-    ) -> Result<RootOperationStatusResponse, canic_contracts::dto::error::Error> {
-        crate::workflow::root_status::operation_status(operation_id, caller, caller_is_controller)
+    ) -> Result<
+        canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::store_adoption_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Return exact Store evidence under the original operation observer authority.
+    pub fn root_store_bootstrap_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::root_store::RootStoreBootstrapResponse,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::store_bootstrap_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Observe exact retained activation evidence under its existing caller authority.
+    pub fn root_activation_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::fleet_activation::FleetActivationStatusResponse,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::activation_status(operation_id, caller, caller_is_controller)
+            .map_err(Into::into)
+    }
+
+    /// Observe exact retained refill evidence under its existing caller authority.
+    pub fn root_refill_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::icp_refill::IcpRefillResponse,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::refill_status(operation_id, caller, caller_is_controller)
+            .map_err(Into::into)
+    }
+
+    /// Observe complete synchronization authority under the original caller fence.
+    pub fn root_registry_synchronization_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::root::RootRegistrySynchronizationOperationStatus,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::registry_synchronization_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Read the exact retained Root-removal operation for its authorized observer.
+    pub fn root_removal_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::root::RootRemovalOperationStatus,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::removal_status(operation_id, caller, caller_is_controller)
             .map_err(Into::into)
     }
 
@@ -200,6 +278,57 @@ impl LifecycleApi {
         caller_is_controller: bool,
     ) -> Result<RootComponentChildAllocationResponse, canic_contracts::dto::error::Error> {
         crate::workflow::root_status::component_child_provisioning_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Observe exact top-level allocation evidence under its existing caller authority.
+    pub fn root_component_allocation_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::root::RootComponentOperationStatus,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::component_allocation_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Read retained subtree evidence without advancing deletion or reconciliation.
+    pub fn root_subtree_removal_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::component_registry::RootComponentSubtreeRemovalResponse,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::subtree_removal_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Observe retained component-removal authority without repeating effects.
+    pub fn root_component_removal_status(
+        operation_id: [u8; 32],
+        caller: ic_platform::principal::ExternalPrincipal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_contracts::dto::root::RootComponentRemovalOperationStatus,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::root_status::component_removal_status(
             operation_id,
             caller,
             caller_is_controller,
@@ -568,21 +697,36 @@ impl LifecycleApi {
 
     pub fn component_directory_head(
         request: ComponentDirectoryHeadRequest,
-    ) -> Result<ComponentDirectoryHead, canic_contracts::dto::error::Error> {
-        crate::workflow::component_registry::directory_head(request).map_err(Into::into)
+    ) -> Result<
+        canic_contracts::dto::component_directory::ComponentDirectoryHead,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::component_registry::directory_head(request)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 
     pub fn component_directory_page(
-        request: ComponentDirectoryPageRequest,
-    ) -> Result<ComponentDirectoryPageResponse, canic_contracts::dto::error::Error> {
-        crate::workflow::component_registry::directory_page(request).map_err(Into::into)
+        request: canic_contracts::dto::component_directory::ComponentDirectoryPageRequest,
+    ) -> Result<
+        canic_contracts::dto::component_directory::ComponentDirectoryPageResponse,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::component_registry::directory_page(request.into())
+            .map(Into::into)
+            .map_err(Into::into)
     }
 
     /// Read complete membership after the Root status endpoint authenticates its controller.
     pub fn controller_component_directory_page(
-        request: ComponentDirectoryPageRequest,
-    ) -> Result<ComponentDirectoryPageResponse, canic_contracts::dto::error::Error> {
-        crate::workflow::component_registry::controller_directory_page(request).map_err(Into::into)
+        request: canic_contracts::dto::component_directory::ComponentDirectoryPageRequest,
+    ) -> Result<
+        canic_contracts::dto::component_directory::ComponentDirectoryPageResponse,
+        canic_contracts::dto::error::Error,
+    > {
+        crate::workflow::component_registry::controller_directory_page(request.into())
+            .map(Into::into)
+            .map_err(Into::into)
     }
 
     pub async fn prepare_fleet_activation()

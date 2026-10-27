@@ -5,6 +5,8 @@
 //! Boundary: receives values projected by ops before workflow use.
 
 #[cfg(feature = "root-control-plane")]
+pub mod application_checkpoint;
+#[cfg(feature = "root-control-plane")]
 pub mod canister_pool;
 #[cfg(feature = "root-control-plane")]
 pub mod component_directory_synchronization;

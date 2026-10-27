@@ -21,9 +21,61 @@ macro_rules! __canic_blob_endpoint {
             ($d category:ident, $d method:expr;) => { let _: () = decode!($d category, $d method, &$crate::__private::transport::arguments(ic_blob_storage_contracts::wire::request_limit($d method).expect("Blob request limit"))); };
             ($d category:ident, $d method:expr; $d arg:ident : $d ty:ty) => { let $d arg: $d ty = decode!($d category, $d method, &$crate::__private::transport::arguments(ic_blob_storage_contracts::wire::request_limit($d method).expect("Blob request limit"))); };
         }
+        macro_rules! gc_arguments {
+            (roots; $d arg:ident : $d ty:ty) => {
+                let $d arg: $d ty = ic_blob_storage_contracts::provider::gc::decode_roots(
+                    &$crate::__private::transport::arguments(ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES)
+                ).expect("bounded provider roots");
+            };
+            (empty;) => {
+                ic_blob_storage_contracts::provider::gc::decode_empty(
+                    &$crate::__private::transport::arguments(ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES)
+                ).expect("empty provider request");
+            };
+        }
+        macro_rules! describe {
+            (IcWire, $d name:ident, $d spec:expr) => {
+                mod $d name {
+                    use super::ic_blob_storage_contracts;
+                    pub const CONTRACT: ic_blob_storage_contracts::endpoints::WireContract =
+                        match ($d spec).wire() {
+                            Ok(contract) => contract,
+                            Err(_) => panic!("Blob owned Wire descriptor"),
+                        };
+                    pub const ID: u64 = CONTRACT.id;
+                }
+            };
+            (Candid, $d name:ident, $d spec:expr) => {};
+        }
         macro_rules! endpoint {
+            (provider, query, $d category:ident, $d wire:literal, fn $d name:ident($d($d arg:ident : $d ty:ty),*) -> $d reply:ty $d body:block) => {
+                mod $d name {
+                    use super::*;
+                    #[cfg_attr(not(target_arch = "wasm32"), ic_platform::candid::contract::candid_method(query, rename = $d wire))]
+                    fn $d name($d($d arg: $d ty),*) -> $d reply $d body
+                    #[canic::canic_raw_query(public, name = $d wire, payload(max_bytes = ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES))]
+                    fn dispatch() {
+                        gc_arguments!($d category; $d($d arg: $d ty),*);
+                        let response = $d name($d($d arg),*);
+                        ic_platform::cdk::api::msg_reply(ic_platform::candid::contract::encode_one(response).expect("provider reply"));
+                    }
+                }
+            };
+            (provider, update, roots, $d wire:literal, async fn $d name:ident($d arg:ident : $d ty:ty) $d body:block) => {
+                mod $d name {
+                    use super::*;
+                    #[cfg_attr(not(target_arch = "wasm32"), ic_platform::candid::contract::candid_method(update, rename = $d wire))]
+                    async fn $d name($d arg: $d ty) $d body
+                    #[canic::canic_raw_update(public, name = $d wire, payload(max_bytes = ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES))]
+                    async fn dispatch() {
+                        gc_arguments!(roots; $d arg: $d ty);
+                        $d name($d arg).await;
+                        ic_platform::cdk::api::msg_reply(ic_platform::candid::contract::encode_args(()).expect("provider acknowledgment reply"));
+                    }
+                }
+            };
             (query, $d category:ident, fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
-                #[canic::canic_raw_query(public, payload(max_bytes = ic_blob_storage_contracts::wire::request_limit(stringify!($d name)).expect("Blob request limit")))]
+                #[canic::canic_raw_query(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
                 fn $d name() {
                     arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (|| $d body)();
@@ -31,7 +83,7 @@ macro_rules! __canic_blob_endpoint {
                 }
             };
             (update, $d category:ident, async fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
-                #[canic::canic_raw_update(public, payload(max_bytes = ic_blob_storage_contracts::wire::request_limit(stringify!($d name)).expect("Blob request limit")))]
+                #[canic::canic_raw_update(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
                 async fn $d name() {
                     arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (async move $d body).await;
@@ -45,6 +97,7 @@ macro_rules! __canic_blob_endpoint {
         }
         $crate::__private::ic_blob_storage_contracts::mount_service_endpoints!(
             emit = endpoint,
+            describe = describe,
             workflow = workflow,
             context = context,
             contracts = ic_blob_storage_contracts,
@@ -83,6 +136,7 @@ macro_rules! mount {
                 }
             }
             $crate::__canic_blob_endpoint!($);
+            $crate::__canic_blob_schema!();
         }
 
         // Candid's declaration pass resolves every endpoint type in this scope.

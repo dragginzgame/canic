@@ -117,11 +117,11 @@ pub(super) fn pause_reset(input: &ReinstallJourney<'_>, journal: &CapacityImport
         .canister_status(stopped, Some(input.root))
         .unwrap();
     assert!(stopped.module_hash.is_some());
-    let status: canic_contracts::dto::canister::CanisterStatusType =
+    let status: ic_platform::management_canister_types::CanisterStatusType =
         ic_platform::candid::decoder::decode_one(&encode_one(stopped.status).unwrap()).unwrap();
     assert_eq!(
         status,
-        canic_contracts::dto::canister::CanisterStatusType::Stopped
+        ic_platform::management_canister_types::CanisterStatusType::Stopped
     );
     assert!(approved.handoffs.iter().all(|entry| entry.effect.is_none()));
 }

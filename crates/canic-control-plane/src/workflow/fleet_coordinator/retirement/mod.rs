@@ -14,7 +14,7 @@ use canic_core::{
             cost_guard::CostGuardRequest,
             ic::{
                 IcOps,
-                cycles_ledger::{CyclesLedgerOps, CyclesLedgerTransferError},
+                cycles_ledger::{CyclesLedgerOps, TransferError},
             },
         },
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
@@ -75,10 +75,10 @@ pub async fn retire(
         CostGuardWorkflow::complete(&permit, IcOps::now_secs())?;
         let block = match response {
             Ok(block)
-            | Err(CyclesLedgerTransferError::Duplicate {
+            | Err(TransferError::Duplicate {
                 duplicate_of: block,
             }) => block,
-            Err(CyclesLedgerTransferError::TemporarilyUnavailable) => {
+            Err(TransferError::TemporarilyUnavailable) => {
                 return Err(InternalError::unavailable());
             }
             Err(_) => return Err(InternalError::conflict()),

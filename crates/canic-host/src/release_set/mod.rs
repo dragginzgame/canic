@@ -2,13 +2,14 @@
 
 mod application;
 mod artifact;
-mod candid;
 mod config;
 mod current;
+mod declaration;
 pub mod fixture;
 mod infrastructure;
 mod paths;
 
+pub(crate) use application::load_retained_application_artifact_union;
 pub use application::{
     ApplicationArtifactBuildOutput, ApplicationArtifactBuildTarget, ApplicationArtifactEntry,
     ApplicationArtifactFileBuildOutput, ApplicationArtifactUnion,
@@ -18,7 +19,6 @@ pub use application::{
     load_persisted_application_artifact_union,
 };
 pub(crate) use artifact::validate_release_artifact_relative_path;
-pub use candid::{BuiltCandid, BuiltCandidError, load_built_candid};
 pub use config::{
     AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
     AppConfigNameField, AppConfigNameIssue, AppConfigOperation, AppConfigPackageIssue,
@@ -31,6 +31,7 @@ pub use current::{
     ReleaseTransitionMode, compile_and_persist_current_release_set_manifest,
     load_persisted_current_release_set_manifest,
 };
+pub use declaration::{BuiltDeclarationError, BuiltWireSchema, load_built_wire_schema};
 pub use infrastructure::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactEntry,
     CanicInfrastructureArtifactInput, CanicInfrastructureArtifactManifest,
@@ -65,3 +66,6 @@ pub(super) fn valid_package_name(package: &str) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) mod test_artifact;

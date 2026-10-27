@@ -816,9 +816,9 @@ placement.minimum_distinct_roots = 1
     ));
 
     let encoded =
-        ic_platform::candid::contract::encode_one(&topology).expect("encode purpose topology");
+        canic_contracts::protocol::authority::encode(&topology).expect("encode purpose topology");
     let decoded: ComponentGroupDeploymentTopology =
-        ic_platform::candid::decoder::decode_one(&encoded).expect("decode purpose topology");
+        canic_contracts::protocol::authority::decode(&encoded).expect("decode purpose topology");
     assert_eq!(decoded, topology);
     decoded
         .validate(

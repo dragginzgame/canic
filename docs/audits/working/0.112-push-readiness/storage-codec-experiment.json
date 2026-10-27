@@ -1,0 +1,385 @@
+{
+  "date": "2026-10-26",
+  "status": "experiment_complete_production_unchanged",
+  "evidence_directory": "/tmp/canic-storage-experiment-20261026",
+  "recommendation": "Prefer the bounded Postcard candidate for a deliberate structured-storage cut; do not promote the generic prototype as production storage.",
+  "scope": "Scratch snapshot and exact excerpts of current funding/auth/provisioning records; CBOR protocol boundaries and evidence-hash encodings retained.",
+  "methodology": {
+    "probe_wire": "0.7.17",
+    "root_wire": "0.7.17",
+    "postcard": "1.1.3",
+    "serde_cbor": "0.11.2",
+    "build_output": "Probe target is private; Root builds sequentially reused the idle consumer target after host process checks. Source and final artifact outputs are in scratch.",
+    "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+    "pocket_ic": "16.1.0",
+    "probe_profile": "release: opt-level=z, lto=true, codegen-units=1",
+    "root_profile": "managed fast; dedicated Blob consumer graph",
+    "instruction_counter": "ic0.performance_counter(0), no global allocation tracker",
+    "allocations": "Separate Wasm with tracking System allocator; peak requested live heap over pre-call baseline, includes result. Excludes allocator metadata and transient realloc implementation overhead.",
+    "record_extraction": "Exact source blocks in probe/src/records/mod.rs; nested public types imported from snapshotted canic-contracts.",
+    "probe_limits": {
+      "bytes": 32768,
+      "allocation": 1048576,
+      "nodes": 65536,
+      "depth": 64
+    },
+    "root_experiment_limits": {
+      "bytes": 67108864,
+      "allocation": 1073741824,
+      "nodes": 67108864,
+      "depth": 128
+    },
+    "root_limit_note": "Generous experiment-only global values, not qualified production record allowances."
+  },
+  "baseline_correction": "Both Root variants and probe dependencies restore CandidType on MetricsKind only in the scratch snapshot, because MetricsStatusRequest still derives CandidType. This correction was not applied to the live worktree.",
+  "artifacts": {
+    "root-cbor": {
+      "sha256": "8403da33b94bbe787164b060e257606f9a8772cef80b2b023ec9b34be5e6186d",
+      "file_bytes": 9333011,
+      "code_body_bytes": 8797826,
+      "defined_functions": 33660
+    },
+    "root-bounded": {
+      "sha256": "f0d5e15c5bd879c290af11cf4eefcfe9db59a3e8bc519758dd9e4e051137136a",
+      "file_bytes": 7932684,
+      "code_body_bytes": 7420852,
+      "defined_functions": 31498
+    },
+    "probe-allocations": {
+      "sha256": "35588d0991866583ccbb0a4c96032f63fb932d81886e1b4de22355b465e1f776",
+      "file_bytes": 1056432,
+      "code_body_bytes": 551774,
+      "defined_functions": 2029
+    },
+    "probe-instructions": {
+      "sha256": "01d4dbc7214a037de9b50dffa76a6af7a76893dd3002bd1b09bdfe342fdb7b83",
+      "file_bytes": 1055455,
+      "code_body_bytes": 553501,
+      "defined_functions": 2011
+    }
+  },
+  "metrics": [
+    {
+      "bytes": 221,
+      "case": "funding-empty",
+      "codec": "cbor",
+      "decode_allocations": 4,
+      "decode_instructions": 77871,
+      "encode_allocations": 6,
+      "encode_instructions": 13538,
+      "encode_peak_requested_heap_bytes": 256,
+      "decode_peak_requested_heap_bytes": 1280
+    },
+    {
+      "bytes": 11,
+      "case": "funding-empty",
+      "codec": "postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 27511,
+      "encode_allocations": 2,
+      "encode_instructions": 2762,
+      "encode_peak_requested_heap_bytes": 16,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 11,
+      "case": "funding-empty",
+      "codec": "bounded-postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 38053,
+      "encode_allocations": 1,
+      "encode_instructions": 6396,
+      "encode_peak_requested_heap_bytes": 11,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 995,
+      "case": "funding-in-flight",
+      "codec": "cbor",
+      "decode_allocations": 27,
+      "decode_instructions": 258667,
+      "encode_allocations": 16,
+      "encode_instructions": 103795,
+      "encode_peak_requested_heap_bytes": 1024,
+      "decode_peak_requested_heap_bytes": 6400
+    },
+    {
+      "bytes": 375,
+      "case": "funding-in-flight",
+      "codec": "postcard",
+      "decode_allocations": 3,
+      "decode_instructions": 66471,
+      "encode_allocations": 7,
+      "encode_instructions": 81661,
+      "encode_peak_requested_heap_bytes": 736,
+      "decode_peak_requested_heap_bytes": 64
+    },
+    {
+      "bytes": 375,
+      "case": "funding-in-flight",
+      "codec": "bounded-postcard",
+      "decode_allocations": 3,
+      "decode_instructions": 96498,
+      "encode_allocations": 17,
+      "encode_instructions": 125170,
+      "encode_peak_requested_heap_bytes": 439,
+      "decode_peak_requested_heap_bytes": 64
+    },
+    {
+      "bytes": 2067,
+      "case": "auth-session-2KiB",
+      "codec": "cbor",
+      "decode_allocations": 2,
+      "decode_instructions": 8232,
+      "encode_allocations": 4,
+      "encode_instructions": 5562,
+      "encode_peak_requested_heap_bytes": 2067,
+      "decode_peak_requested_heap_bytes": 2304
+    },
+    {
+      "bytes": 2050,
+      "case": "auth-session-2KiB",
+      "codec": "postcard",
+      "decode_allocations": 1,
+      "decode_instructions": 3255,
+      "encode_allocations": 2,
+      "encode_instructions": 3720,
+      "encode_peak_requested_heap_bytes": 2050,
+      "decode_peak_requested_heap_bytes": 2048
+    },
+    {
+      "bytes": 2050,
+      "case": "auth-session-2KiB",
+      "codec": "bounded-postcard",
+      "decode_allocations": 1,
+      "decode_instructions": 3586,
+      "encode_allocations": 1,
+      "encode_instructions": 4609,
+      "encode_peak_requested_heap_bytes": 2050,
+      "decode_peak_requested_heap_bytes": 2048
+    },
+    {
+      "bytes": 178,
+      "case": "auth-replay",
+      "codec": "cbor",
+      "decode_allocations": 5,
+      "decode_instructions": 41220,
+      "encode_allocations": 6,
+      "encode_instructions": 15611,
+      "encode_peak_requested_heap_bytes": 304,
+      "decode_peak_requested_heap_bytes": 1280
+    },
+    {
+      "bytes": 72,
+      "case": "auth-replay",
+      "codec": "postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 7002,
+      "encode_allocations": 5,
+      "encode_instructions": 4671,
+      "encode_peak_requested_heap_bytes": 128,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 72,
+      "case": "auth-replay",
+      "codec": "bounded-postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 12502,
+      "encode_allocations": 1,
+      "encode_instructions": 11506,
+      "encode_peak_requested_heap_bytes": 72,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 390,
+      "case": "provisioning-retry",
+      "codec": "cbor",
+      "decode_allocations": 12,
+      "decode_instructions": 81589,
+      "encode_allocations": 7,
+      "encode_instructions": 26838,
+      "encode_peak_requested_heap_bytes": 512,
+      "decode_peak_requested_heap_bytes": 2602
+    },
+    {
+      "bytes": 165,
+      "case": "provisioning-retry",
+      "codec": "postcard",
+      "decode_allocations": 3,
+      "decode_instructions": 13809,
+      "encode_allocations": 5,
+      "encode_instructions": 9026,
+      "encode_peak_requested_heap_bytes": 248,
+      "decode_peak_requested_heap_bytes": 42
+    },
+    {
+      "bytes": 165,
+      "case": "provisioning-retry",
+      "codec": "bounded-postcard",
+      "decode_allocations": 3,
+      "decode_instructions": 21392,
+      "encode_allocations": 1,
+      "encode_instructions": 20539,
+      "encode_peak_requested_heap_bytes": 165,
+      "decode_peak_requested_heap_bytes": 42
+    },
+    {
+      "bytes": 139,
+      "case": "provisioning-cursor",
+      "codec": "cbor",
+      "decode_allocations": 5,
+      "decode_instructions": 39732,
+      "encode_allocations": 6,
+      "encode_instructions": 15159,
+      "encode_peak_requested_heap_bytes": 272,
+      "decode_peak_requested_heap_bytes": 1280
+    },
+    {
+      "bytes": 35,
+      "case": "provisioning-cursor",
+      "codec": "postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 5480,
+      "encode_allocations": 4,
+      "encode_instructions": 3852,
+      "encode_peak_requested_heap_bytes": 64,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 35,
+      "case": "provisioning-cursor",
+      "codec": "bounded-postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 10954,
+      "encode_allocations": 1,
+      "encode_instructions": 9852,
+      "encode_peak_requested_heap_bytes": 35,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 17,
+      "case": "cycles-zero",
+      "codec": "cbor",
+      "decode_allocations": 0,
+      "decode_instructions": 1170,
+      "encode_allocations": 2,
+      "encode_instructions": 1753,
+      "encode_peak_requested_heap_bytes": 17,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 1,
+      "case": "cycles-zero",
+      "codec": "postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 572,
+      "encode_allocations": 1,
+      "encode_instructions": 1027,
+      "encode_peak_requested_heap_bytes": 8,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 1,
+      "case": "cycles-zero",
+      "codec": "bounded-postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 754,
+      "encode_allocations": 1,
+      "encode_instructions": 2198,
+      "encode_peak_requested_heap_bytes": 1,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 17,
+      "case": "cycles-u128-max",
+      "codec": "cbor",
+      "decode_allocations": 0,
+      "decode_instructions": 1170,
+      "encode_allocations": 2,
+      "encode_instructions": 1753,
+      "encode_peak_requested_heap_bytes": 17,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 19,
+      "case": "cycles-u128-max",
+      "codec": "postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 2631,
+      "encode_allocations": 1,
+      "encode_instructions": 1999,
+      "encode_peak_requested_heap_bytes": 19,
+      "decode_peak_requested_heap_bytes": 0
+    },
+    {
+      "bytes": 19,
+      "case": "cycles-u128-max",
+      "codec": "bounded-postcard",
+      "decode_allocations": 0,
+      "decode_instructions": 2711,
+      "encode_allocations": 1,
+      "encode_instructions": 3908,
+      "encode_peak_requested_heap_bytes": 19,
+      "decode_peak_requested_heap_bytes": 0
+    }
+  ],
+  "qualified": [
+    "All eight fixture values round-trip under CBOR, raw Postcard and bounded Postcard.",
+    "Every truncated prefix and one trailing byte reject for every fixture and codec.",
+    "Bounded codec rejects exhausted byte/allocation/node/depth allowances and a short input declaring one million zero-width elements.",
+    "Invalid bool and trailing-data failures are asserted as typed ic_wire errors.",
+    "PocketIC persists the bounded funding record in stable memory; an update overwrites it and traps; subsequent calls recover the exact original record and repeat reads are unchanged.",
+    "Both final managed Root artifacts pass existing Wasm admission guards."
+  ],
+  "limitations": [
+    "Microbenchmarks are not end-to-end workload latency or cycle-cost estimates.",
+    "Auth session bytes are opaque 2KiB fixture contents, not a production login validation.",
+    "Selected storage record excerpts are tested, not every maintained record schema.",
+    "Stable-write rollback proof is not full Root funding/custody recovery acceptance.",
+    "Bounded funding encoding is slower than CBOR; maximum u128 values grow and are slower.",
+    "The scratch prototype is not a release-qualified implementation. No broad suite, staging, commit, version change, release or deployment was run."
+  ],
+  "before_production_cut": [
+    "Inventory record-specific byte/allocation/node/depth allowances, including unbounded Storable paths and large checkpoints.",
+    "Separate canonical authority/checkpoint/receipt hash encoders from persistence while preserving their accepted bytes.",
+    "Update storage schema identities, footprints and exact-byte/current malformed-input tests with their owners.",
+    "Qualify actual same-release interruption, paid-effect replay, checkpoint and restoration paths on regenerated installed artifacts."
+  ],
+  "probe_source_sha256": {
+    "Cargo.toml": "2c1eab8ceb92acb63cff483cbb66287d4047d3f89dc1f226f7940671b639c710",
+    "Cargo.lock": "59131eb77c96462b4453e73a54e7c4c79c2a146098160b906649661e0b896ddd",
+    "src/lib.rs": "0e9467d921ab041530ce1a440e08859ad3a9a360d1b5b00e4d49aac0a14acf52",
+    "src/main.rs": "3db85da9bd45b194e068d9f723641e9c080e892e424aa595815f3babad942692",
+    "src/records/mod.rs": "081ff6741af5eeadb30ff28125e8f1fddc8bfa5384c8dfab7d544194f45e3ab9",
+    "src/current/mod.rs": "5ac516b91bbbf1151e6a05a07db08cecfec398c688157403babb557c3ece5e95",
+    "src/current/de.rs": "eb22411fc446e867d5c0225dc50fadfc75280f62f5b0ad2773c2283fd8bc5432",
+    "src/current/ser.rs": "b893e9e93881bebd78c9a4173288f6d22dca081aceab1085fc715286bacecc68"
+  },
+  "extracted_source_sha256": {
+    "crates/canic-control-plane/src/storage/stable/root_funding/mod.rs": "21b0466e2609ddcb2c2a095233a7e945af8dac71968260e9e01ad97abc240e5f",
+    "crates/canic-core/src/storage/stable/auth/records.rs": "f233c9265dafce92a4b117ad203ee407b24f365267927f49c4e5bd83e6c0039c",
+    "crates/canic-control-plane/src/storage/stable/component_provisioning/mod.rs": "54514ce0fd86681d5c64c77015633068c433342d3ce9a4e686fcbb7c77b00159"
+  },
+  "candidate_source_sha256": {
+    "Cargo.lock": "1d4c851ca75d1e576ff5f48568fd97cb42cdb16417e0b79e648b721a816a0612",
+    "integrations/blob-service/consumer/Cargo.lock": "9cec42d79e8d92b3a5ebaa5128841bd7088b7612787927570c44b243196a028f",
+    "crates/canic-contracts/src/serialization/mod.rs": "4bf24a69b3e3e550d6055e8db707623d5a4debea5a5f521eab52c711c6b3edee",
+    "crates/canic-contracts/src/serialization/cbor/mod.rs": "4b92105d1fbd8ef4c609fe3db278d0625c946a158e760f30e06d3f63967b943c",
+    "crates/canic-contracts/src/serialization/cbor/ser.rs": "b893e9e93881bebd78c9a4173288f6d22dca081aceab1085fc715286bacecc68",
+    "crates/canic-contracts/src/values/metrics/mod.rs": "dae72e20cbbe901fb442da43951cd2d023396a7bb6fa15a31f407e3c852053f8",
+    "crates/canic-core/src/cdk/serialize/mod.rs": "8d4520d9e463a3fa0b6b52773f2aef779641fc801f9b36012e980fd6793ae918",
+    "crates/canic-core/src/ops/application_checkpoint/mod.rs": "ae0778c1cab6a938c339141f35946c0f97516f486b014fd5812b95112700bd93",
+    "crates/canic-core/src/ops/caller_authority/mod.rs": "3210930e591d92f72542c999bc2ac0232f18cba75ba3996d8555162c6b22020b",
+    "crates/canic-control-plane/src/ops/component_registry/mod.rs": "be786f0fc3d8174a197a32c58abe675cf15899a3b069cb36cdbbc69c4f39be5b",
+    "crates/canic-control-plane/src/ops/component_registry/caller_authority/mod.rs": "1c97494928697f8d073256ea9b433ed6d2b542b489cf30a92b9fa82cd8706c1a",
+    "crates/canic-control-plane/src/ops/component_registry/caller_authority/restore/mod.rs": "799365901f7782c864b3855ac187dc6e9786c07dc33391ced0d5880c9fbabd97"
+  },
+  "reproduction": {
+    "setup": "node /tmp/canic-storage-experiment-20261026/setup.mjs",
+    "probe_manifest": "/tmp/canic-storage-experiment-20261026/probe/Cargo.toml",
+    "candidate_script": "/tmp/canic-storage-experiment-20261026/candidate.mjs",
+    "report_script": "/tmp/canic-storage-experiment-20261026/report.mjs",
+    "note": "Setup and candidate scripts mutate fresh scratch inputs and are not idempotent; retained snapshot is the authoritative experiment input. Probe instruction and allocation outputs are separate runs."
+  }
+}

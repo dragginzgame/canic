@@ -102,7 +102,7 @@ impl EnsurePlatform for FundedCanister {
             estate_funding_domains: BTreeMap::new(),
             ledger_fee_cycles: self.fee,
             operator_cycles: self.balance(),
-            protocol_ready: BTreeMap::new(),
+
             canisters: BTreeMap::from([(
                 "treasury".into(),
                 Some(LiveCanister {

@@ -13,7 +13,6 @@ use crate::{
     },
 };
 use canic_contracts::ids::CanisterRole;
-use ic_platform::candid::contract::CandidType;
 
 ///
 /// RpcApi
@@ -69,7 +68,7 @@ impl RpcApi {
         extra: Option<A>,
     ) -> Result<CreateCanisterResponse, Error>
     where
-        A: CandidType + Send + Sync,
+        A: serde::Serialize + Send + Sync,
     {
         RpcRequestWorkflow::create_canister_request(operation_id, canister_role, parent, extra)
             .await

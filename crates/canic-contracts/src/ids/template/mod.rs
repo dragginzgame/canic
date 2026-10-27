@@ -1,9 +1,5 @@
 //! Control-plane-specific identifiers and value types.
 
-use ic_platform::candid::contract::{
-    CandidType,
-    types::{Serializer, Type},
-};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::{Borrow, Cow},
@@ -14,11 +10,12 @@ use std::{
 /// TemplateId
 ///
 
-#[derive(
-    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateId(pub Cow<'static, str>);
 
 impl TemplateId {
@@ -74,6 +71,10 @@ impl fmt::Display for TemplateId {
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateVersion(pub Cow<'static, str>);
 
 impl TemplateVersion {
@@ -123,28 +124,16 @@ impl fmt::Display for TemplateVersion {
     }
 }
 
-impl CandidType for TemplateVersion {
-    fn _ty() -> Type {
-        String::ty()
-    }
-
-    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-    where
-        S: Serializer,
-    {
-        self.as_str().idl_serialize(serializer)
-    }
-}
-
 ///
 /// WasmStoreBinding
 ///
 
-#[derive(
-    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreBinding(pub Cow<'static, str>);
 
 impl WasmStoreBinding {
@@ -198,10 +187,7 @@ impl fmt::Display for WasmStoreBinding {
 /// TemplateReleaseKey
 ///
 
-#[derive(
-    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct TemplateReleaseKey {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -227,10 +213,7 @@ impl fmt::Display for TemplateReleaseKey {
 /// TemplateChunkKey
 ///
 
-#[derive(
-    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct TemplateChunkKey {
     pub release: TemplateReleaseKey,
     pub chunk_index: u32,
@@ -256,8 +239,49 @@ impl fmt::Display for TemplateChunkKey {
 mod tests {
     use super::TemplateVersion;
     use crate::ids::CanisterRole;
-    use ic_platform::candid::contract::CandidType;
-    use ic_platform::candid::contract::Encode;
+
+    #[cfg(feature = "wire-schema")]
+    #[test]
+    fn template_identifiers_project_and_encode_their_actual_text() {
+        use super::TemplateId;
+        let limits = crate::protocol::public_health::RESPONSE_LIMITS;
+        let method = crate::protocol::public_health::METHOD_ID;
+        for text in ["", "template", "é雪"] {
+            let borrowed = TemplateId::new(text);
+            let owned = TemplateId::owned(text.to_owned());
+            let version = TemplateVersion::owned(text.to_owned());
+            let bytes = ic_wire::native::encode_request(method, &text, limits).unwrap();
+            assert_eq!(
+                ic_wire::native::encode_request(method, &borrowed, limits).unwrap(),
+                bytes
+            );
+            assert_eq!(
+                ic_wire::native::encode_request(method, &owned, limits).unwrap(),
+                bytes
+            );
+            assert_eq!(
+                ic_wire::native::encode_request(method, &version, limits).unwrap(),
+                bytes
+            );
+            assert_eq!(
+                ic_wire::native::decode_request::<TemplateId>(method, &bytes, limits).unwrap(),
+                owned
+            );
+            assert_eq!(
+                ic_wire::native::decode_request::<TemplateVersion>(method, &bytes, limits).unwrap(),
+                version
+            );
+        }
+        let text = ic_wire::typescript::native_schema::<String>().unwrap();
+        assert_eq!(
+            ic_wire::typescript::native_schema::<TemplateId>().unwrap(),
+            text
+        );
+        assert_eq!(
+            ic_wire::typescript::native_schema::<TemplateVersion>().unwrap(),
+            text
+        );
+    }
 
     #[test]
     fn canister_role_basic_traits_and_utils() {
@@ -272,11 +296,13 @@ mod tests {
     }
 
     #[test]
-    fn template_version_uses_string_candid_encoding() {
+    fn template_version_uses_string_wire_encoding() {
         let version = TemplateVersion::new("0.18.5");
 
-        assert_eq!(TemplateVersion::ty(), String::ty());
-        assert_eq!(Encode!(&version).unwrap(), Encode!(&"0.18.5").unwrap());
+        assert_eq!(
+            crate::protocol::authority::encode(&version).unwrap(),
+            crate::protocol::authority::encode(&"0.18.5").unwrap()
+        );
     }
 }
 
@@ -284,10 +310,11 @@ mod tests {
 /// TemplateChunkingMode
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
 )]
-#[candid_path("ic_platform::candid::contract")]
 pub enum TemplateChunkingMode {
     Chunked,
 }
@@ -296,10 +323,11 @@ pub enum TemplateChunkingMode {
 /// WasmStoreGcMode
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Default, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
 )]
-#[candid_path("ic_platform::candid::contract")]
 pub enum WasmStoreGcMode {
     #[default]
     Normal,
@@ -327,10 +355,11 @@ pub struct WasmStoreGcStatus {
 /// TemplateManifestState
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
 )]
-#[candid_path("ic_platform::candid::contract")]
 pub enum TemplateManifestState {
     Approved,
 }

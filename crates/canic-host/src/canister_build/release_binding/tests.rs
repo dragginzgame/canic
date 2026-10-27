@@ -134,7 +134,7 @@ fn governed_pocketic_release_binding_retains_runtime_identity() {
                     embed_candid: true,
                     validate_sidecar_only: false,
                     source_wasm_path: &template_path,
-                    candid: b"service : { binding : () -> (text) query }",
+                    candid: b"service : {}",
                     wasm_path: &wasm_path,
                     did_path: &did_path,
                     wasm_gz_path: &gzip_path,
@@ -157,6 +157,15 @@ fn compile_template(root: &std::path::Path) -> std::path::PathBuf {
         .join("../canic-core/src/bootstrap/release_binding/mod.rs");
     fs::copy(source, root.join("release_binding.rs")).unwrap();
     fs::write(root.join("lib.rs"), include_str!("probe.rs.txt")).unwrap();
+    fs::write(root.join("protocol.rs"), include_str!("protocol/mod.rs")).unwrap();
+    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let catalog: toml::Value =
+        toml::from_str(&fs::read_to_string(workspace.join("Cargo.toml")).unwrap()).unwrap();
+    let wire = catalog["workspace"]["dependencies"]["ic-wire"].clone();
     fs::write(
         root.join("Cargo.toml"),
         r#"
@@ -165,6 +174,10 @@ name = "release-binding-probe"
 version = "0.0.0"
 edition = "2024"
 [workspace]
+[workspace.dependencies]
+[dependencies]
+canic-contracts = { workspace = true }
+ic-wire = { workspace = true }
 [lib]
 path = "lib.rs"
 crate-type = ["cdylib"]
@@ -174,6 +187,29 @@ lto = true
 "#,
     )
     .unwrap();
+    let manifest = root.join("Cargo.toml");
+    let mut document: toml::Value =
+        toml::from_str(&fs::read_to_string(&manifest).unwrap()).unwrap();
+    document["workspace"]["dependencies"]
+        .as_table_mut()
+        .unwrap()
+        .insert("ic-wire".into(), wire);
+    document["workspace"]["dependencies"]
+        .as_table_mut()
+        .unwrap()
+        .insert(
+            "canic-contracts".into(),
+            toml::Value::Table(toml::map::Map::from_iter([(
+                "path".into(),
+                toml::Value::String(
+                    workspace
+                        .join("crates/canic-contracts")
+                        .display()
+                        .to_string(),
+                ),
+            )])),
+        );
+    fs::write(manifest, toml::to_string(&document).unwrap()).unwrap();
     fs::write(
         root.join("build.rs"),
         r#"fn main() {
@@ -214,14 +250,32 @@ fn assert_runtime_identity(
         .query_call(
             canister,
             ic_platform::principal::ExternalPrincipal::anonymous(),
-            "binding",
-            ic_platform::candid::contract::encode_args(()).unwrap(),
+            protocol::METHOD,
+            ic_wire::native::encode_request(protocol::METHOD_ID, &(), protocol::LIMITS).unwrap(),
         )
         .unwrap();
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<String>(&reply).unwrap(),
+        ic_wire::native::decode_response::<String>(protocol::METHOD_ID, &reply, protocol::LIMITS)
+            .unwrap(),
         id.to_string()
     );
+    for request in [
+        Vec::new(),
+        ic_wire::native::encode_request(protocol::METHOD_ID + 1, &(), protocol::LIMITS).unwrap(),
+    ] {
+        let rejected = pic
+            .query_call(
+                canister,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                protocol::METHOD,
+                request,
+            )
+            .unwrap_err();
+        assert_eq!(
+            rejected.reject_code,
+            ic_platform::pocket_ic::RejectCode::CanisterError
+        );
+    }
     // A mismatched initializer must not replace a working installation.
     let rejected = pic
         .reinstall_canister(
@@ -253,12 +307,13 @@ fn assert_runtime_identity(
         .query_call(
             canister,
             ic_platform::principal::ExternalPrincipal::anonymous(),
-            "binding",
-            ic_platform::candid::contract::encode_args(()).unwrap(),
+            protocol::METHOD,
+            ic_wire::native::encode_request(protocol::METHOD_ID, &(), protocol::LIMITS).unwrap(),
         )
         .unwrap();
     assert_eq!(
-        ic_platform::candid::decoder::decode_one::<String>(&reply).unwrap(),
+        ic_wire::native::decode_response::<String>(protocol::METHOD_ID, &reply, protocol::LIMITS)
+            .unwrap(),
         id.to_string()
     );
 }

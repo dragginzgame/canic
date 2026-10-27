@@ -867,6 +867,14 @@ premature success and completed success/failure using the invoking Bash.
 also renders a boundary for caller-owned contradictory assertion checks. Its
 child requires `RETENTION_SOURCE_ROOT` and `RETENTION_EXIT_PATH` explicitly.
 Only trusted, reviewed fixture sources and caller-owned injection are inputs.
+The supported boundary is one physical line beginning with `trap ` in column
+one and ending with ` EXIT`, without a trailing comment or whitespace. For a
+multiline cleanup action, define a named function before `trap finish EXIT`.
+This is a source convention, not a general Bash parser: keep trap-like text out
+of quoted initialization data. An absent or unsupported boundary returns nonzero
+with a diagnostic naming the source and the required form, leaving the output
+empty. Rendering never executes the source; callers must check its status before
+running a generated probe.
 
 ## Tool evidence collection orchestration
 
@@ -994,6 +1002,18 @@ flag aliases and hidden assignments stay in `test-consumer-flow-probes.sh`.
 The producer-only `make_probe_execution_modes` is no longer exported; consumer
 admission checks use `make_probe_target_admission` instead.
 
+`make_probe_lint_order MAKE MAKEFILE DIRECTORY EVENTS TARGET FAILURE_EVENTS
+SUCCESS_EVENTS` checks a caller's actual reviewed pipeline under `make -j4`.
+Substitute its lint and effect leaves: record ordered lines through
+`MAKE_PROBE_EVENTS`, and return `MAKE_PROBE_LINT_STATUS` from the lint stub.
+The two expected files hold exact caller-owned event sequences. The probe runs
+lint failure (23) and success (0), requires the corresponding Make status, and
+compares the entire sequence. The failure sequence should include preparation
+and lint but no expensive build/test/package/publication effects. Keep assertions
+of the real lint command's packages/features/options local; this probe does not
+replace that evidence or execute a real release. Clear inherited Make selections
+as for the other disposable consumer probes.
+
 When adopting 0.16.0, update any calls to the removed helper before refreshing
 the reviewed snapshot. Keep the consumer's target roster, effect assertions and
 parallel jobserver checks. Existing snapshots stay bound to their recorded
@@ -1052,6 +1072,13 @@ The probe requires the supported root anchor and EXIT boundary, evidence
 retention, status 1, and a receipt proving the intended assertion was reached.
 Ignored assertions and earlier setup failures are rejected. The focused owner
 suite is `scripts/ci/test-fixture-assertion-probe.sh`.
+The owner must contain the literal line `root="${root%/.}"` before a column-one,
+single-line `trap ACTION EXIT`, using the same trap convention described under
+[consumer fixture retention probes](#consumer-fixture-retention-probes).
+Missing or ambiguous assertion selections and unsupported owner layouts report
+the source and required form without running a child. A rejected selection clears
+any earlier generated script for that probe name; a rejected layout leaves no
+partial script content.
 
 ## Manifest ordering in selected release sources
 

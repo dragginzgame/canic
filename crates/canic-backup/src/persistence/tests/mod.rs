@@ -176,11 +176,11 @@ fn execution_integrity_rejects_completed_mutation_without_receipt() {
     let layout = BackupLayout::new(root.clone());
     let plan = valid_backup_plan();
     let mut journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
-    journal
-        .accept_preflight_bundle_at("preflight-run-001".to_string(), Some("unix:1".to_string()))
-        .expect("accept preflight");
+    journal.preflight_id = Some("preflight-run-001".to_string());
+    journal.preflight_accepted = true;
     journal.operations[4].state = BackupExecutionOperationState::Completed;
     journal.operations[4].state_updated_at = Some("unix:2".to_string());
+    journal.operations[4].blocking_reasons.clear();
     journal.restart_required = true;
 
     layout.write_backup_plan(&plan).expect("write backup plan");
@@ -208,12 +208,8 @@ fn execution_integrity_requires_latest_mutation_receipt_to_match_state() {
     let layout = BackupLayout::new(root.clone());
     let plan = valid_backup_plan();
     let mut journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
-    journal
-        .accept_preflight_bundle_at("preflight-run-001".to_string(), Some("unix:1".to_string()))
-        .expect("accept preflight");
-    journal
-        .mark_operation_pending_at(4, Some("unix:40".to_string()))
-        .expect("mark stop pending");
+    journal.preflight_id = Some("preflight-run-001".to_string());
+    journal.preflight_accepted = true;
     let operation = journal.operations[4].clone();
     let failed_receipt = BackupExecutionOperationReceipt::failed(
         &journal,
@@ -221,24 +217,14 @@ fn execution_integrity_requires_latest_mutation_receipt_to_match_state() {
         Some("unix:41".to_string()),
         "stop failed".to_string(),
     );
-    journal
-        .record_operation_receipt(failed_receipt)
-        .expect("record failed stop");
-    journal
-        .retry_failed_operation_at(4, Some("unix:42".to_string()))
-        .expect("retry stop");
-    journal
-        .mark_operation_pending_at(4, Some("unix:43".to_string()))
-        .expect("mark stop retry pending");
+    journal.operation_receipts.push(failed_receipt);
     let operation = journal.operations[4].clone();
     let completed_receipt = BackupExecutionOperationReceipt::completed(
         &journal,
         &operation,
         Some("unix:44".to_string()),
     );
-    journal
-        .record_operation_receipt(completed_receipt)
-        .expect("record completed stop");
+    journal.operation_receipts.push(completed_receipt);
     journal.operations[4].state = BackupExecutionOperationState::Failed;
     journal.operations[4].state_updated_at = Some("unix:45".to_string());
     journal.operations[4].blocking_reasons = vec!["manual stale state".to_string()];
@@ -269,21 +255,18 @@ fn execution_integrity_requires_terminal_timestamp_to_match_receipt() {
     let layout = BackupLayout::new(root.clone());
     let plan = valid_backup_plan();
     let mut journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
-    journal
-        .accept_preflight_bundle_at("preflight-run-001".to_string(), Some("unix:1".to_string()))
-        .expect("accept preflight");
-    journal
-        .mark_operation_pending_at(4, Some("unix:40".to_string()))
-        .expect("mark stop pending");
+    journal.preflight_id = Some("preflight-run-001".to_string());
+    journal.preflight_accepted = true;
     let operation = journal.operations[4].clone();
     let completed_receipt = BackupExecutionOperationReceipt::completed(
         &journal,
         &operation,
         Some("unix:41".to_string()),
     );
-    journal
-        .record_operation_receipt(completed_receipt)
-        .expect("record completed stop");
+    journal.operation_receipts.push(completed_receipt);
+    journal.operations[4].state = BackupExecutionOperationState::Completed;
+    journal.operations[4].blocking_reasons.clear();
+    journal.restart_required = true;
     journal.operations[4].state_updated_at = Some("unix:42".to_string());
 
     layout.write_backup_plan(&plan).expect("write backup plan");

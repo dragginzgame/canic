@@ -4,13 +4,14 @@
 //! Does not own: consent policy, wallet UX, or application authorization.
 //! Boundary: mirrors the external ICRC-21 surface for Canic callers.
 
-//
-// Keep these DTOs local rather than importing icrc-ledger-types. That crate
-// pulls in broad dependencies and an older ic-stable-structures version.
-//
+// Required external contract: selected Platform 0.6.19 does not yet export
+// the ICRC-21 types from its pinned icrc-ledger-types 0.2.0 dependency.
+// Replace these mirrors when that public supplier surface is available.
+
 mod errors;
 
 use crate::dto::prelude::*;
+use ic_platform::candid::contract::CandidType;
 
 pub use errors::*;
 
@@ -57,27 +58,6 @@ pub struct ConsentMessageRequest {
     pub method: String,
     pub arg: Vec<u8>,
     pub user_preferences: ConsentMessageSpec,
-}
-
-//
-// ConsentMessageResponse
-// Wrapper capturing the ok/error variants from an ICRC-21 consent request.
-//
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum ConsentMessageResponse {
-    Ok(ConsentInfo),
-    Err(Icrc21Error),
-}
-
-impl From<Result<ConsentInfo, Icrc21Error>> for ConsentMessageResponse {
-    fn from(res: Result<ConsentInfo, Icrc21Error>) -> Self {
-        match res {
-            Ok(info) => Self::Ok(info),
-            Err(err) => Self::Err(err),
-        }
-    }
 }
 
 //

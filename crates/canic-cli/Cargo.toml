@@ -27,6 +27,7 @@ ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
 ic-platform = { workspace = true, features = ["candid"] }
+ic-wire.workspace = true
 rustix = { workspace = true, features = ["termios"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

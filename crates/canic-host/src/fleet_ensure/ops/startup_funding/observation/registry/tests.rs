@@ -227,102 +227,27 @@ fn changed_authority_revision_or_content_invalidates_collected_usage() {
 
 #[cfg(unix)]
 #[test]
-fn registry_transport_is_query_only_and_failed_or_changed_heads_do_not_qualify() {
+fn registry_reads_require_authenticated_query_context_before_transport() {
     use std::os::unix::fs::PermissionsExt as _;
     let directory = crate::test_support::temp_dir("funding-registry");
     std::fs::create_dir_all(&directory).unwrap();
     let executable = directory.join("icp");
-    std::fs::write(
-        &executable,
-        crate::test_support::tool_script(
-            r#"#!/bin/sh
-case "$*" in
-  --version) printf 'icp @ICP_VERSION@\n' ;;
-  *canic_coordinator_registry*--query*) cat snapshot.json ;;
-  *canic_observability*--query*) cat head.json ;;
-  *canic_root_status*--query*) cat root.json ;;
-  *) exit 1 ;;
-esac
-"#,
-        ),
-    )
-    .unwrap();
+    std::fs::write(&executable, "#!/bin/sh\ntouch invoked\nexit 1\n").unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let candid = directory.join("coordinator.did");
-    std::fs::write(
-        &candid,
-        include_str!("../../../../../../../canic/candid/fleet_coordinator.did"),
-    )
-    .unwrap();
-    let write = |name: &str, bytes: Vec<u8>| {
-        std::fs::write(
-            directory.join(name),
-            serde_json::json!({
-                "response_bytes": canic_core::cdk::utils::hash::hex_bytes(&bytes)
-            })
-            .to_string(),
-        )
-        .unwrap();
-    };
     let (topology, registry) = fixture();
     let coordinator = registry.authority.binding.coordinator;
-    let mut version = FleetRegistryOps::version(&registry.authority, &topology, &registry).unwrap();
-    write(
-        "snapshot.json",
-        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-            CoordinatorRegistryResponse::Registry(registry),
-        ))
-        .unwrap(),
-    );
-    let write_head = |version| {
-        write(
-            "head.json",
-            ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-                CoordinatorObservabilityResponse::RegistryVersion(version),
-            ))
-            .unwrap(),
-        );
-    };
+    let projected = project(coordinator, &topology, registry).unwrap();
+    let root = summary(&projected).fleet_subnet_root;
     let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(directory.clone());
-    let observed = observe(&icp, &candid, coordinator, &topology).unwrap();
-    let root_summary = summary(&observed);
-    let root = root_summary.fleet_subnet_root;
-    write(
-        "root.json",
-        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-            RootResponse::Inventory(root_summary),
-        ))
-        .unwrap(),
-    );
-    // The adapter uses Rust encoding; generated Root sidecar equality is covered separately.
-    let root_candid = directory.join("root.did");
-    std::fs::write(&root_candid, "service : {}").unwrap();
     assert_eq!(
-        observe_root(&icp, &root_candid, root, &observed),
-        Ok(StartupRootInventory { workloads: 0 })
-    );
-    std::fs::remove_file(directory.join("root.json")).unwrap();
-    assert_eq!(
-        observe_root(&icp, &root_candid, root, &observed),
+        observe(&icp, coordinator, &topology),
         Err(StartupUsageUnavailable::ObservationFailed)
     );
-    write_head(version.clone());
-    assert_eq!(recheck(&icp, &candid, &observed), Ok(()));
-    version.revision += 1;
-    write_head(version);
     assert_eq!(
-        recheck(&icp, &candid, &observed),
-        Err(StartupUsageUnavailable::PolicyTransition)
-    );
-    std::fs::remove_file(directory.join("head.json")).unwrap();
-    assert_eq!(
-        recheck(&icp, &candid, &observed),
+        observe_root(&icp, root, &projected),
         Err(StartupUsageUnavailable::ObservationFailed)
     );
-    std::fs::remove_file(directory.join("snapshot.json")).unwrap();
-    assert_eq!(
-        observe(&icp, &candid, coordinator, &topology),
-        Err(StartupUsageUnavailable::ObservationFailed)
-    );
+    assert!(!directory.join("invoked").exists());
+    assert_eq!(icp.remote_call_count(), 0);
     std::fs::remove_dir_all(directory).unwrap();
 }

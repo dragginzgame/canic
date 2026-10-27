@@ -21,7 +21,6 @@ use canic_contracts::ids::{
     ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
     ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
 };
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
@@ -63,8 +62,7 @@ impl ConfigModel {
 }
 
 /// Canonical compiled App authority required to validate provisioning without source TOML.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDeploymentConfiguration {
     pub component_topology: ComponentTopology,

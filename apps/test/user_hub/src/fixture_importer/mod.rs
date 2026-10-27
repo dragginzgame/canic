@@ -17,8 +17,7 @@ pub const MEMORY_KEY: &str = "test.fixture_import.v1";
 
 const PAYLOAD: &[u8] = b"reviewed fixture source";
 
-#[derive(ic_platform::candid::contract::CandidType, canic::__internal::serde::Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(canic::__internal::serde::Deserialize, canic::__internal::serde::Serialize)]
 #[serde(crate = "canic::__internal::serde")]
 struct ImportRecord {
     held: bool,
@@ -54,7 +53,7 @@ fn load() -> ImportRecord {
                 progress: None,
             }
         } else {
-            ic_platform::candid::decoder::decode_one(cell.get())
+            canic::__internal::contracts::serialization::deserialize(cell.get())
                 .expect("decode application import record")
         }
     })
@@ -63,7 +62,7 @@ fn load() -> ImportRecord {
 fn persist(record: &ImportRecord) {
     IMPORT.with_borrow_mut(|cell| {
         cell.set(
-            ic_platform::candid::contract::encode_one(record)
+            canic::__internal::contracts::serialization::serialize(record)
                 .expect("encode application import record"),
         );
     });
@@ -144,18 +143,36 @@ fn require_controller() -> Result<(), String> {
     decode_with = "decode_release",
     encode_with = "encode_release"
 )]
-#[ic_platform::candid::contract::candid_method(update)]
 fn test_release_fixture() {
     let mut record = load();
     record.held = false;
     persist(&record);
 }
 
+canic::__canic_register_wire_schema!(
+    "test_release_fixture",
+    Update,
+    crate::protocol::RELEASE_FIXTURE,
+    (),
+    (),
+    crate::protocol::REQUEST_LIMITS,
+    crate::protocol::RESPONSE_LIMITS
+);
+
 fn decode_release(bytes: Vec<u8>) {
-    ic_platform::candid::decoder::decode_args::<()>(&bytes)
-        .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()));
+    ic_wire::native::decode_request::<()>(
+        crate::protocol::RELEASE_FIXTURE,
+        &bytes,
+        crate::protocol::REQUEST_LIMITS,
+    )
+    .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()));
 }
 
 fn encode_release() -> Vec<u8> {
-    ic_platform::candid::contract::encode_args(()).expect("encode fixture release reply")
+    ic_wire::native::encode_response(
+        crate::protocol::RELEASE_FIXTURE,
+        &(),
+        crate::protocol::RESPONSE_LIMITS,
+    )
+    .expect("encode fixture release reply")
 }

@@ -21,48 +21,33 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
     pic.set_controllers(source, None, vec![root, Principal::anonymous()])
         .unwrap();
     let before = pic.canister_status(source, Some(root)).unwrap();
-    let running: canic_contracts::dto::canister::CanisterStatusType =
+    let running: ic_platform::management_canister_types::CanisterStatusType =
         ic_platform::candid::decoder::decode_one(&encode_one(before.status).unwrap()).unwrap();
     assert_eq!(
         running,
-        canic_contracts::dto::canister::CanisterStatusType::Running
+        ic_platform::management_canister_types::CanisterStatusType::Running
     );
     let root_before = pic.cycle_balance(root);
     let import = || {
-        let response: Result<RootCommandResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
-                        canister_id: source,
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        root,
-                        Principal::anonymous(),
-                        canic_contracts::protocol::CANIC_ROOT_COMMAND,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let response = import_canister(
+            &pic,
+            root,
+            PoolCanisterRequest {
+                canister_id: source,
+            },
+        );
         assert!(
-            matches!(response.unwrap(), RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == source)
+            matches!(response.unwrap(), PoolImportResponse::Imported { canister_id } if canister_id == ic_platform::Principal::from(source))
         );
     };
     // Discard the successful reply as an interrupted host would; Root retains Ready ownership.
     import();
     let cleared = pic.canister_status(source, Some(root)).unwrap();
-    let stopped: canic_contracts::dto::canister::CanisterStatusType =
+    let stopped: ic_platform::management_canister_types::CanisterStatusType =
         ic_platform::candid::decoder::decode_one(&encode_one(cleared.status).unwrap()).unwrap();
     assert_eq!(
         stopped,
-        canic_contracts::dto::canister::CanisterStatusType::Stopped
+        ic_platform::management_canister_types::CanisterStatusType::Stopped
     );
     assert!(cleared.module_hash.is_none());
     assert_eq!(cleared.memory_metrics.stable_memory_size, Nat::from(0_u8));

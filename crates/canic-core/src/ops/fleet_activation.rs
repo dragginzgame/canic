@@ -20,7 +20,7 @@ use crate::{
     },
 };
 use canic_contracts::ids::{FleetBinding, FleetKey};
-use ciborium::value::Value;
+use serde_cbor::Value;
 use sha2::{Digest, Sha256};
 
 const STATE_SNAPSHOT_DOMAIN: &[u8] = b"canic:fleet-activation:state-snapshot\0";
@@ -328,7 +328,7 @@ fn hash_value(domain: &[u8], value: Value) -> Result<[u8; 32], InternalError> {
 
 fn encode_value(value: &Value) -> Vec<u8> {
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(value, &mut bytes)
+    serde_cbor::to_writer(&mut bytes, value)
         .expect("serializing fixed Fleet-activation CBOR values cannot fail");
     bytes
 }

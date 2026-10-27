@@ -44,7 +44,7 @@ pub use ops::current_protocol::{
     CurrentRegistryStage, compile_current_component_provisioning,
     compile_current_infrastructure_sequence, compile_current_protocol_sequence,
     compile_current_registry_sequence, compile_current_registry_sequence_with_status,
-    compile_current_store_sequence_from_union,
+    compile_current_store_sequence_from_union, prepared_store_status_matches,
 };
 pub use ops::{EnsurePaths, IcpEnsurePlatform, IcpEnsurePlatformError};
 pub use workflow::{

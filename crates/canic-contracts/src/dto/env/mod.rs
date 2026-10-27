@@ -4,8 +4,7 @@
 
 use crate::dto::prelude::*;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct EnvBootstrapArgs {
     // fleet
     pub fleet_subnet_root_pid: Option<Principal>,
@@ -24,8 +23,7 @@ pub struct EnvBootstrapArgs {
 // EnvSnapshotResponse
 //
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize, serde::Serialize)]
 pub struct EnvSnapshotResponse {
     // fleet
     pub fleet_subnet_root_pid: Option<Principal>,

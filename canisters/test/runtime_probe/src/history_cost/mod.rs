@@ -26,8 +26,11 @@ pub fn sample(rows: u16) -> Result<u64, Error> {
 }
 
 /// Separate query-message cost and response evidence for one exact series.
-#[derive(ic_platform::candid::contract::CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct HistoryCost {
     instructions: u64,
     points: u64,

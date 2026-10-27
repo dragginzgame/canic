@@ -48,24 +48,24 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             name: "perf_context_entered",
             kind: "query",
             guard: None,
-            decoder: "codec::decode_args",
-            encoder: "codec::encode_reply",
+            decoder: "codec::entered::decode_args",
+            encoder: "codec::entered::encode_reply",
         },
         ReviewedEndpoint {
             path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
             name: "perf_context_completed",
             kind: "query",
             guard: None,
-            decoder: "codec::decode_args",
-            encoder: "codec::encode_reply",
+            decoder: "codec::completed::decode_args",
+            encoder: "codec::completed::encode_reply",
         },
         ReviewedEndpoint {
             path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
             name: "perf_context_metrics",
             kind: "query",
             guard: None,
-            decoder: "codec::decode_args",
-            encoder: "codec::encode_reply",
+            decoder: "codec::metrics::decode_args",
+            encoder: "codec::metrics::encode_reply",
         },
     ]
 }
@@ -251,7 +251,7 @@ mod tests {
         assert!(check(probe, path).is_empty());
         for invalid in [
             probe.replace("codec::decode_one", "codec::decode_args"),
-            probe.replace("codec::encode_reply", "other_encoder"),
+            probe.replace("::encode_reply", "::other_encoder"),
             probe.replace(r#"decode_with = "codec::decode_one", "#, ""),
             probe.replace(
                 r#"encode_with = "codec::encode_reply""#,
@@ -285,8 +285,9 @@ mod tests {
             "perf_context_completed",
             "perf_context_metrics",
         ] {
+            let codec = name.strip_prefix("perf_context_").unwrap();
             let probe = format!(
-                r#"#[ic_platform::cdk::query(decode_with = "codec::decode_args", encode_with = "codec::encode_reply")] fn {name}() {{}}"#
+                r#"#[ic_platform::cdk::query(decode_with = "codec::{codec}::decode_args", encode_with = "codec::{codec}::encode_reply")] fn {name}() {{}}"#
             );
             assert!(check(&probe, path).is_empty());
             assert!(!check(&probe, "apps/production/src/lib.rs").is_empty());
@@ -302,8 +303,8 @@ mod tests {
                     "decode_with =",
                     r#"guard = "different_guard", decode_with ="#,
                 ),
-                probe.replace("codec::decode_args", "codec::decode_one"),
-                probe.replace("codec::encode_reply", "other_encoder"),
+                probe.replace("::decode_args", "::decode_one"),
+                probe.replace("::encode_reply", "::other_encoder"),
             ] {
                 assert!(!check(&invalid, path).is_empty());
             }

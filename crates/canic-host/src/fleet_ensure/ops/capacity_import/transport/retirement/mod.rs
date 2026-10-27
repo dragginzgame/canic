@@ -73,7 +73,7 @@ pub(super) fn outcome(
         _ => return completed(plan, canister_id, request, status).map(HandoffOutcome::Completed),
     };
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(certificate, &mut bytes)
+    serde_cbor::to_writer(&mut bytes, certificate)
         .map_err(|_| CapacityImportJournalError::RequestInvalid)?;
     Ok(HandoffOutcome::Retired(RetiredHandoff {
         receipt: CapacityImportHandoffRetirementRecord {

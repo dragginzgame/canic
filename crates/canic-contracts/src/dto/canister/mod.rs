@@ -2,17 +2,9 @@ use crate::dto::prelude::*;
 
 pub use crate::values::canister::{CanisterStatusType, LogVisibility};
 
-/// Exact management-canister inspection target selected by a Root controller.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct CanisterInspectionRequest {
-    pub canister_id: Principal,
-}
-
 /// Protected reserve sample for an exact target's management status call.
 /// A preflight query is indicative; only an attempted call reports SDK admission failure.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CanisterInspectionReserveResponse {
     pub caller: Principal,
     pub canister_id: Principal,
@@ -22,18 +14,19 @@ pub struct CanisterInspectionReserveResponse {
 }
 
 /// Protected inspection result; a reserve failure never implies that the target is absent.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterInspectionOutcome {
     Status(Box<CanisterStatusResponse>),
     ReserveRequired(CanisterInspectionReserveResponse),
 }
 
 /// Replicated upstream management history for one exact inspection target.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CanisterHistoryResponse {
-    pub canister_id: Principal,
+    pub canister_id: ic_platform::Principal,
     pub history_candid: Vec<u8>,
 }
 
@@ -41,12 +34,15 @@ pub struct CanisterHistoryResponse {
 // CanisterInfo
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CanisterInfo {
-    pub pid: Principal,
+    pub pid: ic_platform::Principal,
     pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
+    pub parent_pid: Option<ic_platform::Principal>,
     pub module_hash: Option<Vec<u8>>,
     pub created_at: u64,
 }
@@ -55,8 +51,7 @@ pub struct CanisterInfo {
 // CanisterStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct CanisterStatusResponse {
     pub version: u64,
     pub status: CanisterStatusType,
@@ -74,8 +69,7 @@ pub struct CanisterStatusResponse {
 // CanisterSettings
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct CanisterSettings {
     pub controllers: Vec<Principal>,
     pub compute_allocation: Nat,
@@ -93,8 +87,11 @@ pub struct CanisterSettings {
 // EnvironmentVariable
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct EnvironmentVariable {
     pub name: String,
     pub value: String,
@@ -104,8 +101,7 @@ pub struct EnvironmentVariable {
 // MemoryMetrics
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct MemoryMetrics {
     pub wasm_memory_size: Nat,
     pub stable_memory_size: Nat,
@@ -121,8 +117,7 @@ pub struct MemoryMetrics {
 // QueryStats
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct QueryStats {
     pub num_calls_total: Nat,
     pub num_instructions_total: Nat,
@@ -133,22 +128,23 @@ pub struct QueryStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_platform::candid::contract::{Decode, Encode};
+
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 
     #[test]
-    fn canister_status_enums_roundtrip_candid_through_dto_path() {
-        assert_enum_candid_contract(CanisterStatusType::Stopping);
-        assert_enum_candid_contract(LogVisibility::AllowedViewers(vec![Principal::anonymous()]));
+    fn canister_status_enums_roundtrip_wire_through_dto_path() {
+        assert_enum_wire_contract(CanisterStatusType::Stopping);
+        assert_enum_wire_contract(LogVisibility::AllowedViewers(vec![Principal::anonymous()]));
     }
 
-    fn assert_enum_candid_contract<T>(value: T)
+    fn assert_enum_wire_contract<T>(value: T)
     where
-        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
+        T: serde::Serialize + Clone + Debug + DeserializeOwned + Eq,
     {
-        let bytes = Encode!(&value).expect("encode canister enum");
-        let decoded = Decode!(&bytes, T).expect("decode canister enum");
+        let bytes = crate::protocol::authority::encode(&value).expect("encode canister enum");
+        let decoded =
+            crate::protocol::authority::decode::<T>(&bytes).expect("decode canister enum");
 
         assert_eq!(decoded, value);
     }

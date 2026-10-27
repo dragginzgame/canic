@@ -50,10 +50,7 @@ macro_rules! __canic_fixture_reply_checkpoint {
 #[macro_export]
 macro_rules! __canic_fixture_reply_support {
     () => {
-        #[derive(::canic::__internal::ic_platform::candid::contract::CandidType, Clone, Copy, ::canic::__internal::serde::Deserialize, Eq, PartialEq)]
-        #[candid_path("::canic::__internal::ic_platform::candid::contract")]
-        #[serde(crate = "::canic::__internal::serde")]
-        enum __CanicFixtureReplyKind { Grant, Revoke, Chunk }
+        use ::canic::dto::fixture_reply::ReplyKind as __CanicFixtureReplyKind;
 
         struct __CanicFixtureReplyBarrier {
             kind: Option<__CanicFixtureReplyKind>,
@@ -77,7 +74,16 @@ macro_rules! __canic_fixture_reply_support {
             }
         }
 
-        #[$crate::__internal::cdk::update(guard = "__canic_require_fixture_controller")]
+        fn __canic_decode_fixture_reply_arm(bytes: Vec<u8>) -> __CanicFixtureReplyKind {
+            $crate::__internal::ic_wire::native::decode_request(::canic::protocol::fixture_reply::arm::METHOD_ID, &bytes, ::canic::protocol::fixture_reply::LIMITS)
+                .unwrap_or_else(|error| $crate::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()))
+        }
+        fn __canic_encode_fixture_reply_arm(value: bool) -> Vec<u8> {
+            $crate::__internal::ic_wire::native::encode_response(::canic::protocol::fixture_reply::arm::METHOD_ID, &value, ::canic::protocol::fixture_reply::LIMITS)
+                .unwrap_or_else(|error| $crate::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()))
+        }
+
+        #[$crate::__internal::cdk::update(guard = "__canic_require_fixture_controller", decode_with = "__canic_decode_fixture_reply_arm", encode_with = "__canic_encode_fixture_reply_arm")]
         fn canic_test_fixture_reply_arm(kind: __CanicFixtureReplyKind) -> bool {
             __CANIC_FIXTURE_REPLY_BARRIER.with_borrow_mut(|barrier| {
                 if barrier.waiting != 0 { return false; }
@@ -87,12 +93,30 @@ macro_rules! __canic_fixture_reply_support {
             })
         }
 
-        #[$crate::__internal::cdk::update(guard = "__canic_require_fixture_controller")]
+        fn __canic_decode_fixture_reply_release(bytes: Vec<u8>) {
+            $crate::__internal::ic_wire::native::decode_request(::canic::protocol::fixture_reply::release::METHOD_ID, &bytes, ::canic::protocol::fixture_reply::LIMITS)
+                .unwrap_or_else(|error| $crate::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()))
+        }
+        fn __canic_encode_fixture_reply_release() -> Vec<u8> {
+            $crate::__internal::ic_wire::native::encode_response(::canic::protocol::fixture_reply::release::METHOD_ID, &(), ::canic::protocol::fixture_reply::LIMITS)
+                .unwrap_or_else(|error| $crate::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()))
+        }
+
+        #[$crate::__internal::cdk::update(guard = "__canic_require_fixture_controller", decode_with = "__canic_decode_fixture_reply_release", encode_with = "__canic_encode_fixture_reply_release")]
         fn canic_test_fixture_reply_release() {
             __CANIC_FIXTURE_REPLY_BARRIER.with_borrow_mut(|barrier| barrier.released = true);
         }
 
-        #[$crate::__internal::cdk::query(guard = "__canic_require_fixture_controller")]
+        fn __canic_decode_fixture_reply_waiting(bytes: Vec<u8>) {
+            $crate::__internal::ic_wire::native::decode_request(::canic::protocol::fixture_reply::waiting::METHOD_ID, &bytes, ::canic::protocol::fixture_reply::LIMITS)
+                .unwrap_or_else(|error| $crate::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()))
+        }
+        fn __canic_encode_fixture_reply_waiting(value: u32) -> Vec<u8> {
+            $crate::__internal::ic_wire::native::encode_response(::canic::protocol::fixture_reply::waiting::METHOD_ID, &value, ::canic::protocol::fixture_reply::LIMITS)
+                .unwrap_or_else(|error| $crate::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()))
+        }
+
+        #[$crate::__internal::cdk::query(guard = "__canic_require_fixture_controller", decode_with = "__canic_decode_fixture_reply_waiting", encode_with = "__canic_encode_fixture_reply_waiting")]
         fn canic_test_fixture_reply_waiting() -> u32 {
             __CANIC_FIXTURE_REPLY_BARRIER.with_borrow(|barrier| barrier.waiting)
         }

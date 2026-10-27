@@ -1,16 +1,19 @@
 //! Selected-release resolution and rejection tests without network effects.
 
 use super::*;
+use crate::release_build::ReleaseBuildPlanError;
 use crate::{
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     release_set::{
-        CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
-        CanicInfrastructureRole, CurrentReleaseSetManifest,
+        BuiltDeclarationError, CanicInfrastructureArtifactEntry,
+        CanicInfrastructureArtifactManifest, CanicInfrastructureRole, CurrentReleaseSetManifest,
     },
     test_support::temp_dir,
 };
 use canic_core::role_contract::{RoleCapabilityKey, derive_protocol_profile_hashes};
-use std::{collections::BTreeSet, fs};
+use sha2_host::{Digest, Sha256};
+use std::{collections::BTreeSet, fs, path::PathBuf};
+const WIRE_SCHEMA: &[u8] = b"retained native schema bytes";
 
 struct Fixture {
     root: PathBuf,
@@ -37,15 +40,15 @@ impl Fixture {
                 &plan.record.builder_version,
                 &protocol_role,
                 &capabilities,
-                candid,
+                WIRE_SCHEMA,
             );
             let wasm_relative_path = format!(
                 ".canic/release-builds/{release}/artifacts/{0}/{0}.wasm",
                 role.as_str(),
             );
-            let did = root.join(&wasm_relative_path).with_extension("did");
+            let did = root.join(&wasm_relative_path).with_extension("wire.json");
             fs::create_dir_all(did.parent().expect("parent")).expect("mkdir");
-            fs::write(did, candid).expect("write sidecar");
+            fs::write(did, WIRE_SCHEMA).expect("write sidecar");
             CanicInfrastructureArtifactEntry {
                 role,
                 package: role.as_str().to_string(),
@@ -59,7 +62,8 @@ impl Fixture {
                 wasm_gz_size_bytes: 1,
                 wasm_sha256_hex: "01".repeat(32),
                 wasm_gz_sha256_hex: "02".repeat(32),
-                candid_sha256: hashes.candid_sha256,
+                wire_schema_sha256: Sha256::digest(WIRE_SCHEMA).into(),
+                candid_sha256: Sha256::digest(candid).into(),
                 protocol_profile_digest: hashes.protocol_profile_digest,
             }
         })
@@ -76,8 +80,14 @@ impl Fixture {
                 .expect("canonical infrastructure"),
         )
         .expect("write manifest");
+        let application_digest = crate::release_set::test_artifact::write_declaration_application(
+            &root,
+            release,
+            &directory,
+            WIRE_SCHEMA,
+        );
         let current = CurrentReleaseSetManifest {
-            application_artifact_union_sha256: [3; 32],
+            application_artifact_union_sha256: application_digest,
             build_network: plan.record.build_network,
             fixture_artifact_manifest_sha256: [4; 32],
             infrastructure_artifact_manifest_sha256: manifest.digest().expect("digest"),
@@ -110,7 +120,7 @@ impl Fixture {
                 release_identity: artifact.protocol_release_identity.clone(),
                 role: artifact.protocol_role.clone(),
                 capabilities: artifact.protocol_capabilities.clone(),
-                candid_sha256: artifact.candid_sha256,
+                wire_schema_sha256: artifact.wire_schema_sha256,
                 protocol_profile_digest: artifact.protocol_profile_digest,
             }),
         }
@@ -119,7 +129,7 @@ impl Fixture {
     fn sidecar(&self, index: usize) -> PathBuf {
         self.root
             .join(&self.manifest.entries[index].wasm_relative_path)
-            .with_extension("did")
+            .with_extension("wire.json")
     }
 }
 
@@ -134,11 +144,10 @@ fn coordinator_and_roots_resolve_from_finalized_release_without_environment_side
     let fixture = Fixture::new();
     for index in 0..fixture.manifest.entries.len() {
         let entry = fixture.entry(index);
-        let resolved =
-            resolve_release_registry_protocol_binding(&fixture.root, fixture.release, &entry)
-                .expect("resolve retained role");
-        assert_eq!(resolved.candid_path(), fixture.sidecar(index));
-        assert_eq!(Some(resolved.binding()), entry.protocol_binding.as_ref());
+        let resolved = resolve_release_registry_wire_schema(&fixture.root, fixture.release, &entry)
+            .expect("resolve retained role");
+        assert_eq!(resolved.path, fixture.sidecar(index));
+        assert_eq!(resolved.schema, WIRE_SCHEMA);
     }
 }
 
@@ -166,7 +175,7 @@ fn terminal_role_module_and_protocol_authority_must_match_selected_release() {
     cases.push(entry);
     for entry in cases {
         assert!(matches!(
-            resolve_release_registry_protocol_binding(&fixture.root, fixture.release, &entry),
+            resolve_release_registry_wire_schema(&fixture.root, fixture.release, &entry),
             Err(ReleaseProtocolBindingError::ArtifactBindingMismatch { .. })
         ));
     }
@@ -178,16 +187,16 @@ fn missing_and_modified_selected_sidecars_reject_before_transport() {
     let entry = fixture.entry(0);
     fs::write(fixture.sidecar(0), b"service : { changed : () -> (); }\n").expect("tamper");
     assert!(matches!(
-        resolve_release_registry_protocol_binding(&fixture.root, fixture.release, &entry),
-        Err(ReleaseProtocolBindingError::Binding(
-            ProtocolBindingError::CandidHashMismatch { .. }
+        resolve_release_registry_wire_schema(&fixture.root, fixture.release, &entry),
+        Err(ReleaseProtocolBindingError::Declaration(
+            BuiltDeclarationError::DigestMismatch(_)
         ))
     ));
     fs::remove_file(fixture.sidecar(0)).expect("remove");
     assert!(matches!(
-        resolve_release_registry_protocol_binding(&fixture.root, fixture.release, &entry),
-        Err(ReleaseProtocolBindingError::Binding(
-            ProtocolBindingError::MissingCandid { .. }
+        resolve_release_registry_wire_schema(&fixture.root, fixture.release, &entry),
+        Err(ReleaseProtocolBindingError::Declaration(
+            BuiltDeclarationError::UnsafeDeclaration(_)
         ))
     ));
 }
@@ -210,8 +219,10 @@ fn changed_infrastructure_and_finalization_manifests_reject() {
     )
     .expect("tamper");
     assert!(matches!(
-        resolve_release_registry_protocol_binding(&fixture.root, fixture.release, &entry),
-        Err(ReleaseProtocolBindingError::ManifestDigestMismatch)
+        resolve_release_registry_wire_schema(&fixture.root, fixture.release, &entry),
+        Err(ReleaseProtocolBindingError::Declaration(
+            BuiltDeclarationError::ManifestDigestMismatch
+        ))
     ));
 
     let path = directory.join("current-release-set-manifest.json");
@@ -220,9 +231,11 @@ fn changed_infrastructure_and_finalization_manifests_reject() {
     current.infrastructure_artifact_manifest_sha256 = fixture.manifest.digest().expect("digest");
     fs::write(path, current.canonical_bytes().expect("canonical")).expect("tamper current");
     assert!(matches!(
-        resolve_release_registry_protocol_binding(&fixture.root, fixture.release, &entry),
-        Err(ReleaseProtocolBindingError::ReleaseBuild(
-            ReleaseBuildPlanError::ManifestDigestMismatch { .. }
+        resolve_release_registry_wire_schema(&fixture.root, fixture.release, &entry),
+        Err(ReleaseProtocolBindingError::Declaration(
+            BuiltDeclarationError::ReleaseBuild(
+                ReleaseBuildPlanError::ManifestDigestMismatch { .. }
+            )
         ))
     ));
 }
@@ -237,9 +250,84 @@ fn linked_sidecar_rejects_even_with_matching_bytes() {
     fs::rename(&path, &moved).expect("move");
     std::os::unix::fs::symlink(moved, path).expect("link");
     assert!(matches!(
-        resolve_release_registry_protocol_binding(&fixture.root, fixture.release, &entry),
-        Err(ReleaseProtocolBindingError::Binding(
-            ProtocolBindingError::UnsafeCandid { .. }
+        resolve_release_registry_wire_schema(&fixture.root, fixture.release, &entry),
+        Err(ReleaseProtocolBindingError::Declaration(
+            BuiltDeclarationError::UnsafeDeclaration(_)
         ))
     ));
+}
+
+#[test]
+fn infrastructure_native_profile_rejects_inconsistent_metadata() {
+    let fixture = Fixture::new();
+    let original = &fixture.manifest.entries[0];
+    let mut changed = original.clone();
+    changed.protocol_release_identity.push_str("-changed");
+    assert!(matches!(
+        resolve_infrastructure_wire_profile(&fixture.root, &changed),
+        Err(ReleaseProtocolBindingError::ArtifactBindingMismatch { .. })
+    ));
+    let mut changed = original.clone();
+    changed.protocol_role = "unrelated".into();
+    assert!(matches!(
+        resolve_infrastructure_wire_profile(&fixture.root, &changed),
+        Err(ReleaseProtocolBindingError::ArtifactBindingMismatch { .. })
+    ));
+}
+
+#[test]
+fn application_schema_binds_profile_and_raw_module_identity() {
+    let fixture = Fixture::new();
+    let retained = crate::release_set::load_retained_application_artifact_union(
+        &fixture.root,
+        fixture.release,
+    )
+    .unwrap();
+    let artifact = &retained.union.entries[0];
+    let original = RegistryEntry {
+        pid: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        role: Some(artifact.role.to_string()),
+        parent_pid: None,
+        module_hash: Some(artifact.wasm_gz_sha256_hex.clone()),
+        protocol_binding: Some(RegistryProtocolBinding {
+            release_identity: "test-release".into(),
+            role: artifact.role.clone(),
+            capabilities: BTreeSet::new(),
+            wire_schema_sha256: artifact.wire_schema_sha256,
+            protocol_profile_digest: artifact.protocol_profile_digest,
+        }),
+    };
+    let schema =
+        resolve_release_registry_wire_schema(&fixture.root, fixture.release, &original).unwrap();
+    assert_eq!(schema.wasm_sha256, artifact.wasm_sha256_hex);
+    assert_ne!(schema.wasm_sha256, artifact.wasm_gz_sha256_hex);
+    let mut cases = Vec::new();
+    let mut changed = original.clone();
+    changed.module_hash = Some(artifact.wasm_sha256_hex.clone());
+    cases.push(changed);
+    let mut changed = original.clone();
+    changed
+        .protocol_binding
+        .as_mut()
+        .unwrap()
+        .release_identity
+        .push_str("-changed");
+    cases.push(changed);
+    let mut changed = original.clone();
+    changed
+        .protocol_binding
+        .as_mut()
+        .unwrap()
+        .capabilities
+        .insert(RoleCapabilityKey::Runtime);
+    cases.push(changed);
+    let mut changed = original;
+    changed.protocol_binding = None;
+    cases.push(changed);
+    for changed in cases {
+        assert!(matches!(
+            resolve_release_registry_wire_schema(&fixture.root, fixture.release, &changed),
+            Err(ReleaseProtocolBindingError::ArtifactBindingMismatch { .. })
+        ));
+    }
 }

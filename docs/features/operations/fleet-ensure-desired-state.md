@@ -305,7 +305,7 @@ The complete build is network-bound. Select the same named environment that
 the generated Fleet will use:
 
 ```bash
-canic build <app> --environment staging --profile release
+canic --environment staging build <app> --profile release
 ```
 
 The finalized release-build and release-set manifests retain `local` or `ic`
@@ -365,12 +365,14 @@ rejects a total above `canister_pool.maximum_size` before any effect. Retained
 `imports` are forbidden in a fresh seed. Local readiness observes this supply;
 autonomous Root creation remains restricted to IC-mainnet builds.
 
-A fresh plan binds the App config, complete artifact union and role Candid
+A fresh plan binds the App config, complete artifact union, role Wire schema
 identities and reserves a finite successor-action and execution-burn budget.
 Apply installs infrastructure, reconciles imported assets, and advances the
 resulting canonical control-plane and provisioning actions under that original
 reviewed plan. Each successor plan is retained by digest before its first
-effect intent. Response loss and process restart resume the same journal and
+effect intent. Reinstall history witnesses also retain the exact Root schema and admit the native
+history method before calling; the nested IC management history remains Candid.
+Response loss and process restart resume the same journal and
 cumulative conservation baseline. Immediate replay of the completed original
 plan has no effect.
 
@@ -606,9 +608,9 @@ maximum_stalled_observations = 8
 
 [protocol]
 app_config = "canic.toml"
-coordinator_candid = "artifacts/fleet_coordinator.did"
-root_candid = "artifacts/fleet_subnet_root.did"
-store_candid = "artifacts/wasm_store.did"
+coordinator_wire_schema = "artifacts/fleet_coordinator.wire.json"
+root_wire_schema = "artifacts/fleet_subnet_root.wire.json"
+store_wire_schema = "artifacts/wasm_store.wire.json"
 [[protocol.component_group_placements]]
 deployment = "primary_cells"
 ordinal = 0
@@ -693,14 +695,17 @@ creation state before issuing the dependent effect.
 
 The generated `[bootstrap]` and `[protocol]` blocks enable Canic-owned
 infrastructure initialization and control-plane choreography. They name only the checked-in App configuration, exact
-Coordinator/Root/Store Candid contracts, and typed deployment placements.
+Coordinator/Root/Store native schemas and typed deployment placements.
 Operators do not provide Candid methods, argument documents or expected
 response bytes, and missing infrastructure init arguments never silently
 degrade to `()`. Canic compiles Store artifact staging/bootstrap, deterministic
 Registry joins, Root synchronization, Registry and Root-mirror activation, and
 exact local Component Registry preparation before Component provisioning in
 that order. Every configured initial placement must appear once and every
-selected Root must be a declared Root role.
+selected Root must be a declared Root role. The same native actions own planning,
+execution and terminal reconciliation; the journal retains their reviewed desired
+configuration directly. Lifecycle initializer arguments and required external
+contracts, including configured drain methods, retain their Candid encoding.
 
 Every admitted Component Spec's Component and descendant roles must have
 release-bound `initial_cycles` less than or equal to the owning Root's exact
@@ -736,3 +741,22 @@ installs the current Store artifact.
 - [Browse Fleet operations](README.md)
 - [Browse all documentation](../../README.md)
 - [Back to the main README](../../../README.md)
+
+### Native mutation authority
+
+Generated Fleet protocol actions retain `wire_schema` and `wire_schema_sha256`.
+Generation verifies each sidecar against the infrastructure release manifest;
+successor authority includes the three schema hashes. Recovery and concurrent
+publication grouping use those same exact identities. Before an update, Host reads
+the retained schema once with a bounded no-follow read, checks its digest and
+requires the exact method name, ID, update mode and request/response limits.
+Changed or incompatible schemas refuse the effect; they do not select a fallback
+codec or mint a replacement operation. Receipt persistence encodings and external
+IC/provider protocols are unchanged by this transport boundary.
+
+Terminal and funding inventory resolve native schemas from the selected immutable
+release, verify exact schema hashes and retain the release's installed identity.
+Individual Component reviews bind the Root schema hash; submission and allocation
+observation check exact native methods and budgets. Managed initializer bytes use
+native Wire under the selected artifact’s exact tuple shape. External IC/provider
+Candid sidecars and release profile metadata retain their own identities.

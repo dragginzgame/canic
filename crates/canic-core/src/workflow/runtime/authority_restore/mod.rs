@@ -24,7 +24,6 @@ use crate::{
         runtime::env::EnvOps,
         storage::authority_restore::AuthorityRestoreFenceOps,
     },
-    protocol::{CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND},
     view::authority_restore::AuthorityMutationFence,
     workflow::runtime::timer::{TimerAuthorityWorkflow, TimerError},
 };
@@ -138,16 +137,17 @@ impl AuthorityRestoreWorkflow {
         if call.kind != EndpointCallKind::Update {
             return Ok(());
         }
-        let Some(command_endpoint) = authority_command_endpoint()? else {
+        if !is_authority_runtime()? {
             return Ok(());
-        };
+        }
+        let root_authority = is_root_authority()?;
         let fence = AuthorityRestoreFenceOps::mutation_fence_for(IcOps::canister_self())?;
-        require_policy_update_allowed(fence, call.endpoint.name, command_endpoint)
+        require_policy_update_allowed(fence, call.endpoint.name, root_authority)
             .map_err(PolicyError::from)
             .map_err(InternalError::from)
     }
 
-    /// Apply the sealed-authority fence after the role command has been decoded.
+    /// Apply the sealed-authority fence after the native operation has been decoded.
     pub fn require_command_variant_allowed(recovery_command: bool) -> Result<(), InternalError> {
         if !is_authority_runtime()? {
             return Ok(());
@@ -283,12 +283,15 @@ fn require_authority_runtime() -> Result<(), InternalError> {
 }
 
 fn is_authority_runtime() -> Result<bool, InternalError> {
-    authority_command_endpoint().map(|endpoint| endpoint.is_some())
+    if EnvOps::is_fleet_coordinator_runtime() {
+        return Ok(true);
+    }
+    EnvOps::canister_role().map(|role| role.is_root())
 }
 
-fn authority_command_endpoint() -> Result<Option<&'static str>, InternalError> {
+fn is_root_authority() -> Result<bool, InternalError> {
     if EnvOps::is_fleet_coordinator_runtime() {
-        return Ok(Some(CANIC_COORDINATOR_COMMAND));
+        return Ok(false);
     }
-    EnvOps::canister_role().map(|role| role.is_root().then_some(CANIC_ROOT_COMMAND))
+    EnvOps::canister_role().map(|role| role.is_root())
 }

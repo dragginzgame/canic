@@ -23,8 +23,11 @@ thread_local! {
 }
 
 /// Real counter reads bracketing the recorder independently in its own call context.
-#[derive(ic_platform::candid::contract::CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PerfProbeObservation {
     before_enter: u64,
     after_enter: u64,
@@ -37,8 +40,11 @@ pub struct PerfProbeObservation {
 }
 
 /// Read-only sample projection from the production table.
-#[derive(ic_platform::candid::contract::CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PerfProbeMetric {
     name: String,
     count: u64,
@@ -79,23 +85,43 @@ async fn await_controlled_response(which: u8) {
     .expect("controlled simulator HTTP reply");
 }
 
+canic::__canic_register_wire_schema!(
+    "perf_context_entered",
+    Query,
+    crate::timer_wire::PERF_ENTERED,
+    (),
+    Vec<bool>,
+    crate::timer_wire::REQUEST_LIMITS,
+    crate::timer_wire::RESPONSE_LIMITS
+);
+
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::entered::decode_args",
+    encode_with = "codec::entered::encode_reply"
 )]
 fn perf_context_entered() -> Vec<bool> {
     ENTERED.with_borrow(|entered| entered.to_vec())
 }
 
+canic::__canic_register_wire_schema!(
+    "perf_context_completed",
+    Query,
+    crate::timer_wire::PERF_COMPLETED,
+    (),
+    Vec<u8>,
+    crate::timer_wire::REQUEST_LIMITS,
+    crate::timer_wire::RESPONSE_LIMITS
+);
+
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::completed::decode_args",
+    encode_with = "codec::completed::encode_reply"
 )]
 fn perf_context_completed() -> Vec<u8> {
     COMPLETED.with_borrow(Clone::clone)
 }
 
-#[canic::canic_update(public)]
+#[canic::canic_update(public, wire(id = crate::timer_wire::PERF_PROBE, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn perf_context_probe(which: u8) -> Result<PerfProbeObservation, canic::Error> {
     assert!(which < 2);
     work(if which == 0 { 100 } else { 10_000 });
@@ -138,9 +164,19 @@ async fn perf_context_probe(which: u8) -> Result<PerfProbeObservation, canic::Er
     Ok(observed)
 }
 
+canic::__canic_register_wire_schema!(
+    "perf_context_metrics",
+    Query,
+    crate::timer_wire::PERF_METRICS,
+    (),
+    Vec<PerfProbeMetric>,
+    crate::timer_wire::REQUEST_LIMITS,
+    crate::timer_wire::RESPONSE_LIMITS
+);
+
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::metrics::decode_args",
+    encode_with = "codec::metrics::encode_reply"
 )]
 fn perf_context_metrics() -> Vec<PerfProbeMetric> {
     perf::entries()

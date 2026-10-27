@@ -12,8 +12,11 @@ pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 1;
 // CanicHealthStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CanicHealthStatus {
     pub schema_version: u32,
     pub status: HealthStatus,
@@ -25,8 +28,7 @@ pub struct CanicHealthStatus {
 // CanicReadinessStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanicReadinessStatus {
     pub fixture: Result<
         crate::dto::fixture_provisioning::FixtureProvisioningStatus,
@@ -45,8 +47,7 @@ pub struct CanicReadinessStatus {
 // CanicRuntimeStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanicRuntimeStatus {
     pub schema_version: u32,
     pub observed_at_ns: u64,
@@ -72,8 +73,11 @@ pub struct CanicRuntimeStatus {
 // RuntimeBuildInfo
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeBuildInfo {
     pub package_name: String,
     pub package_version: String,
@@ -85,8 +89,11 @@ pub struct RuntimeBuildInfo {
 // RuntimeCheck
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeCheck {
     pub category: String,
     pub code: String,
@@ -101,8 +108,11 @@ pub struct RuntimeCheck {
 // RuntimeDiagnostic
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeDiagnostic {
     pub category: String,
     pub code: String,
@@ -117,8 +127,11 @@ pub struct RuntimeDiagnostic {
 // RuntimeFeatureStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeFeatureStatus {
     pub name: String,
     pub enabled: bool,
@@ -130,8 +143,7 @@ pub struct RuntimeFeatureStatus {
 // RuntimeTopologyStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RuntimeTopologyStatus {
     pub root: Option<Principal>,
     pub parent: Option<Principal>,
@@ -147,8 +159,11 @@ pub struct RuntimeTopologyStatus {
 ///
 /// A transient `RemoveWhenStopped` registration is absent after reaching its
 /// terminal state; its final observation is therefore not retained here.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CanisterTimerStatus {
     pub name: String,
     pub owner: String,
@@ -182,8 +197,11 @@ pub struct CanisterTimerStatus {
 ///
 /// Samples cover the complete accepted shared-runtime callback path rather
 /// than isolating the consumer function from registry and completion work.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TimerCallbackPerformanceStatus {
     pub instruction_samples_since_runtime_start: u64,
     pub instructions_latest: Option<u64>,
@@ -200,8 +218,11 @@ pub struct TimerCallbackPerformanceStatus {
 //
 
 /// Wasm and stable-memory page extents bracketing one completed callback.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TimerMemoryPageSampleStatus {
     pub start: TimerMemoryPageExtentStatus,
     pub end: TimerMemoryPageExtentStatus,
@@ -212,8 +233,11 @@ pub struct TimerMemoryPageSampleStatus {
 //
 
 /// Runtime high-water memory extents measured in 64-KiB pages.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TimerMemoryPageExtentStatus {
     pub wasm_pages: u64,
     pub stable_pages: u64,
@@ -223,8 +247,11 @@ pub struct TimerMemoryPageExtentStatus {
 // RuntimeStateSummary
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeStateSummary {
     pub manifest_schema_version: u32,
     pub domains: Vec<RuntimeStateDomainSummary>,
@@ -235,8 +262,11 @@ pub struct RuntimeStateSummary {
 // RuntimeStateDomainSummary
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeStateDomainSummary {
     pub domain: String,
     pub version: u32,
@@ -249,8 +279,11 @@ pub struct RuntimeStateDomainSummary {
 // RuntimeAuthStatusSummary
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeAuthStatusSummary {
     pub auth_features: Vec<RuntimeFeatureStatus>,
 }
@@ -259,8 +292,11 @@ pub struct RuntimeAuthStatusSummary {
 // RuntimeReceiptCapacityStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeReceiptCapacityStatus {
     pub status: RuntimeCheckStatus,
     pub receipt_records: u64,
@@ -284,8 +320,11 @@ pub struct RuntimeReceiptCapacityStatus {
 // RecentFailure
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RecentFailure {
     pub occurred_at_ns: u64,
     pub subsystem: String,
@@ -300,8 +339,11 @@ pub struct RecentFailure {
 // RuntimeVisibilityEntry
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RuntimeVisibilityEntry {
     pub field: String,
     pub visibility: RuntimeFieldVisibility,
@@ -310,7 +352,6 @@ pub struct RuntimeVisibilityEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_platform::candid::contract::{Decode, Encode};
     use serde::{Serialize, de::DeserializeOwned};
     use std::fmt::Debug;
 
@@ -326,10 +367,15 @@ mod tests {
             maximum_wasm_memory_growth_pages: None,
             maximum_stable_memory_growth_pages: None,
         };
-        let bytes = ic_platform::candid::contract::encode_one(&status).unwrap();
+        // A scalar-contract fixture exercises this nested value's actual Wire encoding.
+        let method = 1;
+        let limits = crate::protocol::protected_runtime::RESPONSE_LIMITS;
+        let bytes = ic_wire::native::encode_response(method, &status, limits).unwrap();
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<TimerCallbackPerformanceStatus>(&bytes)
-                .unwrap(),
+            ic_wire::native::decode_response::<TimerCallbackPerformanceStatus>(
+                method, &bytes, limits
+            )
+            .unwrap(),
             status
         );
         let json = serde_json::to_string(&status).unwrap();
@@ -337,22 +383,6 @@ mod tests {
             serde_json::from_str::<TimerCallbackPerformanceStatus>(&json).unwrap(),
             status
         );
-    }
-
-    #[test]
-    fn runtime_enums_roundtrip_candid_with_canonical_variant_labels() {
-        assert_enum_candid_contract(HealthStatus::Unknown);
-        assert_enum_candid_contract(ReadinessStatus::NotEvaluated);
-        assert_enum_candid_contract(RuntimeStatus::Failing);
-        assert_enum_candid_contract(TimerRegistrationStatus::Unregistered);
-        assert_enum_candid_contract(TimerProcessCondition::MissingRegistration);
-        assert_enum_candid_contract(TimerSchedulingMode::AfterCompletion);
-        assert_enum_candid_contract(TimerExecutionOutcome::InvariantFailure);
-        assert_enum_candid_contract(FailureSeverity::Critical);
-        assert_enum_candid_contract(RuntimeCheckStatus::NotEvaluated);
-        assert_enum_candid_contract(RuntimeDiagnosticSeverity::Unsupported);
-        assert_enum_candid_contract(RuntimeFieldVisibility::OperatorOnly);
-        assert_enum_candid_contract(RuntimeStateDomainStatus::NotEvaluated);
     }
 
     #[test]
@@ -459,16 +489,6 @@ mod tests {
             RuntimeStateDomainStatus::NotEvaluated,
             RuntimeStateDomainStatus::NotEvaluated.label(),
         );
-    }
-
-    fn assert_enum_candid_contract<T>(value: T)
-    where
-        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
-    {
-        let bytes = Encode!(&value).expect("encode runtime enum");
-        let decoded = Decode!(&bytes, T).expect("decode runtime enum");
-
-        assert_eq!(decoded, value);
     }
 
     fn assert_enum_serde_contract<T>(value: T, label: &str)

@@ -24,11 +24,11 @@ use canic_contracts::{
     dto::{
         error::Error as CanicError,
         fleet_registry::FleetRegistry,
+        provisioning_census::Page,
         root::{
             RootProvisioningReleaseKey as Key, RootProvisioningReleasePhase as Phase,
             RootProvisioningReleaseResponse,
         },
-        wire::projection::release_provisioning::{Request, Response},
     },
     protocol,
 };
@@ -38,7 +38,7 @@ use thiserror::Error;
 
 pub(in crate::fleet_ensure) use assessment::assessment_facts;
 
-const RESPONSE_BYTES: usize = 256 * 1024;
+const RESPONSE_BYTES: usize = protocol::provisioning_census::RESPONSE_LIMITS.bytes;
 const MAXIMUM_CENSUS_BYTES: usize = 8 * 1024 * 1024;
 const MAXIMUM_OPERATIONS: usize = 4096;
 const QUERY_DEADLINE: Duration = Duration::from_secs(15);
@@ -104,14 +104,16 @@ pub(super) async fn collect_with_agent(
             let fail = |stage| ReleaseProvisioningError::Observation { root, stage };
             let mut pages = Pages::new(root);
             loop {
-                let argument = ic_platform::candid::contract::encode_one(
-                    Request::ProvisioningRelease(pages.cursor),
+                let argument = ic_wire::native::encode_request(
+                    protocol::provisioning_census::METHOD_ID,
+                    &pages.cursor,
+                    protocol::provisioning_census::REQUEST_LIMITS,
                 )
                 .map_err(|_| fail(ReleaseProvisioningStage::Query))?;
                 let bytes = tokio::time::timeout(
                     QUERY_DEADLINE,
                     agent
-                        .query(&root, protocol::CANIC_ROOT_STATUS)
+                        .query(&root, protocol::provisioning_census::METHOD)
                         .with_arg(argument)
                         .call(),
                 )
@@ -169,18 +171,15 @@ pub fn decode_response(
     *remaining = remaining
         .checked_sub(bytes.len())
         .ok_or_else(|| fail(ReleaseProvisioningStage::Budget))?;
-    let limits = ic_platform::candid::DecodeLimits {
-        reply_bytes: RESPONSE_BYTES,
-        decoding_quota: RESPONSE_BYTES * 8,
-        skipping_quota: RESPONSE_BYTES * 8,
-        type_entries: 512,
-        header_bytes: 16 * 1024,
-    };
-    let response: Result<Response, CanicError> = ic_platform::candid::decode_one(bytes, limits)
-        .map_err(|_| fail(ReleaseProvisioningStage::Decode))?;
-    let Response::ProvisioningRelease(page) =
-        response.map_err(|rejection| ReleaseProvisioningError::Rejected { root, rejection })?;
-    Ok(page)
+    let response: Result<Page, CanicError> = ic_wire::native::decode_response(
+        protocol::provisioning_census::METHOD_ID,
+        bytes,
+        protocol::provisioning_census::RESPONSE_LIMITS,
+    )
+    .map_err(|_| fail(ReleaseProvisioningStage::Decode))?;
+    response
+        .map(Into::into)
+        .map_err(|rejection| ReleaseProvisioningError::Rejected { root, rejection })
 }
 
 struct Pages {

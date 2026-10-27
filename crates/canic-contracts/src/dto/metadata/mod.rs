@@ -4,8 +4,11 @@
 
 use crate::dto::prelude::*;
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CanicMetadataResponse {
     pub package_name: String,
     pub package_version: String,

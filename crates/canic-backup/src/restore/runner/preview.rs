@@ -56,6 +56,7 @@ pub fn restore_run_retry_failed(
         .filter(|operation| operation.state == RestoreApplyOperationState::Failed)
         .cloned()
         .ok_or(RestoreApplyJournalError::NoFailedOperation)?;
+    super::execute::enforce_load_settlement(&journal, &recovered_operation)?;
 
     let recovered_updated_at = state_updated_at(config.updated_at.as_ref());
     journal.retry_failed_operation_at(

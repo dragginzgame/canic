@@ -107,7 +107,8 @@ role = "app"
 Use `canic::build!("../canic.toml")` from `build.rs` and `canic::start!()` from
 `lib.rs`. The `app` value must match `[app].name` in the selected
 `canic.toml`. Define the three async application hooks and place
-`canic::finish!()` after all endpoint definitions:
+`canic::finish!()` after all endpoint definitions. Declare `ic-wire` in the owning
+workspace catalog and inherit it in this package for the native endpoint budgets:
 
 ```rust
 canic::start!();
@@ -116,7 +117,12 @@ async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
-#[canic::canic_query(public)]
+const LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
+};
+
+#[canic::canic_query(public,
+    wire(id = 0x4150_5000_0000_0001, request = LIMITS, response = LIMITS))]
 fn ping() -> Result<String, canic::Error> {
     Ok("ok".to_string())
 }
@@ -142,26 +148,19 @@ Root has no application hooks or custom endpoint surface.
 
 ## Inter-Canister Calls
 
-Use the Canic call builder when application code benefits from concise Candid
-encoding, typed public errors, and Canic's inter-canister call metrics:
+Use the Canic call builder for transport, bounded waits, typed public errors and
+call metrics. For owned methods, encode the declared request with
+`ic_wire::native::encode_request`, supply those exact bytes with `with_raw_args`,
+and decode the response with the same method ID and declared response limits.
+IC Wire owns framing and admission; the caller owns authentication, semantic
+validation and retry policy. Preserve original request bytes across an uncertain
+paid effect instead of constructing a fresh operation.
 
-```rust
-use candid::Principal;
-use canic::prelude::Call;
-
-async fn read_count(target: Principal) -> Result<u64, canic::Error> {
-    Call::bounded_wait(target, "read_count")
-        .execute_candid()
-        .await
-}
-```
-
-`Call::unbounded_wait` is also available, as are `with_arg`, `with_args`,
-`with_raw_args`, `with_cycles`, and `execute_candid_tuple`. Use `execute`
-directly when the response must be retained or decoded later. This is an
-ordinary IC call builder; it does not replace Canic's protected capability RPC
-used for framework-owned creation, upgrade, placement, recycling, or cycle
-operations.
+`Call::bounded_wait` and `Call::unbounded_wait` both support raw arguments and
+`with_cycles`; `execute` retains the response for bounded decoding. External IC
+protocols that require Candid use `with_arg`, `with_args`, `execute_candid` or
+`execute_candid_tuple`. This transport builder does not replace Canic's protected
+framework protocols for creation, upgrade, placement, recycling or funding.
 
 ## Application Timers
 
@@ -217,7 +216,9 @@ This crate lives in the Canic workspace. See the workspace guide at
 `canic-host` generates unpublished Root, Coordinator and Store entrypoint
 packages against this exact Canic dependency. Their runtime implementations
 remain in the facade and control plane. The `candid/` directory ships canonical
-Coordinator and Store interfaces for artifact building and consumer bindings.
+Coordinator and Store lifecycle/external interfaces. Owned method declarations
+produce the separate native Wire schemas and TypeScript clients; DID hashes do
+not stand in for Wire identities.
 
 ## Continue From Here
 

@@ -2,14 +2,15 @@
 //!
 //! Responsibility: encode bounded target-bound application initialization for Root.
 //! Does not own: application schemas, identity allocation, or network effects.
-//! Boundary: the consumer prepares inner Candid after observing the allocated target.
+//! Boundary: the consumer prepares opaque application bytes after observing the allocated target.
 
 use canic_contracts::dto::{
+    component_initialization::RootComponentInitializationRequest as NativeRequest,
     component_registry::{
         MAX_COMPONENT_APPLICATION_INIT_BYTES, RootComponentInitializationRequest,
     },
-    wire::projection::component_initialization::RootCommand,
 };
+use canic_contracts::protocol::component_initialization as wire;
 use ic_platform::principal::ExternalPrincipal as Principal;
 use thiserror::Error;
 
@@ -24,10 +25,10 @@ pub enum ComponentInitializationError {
     )]
     Bounds,
     #[error(transparent)]
-    Candid(#[from] ic_platform::candid::contract::Error),
+    Wire(#[from] ic_wire::Error),
 }
 
-/// Encode the production `canic_root_command` input without interpreting application data.
+/// Encode the native Root initialization input without interpreting application data.
 /// Retain these bytes for an exact retry; Root freezes the request before installation.
 pub fn encode_command(
     request: &RootComponentInitializationRequest,
@@ -42,8 +43,10 @@ pub fn encode_command(
     if bytes.is_empty() || bytes.len() > MAX_COMPONENT_APPLICATION_INIT_BYTES {
         return Err(ComponentInitializationError::Bounds);
     }
-    Ok(ic_platform::candid::contract::encode_one(
-        RootCommand::BindComponentInitialization(request),
+    Ok(ic_wire::native::encode_request(
+        wire::METHOD_ID,
+        &NativeRequest::from(request.clone()),
+        wire::REQUEST_LIMITS,
     )?)
 }
 
@@ -51,8 +54,6 @@ pub fn encode_command(
 mod tests {
     use super::*;
     use canic_contracts::dto::component_registry::ComponentApplicationInitialization;
-
-    use canic_contracts::dto::wire::root_command::RootCommand;
 
     fn request() -> RootComponentInitializationRequest {
         RootComponentInitializationRequest {
@@ -68,11 +69,9 @@ mod tests {
     fn command_preserves_exact_target_and_application_bytes() {
         let request = request();
         let bytes = encode_command(&request).unwrap();
-        let RootCommand::BindComponentInitialization(decoded) =
-            ic_platform::candid::decoder::decode_one(&bytes).unwrap()
-        else {
-            panic!("initialization command selector");
-        };
+        let decoded: NativeRequest =
+            ic_wire::native::decode_request(wire::METHOD_ID, &bytes, wire::REQUEST_LIMITS).unwrap();
+        let decoded = RootComponentInitializationRequest::from(decoded);
         assert_eq!(decoded, request);
         assert_eq!(encode_command(&request).unwrap(), bytes);
     }
@@ -90,6 +89,46 @@ mod tests {
         assert!(matches!(
             encode_command(&request),
             Err(ComponentInitializationError::Bounds)
+        ));
+    }
+}
+
+#[cfg(test)]
+mod native_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn maximum_initializer_fits_and_rejects_wrong_method_and_trailing_bytes() {
+        let request = RootComponentInitializationRequest {
+            operation_id: [1; 32],
+            initialization:
+                canic_contracts::dto::component_registry::ComponentApplicationInitialization {
+                    target_canister: Principal::from_slice(&[2; 29]),
+                    arguments: vec![255; MAX_COMPONENT_APPLICATION_INIT_BYTES],
+                },
+        };
+        let frame = encode_command(&request).unwrap();
+        assert!(frame.len() <= wire::REQUEST_LIMITS.bytes);
+        let decoded: NativeRequest =
+            ic_wire::native::decode_request(wire::METHOD_ID, &frame, wire::REQUEST_LIMITS).unwrap();
+        assert_eq!(RootComponentInitializationRequest::from(decoded), request);
+        assert!(matches!(
+            ic_wire::native::decode_request::<NativeRequest>(
+                wire::METHOD_ID + 1,
+                &frame,
+                wire::REQUEST_LIMITS
+            ),
+            Err(ic_wire::Error::Identity)
+        ));
+        let mut trailing = frame;
+        trailing.push(0);
+        assert!(matches!(
+            ic_wire::native::decode_request::<NativeRequest>(
+                wire::METHOD_ID,
+                &trailing,
+                wire::REQUEST_LIMITS
+            ),
+            Err(ic_wire::Error::Trailing)
         ));
     }
 }

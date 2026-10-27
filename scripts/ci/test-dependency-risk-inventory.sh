@@ -166,6 +166,24 @@ if bash "$GATE" --audit-json "$direct_warning" >/dev/null 2>&1; then
     fail "unmaintained direct dependency fixture was accepted"
 fi
 
+printf 'RUSTSEC-2099-0003\tunmaintained\tserde\t1.0.0\t%s\tcanic-risk-gate-fixture\tapproved-direct\n' \
+    "$checksum" >>"$fixture/scripts/ci/dependency-risk-inventory.tsv"
+bash "$GATE" --audit-json "$direct_warning" >/dev/null 2>&1 ||
+    fail "exact approved direct dependency fixture was rejected"
+for field in id version checksum; do
+    changed_direct="$tmp_dir/direct-$field-drift.json"
+    if [ "$field" = id ]; then
+        "$JQ_BIN" '.warnings.unmaintained[1].advisory.id = "RUSTSEC-2099-0999"' \
+            "$direct_warning" >"$changed_direct"
+    else
+        "$JQ_BIN" --arg field "$field" '.warnings.unmaintained[1].package[$field] = "changed"' \
+            "$direct_warning" >"$changed_direct"
+    fi
+    if bash "$GATE" --audit-json "$changed_direct" >/dev/null 2>&1; then
+        fail "changed direct dependency $field was accepted"
+    fi
+done
+
 yanked_warning="$tmp_dir/yanked-warning.json"
 "$JQ_BIN" '.warnings.yanked = [(.warnings.unmaintained[0]
     | del(.advisory)

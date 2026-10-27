@@ -102,6 +102,7 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         &workspace.join("target/embedded-root/cache"),
         &[PACKAGE],
         crate::workspace::wasm_build_environment(),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_shared_incremental_target(workspace.join("target/embedded-root/cargo"))
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])

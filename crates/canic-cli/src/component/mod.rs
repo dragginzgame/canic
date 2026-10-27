@@ -7,6 +7,7 @@ use crate::{
         clap::{flag_arg, parse_matches, required_string, value_arg},
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_nested_help,
+        render::quote_review_argument,
     },
     support::icp_target::IcpTargetOptions,
 };
@@ -42,6 +43,9 @@ pub enum ComponentCommandError {
 
     #[error("{0}")]
     Usage(String),
+
+    #[error("Component operation is incomplete; resume with {resume_command}")]
+    Incomplete { resume_command: String },
 }
 
 fn command() -> Command {
@@ -67,7 +71,7 @@ fn command() -> Command {
         .subcommand_required(true)
         .subcommand(leaf("apply", "Submit or resume the exact reviewed operation")
             .arg(value_arg("review").long("review").required(true))
-            .arg(value_arg("wait-secs").long("wait-secs").default_value("60").value_parser(clap::value_parser!(u64).range(0..=3600)).help("Maximum polling time; 0 advances once")))
+            .arg(value_arg("wait-secs").long("wait-secs").default_value("60").value_parser(clap::value_parser!(u64).range(0..=3600)).help("Maximum polling time; 0 advances once; incomplete apply exits nonzero")))
         .subcommand(leaf("plan", "Retain a read-only review against the current Fleet")
             .arg(value_arg("root").long("root").required(true).help("Logical Root name in Fleet desired state"))
             .arg(value_arg("spec").long("spec").required(true).help("Admitted Component Spec ID")))
@@ -85,25 +89,12 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), ComponentComm
     let target = IcpTargetOptions::parse(&matches);
     let (action, leaf) = matches
         .subcommand()
-        .ok_or_else(|| ComponentCommandError::Usage("select plan, apply or status".to_string()))?;
+        .ok_or_else(|| ComponentCommandError::Usage("select apply, plan or status".to_string()))?;
     let fleet = required_string(leaf, "fleet");
     let name = required_string(leaf, "name");
     let root = resolve_current_canic_icp_root()?;
     let mut transport = IcpComponentTransport::new(&root, target.icp_cli(&root));
     let record = match action {
-        "plan" => {
-            let spec =
-                ComponentSpecId::try_from(required_string(leaf, "spec")).map_err(|error| {
-                    ComponentCommandError::Usage(format!("invalid Component Spec: {error}"))
-                })?;
-            let authority = transport.authority(
-                &target.environment,
-                &fleet,
-                &required_string(leaf, "root"),
-                &spec,
-            )?;
-            workflow::plan(&root, &name, authority, &mut transport)?
-        }
         "apply" => {
             let review = required_string(leaf, "review");
             let wait =
@@ -131,9 +122,34 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), ComponentComm
                     workflow::status(&root, &target.environment, &fleet, &name, &mut transport)?;
             }
         }
+        "plan" => {
+            let spec =
+                ComponentSpecId::try_from(required_string(leaf, "spec")).map_err(|error| {
+                    ComponentCommandError::Usage(format!("invalid Component Spec: {error}"))
+                })?;
+            let authority = transport.authority(
+                &target.environment,
+                &fleet,
+                &required_string(leaf, "root"),
+                &spec,
+            )?;
+            workflow::plan(&root, &name, authority, &mut transport)?
+        }
         "status" => workflow::status(&root, &target.environment, &fleet, &name, &mut transport)?,
         _ => unreachable!("Clap limits commands"),
     };
+    let complete = record
+        .progress
+        .as_ref()
+        .is_some_and(|progress| progress.complete);
+    let resume = resume_command(
+        &target.environment,
+        &target.icp,
+        &fleet,
+        &name,
+        &record.plan.review_sha256,
+        leaf.try_get_one::<u64>("wait-secs").ok().flatten().copied(),
+    );
     if leaf.get_flag("json") {
         println!("{}", serde_json::to_string_pretty(&record)?);
     } else {
@@ -155,16 +171,142 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), ComponentComm
                 record.submission_attempts
             ),
         }
-        if !record
-            .progress
-            .as_ref()
-            .is_some_and(|progress| progress.complete)
-        {
-            println!(
-                "resume: canic --environment {} component apply {} {} --review {}",
-                target.environment, fleet, name, record.plan.review_sha256
-            );
+        if !complete {
+            println!("resume: {resume}");
         }
     }
+    require_apply_completion(action, complete, resume)
+}
+
+fn resume_command(
+    environment: &str,
+    icp: &str,
+    fleet: &str,
+    name: &str,
+    review: &str,
+    wait_secs: Option<u64>,
+) -> String {
+    let mut command = format!(
+        "canic --environment {} --icp {} component apply {} {} --review {}",
+        quote_review_argument(environment),
+        quote_review_argument(icp),
+        quote_review_argument(fleet),
+        quote_review_argument(name),
+        quote_review_argument(review),
+    );
+    if let Some(wait_secs) = wait_secs {
+        use std::fmt::Write;
+        write!(command, " --wait-secs {wait_secs}").expect("write into String");
+    }
+    command
+}
+
+fn require_apply_completion(
+    action: &str,
+    complete: bool,
+    resume_command: String,
+) -> Result<(), ComponentCommandError> {
+    if action == "apply" && !complete {
+        return Err(ComponentCommandError::Incomplete { resume_command });
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn incomplete_apply_preserves_resume_while_observations_remain_successful() {
+        let resume = resume_command("staging", "/custom icp", "demo", "core", "review", Some(0));
+        assert!(matches!(
+            require_apply_completion("apply", false, resume.clone()),
+            Err(ComponentCommandError::Incomplete { resume_command }) if resume_command == resume
+        ));
+        assert!(require_apply_completion("apply", true, resume.clone()).is_ok());
+        for action in ["plan", "status"] {
+            assert!(require_apply_completion(action, false, resume.clone()).is_ok());
+        }
+    }
+
+    #[test]
+    fn component_commands_and_wait_bounds_use_the_maintained_clap_definition() {
+        let names = command()
+            .get_subcommands()
+            .map(|child| child.get_name().to_string())
+            .collect::<Vec<_>>();
+        assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
+        for wait in ["0", "60", "3600"] {
+            let matches = parse_matches(
+                command(),
+                [
+                    "apply",
+                    "demo",
+                    "core",
+                    "--review",
+                    "review",
+                    "--wait-secs",
+                    wait,
+                ]
+                .map(OsString::from),
+            )
+            .unwrap();
+            let leaf = matches.subcommand_matches("apply").unwrap();
+            assert_eq!(
+                leaf.get_one::<u64>("wait-secs"),
+                Some(&wait.parse::<u64>().unwrap())
+            );
+        }
+        let error = parse_matches(
+            command(),
+            [
+                "apply",
+                "demo",
+                "core",
+                "--review",
+                "review",
+                "--wait-secs",
+                "3601",
+            ]
+            .map(OsString::from),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resume_shell_arguments_preserve_the_exact_target_and_wait() {
+        let environment = "staging's environment";
+        let icp = "/custom tools/icp's binary";
+        let fleet = "fleet $(printf substituted)";
+        let name = "core; printf injected";
+        let review = "a".repeat(64);
+        let resume = resume_command(environment, icp, fleet, name, &review, Some(0));
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", &format!("set -- {resume}; printf '%s\\0' \"$@\"")])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let text = String::from_utf8(output.stdout).unwrap();
+        let arguments = text.trim_end_matches('\0').split('\0').collect::<Vec<_>>();
+        assert_eq!(
+            arguments,
+            [
+                "canic",
+                "--environment",
+                environment,
+                "--icp",
+                icp,
+                "component",
+                "apply",
+                fleet,
+                name,
+                "--review",
+                &review,
+                "--wait-secs",
+                "0"
+            ]
+        );
+    }
 }

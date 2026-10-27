@@ -7,7 +7,6 @@ use canic::dto::{
         PublicSnapshotState,
     },
 };
-use canic_contracts::dto::wire::managed::{PublicStatusRequest, PublicStatusResponse};
 use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{collections::BTreeSet, time::Duration};
@@ -17,27 +16,25 @@ fn snapshot(
     service: Principal,
     family: PublicMetricFamily,
 ) -> PublicMetricsSnapshot {
-    let request = PublicStatusRequest::Metrics(PublicMetricsRequest {
-        family,
-        page: PageRequest {
-            offset: 0,
-            limit: 256,
+    ic_testkit::pic::query_wire(
+        pic,
+        service,
+        Principal::anonymous(),
+        ic_testkit::pic::WireCallSpec {
+            method: canic::protocol::CANIC_PUBLIC_METRICS,
+            method_id: canic::protocol::public_metrics::METHOD_ID,
+            request_limits: canic::protocol::public_metrics::REQUEST_LIMITS,
+            response_limits: canic::protocol::public_metrics::RESPONSE_LIMITS,
         },
-    });
-    let bytes = pic
-        .query_call(
-            service,
-            Principal::anonymous(),
-            canic::protocol::CANIC_PUBLIC_STATUS,
-            ic_platform::candid::contract::encode_args((request,)).unwrap(),
-        )
-        .expect("anonymous public metrics transport");
-    let (response,): (Result<PublicStatusResponse, canic::Error>,) =
-        ic_platform::candid::decode_args(&bytes, canic::testing::CANDID_REPLY_LIMITS).unwrap();
-    let PublicStatusResponse::Metrics(snapshot) = response.expect("public metrics") else {
-        panic!("expected metrics response");
-    };
-    snapshot
+        &PublicMetricsRequest {
+            family,
+            page: PageRequest {
+                offset: 0,
+                limit: 256,
+            },
+        },
+    )
+    .expect("public metrics Wire query")
 }
 
 pub(super) fn check(
@@ -118,7 +115,7 @@ pub(super) fn check(
         assert_eq!(row.value, value, "{name}");
         assert_eq!(row.unit, unit);
         assert_eq!(row.kind, PublicMetricKind::Gauge);
-        assert_eq!(row.canister_id, Some(service));
+        assert_eq!(row.canister_id, Some(service.into()));
         assert_eq!(row.observed_at_ns, sampled_at);
     }
     let repeated = snapshot(pic, service, PublicMetricFamily::Application);

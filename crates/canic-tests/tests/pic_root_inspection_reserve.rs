@@ -3,22 +3,11 @@
 
 use canic::{
     Error,
-    dto::canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
-};
-use canic_contracts::dto::wire::projection::{
-    capacity_management::{RootRequest as RootCommand, RootResponse},
-    fixture_root_inspection_reserve::ReserveRequest,
-    inspection_reserve::InspectionReserveResponse as ReserveResponse,
+    dto::canister::{CanisterInspectionOutcome as RootResponse, CanisterInspectionReserveResponse},
 };
 use canic_testing_internal::pic::{CanicWasmBuildProfile, install_audit_root_probe};
 use ic_platform::pocket_ic::{ErrorCode, PocketIc, RejectResponse};
-use ic_platform::{
-    candid::{
-        contract::{Nat, encode_one},
-        decoder::decode_one,
-    },
-    principal::ExternalPrincipal as Principal,
-};
+use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 
 #[test]
 fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
@@ -41,35 +30,49 @@ fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
     )
     .unwrap();
     assert!(longer.required_liquid_cycles > reserve.required_liquid_cycles);
-    let fenced = pic
-        .query_call(
+    let fenced: Result<canic::dto::role::CycleBalanceStatusResponse, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
             root,
             Principal::anonymous(),
-            canic::protocol::CANIC_OBSERVABILITY,
-            encode_one(ReserveRequest::CycleBalance).unwrap(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::cycle_balance::METHOD,
+                method_id: canic::protocol::cycle_balance::METHOD_ID,
+                request_limits: canic::protocol::cycle_balance::REQUEST_LIMITS,
+                response_limits: canic::protocol::cycle_balance::RESPONSE_LIMITS,
+            },
+            &(),
         )
         .unwrap();
-    let fenced: Result<ReserveResponse, Error> = decode_one(&fenced).unwrap();
     assert!(
         matches!(fenced, Err(error) if error.code() == canic::diagnostics::codes::LIFECYCLE_INACTIVE.raw_code())
     );
     assert!(inspection_reserve(pic, root, target, Principal::from_slice(&[99])).is_err());
     assert!(matches!(
         inspect(pic, root, target).unwrap(),
-        Ok(RootResponse::InspectCanister(_))
+        Ok(RootResponse::Status(_))
     ));
     let denied = pic
         .update_call(
             root,
             Principal::from_slice(&[99]),
-            canic::protocol::CANIC_ROOT_COMMAND,
-            encode_one(RootCommand::InspectCanister(CanisterInspectionRequest {
-                canister_id: target,
-            }))
+            canic::protocol::inspection::METHOD,
+            ic_wire::native::encode_request(
+                canic::protocol::inspection::METHOD_ID,
+                &canic::dto::inspection::Request {
+                    canister_id: target.into(),
+                },
+                canic::protocol::inspection::REQUEST_LIMITS,
+            )
             .unwrap(),
         )
         .unwrap();
-    let denied: Result<RootResponse, Error> = decode_one(&denied).unwrap();
+    let denied: Result<canic::dto::inspection::Response, Error> = ic_wire::native::decode_response(
+        canic::protocol::inspection::METHOD_ID,
+        &denied,
+        canic::protocol::inspection::RESPONSE_LIMITS,
+    )
+    .unwrap();
     assert!(
         denied.is_err(),
         "numerical reserve evidence remains controller-only"
@@ -108,7 +111,7 @@ fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
     assert!(recovered.available_liquid_cycles >= recovered.required_liquid_cycles);
     assert!(matches!(
         inspect(pic, root, target).unwrap(),
-        Ok(RootResponse::InspectCanister(_))
+        Ok(RootResponse::Status(_))
     ));
     assert!(
         pic.cycle_balance(root) <= before,
@@ -136,8 +139,8 @@ fn find_inspection_failure(
         let threshold = low + (high - low) / 2;
         set_freezing_threshold(pic, root, threshold);
         match inspect(pic, root, target) {
-            Ok(Ok(RootResponse::InspectCanister(_))) => low = threshold.checked_add(1).unwrap(),
-            Ok(Ok(RootResponse::InspectionReserveRequired(evidence))) => {
+            Ok(Ok(RootResponse::Status(_))) => low = threshold.checked_add(1).unwrap(),
+            Ok(Ok(RootResponse::ReserveRequired(evidence))) => {
                 observed = Some((threshold, evidence));
                 break;
             }
@@ -206,19 +209,19 @@ fn reserve_query(
     target: Principal,
     caller: Principal,
 ) -> Result<Result<CanisterInspectionReserveResponse, Error>, RejectResponse> {
+    use canic::protocol::inspection_reserve as protocol;
+    let input: ic_platform::Principal = target.into();
     let bytes = pic.query_call(
         root,
         caller,
-        canic::protocol::CANIC_OBSERVABILITY,
-        encode_one(ReserveRequest::InspectionReserve(
-            CanisterInspectionRequest {
-                canister_id: target,
-            },
-        ))
-        .unwrap(),
+        protocol::METHOD,
+        ic_wire::native::encode_request(protocol::METHOD_ID, &input, protocol::REQUEST_LIMITS)
+            .unwrap(),
     )?;
-    let response: Result<ReserveResponse, Error> = decode_one(&bytes).unwrap();
-    Ok(response.map(|ReserveResponse::InspectionReserve(evidence)| evidence))
+    let response: Result<canic::dto::inspection_reserve::InspectionReserve, Error> =
+        ic_wire::native::decode_response(protocol::METHOD_ID, &bytes, protocol::RESPONSE_LIMITS)
+            .unwrap();
+    Ok(response.map(Into::into))
 }
 
 fn set_freezing_threshold(pic: &PocketIc, root: Principal, seconds: u64) {
@@ -237,11 +240,22 @@ fn inspect(
     let bytes = pic.update_call(
         root,
         Principal::anonymous(),
-        canic::protocol::CANIC_ROOT_COMMAND,
-        encode_one(RootCommand::InspectCanister(CanisterInspectionRequest {
-            canister_id: target,
-        }))
+        canic::protocol::inspection::METHOD,
+        ic_wire::native::encode_request(
+            canic::protocol::inspection::METHOD_ID,
+            &canic::dto::inspection::Request {
+                canister_id: target.into(),
+            },
+            canic::protocol::inspection::REQUEST_LIMITS,
+        )
         .unwrap(),
     )?;
-    Ok(decode_one(&bytes).unwrap())
+    let response: Result<canic::dto::inspection::Response, Error> =
+        ic_wire::native::decode_response(
+            canic::protocol::inspection::METHOD_ID,
+            &bytes,
+            canic::protocol::inspection::RESPONSE_LIMITS,
+        )
+        .unwrap();
+    Ok(response.map(|value| value.try_into().unwrap()))
 }

@@ -1,10 +1,7 @@
 //! Verify retained provisioning discovery against the installed production Root.
 
 use canic::protocol;
-use canic_contracts::dto::{
-    root::{RootProvisioningReleaseKey, RootProvisioningReleasePhase},
-    wire::projection::release_provisioning::Request,
-};
+use canic_contracts::dto::root::{RootProvisioningReleaseKey, RootProvisioningReleasePhase};
 use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
 
@@ -22,9 +19,13 @@ pub(super) fn assert_census(
             .query_call(
                 root,
                 caller,
-                protocol::CANIC_ROOT_STATUS,
-                ic_platform::candid::contract::encode_one(Request::ProvisioningRelease(cursor))
-                    .unwrap(),
+                protocol::provisioning_census::METHOD,
+                ic_wire::native::encode_request(
+                    protocol::provisioning_census::METHOD_ID,
+                    &cursor,
+                    protocol::provisioning_census::REQUEST_LIMITS,
+                )
+                .unwrap(),
             )
             .expect("provisioning census transport");
         let mut remaining = 8 * 1024 * 1024;

@@ -14,7 +14,9 @@ fn funding_inspection_reserve_requires_exact_call_participants_and_native_bounds
     };
     assert!(matches!(
         inspection_response(
-            Response::InspectionReserveRequired(evidence.clone()),
+            canic_contracts::dto::canister::CanisterInspectionOutcome::ReserveRequired(
+                evidence.clone()
+            ),
             root,
             child
         ),
@@ -35,7 +37,13 @@ fn funding_inspection_reserve_requires_exact_call_participants_and_native_bounds
         },
     ] {
         assert!(matches!(
-            inspection_response(Response::InspectionReserveRequired(evidence), root, child),
+            inspection_response(
+                canic_contracts::dto::canister::CanisterInspectionOutcome::ReserveRequired(
+                    evidence
+                ),
+                root,
+                child
+            ),
             Err(FundingObservationError::AuthorityMismatch)
         ));
     }

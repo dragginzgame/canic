@@ -10,7 +10,6 @@ use canic::{
     },
     protocol,
 };
-use canic_contracts::dto::wire::projection::release_receipts::Request;
 use canic_host::fleet_ensure::ops::release::{
     intents,
     intents::{ReleaseIntentsError, entry_key},
@@ -20,27 +19,33 @@ use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Read the complete small fixture, proving replay, controller denial and unchanged balance.
-pub(super) fn collect(pic: &PocketIc, owner: Principal, method: &str) -> Vec<ReplayReleaseEntry> {
+pub(super) fn collect(pic: &PocketIc, owner: Principal) -> Vec<ReplayReleaseEntry> {
     let read = |caller, cursor| {
-        let argument = if method == protocol::CANIC_OBSERVABILITY {
-            ic_platform::candid::contract::encode_one(canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityRequest::ReplayRelease(cursor))
-        } else {
-            ic_platform::candid::contract::encode_one(Request::ReplayRelease(cursor))
-        }.unwrap();
+        let argument = ic_wire::native::encode_request(
+            protocol::release_evidence::receipts::METHOD_ID,
+            &cursor,
+            protocol::release_evidence::REQUEST_LIMITS,
+        )
+        .unwrap();
         let bytes = pic
-            .query_call(owner, caller, method, argument)
+            .query_call(
+                owner,
+                caller,
+                protocol::release_evidence::receipts::METHOD,
+                argument,
+            )
             .expect("release receipt query transport");
         let mut remaining = 8 * 1024 * 1024;
         decode_response(owner, &bytes, &mut remaining)
     };
-    let _ = collect_intents(pic, owner, method);
+    let _ = collect_intents(pic, owner);
     let balance = pic.cycle_balance(owner);
     let mut cursor = None;
     let mut complete = false;
     let mut entries = Vec::new();
     for _ in 0..128 {
         let page = read(Principal::anonymous(), cursor).unwrap();
-        assert_eq!(page.owner, owner);
+        assert_eq!(page.owner, owner.into());
         assert_eq!(read(Principal::anonymous(), cursor).unwrap(), page);
         if let Some(entry) = &page.entry {
             assert!(cursor.is_none_or(|previous| entry.slot > previous));
@@ -68,7 +73,7 @@ pub(super) fn assert_funding_receipt(
     child: Principal,
     operation: [u8; 32],
 ) {
-    let receipts = collect(pic, root, protocol::CANIC_ROOT_STATUS);
+    let receipts = collect(pic, root);
     let matches = receipts
         .iter()
         .filter(|entry| {
@@ -78,7 +83,7 @@ pub(super) fn assert_funding_receipt(
     let [entry] = matches.as_slice() else {
         panic!("one original paid child-funding receipt");
     };
-    assert_eq!(entry.actor, child);
+    assert_eq!(entry.actor, child.into());
     assert_eq!(
         entry.authentication,
         ReplayReleaseAuthentication::DirectCaller
@@ -89,7 +94,7 @@ pub(super) fn assert_funding_receipt(
         .as_ref()
         .expect("paid accounting identity");
     assert_ne!(settlement.quota_intent_id, settlement.reservation_intent_id);
-    let canonical = collect_intents(pic, root, protocol::CANIC_ROOT_STATUS);
+    let canonical = collect_intents(pic, root);
     for (id, expected) in [
         (settlement.quota_intent_id, &settlement.quota),
         (settlement.reservation_intent_id, &settlement.reservation),
@@ -112,7 +117,7 @@ pub(super) fn assert_funding_receipt(
     assert_eq!(
         entry.effect,
         Some(ReplayReleaseEffect::ManagementCall {
-            canister: child,
+            canister: child.into(),
             method: "deposit_cycles".into(),
         })
     );
@@ -122,15 +127,21 @@ pub(super) fn assert_funding_receipt(
 pub(super) fn collect_intents(
     pic: &PocketIc,
     owner: Principal,
-    method: &str,
 ) -> Vec<canic::dto::release_intents::IntentReleaseEntry> {
-    use canic_contracts::dto::wire::projection::release_intents::Request as IntentRequest;
     let read = |caller, cursor| {
-        let argument =
-            ic_platform::candid::contract::encode_one(IntentRequest::IntentRelease(cursor))
-                .unwrap();
+        let argument = ic_wire::native::encode_request(
+            protocol::release_evidence::intents::METHOD_ID,
+            &cursor,
+            protocol::release_evidence::REQUEST_LIMITS,
+        )
+        .unwrap();
         let bytes = pic
-            .query_call(owner, caller, method, argument)
+            .query_call(
+                owner,
+                caller,
+                protocol::release_evidence::intents::METHOD,
+                argument,
+            )
             .expect("canonical accounting query transport");
         intents::decode_response(owner, &bytes, &mut (8 * 1024 * 1024))
     };
@@ -140,7 +151,7 @@ pub(super) fn collect_intents(
     let mut complete = false;
     for _ in 0..256 {
         let page = read(Principal::anonymous(), cursor).unwrap();
-        assert_eq!(page.owner, owner);
+        assert_eq!(page.owner, owner.into());
         assert_eq!(read(Principal::anonymous(), cursor).unwrap(), page);
         if let Some(entry) = page.entry {
             let key = entry_key(&entry);

@@ -31,26 +31,36 @@ impl ReceiptTransport {
         request: [u8; 32],
         allocation: RootComponentChildAllocationResponse,
     ) {
-        let input =
-            RootInventoryStatusRequest::ComponentChildProvisioning(OperationStatusRequest {
-                operation_id: request,
-            });
-        fs::write(
-            self.root.join(format!("{index}.bin")),
-            ic_platform::candid::contract::encode_one(input).unwrap(),
+        let input = ic_wire::native::encode_request(
+            canic_contracts::protocol::component_read::child_allocation::METHOD_ID,
+            &request,
+            canic_contracts::protocol::component_read::REQUEST_LIMITS,
         )
         .unwrap();
-        let response = Ok::<_, canic_contracts::dto::error::Error>(
-            RootInventoryStatusResponse::ComponentChildProvisioning(Box::new(allocation)),
+        fs::write(self.root.join(format!("{index}.bin")), input).unwrap();
+        let native =
+            canic_contracts::dto::component_read::ChildAllocation::from(allocation.clone());
+        let response = Ok::<_, canic_contracts::dto::error::Error>(native);
+        let bytes = ic_wire::native::encode_response(
+            canic_contracts::protocol::component_read::child_allocation::METHOD_ID,
+            &response,
+            canic_contracts::protocol::component_read::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        let decoded: Result<
+            canic_contracts::dto::component_read::ChildAllocation,
+            canic_contracts::dto::error::Error,
+        > = ic_wire::native::decode_response(
+            canic_contracts::protocol::component_read::child_allocation::METHOD_ID,
+            &bytes,
+            canic_contracts::protocol::component_read::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        assert_eq!(
+            RootComponentChildAllocationResponse::from(decoded.unwrap()),
+            allocation
         );
-        fs::write(
-            self.root.join(format!("{index}.json")),
-            serde_json::json!({
-                "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
-            })
-            .to_string(),
-        )
-        .unwrap();
+        fs::write(self.root.join(format!("{index}.json")), hex_bytes(bytes)).unwrap();
     }
 }
 
@@ -66,7 +76,7 @@ const SCRIPT: &str = r#"#!/bin/sh
 set -eu
 if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 case " $* " in
-  *" canic_root_operation_status "*" --query "*) ;;
+  *" canic_root_child_allocation "*" --query "*) ;;
   *) touch unexpected; exit 2;;
 esac
 while [ "$1" != --args-file ]; do shift; done
@@ -102,9 +112,9 @@ fn descendant_receipts_overlap_drain_and_reject_before_inspection() {
     let root = member.binding.fleet_subnet_root;
     let children = (0..9_u8)
         .map(|index| CanisterInfo {
-            pid: Principal::from_slice(&[index + 40; 29]),
+            pid: Principal::from_slice(&[index + 40; 29]).into(),
             role: protocol.binding.role.clone(),
-            parent_pid: Some(member.binding.canister_id),
+            parent_pid: Some(member.binding.canister_id.into()),
             module_hash: None,
             created_at: 1,
         })
@@ -141,7 +151,7 @@ fn descendant_receipts_overlap_drain_and_reject_before_inspection() {
         })
         .collect::<Vec<_>>();
     assert!(matches!(
-        observe_terminal_descendants(&fixture.icp, &fixture.root.join("root.did"), &descendants),
+        observe_terminal_descendants(&fixture.icp, &descendants),
         Err(CurrentProtocolError::TerminalInventoryField {
             field: "descendant.operation_id",
             ..

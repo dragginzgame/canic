@@ -1,31 +1,30 @@
 # Root Proof Provisioning Runbook
 
-This runbook is the compact developer handoff for delegated-auth root proof
-provisioning. It documents the maintained chain-key path, not the historical
-bridge-backed canister-signature flow.
+This runbook is the compact developer handoff for delegated-auth Root proof
+provisioning through the maintained chain-key path.
 
 **Operator outcome:** configure the exact Root public key, provision and renew
-delegation proofs through maintained authority, and diagnose failures without
-reviving removed bridge behavior.
+delegation proofs through maintained authority, and diagnose provisioning and
+renewal failures.
 
 ## Source Map
 
 | Concern | Source |
 | --- | --- |
-| Root endpoint macro surface | `crates/canic/src/macros/endpoints/root.rs` |
-| Issuer endpoint macro surface | `crates/canic/src/macros/endpoints/nonroot.rs` |
-| Public auth API adapters | `crates/canic-core/src/api/auth/mod.rs` |
-| Chain-key batch proof state and lookup | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs` |
-| Root issuer renewal status projection | `crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/` |
-| Root renewal timer orchestration | `crates/canic-core/src/workflow/runtime/auth/renewal.rs` |
-| Root chain-key management-canister signing | `crates/canic-core/src/ops/auth/delegated/chain_key_signing.rs` |
-| Root batch install broadcast workflow | `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs` |
-| Issuer active proof verification | `crates/canic-core/src/ops/auth/delegated/active_proof.rs` |
-| Issuer-local canister-signature proof support | `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` |
-| Operator renewal CLI | `crates/canic-cli/src/auth/` |
-| PocketIC acceptance contract | `docs/design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md` |
-| Active architecture contract | `docs/architecture/authentication.md` |
-| Wire/protocol contract | `docs/contracts/AUTH_DELEGATED_SIGNATURES.md` |
+| Root endpoint macro surface | [Root endpoints](../../crates/canic/src/macros/endpoints/root.rs) |
+| Issuer endpoint macro surface | [Managed role endpoints](../../crates/canic/src/macros/endpoints/role.rs) |
+| Public auth API adapters | [Auth API modules](../../crates/canic-core/src/api/auth/) |
+| Chain-key batch proof state and lookup | [Batch operations](../../crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs) |
+| Root issuer renewal status projection | [Renewal operations](../../crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/) |
+| Root renewal timer orchestration | [Renewal workflow](../../crates/canic-core/src/workflow/runtime/auth/renewal.rs) |
+| Root chain-key management-canister signing | [Signing operations](../../crates/canic-core/src/ops/auth/delegated/chain_key_signing/mod.rs) |
+| Root batch install broadcast workflow | [Provisioning workflow](../../crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs) |
+| Issuer active proof verification | [Active proof operations](../../crates/canic-core/src/ops/auth/delegated/active_proof.rs) |
+| Issuer-local canister-signature proof support | [Issuer signature operations](../../crates/canic-core/src/ops/auth/issuer_canister_sig.rs) |
+| Operator renewal CLI | [Auth commands](../../crates/canic-cli/src/auth/) |
+| PocketIC acceptance contract | [Retained acceptance design](../design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md) |
+| Active architecture contract | [Authentication architecture](../architecture/authentication.md) |
+| Wire/protocol contract | [Delegated signature contract](../contracts/AUTH_DELEGATED_SIGNATURES.md) |
 
 ## Offline public-key configuration
 
@@ -76,16 +75,11 @@ The following optional diagnostic makes a management call on every invocation.
 It is not part of offline configuration or the normal deployment path.
 
 A controller of an active canonical Root with the root-delegation capability can
-call the update `canic_root_command` with:
+call the typed Wire update `canic_root_chain_key_public_key` with the selected
+key ID and derivation path. Encode its request using the published native schema
+and endpoint limits.
 
-```candid
-(variant { GetChainKeyPublicKey = record {
-  key_id = "key_1";
-  derivation_path = vec { blob "canic"; blob "delegation" };
-}})
-```
-
-The matching response variant contains compressed SEC1 secp256k1 public-key bytes.
+The typed response contains compressed SEC1 secp256k1 public-key bytes.
 Use the intended key name and derivation path; the request has no canister-ID field.
 Canic binds derivation to the receiving Root's identity. Repeating the same request
 returns the same public key without granting signing access or changing issuer
@@ -99,14 +93,14 @@ verification material during startup; it does not enable Root signing.
 ## Application integration boundaries
 
 An application role guard must preserve caller, role, audience, subnet and
-freshness checks. Canonical `canic_root_status` Component Registry queries are
+freshness checks. The native Wire `canic_root_component_registry` query is
 controller-only, so an ordinary application canister cannot substitute them for
 an application-specific Root lookup. For the supported attestation flow, an
-active Component member prepares a `PrepareRoleAttestation` command and retrieves
-its proof through `canic_root_auth_status::RoleAttestation`. The receiver verifies
+active Component member calls `canic_root_prepare_role_attestation` and retrieves
+its proof through `canic_root_role_attestation`. The receiver verifies
 the proof and checks its required role. The `auth::attested_local_subnet()`
-guard requires `SignedRoleAttestation` as the first endpoint argument and binds
-it to the transport caller and receiver's live subnet; the application must still
+guard consumes the decoded native `canic::dto::role_attestation::SignedRoleAttestation`
+first argument of the Wire endpoint and binds it to the transport caller and receiver's live subnet; the application must still
 check the expected role. Choose TTL and epoch policy for
 the required revocation behavior rather than treating a cached proof as an
 instantaneous registry lookup.
@@ -120,32 +114,20 @@ Reinstalling canonical Root does not add application-specific methods.
 
 ## Supported Flow
 
-Configure each issuer once through `canic_root_command::ConfigureIssuer` or the
-Root-local `AuthApi::configure_issuer_root` facade. One `RootIssuerConfigureRequest`
+The controller configures each issuer through the canonical Root's
+`canic_root_configure_issuer` endpoint. One `RootIssuerConfigureRequest`
 supplies `issuer_pid`, `enabled`, `aud`, `grants`, `cert_ttl_ns`, and
 `refresh_after_ratio_bps`. Canic derives and validates the issuer policy and
 renewal template together before either is persisted. Identical retries preserve
 the delegated-auth registry epoch, renewal state, and usable signed batches.
 Grant targets and scopes are sorted at admission, so equivalent input ordering
 has the same authority. Duplicate, malformed, empty-scope and over-capacity grants
-are rejected before configuration is persisted.
-The application endpoint remains responsible for authorizing configuration.
-
-Inside an authorized application Root workflow, setup is one call:
-
-```rust
-AuthApi::configure_issuer_root(RootIssuerConfigureRequest {
-    issuer_pid,
-    enabled: true,
-    aud: DelegationAudience::Fleet(fleet),
-    grants,
-    cert_ttl_ns: 60_000_000_000,
-    refresh_after_ratio_bps: 8_000,
-})?;
-```
+are rejected before configuration is persisted. The endpoint requires the
+transport caller to be a Root controller and enforces Root activation and
+authority fences before delegating to the Root-local auth workflow.
 
 Select the application's grants and certificate lifetime explicitly. Repeat the
-same setup safely whenever the application ensures a shard exists. Deployment
+same controller-authorized setup safely whenever an issuer is installed. Deployment
 completion alone does not establish authentication readiness; check the issuer's
 `ActiveDelegationProof` status for `Valid`. Application session admission remains
 unavailable until portable Auth integration is complete.
@@ -153,28 +135,19 @@ unavailable until portable Auth integration is complete.
 Root-owned renewal is the active delegated-auth liveness path for enabled issuers:
 
 ```text
-controller             -> root canic_root_command ConfigureIssuer update
+controller             -> root canic_root_configure_issuer update
 root timer             -> root prepares due issuer entries in a chain-key batch
 root                   -> management canister sign_with_ecdsa
-root                   -> issuer canic_command InstallDelegationProof update
-operator/medic         -> root canic_root_status IssuerRenewal query
-operator/medic         -> issuer canic_auth_status ActiveDelegationProof query
+root                   -> issuer canic_install_delegation_proof Wire update
+operator/medic         -> root canic_root_issuer_renewal query
+operator/medic         -> issuer canic_active_delegation_proof Wire query
 ```
 
-An application root may also make a newly installed or reinstalled issuer
-ready through the public Rust facade:
-
-```text
-app root               -> AuthApi::provision_chain_key_delegation_proof_for_issuer_root
-Canic root workflow    -> create or reuse issuer proof from chain-key batch state
-Canic root workflow    -> issuer canic_command InstallDelegationProof update
-Canic root workflow    -> record install success or failure
-```
-
-The application endpoint remains responsible for caller authorization and for
-selecting the issuer principal. The Canic facade requires root context, derives
-proof material only from configured issuer policy and renewal state, and does
-not accept caller-supplied proof bytes.
+Canonical Root owns proof creation, installation and renewal from the configured
+issuer policy. Its Root-local Rust provisioning facade is an implementation
+surface requiring Root context. Application roles use the controller-authorized
+configuration flow and observe the resulting proof status; canonical Root has no
+application hooks or custom endpoint surface.
 
 ## Operator Surface
 
@@ -190,6 +163,17 @@ The status command reports root-owned template, state, and latest-batch data.
 When the issuer status endpoint is locally available, it compares root's last
 installed proof hash and expiry against the issuer's active proof. A drift
 warning is observational; it does not mutate root or issuer state.
+
+Medic reports `auth_renewal_ready` only when renewal is configured and an observed
+`valid` or `refresh_needed` proof matches Root state. Disabled or missing templates,
+pending batches and failed batches produce `auth_renewal_drift_warn`, even while
+the current proof remains usable. These warnings are included in CI text output.
+
+When a registered issuer's local protocol metadata cannot be resolved, the
+observation reason is `issuer_status_metadata_unavailable`. Restore exact local
+metadata from the selected release and retry the status command. This does not
+establish an absent issuer or require a topology reinstall. Without an observed
+proof, otherwise configured renewal reports `unavailable`.
 
 ## Hard Invariants
 

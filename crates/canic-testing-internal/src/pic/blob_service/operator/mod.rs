@@ -2,6 +2,8 @@
 
 mod funding;
 mod provider;
+pub(super) use funding::concurrency::check as qualify_funding_concurrency;
+pub(super) use funding::paid::{FundingReply, check as qualify_paid_funding};
 pub(super) use provider::{cashier, qualify};
 
 use super::tests::decode_blob;
@@ -97,4 +99,34 @@ fn wrong_scopes(scope: OperatorScope) -> [OperatorScope; 4] {
             ..scope
         },
     ]
+}
+
+pub(super) fn refunded(pic: &PocketIc, config: &ServiceConfigurationInput, fenced: bool) -> bool {
+    let scope = OperatorScope {
+        service: config.service,
+        namespace: config.namespace,
+        cashier: config.billing.cashier,
+        payment_account: config.payment_account,
+    };
+    let result: Result<LocalServiceStatus, LocalStatusFailure> = query(
+        pic,
+        scope,
+        config.operator.into(),
+        "blob_local_status",
+        scope,
+    );
+    let funding = result.unwrap().funding;
+    if funding.last_operation != Some(2) || funding.reserved_or_uncertain != 0 {
+        return false;
+    }
+    assert_eq!(funding.fenced, fenced);
+    assert_eq!(funding.retained_intents, 2);
+    assert_eq!(funding.refunded, 200);
+    assert_eq!(funding.not_enqueued, 0);
+    assert_eq!(funding.transport_accepted, 0);
+    assert_eq!(funding.provider_acknowledged, 0);
+    assert_eq!(funding.uncredited_accepted, 0);
+    assert_eq!(funding.available_allocation, config.funding.allocated);
+    funding::check_populated(pic, config.operator.into(), scope, fenced);
+    true
 }

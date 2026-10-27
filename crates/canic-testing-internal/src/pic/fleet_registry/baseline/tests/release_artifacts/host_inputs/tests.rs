@@ -175,6 +175,7 @@ fn excluded_test_edits_still_abort_an_in_flight_cache_transaction() {
         &root.join("target"),
         &["native-producer"],
         crate::workspace::wasm_build_environment(),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("release".into()),

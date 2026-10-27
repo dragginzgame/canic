@@ -164,21 +164,21 @@ pub(super) fn bind_history_witness(
         let protocol = desired
             .protocol
             .as_ref()
-            .ok_or_else(|| conflict("history witness Candid"))?;
+            .ok_or_else(|| conflict("history witness Wire schema"))?;
         let continuation = artifacts
             .continuation
             .as_ref()
             .ok_or_else(|| conflict("history witness hash"))?;
-        let candid = protocol.root_candid.clone();
-        let candid_sha256 = continuation.root_candid_sha256.clone();
+        let wire_schema = protocol.root_wire_schema.clone();
+        let wire_schema_sha256 = continuation.root_wire_schema_sha256.clone();
         let replacement = if configured.kind == DesiredCanisterKind::Root {
             let mut installed = authority.clone();
             installed.module_sha256 = wasm_sha256(artifacts, &configured.name)?;
             Some(Box::new(
                 crate::fleet_ensure::model::ReinstallRootWitnessRecord {
                     authority: installed,
-                    candid: protocol.root_candid.clone(),
-                    candid_sha256: continuation.root_candid_sha256.clone(),
+                    wire_schema: protocol.root_wire_schema.clone(),
+                    wire_schema_sha256: continuation.root_wire_schema_sha256.clone(),
                 },
             ))
         } else {
@@ -194,8 +194,8 @@ pub(super) fn bind_history_witness(
                     .module_sha256
                     .clone(),
                 authority,
-                candid,
-                candid_sha256,
+                wire_schema,
+                wire_schema_sha256,
                 replacement,
             },
         ));
@@ -214,8 +214,8 @@ pub(in crate::fleet_ensure) fn history_authority(
     if current == &witness.authority {
         return Some(crate::fleet_ensure::model::ReinstallRootWitnessRecord {
             authority: witness.authority.clone(),
-            candid: witness.candid.clone(),
-            candid_sha256: witness.candid_sha256.clone(),
+            wire_schema: witness.wire_schema.clone(),
+            wire_schema_sha256: witness.wire_schema_sha256.clone(),
         });
     }
     let replacement = witness.replacement.as_deref()?;

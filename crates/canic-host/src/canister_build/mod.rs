@@ -11,10 +11,16 @@ mod model;
 mod output_roots;
 pub mod release_binding;
 mod reuse;
+mod wire_schema;
 
 pub(crate) use reuse::retain_cargo_include_exports;
 
-pub use crate::{artifact_io::validate_wasm_endpoints, build_profile::CanisterBuildProfile};
+pub use crate::{
+    artifact_io::{
+        WireArtifactError, WireBindings, generate_wire_bindings, validate_wasm_endpoints,
+    },
+    build_profile::CanisterBuildProfile,
+};
 pub use artifact::{
     CanisterArtifactBuilder, build_workspace_canister_artifact,
     build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,
@@ -27,8 +33,12 @@ pub use metrics::read_wasm_artifact_metrics;
 pub use model::{
     AppCanisterArtifactBuildOutput, ArtifactTransformKind, ArtifactTransformOutcome,
     ArtifactTransformOutput, CanisterArtifactBuildOptions, CanisterArtifactBuildOutput,
-    ConfiguredCanisterArtifactBuildOutput, TimedCanisterArtifactBuildOutput, WasmArtifactMetrics,
-    WasmTransformMetrics,
+    ConfiguredCanisterArtifactBuildOutput, NativeSchemaBuildRecipe,
+    TimedCanisterArtifactBuildOutput, WasmArtifactMetrics, WasmTransformMetrics,
+};
+pub use wire_schema::{
+    RetainedWireSchema, WireSchemaBuildError, build_native_wire_contract, build_native_wire_schema,
+    build_workspace_wire_schema, produce_wire_schema,
 };
 
 #[cfg(test)]
@@ -43,3 +53,13 @@ pub use reuse::{
     BuildReuseError, BuildReuseProgress, CompleteBuildReuse, KernelBuildLock, ReusedCompleteBuild,
     inspect_build_lock,
 };
+
+/// Bounds for Cargo configuration observation in Canic artifact builds and proofs.
+/// Admission is shared with framework fixtures; IC Build owns traversal and refusal.
+pub const CARGO_CONFIGURATION_LIMITS: ic_build::cargo::environment::ConfigurationLimits =
+    ic_build::cargo::environment::ConfigurationLimits {
+        file_bytes: 1024 * 1024,
+        total_bytes: 16 * 1024 * 1024,
+        files: 128,
+        depth: 32,
+    };

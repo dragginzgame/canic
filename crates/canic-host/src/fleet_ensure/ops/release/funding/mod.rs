@@ -19,17 +19,12 @@ use crate::{
 };
 use canic_contracts::{
     dto::{
-        error::Error as CanicError,
-        fleet_registry::FleetRegistry,
-        root::RootFundingReleaseResponse,
-        wire::projection::release_funding::{Request, Response},
+        error::Error as CanicError, fleet_registry::FleetRegistry, root::RootFundingReleaseResponse,
     },
     protocol,
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
-use ic_platform::{
-    agent::Agent, candid::contract::CandidType, principal::ExternalPrincipal as Principal,
-};
+use ic_platform::{agent::Agent, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 use std::{collections::BTreeSet, time::Duration};
 use thiserror::Error;
@@ -157,13 +152,16 @@ async fn read_root(
     let mut pages = Pages::new(root, policy_hash);
     loop {
         let fail = |stage| ReleaseFundingError::Observation { root, stage };
-        let argument =
-            ic_platform::candid::contract::encode_one(Request::FundingRelease(pages.cursor))
-                .map_err(|_| fail(ReleaseFundingStage::Query))?;
+        let argument = ic_wire::native::encode_request(
+            protocol::funding_read::release::METHOD_ID,
+            &pages.cursor,
+            protocol::funding_read::REQUEST_LIMITS,
+        )
+        .map_err(|_| fail(ReleaseFundingStage::Query))?;
         let bytes = tokio::time::timeout(
             QUERY_DEADLINE,
             agent
-                .query(&root, protocol::CANIC_ROOT_STATUS)
+                .query(&root, protocol::funding_read::release::METHOD)
                 .with_arg(argument)
                 .call(),
         )
@@ -185,11 +183,22 @@ fn decode(
     bytes: &[u8],
     remaining: &mut usize,
 ) -> Result<RootFundingReleaseResponse, ReleaseFundingError> {
-    let Response::FundingRelease(page) = decode_response(root, bytes, remaining)?;
-    Ok(*page)
+    let response: canic_contracts::dto::funding_read::ReleasePage = decode_response(
+        protocol::funding_read::release::METHOD_ID,
+        root,
+        bytes,
+        remaining,
+    )?;
+    response
+        .try_into()
+        .map_err(|_| ReleaseFundingError::Observation {
+            root,
+            stage: ReleaseFundingStage::Decode,
+        })
 }
 
-fn decode_response<T: CandidType + for<'de> Deserialize<'de>>(
+fn decode_response<T: for<'de> Deserialize<'de>>(
+    method_id: u64,
     root: Principal,
     bytes: &[u8],
     remaining: &mut usize,
@@ -201,15 +210,9 @@ fn decode_response<T: CandidType + for<'de> Deserialize<'de>>(
     *remaining = remaining
         .checked_sub(bytes.len())
         .ok_or_else(|| fail(ReleaseFundingStage::Budget))?;
-    let limits = ic_platform::candid::DecodeLimits {
-        reply_bytes: RESPONSE_BYTES,
-        decoding_quota: RESPONSE_BYTES * 8,
-        skipping_quota: RESPONSE_BYTES * 8,
-        type_entries: 512,
-        header_bytes: 16 * 1024,
-    };
-    let response: Result<T, CanicError> = ic_platform::candid::decode_one(bytes, limits)
-        .map_err(|_| fail(ReleaseFundingStage::Decode))?;
+    let response: Result<T, CanicError> =
+        ic_wire::native::decode_response(method_id, bytes, protocol::funding_read::RESPONSE_LIMITS)
+            .map_err(|_| fail(ReleaseFundingStage::Decode))?;
     response.map_err(|rejection| ReleaseFundingError::Rejected { root, rejection })
 }
 
@@ -245,7 +248,7 @@ impl Pages {
             return Err(ReleaseFundingStage::Budget);
         }
         // Encode only the bounded header to compare exact policy/request/receipt authority.
-        let header = ic_platform::candid::contract::encode_args((
+        let header = canic_contracts::protocol::authority::encode((
             page.policy_generation,
             &page.icp_refill_policy,
             &page.current_request,

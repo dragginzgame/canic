@@ -13,14 +13,26 @@ app = "payload_limit_probe"
 role = "test"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
 
 [dependencies]
 canic = { workspace = true, features = [] }
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-wire.workspace = true
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+canic = { workspace = true, features = ["wire-schema"] }
+ic-host-artifacts = { workspace = true, features = ["wasm"] }
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [lints]
 workspace = true

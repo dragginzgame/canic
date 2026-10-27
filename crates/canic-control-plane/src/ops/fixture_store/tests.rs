@@ -351,23 +351,16 @@ fn child_grant_preserves_component_identity_and_authenticates_only_the_child() {
 fn descriptor_admission_accounts_for_the_full_command_envelope() {
     let _scope = FixtureScope::new();
     let mut description = descriptor(&[vec![1]]);
-    while ic_platform::candid::contract::encode_one(StoreCommand::PrepareFixture(
-        description.clone(),
-    ))
-    .unwrap()
-    .len()
-        <= DEFAULT_UPDATE_INGRESS_MAX_BYTES
+    while ic_wire::native::encode_request(
+        canic_contracts::protocol::store_publication::fixture_prepare::METHOD_ID,
+        &description,
+        canic_contracts::protocol::store_publication::REQUEST_LIMITS,
+    )
+    .is_ok()
     {
         description.chunks.push(description.chunks[0].clone());
         description.encoded_length += 1;
     }
-    // The descriptor alone still fits; the actual endpoint argument does not.
-    assert!(
-        ic_platform::candid::contract::encode_one(&description)
-            .unwrap()
-            .len()
-            <= DEFAULT_UPDATE_INGRESS_MAX_BYTES
-    );
     assert_eq!(
         prepare(description, u64::MAX, 0),
         Err(FixtureStoreError::Bounds)
@@ -483,4 +476,54 @@ fn fixture_inventory_distinguishes_declared_uploaded_and_retiring_chunks() {
         (empty.sources, empty.expected_chunks, empty.stored_chunks),
         (0, 0, 0)
     );
+}
+
+#[test]
+fn native_grant_intent_preserves_cas_and_complete_installation_binding() {
+    let mut original = request(&authority(), [4; 32]);
+    original.expected_revision = u64::MAX - 1;
+    original.enabled = false;
+    let native = canic_contracts::dto::store_control::FixtureGrantRequest::from(original.clone());
+    let bytes = ic_wire::native::encode_request(
+        canic_contracts::protocol::store_control::grant::METHOD_ID,
+        &native,
+        canic_contracts::protocol::store_control::REQUEST_LIMITS,
+    )
+    .unwrap();
+    let decoded: canic_contracts::dto::store_control::FixtureGrantRequest =
+        ic_wire::native::decode_request(
+            canic_contracts::protocol::store_control::grant::METHOD_ID,
+            &bytes,
+            canic_contracts::protocol::store_control::REQUEST_LIMITS,
+        )
+        .unwrap();
+    assert_eq!(FixtureGrantRequest::from(decoded), original);
+}
+
+#[test]
+fn native_read_keeps_exact_grant_revision_and_binding() {
+    let intent = request(&authority(), [4; 32]);
+    let original = FixtureChunkRead {
+        grant: FixtureGrant {
+            revision: u64::MAX - 1,
+            binding: intent.binding,
+            enabled: false,
+        },
+        index: u32::MAX,
+    };
+    let native = canic_contracts::dto::fixture_bytes::ReadRequest::from(original.clone());
+    let bytes = ic_wire::native::encode_request(
+        canic_contracts::protocol::fixture_bytes::read::METHOD_ID,
+        &native,
+        canic_contracts::protocol::fixture_bytes::READ_REQUEST_LIMITS,
+    )
+    .unwrap();
+    let decoded: canic_contracts::dto::fixture_bytes::ReadRequest =
+        ic_wire::native::decode_request(
+            canic_contracts::protocol::fixture_bytes::read::METHOD_ID,
+            &bytes,
+            canic_contracts::protocol::fixture_bytes::READ_REQUEST_LIMITS,
+        )
+        .unwrap();
+    assert_eq!(FixtureChunkRead::from(decoded), original);
 }

@@ -8,7 +8,7 @@ use super::{
     ComponentInstanceId, ComponentSpecId, FleetBinding, FleetCoordinatorBinding,
     ManagedCanisterBinding, SubnetId,
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Maintained generation and wire schema for Fleet admission authority.
@@ -28,8 +28,7 @@ pub const MAX_FLEET_ADMISSION_PROJECTION_RECORD_BYTES: u32 = 32 * 1024;
 pub const MAX_FLEET_ADMISSION_PROJECTION_PAGE: u64 = 128;
 
 /// Exact policy scope selected by protected input or a controller mutation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum FleetAdmissionSelector {
     #[serde(rename = "fleet")]
     Fleet,
@@ -42,8 +41,7 @@ pub enum FleetAdmissionSelector {
 }
 
 /// One canonical narrower admission rule.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionRule {
     pub selector: FleetAdmissionSelector,
@@ -51,8 +49,7 @@ pub struct FleetAdmissionRule {
 }
 
 /// Protected generation-one policy before a fresh Fleet identity exists.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionPolicyTemplate {
     pub schema_version: u16,
@@ -62,8 +59,7 @@ pub struct FleetAdmissionPolicyTemplate {
 }
 
 /// One exact Coordinator-owned Fleet admission policy.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionPolicy {
     pub schema_version: u16,
@@ -83,8 +79,7 @@ pub struct FleetAdmissionTarget {
 }
 
 /// One complete target-bound local enforcement projection.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionProjection {
     pub schema_version: u16,
@@ -99,12 +94,13 @@ pub struct FleetAdmissionProjection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_platform::candid::contract::{Decode, Encode};
 
     #[test]
-    fn selector_candid_labels_round_trip_through_serde() {
-        let encoded = Encode!(&FleetAdmissionSelector::Fleet).expect("encode Fleet selector");
-        let decoded = Decode!(&encoded, FleetAdmissionSelector).expect("decode Fleet selector");
+    fn selector_wire_labels_round_trip_through_serde() {
+        let encoded = crate::protocol::authority::encode(&FleetAdmissionSelector::Fleet)
+            .expect("encode Fleet selector");
+        let decoded = crate::protocol::authority::decode::<FleetAdmissionSelector>(&encoded)
+            .expect("decode Fleet selector");
         assert_eq!(decoded, FleetAdmissionSelector::Fleet);
     }
 }

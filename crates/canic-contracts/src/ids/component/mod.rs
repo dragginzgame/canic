@@ -5,7 +5,7 @@
 //! Boundary: declared IDs are bounded canonical names; generated IDs use lowercase hex.
 
 use crate::ids::FleetKey;
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 use std::{borrow::Borrow, fmt, str::FromStr};
@@ -46,19 +46,6 @@ impl AsRef<str> for ComponentSpecId {
 impl Borrow<str> for ComponentSpecId {
     fn borrow(&self) -> &str {
         self.as_str()
-    }
-}
-
-impl CandidType for ComponentSpecId {
-    fn _ty() -> ic_platform::candid::contract::types::Type {
-        ic_platform::candid::contract::types::TypeInner::Text.into()
-    }
-
-    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-    where
-        S: ic_platform::candid::contract::types::Serializer,
-    {
-        serializer.serialize_text(self.as_str())
     }
 }
 
@@ -144,19 +131,6 @@ impl fmt::Display for ComponentInstanceId {
             write!(formatter, "{byte:02x}")?;
         }
         Ok(())
-    }
-}
-
-impl CandidType for ComponentInstanceId {
-    fn _ty() -> ic_platform::candid::contract::types::Type {
-        ic_platform::candid::contract::types::TypeInner::Text.into()
-    }
-
-    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-    where
-        S: ic_platform::candid::contract::types::Serializer,
-    {
-        serializer.serialize_text(&self.to_string())
     }
 }
 
@@ -318,24 +292,22 @@ mod tests {
     }
 
     #[test]
-    fn component_spec_ids_validate_serde_and_candid_input() {
+    fn component_spec_ids_validate_serde_and_wire_input() {
         let mut invalid_bytes = Vec::new();
-        ciborium::ser::into_writer("bad/name", &mut invalid_bytes)
+        serde_cbor::to_writer(&mut invalid_bytes, &"bad/name")
             .expect("serialize invalid Component Spec ID");
 
-        assert!(ciborium::de::from_reader::<ComponentSpecId, _>(invalid_bytes.as_slice()).is_err());
+        assert!(serde_cbor::from_reader::<ComponentSpecId, _>(invalid_bytes.as_slice()).is_err());
 
-        let candid_bytes = ic_platform::candid::contract::encode_one("projects")
-            .expect("encode Component Spec ID");
-        let spec = ic_platform::candid::decoder::decode_one::<ComponentSpecId>(&candid_bytes)
+        let wire_bytes =
+            crate::protocol::authority::encode("projects").expect("encode Component Spec ID");
+        let spec = crate::protocol::authority::decode::<ComponentSpecId>(&wire_bytes)
             .expect("decode Component Spec ID");
-        let invalid_candid = ic_platform::candid::contract::encode_one("bad/name")
+        let invalid_wire = crate::protocol::authority::encode("bad/name")
             .expect("encode invalid Component Spec ID");
 
         assert_eq!(spec.as_str(), "projects");
-        assert!(
-            ic_platform::candid::decoder::decode_one::<ComponentSpecId>(&invalid_candid).is_err()
-        );
+        assert!(crate::protocol::authority::decode::<ComponentSpecId>(&invalid_wire).is_err());
     }
 
     #[test]
@@ -362,26 +334,23 @@ mod tests {
         assert_eq!(text.parse::<ComponentInstanceId>(), Ok(component));
 
         let mut serde_bytes = Vec::new();
-        ciborium::ser::into_writer(&component, &mut serde_bytes)
+        serde_cbor::to_writer(&mut serde_bytes, &component)
             .expect("serialize Component Instance ID");
-        let decoded: ComponentInstanceId = ciborium::de::from_reader(serde_bytes.as_slice())
-            .expect("decode Component Instance ID");
+        let decoded: ComponentInstanceId =
+            serde_cbor::from_reader(serde_bytes.as_slice()).expect("decode Component Instance ID");
         assert_eq!(decoded, component);
 
-        let candid_bytes = ic_platform::candid::contract::encode_one(component)
-            .expect("encode Component Instance ID");
-        let decoded: ComponentInstanceId = ic_platform::candid::decoder::decode_one(&candid_bytes)
-            .expect("decode Component Instance ID");
-        let invalid_candid = ic_platform::candid::contract::encode_one(
+        let wire_bytes =
+            crate::protocol::authority::encode(component).expect("encode Component Instance ID");
+        let decoded: ComponentInstanceId =
+            crate::protocol::authority::decode(&wire_bytes).expect("decode Component Instance ID");
+        let invalid_wire = crate::protocol::authority::encode(
             "A000000000000000000000000000000000000000000000000000000000000000",
         )
         .expect("encode invalid Component Instance ID");
 
         assert_eq!(decoded, component);
-        assert!(
-            ic_platform::candid::decoder::decode_one::<ComponentInstanceId>(&invalid_candid)
-                .is_err()
-        );
+        assert!(crate::protocol::authority::decode::<ComponentInstanceId>(&invalid_wire).is_err());
     }
 
     #[test]

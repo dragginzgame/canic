@@ -7,16 +7,18 @@
 use super::{DelegatedRoleGrant, DelegationAudience};
 use crate::{dto::prelude::*, ids::BuildNetwork};
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum ChainKeyAlgorithm {
     EcdsaSecp256k1,
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ChainKeyBatchHeaderV1 {
     pub schema_version: u16,
     pub root_canister_id: Principal,
@@ -33,31 +35,43 @@ pub struct ChainKeyBatchHeaderV1 {
     pub key_version: u64,
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum ChainKeyBatchWitnessStepV1 {
     LeftSibling([u8; 32]),
     RightSibling([u8; 32]),
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ChainKeyBatchWitnessV1 {
     pub steps: Vec<ChainKeyBatchWitnessStepV1>,
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ChainKeyKeyId {
     pub name: String,
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ChainKeyRootSignatureV1 {
     pub algorithm: ChainKeyAlgorithm,
     pub key_id: ChainKeyKeyId,
@@ -66,24 +80,33 @@ pub struct ChainKeyRootSignatureV1 {
     pub signature: Vec<u8>,
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct IcCanisterSignatureProofV1 {
     pub signature_cbor: Vec<u8>,
     pub public_key_der: Vec<u8>,
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum IssuerProofAlgorithm {
     IcCanisterSignatureV1,
 }
 
-/// Candid boundary representation; cryptographic interpretation belongs to IC Auth.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+/// Wire boundary representation; cryptographic interpretation belongs to IC Auth.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum IssuerProofBinding {
     IcCanisterSignatureV1 { seed_hash: [u8; 32] },
 }
@@ -92,8 +115,7 @@ pub enum IssuerProofBinding {
 // RootProof
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootProof {
     IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1),
 }
@@ -103,8 +125,11 @@ pub enum RootProof {
 //
 
 /// Controller request to derive a public key for this Root's ECDSA identity.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct RootChainKeyPublicKeyRequest {
     pub key_id: String,
     pub derivation_path: Vec<Vec<u8>>,
@@ -165,8 +190,7 @@ pub struct DelegatedAuthIssuerPolicySnapshotV1 {
 // IcChainKeyBatchSignatureProofV1
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IcChainKeyBatchSignatureProofV1 {
     pub header: ChainKeyBatchHeaderV1,
     pub delegation_cert: ChainKeyDelegationCertV1,
@@ -178,8 +202,7 @@ pub struct IcChainKeyBatchSignatureProofV1 {
 // ChainKeyDelegationCertV1
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ChainKeyDelegationCertV1 {
     pub root_canister_id: Principal,
     pub issuer_canister_id: Principal,
@@ -200,8 +223,7 @@ pub struct ChainKeyDelegationCertV1 {
 // DelegationCert
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationCert {
     pub root_pid: Principal,
     pub issuer_pid: Principal,
@@ -220,8 +242,7 @@ pub struct DelegationCert {
 // DelegationProof
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationProof {
     pub cert: DelegationCert,
     pub root_proof: RootProof,
@@ -231,8 +252,7 @@ pub struct DelegationProof {
 // ActiveDelegationProof
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ActiveDelegationProof {
     pub proof: DelegationProof,
     pub cert_hash: [u8; 32],
@@ -247,8 +267,7 @@ pub struct ActiveDelegationProof {
 // InstallActiveDelegationProofRequest
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InstallActiveDelegationProofRequest {
     pub proof: DelegationProof,
 }
@@ -257,8 +276,7 @@ pub struct InstallActiveDelegationProofRequest {
 // InstallActiveDelegationProofResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InstallActiveDelegationProofResponse {
     pub active_proof: ActiveDelegationProof,
 }
@@ -267,8 +285,11 @@ pub struct InstallActiveDelegationProofResponse {
 // ActiveDelegationProofStatus
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum ActiveDelegationProofStatus {
     Missing,
     Valid,
@@ -280,8 +301,7 @@ pub enum ActiveDelegationProofStatus {
 // ActiveDelegationProofStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ActiveDelegationProofStatusResponse {
     pub status: ActiveDelegationProofStatus,
     pub root_pid: Option<Principal>,

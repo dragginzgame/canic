@@ -4,46 +4,44 @@
 //! Boundary: no retries, no paid calls, no partial inventory promoted to complete evidence.
 
 use crate::{
-    canister_protocol::query_with_candid,
+    canister_protocol::query_wire,
     fleet_ensure::view::startup_funding::{StartupChildFundingBinding, StartupUsageUnavailable},
     icp::IcpCli,
 };
 use canic_contracts::{
-    dto::{
-        component_registry::{
-            ComponentDirectoryHead, ComponentDirectoryPageRequest, ComponentDirectoryPageResponse,
-            ComponentLifecycleStatus,
-        },
-        wire::projection::startup_pages::{Request, Response},
+    dto::component_registry::{
+        ComponentDirectoryHead, ComponentDirectoryPageRequest, ComponentDirectoryPageResponse,
+        ComponentLifecycleStatus,
     },
     ids::ComponentChildBinding,
     protocol,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 const PAGE_LIMIT: u16 = 100;
 
 pub(super) fn observe(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
     directory: &ComponentDirectoryHead,
     members: &[&StartupChildFundingBinding],
 ) -> Result<(), StartupUsageUnavailable> {
     collect(directory, members, |request| {
-        let Response::ComponentDirectoryPage(page) = query_with_candid(
-            icp,
-            candid,
-            root,
-            protocol::CANIC_ROOT_STATUS,
-            &Request::ComponentDirectoryPage(request),
-        )
-        .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
-        Ok(page)
+        let page: canic_contracts::dto::component_directory::ComponentDirectoryPageResponse =
+            query_wire(
+                icp,
+                root,
+                protocol::component_directory::PAGE,
+                protocol::component_directory::PAGE_ID,
+                &canic_contracts::dto::component_directory::ComponentDirectoryPageRequest::from(
+                    request,
+                ),
+                protocol::component_directory::REQUEST_LIMITS,
+                protocol::component_directory::RESPONSE_LIMITS,
+            )
+            .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
+        Ok(page.into())
     })
 }
 

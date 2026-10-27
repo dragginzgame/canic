@@ -1,28 +1,27 @@
-//! Explicit Candid codecs for this fixture's existing endpoint contracts.
+//! Explicit method-bound Wire hooks for standalone receipt tests.
 
-use ic_platform::{
-    candid::{
-        contract::{ArgumentDecoder, CandidType, encode_one},
-        decoder::{DecoderConfig, decode_args_with_config},
-    },
-    cdk::api::trap,
-};
-use serde::Deserialize;
-
-/// Decode the argument list with the fixture's existing CDK skipping quota.
-pub fn decode_args<T: for<'de> ArgumentDecoder<'de>>(bytes: Vec<u8>) -> T {
-    let mut config = DecoderConfig::new();
-    config.set_skipping_quota(10_000);
-    decode_args_with_config(&bytes, &config).unwrap_or_else(|error| trap(error.to_string()))
+macro_rules! codec {
+    ($module:ident, $id:ident, $request:ty) => {
+        pub mod $module {
+            pub fn decode(bytes: Vec<u8>) -> $request {
+                ic_wire::native::decode_request(
+                    crate::protocol::$id,
+                    &bytes,
+                    crate::protocol::LIMITS,
+                )
+                .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()))
+            }
+            pub fn encode<T: serde::Serialize>(value: T) -> Vec<u8> {
+                ic_wire::native::encode_response(
+                    crate::protocol::$id,
+                    &value,
+                    crate::protocol::LIMITS,
+                )
+                .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()))
+            }
+        }
+    };
 }
-
-/// Unwrap a single Candid argument for Platform's scalar decoder hook.
-pub fn decode_one<T: CandidType + for<'de> Deserialize<'de>>(bytes: Vec<u8>) -> T {
-    let (value,) = decode_args(bytes);
-    value
-}
-
-/// Encode the single reply value returned by every fixture RPC.
-pub fn encode_reply<T: CandidType>(value: T) -> Vec<u8> {
-    encode_one(value).unwrap_or_else(|error| trap(error.to_string()))
-}
+codec!(begin, BEGIN, crate::protocol::BeginRequest);
+codec!(load, LOAD, u8);
+codec!(settle, SETTLE, crate::protocol::SettleRequest);

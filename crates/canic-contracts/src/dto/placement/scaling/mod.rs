@@ -4,8 +4,7 @@
 
 use crate::dto::prelude::*;
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct ScalingRegistryEntry {
     pub pid: Principal,
     pub entry: WorkerEntry,
@@ -15,16 +14,14 @@ pub struct ScalingRegistryEntry {
 // ScalingRegistryResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct ScalingRegistryResponse(pub Vec<ScalingRegistryEntry>);
 
 //
 // WorkerEntry
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct WorkerEntry {
     pub pool: String,                // which scale pool this belongs to
     pub canister_role: CanisterRole, // canister role

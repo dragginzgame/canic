@@ -1,4 +1,9 @@
-//! Empty funding history and passive assessment must not manufacture payment evidence.
+//! Funding inspection preserves original facts without manufacturing payment evidence.
+
+pub(super) mod concurrency;
+pub(super) mod paid;
+mod populated;
+pub(super) use populated::check as check_populated;
 
 use super::{PocketIc, Principal, contracts, query, wrong_scopes};
 use contracts::dto::{

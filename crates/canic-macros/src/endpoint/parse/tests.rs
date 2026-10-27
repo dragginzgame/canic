@@ -258,3 +258,52 @@ fn grouped_access_expression_is_unwrapped() {
         panic!("expected caller::is_controller predicate");
     };
 }
+
+#[test]
+fn export_name_accepts_macro_forwarded_literal_groups() {
+    let literal = proc_macro2::Group::new(proc_macro2::Delimiter::None, quote!("provider_method"));
+    let nested = proc_macro2::Group::new(proc_macro2::Delimiter::None, quote!(#literal));
+    let args = parse_args(quote!(public, name = #nested)).unwrap();
+    assert_eq!(args.export_name.unwrap().value(), "provider_method");
+    let expression = proc_macro2::Group::new(proc_macro2::Delimiter::None, quote!(selected_name));
+    assert!(parse_args(quote!(public, name = #expression)).is_err());
+}
+
+#[test]
+fn wire_requires_one_identity_and_both_budgets() {
+    for attributes in [
+        quote!(public, wire(id = 7, request = R)),
+        quote!(public, wire(id = selected(), request = R, response = S)),
+        quote!(public, wire(id = BASE + 1, request = R, response = S)),
+        quote!(public, wire(id = "7", request = R, response = S)),
+        quote!(
+            public,
+            wire(id = 18446744073709551616, request = R, response = S)
+        ),
+        quote!(public, wire(id = 7, id = 8, request = R, response = S)),
+        quote!(public, wire(id = 7, request = R, response = S, extra = 0)),
+    ] {
+        assert!(parse_args(attributes).is_err());
+    }
+}
+
+#[test]
+fn wire_identity_accepts_owner_constants_and_forwarded_paths() {
+    for path in [
+        quote!(METHOD_ID),
+        quote!(owner::METHOD_ID),
+        quote!(<Owner as Contract>::METHOD_ID),
+    ] {
+        let grouped = proc_macro2::Group::new(proc_macro2::Delimiter::None, path.clone());
+        for expression in [path, quote!(#grouped)] {
+            let parsed =
+                parse_args(quote!(public, wire(id = #expression, request = R, response = S)))
+                    .unwrap();
+            let id = parsed.wire.unwrap().id;
+            assert!(matches!(
+                syn::parse2::<syn::Expr>(id).unwrap(),
+                syn::Expr::Path(_)
+            ));
+        }
+    }
+}

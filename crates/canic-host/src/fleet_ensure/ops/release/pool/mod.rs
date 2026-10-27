@@ -21,10 +21,8 @@ use crate::{
 };
 use canic_contracts::{
     dto::{
-        error::Error as CanicError,
-        fleet_registry::FleetRegistry,
+        error::Error as CanicError, fleet_registry::FleetRegistry, pool_census::Census,
         root::RootPoolReleaseResponse,
-        wire::projection::release_pool::{Request, Response},
     },
     protocol,
 };
@@ -34,7 +32,7 @@ use thiserror::Error;
 
 pub(in crate::fleet_ensure) use assessment::assessment_facts;
 
-const RESPONSE_BYTES: usize = 1024 * 1024;
+const RESPONSE_BYTES: usize = protocol::pool_census::RESPONSE_LIMITS.bytes;
 const MAXIMUM_CENSUS_BYTES: usize = 16 * RESPONSE_BYTES;
 const QUERY_DEADLINE: Duration = Duration::from_secs(15);
 const CENSUS_DEADLINE: Duration = Duration::from_secs(120);
@@ -102,12 +100,16 @@ pub(super) async fn collect_with_agent(
         for entry in &registry.fleet_subnet_roots {
             let root = entry.fleet_subnet_root;
             let fail = |stage| ReleasePoolError::Observation { root, stage };
-            let argument = ic_platform::candid::contract::encode_one(Request::PoolRelease)
-                .map_err(|_| fail(ReleasePoolStage::Query))?;
+            let argument = ic_wire::native::encode_request(
+                protocol::pool_census::METHOD_ID,
+                &(),
+                protocol::pool_census::REQUEST_LIMITS,
+            )
+            .map_err(|_| fail(ReleasePoolStage::Query))?;
             let bytes = tokio::time::timeout(
                 QUERY_DEADLINE,
                 agent
-                    .query(&root, protocol::CANIC_ROOT_STATUS)
+                    .query(&root, protocol::pool_census::METHOD)
                     .with_arg(argument)
                     .call(),
             )
@@ -155,18 +157,15 @@ fn decode(
     *remaining = remaining
         .checked_sub(bytes.len())
         .ok_or_else(|| fail(ReleasePoolStage::Budget))?;
-    let limits = ic_platform::candid::DecodeLimits {
-        reply_bytes: RESPONSE_BYTES,
-        decoding_quota: RESPONSE_BYTES * 8,
-        skipping_quota: RESPONSE_BYTES * 8,
-        type_entries: 512,
-        header_bytes: 16 * 1024,
-    };
-    let response: Result<Response, CanicError> = ic_platform::candid::decode_one(bytes, limits)
-        .map_err(|_| fail(ReleasePoolStage::Decode))?;
-    let Response::PoolRelease(status) =
-        response.map_err(|rejection| ReleasePoolError::Rejected { root, rejection })?;
-    Ok(*status)
+    let response: Result<Census, CanicError> = ic_wire::native::decode_response(
+        protocol::pool_census::METHOD_ID,
+        bytes,
+        protocol::pool_census::RESPONSE_LIMITS,
+    )
+    .map_err(|_| fail(ReleasePoolStage::Decode))?;
+    response
+        .map(Into::into)
+        .map_err(|rejection| ReleasePoolError::Rejected { root, rejection })
 }
 
 fn validate(

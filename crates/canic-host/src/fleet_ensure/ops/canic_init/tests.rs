@@ -179,18 +179,18 @@ fn qualify_compiled_initializers(root: &Path, desired: &DesiredFleet) {
         match init {
             DesiredCanisterInit::Coordinator => {
                 let args: FleetCoordinatorInitArgs =
-                    ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+                    canic_contracts::protocol::initialization::decode(&bytes).unwrap();
                 assert_eq!(args.authority, authorities[0].1.binding.authority);
             }
             DesiredCanisterInit::Root { .. } => {
                 let args: FleetSubnetRootInitArgs =
-                    ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+                    canic_contracts::protocol::initialization::decode(&bytes).unwrap();
                 assert_eq!(args.authority, authorities[0].1);
                 qualify_reviewed_capacity_bootstrap(root, desired, &principals, artifact, &args);
             }
             DesiredCanisterInit::Store { .. } => {
                 let args: FleetSubnetWasmStoreInitArgs =
-                    ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+                    canic_contracts::protocol::initialization::decode(&bytes).unwrap();
                 assert_eq!(args.authority, authorities[0].1.wasm_store_authority);
             }
         }
@@ -237,7 +237,7 @@ fn qualify_reviewed_capacity_bootstrap(
     };
     let encoded = compile_arguments(&request).unwrap();
     let decoded: FleetSubnetRootInitArgs =
-        ic_platform::candid::decoder::decode_one(&encoded).unwrap();
+        canic_contracts::protocol::initialization::decode(&encoded).unwrap();
     assert!(decoded.canister_pool_imports.is_empty());
     assert_eq!(decoded.authority, original.authority);
     assert_eq!(decoded.install_id, original.install_id);
@@ -367,7 +367,7 @@ fn generated_coordinator_root_and_store_init_bytes_decode_to_exact_authority() {
         encode_coordinator_arguments(&fixture.bootstrap, fixture.registry.clone(), admission)
             .expect("Coordinator bytes");
     let coordinator: FleetCoordinatorInitArgs =
-        ic_platform::candid::decoder::decode_one(&coordinator_bytes)
+        canic_contracts::protocol::initialization::decode(&coordinator_bytes)
             .expect("decode Coordinator init");
     assert_eq!(coordinator.authority, fixture.registry);
     assert_eq!(coordinator.configured_app, fixture.bootstrap.app);
@@ -387,7 +387,7 @@ fn generated_coordinator_root_and_store_init_bytes_decode_to_exact_authority() {
     )
     .expect("Root bytes");
     let root: FleetSubnetRootInitArgs =
-        ic_platform::candid::decoder::decode_one(&root_bytes).expect("decode Root init");
+        canic_contracts::protocol::initialization::decode(&root_bytes).expect("decode Root init");
     assert_eq!(root.authority, fixture.root_authority);
     assert_eq!(root.canister_pool_imports, vec![pool]);
     assert_eq!(root.install_id, install_id(&operation_id, "root", "root-0"));
@@ -408,7 +408,7 @@ fn generated_coordinator_root_and_store_init_bytes_decode_to_exact_authority() {
     let store_bytes = encode_store_arguments(store_authority.clone(), &operation_id, "root-0")
         .expect("Store bytes");
     let store: FleetSubnetWasmStoreInitArgs =
-        ic_platform::candid::decoder::decode_one(&store_bytes).expect("decode Store init");
+        canic_contracts::protocol::initialization::decode(&store_bytes).expect("decode Store init");
     assert_eq!(store.authority, store_authority);
     assert_eq!(
         store.install_id,
@@ -542,7 +542,7 @@ fn supplied_capacity_bootstrap_retains_typed_authority_and_rejects_ambiguous_sou
     )
     .unwrap();
     let original: FleetSubnetRootInitArgs =
-        ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+        canic_contracts::protocol::initialization::decode(&bytes).unwrap();
     let hold = canic_contracts::dto::pool_import::PoolImportBootstrap {
         review_sha256: [43; 32],
         operator: principal(9),
@@ -550,7 +550,7 @@ fn supplied_capacity_bootstrap_retains_typed_authority_and_rejects_ambiguous_sou
     };
     let encoded = bind_capacity_bootstrap(&bytes, hold.clone()).unwrap();
     let decoded: FleetSubnetRootInitArgs =
-        ic_platform::candid::decoder::decode_one(&encoded).unwrap();
+        canic_contracts::protocol::initialization::decode(&encoded).unwrap();
     assert_eq!(decoded.capacity_import_bootstrap, Some(hold.clone()));
     assert_eq!(decoded.authority, original.authority);
     assert_eq!(decoded.install_id, original.install_id);

@@ -13,6 +13,11 @@
 mod expand;
 mod parse;
 mod validate;
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by sibling macro adapter modules"
+)]
+pub(crate) use parse::WireArgs;
 
 use proc_macro::TokenStream;
 use syn::{ItemFn, Signature, parse_macro_input};
@@ -38,14 +43,21 @@ fn returns_fallible(sig: &Signature) -> bool {
     let syn::ReturnType::Type(_, ty) = &sig.output else {
         return false;
     };
-    let syn::Type::Path(ty) = &**ty else {
-        return false;
-    };
-
-    ty.path
-        .segments
-        .last()
-        .is_some_and(|segment| segment.ident == "Result")
+    let mut ty = ty.as_ref();
+    loop {
+        match ty {
+            syn::Type::Group(group) => ty = &group.elem,
+            syn::Type::Paren(paren) => ty = &paren.elem,
+            syn::Type::Path(path) => {
+                return path
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "Result");
+            }
+            _ => return false,
+        }
+    }
 }
 
 ///
@@ -128,14 +140,18 @@ fn raw_entry(
             "raw entrypoints own their decoder and always reject access refusal",
         ));
     }
-    if parsed.payload_max_bytes.is_none() {
+    if parsed.payload_max_bytes.is_none() && parsed.wire.is_none() {
         return Err(syn::Error::new_spanned(
             sig,
-            "raw entrypoints require payload(max_bytes = N) before adapter IO",
+            "raw entrypoints require payload(max_bytes = N) or a Wire contract before adapter IO",
         ));
     }
     parsed.reject_access = true;
-    let args = validate::validate(kind, parsed, sig)?;
+    let mut args = validate::validate(kind, parsed, sig)?;
+    if let Some(wire) = &args.wire {
+        let request = &wire.request;
+        args.payload_max_bytes = Some(quote::quote!((#request).bytes));
+    }
     expand::expand_raw(kind, args, func)
 }
 
@@ -272,6 +288,55 @@ mod async_raw_tests {
                 quote!(
                     async fn blob_query() {}
                 ),
+            )
+            .is_err()
+        );
+    }
+}
+
+#[cfg(test)]
+mod raw_wire_tests {
+    use super::*;
+    use quote::quote;
+
+    #[test]
+    fn raw_wire_declares_owner_contract_without_synthesizing_codecs() {
+        for kind in [EndpointKind::Query, EndpointKind::Update] {
+            let expanded = raw_entry(
+                kind,
+                quote!(
+                    public,
+                    wire(id = owner::ID, request = REQUEST, response = RESPONSE)
+                ),
+                quote!(
+                    fn owned() {
+                        owner_codec();
+                    }
+                ),
+            )
+            .unwrap();
+            syn::parse2::<syn::File>(expanded.clone()).unwrap();
+            let text = expanded.to_string();
+            assert!(text.contains("icp:private canic:wire"));
+            assert!(text.contains("owner :: ID"));
+            assert!(text.contains("(REQUEST) . bytes"));
+            assert!(text.contains("owner_codec"));
+            assert!(!text.contains("icp:private canic:raw"));
+            assert!(!text.contains("decode_request"));
+            assert!(!text.contains("encode_response"));
+            assert!(!text.contains("candid"));
+        }
+        assert!(
+            raw_entry(
+                EndpointKind::Update,
+                quote!(
+                    public,
+                    payload(max_bytes = 12),
+                    wire(id = owner::ID, request = REQUEST, response = RESPONSE)
+                ),
+                quote!(
+                    fn owned() {}
+                )
             )
             .is_err()
         );

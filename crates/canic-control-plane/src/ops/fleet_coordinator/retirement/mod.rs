@@ -116,6 +116,14 @@ impl FleetCoordinatorOps {
         Self::commit_transition(&current, next)?;
         Ok(status)
     }
+    /// Read only the exact retained retirement operation without attempting its Ledger effect.
+    pub(crate) fn retirement_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<Option<FleetRetirementStatus>, InternalError> {
+        let current = Self::current()?;
+        Ok(retirement_status(&current.retirement)
+            .filter(|status| status.request.operation_id == operation_id))
+    }
 }
 
 pub(super) fn retirement_status(record: &FleetRetirementRecord) -> Option<FleetRetirementStatus> {

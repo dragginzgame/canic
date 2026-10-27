@@ -1,6 +1,8 @@
 #![expect(clippy::unused_async)]
 //! Minimal non-root canister for delegation proof tests.
 
+mod protocol;
+
 use canic::{
     Error,
     access::auth::{
@@ -8,30 +10,21 @@ use canic::{
         LocalApplicationAuthorizationRequest, authorize_local_application,
     },
     api::auth::AuthApi,
-    api::call::Call,
     api::metrics::MetricsQuery,
-    dto::{
-        auth::SignedRoleAttestation,
-        component_registry::RootPeerComponentAllocationRequest,
-        metrics::{MetricEntry, QueryPerfSample},
-        page::{Page, PageRequest},
-        role::OperationReceipt,
-    },
+    dto::{metrics::QueryPerfSample, role_attestation::SignedRoleAttestation},
     prelude::*,
-    protocol::CANIC_ROOT_COMMAND,
 };
-use canic_contracts::dto::{
-    role::OperationAcceptedResponse as RootCommandResponse,
-    wire::projection::peer_allocation::RootCommand,
-};
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 
 const VERIFY_APPLICATION_SCOPE: canic::access::auth::ApplicationScopeRef<'static> =
     canic::application_scope!("app00:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
 
-#[derive(CandidType, Clone, Copy, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum LocalAuthorizationDenialProbe {
     Anonymous,
     AuthorityUnavailable,
@@ -79,39 +72,20 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 /// Run no-op upgrade handling for the delegation issuer stub.
 async fn canic_upgrade() {}
 
-/// Exercise the generic synchronous application guard without changing its application ABI.
-#[canic_query(public)]
-async fn issuer_application_subject() -> Result<Principal, Error> {
-    application_subject()
+/// Exercise the generic synchronous application guard through the native boundary.
+#[canic_query(public, wire(id = protocol::SUBJECT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+async fn issuer_application_subject() -> Result<ic_platform::Principal, Error> {
+    application_subject().map(Into::into)
 }
 
 /// Exercise Fleet admission against the exact local managed projection.
-#[canic_query(requires(caller::is_fleet_admitted()))]
+#[canic_query(requires(caller::is_fleet_admitted()), wire(id = protocol::ADMISSION, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn issuer_fleet_admission_probe() -> Result<(), Error> {
     Ok(())
 }
 
-/// Measure the same synchronous local-application decision in its query context.
-#[canic_query(public)]
-async fn issuer_application_subject_perf()
--> Result<QueryPerfSample<Result<Principal, Error>>, Error> {
-    let start = MetricsQuery::sample_query(()).local_instructions;
-    let mut sample = MetricsQuery::sample_query(application_subject());
-    sample.local_instructions = sample.local_instructions.saturating_sub(start);
-    Ok(sample)
-}
-
-/// Return runtime metrics to the focused instruction-measurement fixture.
-#[canic_query(public)]
-async fn issuer_runtime_metrics() -> Result<Page<MetricEntry>, Error> {
-    Ok(MetricsQuery::runtime(PageRequest {
-        offset: 0,
-        limit: 1_000,
-    }))
-}
-
 /// Measure one implemented caller-gate denial while enrollment is unavailable.
-#[canic_query(public)]
+#[canic_query(public, wire(id = protocol::DENIAL, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn issuer_application_denial_perf(
     probe: LocalAuthorizationDenialProbe,
 ) -> Result<QueryPerfSample<String>, Error> {
@@ -143,49 +117,20 @@ fn application_subject() -> Result<Principal, Error> {
     }
 }
 
-#[canic_update(public)]
-fn issuer_verify_role_attestation(
-    attestation: SignedRoleAttestation,
-    min_accepted_epoch: u64,
-) -> Result<(), Error> {
-    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch)
+#[canic_update(public, wire(id = protocol::VERIFY, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+fn issuer_verify_role_attestation(request: protocol::VerifyRequest) -> Result<(), Error> {
+    AuthApi::verify_role_attestation(&request.attestation.into(), request.min_accepted_epoch)
 }
 
-#[canic_update(requires(auth::attested_local_subnet()))]
+#[canic_update(requires(auth::attested_local_subnet()), wire(id = protocol::ATTESTED, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn issuer_require_attested_local_subnet(attestation: SignedRoleAttestation) -> Result<(), Error> {
     let _ = attestation;
     Ok(())
 }
 
-#[canic_update(requires(caller::is_root()))]
+#[canic_update(requires(caller::is_root()), wire(id = protocol::ROOT_GUARD, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn issuer_guard_is_root() -> Result<(), Error> {
     Ok(())
-}
-
-#[canic_update(requires(caller::is_controller()))]
-fn issuer_guard_is_controller() -> Result<(), Error> {
-    Ok(())
-}
-
-#[canic_update(requires(caller::is_parent()))]
-fn issuer_guard_is_parent() -> Result<(), Error> {
-    Ok(())
-}
-
-/// Forward one peer allocation request so the target root observes this ordinary Component.
-#[canic_update(public)]
-async fn forward_peer_allocation(
-    fleet_subnet_root: Principal,
-    request: RootPeerComponentAllocationRequest,
-) -> Result<OperationReceipt, Error> {
-    let response: Result<RootCommandResponse, Error> =
-        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_COMMAND)
-            .with_arg(RootCommand::ProvisionPeer(request))?
-            .execute_candid()
-            .await?;
-    match response? {
-        RootCommandResponse::OperationAccepted(receipt) => Ok(receipt),
-    }
 }
 
 canic::finish!();

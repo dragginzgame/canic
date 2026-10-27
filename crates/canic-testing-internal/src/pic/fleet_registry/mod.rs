@@ -17,4 +17,6 @@ pub(super) use baseline::{
     governed_fleet_journey_cases, governed_pocketic_cases, governed_recovery_cases,
 };
 
+#[cfg(test)]
+pub(in crate::pic) use baseline::provision_component_request;
 pub(in crate::pic) use baseline::{install_configured_root, reset_pool_assets};

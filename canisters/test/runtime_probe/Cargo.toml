@@ -13,15 +13,24 @@ app = "runtime_probe"
 role = "test"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
 
 [dependencies]
 canic = { workspace = true, features = ["auth-delegated-token-verify", "auth-root-canister-sig-verify"] }
 ic-platform = { workspace = true, features = ["cdk", "candid", "management-canister-types"] }
 ic-timers = { workspace = true }
+ic-wire.workspace = true
+serde.workspace = true
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [lints]
 workspace = true

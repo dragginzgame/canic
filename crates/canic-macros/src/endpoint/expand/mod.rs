@@ -1,4 +1,5 @@
 mod access;
+mod wire;
 
 use crate::{
     adapter::{EntryKind, RawAdapter},
@@ -34,8 +35,10 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
         return syn::Error::new_spanned(&orig_sig.ident, message).to_compile_error();
     }
 
-    let uses_raw_adapter =
-        args.payload_max_bytes.is_some() || args.decode.is_some() || args.reject_access;
+    let uses_raw_adapter = args.payload_max_bytes.is_some()
+        || args.decode.is_some()
+        || args.wire.is_some()
+        || args.reject_access;
 
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
@@ -53,26 +56,21 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     } else {
         cdk_attr(kind, &args.forwarded, &orig_name)
     };
-    let candid_attr = Some({
-        let method_name = args
-            .export_name
-            .clone()
-            .unwrap_or_else(|| syn::LitStr::new(&orig_name.to_string(), orig_name.span()));
-        entry_kind(kind, args.query_mode).candid_attribute(&method_name)
-    });
+    let candid_attr = candid_attribute(kind, &args, &orig_name);
     let codecs = if uses_raw_adapter {
         quote!()
     } else {
         candid_codecs(&orig_sig)
     };
     let payload_registration = payload_registration(kind, &args, &orig_name);
+    let wire_registration = wire::registration(kind, &args, &orig_sig);
 
     let wrapper_sig = wrapper_signature(&orig_sig, impl_async, args.reject_access);
 
     let call_ident = format_ident!("__canic_call");
     let exported_method = exported_method(&args, &orig_name);
     let call_decl = call_decl(kind, args.query_mode, &call_ident, &exported_method);
-    let preflight = preflight(&orig_name);
+    let preflight = quote!(::canic::__internal::core::dispatch::preflight_endpoint);
 
     let startup_denial = if returns_fallible(&orig_sig) || args.reject_access {
         quote!(return Err(err.into());)
@@ -111,6 +109,7 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
 
     quote! {
         #payload_registration
+        #wire_registration
         #codecs
 
         #(#attrs)*
@@ -133,6 +132,20 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     }
 }
 
+fn candid_attribute(
+    kind: EndpointKind,
+    args: &ValidatedArgs,
+    name: &syn::Ident,
+) -> Option<TokenStream2> {
+    args.wire.is_none().then(|| {
+        let method = args
+            .export_name
+            .clone()
+            .unwrap_or_else(|| syn::LitStr::new(&name.to_string(), name.span()));
+        entry_kind(kind, args.query_mode).candid_attribute(&method)
+    })
+}
+
 // Raw adapters share the ordinary startup/access/dispatch authorities. Only the
 // consumer-owned fn() performs payload IO and reply; no Candid attributes exist.
 pub(super) fn expand_raw(
@@ -153,7 +166,7 @@ pub(super) fn expand_raw(
     let call = format_ident!("__canic_call");
     let exported = exported_method(&args, &name);
     let call_decl = call_decl(kind, args.query_mode, &call, &exported);
-    let preflight = preflight(&name);
+    let preflight = quote!(::canic::__internal::core::dispatch::preflight_endpoint);
     let access = access_stage(&plan, &call);
     let asynchronous = func.sig.asyncness.is_some();
     let dispatch = dispatch_call(asynchronous, &call, impl_name.clone(), &[]);
@@ -174,8 +187,16 @@ pub(super) fn expand_raw(
         .export_name
         .as_ref()
         .map_or_else(|| name.to_string(), syn::LitStr::value);
-    let declaration =
-        crate::adapter::raw_declaration(&entry_kind(kind, args.query_mode), &method, &func.sig)?;
+    let declaration = if let Some(wire) = &args.wire {
+        crate::adapter::wire::declaration(
+            wire,
+            &entry_kind(kind, args.query_mode),
+            &method,
+            &func.sig,
+        )?
+    } else {
+        crate::adapter::raw_declaration(&entry_kind(kind, args.query_mode), &method, &func.sig)?
+    };
     let entry = crate::adapter::entrypoint(
         &entry_kind(kind, args.query_mode),
         &method,
@@ -251,6 +272,7 @@ fn raw_adapter(
             .as_ref()
             .map_or_else(|| signature.ident.to_string(), syn::LitStr::value),
         decode: args.decode.as_ref(),
+        wire: args.wire.as_ref(),
         max_bytes: args.payload_max_bytes.as_ref(),
         reject_access: args.reject_access,
         wrapper_async,
@@ -272,27 +294,13 @@ const fn entry_kind(kind: EndpointKind, mode: QueryMode) -> EntryKind {
 // ============================================================================
 //
 
-fn preflight(name: &syn::Ident) -> TokenStream2 {
-    if matches!(
-        name.to_string().as_str(),
-        "canic_wasm_store_chunk"
-            | "canic_wasm_store_publish_chunk"
-            | "canic_wasm_store_fixture_chunk"
-            | "canic_wasm_store_publish_fixture"
-    ) {
-        quote!(::canic::__internal::core::dispatch::preflight_store_data_endpoint)
-    } else {
-        quote!(::canic::__internal::core::dispatch::preflight_endpoint)
-    }
-}
-
 fn payload_registration(
     kind: EndpointKind,
     args: &ValidatedArgs,
     name: &syn::Ident,
 ) -> TokenStream2 {
     if !matches!(kind, EndpointKind::Update)
-        || (args.payload_max_bytes.is_none() && args.decode.is_none())
+        || (args.payload_max_bytes.is_none() && args.decode.is_none() && args.wire.is_none())
     {
         return quote!();
     }
@@ -304,10 +312,15 @@ fn payload_registration(
     } else {
         quote!(stringify!(#name))
     };
-    let max_bytes = args.decode.as_ref().map_or_else(
-        || args.payload_max_bytes.clone().expect("explicit byte limit"),
-        |limits| quote!((#limits).max_bytes),
-    );
+    let max_bytes = if let Some(wire) = &args.wire {
+        let request = &wire.request;
+        quote!((#request).bytes)
+    } else {
+        args.decode.as_ref().map_or_else(
+            || args.payload_max_bytes.clone().expect("explicit byte limit"),
+            |limits| quote!((#limits).max_bytes),
+        )
+    };
 
     quote! {
         const _: () = {

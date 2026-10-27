@@ -3,6 +3,83 @@ use canic_contracts::ids::BuildNetwork;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
+fn finalization_checks_endpoint_codecs_before_replacing_artifacts() {
+    use canic_contracts::protocol::wire_declaration::{
+        CompiledMethod, HEADER_BYTES, MethodKind, MethodLimits, SECTION,
+    };
+
+    const LIMITS: MethodLimits = MethodLimits {
+        bytes: 128,
+        allocation: 256,
+        nodes: 16,
+        depth: 8,
+    };
+    const METHOD: CompiledMethod<'_> = CompiledMethod {
+        name: "echo",
+        kind: MethodKind::Query,
+        id: 9001,
+        request: LIMITS,
+        response: LIMITS,
+    };
+    let tools = BuildToolchain::resolve_prepared(CanisterBuildProfile::Fast).unwrap();
+    for embed_candid in [false, true] {
+        for (candid, accepted) in [
+            ("service : { read : () -> () query }", true),
+            ("service : { read : () -> () }", false),
+            ("service : { absent : () -> () query }", false),
+            ("service : {}", false),
+            (
+                "service : { read : () -> () query; echo : () -> () query }",
+                false,
+            ),
+        ] {
+            let root = unique_temp_dir("canic-final-endpoint-admission");
+            fs::create_dir_all(&root).unwrap();
+            let source = root.join("source.wasm");
+            let wasm_path = root.join("app.wasm");
+            let did_path = root.join("app.did");
+            let gzip_path = root.join("app.wasm.gz");
+            let mut wasm =
+                minimal_wasm_with_exports(&["canister_query read", "canister_query echo"]);
+            let mut section = vec![u8::try_from(SECTION.len()).unwrap()];
+            section.extend_from_slice(SECTION.as_bytes());
+            section.extend_from_slice(&METHOD.encode::<{ HEADER_BYTES + 4 }>());
+            push_section(&mut wasm, 0, &section);
+            fs::write(&source, wasm).unwrap();
+            fs::write(&wasm_path, b"previous wasm").unwrap();
+            fs::write(&did_path, b"previous candid").unwrap();
+            fs::write(&gzip_path, b"previous gzip").unwrap();
+            let result = finalize_wasm_artifact(
+                &WasmArtifactFinalization {
+                    release_build_id: None,
+                    profile: CanisterBuildProfile::Fast,
+                    build_network: BuildNetwork::Local,
+                    embed_candid,
+                    validate_sidecar_only: false,
+                    source_wasm_path: &source,
+                    candid: candid.as_bytes(),
+                    wasm_path: &wasm_path,
+                    did_path: &did_path,
+                    wasm_gz_path: &gzip_path,
+                },
+                &tools,
+            );
+            if accepted {
+                result.unwrap();
+                assert_eq!(fs::read(&did_path).unwrap(), candid.as_bytes());
+            } else {
+                assert!(result.is_err());
+                assert_eq!(fs::read(&wasm_path).unwrap(), b"previous wasm");
+                assert_eq!(fs::read(&did_path).unwrap(), b"previous candid");
+                assert_eq!(fs::read(&gzip_path).unwrap(), b"previous gzip");
+            }
+            assert_no_artifact_stage(&root);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+}
+
+#[test]
 fn install_limit_failure_preserves_the_published_artifact_set() {
     for network in [BuildNetwork::Ic, BuildNetwork::Local] {
         for oversized in [

@@ -40,6 +40,31 @@ capture executor. New live capture must compose IC Backup’s execution and reco
 owner with Canic’s Fleet authority and coordinated checkpoint policy. The active
 restore runner and its same-operation recovery remain maintained.
 
+Root now retains checkpoint identity and the complete active local participant
+catalogue in its own stable storage. Controller-authenticated Wire operations
+`canic_root_checkpoint_begin`, `canic_root_checkpoint_status`,
+`canic_root_checkpoint_advance` and `canic_root_checkpoint_release` reserve,
+inspect, advance one participant and retain release intent. Begin requires the
+current Root installation and expected prior sequence; retries keep the original
+unit. Catalogue mutations remain excluded until every release is acknowledged.
+
+Every selected application must implement the Wire `canic_application_checkpoint`
+hook and authenticate it with `ApplicationCheckpointCommandPredicate`. Resolve
+the request with `binding_from_command`, commit application-owned preparation or
+release, and return the exact command with its acknowledged phase. The authority
+digest commits canonical CBOR receiver authority with the
+`canic.application-checkpoint.authority.v1` NUL-terminated domain; Root commits
+the sorted authority digests under `canic.application-checkpoint.unit.v1`.
+Preparation must cover business timers, mutations and external obligations. An
+unavailable or unsupported hook leaves the original checkpoint fenced for
+recovery; it never counts as released. Applications must qualify both hooks
+before beginning a unit checkpoint. The framework does not supply a business
+freeze automatically.
+
+These commands do not issue snapshot effects or authorize backup publication.
+Production Root/two-participant interruption qualification, paid-effect settlement
+and Backup stage/attempt integration remain required before live capture.
+
 Artifact SHA-256 verification accepts uppercase and lowercase hex as the same
 digest. Malformed hashes and different artifact bytes still reject.
 
@@ -103,6 +128,15 @@ sidecar refuses without recreating custody. IC Backup owns descriptor inheritanc
 one spawn and quiescence. Host owns bounded output capture and child cleanup.
 Terminal reference release freshly validates the original journal and receipts
 while holding the original journal and command guards.
+
+An interrupted snapshot load, or a load command that exits unsuccessfully, is
+unsettled: neither process exit nor observing a stopped canister proves that the
+load did not commit. The runner preserves the journal and source retention and
+refuses another load, including `--retry-failed`. A recorded read-only precondition
+failure remains retryable because the load was never dispatched. The current
+subprocess adapter has no settlement proof for uncertain loads; recovery remains
+an engine-convergence requirement. Do not clear the journal or create a fresh
+restore to bypass this refusal.
 
 Prune reports busy, restore-referenced and invalid layouts as skipped. A deletion
 failure is reported alongside any directories already removed and makes the

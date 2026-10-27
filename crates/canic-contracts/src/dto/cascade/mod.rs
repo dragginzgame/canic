@@ -6,15 +6,21 @@
 
 use crate::dto::{prelude::*, state::FleetStateInput};
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct StateSnapshotInput {
     pub fleet_state: Option<FleetStateInput>,
 }
 
 /// One observed result; an unconfirmed call may have applied before its reply was lost.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum StateCascadeTargetResult {
     Applied,
     AppliedWithReconciliationFailure(crate::dto::error::Error),
@@ -22,16 +28,14 @@ pub enum StateCascadeTargetResult {
 }
 
 /// Exact canister associated with one bounded state-cascade observation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct StateCascadeTargetOutcome {
     pub canister_id: Principal,
     pub result: StateCascadeTargetResult,
 }
 
 /// Aggregate observations retain full counts when the bounded detail list fills.
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct StateCascadeReport {
     pub successful_targets: u64,
     pub reconciliation_failures: u64,
@@ -46,8 +50,7 @@ pub struct StateCascadeReport {
 // Cascade topology snapshot.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct TopologySnapshotInput {
     pub parents: Vec<TopologyPathNode>,
     // Children keyed by parent pid.
@@ -60,8 +63,7 @@ pub struct TopologySnapshotInput {
 // Parent-keyed child list.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct TopologyChildren {
     pub parent_pid: Principal,
     pub children: Vec<TopologyDirectChild>,
@@ -73,8 +75,7 @@ pub struct TopologyChildren {
 // Direct child node.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct TopologyDirectChild {
     pub pid: Principal,
     pub role: CanisterRole,
@@ -86,8 +87,7 @@ pub struct TopologyDirectChild {
 // Parent-path node.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct TopologyPathNode {
     pub pid: Principal,
     pub role: CanisterRole,

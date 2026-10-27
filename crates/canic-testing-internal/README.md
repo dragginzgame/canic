@@ -22,8 +22,8 @@ PocketIC/test helper surface without these repo-specific fixtures.
 
 Ordinary native tests use normal libtest discovery in the workspace library
 invocation. The library test binary compiles the stateful Fleet catalogue only
-with `governed-pocketic-tests`; fixture-library consumers retain the default
-`pocketic-fixtures` surface. Use the governed runner: source-bound activation
+with `governed-pocketic-tests`; reusable fixture support is always available
+to library consumers. Use the governed runner: source-bound activation
 recovery precedes two isolated internal workers, with serial execution within
 each worker. Exact single-case selection stays serial. See the
 [testing guide](../../TESTING.md) for targeted commands and retained diagnostics.

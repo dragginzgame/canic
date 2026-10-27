@@ -44,9 +44,17 @@ external call between begin and settlement.
 
 The replay deadline is required and may not move forward on retry. It must not
 exceed the currently verified authorization expiry. Canic accepts an absent
-operation only while `now < replay_deadline_ns`, with at most 24 hours
-remaining. Exact retained operations are loaded before that temporal decision,
-so pending and terminal results remain observable at and after their deadline.
+operation only while `now < replay_deadline_ns`, with at most one hour
+remaining, inclusive (`MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS`). Exact
+retained operations are loaded before that temporal decision, so their pending
+and terminal results remain observable at and after the deadline while retained.
+
+Terminal application receipts become eligible for reclamation at the later of
+the original replay deadline and 15 minutes after settlement
+(`RECEIPT_TERMINAL_OBSERVATION_GRACE_NS`). Pending receipts are not reclaimed by
+this terminal policy. The [intent model](../../crates/canic-core/src/model/intent/mod.rs)
+owns both constants and the checked eligibility calculation; a late settlement
+therefore retains its full observation grace without extending retry authority.
 
 ## Resource Namespace Ownership
 

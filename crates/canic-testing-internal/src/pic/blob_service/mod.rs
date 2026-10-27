@@ -1,9 +1,12 @@
 //! Framework-owned dedicated and embedded Blob composition qualification.
 
+mod application;
 pub(super) mod artifacts;
+mod browser;
 mod journey;
 mod metrics;
 mod operator;
+mod schema;
 mod tests;
 
 pub(super) fn governed_cases() -> Vec<crate::pic::cases::GovernedTestCase> {

@@ -272,7 +272,7 @@ fn changed_network_signer_and_certificate_signature_reject() {
         Err(Error::ReaderMismatch)
     ));
     let mut certificate: ic_platform::certification::Certificate =
-        ciborium::de::from_reader(cert.as_slice()).unwrap();
+        serde_cbor::from_reader(cert.as_slice()).unwrap();
     certificate.signature[0] ^= 1;
     assert!(matches!(
         verify_read(&fixture.agent, &fixture.read, &cbor(&certificate), limits()),

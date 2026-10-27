@@ -53,6 +53,7 @@ pub mod __internal {
     pub use canic_control_plane as control_plane;
     pub use canic_core as core;
     pub use ic_platform;
+    pub use ic_wire;
     pub use serde;
 
     pub mod cdk {

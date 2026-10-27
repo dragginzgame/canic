@@ -16,7 +16,7 @@ publish = true
 [features]
 default = ["fleet-coordinator-canister", "root-control-plane", "wasm-store-canister"]
 fleet-coordinator-canister = []
-root-control-plane = []
+root-control-plane = ["dep:serde_json"]
 wasm-store-canister = []
 
 [dependencies]
@@ -25,8 +25,9 @@ canic-contracts.workspace = true
 canic-core = { workspace = true }
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-timers = { workspace = true }
+ic-wire = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 

@@ -7,7 +7,7 @@ use canic::dto::component_registry::{
     ComponentApplicationInitialization, RootComponentInitializationRequest,
 };
 
-use canic_contracts::dto::wire::projection::fixture_baseline_application_initialization::Command;
+use canic_contracts::protocol::component_initialization as initialization_wire;
 
 pub(super) use blob::production_blob_initialization_recovers_target_binding;
 
@@ -110,83 +110,29 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     };
     let before = allocation(&pic, fixture.root_id, member_operation);
     assert!(before.application_initialization.is_none());
-    let status_refused: Result<RootStatusResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RootStatusRequestFragment::Operation(OperationStatusRequest {
-                    operation_id: member_operation,
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    fixture.root_id,
-                    target,
-                    canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let status_refused = crate::pic::canic::root_component_allocation(
+        &pic,
+        fixture.root_id,
+        target,
+        member_operation,
+    );
     assert_eq!(
         status_refused
-            .err()
-            .expect("controller-only allocation status")
+            .expect_err("controller-only allocation status")
             .code(),
         canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
+    assert_malformed_binding_frames(&pic, fixture.root_id, member_operation, &request);
     let mut wrong = request.clone();
     wrong.initialization.target_canister = coordinator;
-    let rejected: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(wrong),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let rejected = bind_initialization(&pic, fixture.root_id, Principal::anonymous(), wrong);
     assert_eq!(
-        rejected.err().expect("target mismatch refusal").code(),
+        rejected.expect_err("target mismatch refusal").code(),
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
-    let refused: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(request.clone()),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    target,
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let refused = bind_initialization(&pic, fixture.root_id, target, request.clone());
     assert_eq!(
-        refused.err().expect("controller refusal").code(),
+        refused.expect_err("controller refusal").code(),
         canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
     assert_eq!(allocation(&pic, fixture.root_id, member_operation), before);
@@ -207,7 +153,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         .submit_call(
             fixture.root_id,
             Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_COMMAND,
+            initialization_wire::METHOD,
             bytes,
         )
         .unwrap();
@@ -225,26 +171,12 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         bound.application_initialization,
         Some(request.initialization.clone())
     );
-    let replay: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(request.clone()),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let replay = bind_initialization(
+        &pic,
+        fixture.root_id,
+        Principal::anonymous(),
+        request.clone(),
+    );
     replay.unwrap();
     restart_root_during_installation(
         &pic,
@@ -257,49 +189,25 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     await_root_provisioning(&pic, fixture.root_id, operation, |status| {
         status.root_runtime_active
     });
-    let delivered: Result<Vec<u8>, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    target,
-                    Principal::anonymous(),
-                    "managed_initialization_bytes",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let delivered: Result<Vec<u8>, Error> = ic_testkit::pic::query_wire(
+        &pic,
+        target,
+        Principal::anonymous(),
+        crate::pic::application_probe::MANAGED_INITIALIZATION,
+        &(),
+    )
+    .unwrap();
     assert_eq!(delivered.unwrap(), request.initialization.arguments);
     let installation_version = pic
         .canister_status(target, Some(fixture.root_id))
         .unwrap()
         .version;
-    let replay: Result<RootCommandResponseFragment, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                Command::BindComponentInitialization(request.clone()),
-            ))?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    fixture.root_id,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let replay = bind_initialization(
+        &pic,
+        fixture.root_id,
+        Principal::anonymous(),
+        request.clone(),
+    );
     replay.unwrap();
     assert_eq!(
         pic.canister_status(target, Some(fixture.root_id))
@@ -314,24 +222,14 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         Some(fixture.root_id),
     )
     .unwrap();
-    let restored: Result<Vec<u8>, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    target,
-                    Principal::anonymous(),
-                    "managed_initialization_bytes",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let restored: Result<Vec<u8>, Error> = ic_testkit::pic::query_wire(
+        &pic,
+        target,
+        Principal::anonymous(),
+        crate::pic::application_probe::MANAGED_INITIALIZATION,
+        &(),
+    )
+    .unwrap();
     assert_eq!(restored.unwrap(), request.initialization.arguments);
 }
 
@@ -340,18 +238,9 @@ fn allocation(
     root: Principal,
     operation_id: [u8; 32],
 ) -> canic::dto::component_registry::RootComponentAllocationResponse {
-    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::ProvisionComponent(
-        status,
-    )) = root_status(
-        pic,
-        root,
-        RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-    )
-    .unwrap()
-    else {
-        panic!("exact Component allocation status")
-    };
-    status.allocation
+    crate::pic::canic::root_component_allocation(pic, root, Principal::anonymous(), operation_id)
+        .expect("native Component allocation status")
+        .allocation
 }
 
 fn restart_root_during_installation(
@@ -384,14 +273,84 @@ fn restart_root_during_installation(
     }
     panic!(
         "install intent was not observed before Root restart: phases={phases:?}, query={:?}, provisioning={:?}",
-        pic.query_call(
+        ic_testkit::pic::query_wire::<_, Result<Vec<u8>, Error>>(
+            pic,
             target,
             Principal::anonymous(),
-            "managed_initialization_bytes",
-            ic_platform::candid::contract::encode_args(()).unwrap()
+            crate::pic::application_probe::MANAGED_INITIALIZATION,
+            &(),
         )
-        .map(|bytes| bytes.len()),
+        .map(|reply| reply.map(|bytes| bytes.len())),
         observed_root_provisioning(pic, root, provisioning_operation_id)
             .map(|status| (status.phase, status.last_failure)),
     );
+}
+
+fn bind_initialization(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    request: RootComponentInitializationRequest,
+) -> Result<canic::dto::role::OperationReceipt, Error> {
+    let bytes = canic_host::component_initialization::encode_command(&request).unwrap();
+    let response = ic_testkit::pic::try_pocket_ic_operation(|| {
+        pic.update_call(root, caller, initialization_wire::METHOD, bytes)
+    })
+    .unwrap()
+    .unwrap();
+    ic_wire::native::decode_response(
+        initialization_wire::METHOD_ID,
+        &response,
+        initialization_wire::RESPONSE_LIMITS,
+    )
+    .unwrap()
+}
+
+fn assert_malformed_binding_frames(
+    pic: &PocketIc,
+    root: Principal,
+    member_operation: [u8; 32],
+    request: &RootComponentInitializationRequest,
+) {
+    let before = allocation(pic, root, member_operation);
+    let native =
+        canic_contracts::dto::component_initialization::RootComponentInitializationRequest::from(
+            request.clone(),
+        );
+    let frame = canic_host::component_initialization::encode_command(request).unwrap();
+    let mut trailing = frame.clone();
+    trailing.push(0);
+    let mut truncated = frame;
+    truncated.pop();
+    let wrong_method = ic_wire::native::encode_request(
+        initialization_wire::METHOD_ID + 1,
+        &native,
+        initialization_wire::REQUEST_LIMITS,
+    )
+    .unwrap();
+    let wrong_direction = ic_wire::native::encode_response(
+        initialization_wire::METHOD_ID,
+        &native,
+        initialization_wire::REQUEST_LIMITS,
+    )
+    .unwrap();
+    for bytes in [
+        wrong_method,
+        wrong_direction,
+        trailing,
+        truncated,
+        vec![0; initialization_wire::REQUEST_LIMITS.bytes + 1],
+    ] {
+        let result = ic_testkit::pic::try_pocket_ic_operation(|| {
+            pic.update_call(
+                root,
+                Principal::anonymous(),
+                initialization_wire::METHOD,
+                bytes,
+            )
+        })
+        .unwrap();
+        assert!(result.is_err());
+        assert_eq!(allocation(pic, root, member_operation), before);
+    }
 }

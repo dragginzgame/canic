@@ -1,3 +1,5 @@
+mod protocol;
+
 canic::start_fleet_root!();
 
 fn require_local_controller() -> Result<(), String> {
@@ -22,19 +24,26 @@ fn audit_recovery_balance(retain: u128) -> u128 {
     ic_platform::cdk::api::cycles_burn(excess)
 }
 
+canic::__canic_register_wire_schema!(
+    "audit_recovery_balance",
+    Update,
+    protocol::BALANCE,
+    u128,
+    u128,
+    protocol::REQUEST_LIMITS,
+    protocol::RESPONSE_LIMITS
+);
+
 canic::finish!();
 
-/// Decode the existing single-argument audit contract with the CDK skipping quota.
+/// Decode a native request without opening the production activation fence.
 fn decode_retain(bytes: Vec<u8>) -> u128 {
-    use ic_platform::candid::decoder::{DecoderConfig, decode_one_with_config};
-    let mut config = DecoderConfig::new();
-    config.set_skipping_quota(10_000);
-    decode_one_with_config(&bytes, &config)
+    ic_wire::native::decode_request(protocol::BALANCE, &bytes, protocol::REQUEST_LIMITS)
         .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()))
 }
 
-/// Encode the audit method's existing single Candid balance reply.
+/// Reply with the exact method identity and native balance shape.
 fn encode_balance(balance: u128) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(balance)
+    ic_wire::native::encode_response(protocol::BALANCE, &balance, protocol::RESPONSE_LIMITS)
         .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()))
 }

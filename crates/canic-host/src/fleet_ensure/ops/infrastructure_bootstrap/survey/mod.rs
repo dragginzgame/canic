@@ -15,8 +15,7 @@ use crate::{
             EnsurePaths,
             capacity_import::admission::observer::{inventory, management},
             infrastructure_bootstrap::{
-                InfrastructureBootstrapError, LedgerAccount, authenticated_agent, declarations,
-                seal_sources,
+                InfrastructureBootstrapError, authenticated_agent, declarations, seal_sources,
             },
         },
     },
@@ -105,7 +104,7 @@ impl BootstrapSurvey {
             network_root_key_sha256,
             coordinator,
             estate_seed: None,
-            coordinator_registry_candid_hex: None,
+            coordinator_registry_wire_hex: None,
             declarations_toml: declarations_toml.into(),
             declarations_sha256: Sha256::digest(declarations_toml.as_bytes()).into(),
             sources: BTreeMap::new(),
@@ -201,8 +200,8 @@ impl BootstrapSurvey {
             let name = &desired.bootstrap.as_ref().ok_or_else(invalid)?.coordinator;
             let registry =
                 inventory::registry(agent, *self.selected.get(name).ok_or_else(invalid)?).await?;
-            self.original.coordinator_registry_candid_hex = Some(hex_bytes(
-                ic_platform::candid::contract::encode_one(registry).map_err(|_| invalid())?,
+            self.original.coordinator_registry_wire_hex = Some(hex_bytes(
+                canic_contracts::protocol::authority::encode(registry).map_err(|_| invalid())?,
             ));
         }
         let source = seal_sources(self.original)?;
@@ -240,7 +239,7 @@ impl BootstrapSurvey {
             .canister_query_candid(
                 &desired.cycles_ledger,
                 "icrc1_balance_of",
-                &LedgerAccount {
+                &ic_platform::icrc_ledger_types::Account {
                     owner: self.original.operator,
                     subaccount: None,
                 },

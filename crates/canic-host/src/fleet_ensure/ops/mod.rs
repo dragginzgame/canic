@@ -20,13 +20,14 @@ pub(super) mod funding;
 pub(super) mod funding_observation;
 pub mod independent_effects;
 pub mod infrastructure_bootstrap;
+mod init_arguments;
 mod install_history;
 pub(super) mod operation_selection;
 pub mod operator_mint;
+pub(super) mod plan_authority;
 mod plan_content;
 mod platform;
 pub(super) mod progress;
-mod protocol;
 pub(super) mod readiness;
 pub(super) mod recovery;
 pub(super) mod reinstall;
@@ -40,8 +41,8 @@ use crate::{
     fleet_ensure::model::{
         DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
         FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan,
-        FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
-        RetainedRootStartAuthorityRecord, RootManagementObservation, RootOwnedCanisterLifecycle,
+        FleetEnsureStateRecord, FleetObservation, RetainedRootStartAuthorityRecord,
+        RootManagementObservation, RootOwnedCanisterLifecycle,
     },
 };
 use canic_contracts::{cycles::Cycles, dto::pool::CanisterPoolAssetStatus};
@@ -850,17 +851,6 @@ pub fn resolve_desired_artifacts(
                 .drain_candid_sha256_by_canister
                 .insert(canister.name.clone(), artifact_sha256(root, &drain.candid)?);
         }
-    }
-    for step in &desired.protocol_steps {
-        artifacts.protocol_by_step.insert(
-            step.name.clone(),
-            ProtocolArtifactDigests {
-                candid_sha256: artifact_sha256(root, &step.candid)?,
-                command_args_sha256: artifact_sha256(root, &step.command_args)?,
-                expected_status_sha256: artifact_sha256(root, &step.expected_status)?,
-                status_args_sha256: artifact_sha256(root, &step.status_args)?,
-            },
-        );
     }
     Ok(artifacts)
 }

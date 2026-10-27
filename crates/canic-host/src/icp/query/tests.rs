@@ -64,7 +64,8 @@ fn read_query_never_retries_authentication_integrity_or_decode_failures() {
         IcpQueryError::Agent(Box::new(AgentError::MessageError(
             "502 is only text".into(),
         ))),
-        IcpQueryError::Decode(ic_platform::candid::decoder::decode_one::<u64>(&[0]).unwrap_err()),
+        IcpQueryError::Wire(ic_wire::Error::Identity),
+        IcpQueryError::Wire(ic_wire::Error::Limit),
     ] {
         assert!(!transient(&error));
         let mut error = Some(error);
@@ -83,7 +84,10 @@ fn read_query_never_retries_authentication_integrity_or_decode_failures() {
 
 #[test]
 fn authenticated_query_http_502_retries_only_the_same_read_request() {
-    for method in ["read_status", canic_contracts::protocol::CANIC_ROOT_STATUS] {
+    for method in [
+        "read_status",
+        canic_contracts::protocol::funding_read::root_status::METHOD,
+    ] {
         assert_http_502_read_retry(method);
     }
 }
@@ -275,15 +279,24 @@ esac
         // A changed Principal under the same selected name must fail admission
         // before any network request, even after pooled setup succeeded.
         fs::write(root.join("principal"), Principal::anonymous().to_text()).unwrap();
-        let result: Result<(), _> =
-            icp.query_candid_readonly(Principal::anonymous(), "status", &());
-        assert!(matches!(result, Err(IcpQueryError::Authority(error))
+        let wire_result: Result<(), _> = icp.query_wire_readonly(
+            Principal::anonymous(),
+            canic_contracts::protocol::CANIC_PUBLIC_CHILDREN,
+            canic_contracts::protocol::public_children::METHOD_ID,
+            &canic_contracts::dto::page::PageRequest {
+                limit: 1,
+                offset: 0,
+            },
+            canic_contracts::protocol::public_children::REQUEST_LIMITS,
+            canic_contracts::protocol::public_children::RESPONSE_LIMITS,
+        );
+        assert!(matches!(wire_result, Err(IcpQueryError::Authority(error))
             if matches!(*error, IcpManagementCallError::ExportedIdentityConflict { .. })));
     }
     assert_eq!(icp.remote_call_count(), 0);
     let calls = fs::read_to_string(root.join("calls")).unwrap();
     for kind in ["network", "export", "principal"] {
-        assert_eq!(calls.lines().filter(|line| *line == kind).count(), 4);
+        assert_eq!(calls.lines().filter(|line| *line == kind).count(), 6);
     }
     fs::remove_dir_all(root).unwrap();
 }

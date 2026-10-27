@@ -154,7 +154,12 @@ fn apply_dry_run_rejects_readiness_and_sequence_projection() {
     let err = dry_run
         .validate()
         .expect_err("duplicate operation sequence rejects");
-    std::assert_matches!(err, RestoreApplyDryRunValidationError::DuplicateSequence(0));
+    std::assert_matches!(
+        err,
+        RestoreApplyDryRunValidationError::EffectGraph(
+            ic_backup::model::effect_graph::EffectGraphError::DuplicateOperation(0)
+        )
+    );
 }
 
 #[test]
@@ -470,17 +475,16 @@ fn apply_dry_run_rejects_missing_artifacts() {
 fn apply_dry_run_rejects_artifact_path_traversal() {
     let root = temp_dir("canic-restore-apply-artifacts-traversal");
     fs::create_dir_all(&root).expect("create temp root");
-    let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.deployment.members[1].source_snapshot.artifact_path = "../outside".to_string();
-
-    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let mut plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    plan.members[0].source_snapshot.artifact_path = "../outside".to_string();
     let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect_err("path traversal should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
     std::assert_matches!(
         err,
-        RestoreApplyDryRunError::ArtifactPathEscapesBackup { .. }
+        RestoreApplyDryRunError::InvalidPlan(RestorePlanError::InvalidArtifactPath { .. })
     );
 }
 

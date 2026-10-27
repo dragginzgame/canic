@@ -45,10 +45,10 @@ pub enum AuthValidationError {
         found: Principal,
     },
 
-    #[error("candid encode failed for {context}: {source}")]
+    #[error("Wire encode failed for {context}: {source}")]
     EncodeFailed {
         context: &'static str,
-        source: ic_platform::candid::contract::Error,
+        source: ic_wire::Error,
     },
 
     #[error("attestation subnet was set but verifier subnet is unavailable")]

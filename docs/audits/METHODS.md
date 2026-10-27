@@ -57,7 +57,7 @@ retained-method owner below.
 
 | Candidate definition | Disposition | Active method | Kind/profile | Canonical owner and trigger |
 | --- | --- | --- | --- | --- |
-| `access-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns access-boundary placement; run after access or endpoint-auth changes. |
+| `access-purity.md` | `merge` | `CANIC-LAYERING-001/v3` | invariant | Layering owns access-boundary placement; run after access or endpoint-auth changes. |
 | `bootstrap-lifecycle-symmetry.md` | `revise` | `CANIC-LIFECYCLE-001/v4` | invariant/manual | Lifecycle boundary; run after lifecycle, restore, bootstrap, timer, or start-macro changes. |
 | `capability-surface.md` | `revise` | `CANIC-CAPABILITY-SURFACE-001/v2` | trend/invariant | Public capability and generated endpoint surface; run after endpoint bundle/Candid changes. |
 | `change-friction.md` | `retain` | `CANIC-CHANGE-FRICTION-001/v4` | trend/manual | Observed edit blast radius with an exhaustive owner map and concrete change rehearsals; run for hardening/refactor planning. |
@@ -65,13 +65,13 @@ retained-method owner below.
 | `dependency-hygiene.md` | `revise` | `CANIC-DEPENDENCY-001/v3` | invariant/trend | Cargo graph, feature, advisory, declared-license metadata, and lockfile posture; run after dependency/package graph changes and before closeout. |
 | `dry-consolidation.md` | `revise` | `CANIC-DUPLICATION-001/v3` | manual | Duplicate behavior/authority; run after broad host/CLI/runtime workflow work. |
 | `instruction-footprint.md` | `retain` | `CANIC-INSTRUCTION-001/v3` | measured | Fixed authoritative update/install instruction roster and checkpoint coverage; run after relevant hot-path changes or explicit perf review. |
-| `layer-violations.md` | `revise` | `CANIC-LAYERING-001/v2` | invariant/manual | Canonical architecture owner; run after layer, data-shape, conversion, endpoint, workflow, policy, ops, or model changes. |
+| `layer-violations.md` | `revise` | `CANIC-LAYERING-001/v3` | invariant/manual | Canonical architecture owner; run after layer, data-shape, conversion, endpoint, workflow, policy, ops, or model changes. |
 | `module-structure.md` | `revise` | `CANIC-STRUCTURE-001/v3` | invariant/trend | Module topology and visibility; run after crate/module/public-surface changes. |
-| `ops-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns ops responsibility and side-effect placement. |
+| `ops-purity.md` | `merge` | `CANIC-LAYERING-001/v3` | invariant | Layering owns ops responsibility and side-effect placement. |
 | `publish-surface.md` | `revise` | `CANIC-PUBLISH-001/v2` | invariant/trend | Published package and downstream contract; run after features, packaging, docs.rs, examples, or public crate changes. |
 | `security-boundary-ordering.md` | `revise` | `CANIC-AUTH-ORDERING-001/v1` | invariant/manual | Cross-stage auth/replay/capability order; run after security-boundary sequencing changes. |
 | `wasm-footprint.md` | `revise` | `CANIC-WASM-001/v6` | measured/trend | Canonical optimized release/debug Wasm metrics, two-clean-build determinism, and structural retained-size evidence; run after Wasm-affecting changes or explicit size review. |
-| `workflow-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns workflow responsibility, records, conversions, effects, and typed error placement. |
+| `workflow-purity.md` | `merge` | `CANIC-LAYERING-001/v3` | invariant | Layering owns workflow responsibility, records, conversions, effects, and typed error placement. |
 | `build-integrity.md` | `retain` | `CANIC-BUILD-INTEGRITY-001/v2` | invariant/measured | Build scripts, macros, generated code, unsafe inventory, and reproducibility; run before closeout and after build-pipeline changes. |
 | `release-integrity.md` | `retain` | `CANIC-RELEASE-INTEGRITY-001/v2` | invariant/manual | CI permissions, action pinning, credential handling, artifact provenance/checksums, host/target matrix; run before closeout and after CI/release changes. |
 

@@ -88,7 +88,7 @@ fn canonical_census_keeps_orphan_pending_terminal_and_expired_rows_without_index
     ];
     for (index, key) in keys.iter().enumerate() {
         let page = observe(owner, cursor).unwrap();
-        assert_eq!(page.owner, owner);
+        assert_eq!(page.owner, owner.into());
         assert_eq!(observe(owner, cursor).unwrap(), page);
         match page.entry.as_ref().unwrap() {
             IntentReleaseEntry::Local { intent_id, record } => {
@@ -104,10 +104,20 @@ fn canonical_census_keeps_orphan_pending_terminal_and_expired_rows_without_index
                 assert_eq!(record.revision, 7);
             }
         }
-        let bytes = ic_platform::candid::contract::encode_one(&page).unwrap();
+        let bytes = ic_wire::native::encode_response(
+            crate::protocol::release_evidence::intents::METHOD_ID,
+            &page,
+            crate::protocol::release_evidence::RESPONSE_LIMITS,
+        )
+        .unwrap();
         assert!(bytes.len() < 4096);
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<IntentReleaseResponse>(&bytes).unwrap(),
+            ic_wire::native::decode_response::<IntentReleaseResponse>(
+                crate::protocol::release_evidence::intents::METHOD_ID,
+                &bytes,
+                crate::protocol::release_evidence::RESPONSE_LIMITS
+            )
+            .unwrap(),
             page
         );
         assert_eq!(

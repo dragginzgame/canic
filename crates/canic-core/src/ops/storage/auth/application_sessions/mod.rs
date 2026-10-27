@@ -581,8 +581,7 @@ fn encoded_state_len(
 }
 
 fn encoded_len(value: &impl serde::Serialize) -> Result<usize, ApplicationSessionStateError> {
-    let mut bytes = Vec::new();
-    ciborium::ser::into_writer(value, &mut bytes)
+    let bytes = crate::cdk::serialize::serialize(value)
         .map_err(|_| ApplicationSessionStateError::EncodingFailed)?;
     Ok(bytes.len())
 }

@@ -17,14 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error as ThisError;
 
-/// Exact ICRC-1 account used for Root-owned estate funding.
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct CyclesLedgerAccount {
-    pub owner: Principal,
-    pub subaccount: Option<[u8; 32]>,
-}
+pub use ic_platform::icrc_ledger_types::{Account, TransferError};
 
 /// Exact Cycles Ledger canister-creation request.
 #[derive(CandidType)]
@@ -145,20 +138,6 @@ pub enum CyclesLedgerInfraError {
     InvalidTransfer { balance: u128, fee: u128 },
 }
 
-/// ICRC-1 transfer failure retained as a typed boundary until workflow classification.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum CyclesLedgerTransferError {
-    BadBurn { min_burn_amount: Nat },
-    BadFee { expected_fee: Nat },
-    CreatedInFuture { ledger_time: u64 },
-    Duplicate { duplicate_of: Nat },
-    GenericError { error_code: Nat, message: String },
-    InsufficientFunds { balance: Nat },
-    TemporarilyUnavailable,
-    TooOld,
-}
-
 #[derive(CandidType)]
 #[candid_path("ic_platform::candid::contract")]
 struct CyclesLedgerTransferArgs {
@@ -167,7 +146,7 @@ struct CyclesLedgerTransferArgs {
     fee: Option<Nat>,
     from_subaccount: Option<[u8; 32]>,
     memo: Option<Vec<u8>>,
-    to: CyclesLedgerAccount,
+    to: Account,
 }
 
 /// Raw Cycles Ledger adapter.
@@ -214,7 +193,7 @@ impl CyclesLedgerInfra {
     /// Execute the exact retirement transfer whose intent the caller has persisted.
     pub async fn transfer(
         intent: &FleetLedgerTransferIntent,
-    ) -> Result<Result<Nat, CyclesLedgerTransferError>, IcInfraError> {
+    ) -> Result<Result<Nat, TransferError>, IcInfraError> {
         let amount = intent
             .balance_before
             .checked_sub(intent.fee)
@@ -232,7 +211,7 @@ impl CyclesLedgerInfra {
                 fee: Some(intent.fee.into()),
                 from_subaccount: None,
                 memo: Some(intent.memo.to_vec()),
-                to: CyclesLedgerAccount {
+                to: Account {
                     owner: intent.destination,
                     subaccount: None,
                 },
@@ -245,7 +224,7 @@ impl CyclesLedgerInfra {
     /// Observe the exact Root-owned funding account before a paid creation effect.
     pub async fn balance_of(root: Principal) -> Result<Nat, IcInfraError> {
         Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "icrc1_balance_of")
-            .with_arg(CyclesLedgerAccount {
+            .with_arg(Account {
                 owner: root,
                 subaccount: None,
             })?

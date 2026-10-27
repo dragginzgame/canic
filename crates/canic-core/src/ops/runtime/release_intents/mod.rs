@@ -41,7 +41,7 @@ pub fn observe(
         .filter(|_| page.has_more)
         .map(|(key, _)| *key);
     Ok(IntentReleaseResponse {
-        owner,
+        owner: owner.into(),
         entry: projected.map(|(_, entry)| entry),
         next_after,
     })
@@ -84,9 +84,9 @@ fn project(row: IntentReleaseRow) -> (IntentReleaseKey, IntentReleaseEntry) {
     }
 }
 
-const fn project_evidence(evidence: TerminalEvidence) -> IntentReleaseEvidence {
+fn project_evidence(evidence: TerminalEvidence) -> IntentReleaseEvidence {
     IntentReleaseEvidence {
-        source_canister: evidence.source_canister,
+        source_canister: evidence.source_canister.into(),
         schema_version: evidence.schema_version,
         fingerprint: evidence.fingerprint,
     }

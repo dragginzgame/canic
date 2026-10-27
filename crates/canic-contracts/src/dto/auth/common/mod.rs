@@ -12,8 +12,11 @@ pub use ic_auth_protocol_types::AuthRequestMetadata;
 // DelegationAudience
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum DelegationAudience {
     Fleet(FleetKey),
 }
@@ -22,8 +25,11 @@ pub enum DelegationAudience {
 // DelegatedRoleGrant
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct DelegatedRoleGrant {
     pub target: CanisterRole,
     pub scopes: Vec<String>,

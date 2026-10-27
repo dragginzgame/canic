@@ -115,19 +115,20 @@ An encoder panic propagates to the fixture caller. Use
 the Root allocation request take precedence over this per-role fallback.
 This callback is fixture injection. The production Root path separately uses
 `application_init_required = true` and the controller-authorized
-`BindComponentInitialization` command to retain exact target-bound bytes before
+`canic_root_bind_component_initialization` Wire update to retain exact target-bound bytes before
 installation. Qualification of this callback does not prove production binding,
 Root restart or management-install reconciliation; those require the actual Root
 workflow. See the [blob integration boundary](../blob-storage/README.md).
 
 Configured initial sharding and scaling children are installed before the
 constructor returns. For an on-demand indexed, sharded or scaled child request,
-use `fixture.update_settled::<Reply, _>(target, caller, method, args, maximum_ticks)`.
-Pass Candid tuple arguments, including `()` for no arguments. The helper submits
-once, settles the request and its children, then decodes one reply value using
-`CANDID_REPLY_LIMITS`. Application-level results remain intact in `Reply`;
-transport rejections, bounded decoding failures and exhausted settlement ticks
-return typed fixture errors.
+use `fixture.update_settled::<Reply, _>(target, caller, spec, &request, maximum_ticks)`.
+Pass the endpoint's `WireCallSpec` with its exact method name, native method ID and
+request/response budgets; use `&()` for a unit request. The helper encodes one
+native request, submits once, settles the request and its children, then decodes
+the matching response frame. Application-level results remain intact in `Reply`.
+Request-frame refusal happens before submission; response-frame refusal,
+transport rejection and exhausted settlement ticks retain distinct typed errors.
 
 Allocation replies remain pending until the fixture installs and activates the
 exact child and publishes its allocation identity in the parent's Directory.

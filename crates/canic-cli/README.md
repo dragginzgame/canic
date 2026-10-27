@@ -9,6 +9,9 @@ Run `canic` without arguments, or run `canic --help`, to see the top-level help.
 Use `canic <command> --help` for one command's options and examples.
 
 Place global `--icp <path>` and `--environment <name>` before the command.
+Commands that do not use the selected global reject it as a usage error.
+`app config` and `app list` accept the selected environment; `network enroll`
+uses its positional environment instead of a global selector.
 For `cycles mint`, the leaf option `--icp <amount>` selects the ICP amount:
 `canic --environment sample --icp /path/to/icp cycles mint --icp 0.01`.
 Use `cycles mint --cycles <amount>` to specify the desired cycles instead.
@@ -307,7 +310,10 @@ to retain one review. Apply its `review_sha256` with
 `canic component apply <fleet> <name> --review <sha256>`. Root owns allocation,
 installation and activation; the local name retains one operation across retries.
 Each apply submits or resumes at most once, then polls status. Root coalesces
-concurrent scheduling for the same operation. The default wait is 60 seconds; `--wait-secs 0` advances once. A pending result
+concurrent scheduling for the same operation. The default wait is 60 seconds;
+`--wait-secs 0` advances once. Apply exits nonzero if its result is still pending,
+including with `--json`, and prints a quoted resume command preserving the selected
+environment, ICP executable, name, review digest and wait bound. A pending result
 is resumable using the same name and digest. `component status` refreshes progress
 without submitting. `--json` emits the complete operation record and terminal
 `progress.binding` with the Component identity, role and Principal.

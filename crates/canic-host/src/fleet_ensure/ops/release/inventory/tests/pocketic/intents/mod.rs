@@ -29,7 +29,7 @@ pub(super) fn assert_census(
         pic.update_call(
             root,
             review.authority.operator,
-            "replace",
+            "replace_funding",
             intents::tests::wire(page),
         )
         .unwrap()
@@ -71,7 +71,7 @@ pub(super) fn assert_census(
         Err(Failure::Inventory(_))
     ));
     let mut wrong = root_page.clone();
-    wrong.owner = coordinator;
+    wrong.owner = coordinator.into();
     replace(wrong);
     assert!(
         matches!(collect(review, registry), Err(Failure::Observation { owner, stage: Stage::Binding }) if owner == root)
@@ -82,7 +82,7 @@ pub(super) fn assert_census(
     assert!(
         matches!(collect(review, registry), Err(Failure::Observation { owner, stage: Stage::Pagination }) if owner == root)
     );
-    pic.update_call(root, review.authority.operator, "replace", b"DIDL".to_vec())
+    pic.update_call(root, review.authority.operator, "replace_funding", vec![0])
         .unwrap();
     assert!(
         matches!(collect(review, registry), Err(Failure::Observation { owner, stage: Stage::Decode }) if owner == root)

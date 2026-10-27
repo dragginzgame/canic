@@ -7,48 +7,29 @@
 mod tests;
 
 use crate::{
-    canister_protocol::query_with_candid,
     fleet_ensure::view::startup_funding::{
         StartupFundingPlacement, StartupFundingRegistry, StartupRootInventory,
         StartupUsageUnavailable,
     },
     icp::IcpCli,
 };
-use canic_contracts::{
-    dto::{
-        fleet_coordinator::{
-            CoordinatorObservabilityRequest, CoordinatorObservabilityResponse,
-            CoordinatorRegistryRequest, CoordinatorRegistryResponse,
-        },
-        fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootStatus},
-        fleet_subnet_root::FleetSubnetRootCanisterSummary,
-        wire::projection::subnet_information::{
-            RootStatusRequestFragment as RootRequest, RootStatusResponseFragment as RootResponse,
-        },
-    },
-    protocol,
+use canic_contracts::dto::{
+    fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootStatus},
+    fleet_subnet_root::FleetSubnetRootCanisterSummary,
 };
 use canic_core::control_plane_support::{
     config::ComponentTopology, ops::fleet_registry::FleetRegistryOps,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::path::Path;
 
 /// Require the selected Root's active mirror to match the independently read Coordinator head.
 pub fn observe_root(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
     registry: &StartupFundingRegistry,
 ) -> Result<StartupRootInventory, StartupUsageUnavailable> {
-    let RootResponse::Inventory(summary) = query_with_candid(
-        icp,
-        candid,
-        root,
-        protocol::CANIC_ROOT_STATUS,
-        &RootRequest::Inventory,
-    )
-    .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
+    let summary = crate::registry_discovery::root_inventory(icp, root)
+        .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
     match_root(root, registry, &summary)?;
     Ok(StartupRootInventory {
         workloads: summary.component_canisters,
@@ -76,38 +57,23 @@ fn match_root(
 /// Read one canonical snapshot from the selected Coordinator before child accounting.
 pub fn observe(
     icp: &IcpCli,
-    candid: &Path,
     coordinator: Principal,
     topology: &ComponentTopology,
 ) -> Result<StartupFundingRegistry, StartupUsageUnavailable> {
-    let CoordinatorRegistryResponse::Registry(registry) = query_with_candid(
-        icp,
-        candid,
-        coordinator,
-        protocol::CANIC_COORDINATOR_REGISTRY,
-        &CoordinatorRegistryRequest::Registry,
-    )
-    .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
+    let registry = crate::registry_discovery::snapshot(icp, coordinator)
+        .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
     project(coordinator, topology, registry)
 }
 
 /// Fence a collected preview against a changed or unavailable Coordinator head.
 pub fn recheck(
     icp: &IcpCli,
-    candid: &Path,
+    schema: &crate::release_set::BuiltWireSchema,
     registry: &StartupFundingRegistry,
 ) -> Result<(), StartupUsageUnavailable> {
-    let response = query_with_candid(
-        icp,
-        candid,
-        registry.authority.binding.coordinator,
-        protocol::CANIC_OBSERVABILITY,
-        &CoordinatorObservabilityRequest::RegistryVersion,
-    )
-    .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
-    let CoordinatorObservabilityResponse::RegistryVersion(version) = response else {
-        return Err(StartupUsageUnavailable::ObservationFailed);
-    };
+    let version =
+        crate::registry_discovery::version(icp, schema, registry.authority.binding.coordinator)
+            .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
     match_head(registry, &version)
 }
 

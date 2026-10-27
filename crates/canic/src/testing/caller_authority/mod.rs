@@ -5,22 +5,16 @@
 //! Production membership uses Root's journal; fixtures retain exact receipts in their receivers.
 
 use super::managed_app::ManagedAppQualificationError as FixtureError;
-use canic_contracts::dto::wire::projection::caller_authority::{
-    Command, CommandResponse as Response, StatusRequest, StatusResponse,
-};
 use canic_contracts::{
     dto::{caller_authority::*, error::Error, role::OperationStatusRequest},
     ids::CallerReceiverAuthority,
-    protocol::{CANIC_COMMAND, CANIC_CONTROL_STATUS},
 };
 use canic_core::{
     api::caller_authority::CallerAuthorityApi, bootstrap::compiled::CompiledCallerPolicy,
     control_plane_support::policy::caller_authority::matches_permission,
 };
-use ic_platform::candid::{contract::encode_args, decode_args};
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::try_pocket_ic_operation;
-use {ic_platform::pocket_ic::PocketIc, ic_testkit::pic::PocketIcCallFailure};
 
 pub(super) fn publish(
     pic: &PocketIc,
@@ -71,14 +65,8 @@ pub(super) fn publish(
         {
             ready = false;
             let operation = release.operation_id;
-            let response = command(
-                pic,
-                root,
-                authority.receiver.canister(),
-                Command::ReleaseApplicationStartup(release),
-            )?;
-            if !matches!(response, Response::OperationAccepted(receipt) if receipt.operation_id == operation)
-            {
+            let response = release_startup(pic, root, authority.receiver.canister(), release)?;
+            if response.operation_id != operation {
                 return Err(FixtureError::UnexpectedResponse(
                     "application startup release",
                 ));
@@ -94,25 +82,24 @@ fn status(
     authority: &CallerReceiverAuthority,
     operation_id: [u8; 32],
 ) -> Result<CallerAuthorityStatus, FixtureError> {
-    let response: Result<StatusResponse, Error> = {
-        let bytes = encode_args((StatusRequest::CallerAuthority(OperationStatusRequest {
-            operation_id,
-        }),))
-        .map_err(|error| FixtureError::Candid(error.to_string()))?;
-        let reply = try_pocket_ic_operation(|| {
-            pic.query_call(
-                authority.receiver.canister(),
-                root,
-                CANIC_CONTROL_STATUS,
-                bytes,
-            )
-        })
-        .map_err(PocketIcCallFailure::Operation)?
-        .map_err(PocketIcCallFailure::Rejected)?;
-        decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS).map_err(FixtureError::Decode)
-    }
-    .map(|(reply,)| reply)?;
-    let StatusResponse::CallerAuthority(status) = response.map_err(FixtureError::Canic)?;
+    use canic_contracts::protocol::caller_authority_status as protocol;
+    let response: Result<
+        canic_contracts::dto::caller_authority_status::CallerAuthorityStatus,
+        Error,
+    > = ic_testkit::pic::query_wire(
+        pic,
+        authority.receiver.canister(),
+        root,
+        ic_testkit::pic::WireCallSpec {
+            method: protocol::METHOD,
+            method_id: protocol::METHOD_ID,
+            request_limits: protocol::REQUEST_LIMITS,
+            response_limits: protocol::RESPONSE_LIMITS,
+        },
+        &OperationStatusRequest { operation_id },
+    )
+    .map_err(FixtureError::Wire)?;
+    let status: CallerAuthorityStatus = response.map_err(FixtureError::Canic)?.into();
     if status.authority != *authority {
         return Err(FixtureError::Authority(
             "caller receiver installation or policy differs".into(),
@@ -127,8 +114,8 @@ fn apply(
     authority: &CallerReceiverAuthority,
     change: CallerAuthorityChange,
 ) -> Result<CallerAuthorityPublication, FixtureError> {
-    let encoded = ic_platform::candid::contract::encode_args((authority.clone(), change.clone()))
-        .map_err(|error| FixtureError::Candid(error.to_string()))?;
+    let encoded = canic_contracts::protocol::authority::encode((authority.clone(), change.clone()))
+        .map_err(|error| FixtureError::Encoding(error.to_string()))?;
     let operation: [u8; 32] = canic_core::cdk::utils::hash::sha256_bytes(&encoded)
         .try_into()
         .map_err(|_| FixtureError::Authority("publication identity length".into()))?;
@@ -147,15 +134,7 @@ fn apply(
         CallerAuthorityCommand::Commit(publication.clone()),
         CallerAuthorityCommand::Complete(publication.clone()),
     ] {
-        let Response::CallerAuthority(receipt) = command(
-            pic,
-            root,
-            authority.receiver.canister(),
-            Command::CallerAuthority(request),
-        )?
-        else {
-            return Err(FixtureError::UnexpectedResponse("caller publication"));
-        };
+        let receipt = command(pic, root, authority.receiver.canister(), request)?;
         if receipt.publication != publication {
             return Err(FixtureError::Authority(
                 "publication receipt differs".into(),
@@ -169,16 +148,49 @@ fn command(
     pic: &PocketIc,
     root: Principal,
     target: Principal,
-    command: Command,
-) -> Result<Response, FixtureError> {
-    let response: Result<Response, Error> = {
-        let bytes =
-            encode_args((command,)).map_err(|error| FixtureError::Candid(error.to_string()))?;
-        let reply = try_pocket_ic_operation(|| pic.update_call(target, root, CANIC_COMMAND, bytes))
-            .map_err(PocketIcCallFailure::Operation)?
-            .map_err(PocketIcCallFailure::Rejected)?;
-        decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS).map_err(FixtureError::Decode)
-    }
-    .map(|(reply,)| reply)?;
+    command: CallerAuthorityCommand,
+) -> Result<CallerAuthorityReceipt, FixtureError> {
+    let request = canic_contracts::ops::caller_authority_status::publication_request(command);
+    let response: Result<
+        canic_contracts::dto::caller_authority_status::CallerAuthorityReceipt,
+        Error,
+    > = ic_testkit::pic::update_wire(
+        pic,
+        target,
+        root,
+        ic_testkit::pic::WireCallSpec {
+            method: request.method,
+            method_id: request.method_id,
+            request_limits: canic_contracts::protocol::caller_authority::REQUEST_LIMITS,
+            response_limits: canic_contracts::protocol::caller_authority::RESPONSE_LIMITS,
+        },
+        &request.publication,
+    )
+    .map_err(FixtureError::Wire)?;
+    response.map(Into::into).map_err(FixtureError::Canic)
+}
+
+fn release_startup(
+    pic: &PocketIc,
+    root: Principal,
+    target: Principal,
+    publication: CallerAuthorityPublication,
+) -> Result<canic_contracts::dto::role::OperationReceipt, FixtureError> {
+    use canic_contracts::protocol::caller_authority as protocol;
+    let publication: canic_contracts::dto::caller_authority_status::CallerAuthorityPublication =
+        publication.into();
+    let response: Result<_, Error> = ic_testkit::pic::update_wire(
+        pic,
+        target,
+        root,
+        ic_testkit::pic::WireCallSpec {
+            method: protocol::RELEASE,
+            method_id: protocol::RELEASE_ID,
+            request_limits: protocol::REQUEST_LIMITS,
+            response_limits: protocol::RESPONSE_LIMITS,
+        },
+        &publication,
+    )
+    .map_err(FixtureError::Wire)?;
     response.map_err(FixtureError::Canic)
 }

@@ -73,6 +73,7 @@ export TMPDIR="$TEST_SCRATCH"
 # Direct targeted runs need the same persistent cache lifetime as Make runs.
 # Preserve explicit wrappers, including an empty value that disables caching.
 if [[ ! -v RUSTC_WRAPPER ]] && command -v sccache >/dev/null 2>&1; then
+    export CANIC_SCCACHE_BIN="${CANIC_SCCACHE_BIN:-$(command -v sccache)}"
     export RUSTC_WRAPPER="$ROOT/scripts/ci/run-canic-sccache.sh"
 fi
 

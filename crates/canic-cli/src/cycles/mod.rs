@@ -22,7 +22,6 @@ use crate::{
 };
 use canic_backup::discovery::DiscoveryError;
 use canic_contracts::diagnostics::DiagnosticCode;
-use canic_core::cdk::utils::hash::DecodeHexError;
 use canic_host::{
     CanisterProtocolError, fleet_ensure::CurrentFleetInventoryError, icp::IcpCommandError,
     icp_config::IcpConfigError,
@@ -60,11 +59,8 @@ pub enum CyclesCommandError {
     #[error("failed to update pending operation log: {0}")]
     PendingOperationLog(String),
 
-    #[error("failed to decode ICP refill response Candid: {0}")]
-    IcpRefillResponseCandid(#[source] ic_platform::candid::contract::Error),
-
-    #[error("failed to decode ICP refill response hex: {0}")]
-    IcpRefillResponseHex(#[source] DecodeHexError),
+    #[error(transparent)]
+    IcpRefillWire(#[from] canic_host::icp::IcpWireQueryError),
 
     #[error("ICP refill response operation id mismatch: expected {expected}, got {actual}")]
     IcpRefillOperationIdMismatch { expected: String, actual: String },
@@ -77,12 +73,6 @@ pub enum CyclesCommandError {
 
     #[error("current Fleet funding authority is invalid: {0}")]
     FundingAuthority(String),
-
-    #[error("failed to decode funding status Candid: {0}")]
-    FundingResponseCandid(#[source] ic_platform::candid::contract::Error),
-
-    #[error("failed to decode funding status hex: {0}")]
-    FundingResponseHex(#[source] DecodeHexError),
 
     #[error("funding status request rejected: {diagnostic}")]
     FundingRejected {

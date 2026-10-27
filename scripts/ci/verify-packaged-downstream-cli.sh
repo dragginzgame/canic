@@ -132,6 +132,10 @@ resolver = "3"
 [workspace.package]
 version = "0.0.0"
 
+[workspace.dependencies]
+canic = { version = "=$VERSION", default-features = false }
+$(sed -n '/^ic-platform = /p; /^ic-wire = /p; /^serde = /p' "$ROOT/Cargo.toml")
+
 [patch.crates-io]
 canic = { path = "$PACKAGE_ROOT/canic-$VERSION" }
 canic-contracts = { path = "$PACKAGE_ROOT/canic-contracts-$VERSION" }
@@ -156,27 +160,45 @@ app = "downstream"
 role = "app"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [dependencies]
-canic = { version = "=$VERSION", default-features = false, features = [] }
-candid = "0.10"
-serde = "1"
-ic-cdk = "0.20"
+canic = { workspace = true, features = [] }
+ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-wire = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
-canic = { version = "=$VERSION", default-features = false, features = [] }
+canic = { workspace = true }
 EOF
     printf 'fn main() { canic::build!("../canic.toml"); }\n' >"$DOWNSTREAM_ROOT/apps/downstream/app/build.rs"
     cat >"$DOWNSTREAM_ROOT/apps/downstream/app/src/lib.rs" <<'EOF'
+pub mod protocol;
 use canic::prelude::*;
 canic::start!();
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
-#[canic_query(requires(caller::is_controller()))]
+#[canic_query(requires(caller::is_controller()), wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 async fn packaged_probe() -> Result<u64, canic::Error> { Ok(7) }
 canic::finish!();
+EOF
+    mkdir -p "$DOWNSTREAM_ROOT/apps/downstream/app/src/protocol" \
+        "$DOWNSTREAM_ROOT/apps/downstream/app/examples/wire_schema"
+    cp "$ROOT/crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/packaged_consumer/protocol/mod.rs" \
+        "$DOWNSTREAM_ROOT/apps/downstream/app/src/protocol/mod.rs"
+    cat >"$DOWNSTREAM_ROOT/apps/downstream/app/examples/wire_schema/main.rs" <<'EOF'
+use downstream_app as _;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    canic::endpoint::schema::producer::run()
+}
 EOF
     printf 'canisters: []\n' >"$DOWNSTREAM_ROOT/icp.yaml"
 
@@ -296,6 +318,7 @@ main() {
     CANIC_PACKAGED_CLI="$INSTALLED_CLI" CANIC_PACKAGED_WORKSPACE="$DOWNSTREAM_ROOT" \
         CANIC_PACKAGED_CLI_SHA256="$(sha256sum "$INSTALLED_CLI" | cut -d ' ' -f1)" \
         CANIC_PACKAGED_TARGET="$PROOF_TARGET_DIR" \
+        bash "$ROOT/scripts/ci/run-with-test-scratch.sh" \
         bash "$ROOT/scripts/ci/run-workspace-tests.sh" targeted-pocketic \
         pic::fleet_registry::baseline::tests::packaged_consumer::installed_package_build_deploy_recover_and_replay
 

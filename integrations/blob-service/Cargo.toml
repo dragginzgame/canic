@@ -14,6 +14,13 @@ include = ["src/**", "README.md", "LICENSE"]
 test = false
 doctest = false
 
+[features]
+# Native producer only; deployed artifacts refuse this feature.
+wire-schema = ["canic/wire-schema", "ic-blob-storage-contracts/wire-schema", "dep:ic-wire"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ic-wire = { workspace = true, optional = true, features = ["typescript"] }
+
 [dependencies]
 canic.workspace = true
 ic-blob-storage.workspace = true

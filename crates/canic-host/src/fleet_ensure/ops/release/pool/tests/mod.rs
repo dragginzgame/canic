@@ -22,7 +22,6 @@ use canic_contracts::{
         root::RootPoolBootstrapReleaseEvidence,
     },
 };
-use ic_platform::candid::contract::CandidType;
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(
     root: Principal,
@@ -101,14 +100,21 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(
 }
 
 pub(in crate::fleet_ensure::ops::release) fn wire(status: RootPoolReleaseResponse) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::PoolRelease(Box::new(
-        status,
-    ))))
+    ic_wire::native::encode_response(
+        protocol::pool_census::METHOD_ID,
+        &Ok::<_, CanicError>(Census::from(status)),
+        protocol::pool_census::RESPONSE_LIMITS,
+    )
     .unwrap()
 }
 
 pub(in crate::fleet_ensure::ops::release) fn refused(error: CanicError) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(Err::<Response, _>(error)).unwrap()
+    ic_wire::native::encode_response(
+        protocol::pool_census::METHOD_ID,
+        &Err::<Census, _>(error),
+        protocol::pool_census::RESPONSE_LIMITS,
+    )
+    .unwrap()
 }
 
 #[test]
@@ -161,15 +167,10 @@ fn every_root_and_subnet_binding_is_checked_independently() {
 }
 
 #[test]
-fn decoder_bounds_bytes_work_and_total_collection() {
-    #[derive(CandidType)]
-    #[candid_path("ic_platform::candid::contract")]
-    enum Extended {
-        PoolRelease { root: Principal, extra: Vec<()> },
-    }
-
+fn decoder_bounds_frames_and_total_collection() {
     let root = Principal::from_slice(&[1]);
-    let bytes = wire(fixture(root, Principal::from_slice(&[2])));
+    let status = fixture(root, Principal::from_slice(&[2]));
+    let bytes = wire(status.clone());
     assert!(matches!(
         decode(root, &bytes, &mut 0),
         Err(ReleasePoolError::Observation {
@@ -177,7 +178,21 @@ fn decoder_bounds_bytes_work_and_total_collection() {
             ..
         })
     ));
-    for invalid in [b"DIDL".to_vec(), vec![0; RESPONSE_BYTES + 1]] {
+    let mut trailing = bytes.clone();
+    trailing.push(0);
+    let wrong_method = ic_wire::native::encode_response(
+        protocol::pool_census::METHOD_ID + 1,
+        &Ok::<_, CanicError>(Census::from(status)),
+        protocol::pool_census::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    for invalid in [
+        Vec::new(),
+        vec![0; RESPONSE_BYTES + 1],
+        trailing,
+        wrong_method,
+        bytes[..bytes.len() - 1].to_vec(),
+    ] {
         let mut remaining = MAXIMUM_CENSUS_BYTES;
         assert!(matches!(
             decode(root, &invalid, &mut remaining),
@@ -187,27 +202,6 @@ fn decoder_bounds_bytes_work_and_total_collection() {
             })
         ));
     }
-    // An unknown field containing millions of null values is tiny on the wire.
-    let expensive =
-        ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Extended::PoolRelease {
-            root,
-            extra: vec![(); RESPONSE_BYTES * 8 + 1],
-        }))
-        .unwrap();
-    assert!(expensive.len() < RESPONSE_BYTES);
-    assert!(
-        ic_platform::candid::decoder::decode_one::<Result<Response, CanicError>>(&expensive)
-            .unwrap()
-            .is_ok()
-    );
-    let mut remaining = MAXIMUM_CENSUS_BYTES;
-    assert!(matches!(
-        decode(root, &expensive, &mut remaining),
-        Err(ReleasePoolError::Observation {
-            stage: ReleasePoolStage::Decode,
-            ..
-        })
-    ));
 }
 
 #[test]
@@ -333,5 +327,81 @@ fn decoded_creation_uncertainty_cannot_be_assessed_as_cancelable() {
         });
         assert_eq!(assessment.evidence.roots, [status]);
         assert_eq!(assessment.roots[0].creation, Some(expected));
+    }
+}
+
+#[test]
+fn import_progress_keeps_every_uncertain_and_receipted_boundary() {
+    let root = Principal::from_slice(&[1]);
+    for progress in [
+        PoolImportSourceProgress::AwaitingHandoff,
+        PoolImportSourceProgress::ControllersIssued,
+        PoolImportSourceProgress::ControllersConfirmed,
+        PoolImportSourceProgress::StopIssued,
+        PoolImportSourceProgress::Stopped,
+        PoolImportSourceProgress::UninstallIssued,
+        PoolImportSourceProgress::Ready(
+            canic_contracts::dto::pool_import::PoolImportSourceReceipt {
+                root_sender_canister_version: 11,
+                canister_id: Principal::from_slice(&[3]),
+                canister_version: 12,
+                before_uninstall_canister_version: 10,
+                retained_cycles: 900,
+                retained_reserved_cycles: 25,
+                observed_debit_cycles: 100,
+            },
+        ),
+    ] {
+        let mut status = fixture(root, Principal::from_slice(&[2]));
+        let import = status.capacity_import.as_mut().unwrap();
+        import.progress = vec![progress];
+        import.root_receipt = Some(canic_contracts::dto::pool_import::PoolImportRootReceipt {
+            retained_cycles: 8_000,
+            retained_reserved_cycles: 50,
+            observed_debit_cycles: 2_000,
+        });
+        let bytes = wire(status.clone());
+        let mut remaining = MAXIMUM_CENSUS_BYTES;
+        assert_eq!(decode(root, &bytes, &mut remaining).unwrap(), status);
+    }
+}
+
+#[test]
+fn creation_progress_preserves_uncertainty_and_original_funding_deadlines() {
+    let root = Principal::from_slice(&[1]);
+    for progress in [
+        CanisterPoolCreationProgress::Intent {
+            uncertain_result: true,
+        },
+        CanisterPoolCreationProgress::Created {
+            block_index: 15,
+            canister_id: Principal::from_slice(&[4]),
+        },
+        CanisterPoolCreationProgress::WaitingForFunding {
+            available: Cycles::new(12),
+            attempt_count: 2,
+            last_attempt_at_ns: Some(13),
+            observed_at_ns: 14,
+            required: Cycles::new(20),
+            retry_at_ns: 16,
+            shortfall: Cycles::new(8),
+        },
+        CanisterPoolCreationProgress::Blocked {
+            failure: CanisterPoolCreationFailure::UnresolvedAfterLedgerWindow,
+        },
+        CanisterPoolCreationProgress::Blocked {
+            failure: CanisterPoolCreationFailure::LedgerCreationFailed,
+        },
+        CanisterPoolCreationProgress::Blocked {
+            failure: CanisterPoolCreationFailure::LedgerRejected,
+        },
+    ] {
+        let mut status = fixture(root, Principal::from_slice(&[2]));
+        status.creation.as_mut().unwrap().progress = progress;
+        let mut remaining = MAXIMUM_CENSUS_BYTES;
+        assert_eq!(
+            decode(root, &wire(status.clone()), &mut remaining).unwrap(),
+            status
+        );
     }
 }

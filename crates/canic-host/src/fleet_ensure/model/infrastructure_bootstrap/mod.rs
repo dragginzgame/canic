@@ -94,7 +94,7 @@ pub struct InfrastructureBootstrapRecord {
     pub estate_seed: Option<InfrastructureBootstrapSeedRecord>,
     /// Ready selection requires an independently verified current Registry witness.
     #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
-    pub coordinator_registry_candid_hex: Option<String>,
+    pub coordinator_registry_wire_hex: Option<String>,
     /// Original operator-owned TOML; its exact bytes bind every source disposition.
     pub declarations_toml: String,
     pub declarations_sha256: [u8; 32],

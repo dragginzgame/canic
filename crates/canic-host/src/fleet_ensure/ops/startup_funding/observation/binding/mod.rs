@@ -7,18 +7,17 @@
 mod tests;
 
 use crate::{
-    canister_protocol::query_with_candid,
+    canister_protocol::{CanisterProtocolError, query_wire_cli},
     fleet_ensure::view::startup_funding::{StartupChildFundingBinding, StartupUsageUnavailable},
     icp::IcpCli,
 };
 use canic_contracts::{
     dto::{
+        component_read,
         component_registry::RootComponentAllocationPhase,
-        fleet_coordinator::CoordinatorOperationReadRequest as Request,
+        component_registry::RootComponentChildAllocationResponse,
         pool::{CanisterPoolAssetStatus, CanisterPoolClaim},
-        role::OperationStatusRequest,
-        root::RootOperationStatusResponse,
-        wire::projection::startup_binding::Response,
+        root::RootComponentOperationStatus,
     },
     ids::{
         CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
@@ -27,12 +26,10 @@ use canic_contracts::{
     protocol,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::path::Path;
 
 /// Query the exact allocation behind a current Workload; never guess a parent for other assets.
 pub fn observe(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
     child: Principal,
     status: &CanisterPoolAssetStatus,
@@ -40,17 +37,52 @@ pub fn observe(
     let CanisterPoolAssetStatus::Workload { claim } = status else {
         return Err(StartupUsageUnavailable::NotWorkload);
     };
-    let Response::Operation(response) = query_with_candid(
+    let top: Result<component_read::ComponentAllocation, CanisterProtocolError> = query_wire_cli(
         icp,
-        candid,
         root,
-        protocol::CANIC_ROOT_OPERATION_STATUS,
-        &Request::Operation(OperationStatusRequest {
-            operation_id: claim.operation_id,
-        }),
-    )
-    .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
-    project(root, child, claim, *response)
+        protocol::component_read::allocation::METHOD,
+        protocol::component_read::allocation::METHOD_ID,
+        &claim.operation_id,
+        protocol::component_read::REQUEST_LIMITS,
+        protocol::component_read::RESPONSE_LIMITS,
+    );
+    let top = optional(top)?;
+    let descendant: Result<component_read::ChildAllocation, CanisterProtocolError> = query_wire_cli(
+        icp,
+        root,
+        protocol::component_read::child_allocation::METHOD,
+        protocol::component_read::child_allocation::METHOD_ID,
+        &claim.operation_id,
+        protocol::component_read::REQUEST_LIMITS,
+        protocol::component_read::RESPONSE_LIMITS,
+    );
+    let descendant = optional(descendant)?;
+    let evidence = match (top, descendant) {
+        (Some(top), None) => AllocationEvidence::Component(top.into()),
+        (None, Some(child)) => AllocationEvidence::Child(child.into()),
+        _ => return Err(StartupUsageUnavailable::AuthorityMismatch),
+    };
+    project(root, child, claim, evidence)
+}
+
+/// Exactly one domain must own the observed allocation operation.
+enum AllocationEvidence {
+    Component(RootComponentOperationStatus),
+    Child(RootComponentChildAllocationResponse),
+}
+
+fn optional<T>(
+    response: Result<T, CanisterProtocolError>,
+) -> Result<Option<T>, StartupUsageUnavailable> {
+    match response {
+        Ok(value) => Ok(Some(value)),
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
+            Ok(None)
+        }
+        Err(_) => Err(StartupUsageUnavailable::ObservationFailed),
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -80,11 +112,11 @@ fn project(
     root: Principal,
     child: Principal,
     claim: &CanisterPoolClaim,
-    response: RootOperationStatusResponse,
+    response: AllocationEvidence,
 ) -> Result<StartupChildFundingBinding, StartupUsageUnavailable> {
     let invalid = StartupUsageUnavailable::AuthorityMismatch;
     let (actual, component, parent, parent_role, role, release_set) = match response {
-        RootOperationStatusResponse::ProvisionComponent(status) => {
+        AllocationEvidence::Component(status) => {
             let allocation = status.allocation;
             let install = allocation.installation.ok_or(invalid)?;
             if !status.complete || allocation.phase != RootComponentAllocationPhase::Committed {
@@ -121,8 +153,7 @@ fn project(
                 allocation.release_set,
             )
         }
-        RootOperationStatusResponse::ProvisionChild(status) => {
-            let allocation = status.allocation;
+        AllocationEvidence::Child(allocation) => {
             let install = allocation.installation.ok_or(invalid)?;
             if allocation.phase != RootComponentAllocationPhase::Committed {
                 return Err(StartupUsageUnavailable::PolicyTransition);
@@ -155,7 +186,6 @@ fn project(
                 allocation.release_set,
             )
         }
-        _ => return Err(invalid),
     };
     if actual
         != (AllocationIdentity {

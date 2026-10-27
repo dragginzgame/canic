@@ -1,7 +1,7 @@
 use crate::ids::WasmStoreGcMode;
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
-use canic_core::impl_storable_bounded;
+use canic_core::impl_storable_unbounded;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "wasm-store-canister")]
 use std::cell::RefCell;
@@ -35,7 +35,7 @@ impl WasmStoreGcStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "WasmStoreGcStateRecord";
 }
 
-impl_storable_bounded!(WasmStoreGcStateRecord, 128, true);
+impl_storable_unbounded!(WasmStoreGcStateRecord);
 
 ///
 /// WasmStoreGcStateData

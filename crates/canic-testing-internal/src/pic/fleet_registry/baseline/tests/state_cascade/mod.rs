@@ -13,14 +13,6 @@ use canic::dto::{
     },
 };
 use canic_contracts::dto::template::{WasmStoreGcRequest, WasmStoreGcTarget};
-use canic_contracts::dto::wire::projection::cascade::ComponentCommandResponseFragment as SnapshotResponse;
-use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::ManagedAdminCommand;
-use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::SnapshotCommand;
-use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateCommand;
-use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateQuery;
-use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateQueryResponse;
-use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateResponse;
-use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StoreAdminCommand;
 
 #[test]
 pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
@@ -53,38 +45,34 @@ pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
     // Shard's immediate parent through its managed snapshot command.
     let outsider = Principal::from_slice(&[90; 29]);
     assert_error(
-        command(
+        crate::pic::protected_state::set_funding(
             &pic,
             root,
             outsider,
-            StateCommand::SetCyclesFunding(SetCyclesFundingRequest { enabled: false }),
+            SetCyclesFundingRequest { enabled: false },
         ),
         canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
     );
-    for (target, caller, method) in [
-        (shard, root, canic::protocol::CANIC_COMMAND),
-        (store, outsider, canic::protocol::CANIC_WASM_STORE_COMMAND),
-    ] {
-        let response: Result<SnapshotResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    SnapshotCommand::SynchronizeState(StateSnapshotInput {
-                        fleet_state: Some(FleetStateInput {
-                            mode: FleetMode::Readonly,
-                            cycles_funding_enabled: false,
-                        }),
+    for (target, caller) in [(shard, root), (store, outsider)] {
+        let response: Result<canic::dto::fleet_state_control::CascadeReport, Error> =
+            ic_testkit::pic::update_wire(
+                &pic,
+                target,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::cascade::state::METHOD,
+                    method_id: canic::protocol::cascade::state::METHOD_ID,
+                    request_limits: canic::protocol::cascade::REQUEST_LIMITS,
+                    response_limits: canic::protocol::cascade::RESPONSE_LIMITS,
+                },
+                &StateSnapshotInput {
+                    fleet_state: Some(FleetStateInput {
+                        mode: FleetMode::Readonly,
+                        cycles_funding_enabled: false,
                     }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(target, caller, method, request_bytes)
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("update Candid harness call");
+                },
+            )
+            .expect("native state cascade transport");
         assert_error(
             response,
             canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
@@ -146,15 +134,13 @@ fn assert_mode_recovery(
         FleetStatus::Stopped,
         FleetStatus::Active,
     ] {
-        let StateResponse::SetFleetStatus(response) = command(
+        let response = crate::pic::protected_state::set_status(
             pic,
             root,
             Principal::anonymous(),
-            StateCommand::SetFleetStatus(SetFleetStatusRequest { status }),
+            SetFleetStatusRequest { status },
         )
-        .unwrap() else {
-            panic!("correlated status response")
-        };
+        .unwrap();
         assert_eq!(response.change.current, status);
         assert_complete(&response.propagation, expected);
         let code = match status {
@@ -163,61 +149,44 @@ fn assert_mode_recovery(
             FleetStatus::Active => continue,
         }
         .raw_code();
-        assert_error(
-            command(
+        assert_error(crate::pic::canic::maintain_pool(pic, root), code);
+        let store_response: Result<canic::dto::role::OperationReceipt, Error> =
+            ic_testkit::pic::update_wire(
                 pic,
+                store,
                 root,
-                Principal::anonymous(),
-                StateCommand::MaintainPool,
-            ),
-            code,
-        );
-        let store_response: Result<SnapshotResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    StoreAdminCommand::RunGc(WasmStoreGcRequest {
-                        operation_id: [0x77; 32],
-                        target: WasmStoreGcTarget::Prepared,
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        store,
-                        root,
-                        canic::protocol::CANIC_WASM_STORE_COMMAND,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("update Candid harness call");
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::store_gc::METHOD,
+                    method_id: canic::protocol::store_gc::METHOD_ID,
+                    request_limits: canic::protocol::store_gc::REQUEST_LIMITS,
+                    response_limits: canic::protocol::store_gc::RESPONSE_LIMITS,
+                },
+                &WasmStoreGcRequest {
+                    operation_id: [0x77; 32],
+                    target: WasmStoreGcTarget::Prepared,
+                },
+            )
+            .expect("native Store GC transport");
         assert_error(store_response, code);
-        let managed_response: Result<SnapshotResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    ManagedAdminCommand::OpenFleetAdmission(
-                        canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest {
-                            operation_id: [0x77; 32],
-                            generation: 1,
-                            policy_digest: [1; 32],
-                            projection_digest: [2; 32],
-                        },
-                    ),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(shard, root, canic::protocol::CANIC_COMMAND, request_bytes)
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("update Candid harness call");
+        let managed_response: Result<canic::dto::admission_control::TargetReceipt, Error> =
+            ic_testkit::pic::update_wire(
+                pic,
+                shard,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::admission_control::target_open::METHOD,
+                    method_id: canic::protocol::admission_control::target_open::METHOD_ID,
+                    request_limits: canic::protocol::admission_control::REQUEST_LIMITS,
+                    response_limits: canic::protocol::admission_control::RESPONSE_LIMITS,
+                },
+                &canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest {
+                    operation_id: [0x77; 32],
+                    generation: 1,
+                    policy_digest: [1; 32],
+                    projection_digest: [2; 32],
+                },
+            )
+            .expect("native managed transition");
         assert_error(managed_response, code);
     }
 }
@@ -237,28 +206,20 @@ pub(super) fn activate_components(
 ) {
     let (version, sync) = join_and_synchronize_root(pic, coordinator, fixture);
     activate_registry_and_prepare_component_registry(pic, coordinator, fixture, version, sync);
-    let CoordinatorRegistryResponse::Registry(registry) =
-        coordinator_status(pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+    let registry =
+        crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous()).unwrap();
     let operation_id = [0x76; 32];
     let plan = fixture_fresh_component_plan(config.model(), &registry, operation_id);
-    coordinator_command(
-        pic,
-        coordinator,
-        CoordinatorCommand::ProvisionComponents(plan.request),
-    )
-    .unwrap();
+    crate::pic::batch_control::prepare(pic, coordinator, Principal::anonymous(), plan.request)
+        .unwrap();
     for _ in 0..240 {
-        let CoordinatorOperationReadResponse::Operation(
-            CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-        ) = coordinator_status(
+        let status = crate::pic::canic::coordinator_provisioning(
             pic,
             coordinator,
-            CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+            Principal::anonymous(),
+            operation_id,
         )
-        .unwrap()
-        else {
-            panic!("correlated provisioning status")
-        };
+        .unwrap();
         if status.components_provisioned_at_ns.is_some()
             && status.runtimes_activated_at_ns.is_some()
             && status.runtime_activated_root_count == status.root_batch_count
@@ -271,66 +232,19 @@ pub(super) fn activate_components(
     panic!("fixture activation must complete before exercising live state changes");
 }
 
-fn command(
-    pic: &PocketIc,
-    root: Principal,
-    caller: Principal,
-    command: StateCommand,
-) -> Result<StateResponse, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                root,
-                caller,
-                canic::protocol::CANIC_ROOT_COMMAND,
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call")
-}
-
 fn funding(pic: &PocketIc, root: Principal, enabled: bool) -> FleetStateCommandResult<bool> {
-    let StateResponse::SetCyclesFunding(response) = command(
+    crate::pic::protected_state::set_funding(
         pic,
         root,
         Principal::anonymous(),
-        StateCommand::SetCyclesFunding(SetCyclesFundingRequest { enabled }),
+        SetCyclesFundingRequest { enabled },
     )
-    .unwrap() else {
-        panic!("correlated funding response")
-    };
-    response
+    .unwrap()
 }
 
 fn state(pic: &PocketIc, root: Principal) -> FleetStateResponse {
-    let response: Result<StateQueryResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((StateQuery::FleetState,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
-    let StateQueryResponse::FleetState(state) = response.unwrap();
-    state
+    let response = crate::pic::protected_state::fleet_state(pic, root, Principal::anonymous());
+    response.expect("Root Fleet state")
 }
 
 fn assert_complete(report: &StateCascadeReport, expected: &[Principal]) {
@@ -351,11 +265,7 @@ fn assert_complete(report: &StateCascadeReport, expected: &[Principal]) {
 }
 
 fn assert_root_timer(pic: &PocketIc, root: Principal, enabled: bool) {
-    let RootStatusResponseFragment::Runtime(runtime) =
-        root_status(pic, root, RootStatusRequestFragment::Runtime).unwrap()
-    else {
-        panic!("runtime response")
-    };
+    let runtime = root_runtime(pic, root);
     let timer = runtime
         .timers
         .iter()

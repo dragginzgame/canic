@@ -22,6 +22,7 @@ pub fn prepare_handoff(
     fleet: &str,
     input: &FrontendEnvironmentInput,
     directory: &Path,
+    compiler: &ops::compiler::BrowserCompiler,
 ) -> Result<FrontendManifestRecord, FrontendError> {
     crate::component_operation::policy::validate_label(&input.environment)
         .map_err(|_| FrontendError::Environment)?;
@@ -36,7 +37,7 @@ pub fn prepare_handoff(
         authority.admission_nonempty,
         authority.admission_origin.as_deref(),
     )?;
-    let bundle = ops::prepare_bundle(root, input, authority)?;
+    let bundle = ops::prepare_bundle(root, input, authority, compiler)?;
     ops::publish_bundle(directory, &bundle)?;
     Ok(bundle.manifest)
 }

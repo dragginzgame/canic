@@ -1,8 +1,8 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `4cb9bc907154225a3f7e4c33fd8d75fbeaa125c8` (0.26.6),
-with 133 selected files. Explicit entrypoints record the maintained selection;
+committed revision `a7f85d45d4212d4c39225f58597580560a333550` (0.26.20),
+with 138 selected files. Explicit entrypoints record the maintained selection;
 the exporter derives required companions and verifies ownership before retiring
 unused payloads. Refreshes reuse that selection without repeating file arguments.
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
@@ -17,6 +17,13 @@ export containing only those files. It enforces file/link closure, not prose.
 Exporter integration tests run in Shared Tooling. Canic does not vendor that
 upstream test roster; its adoption checks cover actual refresh, snapshot integrity,
 governance closure and affected local adapters.
+
+The compact baseline delegates task-specific contracts to
+[engineering details](../../rules/engineering-details.md). Focused checks follow
+coherent edit batches; detailed change metrics are opt-in. The selected
+[Node/npm guide](../node-tools.md) closes the new npm boundary documentation link;
+its optional helpers are not selected by this refresh. Executable helper bytes
+and Canic's existing frontend boundary checks remain unchanged.
 
 The maintainer approved retaining Canic's framework fixtures and independent
 private Blob consumer workspaces as scoped exceptions in [AGENTS.md](../../AGENTS.md).
@@ -191,17 +198,12 @@ Every standard increment uses complete validation; package publication and
 artifact cleanup remain separate. Canic retains its validation evidence,
 successful/failed logs and tested compiler-cache failure fallback.
 
-Rerunning a normal target selects and reconciles unfinished intent before
-computing another increment. Preparation-free failures restart current-source
-preflight and validation; earlier evidence is retained. Direct preparation before
-staging can restart from a newer clean descendant commit with committed metadata
-at the saved previous or candidate version. The runner archives the exact old
-intent, selects the requested increment from current metadata and requires fresh
-preflight and complete validation. Canic's validation logger retains unique run
-directories; prior committed receipts and notes remain in Git. Explicit resume
-keeps its saved source and candidate. Staged or delivered intent still requires
-exact reconciliation. Identity, payload, destination, unknown remote history and
-concurrency conflicts stop the operation. Atomic
+Normal increment targets start fresh from current clean, committed metadata.
+They do not scan old plans or replay their effects. Recovery of a particular
+attempt uses `make release-resume VERSION=X.Y.Z`, retaining its exact source,
+candidate, payload and destination. Current source, lock, candidate-ref and
+branch-protection conflicts still stop the operation. Canic retains validation
+logs attributable to each attempt. Atomic
 push dispatch uses the captured push URL, with destination checks before intent
 and dispatch, rather than resolving the remote name again when pushing.
 Focused stub fixtures cover destination drift and lost-response recovery.
@@ -242,3 +244,17 @@ Adoption is not a fresh product audit or a broad validation gate.
 The [adoption walk](../audits/reports/2026-10/2026-10-06/shared-method-adoption.md)
 maps the retired obligations and checks a historical report against the new
 shared methods without relabeling its evidence.
+
+The dependency-boundary gate enables the shared external-IC inventory for the
+root and both private Blob consumers, alongside Canic’s local restrictions.
+Native stable-structures test access uses Platform’s reexport. Formatting and
+installation now select tools from the same literal catalog; Cargo tool setup
+reports its active build phase. The snapshot version is the committed VERSION,
+not an uncommitted sibling version bump.
+
+Historical Tooling 0.67.0 adoption evidence is retained in `/tmp/canic-tooling-067/`:
+all three locked dependency admissions, shared boundary regressions, local
+formatter and development recipes, and release transaction fixtures pass.
+The release fixture uses real Cargo and substituted Git in disposable roots.
+Release metadata and Testkit executables are selected at 0.67.0 and checked
+through the shared receipt owner; no repository release is implied.

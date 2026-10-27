@@ -12,8 +12,7 @@ use crate::{
 /// Exact authority from which one managed non-root initializes its immutable identity.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum CanisterInitAuthority {
     Component {
         root: FleetSubnetRootBinding,
@@ -29,8 +28,7 @@ pub enum CanisterInitAuthority {
 // CanisterInitPayload
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CanisterInitPayload {
     pub root_install_id: [u8; 32],
     pub component_install_id: [u8; 32],
@@ -127,9 +125,9 @@ mod tests {
             )),
         };
 
-        let bytes = ic_platform::candid::contract::encode_one(&payload)
+        let bytes = crate::protocol::authority::encode(&payload)
             .expect("encode managed non-root init payload");
-        let decoded: CanisterInitPayload = ic_platform::candid::decoder::decode_one(&bytes)
+        let decoded: CanisterInitPayload = crate::protocol::authority::decode(&bytes)
             .expect("decode managed non-root init payload");
 
         assert_eq!(decoded.install_id, [11; 32]);

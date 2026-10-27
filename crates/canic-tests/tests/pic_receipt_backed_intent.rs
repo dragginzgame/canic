@@ -3,10 +3,7 @@
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
-use ic_platform::{
-    candid::contract::{CandidType, encode_one},
-    principal::ExternalPrincipal as Principal,
-};
+use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -27,22 +24,20 @@ const MAX_REPLAY_WINDOW_NS: u64 = NANOS_PER_HOUR;
 const CANISTERS: [&str; 1] = ["intent_authority"];
 static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 enum ReceiptStateView {
     Pending,
     Committed {
-        source_canister: Principal,
+        source_canister: ic_platform::Principal,
         fingerprint: [u8; 32],
     },
     RolledBack {
-        source_canister: Principal,
+        source_canister: ic_platform::Principal,
         fingerprint: [u8; 32],
     },
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct ReceiptIntentView {
     payload_digest: [u8; 32],
     quantity: u64,
@@ -50,8 +45,7 @@ struct ReceiptIntentView {
     state: ReceiptStateView,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 enum ReceiptBeginStatus {
     Created,
     ExistingPending,
@@ -76,15 +70,13 @@ enum ReceiptBeginStatus {
     },
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct ReceiptBeginView {
     status: ReceiptBeginStatus,
     intent: Option<ReceiptIntentView>,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 enum ReceiptSettlementStatus {
     Settled,
     AlreadySettled,
@@ -93,18 +85,52 @@ enum ReceiptSettlementStatus {
     BindingConflict,
 }
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 struct ReceiptSettlementView {
     status: ReceiptSettlementStatus,
     intent: Option<ReceiptIntentView>,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 enum ReceiptDecisionView {
     Committed,
     RolledBack,
+}
+
+/// One receipt reservation input; durable intent state remains owned by Canic.
+#[derive(serde::Deserialize, serde::Serialize)]
+struct BeginRequest {
+    operation_seed: u8,
+    payload_seed: u8,
+    resource_seed: u8,
+    quantity: u64,
+    replay_deadline_ns: u64,
+}
+
+/// Terminal evidence for the exact retained operation and expected revision.
+#[derive(serde::Deserialize, serde::Serialize)]
+struct SettleRequest {
+    operation_seed: u8,
+    payload_seed: u8,
+    expected_revision: u64,
+    decision: ReceiptDecisionView,
+    source_canister: ic_platform::Principal,
+    evidence_seed: u8,
+}
+const RECEIPT_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 16_384,
+    allocation: 65_536,
+    nodes: 4096,
+    depth: 32,
+};
+
+fn receipt_spec(method: &'static str, method_id: u64) -> ic_testkit::pic::WireCallSpec {
+    ic_testkit::pic::WireCallSpec {
+        method,
+        method_id,
+        request_limits: RECEIPT_LIMITS,
+        response_limits: RECEIPT_LIMITS,
+    }
 }
 
 #[test]
@@ -344,7 +370,7 @@ fn assert_committed_decisions(
     let committed = ReceiptIntentView {
         revision: 2,
         state: ReceiptStateView::Committed {
-            source_canister: evidence_source,
+            source_canister: evidence_source.into(),
             fingerprint: [13; 32],
         },
         ..pending
@@ -448,7 +474,7 @@ fn assert_rolled_back_decisions(
     let rolled_back = ReceiptIntentView {
         revision: 2,
         state: ReceiptStateView::RolledBack {
-            source_canister: evidence_source,
+            source_canister: evidence_source.into(),
             fingerprint: [33; 32],
         },
         ..rollback_pending
@@ -559,28 +585,19 @@ fn begin_receipt(
     quantity: u64,
     replay_deadline_ns: u64,
 ) -> ReceiptBeginView {
-    (|| -> Result<(Result<ReceiptBeginView, String>,), Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((
+    ic_testkit::pic::update_wire::<_, Result<ReceiptBeginView, String>>(
+        pic,
+        authority_id,
+        Principal::anonymous(),
+        receipt_spec("begin_receipt", 0x5445_5354_0000_0a00),
+        &BeginRequest {
             operation_seed,
             payload_seed,
             resource_seed,
             quantity,
             replay_deadline_ns,
-        ))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                authority_id,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "begin_receipt",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+        },
+    )
     .expect("begin receipt transport")
     .expect("begin receipt application")
 }
@@ -596,22 +613,20 @@ fn settle_receipt(
     source_canister: Principal,
     evidence_seed: u8,
 ) -> Result<ReceiptSettlementView, String> {
-    (|| -> Result<(Result<ReceiptSettlementView, String>,), Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((
+    ic_testkit::pic::update_wire::<_, Result<ReceiptSettlementView, String>>(
+        pic,
+        authority_id,
+        Principal::anonymous(),
+        receipt_spec("settle_receipt", 0x5445_5354_0000_0a02),
+        &SettleRequest {
             operation_seed,
             payload_seed,
             expected_revision,
             decision,
-            source_canister,
+            source_canister: source_canister.into(),
             evidence_seed,
-        ))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).update_call(authority_id, ic_platform::principal::ExternalPrincipal::anonymous(), "settle_receipt", request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })()
-    .map(|(reply,)| reply)
+        },
+    )
     .expect("settle receipt transport")
 }
 
@@ -620,25 +635,13 @@ fn load_receipt(
     authority_id: Principal,
     operation_seed: u8,
 ) -> Option<ReceiptIntentView> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((operation_seed,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                authority_id,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "load_receipt",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args::<(Result<Option<ReceiptIntentView>, String>,)>(
-            &reply,
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::query_wire::<_, Result<Option<ReceiptIntentView>, String>>(
+        pic,
+        authority_id,
+        Principal::anonymous(),
+        receipt_spec("load_receipt", 0x5445_5354_0000_0a01),
+        &operation_seed,
+    )
     .expect("load receipt transport")
     .expect("load receipt application")
 }

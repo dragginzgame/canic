@@ -8,17 +8,14 @@
 mod tests;
 
 use crate::{
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
-    protocol_binding::ResolvedProtocolBinding,
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, IcpWireQueryError},
+    protocol_binding::RegistryProtocolBinding,
 };
-use canic_contracts::dto::{
-    role::{RoleCapability, RoleOverviewResponse},
-    wire::projection::overview::RoleStatusResponse,
-};
+use canic_contracts::dto::role::{RoleCapability, RoleOverviewResponse};
 use canic_core::role_contract::RoleCapabilityKey;
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
+use canic_contracts::protocol::{CANIC_PUBLIC_OVERVIEW, public_overview};
 
 ///
 /// CanicMetadataQueryError
@@ -28,6 +25,12 @@ const ICP_JSON_OUTPUT: &str = "json";
 pub enum CanicMetadataQueryError {
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
+
+    #[error(transparent)]
+    Wire(#[from] ic_wire::Error),
+
+    #[error(transparent)]
+    Argument(#[from] std::io::Error),
 
     #[error(transparent)]
     Response(#[from] IcpJsonResponseError),
@@ -40,40 +43,69 @@ pub enum CanicMetadataQueryError {
 pub fn query_canic_metadata_version(
     icp: &IcpCli,
     canister_id: &str,
-    binding: &ResolvedProtocolBinding,
+    binding: &RegistryProtocolBinding,
 ) -> Result<String, CanicMetadataQueryError> {
-    let output = icp.canister_query_arg_output_with_candid(
-        canister_id,
-        canic_contracts::protocol::CANIC_PUBLIC_STATUS,
-        "(variant { Overview })",
-        Some(ICP_JSON_OUTPUT),
-        Some(binding.candid_path.as_path()),
-    )?;
-    let overview = parse_canic_metadata_response(&output)?;
+    Ok(query_canic_overview(icp, canister_id, binding)?
+        .metadata
+        .canic_version)
+}
+
+/// Query the exact typed Overview and verify the preselected role/release profile.
+pub(crate) fn query_canic_overview(
+    icp: &IcpCli,
+    canister_id: &str,
+    binding: &RegistryProtocolBinding,
+) -> Result<RoleOverviewResponse, CanicMetadataQueryError> {
+    let result: Result<RoleOverviewResponse, canic_contracts::dto::error::Error> = icp
+        .canister_query_wire(
+            canister_id,
+            CANIC_PUBLIC_OVERVIEW,
+            public_overview::METHOD_ID,
+            &(),
+            public_overview::REQUEST_LIMITS,
+            public_overview::RESPONSE_LIMITS,
+        )?;
+    let overview = result.map_err(IcpJsonResponseError::Rejected)?;
     verify_overview_binding(&overview, binding)?;
-    Ok(overview.metadata.canic_version)
+    Ok(overview)
 }
 
 #[cfg(test)]
-fn parse_canic_metadata_version_response(output: &str) -> Result<String, IcpJsonResponseError> {
+fn parse_canic_metadata_version_response(output: &str) -> Result<String, CanicMetadataQueryError> {
     Ok(parse_canic_metadata_response(output)?
         .metadata
         .canic_version)
 }
 
+#[cfg(test)]
 fn parse_canic_metadata_response(
     output: &str,
-) -> Result<RoleOverviewResponse, IcpJsonResponseError> {
-    let response = decode_json_result_response::<RoleStatusResponse>(output)?;
-    let RoleStatusResponse::Overview(overview) = response;
-    Ok(overview)
+) -> Result<RoleOverviewResponse, CanicMetadataQueryError> {
+    let result: Result<RoleOverviewResponse, canic_contracts::dto::error::Error> =
+        crate::icp::decode_wire_response(
+            output,
+            public_overview::METHOD_ID,
+            public_overview::RESPONSE_LIMITS,
+        )?;
+    result.map_err(|error| IcpJsonResponseError::Rejected(error).into())
+}
+
+impl From<IcpWireQueryError> for CanicMetadataQueryError {
+    fn from(error: IcpWireQueryError) -> Self {
+        match error {
+            IcpWireQueryError::Icp(error) => Self::Icp(error),
+            IcpWireQueryError::Wire(error) => Self::Wire(error),
+            IcpWireQueryError::File(error) => Self::Argument(error),
+            IcpWireQueryError::Response(error) => Self::Response(error),
+        }
+    }
 }
 
 fn verify_overview_binding(
     overview: &RoleOverviewResponse,
-    selected: &ResolvedProtocolBinding,
+    selected: &RegistryProtocolBinding,
 ) -> Result<(), CanicMetadataQueryError> {
-    let binding = &selected.binding;
+    let binding = selected;
     if overview.role != binding.role {
         return Err(CanicMetadataQueryError::Binding(
             "role mismatch".to_string(),

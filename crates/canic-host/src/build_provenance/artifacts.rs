@@ -36,6 +36,17 @@ pub(super) fn artifact_provenance(
         ArtifactProvenanceKindV1::Candid,
         &request.output.did_path,
     )?;
+    for (kind, extension) in [
+        (ArtifactProvenanceKindV1::WireSchema, "wire.json"),
+        (ArtifactProvenanceKindV1::WireBindings, "wire.ts"),
+    ] {
+        push_artifact(
+            &mut artifacts,
+            request,
+            kind,
+            &request.output.wasm_path.with_extension(extension),
+        )?;
+    }
     Ok(artifacts)
 }
 

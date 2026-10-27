@@ -8,7 +8,7 @@ use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
 use canic_contracts::dto::root_store::RootStoreBootstrapResponse;
 #[cfg(feature = "root-control-plane")]
 use canic_core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
-use canic_core::{cdk::types::Principal, impl_storable_bounded};
+use canic_core::{cdk::types::Principal, impl_storable_unbounded};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
 use std::cell::RefCell;
@@ -135,7 +135,7 @@ impl RootWasmStoreStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "RootWasmStoreStateRecord";
 }
 
-impl_storable_bounded!(RootWasmStoreStateRecord, 16_384, true);
+impl_storable_unbounded!(RootWasmStoreStateRecord);
 
 ///
 /// RootWasmStoreStateData

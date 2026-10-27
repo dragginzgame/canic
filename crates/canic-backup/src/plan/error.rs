@@ -90,24 +90,6 @@ pub enum BackupPlanError {
     #[error("target {0} must be controllable by root for this plan")]
     MissingRootController(String),
 
-    #[error("target {0} has no control authority receipt")]
-    MissingControlAuthorityReceipt(String),
-
-    #[error("target {0} has no snapshot read authority receipt")]
-    MissingSnapshotReadAuthorityReceipt(String),
-
-    #[error("authority receipt targets unknown canister {0}")]
-    UnknownAuthorityReceiptTarget(String),
-
-    #[error("duplicate authority receipt for target {0}")]
-    DuplicateAuthorityReceipt(String),
-
-    #[error("authority receipt plan id {actual} does not match plan {expected}")]
-    AuthorityReceiptPlanMismatch { expected: String, actual: String },
-
-    #[error("authority receipt preflight id {actual} does not match preflight {expected}")]
-    AuthorityReceiptPreflightMismatch { expected: String, actual: String },
-
     #[error("preflight receipt plan id {actual} does not match plan {expected}")]
     PreflightReceiptPlanMismatch { expected: String, actual: String },
 

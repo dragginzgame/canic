@@ -37,6 +37,7 @@ pub fn snapshot(
     let mut transport = IcpObservatoryTransport {
         icp,
         root,
+        fleet: &options.fleet,
         environment: &options.environment,
         maximum_response_bytes: options.maximum_response_bytes,
         attempted_queries: 0,

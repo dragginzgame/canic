@@ -10,16 +10,18 @@ use crate::{
 
 /// One closed Fleet-admission membership action.
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionMutationAction {
     Add,
     Remove,
 }
 
 /// One exact controller-authorized Fleet-admission mutation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetAdmissionMutationRequest {
     pub authority: FleetCoordinatorBinding,
     pub expected_generation: u64,
@@ -34,8 +36,11 @@ pub struct FleetAdmissionMutationRequest {
 }
 
 /// Public semantic outcome of one accepted request.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionMutationOutcome {
     Planned,
     Converged,
@@ -45,8 +50,11 @@ pub enum FleetAdmissionMutationOutcome {
 }
 
 /// Exact accepted mutation result, including idempotent outcomes.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetAdmissionMutationResponse {
     pub outcome: FleetAdmissionMutationOutcome,
     pub operation_id: [u8; 32],
@@ -55,8 +63,11 @@ pub struct FleetAdmissionMutationResponse {
 }
 
 /// Compact current or successor policy identity and bounded counts.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetAdmissionPolicyStatus {
     pub generation: u64,
     pub policy_digest: [u8; 32],
@@ -66,8 +77,11 @@ pub struct FleetAdmissionPolicyStatus {
 }
 
 /// Durable state of one current or retained Coordinator admission operation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionOperationPhase {
     Planned {
         successor: FleetAdmissionPolicyStatus,
@@ -91,8 +105,7 @@ pub enum FleetAdmissionOperationPhase {
 }
 
 /// Protected operation detail selected by exact operation identity.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetAdmissionOperationStatusResponse {
     pub operation_id: [u8; 32],
     pub action: FleetAdmissionMutationAction,
@@ -102,16 +115,14 @@ pub struct FleetAdmissionOperationStatusResponse {
 }
 
 /// Protected selector and page requested from the current active policy.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetAdmissionStatusRequest {
     pub selector: FleetAdmissionSelector,
     pub page: crate::dto::page::PageRequest,
 }
 
 /// Controller-only current policy, bounded membership page and replay state.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct FleetAdmissionStatusResponse {
     pub fleet: FleetBinding,
     pub active: FleetAdmissionPolicyStatus,
@@ -123,16 +134,22 @@ pub struct FleetAdmissionStatusResponse {
 }
 
 /// Target-local ingress phase exposed to its protected Root/controller status.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionProjectionPhase {
     Fenced,
     Open,
 }
 
 /// Compact optional prepared projection identity.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetAdmissionPreparedProjectionStatus {
     pub generation: u64,
     pub policy_digest: [u8; 32],
@@ -140,8 +157,7 @@ pub struct FleetAdmissionPreparedProjectionStatus {
 }
 
 /// Protected bounded status for one managed target's sole local projection.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct FleetAdmissionProjectionStatusResponse {
     pub authority: FleetCoordinatorBinding,
     pub target: ManagedCanisterBinding,
@@ -155,8 +171,11 @@ pub struct FleetAdmissionProjectionStatusResponse {
 }
 
 /// One target-local phase in the replay-safe admission transition protocol.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionTargetTransitionPhase {
     Prepare,
     Activate,
@@ -164,8 +183,7 @@ pub enum FleetAdmissionTargetTransitionPhase {
 }
 
 /// Root-authenticated command that atomically retains a successor and fences ingress.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetAdmissionPrepareTargetRequest {
     pub operation_id: [u8; 32],
     pub expected_generation: u64,
@@ -174,8 +192,11 @@ pub struct FleetAdmissionPrepareTargetRequest {
 }
 
 /// Root-authenticated command that installs the exact prepared successor while fenced.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetAdmissionActivateTargetRequest {
     pub operation_id: [u8; 32],
     pub expected_generation: u64,
@@ -186,8 +207,11 @@ pub struct FleetAdmissionActivateTargetRequest {
 }
 
 /// Root-authenticated command that opens the exact active successor.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetAdmissionOpenTargetRequest {
     pub operation_id: [u8; 32],
     pub generation: u64,
@@ -196,8 +220,7 @@ pub struct FleetAdmissionOpenTargetRequest {
 }
 
 /// Exact target receipt retained for response-loss replay and Root reconciliation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetAdmissionTargetReceipt {
     pub operation_id: [u8; 32],
     pub phase: FleetAdmissionTargetTransitionPhase,
@@ -209,8 +232,11 @@ pub struct FleetAdmissionTargetReceipt {
 }
 
 /// Coordinator-authenticated command that snapshots one Root subtree and starts fencing it.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionPrepareRootStage {
     Reserve,
     Fence,
@@ -218,8 +244,7 @@ pub enum FleetAdmissionPrepareRootStage {
 }
 
 /// Coordinator-authenticated staged Root catalog reservation or fencing command.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetAdmissionPrepareRootRequest {
     pub authority: FleetCoordinatorBinding,
     pub operation_id: [u8; 32],
@@ -230,8 +255,7 @@ pub struct FleetAdmissionPrepareRootRequest {
 }
 
 /// Coordinator-authenticated command that advances one fully fenced Root subtree to activation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetAdmissionActivateRootRequest {
     pub authority: FleetCoordinatorBinding,
     pub operation_id: [u8; 32],
@@ -242,8 +266,7 @@ pub struct FleetAdmissionActivateRootRequest {
 }
 
 /// Coordinator-authenticated command that opens one fully activated Root subtree.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetAdmissionOpenRootRequest {
     pub authority: FleetCoordinatorBinding,
     pub operation_id: [u8; 32],
@@ -252,8 +275,11 @@ pub struct FleetAdmissionOpenRootRequest {
 }
 
 /// Root aggregate phase retained for Coordinator response-loss replay.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionRootTransitionPhase {
     Preparing,
     PerimeterFenced,
@@ -264,8 +290,7 @@ pub enum FleetAdmissionRootTransitionPhase {
 }
 
 /// Exact aggregate Root receipt returned after every subtree phase converges.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetAdmissionRootReceipt {
     pub operation_id: [u8; 32],
     pub phase: FleetAdmissionRootTransitionPhase,
@@ -278,8 +303,11 @@ pub struct FleetAdmissionRootReceipt {
 }
 
 /// Monotonic target phase exposed through protected Root admission status.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetAdmissionRootParticipantPhase {
     Pending,
     Prepared,
@@ -288,8 +316,7 @@ pub enum FleetAdmissionRootParticipantPhase {
 }
 
 /// One bounded target progress row owned only by its Root journal.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetAdmissionRootParticipantStatus {
     pub target: ManagedCanisterBinding,
     pub projection_digest: [u8; 32],
@@ -298,8 +325,7 @@ pub struct FleetAdmissionRootParticipantStatus {
 }
 
 /// Protected bounded view of the Root's current or retained admission operation.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct FleetAdmissionRootStatusResponse {
     pub operation_id: Option<[u8; 32]>,
     pub phase: Option<FleetAdmissionRootTransitionPhase>,

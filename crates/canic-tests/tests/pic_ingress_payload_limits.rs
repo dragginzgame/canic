@@ -2,9 +2,6 @@ use canic::testing::CANDID_REPLY_LIMITS as REPLY_LIMITS;
 use std::{num::NonZeroUsize, sync::LazyLock};
 
 use canic::{Error, ids::CanisterRole};
-use canic_host::candid_endpoints::{
-    EndpointType, IngressPayloadBasis, parse_candid_service_endpoints,
-};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, install_standalone_canister, install_standalone_canister_on_pic,
     standalone_canister_wasm,
@@ -55,35 +52,18 @@ fn counts(fixture: &CachedPocketIcBaseline<Principal>) -> PlainReply {
 }
 
 fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u64 {
-    let metrics: Result<Vec<canic::dto::metrics::MetricEntry>, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pocket_ic()).query_call(
-                    *fixture.metadata(),
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "access_counts",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Candid harness call");
-    metrics
-        .unwrap()
-        .iter()
-        .filter(|entry| {
-            entry.labels.first().is_some_and(|label| label == "access")
-                && entry.labels.get(1).is_some_and(|label| label == method)
-        })
-        .map(|entry| match entry.value {
-            canic::dto::metrics::MetricValue::Count(count) => count,
-            _ => panic!("access metrics must count denials"),
-        })
-        .sum()
+    let limits = canic_contracts::protocol::protected_runtime::RESPONSE_LIMITS;
+    let request = ic_wire::native::encode_request(7010, &method, limits).unwrap();
+    let reply = fixture
+        .pocket_ic()
+        .query_call(
+            *fixture.metadata(),
+            Principal::anonymous(),
+            "access_counts",
+            request,
+        )
+        .unwrap();
+    ic_wire::native::decode_response(7010, &reply, limits).unwrap()
 }
 
 #[test]
@@ -133,7 +113,7 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
     );
     assert_eq!(denied_count(&fixture, "plain_commit"), 1);
 
-    let accepted: Result<PlainReply, Error> =
+    let accepted: Result<PlainReply, String> =
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes = ic_platform::candid::contract::encode_args((true,))?;
             let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
@@ -158,24 +138,16 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
         }
     );
     assert_eq!(denied_count(&fixture, "result_commit"), 0);
-    let denied: Result<PlainReply, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((false,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pocket_ic()).update_call(
-                    *fixture.metadata(),
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "result_commit",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Candid harness call");
-    assert!(denied.is_err());
+    let denied = fixture
+        .pocket_ic()
+        .update_call(
+            *fixture.metadata(),
+            Principal::anonymous(),
+            "result_commit",
+            encode_args((false,)).unwrap(),
+        )
+        .unwrap_err();
+    assert_eq!(denied.reject_code, RejectCode::CanisterReject);
     assert_eq!(
         counts(&fixture),
         PlainReply {
@@ -208,7 +180,7 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         "bounded-relay",
     );
     assert_bounded_query_admission(&fixture);
-    let relay_bounded = |method: &str, bytes: Vec<u8>| -> Result<bool, Error> {
+    let relay_bounded = |method: &str, bytes: Vec<u8>| -> Result<bool, String> {
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes =
                 ic_platform::candid::contract::encode_args((*fixture.metadata(), method, bytes))?;
@@ -288,10 +260,11 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
     let fixture = acquire_probe_fixture();
     let wasm = standalone_canister_wasm(PROBE_CRATE, CanicWasmBuildProfile::Fast);
     let bad_inputs = [
-        encode_args((Some(vec![0_u8; 4096]),)).unwrap(),
+        canic_contracts::protocol::initialization::encode((Some(vec![0_u8; 4096]),)).unwrap(),
         b"invalid".to_vec(),
-        encode_args((None::<Vec<u8>>, vec![(); 1000])).unwrap(),
-        b"DIDL\x01\x6c\xff\xff\xff\xff\x0f".to_vec(),
+        canic_contracts::protocol::initialization::encode((None::<Vec<u8>>, vec![(); 1000]))
+            .unwrap(),
+        vec![0xff; 32],
     ];
     let before = participant_log_count(&fixture);
     assert!(
@@ -308,7 +281,7 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
             fixture.pocket_ic().reinstall_canister(
                 *fixture.metadata(),
                 wasm.clone(),
-                encode_args((Some(vec![1_u8]),)).unwrap(),
+                canic_contracts::protocol::initialization::encode((Some(vec![1_u8]),)).unwrap(),
                 None,
             )
         })
@@ -369,7 +342,7 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
             fixture.pocket_ic().upgrade_canister(
                 *fixture.metadata(),
                 wasm.clone(),
-                encode_args(()).unwrap(),
+                canic_contracts::protocol::initialization::encode(()).unwrap(),
                 None,
             )
         })
@@ -435,7 +408,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
     );
     let exact_payload_len = string_len_for_wire_size(EXPLICIT_ECHO_MAX_BYTES);
 
-    let accepted: Result<usize, Error> =
+    let accepted: Result<usize, String> =
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes = ic_platform::candid::contract::encode_args((
                 *target.metadata(),
@@ -460,7 +433,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
         exact_payload_len
     );
 
-    let rejected: Result<usize, Error> =
+    let rejected: Result<usize, String> =
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes = ic_platform::candid::contract::encode_args((
                 *target.metadata(),
@@ -498,7 +471,7 @@ fn acquire_probe_fixture() -> CachedPocketIcBaselinePoolGuard<'static, ProbeReci
 // Assert one ingress update reaches the canister and returns the echoed length.
 fn assert_echo_ok(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len: usize) {
     let payload = payload(len);
-    let response: Result<usize, Error> =
+    let response: Result<usize, String> =
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes = ic_platform::candid::contract::encode_args((payload,))?;
             let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
@@ -522,7 +495,7 @@ fn assert_echo_ok(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len
 // Assert one ingress update is rejected before endpoint execution.
 fn assert_rejected(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len: usize) {
     let payload = payload(len);
-    let err = (|| -> Result<(Result<usize, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+    let err = (|| -> Result<(Result<usize, String>,), Box<dyn std::error::Error + Send + Sync>> {
         let request_bytes = ic_platform::candid::contract::encode_args((payload,))?;
         let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
             (fixture.pocket_ic()).update_call(
@@ -568,27 +541,34 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
         PROBE_CRATE,
         CanicWasmBuildProfile::Fast,
     );
-    let endpoints = parse_candid_service_endpoints(&candid).unwrap();
-    let plain = endpoints
-        .iter()
-        .find(|endpoint| endpoint.name == "plain_commit")
+    let contract = canic_testing_internal::payload_contract::read(&candid).unwrap();
+    let program = candid
+        .parse::<ic_platform::candid_parser::IDLProg>()
         .unwrap();
-    assert_eq!(plain.returns.len(), 1);
-    assert!(matches!(
-        resolve_type(&plain.returns[0]),
-        EndpointType::Record { .. }
-    ));
-    let result = endpoints
-        .iter()
-        .find(|endpoint| endpoint.name == "result_commit")
-        .unwrap();
-    assert!(matches!(
-        resolve_type(&result.returns[0]),
-        EndpointType::Variant { .. }
-    ));
-    let limit = plain.payload_limits.as_ref().unwrap();
-    assert_eq!(limit.ingress_max_bytes, Some(1024));
-    assert_eq!(limit.update_guard_max_bytes, Some(1024));
+    let mut env = ic_platform::candid::contract::TypeEnv::new();
+    let actor = ic_platform::candid_parser::check_prog(&mut env, &program).unwrap();
+    let actor = actor.unwrap();
+    let methods = env.as_service(&actor).unwrap();
+    for (name, record) in [("plain_commit", true), ("result_commit", false)] {
+        let (_, ty) = methods.iter().find(|(method, _)| method == name).unwrap();
+        let function = env.as_func(ty).unwrap();
+        assert_eq!(function.rets.len(), 1);
+        let response = env.trace_type(&function.rets[0]).unwrap();
+        use ic_platform::candid::contract::types::TypeInner;
+        assert!(matches!(
+            (record, response.as_ref()),
+            (true, TypeInner::Record(_)) | (false, TypeInner::Variant(_))
+        ));
+    }
+    assert_eq!(
+        contract
+            .update_overrides
+            .iter()
+            .find(|entry| entry.method == "plain_commit")
+            .unwrap()
+            .max_bytes,
+        1024
+    );
     let fixture = acquire_probe_fixture();
     for (method, limit, explicit) in [
         ("default_echo", 16 * 1024, false),
@@ -596,23 +576,19 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
         ("wire_named_echo", 24 * 1024, true),
         ("bare_echo", 16 * 1024, false),
     ] {
-        let declaration = endpoints
+        assert!(methods.iter().any(|(name, _)| name == method));
+        let declared = contract
+            .update_overrides
             .iter()
-            .find(|endpoint| endpoint.name == method)
-            .unwrap();
-        let limits = declaration.payload_limits.as_ref().unwrap();
-        assert_eq!(limits.ingress_max_bytes, Some(limit as u64));
+            .find(|entry| entry.method == method);
         assert_eq!(
-            limits.update_guard_max_bytes,
+            declared.map(|entry| entry.max_bytes),
             explicit.then_some(limit as u64)
         );
         assert_eq!(
-            limits.ingress_basis,
-            if explicit {
-                IngressPayloadBasis::ExplicitOverride
-            } else {
-                IngressPayloadBasis::ManagedDefault
-            }
+            declared.map_or(contract.default_update_ingress_max_bytes, |entry| entry
+                .max_bytes),
+            limit as u64
         );
         let length = string_len_for_wire_size(limit);
         if method == "bare_echo" {
@@ -639,16 +615,6 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
         assert_rejected(&fixture, method, length + 1);
     }
     drop(fixture);
-}
-
-fn resolve_type(ty: &EndpointType) -> &EndpointType {
-    match ty {
-        EndpointType::Named {
-            resolved: Some(inner),
-            ..
-        } => resolve_type(inner),
-        _ => ty,
-    }
 }
 
 fn assert_bounded_query_admission(fixture: &CachedPocketIcBaseline<Principal>) {
@@ -687,4 +653,303 @@ fn assert_bounded_query_admission(fixture: &CachedPocketIcBaseline<Principal>) {
         assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
     }
     assert_eq!(handler_log_count(fixture), before);
+}
+
+#[test]
+fn native_wire_endpoints_enforce_frames_and_roll_back_failed_replies() {
+    assert_compiled_wire_contract();
+    let fixture = acquire_probe_fixture();
+    let limits = ic_wire::Limits {
+        bytes: 1024,
+        allocation: 4096,
+        nodes: 64,
+        depth: 8,
+    };
+    let principal = ic_platform::Principal::from_slice(&[42; 29]);
+    let valid = ic_wire::native::encode_request(7001, &principal, limits).unwrap();
+    let query = |bytes| {
+        fixture.pocket_ic().query_call(
+            *fixture.metadata(),
+            Principal::anonymous(),
+            "native_principal",
+            bytes,
+        )
+    };
+    let reply = query(valid.clone()).unwrap();
+    assert_eq!(
+        ic_testkit::pic::query_wire::<_, ic_platform::Principal>(
+            fixture.pocket_ic(),
+            *fixture.metadata(),
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: "native_principal",
+                method_id: 7001,
+                request_limits: limits,
+                response_limits: limits,
+            },
+            &principal,
+        )
+        .unwrap(),
+        principal
+    );
+    let mut wrong = valid.clone();
+    wrong[2] ^= 1;
+    let mut trailing = valid.clone();
+    trailing.push(0);
+    for bad in [
+        wrong,
+        trailing,
+        vec![0; 1025],
+        ic_wire::native::encode_response(7001, &principal, limits).unwrap(),
+    ] {
+        assert!(query(bad).is_err());
+    }
+    assert_eq!(query(valid).unwrap(), reply);
+    let before = counts(&fixture).committed;
+    let update = |length| {
+        ic_testkit::pic::update_wire::<_, Vec<u8>>(
+            fixture.pocket_ic(),
+            *fixture.metadata(),
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: "native_commit",
+                method_id: 7002,
+                request_limits: limits,
+                response_limits: limits,
+            },
+            &length,
+        )
+    };
+    let denied = update(0_u32).unwrap_err();
+    let ic_testkit::pic::WireCallError::Call { source, .. } = denied else {
+        panic!("expected a rejected update");
+    };
+    let ic_testkit::pic::PocketIcCallFailure::Rejected(rejection) = *source else {
+        panic!("expected an IC rejection");
+    };
+    assert_eq!(rejection.reject_code, RejectCode::CanisterReject);
+    assert_eq!(counts(&fixture).committed, before);
+    assert!(update(1024_u32).is_err());
+    assert_eq!(counts(&fixture).committed, before);
+    let reply = update(2_u32).unwrap();
+    assert_eq!(reply, [0, 0]);
+    assert_eq!(counts(&fixture).committed, before + 1);
+    drop(fixture);
+}
+
+fn assert_compiled_wire_contract() {
+    use canic_contracts::protocol::wire_declaration::{
+        CompiledMethod, MethodKind, MethodLimits, SECTION,
+    };
+    use ic_host_artifacts::wasm::{InspectionLimits, inspect};
+
+    let wasm = standalone_canister_wasm(PROBE_CRATE, CanicWasmBuildProfile::Fast);
+    let facts = inspect(
+        &wasm,
+        InspectionLimits {
+            module_bytes: wasm.len(),
+            sections: 128,
+            exports: 256,
+            custom_sections: 64,
+        },
+    )
+    .unwrap();
+    let mut methods = std::collections::BTreeMap::new();
+    let mut identities = std::collections::BTreeSet::new();
+    for section in facts
+        .custom_sections
+        .iter()
+        .filter(|section| section.name == SECTION)
+    {
+        let mut bytes = section.data;
+        while !bytes.is_empty() {
+            let method = CompiledMethod::decode(&mut bytes).unwrap();
+            assert!(identities.insert(method.id));
+            assert!(methods.insert(method.name, method).is_none());
+        }
+    }
+    let limits = MethodLimits {
+        bytes: 1024,
+        allocation: 4096,
+        nodes: 64,
+        depth: 8,
+    };
+    for (name, kind, id) in [
+        ("access_counts", MethodKind::Query, 7010),
+        ("native_commit", MethodKind::Update, 7002),
+        ("native_composite", MethodKind::CompositeQuery, 7004),
+        ("native_principal", MethodKind::Query, 7001),
+        ("native_raw", MethodKind::Update, 7003),
+        ("native_result", MethodKind::Update, 7005),
+    ] {
+        let method = methods[name];
+        assert_eq!((method.kind, method.id), (kind, id));
+        assert_eq!(method.request, limits);
+        assert_eq!(method.response, limits);
+    }
+}
+
+#[test]
+fn raw_wire_contract_preserves_owner_codec_and_pre_copy_limits() {
+    let fixture = acquire_probe_fixture();
+    let limits = ic_wire::Limits {
+        bytes: 1024,
+        allocation: 4096,
+        nodes: 64,
+        depth: 8,
+    };
+    let update = |bytes| {
+        fixture.pocket_ic().update_call(
+            *fixture.metadata(),
+            Principal::anonymous(),
+            "native_raw",
+            bytes,
+        )
+    };
+    let request = |length: u32| ic_wire::native::encode_request(7003, &length, limits).unwrap();
+    let before = counts(&fixture).committed;
+    let reply = update(request(2)).unwrap();
+    assert_eq!(
+        ic_wire::native::decode_response::<Vec<u8>>(7003, &reply, limits).unwrap(),
+        [0, 0]
+    );
+    assert_eq!(counts(&fixture).committed, before + 1);
+    let rejected = update(vec![0; 1025]).unwrap_err();
+    assert_eq!(rejected.reject_code, RejectCode::CanisterReject);
+    assert!(update(ic_wire::native::encode_request(7002, &2_u32, limits).unwrap()).is_err());
+    assert!(update(request(1024)).is_err());
+    assert_eq!(counts(&fixture).committed, before + 1);
+    drop(fixture);
+}
+
+#[test]
+fn raw_wire_inter_canister_boundary_refuses_before_owner_io() {
+    let fixture = acquire_probe_fixture();
+    let relay = install_standalone_canister_on_pic(
+        fixture.pocket_ic(),
+        PROBE_CRATE,
+        PROBE_ROLE,
+        CanicWasmBuildProfile::Fast,
+        "raw-wire-relay",
+    );
+    let invoke = |bytes: Vec<u8>| -> Result<bool, String> {
+        let request = encode_args((*fixture.metadata(), "native_raw", bytes)).unwrap();
+        let reply = fixture
+            .pocket_ic()
+            .update_call(relay, Principal::anonymous(), "relay_bounded", request)
+            .unwrap();
+        let (result,) = ic_platform::candid::decode_args(&reply, REPLY_LIMITS).unwrap();
+        result
+    };
+    // Canister logs survive failed messages: a decoder trap cannot masquerade as
+    // rejection before the owner's first buffer read merely by rolling back state.
+    let owner_entries = || {
+        fixture
+            .pocket_ic()
+            .fetch_canister_logs(*fixture.metadata(), Principal::anonymous())
+            .unwrap()
+            .iter()
+            .filter(|record| record.content == b"raw Wire owner entered")
+            .count()
+    };
+    let limits = ic_wire::Limits {
+        bytes: 1024,
+        allocation: 4096,
+        nodes: 64,
+        depth: 8,
+    };
+    let valid = ic_wire::native::encode_request(7003, &2_u32, limits).unwrap();
+    let committed = counts(&fixture).committed;
+    let initial_entries = owner_entries();
+    assert_eq!(invoke(valid.clone()), Ok(true));
+    assert_eq!(counts(&fixture).committed, committed + 1);
+    assert_eq!(owner_entries(), initial_entries + 1);
+
+    let mut exact = valid.clone();
+    exact.resize(limits.bytes, 0);
+    assert!(invoke(exact.clone()).is_err());
+    assert_eq!(owner_entries(), initial_entries + 2);
+    assert_eq!(counts(&fixture).committed, committed + 1);
+    exact.push(0);
+    assert!(invoke(exact).is_err());
+    assert_eq!(owner_entries(), initial_entries + 2);
+    assert_eq!(counts(&fixture).committed, committed + 1);
+
+    assert!(invoke(ic_wire::native::encode_request(7003, &1024_u32, limits).unwrap()).is_err());
+    assert_eq!(owner_entries(), initial_entries + 3);
+    assert_eq!(counts(&fixture).committed, committed + 1);
+    assert_eq!(invoke(valid), Ok(true));
+    assert_eq!(counts(&fixture).committed, committed + 2);
+    drop(fixture);
+}
+
+#[test]
+fn native_wire_composite_query_resumes_after_callback_and_rejection() {
+    let fixture = acquire_probe_fixture();
+    let receiver = install_standalone_canister_on_pic(
+        fixture.pocket_ic(),
+        PROBE_CRATE,
+        PROBE_ROLE,
+        CanicWasmBuildProfile::Fast,
+        "wire-query-receiver",
+    );
+    let limits = ic_wire::Limits {
+        bytes: 1024,
+        allocation: 4096,
+        nodes: 64,
+        depth: 8,
+    };
+    let invoke = |target: ic_platform::Principal| {
+        let request = ic_wire::native::encode_request(7004, &target, limits).unwrap();
+        fixture.pocket_ic().query_call(
+            *fixture.metadata(),
+            Principal::anonymous(),
+            "native_composite",
+            request,
+        )
+    };
+    // An existing empty canister gives a real downstream rejection, not a codec refusal.
+    let empty = fixture.pocket_ic().create_canister();
+    assert!(invoke(empty.into()).is_err());
+    let reply = invoke(receiver.into()).unwrap();
+    let echoed: ic_platform::Principal =
+        ic_wire::native::decode_response(7004, &reply, limits).unwrap();
+    assert_eq!(echoed, (*fixture.metadata()).into());
+    assert_compiled_wire_contract();
+    drop(fixture);
+}
+
+#[test]
+fn native_wire_result_preserves_typed_denial_and_guard_short_circuiting() {
+    let fixture = acquire_probe_fixture();
+    let limits = ic_wire::Limits {
+        bytes: 1024,
+        allocation: 4096,
+        nodes: 64,
+        depth: 8,
+    };
+    let invoke = |allow: bool| -> Result<u64, Error> {
+        let request = ic_wire::native::encode_request(7005, &allow, limits).unwrap();
+        let reply = fixture
+            .pocket_ic()
+            .update_call(
+                *fixture.metadata(),
+                Principal::anonymous(),
+                "native_result",
+                request,
+            )
+            .unwrap();
+        ic_wire::native::decode_response(7005, &reply, limits).unwrap()
+    };
+    let before = counts(&fixture);
+    let denied: Error = canic::access::AccessError::ControllerRequired.into();
+    assert_eq!(invoke(false), Err(denied));
+    let after = counts(&fixture);
+    assert_eq!(after.committed, before.committed);
+    assert_eq!(after.predicates, before.predicates + 1);
+    assert_eq!(invoke(true), Ok(before.committed + 1));
+    let after = counts(&fixture);
+    assert_eq!(after.committed, before.committed + 1);
+    assert_eq!(after.predicates, before.predicates + 3);
+    drop(fixture);
 }

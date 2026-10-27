@@ -1,7 +1,7 @@
 # Dependency roles and deployment admission
 
-Canic adopts Shared Tooling 0.24.0 at
-`cab12cd3dfa4fdb34846b25397f0d72881bb9ae0`. The snapshot owns the
+Canic records its reviewed Shared Tooling revision in
+[the snapshot](../../.shared-tooling.snapshot). Shared Tooling owns the
 [role definitions](../../rules/cargo-dependencies.md#dependency-roles-and-deployment-checks).
 Catalog labels describe use here, not registry publication or build success.
 The selected IC tool catalog advances ICP CLI from 1.6.0 to 1.7.0; the extractor
@@ -15,7 +15,7 @@ The production family is `canic`, `canic-backup`, `canic-cli`, `canic-contracts`
 validation packages. The two independent Blob consumers are validation workspaces.
 
 The root catalog's tests/tooling-only entries are `canic-blob-service`, `canic-cli`,
-`canic-testing-internal` and `criterion`. The first two are production packages,
+and `canic-testing-internal`. The first two are production packages,
 but these catalog entries are consumed only by validation packages/dev edges.
 A deployment root is not its own dependency. Normal/build dependencies needed by
 production, including supported optional features and transitive uses, are labelled

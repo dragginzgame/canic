@@ -2,28 +2,17 @@
 
 #![expect(clippy::unused_async)]
 
-use canic::{Error, api::auth::AuthApi, dto::auth::SignedRoleAttestation, prelude::*};
+mod protocol;
+
+use canic::{Error, api::auth::AuthApi, prelude::*};
 
 canic::start_fleet_root!();
 
-#[canic_update(public)]
-fn root_verify_role_attestation(
-    attestation: SignedRoleAttestation,
-    min_accepted_epoch: u64,
-) -> Result<(), Error> {
-    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch)
-}
-
-#[canic_query(public)]
-async fn root_now_secs() -> Result<u64, Error> {
-    Ok(ic_platform::cdk::api::time() / 1_000_000_000)
-}
-
-#[canic_update(requires(caller::is_controller()))]
+#[canic_update(requires(caller::is_controller()), wire(id = protocol::PROVISION, request = protocol::LIMITS, response = protocol::LIMITS))]
 async fn test_provision_chain_key_delegation_proof_for_issuer(
-    issuer_pid: ic_platform::principal::ExternalPrincipal,
+    issuer_pid: ic_platform::Principal,
 ) -> Result<(), Error> {
-    AuthApi::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid).await
+    AuthApi::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid.into()).await
 }
 
 canic::finish!();

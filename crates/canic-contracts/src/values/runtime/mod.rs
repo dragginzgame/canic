@@ -7,18 +7,15 @@
 //! Boundary: DTOs re-export these values to preserve the public API path while
 //! internal code imports them from the domain owner.
 
-// CandidType supports explicit serde(rename) labels, but not rename_all. Keep
-// runtime introspection enum labels canonical and alias-free.
+// Explicit Serde labels define the maintained reporting and storage vocabulary.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 ///
 /// FailureSeverity
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FailureSeverity {
     #[serde(rename = "info")]
     Info,
@@ -46,8 +43,7 @@ impl FailureSeverity {
 /// RuntimeFieldVisibility
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RuntimeFieldVisibility {
     #[serde(rename = "public_safe")]
     PublicSafe,
@@ -78,8 +74,7 @@ impl RuntimeFieldVisibility {
 /// RuntimeCheckStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RuntimeCheckStatus {
     #[serde(rename = "pass")]
     Pass,
@@ -107,8 +102,7 @@ impl RuntimeCheckStatus {
 /// RuntimeDiagnosticSeverity
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RuntimeDiagnosticSeverity {
     #[serde(rename = "info")]
     Info,
@@ -136,8 +130,7 @@ impl RuntimeDiagnosticSeverity {
 /// RuntimeStateDomainStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RuntimeStateDomainStatus {
     #[serde(rename = "ok")]
     Ok,
@@ -165,8 +158,7 @@ impl RuntimeStateDomainStatus {
 /// HealthStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum HealthStatus {
     #[serde(rename = "healthy")]
     Healthy,
@@ -194,8 +186,7 @@ impl HealthStatus {
 /// ReadinessStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ReadinessStatus {
     #[serde(rename = "ready")]
     Ready,
@@ -223,8 +214,7 @@ impl ReadinessStatus {
 /// RuntimeStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RuntimeStatus {
     #[serde(rename = "ok")]
     Ok,
@@ -252,8 +242,7 @@ impl RuntimeStatus {
 /// TimerRegistrationStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TimerRegistrationStatus {
     #[serde(rename = "unregistered")]
     Unregistered,
@@ -278,8 +267,7 @@ impl TimerRegistrationStatus {
 /// TimerProcessCondition
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TimerProcessCondition {
     #[serde(rename = "disabled")]
     Disabled,
@@ -313,8 +301,7 @@ impl TimerProcessCondition {
 /// TimerSchedulingMode
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TimerSchedulingMode {
     #[serde(rename = "once")]
     Once,
@@ -348,8 +335,7 @@ impl TimerSchedulingMode {
 /// TimerExecutionOutcome
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TimerExecutionOutcome {
     #[serde(rename = "success")]
     Success,
@@ -481,3 +467,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+mod schema;

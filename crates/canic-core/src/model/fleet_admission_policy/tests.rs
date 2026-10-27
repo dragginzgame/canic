@@ -64,6 +64,15 @@ fn first_excess_and_noncanonical_authority_fail_closed() {
         Err(FleetAdmissionPolicyValidationError::FleetPrincipalsNonCanonical)
     );
 
+    let redundant = [FleetAdmissionRule {
+        selector: FleetAdmissionSelector::ComponentSpec("app".parse().expect("Component Spec ID")),
+        principals: principals.to_vec(),
+    }];
+    assert_eq!(
+        validate_fleet_admission_policy(&input(&principals, &redundant)),
+        Err(FleetAdmissionPolicyValidationError::RulePrincipalsNonCanonical)
+    );
+
     let widening = [FleetAdmissionRule {
         selector: FleetAdmissionSelector::ComponentSpec("app".parse().expect("Component Spec ID")),
         principals: vec![principal(3)],

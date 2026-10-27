@@ -148,7 +148,7 @@ fn archive_certificate_must_authorize_archive_canister_not_ledger() {
     let archive = authorization(&fixture);
     let read = prepare_archive_read(&fixture.agent, &archive).unwrap();
     let cert = evidence(&fixture, &read, Ok(vec![fixture.block.clone().into()]));
-    let original: Certificate = ciborium::de::from_reader(cert.as_slice()).unwrap();
+    let original: Certificate = serde_cbor::from_reader(cert.as_slice()).unwrap();
     let subnet_key = signing_key();
     let subnet = Principal::from_slice(&[7, 1]);
     for canister in [archive.canister(), fixture.intent.authority.icp_ledger] {

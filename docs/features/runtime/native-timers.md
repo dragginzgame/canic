@@ -46,17 +46,16 @@ Applications that compose other timer owners must qualify their complete selecte
 graph and shared lifecycle in their own repository. Canic's fixture suite qualifies
 Canic's timer custody without depending on a database consumer.
 
-## Replace the Removed Canic Facade
+## Declare an Application Timer
 
-The pre-0.104 `canic::timer!`, `canic::timer_interval!`, public `TimerHandle`
-and `canic::api::timer` application operations have no aliases. Replace them
-with native declarations whose identity names the actual owner rather than
-`canic`:
+Use a native registration whose identity names the application owner. Retain
+its handle in application state so that the application can observe or cancel
+the registration:
 
 ```rust
 use ic_timers::{
-    DeclarationLifetime, OnceDecision, OnceRegistration, OnceRunResult,
-    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion,
+    TimerIdentity, TimerSchedule, TimerStart, register_once,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -67,13 +66,14 @@ thread_local! {
 fn declare_refresh_timer() -> Result<(), Box<dyn std::error::Error>> {
     let registration = register_once(
         TimerIdentity::try_new("my-app", "cache", "refresh")?,
-        DeclarationLifetime::RemoveWhenStopped,
+        TimerStart::RemoveWhenStopped {
+            initial: TimerSchedule::After(Duration::from_secs(30)),
+        },
         |_context| async {
             refresh_cache().await;
             OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop)
         },
     )?;
-    registration.ensure_scheduled(TimerSchedule::After(Duration::from_secs(30)))?;
     REFRESH_TIMER.with_borrow_mut(|current| *current = Some(registration));
     Ok(())
 }
@@ -87,7 +87,8 @@ the next cadence:
 ```rust
 use ic_timers::{
     AfterCompletionDecision, AfterCompletionRegistration, AfterCompletionRunResult,
-    DeclarationLifetime, TimerCadence, TimerCompletion, TimerIdentity, register_after_completion,
+    TimerCadence, TimerCompletion, TimerIdentity, TimerSchedule, TimerStart,
+    register_after_completion,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -99,7 +100,9 @@ fn declare_sweep_timer() -> Result<(), Box<dyn std::error::Error>> {
     let registration = register_after_completion(
         TimerIdentity::try_new("my-app", "maintenance", "sweep")?,
         TimerCadence::new(Duration::from_secs(60))?,
-        DeclarationLifetime::Retained,
+        TimerStart::Retained {
+            initial: Some(TimerSchedule::After(Duration::from_secs(60))),
+        },
         |_context| async {
             let processed = sweep_one_batch().await;
             AfterCompletionRunResult::new(
@@ -108,7 +111,6 @@ fn declare_sweep_timer() -> Result<(), Box<dyn std::error::Error>> {
             )
         },
     )?;
-    registration.ensure_scheduled()?;
     SWEEP_TIMER.with_borrow_mut(|current| *current = Some(registration));
     Ok(())
 }
@@ -146,6 +148,12 @@ The returned registration is a non-clone owner capability:
 - `unregister(self)` consumes custody and removes callback authority; and
 - dropping the Rust value only detaches the caller's control capability. It
   does not cancel or unregister the timer.
+
+`TimerStart` binds declaration lifetime and the initial schedule in the same
+registration. `RemoveWhenStopped` requires a schedule; `Retained` permits
+`initial: None` when durable demand is currently absent. Registration succeeds
+only after the provider has accepted the requested initial wake-up. Use native
+reconciliation for retained declarations that lifecycle work may revisit.
 
 Provider inventory is volatile.
 Provider inventory is not durable business demand.
@@ -234,9 +242,9 @@ post-upgrade. Application fan-out belongs inside the named function:
 ```rust
 pub fn after_canic_post_upgrade() {
     reconstruct_application_timers()
-        .unwrap_or_else(|error| ic_cdk::trap(format!("timer reconstruction failed: {error}")));
+        .unwrap_or_else(|error| ic_platform::cdk::api::trap(format!("timer reconstruction failed: {error}")));
     reconstruct_database_runtime()
-        .unwrap_or_else(|error| ic_cdk::trap(format!("database reconstruction failed: {error}")));
+        .unwrap_or_else(|error| ic_platform::cdk::api::trap(format!("database reconstruction failed: {error}")));
 }
 ```
 
@@ -249,6 +257,21 @@ lifecycle message.
 The declaration adds no lifecycle export, Candid method, stable record or
 readiness claim. The canister still has exactly one `init` and one
 `post_upgrade` export, both owned by Canic.
+
+## Observe Through Canic
+
+Timer registration and control use the local Rust API. Canic's controller-only
+Wire `canic_runtime` query projects the shared inventory, including application
+and companion-library owners, into runtime health and performance records.
+Enabled public Operations and Performance families expose bounded cached
+measurements through Wire `canic_public_metrics` and `canic_public_history`.
+No separately mounted timer endpoint is required.
+
+The installed timer fixture uses bounded native Wire requests for its timer
+controls and sampling probes. Its callers exercise initialization and repeated
+same-release restoration, detached custody, cancellation, recurrence, capacity,
+malformed ingress and public measurement continuity. These fixture controls
+are qualification surfaces, not application timer APIs.
 
 ## Qualification Checklist
 
@@ -265,8 +288,8 @@ Before shipping a composed canister, prove:
 - callback progress and durable retry/idempotency are tested independently;
 - participant failure rolls back install/upgrade and a corrected retry
   succeeds; and
-- the composed Wasm retains one lifecycle export pair and its intended Candid
-  surface.
+- the composed Wasm retains one lifecycle export pair, its native Wire methods
+  and any required external protocol methods.
 
 ## Continue From Here
 

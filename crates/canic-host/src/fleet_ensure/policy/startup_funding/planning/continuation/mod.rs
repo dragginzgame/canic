@@ -37,6 +37,7 @@ pub(in crate::fleet_ensure::policy) fn prepay_continuation(
                 desired,
                 &root.root,
                 live,
+                observation,
                 minimum,
                 bounds,
                 created_at_time,

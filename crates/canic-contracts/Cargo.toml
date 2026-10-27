@@ -10,13 +10,22 @@ repository.workspace = true
 homepage.workspace = true
 publish = true
 
+[features]
+# Host metadata only; runtime DTO serialization remains independent of generation.
+wire-schema = ["ic-platform/wire-schema", "ic-wire/typescript", "dep:serde_json"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde_json = { workspace = true, optional = true }
+
 [dependencies]
-ciborium.workspace = true
 ic-auth-protocol-types.workspace = true
 ic-platform = { workspace = true, features = ["candid"] }
+ic-wire.workspace = true
+num-bigint.workspace = true
 remain.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_bytes.workspace = true
+serde_cbor.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
@@ -26,3 +35,7 @@ toml.workspace = true
 
 [lints]
 workspace = true
+
+[[example]]
+name = "wire_conformance"
+required-features = ["wire-schema"]

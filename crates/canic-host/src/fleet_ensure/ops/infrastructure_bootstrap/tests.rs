@@ -451,7 +451,7 @@ fn source_record(desired: &DesiredFleet) -> InfrastructureBootstrapRecord {
         network_root_key_sha256: [43; 32],
         coordinator: BootstrapCoordinatorSelection::Initialize,
         estate_seed: None,
-        coordinator_registry_candid_hex: None,
+        coordinator_registry_wire_hex: None,
         declarations_toml: String::new(),
         declarations_sha256: [0; 32],
         sources,
@@ -924,8 +924,8 @@ fn qualify_ready_coordinator(
     )
     .unwrap();
     source.coordinator = BootstrapCoordinatorSelection::Ready;
-    source.coordinator_registry_candid_hex = Some(hex_bytes(
-        ic_platform::candid::contract::encode_one(&registry).unwrap(),
+    source.coordinator_registry_wire_hex = Some(hex_bytes(
+        canic_contracts::protocol::authority::encode(&registry).unwrap(),
     ));
     let artifacts = resolve_desired_artifacts(root, &desired).unwrap();
     let coordinator = source.sources.get_mut("coordinator").unwrap();
@@ -939,8 +939,8 @@ fn qualify_ready_coordinator(
     let plan = prepare(root, &desired, &source, "ready-coordinator", 46).unwrap();
     assert!(plan.canisters[0].actions.is_empty());
     registry.revision += 1;
-    source.coordinator_registry_candid_hex = Some(hex_bytes(
-        ic_platform::candid::contract::encode_one(&registry).unwrap(),
+    source.coordinator_registry_wire_hex = Some(hex_bytes(
+        canic_contracts::protocol::authority::encode(&registry).unwrap(),
     ));
     reseal(&mut desired, &mut source);
     assert!(matches!(
@@ -1069,8 +1069,15 @@ fn qualify_terminal_publication(
     for field in projection.as_object().unwrap().keys() {
         let mut incomplete = projection.clone();
         incomplete.as_object_mut().unwrap().remove(field);
-        let error = serde_json::from_value::<FleetEnsureJournalRecord>(incomplete).unwrap_err();
-        assert_eq!(error.classify(), serde_json::error::Category::Data);
+        if field == "release" {
+            assert_eq!(
+                serde_json::from_value::<FleetEnsureJournalRecord>(incomplete).unwrap(),
+                journal
+            );
+        } else {
+            let error = serde_json::from_value::<FleetEnsureJournalRecord>(incomplete).unwrap_err();
+            assert_eq!(error.classify(), serde_json::error::Category::Data);
+        }
     }
     let actual = ActualCycleConservation {
         estate_funding_cycles: 0,

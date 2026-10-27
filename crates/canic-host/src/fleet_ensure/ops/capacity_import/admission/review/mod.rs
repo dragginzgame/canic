@@ -127,8 +127,8 @@ impl ReviewSurvey {
         }
         let admission = CapacityImportAdmissionRecord {
             infrastructure,
-            registry_candid_hex: hex_bytes(
-                ic_platform::candid::contract::encode_one(registry)
+            registry_wire_hex: hex_bytes(
+                canic_contracts::protocol::authority::encode(registry)
                     .map_err(|_| CapacityImportJournalError::InventoryInvalid)?,
             ),
             declarations_sha256: Sha256::digest(text.as_bytes()).into(),

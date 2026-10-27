@@ -11,6 +11,7 @@ form of Canic configuration or a parser inside canister Wasm.
 | Concern | Section |
 | --- | --- |
 | Keep TOML and ICP YAML ownership separate | [Configuration Format Boundary](#configuration-format-boundary) |
+| Find the intended Canic workspace | [Workspace Discovery](#workspace-discovery) |
 | Select an ICP environment and role build | [Environment And Selective Builds](#environment-and-selective-builds) |
 | Inspect management state safely | [Management Inspection](#management-inspection) |
 
@@ -45,6 +46,19 @@ bootstrap release-manifest contract, CBOR serves stable storage, and Candid
 serves canister interfaces. Their runtime uses are separate from configuration
 parsing. Reuse the existing workspace format libraries for new Canic code;
 upstream transitive parsers do not justify introducing another direct parser.
+
+## Workspace Discovery
+
+Canic selects the nearest ancestor with App configs under `apps/`, and stops at
+a Cargo workspace boundary when it finds no configs. An enclosing `icp.yaml`
+does not override a nearer config root. Run commands from the intended workspace
+when multiple config roots are nested.
+
+Discovery skips `.canic`, `.git`, `node_modules`, `target` and symlink entries.
+Keep maintained App configs outside those directory names. Each inventory admits
+at most 32 directory levels below `apps/` and 100,000 visited entries; reaching
+either limit returns a typed error instead of selecting a partial inventory.
+Duplicate App identities inside the selected workspace remain errors.
 
 ## Environment And Selective Builds
 

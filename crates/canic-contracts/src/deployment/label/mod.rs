@@ -4,7 +4,6 @@
 //! Does not own: inheritance, typed purpose, placement, authorization, or runtime state.
 //! Boundary: source and decoded label text is validated before group compilation.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::{borrow::Borrow, fmt};
 use thiserror::Error as ThisError;
@@ -48,19 +47,6 @@ macro_rules! bounded_component_deployment_label_text {
             }
         }
 
-        impl CandidType for $name {
-            fn _ty() -> ic_platform::candid::contract::types::Type {
-                ic_platform::candid::contract::types::TypeInner::Text.into()
-            }
-
-            fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-            where
-                S: ic_platform::candid::contract::types::Serializer,
-            {
-                serializer.serialize_text(self.as_str())
-            }
-        }
-
         impl TryFrom<String> for $name {
             type Error = ComponentDeploymentLabelParseError;
 
@@ -97,9 +83,12 @@ bounded_component_deployment_label_text!(
 );
 
 /// One bounded inert metadata label on a flattened Component occurrence.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentDeploymentLabel {
     pub key: ComponentDeploymentLabelKey,
     pub value: ComponentDeploymentLabelValue,

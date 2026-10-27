@@ -62,8 +62,8 @@ pub enum RestorePlanError {
     #[error("mapping is missing source canister {0}")]
     MissingMappingSource(String),
 
-    #[error("restore plan contains a parent cycle or unresolved dependency")]
-    RestoreOrderCycle,
+    #[error(transparent)]
+    EffectGraph(#[from] ic_backup::model::effect_graph::EffectGraphError),
 
     #[error("mapping references unknown source canister {0}")]
     UnknownMappingSource(String),

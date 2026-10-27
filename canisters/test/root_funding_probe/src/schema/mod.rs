@@ -1,0 +1,136 @@
+//! Owned probe schemas; installation and external provider schemas are separate.
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_prepare",
+    Update,
+    crate::protocol::PREPARE,
+    crate::protocol::PrepareRequest,
+    crate::GrantIntent,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_handle_request",
+    Update,
+    crate::protocol::HANDLE_REQUEST,
+    crate::GrantRequest,
+    crate::IssueResult,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_request",
+    Update,
+    crate::protocol::REQUEST,
+    (),
+    crate::RootRequestObservation,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_emergency_refill",
+    Update,
+    crate::protocol::EMERGENCY_REFILL,
+    (),
+    crate::protocol::EmergencyOperation,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_emergency_refill_transfer_then_trap",
+    Update,
+    crate::protocol::EMERGENCY_REFILL_TRANSFER_THEN_TRAP,
+    (),
+    crate::protocol::EmergencyOperation,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_emergency_refill_notify_then_trap",
+    Update,
+    crate::protocol::EMERGENCY_REFILL_NOTIFY_THEN_TRAP,
+    (),
+    crate::protocol::EmergencyOperation,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_emergency_operation",
+    Query,
+    crate::protocol::EMERGENCY_OPERATION,
+    (),
+    Option<crate::protocol::EmergencyOperation>,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_issue",
+    Update,
+    crate::protocol::ISSUE,
+    (),
+    crate::IssueResult,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_issue_root_accept_then_trap",
+    Update,
+    crate::protocol::ISSUE_ROOT_ACCEPT_THEN_TRAP,
+    (),
+    crate::IssueResult,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_issue_then_trap",
+    Update,
+    crate::protocol::ISSUE_THEN_TRAP,
+    (),
+    crate::IssueResult,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_intent",
+    Query,
+    crate::protocol::INTENT,
+    (),
+    Option<crate::GrantIntent>,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_receipt",
+    Query,
+    crate::protocol::RECEIPT,
+    (),
+    Option<crate::GrantReceipt>,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_acceptance_observation",
+    Query,
+    crate::protocol::ACCEPTANCE_OBSERVATION,
+    (),
+    Option<crate::AcceptanceObservation>,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_accept",
+    Update,
+    crate::protocol::ACCEPT,
+    crate::GrantRequest,
+    crate::RootAcceptResult,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);
+canic::__canic_register_wire_schema!(
+    "root_funding_probe_accept_then_trap",
+    Update,
+    crate::protocol::ACCEPT_THEN_TRAP,
+    crate::GrantRequest,
+    crate::RootAcceptResult,
+    crate::protocol::LIMITS,
+    crate::protocol::LIMITS
+);

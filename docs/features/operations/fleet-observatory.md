@@ -12,6 +12,12 @@ pre-1.0 reinstall-only hard cut.
 from one terminal Fleet without giving canisters a renderer, filesystem access,
 or a new polling service.
 
+Overview uses the typed `canic_public_overview` Wire query for every managed
+role, with a bounded unit request and a `Result<RoleOverviewResponse, Error>`
+reply. Its immutable role and profile still must match the preselected binding.
+Other protected selectors below retain their current transport until their
+coordinated Wire migration; Candid sidecars do not describe the Overview query.
+
 ## At A Glance
 
 | Need | Section |
@@ -83,9 +89,14 @@ balances or conservation receipts.
 
 ## Application metrics
 
+The ICP adapter sends binary Wire frames and requests raw hex in the JSON response
+wrapper, preserving the existing process deadline and capture bounds. Installed
+release/profile admission still uses the existing retained binding; final Wire
+schema identity propagation is a separate unfinished release-build obligation.
+
 Every role instance includes an independent `application_metrics` observation.
 The retained protocol binding's `ObservabilityMetrics` capability selects
-`canic_public_status`'s cached `Application` family. Roles without that capability,
+`canic_public_metrics`'s cached `Application` family over Wire. Roles without that capability,
 including the Coordinator, report `unsupported` without a metric query or tool
 version probe. Collection issues at most one additional query per supported instance,
 with no retries, inside the existing
@@ -125,8 +136,9 @@ evidence. The existing current schema remains version 1, with a required nullabl
 `costs` field; this is a pre-1.0 hard cut of the private host JSON/Rust contract.
 
 Up to four bounded reads per selected role collect the existing cached Cycles,
-Operations and Performance families, then the Cycles history's heap-start and
-canister-version anchor. Each family reads at most 256 rows once, without
+Operations and Performance families through `canic_public_metrics`, then the
+Cycles history's heap-start and
+canister-version anchor through typed Wire `canic_public_history`. Each family reads at most 256 rows once, without
 pagination retries. Independent failures, source freshness, source timestamps,
 counter windows, saturation and incomplete pages remain visible. Source values
 use decimal strings. Missing, disabled or truncated rows never mean zero.

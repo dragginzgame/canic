@@ -6,7 +6,7 @@
 
 use ic_platform::{
     candid::contract::{CandidType, Nat},
-    management_canister_types::ChunkHash,
+    management_canister_types::{CanisterStatusType, ChunkHash, MemoryMetrics, QueryStats},
     principal::ExternalPrincipal as Principal,
 };
 //
@@ -42,16 +42,6 @@ pub(super) struct InfraCanisterIdRecordExtended {
 }
 
 //
-// InfraCanisterInfoResult
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub(super) struct InfraCanisterInfoResult {
-    pub(super) total_num_changes: u64,
-}
-
-//
 // InfraCanisterInstallMode
 //
 
@@ -71,16 +61,6 @@ pub(super) enum InfraCanisterInstallMode {
 pub(super) struct InfraUploadChunkArgs {
     pub(super) canister_id: Principal,
     pub(super) chunk: Vec<u8>,
-}
-
-//
-// InfraClearChunkStoreArgs
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub(super) struct InfraClearChunkStoreArgs {
-    pub(super) canister_id: Principal,
 }
 
 //
@@ -188,21 +168,6 @@ pub struct InfraSignWithEcdsaResult {
 }
 
 //
-// InfraCanisterStatusType
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum InfraCanisterStatusType {
-    #[serde(rename = "running")]
-    Running,
-    #[serde(rename = "stopping")]
-    Stopping,
-    #[serde(rename = "stopped")]
-    Stopped,
-}
-
-//
 // InfraLogVisibility
 //
 
@@ -248,36 +213,6 @@ pub struct InfraDefiniteCanisterSettings {
 }
 
 //
-// InfraMemoryMetrics
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct InfraMemoryMetrics {
-    pub wasm_memory_size: Nat,
-    pub stable_memory_size: Nat,
-    pub global_memory_size: Nat,
-    pub wasm_binary_size: Nat,
-    pub custom_sections_size: Nat,
-    pub canister_history_size: Nat,
-    pub wasm_chunk_store_size: Nat,
-    pub snapshots_size: Nat,
-}
-
-//
-// InfraQueryStats
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct InfraQueryStats {
-    pub num_calls_total: Nat,
-    pub num_instructions_total: Nat,
-    pub request_payload_bytes_total: Nat,
-    pub response_payload_bytes_total: Nat,
-}
-
-//
 // InfraCanisterStatusResult
 //
 
@@ -285,13 +220,13 @@ pub struct InfraQueryStats {
 #[candid_path("ic_platform::candid::contract")]
 pub struct InfraCanisterStatusResult {
     pub version: u64,
-    pub status: InfraCanisterStatusType,
+    pub status: CanisterStatusType,
     pub settings: InfraDefiniteCanisterSettings,
     pub module_hash: Option<Vec<u8>>,
     pub memory_size: Nat,
-    pub memory_metrics: InfraMemoryMetrics,
+    pub memory_metrics: MemoryMetrics,
     pub cycles: Nat,
     pub reserved_cycles: Nat,
     pub idle_cycles_burned_per_day: Nat,
-    pub query_stats: InfraQueryStats,
+    pub query_stats: QueryStats,
 }

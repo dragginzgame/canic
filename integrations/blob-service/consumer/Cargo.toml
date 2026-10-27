@@ -13,7 +13,8 @@ license = "MIT"
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
 # Tests and tooling only
-ic-platform = { version = "0.6.7", default-features = false }
+ic-host-artifacts = { version = "0.68.8", default-features = false }
+ic-platform = { version = "0.6.19", default-features = false }
 
 [package]
 name = "blob-service-consumer"
@@ -28,7 +29,7 @@ app = "consumer-app"
 role = "blob"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 test = false
 doctest = false
 
@@ -36,6 +37,9 @@ doctest = false
 canic = { workspace = true, features = [] }
 canic-blob-service.workspace = true
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+ic-host-artifacts = { workspace = true, features = ["wasm"] }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
@@ -51,3 +55,10 @@ inherits = "release"
 lto = "thin"
 codegen-units = 8
 incremental = false
+
+[features]
+wire-schema = ["canic-blob-service/wire-schema"]
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]

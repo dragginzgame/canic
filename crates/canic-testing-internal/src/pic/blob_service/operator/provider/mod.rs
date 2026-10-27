@@ -2,6 +2,8 @@
 
 mod account;
 mod gateways;
+mod gc;
+mod races;
 mod relationship;
 
 use super::{
@@ -87,6 +89,7 @@ fn replies(
 pub(in crate::pic::blob_service) fn qualify(
     pic: &PocketIc,
     config: &ServiceConfigurationInput,
+    permission: contracts::dto::upload::admission::UploadAdmissionRequest,
     resume: impl Fn(),
     restore: impl Fn(),
 ) {
@@ -131,5 +134,13 @@ pub(in crate::pic::blob_service) fn qualify(
     account::check(pic, scope, operator);
     gateways::check(pic, scope, operator, gateway);
     gateways::lost_reply(pic, scope, operator, gateway);
+    races::check(pic, scope, operator, gateway);
+    replies(pic, scope, &members, &balance, &[0], false);
+    gateways::lost_reply(pic, scope, operator, gateway);
     relationship::check(pic, scope, operator);
+    gc::check(pic, scope, operator, permission);
+    restore();
+    gc::fenced(pic, scope, permission);
+    resume();
+    gc::restored(pic, scope, operator, permission);
 }

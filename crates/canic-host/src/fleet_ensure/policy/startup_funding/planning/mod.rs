@@ -136,6 +136,7 @@ fn append(
             desired,
             &root.root,
             live,
+            observation,
             minimum,
             bounds,
             created_at_time,
@@ -177,10 +178,15 @@ fn selects_root(action: &EnsureAction, principal: &str) -> bool {
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Root funding shares the reviewed target, observation and economic bounds"
+)]
 fn fund_root(
     desired: &DesiredFleet,
     name: &str,
     live: &LiveCanister,
+    observation: &FleetObservation,
     minimum: u128,
     bounds: CycleBounds,
     created_at_time: u64,
@@ -223,6 +229,7 @@ fn fund_root(
             desired,
             configured,
             live,
+            observation,
             cycle_policy,
             bounds,
             time,

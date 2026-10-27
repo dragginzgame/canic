@@ -24,9 +24,6 @@ use crate::{
     },
     test_support::temp_dir,
 };
-use canic_contracts::dto::wire::projection::fixture_host_inspection::{
-    FixturePoolControllers, FixturePoolInspection, FixturePoolInspectionResponse,
-};
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -40,15 +37,13 @@ use canic_contracts::{
             CanisterPoolResponse,
         },
         template::TemplateChunkInput,
-        wire::projection::inspection_reserve::{
-            InspectionReserveRequest, InspectionReserveResponse,
-        },
     },
     ids::{
         CanisterRole, ComponentDeploymentConfigurationDigest, FleetCoordinatorBinding, FleetKey,
         FleetRegistryAuthority, FleetSubnetRootReleaseSet, ReleaseBuildNonce, ReleaseSetDigest,
         TemplateId, TemplateVersion,
     },
+    protocol,
 };
 use canic_core::{
     cdk::utils::hash::{hex_bytes, sha256_hex},
@@ -1363,7 +1358,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 .collect(),
             ledger_fee_cycles: 100_000_000,
             operator_cycles: u128::MAX,
-            protocol_ready: BTreeMap::new(),
         },
         1_800_000_000_000_000_000,
         &"74".repeat(32),
@@ -1414,7 +1408,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                     .collect(),
                 ledger_fee_cycles: 100_000_000,
                 operator_cycles: u128::MAX,
-                protocol_ready: BTreeMap::new(),
             },
             1_800_000_000_000_000_000,
             &"74".repeat(32),
@@ -3299,8 +3292,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         pending_desired.clone(),
         icp.to_str().expect("fake ICP path"),
         &root,
-    )
-    .with_process_fixture_pool_reader();
+    );
     let pending_plan = workflow::plan(
         &root,
         &pending_desired,
@@ -3337,8 +3329,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         drifted_desired.clone(),
         icp.to_str().expect("fake ICP path"),
         &root,
-    )
-    .with_process_fixture_pool_reader();
+    );
     let error = workflow::plan(
         &root,
         &drifted_desired,
@@ -3947,7 +3938,6 @@ impl EnsurePlatform for RetainedEnsurePlatform {
                 .collect(),
             ledger_fee_cycles: self.ledger_fee_cycles,
             operator_cycles: 1_000_000_000_000_000,
-            protocol_ready: BTreeMap::new(),
         })
     }
 
@@ -4053,7 +4043,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
                     release_identity: "current".to_string(),
                     role: CanisterRole::from("app"),
                     capabilities: BTreeSet::new(),
-                    candid_sha256: [72; 32],
+                    wire_schema_sha256: [72; 32],
                     protocol_profile_digest: ProtocolProfileDigest::from_bytes([73; 32]),
                 }),
                 role: Some("app".to_string()),
@@ -4190,8 +4180,8 @@ fn terminal_observation_protocol_actions(
                     bytes: vec![2],
                 },
             }),
-            candid: protocol.store_candid.clone(),
-            candid_sha256: "11".repeat(32),
+            wire_schema: protocol.store_wire_schema.clone(),
+            wire_schema_sha256: "11".repeat(32),
             maximum_execution_burn_cycles: 1,
             name: "store-chunk-publication".to_string(),
             principal: store,
@@ -4217,8 +4207,8 @@ fn terminal_observation_protocol_actions(
                 },
                 plan_hash: [5; 32],
             }),
-            candid: protocol.coordinator_candid.clone(),
-            candid_sha256: "12".repeat(32),
+            wire_schema: protocol.coordinator_wire_schema.clone(),
+            wire_schema_sha256: "12".repeat(32),
             maximum_execution_burn_cycles: 1,
             name: "fleet-component-provisioning".to_string(),
             principal: coordinator,
@@ -4583,7 +4573,7 @@ fn persist_test_release_authority(
     .expect("write infrastructure manifest");
 
     let role = CanisterRole::from("app");
-    let wasm = [b"\0asm\x01\0\0\0".as_slice(), &[74]].concat();
+    let wasm = crate::test_support::wire_wasm(&[74]);
     let wasm_gz = gzip(&wasm);
     fs::write(root.join("artifacts/app.wasm"), &wasm).expect("write application artifact");
     fs::write(root.join("artifacts/app.wasm.gz"), &wasm_gz)
@@ -4605,6 +4595,7 @@ fn persist_test_release_authority(
             wasm,
             wasm_gz_relative_path: "artifacts/app.wasm.gz".to_string(),
             wasm_gz,
+            wire_schema: crate::test_support::WIRE_SCHEMA.to_vec(),
             candid_sha256: [75; 32],
             protocol_profile_digest: ProtocolProfileDigest::from_bytes([76; 32]),
         }],
@@ -4918,14 +4909,19 @@ fn write_fake_icp_with_status_projection(
     } else {
         format!("printf '%s\\n' '{store_status}'\n    exit 0")
     };
-    let authority_response = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
-        RootEstateStatusResponse::FleetAuthority(Box::new(authority.clone())),
-    ));
-    let pool_response = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
-        RootEstateStatusResponse::Pool(Box::new(pool.clone())),
-    ));
+    let authority_response = canic_core::cdk::utils::hash::hex_bytes(
+        ic_wire::native::encode_response(
+            protocol::root_authority::METHOD_ID,
+            &Ok::<_, canic_contracts::dto::error::Error>(
+                canic_contracts::dto::root_authority::Authority::from(authority.clone()),
+            ),
+            protocol::root_authority::RESPONSE_LIMITS,
+        )
+        .unwrap(),
+    );
+    let pool_response = crate::test_support::pool_reply(Ok(pool.clone()));
     let root_error_case = root_status_error.map_or_else(String::new, |code| {
-        let response = candid_response_json(&Err::<RootEstateStatusResponse, _>(
+        let response = crate::test_support::pool_reply(Err(
             canic_contracts::dto::error::Error::from_registered(code),
         ));
         format!(
@@ -4940,29 +4936,26 @@ fn write_fake_icp_with_status_projection(
     let ledger_balance_response = candid_response_json(&Nat::from(1_000_000_000_000_000_u64));
     let controller_cycle_case =
         controller_cycle_balance.map_or_else(String::new, |(canister, cycles)| {
-        let response = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
-            canic_contracts::dto::wire::projection::pool_observation::ManagedCanisterStatusResponse::CycleBalance(
-                canic_contracts::dto::role::CycleBalanceStatusResponse { cycles },
-            ),
-        ));
+        let response = canic_core::cdk::utils::hash::hex_bytes(ic_wire::native::encode_response(
+            canic_contracts::protocol::cycle_balance::METHOD_ID,
+            &Ok::<_, canic_contracts::dto::error::Error>(canic_contracts::dto::role::CycleBalanceStatusResponse { cycles }),
+            canic_contracts::protocol::cycle_balance::RESPONSE_LIMITS,
+        ).unwrap());
         format!(
-            r#"if [ "$1" = "canister" ] && [ "$2" = "call" ] && [ "$3" = "{canister}" ] && [ "$4" = "canic_observability" ]; then
+            r#"if [ "$1" = "canister" ] && [ "$2" = "call" ] && [ "$3" = "{canister}" ] && [ "$4" = "canic_cycle_balance" ]; then
   printf '%s\n' '{response}'
   exit 0
 fi
 "#
         )
     });
-    let inspection = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
-        FixturePoolInspectionResponse::InspectCanister(FixturePoolInspection {
-            status: canic_contracts::dto::canister::CanisterStatusType::Running,
-            cycles: Nat::from(6_000_000_000_000_u128),
-            module_hash: None,
-            settings: FixturePoolControllers {
-                controllers: vec![Principal::from_text(fleet_root).expect("Root")],
-            },
-        }),
-    ));
+    let inspection =
+        crate::test_support::inspection_reply(Ok(crate::test_support::inspection_status(
+            canic_contracts::dto::canister::CanisterStatusType::Running,
+            vec![Principal::from_text(fleet_root).expect("Root")],
+            None,
+            Nat::from(6_000_000_000_000_u128),
+        )));
     write_inspection_reserve_responses(root, fleet_root, store, pool);
     let script = crate::test_support::tool_script(&format!(
         r#"#!/bin/sh
@@ -5014,13 +5007,13 @@ if [ "$1" = "canister" ] && [ "$2" = "start" ] && [ "$3" = "{fleet_root}" ]; the
 fi
 if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
 {controller_cycle_case}
-  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_observability" ]; then
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_inspection_reserve" ]; then
     for expected in '{reserve_root}'/reserve-*.bin; do
-      if cmp -s "$6" "$expected"; then cat "${{expected%.bin}}.json"; exit; fi
+      if cmp -s "$6" "$expected"; then cat "${{expected%.bin}}.hex"; exit; fi
     done
     exit 1
   fi
-  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_command" ]; then
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_inspect_canister" ]; then
     printf '%s\n' '{inspection}'
     exit 0
   fi
@@ -5032,19 +5025,17 @@ if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
     printf '%s\n' '{ledger_balance_response}'
     exit 0
   fi
-  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_status" ]; then
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_authority" ]; then
+    printf '%s\n' '1' > "{counter}"
+    printf '%s\n' '{authority_response}'
+    exit 0
+  fi
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_pool" ]; then
     count=0
-    if [ -f "{counter}" ]; then
-      count=$(sed -n '1p' "{counter}")
-    fi
-    if [ "$count" = "0" ]; then
-      printf '%s\n' '1' > "{counter}"
-      printf '%s\n' '{authority_response}'
-    else
-      {root_error_case}
-      printf '%s\n' "$((count + 1))" > "{counter}"
-      printf '%s\n' '{pool_response}'
-    fi
+    if [ -f "{counter}" ]; then count=$(sed -n '1p' "{counter}"); fi
+    {root_error_case}
+    printf '%s\n' "$((count + 1))" > "{counter}"
+    printf '%s\n' '{pool_response}'
     exit 0
   fi
 fi
@@ -5079,24 +5070,30 @@ fn write_inspection_reserve_responses(
         let base = root.join(format!("reserve-{canister_id}"));
         fs::write(
             base.with_extension("bin"),
-            ic_platform::candid::contract::encode_one(InspectionReserveRequest::InspectionReserve(
-                canic_contracts::dto::canister::CanisterInspectionRequest { canister_id },
-            ))
+            ic_wire::native::encode_request(
+                canic_contracts::protocol::inspection_reserve::METHOD_ID,
+                &ic_platform::Principal::from(canister_id),
+                canic_contracts::protocol::inspection_reserve::REQUEST_LIMITS,
+            )
             .unwrap(),
         )
         .unwrap();
         let response = Ok::<_, canic_contracts::dto::error::Error>(
-            InspectionReserveResponse::InspectionReserve(
-                canic_contracts::dto::canister::CanisterInspectionReserveResponse {
-                    caller,
-                    canister_id,
-                    native_cycles: 30_000_000_000_000,
-                    available_liquid_cycles: 20_000_000_000_000,
-                    required_liquid_cycles: 50_000_000_000,
-                },
-            ),
+            canic_contracts::dto::inspection_reserve::InspectionReserve {
+                caller: caller.into(),
+                canister_id: canister_id.into(),
+                native_cycles: 30_000_000_000_000,
+                available_liquid_cycles: 20_000_000_000_000,
+                required_liquid_cycles: 50_000_000_000,
+            },
         );
-        fs::write(base.with_extension("json"), candid_response_json(&response)).unwrap();
+        let bytes = ic_wire::native::encode_response(
+            canic_contracts::protocol::inspection_reserve::METHOD_ID,
+            &response,
+            canic_contracts::protocol::inspection_reserve::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        fs::write(base.with_extension("hex"), hex_bytes(bytes)).unwrap();
     }
 }
 
@@ -5164,11 +5161,12 @@ fn infrastructure_artifacts(
         fs::create_dir_all(absolute.parent().expect("artifact parent"))
             .expect("create artifact parent");
         fs::write(&absolute, &bytes).expect("write artifact");
-        let candid = if role == CanicInfrastructureRole::FleetSubnetRoot {
-            "service : { canic_observability : (variant { InspectionReserve : record { canister_id : principal } }) -> () query }"
-        } else {
-            "service : {};"
-        };
+        fs::write(
+            absolute.with_extension("wire.json"),
+            crate::test_support::WIRE_SCHEMA,
+        )
+        .unwrap();
+        let candid = "service : {};";
         fs::write(absolute.with_extension("did"), candid).expect("write Candid");
         CanicInfrastructureArtifactEntry {
             role,
@@ -5186,6 +5184,7 @@ fn infrastructure_artifacts(
             ),
             wasm_gz_size_bytes: 1,
             wasm_gz_sha256_hex: "00".repeat(32),
+            wire_schema_sha256: Sha256::digest(crate::test_support::WIRE_SCHEMA).into(),
             candid_sha256: Sha256::digest(candid.as_bytes()).into(),
             protocol_profile_digest: ProtocolProfileDigest::from_bytes([marker; 32]),
         }
@@ -5193,53 +5192,9 @@ fn infrastructure_artifacts(
     .collect()
 }
 
-#[test]
-fn candid_sidecar_uses_the_manifest_bound_wasm_basename() {
-    let root = temp_dir("canic-generate-candid-sidecar");
-    let release_build_id = "91".repeat(32).parse().expect("release build ID");
-    let artifacts = infrastructure_artifacts(&root, release_build_id);
-    let root_artifact = artifacts
-        .iter()
-        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
-        .expect("Root artifact");
-
-    assert_eq!(
-        root_artifact.wasm_relative_path,
-        format!("artifacts/{release_build_id}/root/root.wasm")
-    );
-    assert_eq!(
-        candid_sidecar(&root, root_artifact).expect("resolve Root sidecar"),
-        format!("artifacts/{release_build_id}/root/root.did")
-    );
-
-    let sidecar = root
-        .join(&root_artifact.wasm_relative_path)
-        .with_extension("did");
-    fs::rename(&sidecar, sidecar.with_file_name("renamed.did")).expect("rename sidecar");
-    assert!(matches!(
-        candid_sidecar(&root, root_artifact),
-        Err(FleetGenerateError::CandidMissing { path }) if path == sidecar
-    ));
-    let changed = b"service : { changed : () -> (); };";
-    let changed_digest: [u8; 32] = Sha256::digest(changed).into();
-    fs::write(&sidecar, changed).expect("write changed sidecar");
-    assert!(matches!(
-        candid_sidecar(&root, root_artifact),
-        Err(FleetGenerateError::CandidDigestMismatch {
-            path,
-            expected,
-            observed,
-        }) if path == sidecar
-            && expected == root_artifact.candid_sha256
-            && observed == changed_digest
-    ));
-
-    fs::remove_dir_all(root).expect("remove fixture root");
-}
-
 #[cfg(unix)]
 #[test]
-fn candid_sidecar_rejects_a_symbolic_link() {
+fn wire_schema_sidecar_rejects_a_symbolic_link() {
     let root = temp_dir("canic-generate-candid-sidecar-link");
     let release_build_id = "92".repeat(32).parse().expect("release build ID");
     let artifacts = infrastructure_artifacts(&root, release_build_id);
@@ -5249,14 +5204,14 @@ fn candid_sidecar_rejects_a_symbolic_link() {
         .expect("Root artifact");
     let sidecar = root
         .join(&root_artifact.wasm_relative_path)
-        .with_extension("did");
-    let target = sidecar.with_file_name("target.did");
+        .with_extension("wire.json");
+    let target = sidecar.with_file_name("target.wire.json");
     fs::rename(&sidecar, &target).expect("move real sidecar");
     symlink(&target, &sidecar).expect("link sidecar");
 
     assert!(matches!(
-        candid_sidecar(&root, root_artifact),
-        Err(FleetGenerateError::CandidNotRegular { path }) if path == sidecar
+        wire_schema_sidecar(&root, root_artifact),
+        Err(FleetGenerateError::WireSchemaNotRegular { path }) if path == sidecar
     ));
 
     fs::remove_dir_all(root).expect("remove fixture root");
@@ -5345,7 +5300,7 @@ fn assert_reinstall_captures_additional_physical_pool_assets(desired: &DesiredFl
         estate_funding_domains: BTreeMap::new(),
         ledger_fee_cycles: 0,
         operator_cycles: 0,
-        protocol_ready: BTreeMap::new(),
+
         canisters: desired
             .canisters
             .iter()
@@ -5409,4 +5364,30 @@ fn assert_reinstall_captures_additional_physical_pool_assets(desired: &DesiredFl
     assert_eq!(new.controller_canisters, std::slice::from_ref(root_name));
     assert_eq!(new.parent.as_ref(), Some(root_name));
     assert!(!new.replace);
+}
+
+#[test]
+fn wire_sidecar_is_bound_to_release_bytes_and_refuses_drift() {
+    let root = temp_dir("canic-generate-wire-sidecar");
+    let id = "91".repeat(32).parse().unwrap();
+    let artifacts = infrastructure_artifacts(&root, id);
+    for artifact in &artifacts {
+        let path = root
+            .join(&artifact.wasm_relative_path)
+            .with_extension("wire.json");
+        assert_eq!(
+            root.join(wire_schema_sidecar(&root, artifact).unwrap()),
+            path
+        );
+        fs::write(&path, b"changed").unwrap();
+        assert!(matches!(wire_schema_sidecar(&root, artifact),
+            Err(FleetGenerateError::WireSchemaDigestMismatch { expected, .. })
+                if expected == artifact.wire_schema_sha256));
+        fs::remove_file(&path).unwrap();
+        assert!(matches!(
+            wire_schema_sidecar(&root, artifact),
+            Err(FleetGenerateError::WireSchemaMissing { .. })
+        ));
+    }
+    fs::remove_dir_all(root).unwrap();
 }

@@ -4,7 +4,6 @@
 //! Does not own: ICP environment resolution or deployment selection.
 //! Boundary: exposes the network class baked into a canister artifact.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display};
 
@@ -15,8 +14,7 @@ use std::{fmt, fmt::Display};
 /// Owned by ids and consumed by build-network config and access checks.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BuildNetwork {
     #[serde(rename = "ic")]
     Ic,
@@ -40,3 +38,6 @@ impl Display for BuildNetwork {
         f.write_str(self.as_str())
     }
 }
+
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+mod schema;

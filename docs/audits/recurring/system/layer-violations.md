@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-LAYERING-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `revise`; absorbs the retired access-, ops-, and workflow-purity
   definitions
 - Owner: endpoint, access, workflow, policy, ops, model, DTO, record, view,
@@ -28,8 +28,15 @@ This is a drift audit, not a security invariant audit.
 
 Risk model:
 
-> Dependencies and behavior must follow the canonical direction:
-> `endpoints/macros -> workflow -> policy -> ops -> model`.
+Endpoints and macros delegate to workflow. Workflow may call policy and ops
+independently; ops may call model:
+
+```text
+endpoints/macros -> workflow -> policy
+                           +-> ops -> model
+```
+
+Policy is pure and never calls ops or reads storage.
 
 ## Why This Matters
 

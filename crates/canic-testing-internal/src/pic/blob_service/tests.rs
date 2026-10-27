@@ -1,7 +1,7 @@
 //! Qualify the adapter in both framework-owned managed consumer shapes.
 //!
 //! The caller supplies manifest-verified artifacts and owns the PocketIC server.
-//! These cases exercise local composition, not provider uploads or funding.
+//! These cases exercise local composition and refunded funding, not live providers.
 
 use std::time::Duration;
 
@@ -38,12 +38,11 @@ use canic_blob_service::dto::{
         exposure::UploadExposureFailure,
     },
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 const NAMESPACE: u128 = 7;
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct EmbeddedInput {
     initial_count: u64,
     blob: Vec<u8>,
@@ -65,17 +64,17 @@ fn installation(service: Principal) -> ServiceInstallationInput {
                 max_object_bytes: 10,
                 max_headers: 8,
                 max_header_bytes: 1024,
-                max_chunks: 4,
-                max_tenant_chunks: 2,
-                max_objects: 4,
-                max_tenant_objects: 2,
+                max_chunks: 128,
+                max_tenant_chunks: 128,
+                max_objects: 128,
+                max_tenant_objects: 128,
                 max_physical_bytes: 30_000,
                 max_liability_bytes: 20_000,
                 max_tenant_logical_bytes: 10_000,
                 max_references_per_object: 2,
                 max_receipts_per_object: 3,
-                max_active: 4,
-                max_tenant_active: 2,
+                max_active: 128,
+                max_tenant_active: 128,
             },
             billing: ServiceBillingInput {
                 cashier: super::operator::cashier().into(),
@@ -87,9 +86,9 @@ fn installation(service: Principal) -> ServiceInstallationInput {
             },
             funding: ServiceFundingInput {
                 allocated: 10_000,
-                renewal_ceiling: 10_000,
+                renewal_ceiling: 10_150,
                 reserve: 100,
-                max_attempts: 4,
+                max_attempts: 6,
             },
             reads: ServiceReadInput {
                 sessions: 2,
@@ -109,7 +108,7 @@ fn dedicated_init(service: Principal) -> Vec<u8> {
 }
 
 fn embedded_init(service: Principal) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(EmbeddedInput {
+    canic_contracts::protocol::initialization::encode(EmbeddedInput {
         initial_count: 41,
         blob: dedicated_init(service),
     })
@@ -127,15 +126,12 @@ struct ConsumerInput {
     clippy::too_many_lines,
     reason = "one managed composition journey retains installation, fencing and exact restoration observations"
 )]
-fn qualify(embedded: bool) {
+fn qualify(embedded: bool, funding_case: super::operator::FundingReply, browser: bool) {
     let composition = if embedded {
         Composition::Embedded
     } else {
         Composition::Dedicated
     };
-    if artifacts::write_worker_result(composition) {
-        return;
-    }
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
     let ConsumerInput {
         role,
@@ -186,12 +182,22 @@ fn qualify(embedded: bool) {
         .find(|entry| entry.role.as_str() == role)
         .expect("selected Blob role in application manifest");
     let wasm_path = consumer.join(&entry.wasm_relative_path);
+    let retained = canic_host::release_set::load_built_wire_schema(&consumer, build, role)
+        .expect("exact finalized Blob Wire declaration");
+    assert_eq!(retained.schema_sha256, entry.wire_schema_sha256);
+    assert_eq!(retained.wasm_sha256, entry.wasm_sha256_hex);
+    assert_eq!(
+        retained.schema,
+        std::fs::read(wasm_path.with_extension("wire.json")).unwrap()
+    );
+    super::schema::qualify_retained(&wasm_path);
     canic_host::canister_build::validate_wasm_endpoints(
         &wasm_path,
         &wasm_path.with_extension("did"),
     )
     .expect("Candid and raw declarations match callable consumer endpoints");
-    let wasm = std::fs::read(wasm_path).expect("verified consumer Wasm");
+    let wasm = std::fs::read(&wasm_path).expect("verified consumer Wasm");
+    super::schema::qualify(&wasm);
     let build_id = build.to_string();
     let reinstall_wasm = wasm.clone();
     let mut artifact = ManagedRoleQualificationArtifact::new(role.parse().unwrap(), wasm);
@@ -214,9 +220,34 @@ fn qualify(embedded: bool) {
     let operator = principal(7);
     let tenant = principal(8);
     let stranger = principal(9);
+    for caller in [stranger, Principal::anonymous()] {
+        let health: canic::dto::public_status::PublicHealth = ic_testkit::pic::query_wire(
+            pic,
+            service,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::CANIC_PUBLIC_HEALTH,
+                method_id: canic::protocol::public_health::METHOD_ID,
+                request_limits: canic::protocol::public_health::REQUEST_LIMITS,
+                response_limits: canic::protocol::public_health::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("public Wire health in managed Blob composition");
+        assert_eq!(health.canister_id, service.into());
+        assert_eq!(health.role.as_deref(), Some(role));
+        assert_eq!(
+            health.health,
+            canic::dto::public_status::PublicHealthStatus::Responding
+        );
+    }
     let resume = || {
-        let result: Result<(), canic_blob_service::dto::recovery::CurrentInstanceRecoveryFailure> =
-            decode_blob(
+        // A concurrent replicated execution invalidates a read-only continuity proof.
+        for attempt in 0..3 {
+            let result: Result<
+                (),
+                canic_blob_service::dto::recovery::CurrentInstanceRecoveryFailure,
+            > = decode_blob(
                 "blob_resume_current_instance",
                 &pic.update_call(
                     service,
@@ -227,7 +258,15 @@ fn qualify(embedded: bool) {
                 .expect("Blob transport"),
             )
             .expect("recovery transport");
-        assert_eq!(result, Ok(()));
+            if result
+                == Err(canic_blob_service::dto::recovery::CurrentInstanceRecoveryFailure::Binding)
+                && attempt < 2
+            {
+                continue;
+            }
+            assert_eq!(result, Ok(()));
+            return;
+        }
     };
     resume();
     let configuration = || {
@@ -248,7 +287,7 @@ fn qualify(embedded: bool) {
     assert_eq!(installed.configuration, installation(service).configuration);
     assert_eq!(
         installed.release,
-        canic_blob_service::__private::ic_blob_storage_contracts::CONTRACT_VERSION
+        artifacts::blob_contract_release(composition)
     );
     assert!(!installed.fenced);
     super::operator::check(pic, &installed.configuration, false);
@@ -474,9 +513,9 @@ fn qualify(embedded: bool) {
     assert_eq!(
         admitted_capacity,
         UploadCapacityResponse {
-            remaining_objects: 0,
-            remaining_active_uploads: 0,
-            remaining_manifest_chunks: 0,
+            remaining_objects: initial_capacity.remaining_objects - 2,
+            remaining_active_uploads: initial_capacity.remaining_active_uploads - 2,
+            remaining_manifest_chunks: initial_capacity.remaining_manifest_chunks - 2,
             remaining_logical_bytes: 9_998,
             remaining_physical_bytes: 29_998,
             remaining_liability_bytes: 19_998,
@@ -485,23 +524,7 @@ fn qualify(embedded: bool) {
         }
     );
     if embedded {
-        let count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    service,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "application_increment",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("application mutation");
+        let count = super::application::increment(pic, service);
         assert_eq!(count, 42);
     }
     super::metrics::check(pic, service, 2, false, embedded.then_some(42));
@@ -556,23 +579,7 @@ fn qualify(embedded: bool) {
         assert_eq!(replayed.admission.permission, permission);
     }
     if embedded {
-        let count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    service,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "application_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("restored application counter");
+        let count = super::application::count(pic, service);
         assert_eq!(count, 42);
     }
     let registered: Vec<_> = permissions
@@ -598,21 +605,83 @@ fn qualify(embedded: bool) {
         super::journey::check_registration(pic, permission, false);
     }
     super::journey::qualify_refusals(pic, original_permission);
-    super::operator::qualify(pic, &installed.configuration, resume, || {
+    super::journey::qualify_pagination(pic, original_permission);
+    super::operator::qualify(
+        pic,
+        &installed.configuration,
+        original_permission,
+        resume,
+        || {
+            fixture
+                .upgrade_same_release(service, Duration::from_secs(300))
+                .unwrap();
+        },
+    );
+    if browser {
+        super::browser::qualify(pic, &wasm_path, service, operator, stranger, scope);
+    }
+    if embedded {
+        pic.update_call(service, Principal::anonymous(), "test_funding", vec![])
+            .expect("installed funding caller refusal");
+        super::operator::qualify_funding_concurrency(pic, &installed.configuration);
+        assert!(super::operator::refunded(
+            pic,
+            &installed.configuration,
+            false
+        ));
         fixture
             .upgrade_same_release(service, Duration::from_secs(300))
             .unwrap();
-    });
+        assert!(super::operator::refunded(
+            pic,
+            &installed.configuration,
+            true
+        ));
+        resume();
+        assert!(super::operator::refunded(
+            pic,
+            &installed.configuration,
+            false
+        ));
+        super::operator::qualify_paid_funding(pic, &installed.configuration, funding_case, || {
+            fixture
+                .upgrade_same_release(service, Duration::from_secs(300))
+                .unwrap();
+            resume();
+        });
+    }
 }
 
 #[test]
 pub(super) fn managed_composition_dedicated() {
-    qualify(false);
+    if artifacts::write_worker_result(Composition::Dedicated) {
+        return;
+    }
+    qualify(false, super::operator::FundingReply::Malformed, false);
 }
 
 #[test]
 pub(super) fn managed_composition_embedded() {
-    qualify(true);
+    if artifacts::write_worker_result(Composition::Embedded) {
+        return;
+    }
+    for reply in [
+        super::operator::FundingReply::Malformed,
+        super::operator::FundingReply::ProviderError,
+        super::operator::FundingReply::CallbackTrap,
+        super::operator::FundingReply::Liquidity,
+        super::operator::FundingReply::Budget,
+    ] {
+        qualify(true, reply, false);
+    }
+}
+
+#[test]
+#[ignore = "requires prepared pinned Node and TypeScript; run explicitly for Blob client qualification"]
+fn managed_browser_compositions() {
+    for embedded in [false, true] {
+        qualify(embedded, super::operator::FundingReply::Malformed, true);
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -622,8 +691,7 @@ struct UnmodeledInstallationInput {
     unmodeled: Principal,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct UnmodeledEmbeddedInput {
     initial_count: u64,
     blob: Vec<u8>,
@@ -669,15 +737,17 @@ fn refuse_invalid_configuration(
     use canic::{dto::abi::v1::CanisterInitPayload, testing::CanisterInstallExt as _};
     let pic = fixture.pic();
     let (protected, application): (CanisterInitPayload, Option<Vec<u8>>) =
-        ic_platform::candid::decoder::decode_args(fixture.installation_arguments(service).unwrap())
-            .unwrap();
+        canic_contracts::protocol::initialization::decode(
+            fixture.installation_arguments(service).unwrap(),
+        )
+        .unwrap();
     let unmodeled = UnmodeledInstallationInput {
         configuration: installation(service).configuration,
         project: installation(service).project,
         unmodeled: Principal::anonymous(),
     };
     let unknown_field = if embedded {
-        ic_platform::candid::contract::encode_one(UnmodeledEmbeddedInput {
+        canic_contracts::protocol::initialization::encode(UnmodeledEmbeddedInput {
             initial_count: 41,
             blob: contracts::wire::encode_request("blob_install", unmodeled).unwrap(),
         })
@@ -686,7 +756,7 @@ fn refuse_invalid_configuration(
         contracts::wire::encode_request("blob_install", unmodeled).unwrap()
     };
     let extra_argument = if embedded {
-        ic_platform::candid::contract::encode_args((
+        canic_contracts::protocol::initialization::encode((
             EmbeddedInput {
                 initial_count: 41,
                 blob: dedicated_init(service),
@@ -705,7 +775,8 @@ fn refuse_invalid_configuration(
     for invalid in [unknown_field, extra_argument] {
         assert!(invalid.len() < contracts::wire::request_limit("blob_install").unwrap());
         let args =
-            ic_platform::candid::contract::encode_args((protected.clone(), Some(invalid))).unwrap();
+            canic_contracts::protocol::initialization::encode((protected.clone(), Some(invalid)))
+                .unwrap();
         pic.wait_out_install_code_rate_limit(Duration::from_secs(300));
         let refusal = pic
             .reinstall_canister(service, wasm.to_vec(), args, Some(fixture.root()))
@@ -736,23 +807,7 @@ fn refuse_invalid_configuration(
             }
         );
         if embedded {
-            let count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        service,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "application_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+            let count = super::application::count(pic, service);
             assert_eq!(count, 41);
         }
     }

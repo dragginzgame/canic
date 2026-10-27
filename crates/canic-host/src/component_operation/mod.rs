@@ -54,7 +54,10 @@ pub enum ComponentOperationError {
     Protocol(#[from] crate::CanisterProtocolError),
 
     #[error(transparent)]
-    ProtocolBinding(#[from] crate::protocol_binding::ProtocolBindingError),
+    ProtocolBinding(#[from] crate::protocol_binding::ReleaseProtocolBindingError),
+
+    #[error(transparent)]
+    WireSchema(#[from] crate::artifact_io::WireArtifactError),
 
     #[error("Component operation review digest differs from --review")]
     Review,

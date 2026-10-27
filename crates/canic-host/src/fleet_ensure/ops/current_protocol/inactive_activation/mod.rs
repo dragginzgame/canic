@@ -2,19 +2,17 @@
 //!
 //! Responsibility: observe installed activation and initial-inventory receipts for reset review.
 //! Does not own: reset admission, source supersession, payments or effect execution.
-//! Boundary: only retained, hash-bound protected read contracts are used.
+//! Boundary: retained source evidence stays hash-bound; typed reads validate exact operation identity.
 
 use super::{
     ComponentRegistryAuthority, CurrentFleetProtocolAction, CurrentProtocolError, IcpCli,
-    OperationStatusRequest, Path, Principal, ResolvedProtocolAction, RootOperationStatusResponse,
-    RootStatusRequestFragment, RootStatusResponseFragment, StoreStatusRequest, StoreStatusResponse,
-    canic_init, protocol, query_root_operation, query_with_candid, read_sha256,
+    OperationStatusRequest, Path, Principal, ResolvedProtocolAction, canic_init, protocol,
+    query_root_activation, query_root_provisioning, query_wire_cli, read_sha256,
 };
 use crate::fleet_ensure::model::{FleetActivationSourceRecord, RootActivationResetRecord};
 use canic_contracts::dto::{
     component_provisioning::RootComponentProvisioningPhase,
     fleet_activation::{FleetActivationIdentity, FleetActivationPhase},
-    template::StoreOperationStatusResponse,
 };
 
 /// Read the exact Prepared Root and its conflicting source-operation Store binding.
@@ -39,16 +37,7 @@ pub(in crate::fleet_ensure::ops) fn observe(
     else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
-    let RootStatusResponseFragment::ComponentRegistry(registry) =
-        crate::canister_protocol::query_authenticated(
-            icp,
-            root,
-            protocol::CANIC_ROOT_STATUS,
-            &RootStatusRequestFragment::ComponentRegistry(request.clone()),
-        )?
-    else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
+    let registry = crate::canister_protocol::registry_read::status(icp, root, request.clone())?;
     if ComponentRegistryAuthority::from(&registry) != ComponentRegistryAuthority::from(expected) {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
@@ -66,9 +55,7 @@ pub(in crate::fleet_ensure::ops) fn observe(
         .iter()
         .find(|batch| batch.root.fleet_subnet_root == root)
         .ok_or(CurrentProtocolError::ResponseMismatch)?;
-    let Some(RootOperationStatusResponse::ProvisionComponents(provisioning)) =
-        query_root_operation(icp, &resolved.candid_path, root, request.operation_id)?
-    else {
+    let Some(provisioning) = query_root_provisioning(icp, root, request.operation_id)? else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
     let inventory_complete = [
@@ -102,12 +89,7 @@ pub(in crate::fleet_ensure::ops) fn observe(
     if sealed.fleet_activation_operation_id == expected_root_operation {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
-    let Some(RootOperationStatusResponse::FleetActivation(activation)) = query_root_operation(
-        icp,
-        &resolved.candid_path,
-        root,
-        sealed.fleet_activation_operation_id,
-    )?
+    let Some(activation) = query_root_activation(icp, root, sealed.fleet_activation_operation_id)?
     else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
@@ -121,16 +103,7 @@ pub(in crate::fleet_ensure::ops) fn observe(
     {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
-    let RootStatusResponseFragment::FleetAuthority(authority) =
-        crate::canister_protocol::query_authenticated(
-            icp,
-            root,
-            protocol::CANIC_ROOT_STATUS,
-            &RootStatusRequestFragment::FleetAuthority,
-        )?
-    else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
+    let authority = crate::canister_protocol::root_authority::query(icp, root)?;
     if authority.binding != batch.root || authority.initial_release_set != batch.active_release_set
     {
         return Err(CurrentProtocolError::ResponseMismatch);
@@ -140,25 +113,25 @@ pub(in crate::fleet_ensure::ops) fn observe(
         .iter()
         .find(|store| store.principal == authority.wasm_store_authority.wasm_store.to_text())
         .ok_or(CurrentProtocolError::ResponseMismatch)?;
-    let candid = workspace.join(&store.candid);
-    if read_sha256(&candid)? != store.candid_sha256 {
+    let wire_schema = workspace.join(&store.wire_schema);
+    if read_sha256(&wire_schema)? != store.wire_schema_sha256 {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
     let store_operation = canic_init::install_id(&source.operation_id, "store", root_name);
-    let StoreStatusResponse::Operation(StoreOperationStatusResponse::FleetActivation(
-        store_activation,
-    )) = query_with_candid(
-        icp,
-        &candid,
-        authority.wasm_store_authority.wasm_store,
-        protocol::CANIC_WASM_STORE_STATUS,
-        &StoreStatusRequest::Operation(OperationStatusRequest {
-            operation_id: store_operation,
-        }),
-    )?
-    else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
+    let store_activation: canic_contracts::dto::runtime_reporting::FleetActivationStatusResponse =
+        query_wire_cli(
+            icp,
+            authority.wasm_store_authority.wasm_store,
+            protocol::store_status::activation::METHOD,
+            protocol::store_status::activation::METHOD_ID,
+            &OperationStatusRequest {
+                operation_id: store_operation,
+            },
+            protocol::store_status::REQUEST_LIMITS,
+            protocol::store_status::RESPONSE_LIMITS,
+        )?;
+    let store_activation: canic_contracts::dto::fleet_activation::FleetActivationStatusResponse =
+        store_activation.into();
     let store_identity = FleetActivationIdentity {
         operation_id: store_operation,
         ..expected_activation

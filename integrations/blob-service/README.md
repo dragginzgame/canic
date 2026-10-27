@@ -62,3 +62,60 @@ Run the owning case with `make test-pocketic-case` and its exact registered Rust
 path under `pic::blob_service::tests`. They are private fixtures and are excluded from the registry
 package. Application installation, same-release recovery and provider acceptance
 remain the application's responsibility.
+
+Applications may opt into `funding::{prepare, dispatch, renew}`
+using upstream `ic-blob-storage` types. These functions bind the shared workflows
+to the installed journal and actual IC caller/service; they mount no endpoint or
+automatic schedule. The caller must be the installed operator. Applications own
+trusted current provider/account/activity/liability evidence; unknown fields
+block payment. Never accept that evidence as ingress assertions. Lost replies
+require inspecting the original operation, not resending payment. The adapter
+does not expose independent-credit reconciliation. Uncertain accepted payments
+retain their original obligations and renewal refusals. See the
+[funding integration guide](https://github.com/dragginzgame/canic/blob/main/docs/features/blob-storage/README.md#opt-in-application-funding)
+for responsibilities and the remaining paid-provider qualification.
+
+## Wire adapter ownership
+
+This crate supplies Canic mounting, access/lifecycle integration and compiled
+artifact declarations. Blob owns endpoint schemas, codecs and scalar semantics.
+Its native schema API also supplies the browser decimal-validation adapter;
+Canic must not copy that validator or infer schemas from raw handler signatures.
+
+For combined native client generation, Canic Contracts supplies
+`ids::wire_schema::TYPESCRIPT_ADAPTER` alongside its identity validators.
+Blob's `wire::schema::runtime_adapter("./adapter.js")` can delegate to that
+adapter, which preserves Blob's supplied checks and adds Canic's identity checks.
+Attempts to replace the Canic checks refuse. Both use the same published Wire
+runtime; neither adapter performs transport or authorization.
+
+The `canic-testing-internal` example `wire_composition` qualifies a combined
+catalog using actual Canic and Blob types, Rust frame vectors, strict generated
+TypeScript and Node checks. It is native test tooling, not the unfinished managed
+schema/release/frontend pipeline. Normal canister graphs exclude generation.
+
+Enable this adapter's `wire-schema` feature only in a native schema producer.
+`mount!` then registers Blob's published request/reply projections through Canic's
+shared provider registry, alongside typed application methods. Snapshot admission
+checks the combined registry against declarations read from finalized Wasm;
+duplicate names/IDs, invalid schema references and changed budgets refuse.
+The feature is rejected for Wasm and is absent from normal deployed graphs.
+This registration does not yet write a managed sidecar or bind its release hash.
+
+The dedicated consumer's native `mounted_supplier_schema_matches_final_wasm`
+test accepts `CANIC_BLOB_SCHEMA_WASM` pointing at the managed final artifact. It
+also compares every supplier payload projection with Blob's own schema output.
+
+The dedicated consumer's native `wire_schema` example links its mounted library
+and accepts one finalized Wasm path, emitting schema JSON on stdout. Its parser
+and JSON dependencies are native development dependencies; normal Wasm graphs do
+not acquire them. `canic_host::canister_build::produce_wire_schema` runs a selected
+native producer with bounded capture, checks final exports/contracts, and retains
+the exact output through IC Build's transaction. A failed producer leaves the
+previous materialized sidecar intact. Raw producer output alone is not release
+admission. The explicit Host `build_workspace_wire_schema` entrypoint can now compile the
+configured role's example with its runtime profile/features and a native-only
+`wire-schema` addition, then acquire the output with a Cargo source snapshot.
+It selects the actual executable from Cargo records and owns the build lock
+through acquisition. Normal artifact-build invocation and release hash binding
+remain unfinished; this example is a private framework qualification consumer.

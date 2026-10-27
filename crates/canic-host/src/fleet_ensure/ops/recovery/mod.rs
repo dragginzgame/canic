@@ -36,7 +36,7 @@ fn action_review(action: &EnsureAction) -> FleetReviewAction {
         EnsureAction::Fund { principal, .. } => ("fund", Some(principal)),
         EnsureAction::FundEstate { principal, .. } => ("fund_estate", Some(principal)),
         EnsureAction::Install { principal, .. } => ("install", Some(principal)),
-        EnsureAction::Protocol { principal, .. } => ("protocol", Some(principal)),
+
         EnsureAction::SetControllers { principal, .. } => ("set_controllers", Some(principal)),
         EnsureAction::Start { principal, .. } => ("start", Some(principal)),
         EnsureAction::Stop { principal, .. } => ("stop", Some(principal)),

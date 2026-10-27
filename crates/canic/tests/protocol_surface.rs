@@ -12,32 +12,18 @@ use canic::{
             RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
             RootIssuerRenewalTemplateView, RootProof,
         },
-        cascade::StateSnapshotInput,
-        component_provisioning,
         cycles::Cycles,
-        env::{EnvBootstrapArgs, EnvSnapshotResponse},
         error::Error as CanicError,
-        fleet_activation::FleetActivationStatusResponse,
-        fleet_admission,
         fleet_admission::{
             FleetAdmissionPreparedProjectionStatus, FleetAdmissionProjectionPhase,
             FleetAdmissionProjectionStatusResponse,
         },
-        fleet_funding, fleet_registry,
-        icp_refill::{IcpRefillDryRun, IcpRefillRequest},
         icrc21::{
             ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
-            ConsentMessageResponse, ConsentMessageSpec, DisplayMessageType,
+            ConsentMessageSpec, DisplayMessageType,
         },
-        memory::MemoryLedgerResponse,
         page::Page,
-        role,
         rpc::{CyclesFundingPreflightResponse, CyclesResponse, Response as RootRpcResponse},
-        runtime::{
-            CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
-            RuntimeFieldVisibility,
-        },
-        state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
     },
     ids,
     ids::{
@@ -46,19 +32,9 @@ use canic::{
         ManagedCanisterBinding, SubnetId,
     },
 };
-use ic_platform::{
-    candid::{
-        contract::{
-            TypeEnv, encode_one,
-            types::{Type, TypeInner, internal::TypeContainer},
-        },
-        decoder::decode_one,
-    },
-    candid_parser::CandidSource,
-    principal::ExternalPrincipal as Principal,
-};
+use canic_contracts::protocol::authority::{decode, encode};
+use ic_platform::{candid_parser::CandidSource, principal::ExternalPrincipal as Principal};
 use std::{
-    collections::{BTreeSet, HashSet},
     fmt::Debug,
     fs,
     path::{Path, PathBuf},
@@ -125,106 +101,21 @@ fn read_text(path: &Path) -> String {
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
 }
 
-fn assert_candid_roundtrip<T>(value: T)
+fn assert_wire_roundtrip<T>(value: T)
 where
-    T: ic_platform::candid::contract::CandidType + for<'de> serde::Deserialize<'de> + Eq + Debug,
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + Eq + Debug,
 {
-    let encoded = encode_one(&value).expect("encode Candid value");
-    let decoded = decode_one::<T>(&encoded).expect("decode Candid value");
+    let encoded = encode(&value).expect("encode Wire value");
+    let decoded = decode::<T>(&encoded).expect("decode Wire value");
     assert_eq!(decoded, value);
 }
 
-fn candid_type_env<T: ic_platform::candid::contract::CandidType>() -> String {
-    let mut types = TypeContainer::new();
-    types.add::<T>();
-    types.env.to_string()
-}
-
 // Compare wire structure, independent of aliases, formatting and field order.
-fn candid_type_matches<T: ic_platform::candid::contract::CandidType>(
-    env: &TypeEnv,
-    actual: &Type,
-) -> bool {
-    let mut env = env.clone();
-    let mut rust = TypeContainer::new();
-    let expected = rust.add::<T>();
-    let expected = env.merge_type(rust.env, expected);
-    ic_platform::candid::contract::types::subtype::equal(
-        &mut HashSet::default(),
-        &env,
-        actual,
-        &expected,
-    )
-    .is_ok()
-}
-
-fn assert_candid_type<T: ic_platform::candid::contract::CandidType>(env: &TypeEnv, name: &str) {
-    let actual = env
-        .find_type(name)
-        .unwrap_or_else(|err| panic!("{name}: {err}"));
-    assert!(
-        candid_type_matches::<T>(env, actual),
-        "{name} differs from the Rust wire contract: {actual}"
-    );
-}
-
-fn candid_field(env: &TypeEnv, name: &str, field: &str) -> Type {
-    let ty = env.trace_type(env.find_type(name).unwrap()).unwrap();
-    let fields = match ty.as_ref() {
-        TypeInner::Record(fields) | TypeInner::Variant(fields) => fields,
-        other => panic!("{name} must be a record or variant, got {other:?}"),
-    };
-    fields
-        .iter()
-        .find(|entry| entry.id.get_id() == ic_platform::candid::contract::idl_hash(field))
-        .unwrap_or_else(|| panic!("{name} has no field {field}"))
-        .ty
-        .clone()
-}
 
 #[test]
-fn wire_shape_checks_accept_aliases_and_layout_but_reject_changed_contracts() {
-    for source in [
-        "type Error = record { code : nat16 };",
-        "// another layout\ntype Code = nat16; type Error=record{code:Code;};",
-    ] {
-        let (env, _) = CandidSource::Text(source).load().unwrap();
-        assert_candid_type::<CanicError>(&env, "Error");
-    }
-    for source in [
-        "type Error = record { code : nat32 };",
-        "type Error = variant { code : nat16 };",
-        "type Error = record { code : nat16; extra : text };",
-    ] {
-        let (env, _) = CandidSource::Text(source).load().unwrap();
-        assert!(!candid_type_matches::<CanicError>(
-            &env,
-            env.find_type("Error").unwrap()
-        ));
-    }
-}
-
-#[test]
-fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
-    let command_env = candid_type_env::<FleetCommand>();
-    assert!(command_env.contains("FleetCommand"));
-    let response_env = candid_type_env::<FleetCommandResponse>();
-    assert!(response_env.contains("FleetCommandResponse"));
-    let state_env = candid_type_env::<FleetStateResponse>();
-    assert!(state_env.contains("FleetStateResponse"));
-    assert!(state_env.contains("FleetMode"));
-
-    let cascade_env = candid_type_env::<StateSnapshotInput>();
-    assert!(
-        cascade_env.contains("fleet_state"),
-        "state cascade Candid must contain fleet_state"
-    );
-
-    assert_candid_roundtrip(FleetMode::Readonly);
-}
-
-#[test]
-fn fleet_admission_projection_candid_uses_the_bounded_managed_role_contract() {
+fn fleet_admission_projection_wire_preserves_the_bounded_managed_role_contract() {
+    use canic::dto::admission_control::ManagedStatus;
+    use canic::protocol::admission_control::{RESPONSE_LIMITS, managed_status::METHOD_ID};
     let principal = Principal::from_slice(&[0x31; 29]);
     let target = admission_target();
     let authority = match &target {
@@ -249,9 +140,17 @@ fn fleet_admission_projection_candid_uses_the_bounded_managed_role_contract() {
         },
         maximum_page_size: 128,
     };
-    let status_bytes = encode_one(&status_value).expect("encode Fleet-admission status");
-    let decoded = decode_one::<FleetAdmissionProjectionStatusResponse>(&status_bytes)
-        .expect("decode Fleet-admission status");
+    let status_bytes = ic_wire::native::encode_response(
+        METHOD_ID,
+        &Ok::<ManagedStatus, CanicError>(status_value.clone().into()),
+        RESPONSE_LIMITS,
+    )
+    .unwrap();
+    let decoded: Result<ManagedStatus, CanicError> =
+        ic_wire::native::decode_response(METHOD_ID, &status_bytes, RESPONSE_LIMITS).unwrap();
+    let decoded: FleetAdmissionProjectionStatusResponse = decoded.unwrap().into();
+    assert_eq!(decoded.authority, status_value.authority);
+    assert_eq!(decoded.target, status_value.target);
     assert_eq!(decoded.principals.entries, status_value.principals.entries);
     assert_eq!(decoded.principals.total, status_value.principals.total);
     assert_eq!(decoded.generation, status_value.generation);
@@ -261,25 +160,6 @@ fn fleet_admission_projection_candid_uses_the_bounded_managed_role_contract() {
     assert_eq!(decoded.prepared, status_value.prepared);
     assert_eq!(decoded.maximum_page_size, status_value.maximum_page_size);
 
-    let status = candid_type_env::<FleetAdmissionProjectionStatusResponse>();
-    for field in [
-        "authority",
-        "target",
-        "generation",
-        "policy_digest",
-        "projection_digest",
-        "phase",
-        "prepared",
-        "principals",
-        "maximum_page_size",
-    ] {
-        assert!(
-            status.contains(field),
-            "projection status omits {field}:\n{status}"
-        );
-    }
-    assert!(!status.contains("operation_id") && !status.contains("request_hash"));
-
     let maximum_principals = (0..256)
         .map(maximum_admission_principal)
         .collect::<Vec<_>>();
@@ -288,7 +168,7 @@ fn fleet_admission_projection_candid_uses_the_bounded_managed_role_contract() {
         ManagedCanisterBinding::Component(binding) => binding.authority.binding.clone(),
         ManagedCanisterBinding::ComponentChild(_) => unreachable!(),
     };
-    let maximum_status = encode_one(FleetAdmissionProjectionStatusResponse {
+    let maximum_status: ManagedStatus = FleetAdmissionProjectionStatusResponse {
         authority,
         target,
         generation: u64::MAX,
@@ -301,67 +181,15 @@ fn fleet_admission_projection_candid_uses_the_bounded_managed_role_contract() {
             total: 256,
         },
         maximum_page_size: 128,
-    })
-    .expect("maximum Fleet-admission status Candid");
-    assert!(maximum_status.len() < 16 * 1_024);
-
-    let role_capability = candid_type_env::<canic::dto::role::RoleCapability>();
-    assert!(role_capability.contains("FleetAdmissionProjection"));
-}
-
-#[test]
-fn public_error_contract_is_the_compact_nat16_hard_cut() {
-    let (env, _) = CandidSource::Text("type Error = record { code : nat16 };")
-        .load()
-        .unwrap();
-    assert_candid_type::<CanicError>(&env, "Error");
-    assert_candid_roundtrip(CanicError::from_registered(
-        canic_contracts::diagnostics::codes::REQUEST_INVALID,
-    ));
-
-    for relative_path in [
-        "crates/canic/candid/fleet_coordinator.did",
-        "crates/canic/candid/wasm_store.did",
-    ] {
-        let did_path = workspace_root().join(relative_path);
-        let did = read_text(&did_path);
-        let (env, _) = CandidSource::Text(&did).load().unwrap();
-        assert_candid_type::<CanicError>(&env, "Error");
     }
-}
-
-#[test]
-fn authority_restore_release_status_matches_canonical_candid() {
-    use canic::dto::authority_restore::{
-        AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
-    };
-
-    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
-    let (mut env, _) = CandidSource::Text(&did).load().unwrap();
-    let canonical = env
-        .find_type("AuthorityRestoreFenceStatusResponse")
-        .unwrap()
-        .clone();
-    let mut rust = TypeContainer::new();
-    let response = rust.add::<AuthorityRestoreFenceStatusResponse>();
-    let response = env.merge_type(rust.env, response);
-    ic_platform::candid::contract::types::subtype::equal(
-        &mut HashSet::default(),
-        &env,
-        &canonical,
-        &response,
+    .into();
+    let maximum_status = ic_wire::native::encode_response(
+        METHOD_ID,
+        &Ok::<_, CanicError>(maximum_status),
+        RESPONSE_LIMITS,
     )
     .unwrap();
-    assert_candid_roundtrip(AuthorityRestoreFenceStatusResponse {
-        authority_canister: Principal::from_slice(&[1]),
-        phase: AuthorityRestoreFencePhase::ReleaseSealed {
-            review_sha256: [2; 32],
-            recipient: Principal::from_slice(&[3]),
-        },
-        operation_id: Some([4; 32]),
-        history_total_num_changes: None,
-        changed_at_ns: Some(5),
-    });
+    assert!(maximum_status.len() < 16 * 1_024);
 }
 
 #[test]
@@ -383,53 +211,7 @@ fn cycles_preflight_contract_preserves_caller_continuation_values() {
             cycles_transferred: 100,
         },
     ] {
-        assert_candid_roundtrip(response);
-    }
-
-    let response_env = candid_type_env::<CyclesResponse>();
-    for field in [
-        "approved_cycles : nat",
-        "remaining_child_budget : nat",
-        "max_per_child : nat",
-        "retry_after_secs : nat64",
-        "cycles_transferred : nat",
-    ] {
-        assert!(
-            response_env.contains(field),
-            "cycles response omits caller-required field {field}:\n{response_env}"
-        );
-    }
-    assert!(
-        !response_env.contains("available_cycles"),
-        "cycles response must not expose the parent balance:\n{response_env}"
-    );
-
-    let relative_path = "crates/canic/candid/wasm_store.did";
-    let did = read_text(&workspace_root().join(relative_path));
-    for field in [
-        "approved_cycles : nat",
-        "remaining_child_budget : nat",
-        "max_per_child : nat",
-        "retry_after_secs : nat64",
-    ] {
-        assert!(
-            did.contains(field),
-            "checked-in service DID omits {field} in {relative_path}"
-        );
-    }
-}
-
-#[test]
-fn environment_candid_shapes_use_fleet_subnet_root_and_component_spec() {
-    for env in [
-        candid_type_env::<EnvBootstrapArgs>(),
-        candid_type_env::<EnvSnapshotResponse>(),
-    ] {
-        assert!(
-            env.contains("fleet_subnet_root_pid : opt principal")
-                && env.contains("component_spec : opt text"),
-            "environment Candid must expose Fleet Subnet Root and Component Spec identity:\n{env}"
-        );
+        assert_wire_roundtrip(response);
     }
 }
 
@@ -439,39 +221,26 @@ fn root_rpc_commands_without_result_data_use_unit_variants() {
         RootRpcResponse::AcknowledgePlacementReceipt,
         RootRpcResponse::RecycleCanister,
     ] {
-        let encoded = encode_one(&response).expect("encode root RPC response");
-        let decoded =
-            decode_one::<RootRpcResponse>(&encoded).expect("decode root RPC unit response");
+        let encoded = encode(&response).expect("encode root RPC response");
+        let decoded = decode::<RootRpcResponse>(&encoded).expect("decode root RPC unit response");
         assert_eq!(
             std::mem::discriminant(&decoded),
             std::mem::discriminant(&response)
         );
     }
-
-    let env = candid_type_env::<RootRpcResponse>();
-    assert!(env.contains("AcknowledgePlacementReceipt"));
-    assert!(env.contains("RecycleCanister"));
 }
 
 #[test]
 fn root_capability_surface_uses_component_registry_authority() {
-    let mut types = TypeContainer::new();
-    types.add::<canic_contracts::dto::wire::root_command::RootCommand>();
-    assert!(candid_type_matches::<
-        canic::dto::capability::RootCapabilityEnvelopeV1,
-    >(
-        &types.env,
-        &candid_field(&types.env, "RootCommand", "RespondCapability"),
-    ));
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    assert!(
-        source.contains("if matches!(&command, RootCommand::RespondCapability(_))")
-            && source.contains("RootCapabilityCallerPredicate")
-            && source.contains("RootCommand::RespondCapability(envelope)")
-            && source.contains("ComponentRpcApi::response_capability_v1_root(envelope)"),
-        "Root RespondCapability must retain Component Registry authority inside its command variant"
+    let source = read_text(
+        &workspace_root().join("crates/canic/src/macros/endpoints/root_capability/mod.rs"),
     );
+    assert!(source.contains("RootCapabilityCallerPredicate"));
+    assert!(source.contains("AuthorityRestoreApi::require_command_variant_allowed(false)"));
+    assert!(source.contains("ComponentRpcApi::response_capability_v1_root(envelope)"));
+    for method in ["acknowledge", "allocate", "create", "recycle", "cycles"] {
+        assert!(source.contains(&format!("fn canic_root_capability_{method}(")));
+    }
 }
 
 fn consent_message_request(method: &str) -> ConsentMessageRequest {
@@ -490,7 +259,12 @@ fn consent_message_request(method: &str) -> ConsentMessageRequest {
 
 #[test]
 fn semantic_protocol_and_cycle_types_are_public() {
-    assert_candid_roundtrip(consent_message_request("transfer"));
+    let request = consent_message_request("transfer");
+    let bytes = ic_platform::candid::contract::encode_one(&request).unwrap();
+    assert_eq!(
+        ic_platform::candid::decoder::decode_one::<ConsentMessageRequest>(&bytes).unwrap(),
+        request
+    );
 
     let cycles = Cycles::new(42);
     assert_eq!(cycles.to_u128(), 42);
@@ -524,33 +298,19 @@ fn composed_framework_fleet_admission_facade_is_typed_and_synchronous() {
 fn icrc21_dispatcher_uses_the_registered_typed_handler() {
     let method = "protocol_surface_transfer";
     Icrc21Dispatcher::register(method, |request| {
-        ConsentMessageResponse::Ok(ConsentInfo {
+        Ok(ConsentInfo {
             consent_message: ConsentMessage::GenericDisplayMessage(request.method),
             metadata: request.user_preferences.metadata,
         })
     });
 
-    let ConsentMessageResponse::Ok(info) =
-        Icrc21Dispatcher::consent_message(consent_message_request(method))
-    else {
+    let Ok(info) = Icrc21Dispatcher::consent_message(consent_message_request(method)) else {
         panic!("registered handler should return consent information");
     };
     assert_eq!(
         info.consent_message,
         ConsentMessage::GenericDisplayMessage(method.to_string())
     );
-}
-
-#[test]
-fn wasm_store_exposes_cycle_history_through_observability() {
-    let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
-    let did = read_text(&did_path);
-
-    let (env, _) = CandidSource::Text(&did).load().unwrap();
-    assert!(candid_type_matches::<canic::dto::page::PageRequest>(
-        &env,
-        &candid_field(&env, "StoreObservabilityRequest", "CycleHistory")
-    ));
 }
 
 #[test]
@@ -561,22 +321,6 @@ fn wasm_store_canonical_did_parses() {
         .load()
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
 
-    assert_candid_type::<FleetKey>(&env, "FleetKey");
-    assert_candid_type::<canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs>(
-        &env,
-        "FleetSubnetWasmStoreInitArgs",
-    );
-    assert!(candid_type_matches::<
-        canic::ids::FleetSubnetWasmStoreAuthority,
-    >(
-        &env,
-        &candid_field(&env, "StoreStatusResponse", "Authority")
-    ));
-    assert!(candid_type_matches::<StateSnapshotInput>(
-        &env,
-        &candid_field(&env, "StoreCommand", "SynchronizeState")
-    ));
-
     let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
     let service = env
         .as_service(&actor)
@@ -588,148 +332,8 @@ fn wasm_store_canonical_did_parses() {
         .collect::<Vec<_>>();
     assert_eq!(
         methods,
-        vec![
-            canic::protocol::CANIC_OBSERVABILITY,
-            canic::protocol::CANIC_PUBLIC_STATUS,
-            canic::protocol::CANIC_WASM_STORE_CATALOG,
-            canic::protocol::CANIC_WASM_STORE_CHUNK,
-            canic::protocol::CANIC_WASM_STORE_COMMAND,
-            canic::protocol::CANIC_WASM_STORE_FIXTURE_CHUNK,
-            canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-            canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
-            canic::protocol::CANIC_WASM_STORE_STATUS,
-            canic::protocol::ICRC10_SUPPORTED_STANDARDS,
-        ],
+        vec![canic::protocol::ICRC10_SUPPORTED_STANDARDS,],
         "canonical Store exposes its current read, control, byte and ICRC-10 methods"
-    );
-
-    let status_env = candid_type_env::<FleetActivationStatusResponse>();
-    assert!(status_env.contains("FleetActivationStatusResponse"));
-    assert!(status_env.contains("FleetActivationIdentity"));
-    assert!(status_env.contains("FleetCascadeActivationEvidence"));
-    assert!(status_env.contains("FleetCredentialManifest"));
-}
-
-#[test]
-fn canonical_store_exposes_public_and_protected_reads() {
-    let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
-    let (env, actor) = CandidSource::Text(&did).load().unwrap();
-    let service = env.as_service(actor.as_ref().unwrap()).unwrap();
-    for method in [
-        canic::protocol::CANIC_PUBLIC_STATUS,
-        canic::protocol::CANIC_OBSERVABILITY,
-        canic::protocol::CANIC_WASM_STORE_CATALOG,
-        canic::protocol::CANIC_WASM_STORE_STATUS,
-    ] {
-        assert!(service.iter().any(|(name, _)| name == method));
-    }
-}
-
-#[test]
-fn fleet_coordinator_canonical_did_parses() {
-    let did_path = workspace_root().join("crates/canic/candid/fleet_coordinator.did");
-    let did = read_text(&did_path);
-    let (env, actor) = CandidSource::Text(&did)
-        .load()
-        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
-
-    let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
-    let service = env
-        .as_service(&actor)
-        .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
-
-    let methods = service
-        .iter()
-        .map(|(name, _)| name.as_str())
-        .collect::<Vec<_>>();
-    assert_eq!(
-        methods,
-        vec![
-            canic::protocol::CANIC_COORDINATOR_COMMAND,
-            canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
-            canic::protocol::CANIC_COORDINATOR_REGISTRY,
-            canic::protocol::CANIC_OBSERVABILITY,
-            canic::protocol::CANIC_PUBLIC_STATUS,
-        ],
-        "Fleet Coordinator must expose only its role-owned command and status methods"
-    );
-}
-
-#[test]
-fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_types() {
-    macro_rules! contracts {
-        ($env:ident, $module:ident: $($name:ident),+ $(,)?) => {
-            $(assert_candid_type::<$module::$name>(&$env, stringify!($name));)+
-        };
-    }
-    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
-    let (env, _) = CandidSource::Text(&did).load().unwrap();
-    contracts!(env, fleet_admission:
-        FleetAdmissionMutationAction, FleetAdmissionMutationRequest,
-        FleetAdmissionMutationResponse, FleetAdmissionOperationStatusResponse,
-        FleetAdmissionPolicyStatus, FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
-    );
-    contracts!(env, fleet_funding:
-        FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
-        FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
-        FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationStageRootRequest,
-        FleetFundingPolicyUsage, FleetRootFundingAcceptanceReceipt,
-        FleetRootFundingAcceptanceRequest, FleetRootFundingNoGrantReason,
-        FleetRootFundingRequest, FleetRootFundingResponse,
-    );
-    contracts!(env, component_provisioning:
-        FleetComponentProvisioningRetryStage, FleetComponentProvisioningRootFailure,
-        FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
-    );
-    contracts!(env, ids:
-        FleetCoordinatorRootFundingPolicy, FleetFundingProfile,
-        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
-        FleetSubnetRootIcpRefillPolicy, FleetSubnetRootAutomaticIcpRefillPolicy,
-        FleetSubnetRootBinding,
-    );
-    contracts!(env, fleet_registry: FleetSubnetRootEntry);
-    contracts!(env, role: RoleCapability);
-    #[cfg(feature = "fleet-coordinator-canister")]
-    assert_candid_type::<
-        canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse,
-    >(&env, "FleetFundingPolicyRotationStatusResponse");
-}
-
-#[test]
-fn fleet_coordinator_diagnostic_and_retirement_types_match_rust() {
-    fn assert_current_type<T: ic_platform::candid::contract::CandidType>(name: &str) {
-        let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
-        let (mut env, _) = CandidSource::Text(&did)
-            .load()
-            .expect("parse canonical Coordinator Candid");
-        let canonical = env
-            .find_type(name)
-            .expect("canonical retirement type")
-            .clone();
-        let mut rust = TypeContainer::new();
-        let ty = rust.add::<T>();
-        let ty = env.merge_type(rust.env, ty);
-        ic_platform::candid::contract::types::subtype::equal(
-            &mut HashSet::default(),
-            &env,
-            &canonical,
-            &ty,
-        )
-        .expect("canonical retirement type must equal the current Rust contract");
-    }
-    use canic::dto::fleet_registry::{
-        FleetRetirementStatus, FleetSubnetRootDeletionReadinessRequest,
-        FleetSubnetRootDrainingReservationRequest,
-    };
-    assert_current_type::<FleetSubnetRootDeletionReadinessRequest>(
-        "FleetSubnetRootDeletionReadinessRequest",
-    );
-    assert_current_type::<FleetSubnetRootDrainingReservationRequest>(
-        "FleetSubnetRootDrainingReservationRequest",
-    );
-    assert_current_type::<FleetRetirementStatus>("FleetRetirementStatus");
-    assert_current_type::<canic::dto::component_provisioning::ProvisioningFailureOrigin>(
-        "ProvisioningFailureOrigin",
     );
 }
 
@@ -749,170 +353,35 @@ fn provisioning_origin_preserves_explicit_deadline_presence() {
             diagnostic_code: 137,
             retry_category: ProvisioningRetryCategory::Backoff,
         };
-        assert_candid_roundtrip(origin);
-    }
-}
-
-#[test]
-fn fleet_coordinator_command_surface_is_profile_exact() {
-    let did_path = workspace_root().join("crates/canic/candid/fleet_coordinator.did");
-    let did = read_text(&did_path);
-    let (env, _) = CandidSource::Text(&did).load().unwrap();
-    let request = env
-        .trace_type(env.find_type("CoordinatorCommand").unwrap())
-        .unwrap();
-    let TypeInner::Variant(variants) = request.as_ref() else {
-        panic!("CoordinatorCommand must be a variant");
-    };
-
-    let expected = [
-        "AcknowledgeRootSnapshot",
-        "ActivateRegistry",
-        "ApplyFundingPolicyRotation",
-        "BeginFundingPolicyRotation",
-        "CompleteRootDeletion",
-        "JoinRoot",
-        "MutateAdmission",
-        "PrepareAuthoritySnapshot",
-        "PrepareRootDeletionExecution",
-        "ProvisionComponents",
-        "RemoveRoot",
-        "RequestRootFunding",
-        "ResumeAuthoritySnapshot",
-        "Retire",
-        "SetRootFunding",
-        "StageFundingPolicyRotationRoot",
-    ];
-    assert_eq!(
-        variants
-            .iter()
-            .map(|variant| variant.id.get_id())
-            .collect::<BTreeSet<_>>(),
-        expected
-            .into_iter()
-            .map(ic_platform::candid::contract::idl_hash)
-            .collect::<BTreeSet<_>>(),
-        "CoordinatorCommand must expose the reviewed command identities"
-    );
-}
-
-#[cfg(any(
-    feature = "fleet-coordinator-canister",
-    feature = "control-plane",
-    feature = "wasm-store-canister"
-))]
-mod infrastructure_read_contracts {
-    use super::*;
-
-    fn assert_contract<
-        Q: ic_platform::candid::contract::CandidType,
-        R: ic_platform::candid::contract::CandidType,
-    >(
-        path: &str,
-        method: &str,
-    ) {
-        let did = read_text(&workspace_root().join(path));
-        let (mut env, actor) = CandidSource::Text(&did)
-            .load()
-            .expect("parse canonical read contract");
-        let service = env
-            .as_service(actor.as_ref().expect("canonical service"))
-            .unwrap();
-        let (_, ty) = service
-            .iter()
-            .find(|(name, _)| name == method)
-            .expect("current read endpoint");
-        let function = env.as_func(ty).unwrap();
-        assert_eq!(function.args.len(), 1);
-        assert_eq!(function.rets.len(), 1);
-        assert_eq!(
-            function.modes,
-            vec![ic_platform::candid::contract::types::FuncMode::Query]
-        );
-        let canonical_request = function.args[0].clone();
-        let canonical_response = function.rets[0].clone();
-        let mut rust = TypeContainer::new();
-        let request = rust.add::<Q>();
-        let response = rust.add::<Result<R, canic::Error>>();
-        let request = env.merge_type(rust.env.clone(), request);
-        let response = env.merge_type(rust.env, response);
-        for (canonical, ty) in [(canonical_request, request), (canonical_response, response)] {
-            ic_platform::candid::contract::types::subtype::equal(
-                &mut HashSet::default(),
-                &env,
-                &canonical,
-                &ty,
-            )
-            .expect("read contract matches its current authority owner");
-        }
-    }
-
-    #[cfg(feature = "fleet-coordinator-canister")]
-    #[test]
-    fn coordinator_reads_match_their_authority_owner() {
-        use canic::dto::fleet_coordinator::{
-            CoordinatorObservabilityRequest, CoordinatorObservabilityResponse,
-            CoordinatorOperationReadRequest, CoordinatorOperationReadResponse,
-            CoordinatorRegistryRequest, CoordinatorRegistryResponse,
-        };
-
-        let coordinator = "crates/canic/candid/fleet_coordinator.did";
-        assert_contract::<CoordinatorObservabilityRequest, CoordinatorObservabilityResponse>(
-            coordinator,
-            canic::protocol::CANIC_OBSERVABILITY,
-        );
-        assert_contract::<CoordinatorRegistryRequest, CoordinatorRegistryResponse>(
-            coordinator,
-            canic::protocol::CANIC_COORDINATOR_REGISTRY,
-        );
-        assert_contract::<CoordinatorOperationReadRequest, CoordinatorOperationReadResponse>(
-            coordinator,
-            canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
-        );
-    }
-
-    #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
-    #[test]
-    fn store_reads_match_their_authority_owner() {
-        use canic::dto::template::{
-            StoreCatalogRequest, StoreCatalogResponse, StoreObservabilityRequest,
-            StoreObservabilityResponse, StoreStatusRequest, StoreStatusResponse,
-        };
-
-        let store = "crates/canic/candid/wasm_store.did";
-        assert_contract::<StoreStatusRequest, StoreStatusResponse>(
-            store,
-            canic::protocol::CANIC_WASM_STORE_STATUS,
-        );
-        assert_contract::<StoreCatalogRequest, StoreCatalogResponse>(
-            store,
-            canic::protocol::CANIC_WASM_STORE_CATALOG,
-        );
-        assert_contract::<StoreObservabilityRequest, StoreObservabilityResponse>(
-            store,
-            canic::protocol::CANIC_OBSERVABILITY,
-        );
+        assert_wire_roundtrip(origin);
     }
 }
 
 #[test]
 fn infrastructure_role_ingress_names_match_current_protocol() {
-    assert_eq!(canic::protocol::CANIC_COMMAND, "canic_command");
     assert_eq!(
-        canic::protocol::CANIC_COORDINATOR_COMMAND,
-        "canic_coordinator_command"
-    );
-    assert_eq!(canic::protocol::CANIC_OBSERVABILITY, "canic_observability");
-    assert_eq!(canic::protocol::CANIC_ROOT_COMMAND, "canic_root_command");
-    assert_eq!(canic::protocol::CANIC_ROOT_STATUS, "canic_root_status");
-    assert_eq!(canic::protocol::CANIC_PUBLIC_STATUS, "canic_public_status");
-    assert_eq!(
-        canic::protocol::CANIC_WASM_STORE_COMMAND,
-        "canic_wasm_store_command"
+        canic::protocol::cycles_capability::METHOD,
+        "canic_request_cycles"
     );
     assert_eq!(
-        canic::protocol::CANIC_WASM_STORE_STATUS,
-        "canic_wasm_store_status"
+        canic::protocol::batch_control::prepare::METHOD,
+        "canic_coordinator_provision_components"
+    );
+    assert_eq!(
+        canic::protocol::funding_read::coordinator_status::METHOD,
+        "canic_coordinator_funding"
+    );
+    assert_eq!(
+        canic::protocol::inspection::METHOD,
+        "canic_root_inspect_canister"
+    );
+    assert_eq!(
+        canic::protocol::funding_read::root_status::METHOD,
+        "canic_root_funding"
+    );
+    assert_eq!(
+        canic::protocol::component_directory::MEMBER_PAGE,
+        "canic_component_directory_page"
     );
 }
 
@@ -934,9 +403,9 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
     let endpoint_source = read_text(&endpoint_path);
     assert!(
         endpoint_source.contains("#[cfg(canic_capability_delegated_token_issuer)]")
-            && endpoint_source.contains("InstallDelegationProof(")
+            && endpoint_source.contains("fn canic_install_delegation_proof(")
             && endpoint_source.contains("ActiveDelegationProof"),
-        "managed auth command and status variants must be issuer-profile gated"
+        "managed proof installation and status must be issuer-profile gated"
     );
     assert!(
         endpoint_source.contains("access::auth::is_controller(caller)")
@@ -946,26 +415,22 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
 }
 
 #[test]
-fn root_delegation_commands_are_variant_owned() {
+fn root_delegation_methods_are_native_and_authorized() {
     assert_root_provisioning_facade_is_public();
 
     let source = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
     for variant in [
-        "GetOrCreateDelegationProof",
-        "GetChainKeyPublicKey",
-        "ConfigureIssuer",
+        "fn canic_root_delegation_proof(",
+        "fn canic_root_chain_key_public_key(",
+        "fn canic_root_configure_issuer(",
     ] {
         assert!(
             source.contains(variant),
             "Root command surface lacks {variant}"
         );
     }
-    let mut types = TypeContainer::new();
-    types.add::<canic_contracts::dto::wire::root::RootStatusRequest>();
-    assert!(candid_type_matches::<RootIssuerRenewalStatusRequest>(
-        &types.env,
-        &candid_field(&types.env, "RootStatusRequest", "IssuerRenewal"),
-    ));
+    assert!(source.contains("fn canic_root_issuer_renewal("));
+    assert!(source.contains("::canic::protocol::issuer_renewal::METHOD_ID"));
     assert!(source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"));
     assert!(source.contains("AuthApi::configure_issuer_root"));
     assert!(source.contains("AuthApi::root_issuer_renewal_status_root"));
@@ -986,7 +451,7 @@ fn assert_root_provisioning_facade_is_public() {
     );
 }
 #[test]
-fn root_delegation_proof_dtos_roundtrip_through_candid() {
+fn root_delegation_proof_dtos_roundtrip_through_wire() {
     assert_root_issuer_configure_dtos_roundtrip();
     assert_root_issuer_renewal_dtos_roundtrip();
     assert_root_delegation_proof_dtos_roundtrip();
@@ -1001,8 +466,8 @@ fn assert_root_issuer_configure_dtos_roundtrip() {
         root_issuer_configure_request(issuer_pid, audience.clone(), grant.clone());
     let issuer_policy_response = root_issuer_configure_response(issuer_pid, audience, grant);
 
-    assert_candid_roundtrip(issuer_policy_request);
-    assert_candid_roundtrip(issuer_policy_response);
+    assert_wire_roundtrip(issuer_policy_request);
+    assert_wire_roundtrip(issuer_policy_response);
 }
 
 fn assert_root_issuer_renewal_dtos_roundtrip() {
@@ -1042,8 +507,8 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
         latest_batch: Some(renewal_batch),
     };
 
-    assert_candid_roundtrip(renewal_status_request);
-    assert_candid_roundtrip(renewal_status_response);
+    assert_wire_roundtrip(renewal_status_request);
+    assert_wire_roundtrip(renewal_status_response);
 }
 
 fn assert_root_delegation_proof_dtos_roundtrip() {
@@ -1060,8 +525,8 @@ fn assert_root_delegation_proof_dtos_roundtrip() {
         cert_hash,
         proof,
     };
-    assert_candid_roundtrip(chain_key_proof);
-    assert_candid_roundtrip(batch_proof);
+    assert_wire_roundtrip(chain_key_proof);
+    assert_wire_roundtrip(batch_proof);
 }
 
 fn assert_active_delegation_proof_status_roundtrip() {
@@ -1077,7 +542,9 @@ fn assert_active_delegation_proof_status_roundtrip() {
         refresh_after_ns: Some(72),
     };
 
-    assert_candid_roundtrip(status);
+    let native =
+        canic::dto::issuer_proof::ActiveDelegationProofStatusResponse::from(status.clone());
+    assert_eq!(ActiveDelegationProofStatusResponse::from(native), status);
 }
 
 fn test_delegated_role_grant() -> DelegatedRoleGrant {
@@ -1212,148 +679,21 @@ fn chain_key_root_proof(
     }
 }
 
+#[cfg(feature = "wire-schema")]
 #[test]
-fn memory_ledger_dto_candid_shape_includes_backing_memory_size() {
-    let ledger_env = candid_type_env::<MemoryLedgerResponse>();
-
-    assert!(
-        ledger_env.contains("memories : vec MemoryLedgerMemoryEntry")
-            && ledger_env.contains("ledger_memory_manager_id : nat8")
-            && ledger_env.contains("excluded_ids : blob")
-            && ledger_env.contains("type MemoryLedgerMemoryEntry = record")
-            && ledger_env.contains("memory_manager_id : nat8")
-            && ledger_env.contains("stable_key : text")
-            && ledger_env.contains("size : MemoryAllocationSizeEntry")
-            && ledger_env.contains("memory_size : opt MemoryAllocationSizeEntry")
-            && ledger_env.contains("type MemoryAllocationSizeEntry = record")
-            && ledger_env.contains("wasm_pages : nat64")
-            && ledger_env.contains("bytes : nat64"),
-        "memory ledger DTO Candid changed:\n{ledger_env}"
-    );
-}
-
-#[test]
-fn root_icp_refill_dto_candid_shapes_are_named() {
-    let request_env = candid_type_env::<IcpRefillRequest>();
-    assert!(
-        request_env.contains("type IcpRefillRequest = record")
-            && request_env.contains("operation_id : blob")
-            && request_env.contains("source_subaccount : opt blob")
-            && request_env.contains("amount_e8s : nat64")
-            && request_env.contains("dry_run : bool"),
-        "root ICP refill request Candid changed:\n{request_env}"
-    );
-
-    let dry_run_env = candid_type_env::<IcpRefillDryRun>();
-    assert!(
-        dry_run_env.contains("type IcpRefillDryRun = record")
-            && dry_run_env.contains("operation_id : blob")
-            && dry_run_env.contains("amount_e8s : nat64")
-            && dry_run_env.contains("fee_e8s : nat64")
-            && dry_run_env.contains("xdr_permyriad_per_icp : opt nat64")
-            && dry_run_env.contains("estimated_cycles : opt nat"),
-        "root ICP refill dry-run Candid changed:\n{dry_run_env}"
-    );
-}
-
-#[test]
-fn runtime_introspection_dto_candid_shapes_are_named() {
-    let status_env = candid_type_env::<CanicRuntimeStatus>();
-
-    assert!(
-        status_env.contains("type CanicRuntimeStatus = record")
-            && status_env.contains("schema_version : nat32")
-            && status_env.contains("observed_at_ns : nat64")
-            && status_env.contains("canister_id : principal")
-            && status_env.contains("build_network : opt BuildNetwork")
-            && status_env.contains("type BuildNetwork = variant { ic; local }")
-            && status_env.contains("readiness : CanicReadinessStatus")
-            && status_env.contains("auth : opt RuntimeAuthStatusSummary")
-            && status_env.contains("receipt_capacity : opt RuntimeReceiptCapacityStatus")
-            && status_env.contains("timer_inventory : RuntimeCheck")
-            && status_env.contains("recent_failures : vec RecentFailure")
-            && status_env.contains("visibility : vec RuntimeVisibilityEntry")
-            && status_env.contains("type RuntimeAuthStatusSummary = record")
-            && status_env.contains("auth_features : vec RuntimeFeatureStatus")
-            && status_env.contains("type RuntimeReceiptCapacityStatus = record")
-            && status_env.contains("receipt_record_limit : nat64")
-            && status_env.contains("resource_total_record_limit : nat64")
-            && status_env.contains("remaining_resource_total_headroom : nat64")
-            && status_env.contains("warning_headroom_threshold : nat64")
-            && status_env.contains("type CanicReadinessStatus = record")
-            && status_env.contains("type RecentFailure = record")
-            && status_env.contains("redacted : bool")
-            && status_env.contains("type RuntimeFieldVisibility = variant")
-            && status_env.contains("type CanisterTimerStatus = record")
-            && status_env.contains("scheduler_performance : TimerCallbackPerformanceStatus")
-            && status_env.contains("work_performance : TimerCallbackPerformanceStatus")
-            && status_env.contains("type TimerCallbackPerformanceStatus = record")
-            && status_env.contains("instruction_samples_since_runtime_start : nat64")
-            && status_env.contains("memory_page_samples_since_runtime_start : nat64")
-            && status_env.contains("memory_pages_latest : opt TimerMemoryPageSampleStatus")
-            && status_env.contains("maximum_wasm_memory_growth_pages : opt nat64")
-            && status_env.contains("maximum_stable_memory_growth_pages : opt nat64")
-            && status_env.contains("type TimerMemoryPageSampleStatus = record")
-            && status_env.contains("start : TimerMemoryPageExtentStatus")
-            && status_env.contains("end : TimerMemoryPageExtentStatus")
-            && status_env.contains("type TimerMemoryPageExtentStatus = record")
-            && status_env.contains("wasm_pages : nat64")
-            && status_env.contains("stable_pages : nat64")
-            && status_env.contains("scheduling_mode : TimerSchedulingMode")
-            && status_env.contains("registration : TimerRegistrationStatus")
-            && status_env.contains("condition : TimerProcessCondition")
-            && status_env.contains("last_outcome : opt TimerExecutionOutcome")
-            && status_env.contains("type TimerExecutionOutcome = variant")
-            && status_env.contains("type TimerProcessCondition = variant")
-            && status_env.contains("type TimerRegistrationStatus = variant")
-            && status_env.contains("type TimerSchedulingMode = variant"),
-        "runtime introspection DTO Candid changed:\n{status_env}"
-    );
-    for label in [
-        "controller_only",
-        "disabled",
-        "feature_gated",
-        "operator_only",
-        "public_safe",
-    ] {
-        assert!(
-            status_env.contains(label),
-            "runtime introspection Candid labels must be canonical snake_case; missing {label}:\n{status_env}"
-        );
-    }
-
-    let health_env = candid_type_env::<CanicHealthStatus>();
-    assert!(
-        health_env.contains("type CanicHealthStatus = record")
-            && health_env.contains("status : HealthStatus")
-            && health_env.contains("checks : vec RuntimeCheck"),
-        "health DTO Candid changed:\n{health_env}"
-    );
-    for label in ["degraded", "healthy", "unhealthy", "unknown"] {
-        assert!(
-            health_env.contains(label),
-            "health Candid labels must be canonical snake_case; missing {label}:\n{health_env}"
-        );
-    }
-
-    let readiness_env = candid_type_env::<CanicReadinessStatus>();
-    assert!(
-        readiness_env.contains("type CanicReadinessStatus = record")
-            && readiness_env.contains("blockers : vec RuntimeDiagnostic")
-            && readiness_env.contains("warnings : vec RuntimeDiagnostic"),
-        "readiness DTO Candid changed:\n{readiness_env}"
-    );
-
-    let _ = RuntimeFieldVisibility::ControllerOnly;
-    let _ = RecentFailure {
-        occurred_at_ns: 0,
-        subsystem: String::new(),
-        code: String::new(),
-        severity: canic::dto::runtime::FailureSeverity::Info,
-        summary: String::new(),
-        correlation_id: None,
-        redacted: true,
+fn runtime_introspection_has_complete_native_schemas() {
+    use canic::dto::{
+        runtime::CanicHealthStatus,
+        runtime_observation::{CanicReadinessStatus, CanicRuntimeStatus},
     };
+    for schema in [
+        ic_wire::typescript::native_schema::<CanicHealthStatus>().unwrap(),
+        ic_wire::typescript::native_schema::<CanicReadinessStatus>().unwrap(),
+        ic_wire::typescript::native_schema::<CanicRuntimeStatus>().unwrap(),
+    ] {
+        assert_eq!(schema["k"], "record");
+        assert!(!schema["fields"].as_array().unwrap().is_empty());
+    }
 }
 
 #[test]
@@ -1372,216 +712,58 @@ fn missing_finish_marker_stays_actionable() {
     );
 }
 
-#[test]
-fn public_history_canonical_types_match_rust() {
-    fn check<T: ic_platform::candid::contract::CandidType>(name: &str) {
-        let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
-        let (mut env, _) = CandidSource::Text(&did)
-            .load()
-            .expect("canonical Store Candid");
-        let canonical = env.find_type(name).unwrap().clone();
-        let mut rust = TypeContainer::new();
-        let ty = rust.add::<T>();
-        let ty = env.merge_type(rust.env, ty);
-        ic_platform::candid::contract::types::subtype::equal(
-            &mut HashSet::default(),
-            &env,
-            &canonical,
-            &ty,
-        )
-        .expect("canonical public metrics type equals current Rust contract");
-    }
-    use canic::dto::public_status::{PublicHistoryRequest, PublicHistorySnapshot, PublicMetric};
-    check::<PublicMetric>("PublicMetric");
-    check::<PublicHistoryRequest>("PublicHistoryRequest");
-    check::<PublicHistorySnapshot>("PublicHistorySnapshot");
-}
-
-#[test]
-fn public_health_canonical_types_match_rust() {
-    for file in ["fleet_coordinator.did", "wasm_store.did"] {
-        let did = read_text(&workspace_root().join("crates/canic/candid").join(file));
-        let (mut env, _) = CandidSource::Text(&did).load().expect("canonical Candid");
-        let canonical = env.find_type("PublicHealth").unwrap().clone();
-        let mut rust = TypeContainer::new();
-        let ty = rust.add::<canic::dto::public_status::PublicHealth>();
-        let ty = env.merge_type(rust.env, ty);
-        ic_platform::candid::contract::types::subtype::equal(
-            &mut HashSet::default(),
-            &env,
-            &canonical,
-            &ty,
-        )
-        .expect("canonical public health equals current Rust contract");
-    }
-}
-
-#[test]
-fn fleet_recovery_controller_binding_matches_canonical_candid() {
-    for file in ["fleet_coordinator.did", "wasm_store.did"] {
-        let did = read_text(&workspace_root().join("crates/canic/candid").join(file));
-        let (mut env, _) = CandidSource::Text(&did).load().expect("canonical Candid");
-        let canonical = env.find_type("FleetCoordinatorBinding").unwrap().clone();
-        let mut rust = TypeContainer::new();
-        let ty = rust.add::<ids::FleetCoordinatorBinding>();
-        let ty = env.merge_type(rust.env, ty);
-        ic_platform::candid::contract::types::subtype::equal(
-            &mut HashSet::default(),
-            &env,
-            &canonical,
-            &ty,
-        )
-        .expect("Fleet recovery controller binding matches canonical Candid");
-    }
-}
-
 #[cfg(feature = "control-plane")]
-#[test]
-fn fleet_funding_rotation_status_matches_canonical_candid_after_recovery_binding() {
-    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
-    let (mut env, _) = CandidSource::Text(&did).load().expect("Coordinator Candid");
-    let canonical = env
-        .find_type("FleetFundingPolicyRotationStatusPhase")
-        .unwrap()
-        .clone();
-    let mut rust = TypeContainer::new();
-    let ty = rust
-        .add::<canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase>();
-    let ty = env.merge_type(rust.env, ty);
-    ic_platform::candid::contract::types::subtype::equal(
-        &mut HashSet::default(),
-        &env,
-        &canonical,
-        &ty,
-    )
-    .expect("funding rotation status retains its canonical Candid shape");
-}
-
-#[test]
-fn provisioning_failure_stage_matches_canonical_candid() {
-    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
-    let (mut env, _) = CandidSource::Text(&did).load().expect("Coordinator Candid");
-    let mut rust = TypeContainer::new();
-    let types = [
-        ("ProvisioningFailureStage", rust.add::<canic::dto::component_provisioning::ProvisioningFailureStage>()),
-        ("ProvisioningFailureOrigin", rust.add::<canic::dto::component_provisioning::ProvisioningFailureOrigin>()),
-        ("ProvisioningDependencyFailure", rust.add::<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>()),
-    ];
-    for (name, ty) in types {
-        let canonical = env.find_type(name).unwrap().clone();
-        let ty = env.merge_type(rust.env.clone(), ty);
-        ic_platform::candid::contract::types::subtype::equal(
-            &mut HashSet::default(),
-            &env,
-            &canonical,
-            &ty,
-        )
-        .expect("protected provisioning evidence equals the current Rust contract");
-    }
-}
-
-#[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
-#[test]
-fn state_cascade_store_response_matches_canonical_candid() {
-    let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
-    let (mut env, _) = CandidSource::Text(&did)
-        .load()
-        .expect("canonical Store Candid");
-    let canonical = env.find_type("StoreCommandResponse").unwrap().clone();
-    let mut rust = TypeContainer::new();
-    let ty = rust.add::<canic_contracts::dto::template::StoreCommandResponse>();
-    let ty = env.merge_type(rust.env, ty);
-    ic_platform::candid::contract::types::subtype::equal(
-        &mut HashSet::default(),
-        &env,
-        &canonical,
-        &ty,
-    )
-    .expect("Store response contract equals current Rust, including cascade outcomes");
-}
-
-#[cfg(feature = "wasm-store-canister")]
-#[test]
-fn store_preparation_command_matches_canonical_candid() {
-    let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
-    let (mut env, _) = CandidSource::Text(&did)
-        .load()
-        .expect("canonical Store Candid");
-    let mut rust = TypeContainer::new();
-    let command = rust.add::<canic_contracts::dto::template::StoreCommand>();
-    let chunk = rust.add::<canic_contracts::dto::template::TemplateChunkInput>();
-    for (name, ty) in [("StoreCommand", command), ("TemplateChunkInput", chunk)] {
-        let canonical = env.find_type(name).unwrap().clone();
-        let ty = env.merge_type(rust.env.clone(), ty);
-        ic_platform::candid::contract::types::subtype::equal(
-            &mut HashSet::default(),
-            &env,
-            &canonical,
-            &ty,
-        )
-        .expect("Store publication matches its canonical Candid contract");
-    }
-}
-
 #[cfg(feature = "control-plane")]
 mod capacity_import_surface {
-    use canic::dto::pool_import::{PoolImportCommand, PoolImportIdentity};
-    use ic_platform::candid::contract::encode_one;
-    use ic_platform::candid::decoder::decode_one;
-
+    use canic::{dto::pool_import::PoolImportIdentity, protocol::import_control as wire};
     canic::canic_emit_root_command_endpoint!();
-
     #[test]
     fn capacity_import_generated_root_command_preserves_operation_identity() {
         let identity = PoolImportIdentity {
             sequence: u64::MAX - 1,
             plan_sha256: [42; 32],
         };
-        let command = RootCommand::ImportPoolCapacity(PoolImportCommand::Settle(identity));
-        let restored = decode_one::<RootCommand>(&encode_one(command).unwrap()).unwrap();
-        assert!(matches!(restored,
-            RootCommand::ImportPoolCapacity(PoolImportCommand::Settle(found)) if found == identity
-        ));
+        let bytes = ic_wire::native::encode_request(
+            wire::settle::METHOD_ID,
+            &identity,
+            wire::REQUEST_LIMITS,
+        )
+        .unwrap();
+        let restored: PoolImportIdentity =
+            ic_wire::native::decode_request(wire::settle::METHOD_ID, &bytes, wire::REQUEST_LIMITS)
+                .unwrap();
+        assert_eq!(restored, identity);
     }
 }
 
 mod lean_observability_relay {
-    use super::*;
-    canic::__canic_emit_relay_observability_response!();
-
     #[test]
-    fn lean_reply_decodes_at_root_and_disabled_reads_fail_without_collecting() {
-        use canic::dto::observability::{
-            CanisterObservabilityRequest, CanisterObservabilityResponse,
-        };
-        let encoded = encode_one(RelayedObservabilityResponse::CycleBalance(
-            canic::dto::role::CycleBalanceStatusResponse { cycles: 123 },
-        ))
-        .unwrap();
-        let decoded: CanisterObservabilityResponse = decode_one(&encoded).unwrap();
-        assert!(
-            matches!(decoded, CanisterObservabilityResponse::CycleBalance(value) if value.cycles == 123)
+    fn disabled_provider_returns_the_same_typed_error_without_collection() {
+        let collected = std::cell::Cell::new(false);
+        let result: Result<canic::dto::memory::MemoryAllocationsResponse, canic::Error> =
+            canic::__canic_optional_observation!(any(), {
+                collected.set(true);
+                unreachable!()
+            });
+        assert!(!collected.get());
+        assert_eq!(
+            result.as_ref().unwrap_err().clone(),
+            canic::Error::from_registered(canic::diagnostics::codes::REQUEST_INVALID)
         );
-        for request in [
-            CanisterObservabilityRequest::MemoryAllocations,
-            CanisterObservabilityRequest::CycleHistory(canic::dto::page::PageRequest {
-                offset: 0,
-                limit: 10,
-            }),
-        ] {
-            let result = canic::__canic_sensitive_observability_response!(
-                request,
-                RelayedObservabilityResponse
-            );
-            assert!(
-                matches!(result, Err(error) if error == canic::Error::from_registered(canic::diagnostics::codes::REQUEST_INVALID))
-            );
-        }
-        let candid = candid_type_env::<RelayedObservabilityResponse>();
-        assert!(candid.contains("CycleBalance"));
-        assert!(candid.contains("ChildFunding"));
-        assert!(!candid.contains("MemoryAllocations"));
-        assert!(!candid.contains("CycleHistory"));
-        assert!(!candid.contains("Metrics"));
+        let protocol = canic::protocol::observability_relay::memory_allocations::METHOD_ID;
+        let bytes = ic_wire::native::encode_response(
+            protocol,
+            &result,
+            canic::protocol::observability_relay::memory_allocations::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        let decoded: Result<canic::dto::memory::MemoryAllocationsResponse, canic::Error> =
+            ic_wire::native::decode_response(
+                protocol,
+                &bytes,
+                canic::protocol::observability_relay::memory_allocations::RESPONSE_LIMITS,
+            )
+            .unwrap();
+        assert_eq!(decoded, result);
     }
 }

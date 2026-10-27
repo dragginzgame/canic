@@ -24,16 +24,12 @@ mod build_environment;
 mod build_profile;
 pub mod build_provenance;
 pub mod build_toolchain;
-pub mod candid_endpoints;
 pub mod canic_metadata;
 pub mod canister_build;
 mod canister_protocol;
 mod canonical_root;
 mod fleet_package;
-pub use canister_protocol::{
-    CanisterProtocolError, call_with_arg as call_canister_with_arg,
-    query_with_arg as query_canister_with_arg,
-};
+pub use canister_protocol::{CanisterProtocolError, funding_read};
 pub mod canister_ready;
 mod cargo_observation;
 pub mod component_initialization;
@@ -58,6 +54,7 @@ pub mod policy_gate;
 pub mod protocol_binding;
 pub mod publication;
 pub mod registry;
+pub mod registry_discovery;
 pub mod release_build;
 pub mod release_set;
 pub mod replica_query;

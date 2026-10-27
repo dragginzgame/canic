@@ -1,6 +1,35 @@
 # Local developer setup
 <!-- Shared companions: scripts/ci/report-tool-versions.sh -->
 
+## Tool selection and diagnostics
+
+`make tools-report` runs all existing host, common Rust and selected local check
+targets, retaining individual failures through the shared validation logger.
+It returns nonzero if any check fails and never calls install targets. It is an
+optional diagnostic, not release admission: `make tools-check` keeps its existing
+fail-fast behavior. Local check targets must retain their offline/no-install
+contract. The report uses the consumer root even with a nested shared snapshot.
+
+The host, IC and Rust installers accept `--describe` instead of installation,
+`--check` or `--preflight`. They print JSON after parsing the same selection
+used by normal operation, without creating stores, probing installed binaries,
+invoking Cargo/Rustup or downloading. For example:
+
+```bash
+bash scripts/dev/install-rust-tools.sh --consumer "$PWD" --describe
+bash scripts/dev/install-ic-tools.sh --consumer "$PWD" --tool wasm-opt --describe
+```
+
+Catalog selections include absolute consumer/catalog/source paths, the installer
+source fingerprint and selected version/digest records. Explicit Cargo recipes
+instead report package/version, binary or example, profile, features and lockfile.
+Lock-selected recipes still need prepared yq/jq to read the supplied lockfile.
+No output claims installed-tool integrity or registry availability. For catalog
+agreement, capture the JSON as a [caller observation](tool-catalog-bindings.md);
+retain the actual command and its source context. Product pins remain local.
+
+## Common setup
+
 From the checkout root, prepare the common executables explicitly:
 
 ```bash
@@ -394,6 +423,62 @@ product/native qualification. Formatting still requires rustfmt and the
 [formatter check](verification-helpers.md#formatter-prerequisites).
 
 ### Standard Cargo tool-build environment
+
+Explicit Cargo setup waits up to 60 seconds per occupied selected-tool slot
+when its physical, user-owned lock has a readable, regular
+owner record. Set `SHARED_TOOLING_SETUP_WAIT_SECONDS` to a canonical integer from
+0 to 300 to select another budget; `0` retains immediate refusal. Diagnostics name
+the slot and recorded owner, then report release or timeout. The record identifies
+the claim, not whether its PID is still live. No lock is removed or owner killed.
+
+After waiting, setup rechecks compiler/build identity, lockfile selection and
+normal source/receipt/checksum admission before reuse or activation. An owner
+failure never makes its partial generation reusable. An admitted owner's record
+may disappear during cleanup only while the same physical lock directory remains;
+a directory that has disappeared goes back through atomic acquisition. A missing
+initial record or a replacement directory without an admitted owner still refuses.
+Malformed, redirected or unwritable lock routes fail rather than polling. Atomic
+`mkdir` still owns acquisition: if a new owner wins that race, or acquisition fails
+for another reason, its diagnostic/status is preserved without a retry. Timeouts
+are nonzero and retain previous selections and failed evidence. Plain `--check`,
+`--preflight`, checkout locks and Host/IC setup remain immediate. The setup wait
+environment variable does not change check behavior.
+
+Cargo admission supports explicit `--check --wait-seconds N`, with a canonical
+integer from 0 to 300. It waits only on an admitted exact shared-slot claim for
+an already selected tool. Exit **75** means that admitted slot is busy or its
+admission wait timed out; missing/corrupt preparation and invalid, inaccessible
+or redirected claims remain failures rather than busy results. Consumers should
+propagate that status and diagnostic instead of recommending installation or
+classifying stderr text. The default budget is zero; setup waiting is unchanged.
+
+After a wait, admission rereads compiler/build and source inputs, supplied
+lock/catalog bytes, checkout reference, generation, features, receipts and
+checksums. Changed inputs fail; an owner's partial installation cannot be
+selected. This path performs no installation, repair, activation, lock acquisition
+or foreign-lock cleanup. No consumer sleep/retry loop is needed. An immediate
+busy check emits no executable path or installation hint. Successful waiting
+prints the same path as an ordinary check, with wait diagnostics only on stderr.
+
+Explicit Cargo-tool setup reports package/version, phase, outcome and elapsed
+whole seconds on stderr. Start and completion messages distinguish source
+preparation, selection reuse, shared-slot acquisition/waiting, cache reuse,
+compilation and receipt/build admission when those paths run. Compilation output
+stays in the retained attempt's `install.log`; a failure still replays that log
+and returns its original status. Timings are observations, not a speedup claim or
+another deadline. Diagnostic write failures do not replace command results.
+Stdout remains the selected executable or common-bin path. Successful immediate
+`--check` calls remain quiet on stderr; checks, preflight and descriptions add no setup.
+These diagnostics do not change installed-tool identities or require rebuilding
+an already admitted generation.
+
+Source-cache initialization uses idempotent private directory creation, admitting
+existing paths before creation and checking cache routes/configuration before
+Cargo dispatch. It has no global installation lock; Cargo owns actual source
+download serialization. Old source-preparation slots remain untouched.
+The 0.26.8 build-helper change alters its policy digest: after adoption, rerun
+explicit Cargo-tool setup to select tools under that policy. Previous generations
+remain retained, and offline checks never repair selections.
 
 Tool builds have a cleared environment, a fresh private HOME per attempt, the
 selected compiler's bin directory followed by system executable directories,

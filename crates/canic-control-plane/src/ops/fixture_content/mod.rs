@@ -4,20 +4,19 @@
 //! Does not own: storage, release selection, endpoint authentication or publication.
 //! Boundary: host compilation and Store admission use the same wire-envelope and hash rules.
 
-use crate::dto::template::StoreCommand;
 use canic_contracts::dto::fixture_provisioning::{FixtureDescriptor, FixtureStoreError};
-use canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
+use canic_contracts::protocol::store_publication;
 
 /// Content hashing excludes all release and target identities to avoid circular binding.
 
 pub fn content_id(descriptor: &FixtureDescriptor) -> Result<[u8; 32], FixtureStoreError> {
     let content_id = canic_core::api::fixture_content::FixtureContentApi::content_id(descriptor)?;
-    let encoded =
-        ic_platform::candid::contract::encode_one(StoreCommand::PrepareFixture(descriptor.clone()))
-            .map_err(|_| FixtureStoreError::Bounds)?;
-    if encoded.len() > DEFAULT_UPDATE_INGRESS_MAX_BYTES {
-        return Err(FixtureStoreError::Bounds);
-    }
+    ic_wire::native::encode_request(
+        store_publication::fixture_prepare::METHOD_ID,
+        descriptor,
+        store_publication::REQUEST_LIMITS,
+    )
+    .map_err(|_| FixtureStoreError::Bounds)?;
     Ok(content_id)
 }
 

@@ -303,7 +303,7 @@ const fn action_label(kind: FleetEnsureActionKind) -> &'static str {
         FleetEnsureActionKind::ObservePoolReadiness => "Verify pool readiness",
         FleetEnsureActionKind::PrepareComponentRegistry => "Prepare service registry",
         FleetEnsureActionKind::PrepareStoreFixture => "Prepare artifact upload",
-        FleetEnsureActionKind::Protocol => "Apply reviewed protocol action",
+
         FleetEnsureActionKind::ProvisionComponents => "Provision application services",
         FleetEnsureActionKind::PublishStoreChunk
         | FleetEnsureActionKind::PublishStoreFixtureChunk => "Upload artifact chunk",

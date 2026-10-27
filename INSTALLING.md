@@ -212,13 +212,11 @@ endpoint macros. The complete App schema is in [CONFIG.md](CONFIG.md).
 
 ## Configure And Build
 
-These commands create an App, create a Rust canister package for its `app` role,
-connect that role to a Component blueprint, and build it:
+App creation writes the Rust package for its `app` role and declares that role's
+Component Spec. Build that generated package directly:
 
 ```bash
-canic app create example
-canic scaffold canister example app
-canic app role attach example app --component-spec example.app
+canic app create example --yes
 canic build example app --profile release \
   --provenance artifacts/example-app-provenance.json
 ```

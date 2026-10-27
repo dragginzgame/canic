@@ -6,14 +6,14 @@
 
 use super::{
     MgmtInfra,
-    types::{InfraCanisterInfoResult, InfraCanisterStatusResult, InfraUpdateSettingsArgs},
+    types::{InfraCanisterStatusResult, InfraUpdateSettingsArgs},
 };
 use crate::infra::ic::{
     IcInfraError,
     call::{Call, CallBuilder, CallResult},
 };
 use ic_platform::{
-    management_canister_types::{CanisterIdRecord, CanisterInfoArgs},
+    management_canister_types::{CanisterIdRecord, CanisterInfoArgs, CanisterInfoResult},
     principal::ExternalPrincipal as Principal,
 };
 
@@ -53,7 +53,7 @@ impl MgmtInfra {
             .with_arg(args)?
             .execute()
             .await?;
-        let (info,): (InfraCanisterInfoResult,) = response.candid_tuple()?;
+        let (info,): (CanisterInfoResult,) = response.candid_tuple()?;
         Ok(info.total_num_changes)
     }
 

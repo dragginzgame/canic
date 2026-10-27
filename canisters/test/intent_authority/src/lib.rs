@@ -3,6 +3,7 @@
 //!
 
 mod codec;
+mod protocol;
 
 use canic::api::intent::{
     BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, IntentResourceKey, OperationId,
@@ -10,13 +11,16 @@ use canic::api::intent::{
     SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult, TerminalEvidence,
     TerminalEvidenceDecision,
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
-use serde::Deserialize;
+use ic_platform::Principal;
+use serde::{Deserialize, Serialize};
 
 const RECEIPT_CAPACITY: u64 = 1;
 
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum ReceiptStateView {
     Pending,
     Committed {
@@ -29,8 +33,11 @@ enum ReceiptStateView {
     },
 }
 
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct ReceiptIntentView {
     payload_digest: [u8; 32],
     quantity: u64,
@@ -38,8 +45,11 @@ struct ReceiptIntentView {
     state: ReceiptStateView,
 }
 
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum ReceiptBeginStatus {
     Created,
     ExistingPending,
@@ -64,15 +74,21 @@ enum ReceiptBeginStatus {
     },
 }
 
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct ReceiptBeginView {
     status: ReceiptBeginStatus,
     intent: Option<ReceiptIntentView>,
 }
 
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum ReceiptSettlementStatus {
     Settled,
     AlreadySettled,
@@ -81,15 +97,21 @@ enum ReceiptSettlementStatus {
     BindingConflict,
 }
 
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 struct ReceiptSettlementView {
     status: ReceiptSettlementStatus,
     intent: Option<ReceiptIntentView>,
 }
 
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum ReceiptDecisionView {
     Committed,
     RolledBack,
@@ -109,17 +131,19 @@ fn post_upgrade() {
     ic_platform::cdk::println!("intent_authority: post_upgrade memory initialized");
 }
 
+canic::__canic_register_wire_schema!("begin_receipt", Update, protocol::BEGIN, protocol::BeginRequest, Result<ReceiptBeginView, String>, protocol::LIMITS, protocol::LIMITS);
 #[ic_platform::cdk::update(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::begin::decode",
+    encode_with = "codec::begin::encode"
 )]
-fn begin_receipt(
-    operation_seed: u8,
-    payload_seed: u8,
-    resource_seed: u8,
-    quantity: u64,
-    replay_deadline_ns: u64,
-) -> Result<ReceiptBeginView, String> {
+fn begin_receipt(request: protocol::BeginRequest) -> Result<ReceiptBeginView, String> {
+    let protocol::BeginRequest {
+        operation_seed,
+        payload_seed,
+        resource_seed,
+        quantity,
+        replay_deadline_ns,
+    } = request;
     init_memory();
     let operation_id = operation_id(operation_seed);
     let result = ReceiptBackedIntentApi::begin_or_load(&BeginReceiptBackedIntentInput {
@@ -185,23 +209,37 @@ fn begin_receipt(
     Ok(ReceiptBeginView { status, intent })
 }
 
-#[ic_platform::cdk::query(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
+canic::__canic_register_wire_schema!(
+    "load_receipt",
+    Query,
+    protocol::LOAD,
+    u8,
+    Result<Option<ReceiptIntentView>, String>,
+    protocol::LIMITS,
+    protocol::LIMITS
+);
+#[ic_platform::cdk::query(
+    decode_with = "codec::load::decode",
+    encode_with = "codec::load::encode"
+)]
 fn load_receipt(operation_seed: u8) -> Result<Option<ReceiptIntentView>, String> {
     load_receipt_view(operation_id(operation_seed))
 }
 
+canic::__canic_register_wire_schema!("settle_receipt", Update, protocol::SETTLE, protocol::SettleRequest, Result<ReceiptSettlementView, String>, protocol::LIMITS, protocol::LIMITS);
 #[ic_platform::cdk::update(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::settle::decode",
+    encode_with = "codec::settle::encode"
 )]
-fn settle_receipt(
-    operation_seed: u8,
-    payload_seed: u8,
-    expected_revision: u64,
-    decision: ReceiptDecisionView,
-    source_canister: Principal,
-    evidence_seed: u8,
-) -> Result<ReceiptSettlementView, String> {
+fn settle_receipt(request: protocol::SettleRequest) -> Result<ReceiptSettlementView, String> {
+    let protocol::SettleRequest {
+        operation_seed,
+        payload_seed,
+        expected_revision,
+        decision,
+        source_canister,
+        evidence_seed,
+    } = request;
     init_memory();
     let operation_id = operation_id(operation_seed);
     let decision = match decision {
@@ -212,7 +250,7 @@ fn settle_receipt(
         operation_id,
         expected_revision,
         expected_payload_binding: payload_binding(payload_seed),
-        evidence: TerminalEvidence::new(source_canister, decision, [evidence_seed; 32]),
+        evidence: TerminalEvidence::new(source_canister.into(), decision, [evidence_seed; 32]),
     })
     .map_err(|err| err.to_string())?;
 
@@ -272,11 +310,11 @@ impl From<ReceiptBackedIntent> for ReceiptIntentView {
         let state = match intent.state {
             ReceiptBackedIntentState::Pending => ReceiptStateView::Pending,
             ReceiptBackedIntentState::Committed { evidence } => ReceiptStateView::Committed {
-                source_canister: evidence.source_canister,
+                source_canister: evidence.source_canister.into(),
                 fingerprint: evidence.fingerprint,
             },
             ReceiptBackedIntentState::RolledBack { evidence } => ReceiptStateView::RolledBack {
-                source_canister: evidence.source_canister,
+                source_canister: evidence.source_canister.into(),
                 fingerprint: evidence.fingerprint,
             },
         };

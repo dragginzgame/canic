@@ -4,7 +4,6 @@
 //! Does not own: group compilation, placement policy, service authority, or runtime parentage.
 //! Boundary: source identities and member paths are bounded canonical values at decode time.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::{borrow::Borrow, fmt, str::FromStr};
 use thiserror::Error as ThisError;
@@ -47,18 +46,6 @@ macro_rules! bounded_deployment_name {
             }
         }
 
-        impl CandidType for $name {
-            fn _ty() -> ic_platform::candid::contract::types::Type {
-                ic_platform::candid::contract::types::TypeInner::Text.into()
-            }
-
-            fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-            where
-                S: ic_platform::candid::contract::types::Serializer,
-            {
-                serializer.serialize_text(self.as_str())
-            }
-        }
 
         impl FromStr for $name {
             type Err = ComponentDeploymentIdParseError;
@@ -116,11 +103,12 @@ bounded_deployment_name!(
 );
 
 /// SHA-256 identity of one canonical Component deployment configuration.
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentDeploymentConfigurationDigest([u8; 32]);
 
 impl ComponentDeploymentConfigurationDigest {
@@ -150,11 +138,12 @@ impl fmt::Display for ComponentDeploymentConfigurationDigest {
 }
 
 /// Durable Fleet-scoped identity of one materialized Component Group deployment copy.
-#[derive(
-    CandidType, Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentGroupPlacementId {
     pub deployment: ComponentGroupDeploymentId,
     pub ordinal: u32,
@@ -188,19 +177,6 @@ impl TryFrom<Vec<ComponentGroupMemberId>> for ComponentGroupMemberPath {
     fn try_from(value: Vec<ComponentGroupMemberId>) -> Result<Self, Self::Error> {
         validate_component_group_member_path(&value)?;
         Ok(Self(value))
-    }
-}
-
-impl CandidType for ComponentGroupMemberPath {
-    fn _ty() -> ic_platform::candid::contract::types::Type {
-        <Vec<ComponentGroupMemberId> as CandidType>::_ty()
-    }
-
-    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-    where
-        S: ic_platform::candid::contract::types::Serializer,
-    {
-        self.0.idl_serialize(serializer)
     }
 }
 
@@ -325,29 +301,26 @@ mod tests {
     }
 
     #[test]
-    fn deployment_names_validate_serde_and_candid_input() {
-        let invalid_candid = ic_platform::candid::contract::encode_one("bad/name")
-            .expect("encode invalid service ID");
+    fn deployment_names_validate_serde_and_wire_input() {
+        let invalid_wire =
+            crate::protocol::authority::encode("bad/name").expect("encode invalid service ID");
         let invalid_cbor = {
             let mut bytes = Vec::new();
-            ciborium::ser::into_writer("bad/name", &mut bytes).expect("encode invalid service ID");
+            serde_cbor::to_writer(&mut bytes, &"bad/name").expect("encode invalid service ID");
             bytes
         };
 
-        assert!(
-            ic_platform::candid::decoder::decode_one::<FleetServiceId>(&invalid_candid).is_err()
-        );
-        assert!(ciborium::de::from_reader::<FleetServiceId, _>(invalid_cbor.as_slice()).is_err());
+        assert!(crate::protocol::authority::decode::<FleetServiceId>(&invalid_wire).is_err());
+        assert!(serde_cbor::from_reader::<FleetServiceId, _>(invalid_cbor.as_slice()).is_err());
     }
 
     #[test]
     fn configuration_digest_preserves_exact_bytes_and_hex_boundary() {
         let digest = ComponentDeploymentConfigurationDigest::from_bytes([0xab; 32]);
         let encoded =
-            ic_platform::candid::contract::encode_one(digest).expect("encode configuration digest");
+            crate::protocol::authority::encode(digest).expect("encode configuration digest");
         let decoded: ComponentDeploymentConfigurationDigest =
-            ic_platform::candid::decoder::decode_one(&encoded)
-                .expect("decode configuration digest");
+            crate::protocol::authority::decode(&encoded).expect("decode configuration digest");
 
         assert_eq!(decoded, digest);
         assert_eq!(digest.as_bytes(), &[0xab; 32]);
@@ -363,10 +336,10 @@ mod tests {
                 .expect("Component Group deployment ID"),
             ordinal: 7,
         };
-        let candid = ic_platform::candid::contract::encode_one(&placement)
-            .expect("encode placement identity");
+        let wire =
+            crate::protocol::authority::encode(&placement).expect("encode placement identity");
         let decoded: ComponentGroupPlacementId =
-            ic_platform::candid::decoder::decode_one(&candid).expect("decode placement identity");
+            crate::protocol::authority::decode(&wire).expect("decode placement identity");
 
         assert_eq!(decoded, placement);
         assert!(crate::serialization::serialize(&placement).unwrap().len() <= 128);
@@ -379,9 +352,9 @@ mod tests {
             "database_a".parse().expect("Component member"),
         ])
         .expect("member path");
-        let candid = ic_platform::candid::contract::encode_one(&path).expect("encode member path");
+        let wire = crate::protocol::authority::encode(&path).expect("encode member path");
         let decoded: ComponentGroupMemberPath =
-            ic_platform::candid::decoder::decode_one(&candid).expect("decode member path");
+            crate::protocol::authority::decode(&wire).expect("decode member path");
 
         assert_eq!(decoded, path);
         assert_eq!(path.len(), 2);

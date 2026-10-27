@@ -134,6 +134,7 @@ pub(in crate::fleet_ensure) fn compile(
                 desired,
                 configured,
                 live,
+                observation,
                 CanisterCyclePolicy {
                     minimum_cycles: required,
                     ..cycle_policy
@@ -627,7 +628,7 @@ fn validate_sources(
             != desired.canisters.len()
         || (record.coordinator == BootstrapCoordinatorSelection::Ready)
             != record
-                .coordinator_registry_candid_hex
+                .coordinator_registry_wire_hex
                 .as_ref()
                 .is_some_and(|text| !text.is_empty())
     {

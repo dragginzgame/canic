@@ -55,8 +55,8 @@ mod tests {
             Some(codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES)
         );
         let public = Error::from(error);
-        let decoded: Error = ic_platform::candid::decoder::decode_one(
-            &ic_platform::candid::contract::encode_one(public).unwrap(),
+        let decoded: Error = canic_contracts::protocol::authority::decode(
+            &canic_contracts::protocol::authority::encode(public).unwrap(),
         )
         .unwrap();
         assert_eq!(
@@ -77,7 +77,11 @@ mod tests {
         assert_eq!(error.platform_rejection(), Some(expected.as_str()));
         let target = ic_platform::principal::ExternalPrincipal::from_slice(&[9]);
         let error = error
-            .with_dependency_failure(target, "canic_wasm_store_command", "inspect_template")
+            .with_dependency_failure(
+                target,
+                crate::protocol::store_publication::inspect::METHOD,
+                "inspect_template",
+            )
             .with_provisioning_failure(
                 crate::domain::provisioning_failure::ProvisioningFailureStage::StoreStatus,
                 target,
@@ -92,7 +96,10 @@ mod tests {
         let origin = error.provisioning_failure().unwrap();
         let dependency = origin.dependency.unwrap();
         assert_eq!(dependency.target, target);
-        assert_eq!(dependency.method, "canic_wasm_store_command");
+        assert_eq!(
+            dependency.method,
+            crate::protocol::store_publication::inspect::METHOD
+        );
         assert_eq!(dependency.step, "inspect_template");
         assert_eq!(dependency.rejection_code, Some(5));
         assert_eq!(

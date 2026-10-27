@@ -1,21 +1,21 @@
 #![expect(clippy::unused_async)]
 
+mod ops;
+mod protocol;
+
+#[cfg(test)]
+mod tests;
+
 use canic::{
-    __internal::core::{api::log::LogQuery, log::Level},
+    __internal::core::api::log::LogQuery,
     Error,
     api::env::EnvQuery,
     api::metrics::MetricsQuery,
-    dto::{
-        env::EnvSnapshotResponse,
-        log::LogEntry,
-        metrics::QueryPerfSample,
-        page::{Page, PageRequest},
-    },
+    dto::{log::LogEntry, metrics::QueryPerfSample, page::Page},
     prelude::*,
 };
-use ic_platform::candid::contract::CandidType;
 use ic_platform::cdk::api::time;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 canic::start!();
 
@@ -28,34 +28,48 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 /// Run no-op upgrade handling for the audit leaf probe.
 async fn canic_upgrade() {}
 
+const FRONTEND_PROBE_ID: u64 = 0x4155_4454_0000_0001;
+const FRONTEND_UPDATE_PROBE_ID: u64 = 0x4155_4454_0000_0002;
+const FRONTEND_PROBE_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 256,
+    allocation: 2048,
+    nodes: 16,
+    depth: 8,
+};
+
 /// Prove browser-owned authenticated ingress through the current Fleet admission policy.
-#[canic_query(requires(caller::is_fleet_admitted()))]
-async fn audit_frontend_admission_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error>
-{
-    Ok(ic_platform::principal::ExternalPrincipal::from(
-        ic_platform::cdk::api::msg_caller(),
-    ))
+#[canic_query(requires(caller::is_fleet_admitted()),
+    wire(id = crate::FRONTEND_PROBE_ID, request = crate::FRONTEND_PROBE_LIMITS, response = crate::FRONTEND_PROBE_LIMITS))]
+async fn audit_frontend_admission_probe() -> Result<ic_platform::Principal, Error> {
+    Ok(ic_platform::cdk::api::msg_caller())
 }
 
-#[canic_query(requires(env::build_local_only()))]
+/// Prove authenticated update transport under the same Fleet admission policy.
+#[canic_update(requires(caller::is_fleet_admitted()),
+    wire(id = crate::FRONTEND_UPDATE_PROBE_ID, request = crate::FRONTEND_PROBE_LIMITS, response = crate::FRONTEND_PROBE_LIMITS))]
+async fn audit_frontend_update_probe() -> Result<ic_platform::Principal, Error> {
+    Ok(ic_platform::cdk::api::msg_caller())
+}
+
+#[canic_query(requires(env::build_local_only()), wire(id = protocol::TIME, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_time_probe() -> Result<QueryPerfSample<u64>, Error> {
     Ok(MetricsQuery::sample_query(time()))
 }
 
-#[canic_query(requires(env::build_local_only()))]
-async fn audit_env_probe() -> Result<QueryPerfSample<EnvSnapshotResponse>, Error> {
-    Ok(MetricsQuery::sample_query(EnvQuery::snapshot()))
+#[canic_query(requires(env::build_local_only()), wire(id = protocol::ENV, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+async fn audit_env_probe() -> Result<QueryPerfSample<protocol::Environment>, Error> {
+    Ok(MetricsQuery::sample_query(EnvQuery::snapshot().into()))
 }
 
-#[canic_query(requires(env::build_local_only()))]
+#[canic_query(requires(env::build_local_only()), wire(id = protocol::LOG, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_log_probe(
-    crate_name: Option<String>,
-    topic: Option<String>,
-    min_level: Option<Level>,
-    page: PageRequest,
+    request: protocol::LogRequest,
 ) -> Result<QueryPerfSample<Page<LogEntry>>, Error> {
     Ok(MetricsQuery::sample_query(LogQuery::page(
-        crate_name, topic, min_level, page,
+        request.crate_name,
+        request.topic,
+        request.min_level,
+        request.page,
     )))
 }
 
@@ -64,8 +78,11 @@ async fn audit_log_probe(
 // build script changes aliases only; method, branch, and wire shapes stay fixed.
 macro_rules! generic_cohort_nominal {
     ($name:ident) => {
-        #[derive(CandidType, Deserialize)]
-        #[candid_path("ic_platform::candid::contract")]
+        #[derive(Deserialize, Serialize)]
+        #[cfg_attr(
+            all(feature = "wire-schema", not(target_arch = "wasm32")),
+            derive(ic_wire::Wire)
+        )]
         struct $name {
             value: u64,
         }
@@ -110,8 +127,11 @@ type GenericCohortSlot5 = GenericCohortNominal5;
 #[cfg(not(canic_generic_cohort_ge_5))]
 type GenericCohortSlot5 = GenericCohortNominal1;
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum GenericPageCohortResponse {
     Slot1(Page<GenericCohortSlot1>),
     Slot2(Page<GenericCohortSlot2>),
@@ -137,8 +157,11 @@ generic_cohort_page!(generic_cohort_page_3, GenericCohortSlot3);
 generic_cohort_page!(generic_cohort_page_4, GenericCohortSlot4);
 generic_cohort_page!(generic_cohort_page_5, GenericCohortSlot5);
 
-#[canic_query(public)]
-fn audit_page_generic_cohort(slot: u8, value: u64) -> Result<GenericPageCohortResponse, Error> {
+#[canic_query(public, wire(id = protocol::COHORT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+fn audit_page_generic_cohort(
+    request: protocol::CohortRequest,
+) -> Result<GenericPageCohortResponse, Error> {
+    let protocol::CohortRequest { slot, value } = request;
     let response = match slot {
         2 => GenericPageCohortResponse::Slot2(generic_cohort_page_2(value)),
         3 => GenericPageCohortResponse::Slot3(generic_cohort_page_3(value)),
@@ -150,7 +173,7 @@ fn audit_page_generic_cohort(slot: u8, value: u64) -> Result<GenericPageCohortRe
 }
 
 /// Spend fixture cycles before reviewing a later release's recovery funding.
-#[canic_update(requires(env::build_local_only(), caller::is_controller()))]
+#[canic_update(requires(env::build_local_only(), caller::is_controller()), wire(id = protocol::BALANCE, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_recovery_balance(retain: u128) -> Result<u128, Error> {
     let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
     Ok(ic_platform::cdk::api::cycles_burn(excess))

@@ -1,7 +1,31 @@
+pub mod protocol;
 mod release_binding;
 
+use canic_contracts::protocol::wire_declaration::{
+    CompiledMethod, HEADER_BYTES, MethodKind, MethodLimits,
+};
+
+const LIMITS: MethodLimits = MethodLimits {
+    bytes: protocol::LIMITS.bytes as u64,
+    allocation: protocol::LIMITS.allocation as u64,
+    nodes: protocol::LIMITS.nodes as u64,
+    depth: protocol::LIMITS.depth as u64,
+};
+
 #[used]
-static ID: release_binding::EmbeddedReleaseBuildId = release_binding::EmbeddedReleaseBuildId::new(option_env!("CANIC_RELEASE_BUILD_ID"));
+#[unsafe(link_section = "icp:private canic:wire")]
+static METHOD: [u8; HEADER_BYTES + protocol::METHOD.len()] = CompiledMethod {
+    name: protocol::METHOD,
+    kind: MethodKind::Query,
+    id: protocol::METHOD_ID,
+    request: LIMITS,
+    response: LIMITS,
+}
+.encode();
+
+#[used]
+static ID: release_binding::EmbeddedReleaseBuildId =
+    release_binding::EmbeddedReleaseBuildId::new(option_env!("CANIC_RELEASE_BUILD_ID"));
 
 #[link(wasm_import_module = "ic0")]
 unsafe extern "C" {
@@ -24,8 +48,16 @@ pub extern "C" fn init() {
 #[unsafe(export_name = "canister_query binding")]
 pub extern "C" fn binding() {
     let id = ID.read().expect("bound release");
-    let mut reply = b"DIDL\0\x01\x71\x40".to_vec();
-    reply.extend(id.as_bytes());
+    let size = unsafe { msg_arg_data_size() } as usize;
+    assert!(size <= protocol::LIMITS.bytes);
+    let mut request = vec![0; size];
+    unsafe {
+        msg_arg_data_copy(request.as_mut_ptr() as i32, 0, size as i32);
+    }
+    ic_wire::native::decode_request::<()>(protocol::METHOD_ID, &request, protocol::LIMITS)
+        .expect("binding request");
+    let reply = ic_wire::native::encode_response(protocol::METHOD_ID, &id, protocol::LIMITS)
+        .expect("binding response");
     unsafe {
         msg_reply_data_append(reply.as_ptr() as i32, reply.len() as i32);
         msg_reply();

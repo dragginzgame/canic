@@ -4,17 +4,14 @@
 //! Does not own: capability derivation, endpoint authorization, or status dispatch.
 //! Boundary: consumes only closed cfgs emitted by `canic::build!` from the validated role contract.
 
-/// Emit the response subset that the shared Root relay can decode.
+/// Emit the capability-independent typed public responsiveness query.
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __canic_emit_relay_observability_response {
+macro_rules! __canic_emit_public_health_endpoint {
     () => {
-        ::canic::__internal::contracts::__canic_relay_wire_types! {
-            serde_crate = "::canic::__internal::serde",
-            history_attributes = [#[cfg(canic_capability_observability_history)]],
-            topup_history_attributes = [#[cfg(all( canic_capability_observability_history, canic_capability_automatic_topup ))]],
-            diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
-            metrics_attributes = [#[cfg(canic_capability_observability_metrics)]],
+        #[$crate::canic_query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_health::METHOD_ID, request = ::canic::protocol::public_health::REQUEST_LIMITS, response = ::canic::protocol::public_health::RESPONSE_LIMITS))]
+        fn canic_public_health() -> ::canic::dto::public_status::PublicHealth {
+            ::canic::__internal::core::api::public_status::PublicStatusApi::health()
         }
     };
 }
@@ -102,178 +99,124 @@ macro_rules! __canic_compiled_role_capabilities {
 #[macro_export]
 macro_rules! __canic_emit_managed_status_endpoint {
     () => {
-        ::canic::__internal::contracts::__canic_managed_wire_types! {
-            serde_crate = "::canic::__internal::serde",
-            metrics_attributes = [#[cfg(canic_capability_observability_metrics)]],
-            history_attributes = [#[cfg(canic_capability_observability_history)]],
-            child_provisioning_attributes = [#[cfg(canic_capability_child_provisioning)]],
-            automatic_topup_attributes = [#[cfg(canic_capability_automatic_topup)]],
-            logs_attributes = [#[cfg(canic_capability_observability_logs)]],
-            diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
-            token_issuer_attributes = [#[cfg(canic_capability_delegated_token_issuer)]],
-            caller_authority_attributes = [#[cfg(canic_capability_caller_authority)]],
-            fleet_admission_attributes = [#[cfg(canic_capability_fleet_admission_projection)]],
+        $crate::__canic_emit_public_health_endpoint!();
+        #[cfg(canic_capability_observability_metrics)]
+        $crate::__canic_emit_public_metrics_endpoint!();
+
+        #[cfg(canic_capability_observability_history)]
+        $crate::__canic_emit_public_history_endpoint!();
+
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_overview::METHOD_ID, request = ::canic::protocol::public_overview::REQUEST_LIMITS, response = ::canic::protocol::public_overview::RESPONSE_LIMITS))]
+        fn canic_public_overview() -> Result<::canic::dto::role::RoleOverviewResponse, ::canic::Error> {
+            Ok($crate::__canic_role_overview!())
         }
 
-
-        #[$crate::canic_query(public)]
-        fn canic_public_status(
-            request: PublicStatusRequest,
-        ) -> Result<PublicStatusResponse, ::canic::Error> {
-            match request {
-                PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(::canic::__internal::core::api::public_status::PublicStatusApi::health())),
-
-                #[cfg(canic_capability_observability_metrics)]
-                PublicStatusRequest::Metrics(request) => Ok(PublicStatusResponse::Metrics(::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request))),
-
-                #[cfg(canic_capability_observability_history)]
-                PublicStatusRequest::History(request) => Ok(PublicStatusResponse::History(::canic::__internal::core::api::public_status::PublicStatusApi::history(request))),
-                PublicStatusRequest::Overview => Ok(PublicStatusResponse::Overview(
-                    $crate::__canic_role_overview!(),
-                )),
-                #[cfg(canic_capability_child_provisioning)]
-                PublicStatusRequest::Children(page) => Ok(PublicStatusResponse::Children(
-                    $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(
-                        page,
-                    ),
-                )),
-            }
+        #[cfg(canic_capability_child_provisioning)]
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_children::METHOD_ID, request = ::canic::protocol::public_children::REQUEST_LIMITS, response = ::canic::protocol::public_children::RESPONSE_LIMITS))]
+        fn canic_public_children(page: ::canic::dto::page::PageRequest) -> Result<::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>, ::canic::Error> {
+            Ok($crate::__internal::core::api::topology::children::CanisterChildrenApi::page(page))
         }
 
+        $crate::__canic_emit_cycle_balance_endpoint!(before = []);
 
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        fn canic_observability(
-            request: ObservabilityRequest,
-        ) -> Result<ObservabilityResponse, ::canic::Error> {
-            match request {
-                ObservabilityRequest::Binding => {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::managed_binding()
-                        .map(ObservabilityResponse::Binding)
-                }
-                ObservabilityRequest::ChildFunding(child) => {
-                    $crate::__internal::core::api::observability::ObservabilityApi::child_funding(child)
-                        .map(ObservabilityResponse::ChildFunding)
-                }
-                ObservabilityRequest::CycleBalance => Ok(
-                    ObservabilityResponse::CycleBalance(
-                        ::canic::dto::role::CycleBalanceStatusResponse {
-                            cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
-                        },
-                    ),
-                ),
+        $crate::__canic_emit_protected_health_endpoint!(before = []);
+        $crate::__canic_emit_protected_readiness_endpoint!(before = []);
+        #[cfg(canic_capability_observability_diagnostics)]
+        $crate::__canic_emit_protected_runtime_endpoint!(before = []);
+        $crate::__canic_emit_protected_binding_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_history)]
-                ObservabilityRequest::CycleHistory(page) => {
-                    Ok(ObservabilityResponse::CycleHistory(
-                        $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
-                    ))
-                }
-                #[cfg(canic_capability_automatic_topup)]
+        $crate::__canic_emit_child_funding_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_history)]
-                ObservabilityRequest::CycleTopups(page) => {
-                    Ok(ObservabilityResponse::CycleTopups(
-                        $crate::__internal::core::api::cycles::CycleTrackerQuery::topups(page),
-                    ))
-                }
-                ObservabilityRequest::Health => Ok(ObservabilityResponse::Health(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
-                        $crate::__internal::cdk::api::time(),
-                    )),
-                )),
+        #[cfg(canic_capability_observability_logs)]
+        $crate::__canic_emit_protected_logs_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_logs)]
-                ObservabilityRequest::Logs(request) => {
-                    Ok(ObservabilityResponse::Logs(
-                        $crate::__internal::core::api::log::LogQuery::page(
-                            request.crate_name,
-                            request.topic,
-                            request.min_level,
-                            request.page,
-                        ),
-                    ))
-                }
+        #[cfg(canic_capability_observability_metrics)]
+        $crate::__canic_emit_protected_metrics_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_diagnostics)]
-                ObservabilityRequest::MemoryAllocations => {
-                    $crate::__internal::core::api::memory::MemoryQuery::allocations()
-                        .map(ObservabilityResponse::MemoryAllocations)
-                }
+        #[cfg(canic_capability_observability_diagnostics)]
+        $crate::__canic_emit_protected_memory_allocations_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_metrics)]
-                ObservabilityRequest::Metrics(request) => {
-                    $crate::__canic_role_metrics_status!(request)
-                        .map(ObservabilityResponse::Metrics)
-                }
-                ObservabilityRequest::Readiness => Ok(ObservabilityResponse::Readiness(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::readiness(
-                        $crate::__internal::cdk::api::time(),
-                    ),
-                )),
+        #[cfg(canic_capability_observability_history)]
+        $crate::__canic_emit_cycle_history_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_diagnostics)]
-                ObservabilityRequest::Runtime => Ok(ObservabilityResponse::Runtime(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::runtime_status(
-                        $crate::__internal::cdk::api::time(),
-                        env!("CARGO_PKG_NAME"),
-                        env!("CARGO_PKG_VERSION"),
-                        $crate::VERSION,
-                        $crate::__internal::cdk::api::canister_version(),
-                    ),
-                )),
-                        }
-        }
+        #[cfg(all(canic_capability_observability_history, canic_capability_automatic_topup))]
+        $crate::__canic_emit_cycle_topups_endpoint!();
 
 
         #[cfg(canic_capability_delegated_token_issuer)]
-        #[$crate::canic_query(public)]
-        fn canic_auth_status(
-            request: AuthStatusRequest,
-        ) -> Result<AuthStatusResponse, ::canic::Error> {
-            match request {
-                #[cfg(canic_capability_delegated_token_issuer)]
-                AuthStatusRequest::ActiveDelegationProof => {
-                    $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status()
-                        .map(AuthStatusResponse::ActiveDelegationProof)
-                }
-            }
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::issuer_proof::status::METHOD_ID, request = ::canic::protocol::issuer_proof::status::REQUEST_LIMITS, response = ::canic::protocol::issuer_proof::status::RESPONSE_LIMITS))]
+        fn canic_active_delegation_proof() -> Result<::canic::dto::issuer_proof::ActiveDelegationProofStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status().map(Into::into)
         }
 
-
-        #[$crate::canic_query(requires(caller::is_root()))]
-        fn canic_control_status(
-            request: ControlStatusRequest,
-        ) -> Result<ControlStatusResponse, ::canic::Error> {
-            match request {
-                #[cfg(canic_capability_caller_authority)]
-                ControlStatusRequest::CallerAuthority(request) => {
-                    $crate::__internal::core::api::caller_authority::CallerAuthorityApi::status(request.operation_id)
-                        .map(ControlStatusResponse::CallerAuthority)
-                }
-                ControlStatusRequest::Operation(request) => {
-                    $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::operation_status(
-                        request.operation_id,
-                    )
-                    .map(CanisterOperationStatusResponse::ConfigureRuntime)
-                    .map(ControlStatusResponse::Operation)
-                }
-            }
+        #[cfg(canic_capability_caller_authority)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::PREPARE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        fn canic_caller_authority_prepare(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::caller_authority_status::CallerAuthorityReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                ::canic::ids::EndpointCall { endpoint: ::canic::ids::EndpointId::new(::canic::protocol::caller_authority::PREPARE), kind: ::canic::ids::EndpointCallKind::Update },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::caller_authority::CallerAuthorityApi::apply(::canic::dto::caller_authority::CallerAuthorityCommand::Prepare(publication.into())).map(Into::into)
         }
 
+        #[cfg(canic_capability_caller_authority)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::COMMIT_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        fn canic_caller_authority_commit(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::caller_authority_status::CallerAuthorityReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                ::canic::ids::EndpointCall { endpoint: ::canic::ids::EndpointId::new(::canic::protocol::caller_authority::COMMIT), kind: ::canic::ids::EndpointCallKind::Update },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::caller_authority::CallerAuthorityApi::apply(::canic::dto::caller_authority::CallerAuthorityCommand::Commit(publication.into())).map(Into::into)
+        }
+
+        #[cfg(canic_capability_caller_authority)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::COMPLETE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        fn canic_caller_authority_complete(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::caller_authority_status::CallerAuthorityReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                ::canic::ids::EndpointCall { endpoint: ::canic::ids::EndpointId::new(::canic::protocol::caller_authority::COMPLETE), kind: ::canic::ids::EndpointCallKind::Update },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::caller_authority::CallerAuthorityApi::apply(::canic::dto::caller_authority::CallerAuthorityCommand::Complete(publication.into())).map(Into::into)
+        }
+
+        #[cfg(canic_capability_caller_authority)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::RELEASE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        fn canic_application_startup_release(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                ::canic::ids::EndpointCall { endpoint: ::canic::ids::EndpointId::new(::canic::protocol::caller_authority::RELEASE), kind: ::canic::ids::EndpointCallKind::Update },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
+            let operation_id = publication.operation_id;
+            $crate::__internal::core::api::application_startup::ApplicationStartupApi::release(publication.into())?;
+            __canic_schedule_application_startup();
+            Ok(::canic::dto::role::OperationReceipt { operation_id })
+        }
+
+        #[cfg(canic_capability_caller_authority)]
+        #[$crate::canic_query(requires(caller::is_root()), wire(id = ::canic::protocol::caller_authority_status::METHOD_ID, request = ::canic::protocol::caller_authority_status::REQUEST_LIMITS, response = ::canic::protocol::caller_authority_status::RESPONSE_LIMITS))]
+        fn canic_caller_authority_status(request: ::canic::dto::role::OperationStatusRequest) -> Result<::canic::dto::caller_authority_status::CallerAuthorityStatus, ::canic::Error> {
+            $crate::__internal::core::api::caller_authority::CallerAuthorityApi::status(request.operation_id).map(Into::into)
+        }
+
+        #[$crate::canic_query(requires(caller::is_root()), wire(id = ::canic::protocol::runtime_reporting::METHOD_ID, request = ::canic::protocol::runtime_reporting::REQUEST_LIMITS, response = ::canic::protocol::runtime_reporting::RESPONSE_LIMITS))]
+        fn canic_runtime_operation(request: ::canic::dto::role::OperationStatusRequest) -> Result<::canic::dto::runtime_reporting::ComponentRuntimeOperationStatus, ::canic::Error> {
+            $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::operation_status(request.operation_id).map(Into::into)
+        }
 
         #[cfg(canic_capability_fleet_admission_projection)]
-        #[$crate::canic_query(requires(any(caller::is_controller(), caller::is_root())))]
-        fn canic_admission_status(
-            request: AdmissionStatusRequest,
-        ) -> Result<AdmissionStatusResponse, ::canic::Error> {
-            match request {
-                #[cfg(canic_capability_fleet_admission_projection)]
-                AdmissionStatusRequest::Admission(page) => {
-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::status(page)
-                        .map(AdmissionStatusResponse::Admission)
-                }
-            }
+        #[$crate::canic_query(requires(any(caller::is_controller(), caller::is_root())), wire(id = ::canic::protocol::admission_control::managed_status::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        fn canic_admission_status(page: ::canic::dto::page::PageRequest) -> Result<::canic::dto::admission_control::ManagedStatus, ::canic::Error> {
+            $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::status(page).map(Into::into)
         }
+
     };
 }
 
@@ -282,270 +225,143 @@ macro_rules! __canic_emit_managed_status_endpoint {
 #[macro_export]
 macro_rules! __canic_emit_local_status_endpoint {
     () => {
-        ::canic::__internal::contracts::__canic_local_wire_types! {
-            serde_crate = "::canic::__internal::serde",
-            metrics_attributes = [#[cfg(canic_capability_observability_metrics)]],
-            history_attributes = [#[cfg(canic_capability_observability_history)]],
-            child_provisioning_attributes = [#[cfg(canic_capability_child_provisioning)]],
-            automatic_topup_attributes = [#[cfg(canic_capability_automatic_topup)]],
-            logs_attributes = [#[cfg(canic_capability_observability_logs)]],
-            diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
+
+
+        $crate::__canic_emit_public_health_endpoint!();
+        #[cfg(canic_capability_observability_metrics)]
+        $crate::__canic_emit_public_metrics_endpoint!();
+
+        #[cfg(canic_capability_observability_history)]
+        $crate::__canic_emit_public_history_endpoint!();
+
+        #[cfg(canic_capability_child_provisioning)]
+        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_children::METHOD_ID, request = ::canic::protocol::public_children::REQUEST_LIMITS, response = ::canic::protocol::public_children::RESPONSE_LIMITS))]
+        fn canic_public_children(page: ::canic::dto::page::PageRequest) -> Result<::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>, ::canic::Error> {
+            Ok($crate::__internal::core::api::topology::children::CanisterChildrenApi::page(page))
         }
 
-        #[$crate::canic_query(public)]
-        fn canic_public_status(
-            request: PublicStatusRequest,
-        ) -> Result<PublicStatusResponse, ::canic::Error> {
-            match request {
-                PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(
-                    ::canic::__internal::core::api::public_status::PublicStatusApi::health(),
-                )),
+        $crate::__canic_emit_cycle_balance_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_history)]
-                PublicStatusRequest::History(request) => Ok(PublicStatusResponse::History(
-                    ::canic::__internal::core::api::public_status::PublicStatusApi::history(
-                        request,
-                    ),
-                )),
+        $crate::__canic_emit_protected_health_endpoint!(before = []);
+        $crate::__canic_emit_protected_readiness_endpoint!(before = []);
+        #[cfg(canic_capability_observability_diagnostics)]
+        $crate::__canic_emit_protected_runtime_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_metrics)]
-                PublicStatusRequest::Metrics(request) => Ok(PublicStatusResponse::Metrics(
-                    ::canic::__internal::core::api::public_status::PublicStatusApi::metrics(
-                        request,
-                    ),
-                )),
-                #[cfg(canic_capability_child_provisioning)]
-                PublicStatusRequest::Children(page) => Ok(PublicStatusResponse::Children(
-                    $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(
-                        page,
-                    ),
-                )),
-            }
-        }
+        $crate::__canic_emit_child_funding_endpoint!(before = []);
 
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        fn canic_observability(
-            request: ObservabilityRequest,
-        ) -> Result<ObservabilityResponse, ::canic::Error> {
-            match request {
-                ObservabilityRequest::ChildFunding(child) => {
-                    $crate::__internal::core::api::observability::ObservabilityApi::child_funding(
-                        child,
-                    )
-                    .map(ObservabilityResponse::ChildFunding)
-                }
-                ObservabilityRequest::CycleBalance => Ok(ObservabilityResponse::CycleBalance(
-                    ::canic::dto::role::CycleBalanceStatusResponse {
-                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
-                    },
-                )),
+        #[cfg(canic_capability_observability_logs)]
+        $crate::__canic_emit_protected_logs_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_history)]
-                ObservabilityRequest::CycleHistory(page) => {
-                    Ok(ObservabilityResponse::CycleHistory(
-                        $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
-                    ))
-                }
-                #[cfg(canic_capability_automatic_topup)]
-                #[cfg(canic_capability_observability_history)]
-                ObservabilityRequest::CycleTopups(page) => Ok(ObservabilityResponse::CycleTopups(
-                    $crate::__internal::core::api::cycles::CycleTrackerQuery::topups(page),
-                )),
-                ObservabilityRequest::Health => Ok(ObservabilityResponse::Health(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
-                        $crate::__internal::cdk::api::time(),
-                    )),
-                )),
+        #[cfg(canic_capability_observability_metrics)]
+        $crate::__canic_emit_protected_metrics_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_logs)]
-                ObservabilityRequest::Logs(request) => Ok(ObservabilityResponse::Logs(
-                    $crate::__internal::core::api::log::LogQuery::page(
-                        request.crate_name,
-                        request.topic,
-                        request.min_level,
-                        request.page,
-                    ),
-                )),
+        #[cfg(canic_capability_observability_history)]
+        $crate::__canic_emit_cycle_history_endpoint!(before = []);
 
-                #[cfg(canic_capability_observability_metrics)]
-                ObservabilityRequest::Metrics(request) => {
-                    $crate::__canic_role_metrics_status!(request)
-                        .map(ObservabilityResponse::Metrics)
-                }
-                ObservabilityRequest::Readiness => Ok(ObservabilityResponse::Readiness(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::readiness(
-                        $crate::__internal::cdk::api::time(),
-                    ),
-                )),
+        #[cfg(all(canic_capability_observability_history, canic_capability_automatic_topup))]
+        $crate::__canic_emit_cycle_topups_endpoint!();
 
-                #[cfg(canic_capability_observability_diagnostics)]
-                ObservabilityRequest::Runtime => Ok(ObservabilityResponse::Runtime(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::runtime_status(
-                        $crate::__internal::cdk::api::time(),
-                        env!("CARGO_PKG_NAME"),
-                        env!("CARGO_PKG_VERSION"),
-                        $crate::VERSION,
-                        $crate::__internal::cdk::api::canister_version(),
-                    ),
-                )),
-            }
-        }
     };
 }
 
-/// Emit the cfg-pruned managed command types and their uniformly authorized dispatchers.
+/// Emit managed native updates with their capability selection and authority checks.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_emit_managed_command_endpoint {
     () => {
-        $crate::__canic_emit_relay_observability_response!();
+        $crate::__canic_emit_observation_updates!();
 
-        ::canic::__internal::contracts::__canic_managed_command_wire_types! {
-            serde_crate = "::canic::__internal::serde",
-            fleet_admission_attributes = [#[cfg(canic_capability_fleet_admission_projection)]],
-            caller_authority_attributes = [#[cfg(canic_capability_caller_authority)]],
-            token_issuer_attributes = [#[cfg(canic_capability_delegated_token_issuer)]],
-            child_provisioning_attributes = [#[cfg(canic_capability_child_provisioning)]],
+        #[cfg(canic_capability_child_provisioning)]
+        $crate::__canic_emit_cycles_capability_endpoint!();
+
+        #[cfg(canic_capability_fleet_admission_projection)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::admission_control::target_prepare::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        fn canic_admission_prepare(request: ::canic::dto::admission_control::PrepareTargetRequest) -> Result<::canic::dto::admission_control::TargetReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                $crate::__internal::contracts::ids::EndpointCall {
+                    endpoint: $crate::__internal::contracts::ids::EndpointId::new(::canic::protocol::admission_control::target_prepare::METHOD),
+                    kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
+                },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::prepare(request.into()).map(Into::into)
+        }
+
+        #[cfg(canic_capability_fleet_admission_projection)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::admission_control::target_activate::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        fn canic_admission_activate(request: ::canic::dto::fleet_admission::FleetAdmissionActivateTargetRequest) -> Result<::canic::dto::admission_control::TargetReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                $crate::__internal::contracts::ids::EndpointCall {
+                    endpoint: $crate::__internal::contracts::ids::EndpointId::new(::canic::protocol::admission_control::target_activate::METHOD),
+                    kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
+                },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::activate(request).map(Into::into)
+        }
+
+        #[cfg(canic_capability_fleet_admission_projection)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::admission_control::target_open::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        fn canic_admission_open(request: ::canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest) -> Result<::canic::dto::admission_control::TargetReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                $crate::__internal::contracts::ids::EndpointCall {
+                    endpoint: $crate::__internal::contracts::ids::EndpointId::new(::canic::protocol::admission_control::target_open::METHOD),
+                    kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
+                },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open(request).map(Into::into)
+        }
+
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::runtime_configuration::METHOD_ID, request = ::canic::protocol::runtime_configuration::REQUEST_LIMITS, response = ::canic::protocol::runtime_configuration::RESPONSE_LIMITS))]
+        fn canic_configure_runtime(request: ::canic::dto::runtime_configuration::ComponentRuntimeDirectoryPreparationRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                $crate::__internal::contracts::ids::EndpointCall {
+            endpoint: $crate::__internal::contracts::ids::EndpointId::new(::canic::protocol::runtime_configuration::METHOD),
+            kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
+                },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_root(caller)
+                .map_err(::canic::Error::from)?;
+            let operation_id = request.operation_id;
+            #[cfg(canic_capability_automatic_topup)]
+            let configure_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::configure_component_runtime_with_automatic_topup;
+            #[cfg(not(canic_capability_automatic_topup))]
+            let configure_runtime = $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::configure;
+            configure_runtime(request.into())?;
+            #[cfg(canic_capability_fleet_admission_projection)]
+            $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open_fresh()?;
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
+            Ok(::canic::dto::role::OperationReceipt { operation_id })
+        }
+
+        $crate::__canic_emit_state_cascade_endpoint!();
+
+        #[cfg(canic_capability_delegated_token_issuer)]
+        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::issuer_proof::INSTALL_ID, request = ::canic::protocol::issuer_proof::REQUEST_LIMITS, response = ::canic::protocol::issuer_proof::RESPONSE_LIMITS))]
+        fn canic_install_delegation_proof(request: ::canic::dto::issuer_proof::InstallActiveDelegationProofRequest) -> Result<::canic::dto::issuer_proof::InstallActiveDelegationProofResponse, ::canic::Error> {
+            $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                ::canic::ids::EndpointCall {
+                    endpoint: ::canic::ids::EndpointId::new(::canic::protocol::issuer_proof::INSTALL),
+                    kind: ::canic::ids::EndpointCallKind::Update,
+                },
+            ).map_err(::canic::Error::from)?;
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
+            $crate::__internal::core::access::auth::is_controller(caller).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::auth::AuthApi::install_active_delegation_proof(request.into()).map(Into::into)
         }
 
 
-        #[doc(hidden)]
-        fn __canic_inspect_managed_update_message() {
-            if $crate::__internal::core::ingress::payload::current_method_name()
-                != $crate::__internal::contracts::protocol::CANIC_COMMAND
-            {
-                $crate::__internal::core::ingress::payload::inspect_update_message();
-                return;
-            }
 
-            let bytes = $crate::__internal::core::ingress::payload::current_payload_bytes();
-            if !$crate::__internal::core::ingress::payload::payload_within_limit(
-                bytes.len(),
-                $crate::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
-            ) {
-                return;
-            }
-            if ::canic::__internal::ic_platform::candid::decoder::decode_one::<CanisterCommand>(&bytes).is_ok() {
-                $crate::__internal::core::ingress::payload::accept_current_message();
-            }
-        }
-
-        #[$crate::canic_update(
-            internal,
-            public,
-            payload(max_bytes = ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES)
-        )]
-        async fn canic_command(
-            command: CanisterCommand,
-        ) -> Result<CanisterCommandResponse, ::canic::Error> {
-            if !matches!(&command, CanisterCommand::SynchronizeState(_)) {
-                $crate::__internal::core::access::expr::eval_default_fleet_guard(
-                    $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
-                    $crate::__internal::contracts::ids::EndpointCall {
-                        endpoint: $crate::__internal::contracts::ids::EndpointId::new(
-                            $crate::__internal::contracts::protocol::CANIC_COMMAND,
-                        ),
-                        kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
-                    },
-                )
-                    .map_err(::canic::Error::from)?;
-            }
-            match command {
-                #[cfg(canic_capability_fleet_admission_projection)]
-                CanisterCommand::ActivateFleetAdmission(request) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_root(caller)
-                        .map_err(::canic::Error::from)?;
-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::activate(request)
-                        .map(CanisterCommandResponse::ActivateFleetAdmission)
-                }
-                #[cfg(canic_capability_caller_authority)]
-                CanisterCommand::CallerAuthority(request) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
-                    $crate::__internal::core::api::caller_authority::CallerAuthorityApi::apply(request)
-                        .map(CanisterCommandResponse::CallerAuthority)
-                }
-                #[cfg(canic_capability_caller_authority)]
-                CanisterCommand::ReleaseApplicationStartup(publication) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
-                    let operation_id = publication.operation_id;
-                    $crate::__internal::core::api::application_startup::ApplicationStartupApi::release(publication)?;
-                    __canic_schedule_application_startup();
-                    Ok(CanisterCommandResponse::OperationAccepted(
-                        ::canic::dto::role::OperationReceipt { operation_id },
-                    ))
-                }
-                CanisterCommand::ConfigureRuntime(request) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_root(caller)
-                        .map_err(::canic::Error::from)?;
-                    let operation_id = request.operation_id;
-                    #[cfg(canic_capability_automatic_topup)]
-                    let configure_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::configure_component_runtime_with_automatic_topup;
-                    #[cfg(not(canic_capability_automatic_topup))]
-                    let configure_runtime = $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::configure;
-                    configure_runtime(request)?;
-                    #[cfg(canic_capability_fleet_admission_projection)]
-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open_fresh()?;
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
-                    Ok(CanisterCommandResponse::OperationAccepted(
-                        ::canic::dto::role::OperationReceipt { operation_id },
-                    ))
-                }
-                #[cfg(canic_capability_delegated_token_issuer)]
-                CanisterCommand::InstallDelegationProof(request) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_controller(caller)
-                        .map_err(::canic::Error::from)?;
-                    $crate::__internal::core::api::auth::AuthApi::install_active_delegation_proof(
-                        request,
-                    )
-                    .map(CanisterCommandResponse::InstallDelegationProof)
-                }
-
-                CanisterCommand::Observe(request) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_controller(caller)
-                        .map_err(::canic::Error::from)?;
-                    $crate::__canic_sensitive_observability_response!(request, RelayedObservabilityResponse)
-                        .map(CanisterCommandResponse::Observe)
-                }
-                #[cfg(canic_capability_fleet_admission_projection)]
-                CanisterCommand::OpenFleetAdmission(request) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_root(caller)
-                        .map_err(::canic::Error::from)?;
-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open(request)
-                        .map(CanisterCommandResponse::OpenFleetAdmission)
-                }
-                #[cfg(canic_capability_fleet_admission_projection)]
-                CanisterCommand::PrepareFleetAdmission(request) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_root(caller)
-                        .map_err(::canic::Error::from)?;
-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::prepare(request)
-                        .map(CanisterCommandResponse::PrepareFleetAdmission)
-                }
-                #[cfg(canic_capability_child_provisioning)]
-                CanisterCommand::RespondCapability(envelope) => {
-                    $crate::__internal::core::api::rpc::RpcApi::response_capability_v1_nonroot(
-                        envelope,
-                    )
-                    .await
-                        .map(CanisterCommandResponse::RespondCapability)
-                }
-                CanisterCommand::SynchronizeState(snapshot) => {
-                    let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
-                    $crate::__internal::core::access::auth::is_parent(caller)
-                        .map_err(::canic::Error::from)?;
-                    $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot)
-                        .await
-                        .map(CanisterCommandResponse::SynchronizeState)
-                }
-            }
-        }
     };
 }
 
@@ -625,54 +441,26 @@ macro_rules! __canic_role_metrics_status {
     }};
 }
 
-/// Dispatch exact cycle and performance observations after endpoint-owned authorization.
+/// Emit the cached public metric query without role-dependent union tags.
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __canic_sensitive_observability_response {
-    ($request:expr, $response:ident) => {{
-        match $request {
-            ::canic::dto::observability::CanisterObservabilityRequest::ChildFunding(child) => {
-                $crate::__internal::core::api::observability::ObservabilityApi::child_funding(child)
-                    .map($response::ChildFunding)
-            }
-            ::canic::dto::observability::CanisterObservabilityRequest::CycleBalance => Ok(
-                $response::CycleBalance(::canic::dto::role::CycleBalanceStatusResponse {
-                    cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
-                }),
-            ),
-            #[cfg(canic_capability_observability_history)]
-            ::canic::dto::observability::CanisterObservabilityRequest::CycleHistory(page) => {
-                Ok($response::CycleHistory(
-                    $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
-                ))
-            }
-            #[cfg(all(
-                canic_capability_observability_history,
-                canic_capability_automatic_topup
-            ))]
-            ::canic::dto::observability::CanisterObservabilityRequest::CycleTopups(page) => {
-                Ok($response::CycleTopups(
-                    $crate::__internal::core::api::cycles::CycleTrackerQuery::topups(page),
-                ))
-            }
-            #[cfg(canic_capability_observability_diagnostics)]
-            ::canic::dto::observability::CanisterObservabilityRequest::MemoryAllocations => {
-                $crate::__internal::core::api::memory::MemoryQuery::allocations()
-                    .map($response::MemoryAllocations)
-            }
-            #[cfg(canic_capability_observability_metrics)]
-            ::canic::dto::observability::CanisterObservabilityRequest::Metrics(request) => {
-                $crate::__canic_role_metrics_status!(request).map($response::Metrics)
-            }
-            #[cfg(not(all(
-                canic_capability_observability_history,
-                canic_capability_automatic_topup,
-                canic_capability_observability_diagnostics,
-                canic_capability_observability_metrics
-            )))]
-            _ => Err(::canic::Error::from_registered(
-                ::canic::diagnostics::codes::REQUEST_INVALID,
-            )),
+macro_rules! __canic_emit_public_metrics_endpoint {
+    () => {
+        #[$crate::canic_query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_metrics::METHOD_ID, request = ::canic::protocol::public_metrics::REQUEST_LIMITS, response = ::canic::protocol::public_metrics::RESPONSE_LIMITS))]
+        fn canic_public_metrics(request: ::canic::dto::public_status::PublicMetricsRequest) -> ::canic::dto::public_status::PublicMetricsSnapshot {
+            ::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request)
         }
-    }};
+    };
+}
+
+/// Emit cached history without role-dependent union tags.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_emit_public_history_endpoint {
+    () => {
+        #[$crate::canic_query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_history::METHOD_ID, request = ::canic::protocol::public_history::REQUEST_LIMITS, response = ::canic::protocol::public_history::RESPONSE_LIMITS))]
+        fn canic_public_history(request: ::canic::dto::public_status::PublicHistoryRequest) -> ::canic::dto::public_status::PublicHistorySnapshot {
+            ::canic::__internal::core::api::public_status::PublicStatusApi::history(request)
+        }
+    };
 }

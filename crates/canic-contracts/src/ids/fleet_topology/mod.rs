@@ -11,7 +11,7 @@ use crate::{
         ReleaseSetDigest, SubnetId,
     },
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -21,11 +21,12 @@ use std::fmt;
 /// SHA-256 identity of one canonical root-local Component Topology projection.
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentTopologyDigest([u8; 32]);
 
 impl ComponentTopologyDigest {
@@ -60,17 +61,23 @@ impl fmt::Display for ComponentTopologyDigest {
 /// Positive aggregate cycles-funding ceiling applied over one bounded window.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CyclesFundingBudget {
     pub window_secs: u64,
     pub maximum_cycles: Cycles,
 }
 
 /// Protected physical-topology class that selects the minimum Root funding baseline.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetFundingProfile {
     #[serde(rename = "single_subnet")]
     SingleSubnet,
@@ -104,9 +111,12 @@ pub const MAX_FLEET_CAPACITY_IMPORT_SOURCES: usize = 256;
 /// Immutable Fleet-wide reserve and grant-budget authority installed into one Coordinator.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetCoordinatorRootFundingPolicy {
     pub funding_profile: FleetFundingProfile,
     pub minimum_reserve_cycles: Cycles,
@@ -121,9 +131,12 @@ pub struct FleetCoordinatorRootFundingPolicy {
 /// Immutable Coordinator-grant thresholds and budget for one registered root.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetSubnetRootFundingPolicy {
     pub funding_profile: FleetFundingProfile,
     pub request_threshold: Cycles,
@@ -140,9 +153,12 @@ pub struct FleetSubnetRootFundingPolicy {
 /// Optional emergency trigger and target subordinate to one root's ICP-refill policy.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetSubnetRootAutomaticIcpRefillPolicy {
     pub emergency_threshold: Cycles,
     pub target_balance: Cycles,
@@ -156,8 +172,7 @@ pub struct FleetSubnetRootAutomaticIcpRefillPolicy {
 /// Immutable root-owned ICP conversion budget, balance floor, and system-Canister authority.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootIcpRefillPolicy {
     pub max_refill_e8s_per_call: u64,
@@ -177,8 +192,7 @@ pub struct FleetSubnetRootIcpRefillPolicy {
 /// Complete immutable Coordinator-grant and optional ICP-refill policy for one root.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootFundingAuthority {
     pub root_funding: FleetSubnetRootFundingPolicy,
@@ -191,9 +205,12 @@ pub struct FleetSubnetRootFundingAuthority {
 /// Immutable prepaid empty-Canister inventory policy for one Fleet Subnet Root.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetSubnetCanisterPoolConfig {
     /// Ready empty Canisters automatically maintained for the root.
     pub minimum_size: u32,
@@ -214,9 +231,12 @@ pub struct FleetSubnetCanisterPoolConfig {
 /// Immutable permission and concrete-instance ceiling for one Spec on one Fleet Subnet Root.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct ComponentSpecAdmission {
     pub component_spec: ComponentSpecId,
     pub spec_hash: [u8; 32],
@@ -229,9 +249,12 @@ pub struct ComponentSpecAdmission {
 /// Immutable aggregate policy ceilings for one Fleet Subnet Root.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetSubnetRootLimits {
     pub maximum_component_instances: u32,
     pub maximum_registry_bytes: u64,
@@ -248,8 +271,7 @@ pub struct FleetSubnetRootLimits {
 /// Immutable Coordinator identity, placement and direct Fleet recovery authority.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetCoordinatorBinding {
     pub fleet: FleetBinding,
@@ -285,8 +307,7 @@ impl FleetCoordinatorBinding {
 /// Exact Coordinator binding and reinstall-local authority epoch for one Fleet Registry.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetRegistryAuthority {
     pub binding: FleetCoordinatorBinding,
@@ -299,8 +320,7 @@ pub struct FleetRegistryAuthority {
 /// Complete immutable identity, placement, admissions, and limits of one Fleet Subnet Root.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootBinding {
     pub authority: FleetRegistryAuthority,
@@ -318,8 +338,7 @@ pub struct FleetSubnetRootBinding {
 /// Exact reciprocal authority retained by one root and its host-installed sibling Store.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetWasmStoreAuthority {
     pub authority: FleetRegistryAuthority,
@@ -332,8 +351,7 @@ pub struct FleetSubnetWasmStoreAuthority {
 }
 
 /// Exact child identity Root must use while activating its independently installed Store.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetWasmStoreActivationAuthority {
     pub fleet: FleetBinding,
     pub operation_id: [u8; 32],
@@ -351,8 +369,7 @@ pub struct FleetSubnetWasmStoreActivationAuthority {
 /// Complete immutable identity and placement of one concrete Component.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentBinding {
     pub authority: FleetRegistryAuthority,
@@ -371,8 +388,7 @@ pub struct ComponentBinding {
 /// Complete immutable identity of one child at any depth in one exact Component tree.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildBinding {
     pub component: ComponentBinding,
@@ -387,8 +403,7 @@ pub struct ComponentChildBinding {
 /// Immutable Registry-issued identity retained by one managed application Canister.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub enum ManagedCanisterBinding {
     Component(ComponentBinding),
@@ -425,17 +440,17 @@ mod tests {
     }
 
     #[test]
-    fn funding_profile_candid_spelling_roundtrips() {
+    fn funding_profile_wire_spelling_roundtrips() {
         for profile in [
             FleetFundingProfile::SingleSubnet,
             FleetFundingProfile::PreviewMultiSubnet,
             FleetFundingProfile::MultiSubnet,
         ] {
-            let bytes = ic_platform::candid::contract::encode_one(profile)
-                .expect("encode funding profile Candid");
+            let bytes =
+                crate::protocol::authority::encode(profile).expect("encode funding profile Wire");
             assert_eq!(
-                ic_platform::candid::decoder::decode_one::<FleetFundingProfile>(&bytes)
-                    .expect("decode funding profile Candid"),
+                crate::protocol::authority::decode::<FleetFundingProfile>(&bytes)
+                    .expect("decode funding profile Wire"),
                 profile
             );
         }

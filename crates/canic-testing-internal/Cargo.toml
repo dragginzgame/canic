@@ -16,9 +16,7 @@ ignored = ["serde"]
 [features]
 # Keep the large governed PocketIC case catalogue out of ordinary and fast
 # library-test compilation. The workspace PocketIC lane enables it explicitly.
-default = ["pocketic-fixtures"]
-governed-pocketic-tests = ["pocketic-fixtures", "canic-host/local-fleet"]
-pocketic-fixtures = []
+governed-pocketic-tests = ["canic-host/local-fleet", "ic-testkit/held-reply-fixtures"]
 
 [dependencies]
 canic = { workspace = true, features = ["testing"] }
@@ -29,24 +27,30 @@ canic-control-plane = { workspace = true, features = [
 ] }
 canic-core = { workspace = true }
 canic-host = { workspace = true }
-ciborium = { workspace = true }
 ic-build.workspace = true
-ic-host-artifacts = { workspace = true, features = ["gzip"] }
+ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process.workspace = true
 ic-platform = { workspace = true, features = ["pocket-ic", "candid", "candid-parser"] }
-ic-testkit = { workspace = true, features = ["reply-fixtures"] }
+ic-testkit = { workspace = true, features = ["reply-fixtures", "wire"] }
+ic-wire.workspace = true
 serde = { workspace = true }
+serde_cbor = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]
 canic-blob-service = { workspace = true }
 canic-cli = { workspace = true }
+ic-blob-storage-contracts = { workspace = true, features = ["wire-schema"] }
 ic-query = { workspace = true }
 proc-macro2 = { workspace = true }
 syn = { workspace = true, features = ["full", "visit"] }
 tokio = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+canic-contracts = { workspace = true, features = ["wire-schema"] }
+ic-wire = { workspace = true, features = ["typescript"] }
 
 [lints]
 workspace = true

@@ -4,6 +4,8 @@
 //! callers bind a private copy before optimization, hashing and publication.
 
 #[cfg(test)]
+mod protocol;
+#[cfg(test)]
 mod tests;
 
 use canic_contracts::ids::ReleaseBuildId;

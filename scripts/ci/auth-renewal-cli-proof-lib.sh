@@ -58,7 +58,6 @@ prepare_auth_renewal_cli_surface_fixture() {
     local downstream_root="$1"
 
     mkdir -p \
-        "$downstream_root/.icp/fixture/canisters/app" \
         "$downstream_root/apps/downstream/app" \
         "$downstream_root/apps/downstream/root"
 
@@ -111,12 +110,6 @@ app = "downstream"
 role = "app"
 EOF
 
-    cat > "$downstream_root/.icp/fixture/canisters/app/app.did" <<'EOF'
-service : {
-  application_status : (record { verbose : bool }) -> () query;
-  canic_auth_status : (variant { ActiveDelegationProof }) -> () query;
-}
-EOF
 }
 
 run_auth_renewal_cli_surface_probe_commands() {

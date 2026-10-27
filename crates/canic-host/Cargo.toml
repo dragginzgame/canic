@@ -28,7 +28,6 @@ canic-control-plane = { workspace = true, features = [
     "wasm-store-canister",
 ] }
 canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
-ciborium = { workspace = true }
 crc32fast = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
@@ -38,12 +37,14 @@ ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
 ic-host-tools = { workspace = true, features = ["candid", "ic-interface", "icp-ledger", "ledger-evidence"] }
-ic-platform = { workspace = true, features = ["agent", "candid", "certification", "candid-parser", "icrc-ledger-types"] }
+ic-platform = { workspace = true, features = ["agent", "candid", "certification", "candid-parser", "icrc-ledger-types", "management-canister-types"] }
 ic-query = { workspace = true, features = ["ledger-evidence-host"] }
 ic-testkit = { workspace = true, optional = true }
+ic-wire = { workspace = true, features = ["typescript"] }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
+serde_cbor = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
 sha2-host = { workspace = true }

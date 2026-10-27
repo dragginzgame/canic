@@ -69,9 +69,12 @@ fn page(ids: impl IntoIterator<Item = u64>, next_after: Option<u64>) -> RootFund
 }
 
 fn wire(page: RootFundingReleaseResponse) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::FundingRelease(
-        Box::new(page),
-    )))
+    let native = canic_contracts::dto::funding_read::ReleasePage::try_from(page).unwrap();
+    ic_wire::native::encode_response(
+        protocol::funding_read::release::METHOD_ID,
+        &Ok::<_, CanicError>(native),
+        protocol::funding_read::RESPONSE_LIMITS,
+    )
     .unwrap()
 }
 
@@ -228,7 +231,7 @@ fn census_bounds_records_without_overflow_or_truncation() {
 }
 
 #[test]
-fn decoder_bounds_raw_skipping_work_and_aggregate_bytes() {
+fn decoder_bounds_native_frames_and_aggregate_bytes() {
     let bytes = wire(page([1], None));
     let mut remaining = bytes.len();
     let decoded = decode(root(), &bytes, &mut remaining).unwrap();
@@ -255,23 +258,25 @@ fn decoder_bounds_raw_skipping_work_and_aggregate_bytes() {
             })
         ));
     }
-    // Zero-sized values have small wire size but expensive skipping work.
-    let reply = Ok::<_, CanicError>(Response::FundingRelease(Box::new(page([], None))));
-    let extra =
-        ic_platform::candid::contract::encode_args((reply, vec![(); RESPONSE_BYTES * 8 + 1]))
-            .unwrap();
-    assert!(extra.len() < RESPONSE_BYTES);
-    ic_platform::candid::decoder::decode_one::<Result<Response, CanicError>>(&extra)
-        .unwrap()
-        .unwrap();
-    let mut remaining = MAXIMUM_CENSUS_BYTES;
-    assert!(matches!(
-        decode(root(), &extra, &mut remaining),
-        Err(ReleaseFundingError::Observation {
-            stage: ReleaseFundingStage::Decode,
-            ..
-        })
-    ));
+    let native = canic_contracts::dto::funding_read::ReleasePage::try_from(page([], None)).unwrap();
+    let wrong_method = ic_wire::native::encode_response(
+        protocol::pool_inventory::METHOD_ID,
+        &Ok::<_, CanicError>(native),
+        protocol::funding_read::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    let mut trailing = bytes.clone();
+    trailing.push(0);
+    for invalid in [wrong_method, trailing, bytes[..bytes.len() - 1].to_vec()] {
+        let mut remaining = MAXIMUM_CENSUS_BYTES;
+        assert!(matches!(
+            decode(root(), &invalid, &mut remaining),
+            Err(ReleaseFundingError::Observation {
+                stage: ReleaseFundingStage::Decode,
+                ..
+            })
+        ));
+    }
 }
 
 fn registry() -> FleetRegistry {
@@ -448,4 +453,141 @@ fn assessment_keeps_coordinator_pending_work_and_completed_history_distinct() {
             .last_result
             .is_some()
     );
+}
+
+#[test]
+fn native_census_retains_arbitrary_cycles_and_rejects_nonminimal_magnitudes() {
+    use canic_contracts::protocol::authority::encode;
+    use ic_platform::candid::contract::Nat;
+    for amount in [
+        None,
+        Some(Nat::from(0u8)),
+        Some(Nat::from(u128::MAX)),
+        Some(Nat::from(u128::MAX) + Nat::from(1u8)),
+    ] {
+        let mut original = page([1], None);
+        original.icp_refills[0].response.cycles_sent = amount;
+        let expected = encode(&original).unwrap();
+        let bytes = wire(original);
+        let mut remaining = MAXIMUM_CENSUS_BYTES;
+        let decoded = decode(root(), &bytes, &mut remaining).unwrap();
+        assert_eq!(encode(decoded).unwrap(), expected);
+    }
+    let mut native =
+        canic_contracts::dto::funding_read::ReleasePage::try_from(page([1], None)).unwrap();
+    native.icp_refills[0].response.cycles_sent = Some(ic_wire::Bytes::new(vec![0, 1]).unwrap());
+    let bytes = ic_wire::native::encode_response(
+        protocol::funding_read::release::METHOD_ID,
+        &Ok::<_, CanicError>(native),
+        protocol::funding_read::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    let mut remaining = MAXIMUM_CENSUS_BYTES;
+    assert!(matches!(
+        decode(root(), &bytes, &mut remaining),
+        Err(ReleaseFundingError::Observation {
+            stage: ReleaseFundingStage::Decode,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn coordinator_native_census_preserves_all_rotation_phases_and_receipts() {
+    use canic_contracts::dto::{
+        fleet_coordinator::{
+            FleetFundingPolicyRotationStatusPhase as Phase,
+            FleetFundingPolicyRotationStatusResponse as Rotation,
+        },
+        fleet_funding::FleetFundingPolicyRotationReceipt,
+        fleet_registry::FleetRegistryVersion,
+        funding_read::CoordinatorStatus,
+    };
+    let registry = registry();
+    let version = FleetRegistryVersion {
+        authority: registry.authority.clone(),
+        revision: registry.revision,
+        content_hash: [1; 32],
+    };
+    let completed = FleetFundingPolicyRotationReceipt {
+        operation_id: [2; 32],
+        plan_digest: [3; 32],
+        predecessor_registry: version.clone(),
+        successor_registry: version.clone(),
+        predecessor_generation: 4,
+        successor_generation: 5,
+        affected_root_count: 1,
+        retained_historical_automatic_grants: u64::MAX,
+        retained_historical_automatic_cycles: u128::MAX.into(),
+        successor_policy_set_hash: [6; 32],
+        maximum_new_automatic_cycles: 7.into(),
+        apply_operator_debit: 8.into(),
+        completed_at_ns: 9,
+    };
+    for phase in [
+        Phase::Staging {
+            staged_root_count: 1,
+            expected_root_count: 2,
+        },
+        Phase::PreparingRoots {
+            prepared_root_count: 1,
+            expected_root_count: 2,
+        },
+        Phase::ActivatingRoots {
+            activated_root_count: 1,
+            expected_root_count: 2,
+            successor_registry: Box::new(version),
+        },
+        Phase::Completed(Box::new(completed)),
+    ] {
+        let mut expected = coordinator_status(&registry);
+        expected.rotation = Some(Rotation {
+            operation_id: [2; 32],
+            plan_digest: [3; 32],
+            predecessor_generation: 4,
+            successor_generation: 5,
+            phase,
+        });
+        let response: Result<CoordinatorStatus, CanicError> = Ok(expected.clone().into());
+        let bytes = ic_wire::native::encode_response(
+            protocol::funding_read::coordinator_status::METHOD_ID,
+            &response,
+            protocol::funding_read::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        let mut remaining = bytes.len();
+        let native: CoordinatorStatus = decode_response(
+            protocol::funding_read::coordinator_status::METHOD_ID,
+            expected.coordinator,
+            &bytes,
+            &mut remaining,
+        )
+        .unwrap();
+        assert_eq!(CoordinatorFundingStatusResponse::from(native), expected);
+        assert_eq!(remaining, 0);
+        assert!(matches!(
+            decode_response::<CoordinatorStatus>(
+                protocol::funding_read::coordinator_status::METHOD_ID,
+                expected.coordinator,
+                &bytes,
+                &mut remaining
+            ),
+            Err(ReleaseFundingError::Observation {
+                stage: ReleaseFundingStage::Budget,
+                ..
+            })
+        ));
+        assert!(matches!(
+            decode_response::<CoordinatorStatus>(
+                protocol::funding_read::root_status::METHOD_ID,
+                expected.coordinator,
+                &bytes,
+                &mut bytes.len()
+            ),
+            Err(ReleaseFundingError::Observation {
+                stage: ReleaseFundingStage::Decode,
+                ..
+            })
+        ));
+    }
 }

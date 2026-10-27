@@ -31,6 +31,7 @@ use crate::{
     },
 };
 use ic_build::cargo::execution::{CargoInvocation, CargoRecipe};
+use sha2_host::Digest as _;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -73,6 +74,7 @@ impl InfrastructureRole {
 
 #[derive(Clone, Debug)]
 struct InfrastructureSource {
+    workspace_root: PathBuf,
     manifest_path: PathBuf,
     package_name: String,
     package_version: String,
@@ -106,12 +108,16 @@ pub(super) fn compile(
     let source = resolve_source(role, context)?;
     require_contract(role, &source.manifest_path)?;
     let candid = resolve_candid(role, context, &source)?;
+    let wire_schema = super::wire_schema::workspace_wire_contract(
+        &context.with_role(role.name()),
+        &super::CanisterArtifactBuildOptions::default(),
+    )?;
     let capabilities = source.capabilities.clone();
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
         &source.package_version,
         &canic_contracts::ids::CanisterRole::new(role.name()),
         &capabilities,
-        &candid,
+        &wire_schema,
     );
     let built_wasm_path = run_build(
         role,
@@ -136,7 +142,8 @@ pub(super) fn compile(
         wasm_path,
         wasm_gz_path,
         did_path,
-        candid_sha256: profile.candid_sha256,
+        candid_sha256: sha2_host::Sha256::digest(&candid).into(),
+        wire_schema_sha256: profile.wire_schema_sha256,
         protocol_profile_digest: profile.protocol_profile_digest,
         transforms: Vec::new(),
     };
@@ -158,6 +165,7 @@ fn resolve_source(
             &super::CanisterArtifactBuildOptions::default(),
         )?;
         return Ok(InfrastructureSource {
+            workspace_root: spec.cargo_workspace_root,
             manifest_path: spec.package_manifest_path,
             package_name: spec.package_name,
             package_version: spec.canic_version,
@@ -197,6 +205,10 @@ fn resolve_source(
         },
     )?;
     Ok(InfrastructureSource {
+        workspace_root: manifest
+            .parent()
+            .ok_or("generated manifest parent")?
+            .to_path_buf(),
         manifest_path: manifest,
         package_name: role.package().to_string(),
         package_version: canic.version.to_string(),
@@ -354,4 +366,20 @@ fn resolve_candid(
             .join(format!("{}.wasm", role.crate_name())),
         || run_build(role, context, &source.manifest_path, None, true).map(|_| ()),
     )
+}
+
+/// Reuse infrastructure package admission, marker policy and profile arguments.
+pub(super) fn native_schema_recipe(
+    role: InfrastructureRole,
+    context: &WorkspaceBuildContext,
+) -> Result<super::model::NativeSchemaBuildRecipe, Box<dyn std::error::Error>> {
+    let source = resolve_source(role, context)?;
+    require_contract(role, &source.manifest_path)?;
+    let invocation = cargo_command_for_role(role, context, &source.manifest_path, false);
+    Ok(super::model::NativeSchemaBuildRecipe {
+        manifest: source.manifest_path,
+        workspace: source.workspace_root,
+        package: source.package_name,
+        invocation,
+    })
 }

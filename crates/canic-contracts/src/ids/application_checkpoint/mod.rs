@@ -4,15 +4,13 @@
 //! Boundary: identity data supplies no freeze, snapshot or spending authority.
 
 use crate::ids::CallerReceiverAuthority;
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 /// Exact installed audience and monotonic Root-issued identity of one checkpoint.
 ///
 /// Root owns sequence issuance outside application snapshots. The unit digest
 /// commits complete semantic membership and the selected application contract.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ApplicationCheckpointBinding {
     pub authority: CallerReceiverAuthority,
@@ -22,8 +20,11 @@ pub struct ApplicationCheckpointBinding {
 }
 
 /// Canonical participant phase shared by durable state and wire acknowledgements.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum ApplicationCheckpointPhase {
     Preparing,
     Prepared,

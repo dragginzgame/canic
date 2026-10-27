@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/test-tool-evidence.sh scripts/ci/test-tool-store.sh scripts/ci/prepare-script-fixture.sh
+# Shared companions: scripts/ci/test-tool-evidence.sh scripts/ci/test-tool-store.sh scripts/ci/prepare-script-fixture.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 path_context=false
 if [[ "${1:-}" == --path-context && $# == 1 ]]; then path_context=true;
@@ -8,24 +8,19 @@ ROOT="$0"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/host-tools-test.XXXXXX")"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
+fixture="$(fixture_create "${TMPDIR:-/tmp}/host-tools-test.XXXXXX")"
 fixture_complete=false
 finish() {
     local status=$?
-    # Bash 3.2 may report zero after nounset before assertions finish.
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
-    else
-        echo "Host tool fixtures retained: $fixture" >&2
-        echo "Host tool fixture stopped with status $status" >&2
-        if [[ -f "$fixture/install.log" ]]; then tail -n 80 "$fixture/install.log" >&2; fi
+    fixture_completion_status "$status" "$fixture_complete" || status=$?
+    if [[ "$status" != 0 && -f "$fixture/install.log" ]]; then
+        tail -n 80 "$fixture/install.log" >&2 || :
     fi
-    exit "$status"
+    fixture_finish "$status" "$fixture" 'Host tool fixtures retained'
 }
 trap finish EXIT
-[[ "$fixture" == /* ]] || fixture="$PWD/$fixture"
-fixture="$(cd -P "$fixture" && printf '%s/.' "$PWD")"
-fixture="${fixture%/.}"
 mkdir "$fixture/bin" "$fixture/assets" "$fixture/consumer"
 export HOST_TOOLS_FIXTURE="$fixture"
 cat > "$fixture/bin/uname" <<'SCRIPT'

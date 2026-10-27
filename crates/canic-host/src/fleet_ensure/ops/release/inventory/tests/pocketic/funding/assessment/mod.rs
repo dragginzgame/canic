@@ -88,17 +88,7 @@ pub(super) fn assert_assessment(
     let mut coordinator = funding::tests::coordinator_status(registry);
     coordinator.roots[0].current_operation = page.current_request.clone();
     coordinator.roots[0].window.reserved_cycles = Cycles::new(200);
-    let coordinator_bytes = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
-        CoordinatorReply::Funding(Box::new(coordinator.clone())),
-    ))
-    .unwrap();
-    pic.update_call(
-        review.authority.coordinator,
-        review.authority.operator,
-        "replace_funding",
-        coordinator_bytes,
-    )
-    .unwrap();
+    super::replace_coordinator(pic, review, &coordinator);
     let mut completed = refill(root, 1);
     completed.transfer_uncertain = false;
     completed.response.status = IcpRefillStatus::Completed;
@@ -109,10 +99,7 @@ pub(super) fn assert_assessment(
     let mut refused = refill(root, 3);
     refused.transfer_uncertain = false;
     page.icp_refills = vec![completed, unresolved, refused];
-    let bytes = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
-        RootReply::FundingRelease(Box::new(page)),
-    ))
-    .unwrap();
+    let bytes = root_funding_reply(page);
     pic.update_call(root, review.authority.operator, "replace", bytes.clone())
         .unwrap();
     let evidence = runtime
@@ -138,11 +125,5 @@ pub(super) fn assert_assessment(
     );
     let retained = report.evidence.roots[0].pages[0].clone();
     assert_eq!(retained.icp_refills[0].source_subaccount, Some([4; 32]));
-    assert_eq!(
-        ic_platform::candid::contract::encode_one(Ok::<_, Error>(RootReply::FundingRelease(
-            Box::new(retained)
-        )))
-        .unwrap(),
-        bytes
-    );
+    assert_eq!(root_funding_reply(retained), bytes);
 }

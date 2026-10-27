@@ -1,5 +1,4 @@
 use super::*;
-use crate::release_set::WASM_MAGIC;
 use canic_contracts::ids::{ReleaseBuildId, ReleaseBuildNonce};
 use canic_core::cdk::utils::hash::sha256_hex;
 use flate2::{Compression, GzBuilder};
@@ -10,9 +9,7 @@ fn release_build(byte: u8) -> ReleaseBuildId {
 }
 
 fn wasm(marker: u8) -> Vec<u8> {
-    let mut bytes = WASM_MAGIC.to_vec();
-    bytes.push(marker);
-    bytes
+    crate::test_support::wire_wasm(&[marker])
 }
 
 fn gzip(bytes: &[u8]) -> Vec<u8> {
@@ -91,6 +88,7 @@ impl OwnedInput {
             wasm: &self.wasm,
             wasm_gz_relative_path: &self.wasm_gz_relative_path,
             wasm_gz: &self.wasm_gz,
+            wire_schema: crate::test_support::WIRE_SCHEMA,
             candid_sha256: [3; 32],
             protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
                 [4; 32],
@@ -146,7 +144,7 @@ fn compiler_derives_one_canonical_entry_per_infrastructure_role() {
     assert_eq!(manifest.digest().expect("manifest digest"), expected_digest);
     assert_eq!(
         canic_core::cdk::utils::hash::hex_bytes(expected_digest),
-        "a47c776c52fed66e694c863993064f3f1e4b210153db4a33d24a99576af9815f",
+        "e14af9321e27362056bd5c2abd55dab2abd1eba85ea789033276cf92baef6f9d",
     );
 }
 

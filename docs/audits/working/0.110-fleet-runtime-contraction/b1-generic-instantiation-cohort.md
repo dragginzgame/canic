@@ -314,3 +314,11 @@ post-`-Oz` body mappings. Runtime instruction evidence is explicitly absent.
 Complete B1 awaits human acceptance; no generic consolidation is authorized
 from source repetition alone. A production cut that changes this family must
 refresh the mapping and explicitly retain, retarget or stop the cohort.
+
+## Wire cutover evidence boundary — 2026-10-26
+
+The maintained cohort endpoint now uses a native request record and Wire frames.
+Earlier Candid measurements and their revision-specific ablation patches remain
+historical evidence. They do not qualify the current codec, instruction cost or
+artifact shape. A new measurement campaign must bind the current native source,
+features and schemas and regenerate its patches against that selected baseline.

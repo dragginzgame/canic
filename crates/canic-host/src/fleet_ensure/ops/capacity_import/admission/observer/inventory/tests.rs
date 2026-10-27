@@ -140,43 +140,39 @@ fn failed_assets_remain_owned_without_blocking_a_quiet_destination() {
 }
 
 #[test]
-fn inventory_decode_bounds_bytes_types_and_malformed_replies() {
+fn inventory_decode_bounds_bytes_and_rejects_identity_and_malformed_frames() {
     let canister = principal(2);
-    let valid = ic_platform::candid::contract::encode_one(Ok::<_, Error>(RootResponse::Pool(
-        Box::new(page()),
-    )))
+    let response = Ok::<_, Error>(canic_contracts::dto::pool_inventory::Page::from(page()));
+    let valid = ic_wire::native::encode_response(
+        protocol::pool_inventory::METHOD_ID,
+        &response,
+        protocol::pool_inventory::RESPONSE_LIMITS,
+    )
     .unwrap();
-    let decoded: Result<RootResponse, Error> = decode(canister, &valid).unwrap();
-    let RootResponse::Pool(observed) = decoded.unwrap();
-    assert_eq!(*observed, page());
-    for bytes in [&vec![0; RESPONSE_BYTES + 1][..], b"DIDL"] {
+    assert_eq!(
+        CanisterPoolResponse::from(decode(canister, &valid).unwrap().unwrap()),
+        page()
+    );
+    let wrong_method = ic_wire::native::encode_response(
+        protocol::pool_census::METHOD_ID,
+        &response,
+        protocol::pool_inventory::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    let mut trailing = valid.clone();
+    trailing.push(0);
+    for bytes in [
+        &vec![0; RESPONSE_BYTES + 1][..],
+        &valid[..valid.len() - 1],
+        &wrong_method,
+        &trailing,
+    ] {
         assert!(matches!(
-            decode::<Result<RootResponse, Error>>(canister, bytes),
+            decode(canister, bytes),
             Err(CapacityImportJournalError::InventoryObservation {
                 stage: CapacityImportInventoryStage::Decode,
                 ..
             })
         ));
     }
-    // Valid empty record types with a valid argument: refusal must come from
-    // the bound, not a malformed/truncated header or incompatible reply type.
-    let mut excess_types = b"DIDL\x81\x20".to_vec();
-    for _ in 0..4097 {
-        excess_types.extend([0x6c, 0]);
-    }
-    excess_types.extend([1, 0]);
-    let mut generous = ic_platform::candid::decoder::DecoderConfig::new();
-    generous.set_max_type_len(4097);
-    ic_platform::candid::decoder::decode_one_with_config::<ic_platform::candid::contract::Reserved>(
-        &excess_types,
-        &generous,
-    )
-    .unwrap();
-    assert!(matches!(
-        decode::<ic_platform::candid::contract::Reserved>(canister, &excess_types),
-        Err(CapacityImportJournalError::InventoryObservation {
-            stage: CapacityImportInventoryStage::Decode,
-            ..
-        })
-    ));
 }

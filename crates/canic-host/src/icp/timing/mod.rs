@@ -446,13 +446,13 @@ mod attribution_tests {
                         icp.measure_request(
                             IcpRequestKind::Query,
                             Some(&root.to_text()),
-                            Some("canic_observability"),
+                            Some("canic_coordinator_funding"),
                             || Ok::<_, u8>(()),
                         )?;
                         icp.measure_request(
                             IcpRequestKind::Update,
                             Some(&root.to_text()),
-                            Some("canic_root_command"),
+                            Some("canic_root_inspect_canister"),
                             || Err::<(), _>(7),
                         )
                     });

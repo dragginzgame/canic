@@ -7,15 +7,18 @@
 //! Boundary: ops and DTO modules re-export these values to preserve public API
 //! paths while conversion from foreign infra payloads remains explicit.
 
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
-use serde::Deserialize;
+use ic_platform::principal::ExternalPrincipal as Principal;
+use serde::{Deserialize, Serialize};
 
 ///
 /// CanisterStatusType
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum CanisterStatusType {
     #[serde(rename = "running")]
     Running,
@@ -29,8 +32,7 @@ pub enum CanisterStatusType {
 /// LogVisibility
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum LogVisibility {
     #[serde(rename = "controllers")]
     Controllers,

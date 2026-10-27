@@ -5,18 +5,21 @@
 //! Boundary: replicated Root observations must agree with authenticated management status.
 
 use crate::{
-    canister_protocol::call_with_candid,
+    canister_protocol::call_wire,
     fleet_ensure::{
         model::{LiveCanister, ReinstallRootWitnessRecord},
         ops::current_protocol::CurrentProtocolError,
     },
     icp::IcpCli,
 };
-use canic_contracts::dto::{
-    canister::CanisterInspectionRequest,
-    wire::projection::install_history::{Command, Response},
+use canic_contracts::{
+    dto::{canister::CanisterHistoryResponse, inspection_history::Request},
+    protocol::inspection_history as wire,
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::{
+    candid::contract::CandidType, management_canister_types::CodeDeploymentMode,
+    principal::ExternalPrincipal as Principal,
+};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -56,18 +59,10 @@ enum Origin {
 #[candid_path("ic_platform::candid::contract")]
 enum Details {
     #[serde(rename = "code_deployment")]
-    CodeDeployment { mode: Mode, module_hash: Vec<u8> },
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum Mode {
-    #[serde(rename = "install")]
-    Install,
-    #[serde(rename = "reinstall")]
-    Reinstall,
-    #[serde(rename = "upgrade")]
-    Upgrade,
+    CodeDeployment {
+        mode: CodeDeploymentMode,
+        module_hash: Vec<u8>,
+    },
 }
 
 pub(super) fn observe(
@@ -78,27 +73,36 @@ pub(super) fn observe(
     before: u64,
     live: &LiveCanister,
 ) -> Result<HistoryEffect, CurrentProtocolError> {
-    let path = root.join(&witness.candid);
-    let bytes =
-        std::fs::read(&path).map_err(|e| CurrentProtocolError::Configuration(e.to_string()))?;
-    if canic_core::cdk::utils::hash::sha256_hex(&bytes) != witness.candid_sha256 {
+    let path = root.join(&witness.wire_schema);
+    let bytes = super::current_protocol::read_schema(&path)?;
+    if canic_core::cdk::utils::hash::sha256_hex(&bytes) != witness.wire_schema_sha256 {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
+    crate::artifact_io::require_wire_method(
+        &bytes,
+        wire::METHOD,
+        wire::METHOD_ID,
+        canic_contracts::protocol::wire_declaration::MethodKind::Update,
+        wire::REQUEST_LIMITS,
+        wire::RESPONSE_LIMITS,
+    )?;
     let principal = Principal::from_text(&live.principal)
         .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
     let witness_principal = Principal::from_text(&witness.authority.principal)
         .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
     icp.measure_canister_history(witness_principal, principal, || {
-        let Response::InspectCanisterHistory(response) = call_with_candid(
+        let response: CanisterHistoryResponse = call_wire(
             icp,
-            &path,
             witness_principal,
-            canic_contracts::protocol::CANIC_ROOT_COMMAND,
-            &Command::InspectCanisterHistory(CanisterInspectionRequest {
-                canister_id: principal,
-            }),
+            wire::METHOD,
+            wire::METHOD_ID,
+            &Request {
+                canister_id: principal.into(),
+            },
+            wire::REQUEST_LIMITS,
+            wire::RESPONSE_LIMITS,
         )?;
-        if response.canister_id != principal {
+        if response.canister_id != ic_platform::Principal::from(principal) {
             return Err(CurrentProtocolError::ResponseMismatch);
         }
         let history: History = ic_platform::candid::decoder::decode_one(&response.history_candid)
@@ -182,7 +186,7 @@ fn matches_history(
         return false;
     };
     let Some(Details::CodeDeployment {
-        mode: Mode::Reinstall,
+        mode: CodeDeploymentMode::Reinstall,
         module_hash,
     }) = &change.details
     else {
@@ -272,7 +276,7 @@ mod tests {
         assert!(matches!(
             history.recent_changes[0].details,
             Some(Details::CodeDeployment {
-                mode: Mode::Reinstall,
+                mode: CodeDeploymentMode::Reinstall,
                 ..
             })
         ));
@@ -363,7 +367,7 @@ mod tests {
             &live
         ));
         history.recent_changes[0].details = Some(Details::CodeDeployment {
-            mode: Mode::Reinstall,
+            mode: CodeDeploymentMode::Reinstall,
             module_hash: vec![0x11; 32],
         });
         assert!(matches_history(
@@ -414,7 +418,7 @@ mod tests {
             HistoryEffect::Conflict
         );
         history.recent_changes[0].details = Some(Details::CodeDeployment {
-            mode: Mode::Upgrade,
+            mode: CodeDeploymentMode::Upgrade,
             module_hash: vec![0x11; 32],
         });
         assert!(!matches_history(

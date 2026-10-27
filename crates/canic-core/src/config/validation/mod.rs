@@ -8,12 +8,15 @@ mod app;
 mod auth;
 mod component_spec;
 
-use crate::config::schema::{
-    ConfigModel, ConfigSchemaError, MAX_FLEET_COMPONENT_INSTANCES, RoleDeclarationKind, Validate,
-    validate_canister_role_name,
+use crate::config::{
+    provisioning_grants::{ProvisioningGrantGraph, ProvisioningGrantGraphError},
+    schema::{
+        ConfigModel, ConfigSchemaError, MAX_FLEET_COMPONENT_INSTANCES, RoleDeclarationKind,
+        Validate, validate_canister_role_name,
+    },
 };
-use canic_contracts::ids::{CanisterRole, ComponentSpecId};
-use std::collections::{BTreeMap, VecDeque};
+use canic_contracts::ids::CanisterRole;
+use std::collections::BTreeMap;
 
 fn validate_canister_role(
     role: &CanisterRole,
@@ -114,19 +117,7 @@ fn validate_attestation_epoch_roles(config: &ConfigModel) -> Result<(), ConfigSc
 }
 
 fn validate_component_provisioning_grants(config: &ConfigModel) -> Result<(), ConfigSchemaError> {
-    let mut outgoing = config
-        .component_specs
-        .keys()
-        .cloned()
-        .map(|component_spec| (component_spec, Vec::new()))
-        .collect::<BTreeMap<ComponentSpecId, Vec<ComponentSpecId>>>();
-    let mut incoming = config
-        .component_specs
-        .keys()
-        .cloned()
-        .map(|component_spec| (component_spec, 0_u32))
-        .collect::<BTreeMap<_, _>>();
-
+    let mut graph = ProvisioningGrantGraph::new(config.component_specs.keys());
     for (requester, source) in &config.component_specs {
         for target in source.provisions.keys() {
             if requester == target {
@@ -134,54 +125,23 @@ fn validate_component_provisioning_grants(config: &ConfigModel) -> Result<(), Co
                     "Component Spec '{requester}' cannot provision itself",
                 )));
             }
-            let Some(target_incoming) = incoming.get_mut(target) else {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Component Spec '{requester}' provisioning grant references unknown target '{target}'",
-                )));
-            };
-            *target_incoming = target_incoming.checked_add(1).ok_or_else(|| {
-                ConfigSchemaError::ValidationError(
-                    "Component provisioning grant count overflowed".into(),
-                )
+            graph.add_grant(requester, target).map_err(|error| {
+                let message = match error {
+                    ProvisioningGrantGraphError::UnknownTarget => format!(
+                        "Component Spec '{requester}' provisioning grant references unknown target '{target}'",
+                    ),
+                    ProvisioningGrantGraphError::IncomingCountOverflow =>
+                        "Component provisioning grant count overflowed".into(),
+                };
+                ConfigSchemaError::ValidationError(message)
             })?;
-            outgoing
-                .get_mut(requester)
-                .expect("requester was initialized from the same Component Spec map")
-                .push(target.clone());
         }
     }
-
-    let mut ready = incoming
-        .iter()
-        .filter(|(_component_spec, count)| **count == 0)
-        .map(|(component_spec, _count)| component_spec.clone())
-        .collect::<VecDeque<_>>();
-    let mut visited = 0_usize;
-
-    while let Some(requester) = ready.pop_front() {
-        visited += 1;
-        for target in &outgoing[&requester] {
-            let target_incoming = incoming
-                .get_mut(target)
-                .expect("grant targets were validated above");
-            *target_incoming -= 1;
-            if *target_incoming == 0 {
-                ready.push_back(target.clone());
-            }
-        }
-    }
-
-    if visited != config.component_specs.len() {
-        let component_spec = incoming
-            .into_iter()
-            .find(|(_component_spec, count)| *count > 0)
-            .map(|(component_spec, _count)| component_spec)
-            .expect("an unvisited graph node must retain an incoming edge");
+    if let Some(component_spec) = graph.cycle_blocked_spec() {
         return Err(ConfigSchemaError::ValidationError(format!(
             "Component provisioning grants contain a cycle involving Spec '{component_spec}'",
         )));
     }
-
     Ok(())
 }
 

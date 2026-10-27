@@ -1,6 +1,7 @@
 # Canic Metrics Reference
 
-The `canic_observability` selector `Metrics { kind, page }` is controller-only and returns a
+The native Wire `canic_metrics` query accepts `MetricsStatusRequest { kind, page }`,
+is controller-only and returns a
 paginated `Page<MetricEntry>`. Rows are sorted by `labels`, then `principal`,
 before pagination. This guard is intentional: runtime rows include exact
 instruction totals, timer delays, cycle-funding values, and principal-scoped
@@ -10,9 +11,10 @@ For a managed Fleet, use `canic info metrics`. Human operators do not become
 controllers of every Component; the CLI authenticates to the Fleet Subnet
 Root, which relays the bounded observation to the Root-controlled target. A
 direct status query remains appropriate for a canister's own controller.
-Managed Components and Roots use `canic_observability`.
+Managed Components and Roots expose `canic_metrics`; the authenticated Root relay
+uses `canic_root_observe_metrics` and the target's `canic_observe_metrics` update.
 
-Optional public aggregates use the separate `canic_public_status` endpoint and
+Optional public aggregates use the separate `canic_public_metrics` endpoint and
 are disabled by default. See [public metric publication](features/runtime/public-observability.md)
 for configuration, cached snapshots, units and staleness. Publication does not
 change the protected metrics contract described here.
@@ -50,16 +52,20 @@ query-side instruction measurements, return a `QueryPerfSample<T>` from the
 same query call:
 
 ```rust
-#[canic_query(requires(env::build_local_only()))]
-async fn audit_env_probe() -> Result<QueryPerfSample<EnvSnapshotResponse>, Error> {
-    Ok(MetricsQuery::sample_query(EnvQuery::snapshot()))
+const LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
+};
+#[canic_query(requires(env::build_local_only()),
+    wire(id = 0x4155_4454_0000_0010, request = LIMITS, response = LIMITS))]
+async fn audit_time_probe() -> Result<QueryPerfSample<u64>, Error> {
+    Ok(MetricsQuery::sample_query(ic_platform::cdk::api::time()))
 }
 ```
 
 `QueryPerfSample::local_instructions` is the local call-context instruction
 counter observed before the query response is returned. Use this for explicit
 audit/probe endpoints; use the role-owned
-`Metrics(MetricsKind::Runtime, ...)` status selector for persisted update and
+`canic_metrics` query with `MetricsKind::Runtime` for persisted update and
 timer rows.
 
 Audit reports should treat a zero `local_instructions` value as unobservable
@@ -85,7 +91,7 @@ Use an override only when a role needs more visibility than its default:
 profile = "full"
 ```
 
-Unsupported tier requests keep the same Candid enum shape and return a Canic
+Unsupported tier requests retain the declared Wire request shape and return a Canic
 invalid-input error for that canister.
 
 | `MetricsKind` | Families | Notes |
@@ -133,6 +139,15 @@ publication.
 
 ## Family Labels
 
+Inter-canister counters record Call builder construction, including builders never
+executed. Execution outcomes are recorded separately under `platform_call`.
+The heap retains the first 1,024 distinct `(target, method)` identities with method
+names of at most 128 UTF-8 bytes. Existing admitted identities continue counting
+at capacity. Excess identities and oversized names increment a saturating
+`inter_canister_call.overflow` row with no principal; their text is not retained.
+Snapshots clone at most 1,024 retained identities plus that aggregate row. These
+counters reset with the heap. Clients must accept the principal-free overflow row.
+
 The first label in every row identifies the concrete family. Remaining labels
 use the existing family-specific dimensions:
 
@@ -146,7 +161,7 @@ use the existing family-specific dimensions:
 | `cycles_topup` | `[metric]` | `None` | `Count` |
 | `delegated_auth` | `[delegated_auth_authority]` or `[operation, outcome, reason]` | Verified signer authority for authority rows | `Count` |
 | `intent` | `[surface, operation, outcome, reason]` | `None` | `Count` |
-| `inter_canister_call` | `[method]` | Target canister principal | `Count` |
+| `inter_canister_call` | `[method]` or `[overflow]` | Target canister principal; `None` for overflow | `Count` |
 | `lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` |
 | `perf` | `[endpoint, call_kind, name]`, `[timer, owner, subsystem, name]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
 | `platform_call` | `[surface, mode, outcome, reason]` | `None` | `Count` |

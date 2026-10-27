@@ -1,33 +1,21 @@
 //! Module: canister_protocol
 //!
-//! Responsibility: invoke typed Canic Candid methods through ICP-selected transports.
+//! Responsibility: invoke typed Canic methods through ICP-selected transports.
 //! Does not own: domain sequencing, endpoint authorization, or management-Canister effects.
 //! Boundary: domain workflows supply exact Canister, method, and arguments through explicit
 //! query or update operations.
 
-pub mod contract;
+pub mod funding_read;
 pub mod inspection;
+pub mod pool_inventory;
+pub mod registry_read;
+pub mod root_authority;
 
-use crate::{
-    icp::{
-        IcpCli, IcpCommandError, IcpJsonResponseError, cleanup_candid_argument_file,
-        decode_json_result_response, write_candid_argument_file,
-    },
-    protocol_binding::ResolvedProtocolBinding,
-};
+use crate::icp::{IcpCli, IcpJsonResponseError};
 use canic_contracts::diagnostics::RegisteredDiagnosticCode;
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::de::DeserializeOwned;
-use std::io;
 use thiserror::Error as ThisError;
-
-const ICP_JSON_OUTPUT: &str = "json";
-
-#[derive(Clone, Copy)]
-enum ProtocolCallMode {
-    Query,
-    Update,
-}
 
 #[derive(Debug, ThisError)]
 pub enum CanisterProtocolError {
@@ -39,8 +27,21 @@ pub enum CanisterProtocolError {
         source: crate::icp::IcpQueryError,
     },
 
-    #[error("invalid bound inspection contract for Root {caller}: {detail}")]
-    InspectionContract { caller: Principal, detail: String },
+    #[error("Wire query {method} on Canister {canister} failed: {source}")]
+    WireQuery {
+        canister: Principal,
+        method: &'static str,
+        #[source]
+        source: crate::icp::IcpWireQueryError,
+    },
+
+    #[error("Wire update {method} on Canister {canister} failed: {source}")]
+    WireUpdate {
+        canister: Principal,
+        method: &'static str,
+        #[source]
+        source: crate::icp::IcpWireQueryError,
+    },
 
     #[error("Root {} inspection preflight for {} observed native={} cycles, liquid={} cycles, required outbound reserve={} cycles. Inspection was not attempted. Review Root funding or freezing reserve and retry with a fresh observation.", .0.caller, .0.canister_id, .0.native_cycles, .0.available_liquid_cycles, .0.required_liquid_cycles)]
     InspectionPreflightReserve(
@@ -54,32 +55,6 @@ pub enum CanisterProtocolError {
     InvalidInspectionReserve {
         caller: Principal,
         target: Principal,
-    },
-
-    #[error("failed to encode Candid arguments for {method} on Canister {canister}: {source}")]
-    ArgumentEncoding {
-        canister: Principal,
-        method: &'static str,
-        #[source]
-        source: ic_platform::candid::contract::Error,
-    },
-
-    #[error(
-        "failed to manage binary Candid arguments for {method} on Canister {canister}: {source}"
-    )]
-    ArgumentFile {
-        canister: Principal,
-        method: &'static str,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("failed to invoke {method} on Canister {canister}: {source}")]
-    Invocation {
-        canister: Principal,
-        method: &'static str,
-        #[source]
-        source: IcpCommandError,
     },
 
     #[error("invalid {method} response from Canister {canister}: {source}")]
@@ -122,103 +97,25 @@ impl CanisterProtocolError {
     }
 }
 
-pub fn call_with_arg<I, O>(
-    icp: &IcpCli,
-    binding: &ResolvedProtocolBinding,
-    canister: Principal,
-    method: &'static str,
-    input: &I,
-) -> Result<O, CanisterProtocolError>
-where
-    I: CandidType,
-    O: CandidType + DeserializeOwned,
-{
-    invoke_with_candid(
-        icp,
-        &binding.candid_path,
-        canister,
-        method,
-        input,
-        ProtocolCallMode::Update,
-    )
-}
-
-pub fn query_with_arg<I, O>(
-    icp: &IcpCli,
-    binding: &ResolvedProtocolBinding,
-    canister: Principal,
-    method: &'static str,
-    input: &I,
-) -> Result<O, CanisterProtocolError>
-where
-    I: CandidType,
-    O: CandidType + DeserializeOwned,
-{
-    invoke_with_candid(
-        icp,
-        &binding.candid_path,
-        canister,
-        method,
-        input,
-        ProtocolCallMode::Query,
-    )
-}
-
-/// Invoke one typed current-generation call after its exact Candid bytes were
-/// independently bound into the reviewed Fleet action.
-pub fn call_with_candid<I, O>(
-    icp: &IcpCli,
-    candid_path: &std::path::Path,
-    canister: Principal,
-    method: &'static str,
-    input: &I,
-) -> Result<O, CanisterProtocolError>
-where
-    I: CandidType,
-    O: CandidType + DeserializeOwned,
-{
-    invoke_with_candid(
-        icp,
-        candid_path,
-        canister,
-        method,
-        input,
-        ProtocolCallMode::Update,
-    )
-}
-
-/// Query one typed current-generation status after its exact Candid bytes were
-/// independently bound into the reviewed Fleet action.
-pub fn query_with_candid<I, O>(
-    icp: &IcpCli,
-    candid_path: &std::path::Path,
-    canister: Principal,
-    method: &'static str,
-    input: &I,
-) -> Result<O, CanisterProtocolError>
-where
-    I: CandidType,
-    O: CandidType + DeserializeOwned,
-{
-    invoke_with_candid(
-        icp,
-        candid_path,
-        canister,
-        method,
-        input,
-        ProtocolCallMode::Query,
-    )
-}
-
-/// Read a compiled Canic status contract while preserving typed transport failures.
-pub fn query_authenticated<I: CandidType, O: CandidType + DeserializeOwned>(
+/// Query an owned Wire contract with authenticated bounded reads and typed application errors.
+pub fn query_wire<I: serde::Serialize, O: DeserializeOwned>(
     icp: &IcpCli,
     canister: Principal,
     method: &'static str,
+    method_id: u64,
     input: &I,
+    request_limits: ic_wire::Limits,
+    response_limits: ic_wire::Limits,
 ) -> Result<O, CanisterProtocolError> {
     let response: Result<O, canic_contracts::dto::error::Error> = icp
-        .query_candid_readonly(canister, method, input)
+        .query_wire_readonly(
+            canister,
+            method,
+            method_id,
+            input,
+            request_limits,
+            response_limits,
+        )
         .map_err(|source| CanisterProtocolError::ReadOnlyQuery {
             canister,
             method,
@@ -231,96 +128,78 @@ pub fn query_authenticated<I: CandidType, O: CandidType + DeserializeOwned>(
     })
 }
 
-fn invoke_with_candid<I, O>(
+/// Invoke a compiled native update through the selected ICP identity.
+/// Callers own release-schema admission; transport preserves typed refusals and framing failures.
+pub fn call_wire<I: serde::Serialize, O: DeserializeOwned>(
     icp: &IcpCli,
-    candid_path: &std::path::Path,
     canister: Principal,
     method: &'static str,
+    method_id: u64,
     input: &I,
-    mode: ProtocolCallMode,
-) -> Result<O, CanisterProtocolError>
-where
-    I: CandidType,
-    O: CandidType + DeserializeOwned,
-{
-    let output = invoke_output(icp, Some(candid_path), canister, method, input, mode)?;
-    decode_response(canister, method, &output)
-}
-
-fn invoke_output<I>(
-    icp: &IcpCli,
-    candid_path: Option<&std::path::Path>,
-    canister: Principal,
-    method: &'static str,
-    input: &I,
-    mode: ProtocolCallMode,
-) -> Result<String, CanisterProtocolError>
-where
-    I: CandidType,
-{
-    let bytes = ic_platform::candid::contract::encode_one(input).map_err(|source| {
-        CanisterProtocolError::ArgumentEncoding {
+    request_limits: ic_wire::Limits,
+    response_limits: ic_wire::Limits,
+) -> Result<O, CanisterProtocolError> {
+    let response: Result<O, canic_contracts::dto::error::Error> = icp
+        .canister_update_wire(
+            &canister.to_text(),
+            method,
+            method_id,
+            input,
+            request_limits,
+            response_limits,
+        )
+        .map_err(|source| CanisterProtocolError::WireUpdate {
             canister,
             method,
             source,
-        }
-    })?;
-    let args_path = write_candid_argument_file(&bytes).map_err(|source| {
-        CanisterProtocolError::ArgumentFile {
+        })?;
+    response.map_err(|error| CanisterProtocolError::Response {
+        canister,
+        method,
+        source: IcpJsonResponseError::Rejected(error),
+    })
+}
+
+/// Query a compiled native contract through the selected ICP CLI identity and transport.
+pub fn query_wire_cli<I: serde::Serialize, O: DeserializeOwned>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+    method_id: u64,
+    input: &I,
+    request_limits: ic_wire::Limits,
+    response_limits: ic_wire::Limits,
+) -> Result<O, CanisterProtocolError> {
+    let response: Result<O, canic_contracts::dto::error::Error> = icp
+        .canister_query_wire(
+            &canister.to_text(),
+            method,
+            method_id,
+            input,
+            request_limits,
+            response_limits,
+        )
+        .map_err(|source| CanisterProtocolError::WireQuery {
             canister,
             method,
             source,
-        }
-    })?;
-    let canister_text = canister.to_text();
-    let output = match mode {
-        ProtocolCallMode::Query => icp.canister_query_binary_args_output_with_candid(
-            &canister_text,
-            method,
-            &args_path,
-            Some(ICP_JSON_OUTPUT),
-            candid_path,
-        ),
-        ProtocolCallMode::Update => icp.canister_call_binary_args_output_with_candid(
-            &canister_text,
-            method,
-            &args_path,
-            Some(ICP_JSON_OUTPUT),
-            candid_path,
-        ),
-    };
-    cleanup_candid_argument_file(&args_path);
-    let output = output.map_err(|source| CanisterProtocolError::Invocation {
+        })?;
+    response.map_err(|error| CanisterProtocolError::Response {
         canister,
         method,
-        source,
-    })?;
-    Ok(output)
-}
-
-fn decode_response<O>(
-    canister: Principal,
-    method: &'static str,
-    output: &str,
-) -> Result<O, CanisterProtocolError>
-where
-    O: CandidType + DeserializeOwned,
-{
-    decode_json_result_response(output).map_err(|source| CanisterProtocolError::Response {
-        canister,
-        method,
-        source,
+        source: IcpJsonResponseError::Rejected(error),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::Deserialize;
+    use crate::icp::{IcpWireQueryError, write_binary_argument_file};
+    use canic_contracts::protocol::public_overview as wire;
+    use serde::{Deserialize, Serialize};
     use std::fs;
 
-    #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-    #[candid_path("ic_platform::candid::contract")]
+    #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
     struct EmptyVectorArgument {
         values: Vec<u64>,
     }
@@ -355,9 +234,9 @@ exit "$(cat exit-code)"
         let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
         let reply: Result<u64, canic_contracts::dto::error::Error> = Ok(42);
         let response = serde_json::json!({
-            "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(reply).unwrap()),
+            "response_bytes": hex_bytes(ic_wire::native::encode_response(wire::METHOD_ID, &reply, wire::RESPONSE_LIMITS).unwrap()),
         });
-        for mode in [ProtocolCallMode::Update, ProtocolCallMode::Query] {
+        for update in [true, false] {
             for outcome in 0..3 {
                 fs::write(root.join("exit-code"), if outcome == 1 { "1" } else { "0" }).unwrap();
                 fs::write(
@@ -369,23 +248,41 @@ exit "$(cat exit-code)"
                     },
                 )
                 .unwrap();
-                let result = invoke_with_candid::<_, u64>(
+                let invoke = if update {
+                    call_wire::<(), u64>
+                } else {
+                    query_wire_cli::<(), u64>
+                };
+                let result = invoke(
                     &icp,
-                    &root.join("probe.did"),
                     Principal::from_slice(&[1]),
                     "probe",
+                    wire::METHOD_ID,
                     &(),
-                    mode,
+                    wire::REQUEST_LIMITS,
+                    wire::RESPONSE_LIMITS,
                 );
                 match outcome {
                     0 => assert_eq!(result.unwrap(), 42),
                     1 => assert!(matches!(
                         result,
-                        Err(CanisterProtocolError::Invocation { .. })
+                        Err(CanisterProtocolError::WireUpdate {
+                            source: IcpWireQueryError::Icp(_),
+                            ..
+                        } | CanisterProtocolError::WireQuery {
+                            source: IcpWireQueryError::Icp(_),
+                            ..
+                        })
                     )),
                     _ => assert!(matches!(
                         result,
-                        Err(CanisterProtocolError::Response { .. })
+                        Err(CanisterProtocolError::WireUpdate {
+                            source: IcpWireQueryError::Response(_),
+                            ..
+                        } | CanisterProtocolError::WireQuery {
+                            source: IcpWireQueryError::Response(_),
+                            ..
+                        })
                     )),
                 }
                 let argument_path = PathBuf::from(
@@ -454,14 +351,18 @@ exit "$(cat exit-code)"
     #[test]
     fn typed_arguments_are_written_to_private_binary_files() {
         let argument = EmptyVectorArgument { values: Vec::new() };
-        let path = write_candid_argument_file(
-            &ic_platform::candid::contract::encode_one(&argument).expect("encode argument"),
+        let path = write_binary_argument_file(
+            &ic_wire::native::encode_request(wire::METHOD_ID, &argument, wire::REQUEST_LIMITS)
+                .expect("encode argument"),
         )
         .expect("write argument file");
 
-        let decoded: EmptyVectorArgument =
-            ic_platform::candid::decoder::decode_one(&fs::read(&path).expect("read argument file"))
-                .expect("decode argument");
+        let decoded: EmptyVectorArgument = ic_wire::native::decode_request(
+            wire::METHOD_ID,
+            &fs::read(&path).expect("read argument file"),
+            wire::REQUEST_LIMITS,
+        )
+        .expect("decode argument");
         assert_eq!(decoded, argument);
         #[cfg(unix)]
         {

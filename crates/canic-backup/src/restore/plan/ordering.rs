@@ -9,35 +9,54 @@ use crate::restore::{
     RestorePlanError, RestorePlanMember,
 };
 
-use std::collections::BTreeSet;
+use ic_backup::model::effect_graph::{EffectGraphRecord, EffectNodeRecord, EffectNodeRequest};
+use std::collections::BTreeMap;
 
 pub(super) fn order_members(
     members: Vec<RestorePlanMember>,
 ) -> Result<Vec<RestorePlanMember>, RestorePlanError> {
-    let mut remaining = members;
-    let group_sources = remaining
-        .iter()
-        .map(|member| member.source_canister.clone())
-        .collect::<BTreeSet<_>>();
-    let mut emitted = BTreeSet::new();
-    let mut ordered = Vec::with_capacity(remaining.len());
-
-    while !remaining.is_empty() {
-        let Some(index) = remaining
-            .iter()
-            .position(|member| parent_satisfied(member, &group_sources, &emitted))
-        else {
-            return Err(RestorePlanError::RestoreOrderCycle);
-        };
-
-        let mut member = remaining.remove(index);
-        member.member_order = ordered.len();
-        member.ordering_dependency = ordering_dependency(&member);
-        emitted.insert(member.source_canister.clone());
-        ordered.push(member);
+    if members.is_empty() {
+        return Ok(members);
     }
-
-    Ok(ordered)
+    let sources: BTreeMap<_, _> = members
+        .iter()
+        .enumerate()
+        .map(|(index, member)| (member.source_canister.as_str(), index as u64))
+        .collect();
+    let nodes = members
+        .iter()
+        .enumerate()
+        .map(|(index, member)| {
+            EffectNodeRecord::new(EffectNodeRequest {
+                operation_sequence: index as u64,
+                depends_on: member
+                    .parent_source_canister
+                    .as_deref()
+                    .and_then(|parent| sources.get(parent))
+                    .copied()
+                    .into_iter()
+                    .collect(),
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    let graph = EffectGraphRecord::new(nodes)?;
+    let mut members: BTreeMap<_, _> = members
+        .into_iter()
+        .enumerate()
+        .map(|(index, member)| (index as u64, member))
+        .collect();
+    Ok(graph
+        .ordered_nodes()
+        .enumerate()
+        .map(|(order, node)| {
+            let mut member = members
+                .remove(&node.operation_sequence())
+                .expect("graph names an original member exactly once");
+            member.member_order = order;
+            member.ordering_dependency = ordering_dependency(&member);
+            member
+        })
+        .collect())
 }
 
 fn ordering_dependency(member: &RestorePlanMember) -> Option<RestoreOrderingDependency> {
@@ -68,15 +87,4 @@ pub(super) fn restore_ordering_summary(members: &[RestorePlanMember]) -> Restore
     }
 
     summary
-}
-
-fn parent_satisfied(
-    member: &RestorePlanMember,
-    group_sources: &BTreeSet<String>,
-    emitted: &BTreeSet<String>,
-) -> bool {
-    match &member.parent_source_canister {
-        Some(parent) if group_sources.contains(parent) => emitted.contains(parent),
-        _ => true,
-    }
 }

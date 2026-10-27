@@ -5,12 +5,7 @@ mod assessment;
 use super::*;
 use crate::fleet_ensure::ops::release::{funding, observation::ReleaseObservationError};
 use canic_contracts::dto::{
-    fleet_coordinator::CoordinatorFundingStatusResponse,
-    root::RootFundingReleaseResponse,
-    wire::projection::{
-        release_coordinator_funding::Response as CoordinatorReply,
-        release_funding::Response as RootReply,
-    },
+    fleet_coordinator::CoordinatorFundingStatusResponse, root::RootFundingReleaseResponse,
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
 use ic_platform::pocket_ic::PocketIc;
@@ -116,7 +111,7 @@ pub(super) fn assert_census(
             ..
         })
     ));
-    replace(b"DIDL".to_vec());
+    replace(vec![0]);
     assert!(matches!(
         collect(review, registry),
         Err(funding::ReleaseFundingError::Observation {
@@ -127,9 +122,11 @@ pub(super) fn assert_census(
 }
 
 fn root_funding_reply(page: RootFundingReleaseResponse) -> Vec<u8> {
-    ic_platform::candid::contract::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(
-        page,
-    ))))
+    ic_wire::native::encode_response(
+        canic_contracts::protocol::funding_read::release::METHOD_ID,
+        &Ok::<_, Error>(canic_contracts::dto::funding_read::ReleasePage::try_from(page).unwrap()),
+        canic_contracts::protocol::funding_read::RESPONSE_LIMITS,
+    )
     .unwrap()
 }
 
@@ -160,7 +157,7 @@ fn assert_coordinator_refusals(
         review.authority.coordinator,
         review.authority.operator,
         "replace_funding",
-        b"DIDL".to_vec(),
+        vec![0],
     )
     .unwrap();
     assert!(
@@ -174,9 +171,12 @@ fn replace_coordinator(
     review: &FleetReleaseReviewRecord,
     status: &CoordinatorFundingStatusResponse,
 ) {
-    let bytes = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
-        CoordinatorReply::Funding(Box::new(status.clone())),
-    ))
+    let native = canic_contracts::dto::funding_read::CoordinatorStatus::from(status.clone());
+    let bytes = ic_wire::native::encode_response(
+        canic_contracts::protocol::funding_read::coordinator_status::METHOD_ID,
+        &Ok::<_, Error>(native),
+        canic_contracts::protocol::funding_read::RESPONSE_LIMITS,
+    )
     .unwrap();
     pic.update_call(
         review.authority.coordinator,

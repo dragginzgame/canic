@@ -24,7 +24,7 @@ pub fn sample() -> Result<Vec<PublicMetric>, Error> {
             .usage()
             .map_err(|_| Error::from_registered(codes::STORAGE_INVALID_STATE))?;
         let observed_at_ns = ic_platform::cdk::api::time();
-        let canister_id = Some(ic_platform::cdk::api::canister_self().into());
+        let canister_id = Some(ic_platform::cdk::api::canister_self());
         Ok([
             (
                 "blob.active_reservations",

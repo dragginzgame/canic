@@ -9,8 +9,7 @@ use crate::{
 mod tests;
 
 /// Exact authority and audience authenticated independently of a credential.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ApplicationEnrollmentBinding {
     pub fleet: FleetKey,
     pub root: Principal,
@@ -21,16 +20,14 @@ pub struct ApplicationEnrollmentBinding {
 }
 
 /// Verification mechanism approved by Root, never selected by submitted claims.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ApplicationEnrollmentKey {
     Certified,
     Ed25519([u8; 32]),
 }
 
 /// Root-approved key and scope ceiling for the selected receiver role.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ApplicationEnrollmentEntry {
     pub issuer: Principal,
     pub key_id: [u8; 32],
@@ -42,8 +39,7 @@ pub struct ApplicationEnrollmentEntry {
 }
 
 /// Complete current authority response to an authenticated receiver pull.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ApplicationEnrollmentSnapshot {
     pub binding: ApplicationEnrollmentBinding,
     pub challenge: [u8; 32],
@@ -56,8 +52,7 @@ pub struct ApplicationEnrollmentSnapshot {
 }
 
 /// Request bound to the receiver's current boot or refresh attempt.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ApplicationEnrollmentRequest {
     pub binding: ApplicationEnrollmentBinding,
     pub challenge: [u8; 32],

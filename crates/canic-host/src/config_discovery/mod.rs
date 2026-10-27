@@ -4,7 +4,13 @@
 //! Does not own: Fleet convergence, prompting, reviewed plans, or runtime state.
 //! Boundary: returns canonical local paths and rejects duplicate App identities.
 
-use crate::release_set::{WorkspaceDiscoveryError, read_app_config_identity};
+#[cfg(test)]
+mod tests;
+
+use crate::{
+    release_set::{WorkspaceDiscoveryError, read_app_config_identity},
+    workspace_discovery::{discovery_start, has_workspace_manifest},
+};
 use std::{
     collections::BTreeMap,
     env, fs, io,
@@ -13,7 +19,9 @@ use std::{
 use thiserror::Error as ThisError;
 
 const APPS_ROOT: &str = "apps";
-const ICP_CONFIG_FILE: &str = "icp.yaml";
+const MAX_CONFIG_DEPTH: usize = 32;
+const MAX_CONFIG_ENTRIES: usize = 100_000;
+const EXCLUDED_DIRECTORIES: [&str; 4] = [".canic", ".git", "node_modules", "target"];
 
 /// Typed failure while discovering current App configuration.
 
@@ -46,6 +54,12 @@ pub enum ConfigDiscoveryError {
     #[error("multiple configs declare app {app}: {configs}")]
     DuplicateApp { app: String, configs: String },
 
+    #[error("Canic config discovery exceeds {maximum} directory levels at {path}")]
+    DepthLimit { path: PathBuf, maximum: usize },
+
+    #[error("Canic config discovery exceeds {maximum} entries at {path}")]
+    EntryLimit { path: PathBuf, maximum: usize },
+
     #[error(transparent)]
     WorkspaceDiscovery(#[from] WorkspaceDiscoveryError),
 }
@@ -63,29 +77,20 @@ pub fn current_canic_workspace_root() -> Result<PathBuf, ConfigDiscoveryError> {
     Ok(discover_canic_workspace_root_from(&current_dir)?.unwrap_or(current_dir))
 }
 
-/// Find the nearest conventional Canic workspace from one start path.
+/// Find the nearest App configuration root without crossing a Cargo workspace boundary.
 pub fn discover_canic_workspace_root_from(
     start: &Path,
 ) -> Result<Option<PathBuf>, ConfigDiscoveryError> {
-    let mut nearest_apps_root = None;
+    let start = discovery_start(start)?;
     for candidate in start.ancestors() {
         if !discover_workspace_canic_config_choices(candidate)?.is_empty() {
-            let root =
-                candidate
-                    .canonicalize()
-                    .map_err(|source| ConfigDiscoveryError::Canonicalize {
-                        path: candidate.to_path_buf(),
-                        source,
-                    })?;
-            if candidate.join(ICP_CONFIG_FILE).is_file() {
-                return Ok(Some(root));
-            }
-            if nearest_apps_root.is_none() {
-                nearest_apps_root = Some(root);
-            }
+            return Ok(Some(candidate.to_path_buf()));
+        }
+        if has_workspace_manifest(candidate)? {
+            break;
         }
     }
-    Ok(nearest_apps_root)
+    Ok(None)
 }
 
 /// Discover App configuration choices in the current workspace.
@@ -95,12 +100,14 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
 }
 
 /// Discover candidate `canic.toml` files under conventional App roots.
+/// Generated trees and symlinks are excluded; exhausted traversal bounds are errors.
 pub fn discover_workspace_canic_config_choices(
     workspace_root: &Path,
 ) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let mut choices = Vec::new();
+    let mut visited_entries = 0;
     for root in workspace_app_roots(workspace_root) {
-        collect_canic_config_choices(&root, &mut choices)?;
+        collect_canic_config_choices(&root, &mut choices, 0, &mut visited_entries)?;
     }
     choices.sort();
     choices.dedup();
@@ -157,9 +164,27 @@ fn unique_configs_by_app(
 fn collect_canic_config_choices(
     root: &Path,
     choices: &mut Vec<PathBuf>,
+    depth: usize,
+    visited_entries: &mut usize,
 ) -> Result<(), ConfigDiscoveryError> {
-    if !root.is_dir() {
+    let metadata = match fs::symlink_metadata(root) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => {
+            return Err(ConfigDiscoveryError::Path {
+                path: root.to_path_buf(),
+                source,
+            });
+        }
+    };
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
         return Ok(());
+    }
+    if depth > MAX_CONFIG_DEPTH {
+        return Err(ConfigDiscoveryError::DepthLimit {
+            path: root.to_path_buf(),
+            maximum: MAX_CONFIG_DEPTH,
+        });
     }
     for entry in fs::read_dir(root).map_err(|source| ConfigDiscoveryError::Directory {
         path: root.to_path_buf(),
@@ -170,6 +195,13 @@ fn collect_canic_config_choices(
             source,
         })?;
         let path = entry.path();
+        if *visited_entries >= MAX_CONFIG_ENTRIES {
+            return Err(ConfigDiscoveryError::EntryLimit {
+                path,
+                maximum: MAX_CONFIG_ENTRIES,
+            });
+        }
+        *visited_entries += 1;
         let file_type = entry
             .file_type()
             .map_err(|source| ConfigDiscoveryError::Path {
@@ -180,7 +212,12 @@ fn collect_canic_config_choices(
             continue;
         }
         if file_type.is_dir() {
-            collect_canic_config_choices(&path, choices)?;
+            if !EXCLUDED_DIRECTORIES
+                .iter()
+                .any(|name| entry.file_name() == *name)
+            {
+                collect_canic_config_choices(&path, choices, depth + 1, visited_entries)?;
+            }
         } else if file_type.is_file()
             && path.file_name().and_then(|name| name.to_str()) == Some("canic.toml")
         {

@@ -1,116 +1,92 @@
 # Endpoint argument and reply controls
 
-Managed application updates inherit a **16 KiB (16,384 byte) encoded argument
-limit** unless their Canic endpoint declares another limit. The bound includes
-the entire Candid argument encoding, including its type table and all arguments;
-it is not a string, action-list or JSON body size. An argument exactly at the
-selected limit passes the byte check. Other admission checks still apply.
+Owned Canic and application endpoints use native Wire with an explicit method ID
+and separate request/reply budgets. Declare `ic-wire` in the owning workspace
+catalog and inherit it in the endpoint package.
 
-The public Rust constant `canic::CANIC_DEFAULT_UPDATE_INGRESS_MAX_BYTES` names
-the default. For a method that needs a larger payload, put the intended bound
-beside its endpoint declaration:
+```rust
+const REQUEST: ic_wire::Limits = ic_wire::Limits {
+    bytes: 48 * 1024, allocation: 512 * 1024, nodes: 200_000, depth: 32,
+};
+const RESPONSE: ic_wire::Limits = ic_wire::Limits {
+    bytes: 1024, allocation: 4096, nodes: 256, depth: 16,
+};
 
-```rust,ignore
-#[canic::canic_update(public, payload(max_bytes = 48 * 1024))]
+#[canic::canic_update(requires(caller::is_controller()),
+    wire(id = 0x4150_5000_0000_0001, request = REQUEST, response = RESPONSE))]
 fn submit_batch(payload: Vec<u8>) -> Result<(), canic::Error> {
-    // Authenticate/authorize and validate the application request as required.
+    // Validate application semantics and commit the intended operation here.
     Ok(())
 }
 ```
 
-`public` in this example is an access decision, not part of the payload setting.
-Keep the endpoint's intended authentication and authorization predicates. A
-larger byte limit grants no application authority and does not change platform
-message limits.
+These are illustrative budgets. Measure valid application inputs and choose the
+actual frame-byte, decoded-allocation, traversal-node and nesting-depth bounds.
+The request byte cap includes the entire method-bound Wire frame. Canic checks
+that cap before copying ingress bytes and registers it with managed update
+inspection. IC Wire owns framing and decoder resource admission. The same
+endpoint checks apply to inter-canister updates; inspection alone does not.
+Queries use their declared request budgets without an update inspector default.
 
-## Identify the effective limit
+A Wire handler accepts one Serde request value, or no arguments for unit, and
+returns one Serde response. Authentication and semantic validation remain at
+their Canic/application owners. Ordinary Result responses preserve typed access
+refusals; `on_access_denied = "reject"` selects IC rejection. Reply encoding
+failure traps, rolling back synchronous mutations. Async callbacks retain the
+IC's transaction boundaries. There is no fallback codec.
 
-| Application endpoint declaration | External update ingress | Inter-canister update |
-| --- | --- | --- |
-| `#[canic_update(..., payload(max_bytes = N))]` | `N` encoded argument bytes | The generated raw adapter also enforces `N` before decoding |
-| `#[canic_update(..., decode = LIMITS)]` | `LIMITS.max_bytes` encoded bytes | The same byte limit and Candid budgets apply before dispatch |
-| `#[canic_update(...)]` without `payload` or `decode` | Managed inspector default: 16 KiB | No explicit Canic raw payload bound from this declaration |
-| Bare `#[ic_cdk::update]` in a Canic-managed application | Managed inspector default: 16 KiB | Canic's ingress inspector is not on this call path |
-
-This table describes ordinary application updates under Canic's generated
-inspector. Framework protocol methods may have their own role/selector checks.
-Queries do not inherit the update inspector default. They may select
-`payload(max_bytes = N)` for a raw byte bound or `decode = LIMITS` for all decoder
-bounds. Inspection does not replace endpoint authentication, authorization or
-argument validation.
-
-The optional `name = "wire_method"` attribute binds an explicit payload limit
-to the exported method name, even when the Rust function has another name.
-Registration follows the compiled endpoint and its feature selection. Declaring
-the same explicit method limit twice is invalid and inspection rejects it.
-
-A browser budget or a larger IC platform maximum does not override this limit.
-Oversized external ingress can be rejected during inspection before decoding or
-entering the handler, so there may be no application error response or handler
-log. Inspect the endpoint's declaration and the inherited default first.
-
-## Client contract review
-
-After `canic build`, use its emitted release-build ID to inspect a role offline:
+## Inspect the retained client contract
 
 ```sh
 canic info endpoints <fleet> <role> --release-build <sha256> --json
+canic --environment staging info endpoints <fleet> <canister> --json
 ```
 
-The Fleet argument does not select live state when `--release-build` is present.
-The existing managed artifact owner verifies finalization, canonical child
-manifest digests and the selected declaration hash. The command reads the
-verified bytes directly, without an installed Fleet or a copied ICP sidecar.
-It does not infer a latest build or substitute live/local metadata when selected
-build verification fails. Current source/config edits do not replace the sealed
-build's contract. This checks the declaration, not deployed Wasm or live admission.
+The first command inspects the selected completed build. The second resolves the
+exact retained deployed release; target selection needs a unique role or exact
+member Principal. Both read the release-admitted native Wire schema. Missing
+release/schema evidence is an error; current source or an adjacent DID cannot
+replace the selected contract. This inspection does not query live Wasm.
 
-Without `--release-build`,
-`canic --environment staging info endpoints <fleet> <canister> --json` inspects
-the exact Candid declaration in the deployed Fleet's retained release. Target
-selection requires a unique role or an exact member Principal. Missing Fleet,
-release or protocol evidence is an error. JSON identifies `source_kind` (`built`
-or `installed`), `source`, and the exact `release_build_id`; plain output identifies
-the retained source path. Inspection describes retained installation authority,
-not a live query or proof that the deployed Wasm has not changed.
+JSON records the source, source kind, release-build identity, types and method
+entries. Each method supplies its ID, name, kind, mode, request/reply shapes and
+`requestBytes`, `requestAllocation`, `requestNodes`, `requestDepth` plus the
+corresponding `response*` budgets. Generators derive these declarations from
+actual endpoint types and verify them against final Wasm exports and compiled
+metadata. Clients must retain method identity and all applicable budgets.
 
-Each update's `payload_limits` reports
-`ingress_max_bytes`, `update_guard_max_bytes` and `ingress_basis`. The basis is
-`managed_default`, `explicit_override` or `variant_dependent`. Queries have no
-update payload contract. Plain output also shows these limits beside the method
-inventory.
+Qualify accepted requests, exact byte boundaries and first-excess refusals in
+real Wasm, including inter-canister callers where present. Byte length alone does
+not prove allocation, node or depth admission. A browser budget or platform
+maximum never overrides the selected endpoint limits.
 
-The declaration build emits a version-1 typed CBOR record in the dedicated
-`// canic:payload-contract ` Candid comment field, encoded as hexadecimal. It
-reads the compiled inspector's default and the same macro registrations used by
-runtime inspection, including renamed and feature-selected endpoints. The
-existing artifact hash covers the record; the Candid service schema is unchanged.
-No extra network endpoint or manually synchronized limit inventory is required.
-Declarations without this field report unknown limits. Malformed or duplicate
-records reject contract inspection rather than silently supplying a default.
+## External Candid argument controls
 
-Built-in commands can select a smaller limit after decoding their request
-variant. Those methods report a variant-dependent ingress limit rather than
-promising that every request accepts the raw adapter's frame ceiling. An explicit
-`update_guard_max_bytes` describes the pre-decode adapter; authentication and any
-additional endpoint checks still apply. These fields describe encoded argument
-bytes, not decoded values or platform message limits.
+External IC protocols keep their specified Candid ABI. For these methods,
+Canic's managed update inspector has a default encoded-argument limit of 16 KiB,
+exposed as `canic::CANIC_DEFAULT_UPDATE_INGRESS_MAX_BYTES`. The byte count includes
+the complete Candid tuple and type table. Explicit adapter limits take priority:
 
-Measure the fully encoded Candid argument tuple in client tests. Keep the client
-budget within the endpoint ceiling, including encoding overhead. For a larger
-declared limit, qualify an accepted call above the inherited default, the exact
-encoded boundary and the first byte beyond it in real Wasm. If inter-canister
-callers use the method, qualify that path separately as well.
+| External method declaration | Managed update inspection | Raw adapter |
+| --- | --- | --- |
+| `payload(max_bytes = N)` | `N` bytes | Checks `N` before decoding |
+| `decode = LIMITS` | `LIMITS.max_bytes` | Checks byte and Candid decoding budgets |
+| No explicit limit | 16 KiB default | No explicit Canic raw payload bound |
+| Bare IC CDK update | 16 KiB default | Canic's adapter does not run |
 
-The existing `payload_limit_probe` and `pic_ingress_payload_limits` integration
-target demonstrate default, explicit, bare-CDK, exported-name and inter-canister
-behavior, and compare compiled metadata against exact and first-excess boundaries.
-They exercise the owned inspector and generated adapter; no bypass or default
-increase is needed.
+Queries may select `payload` or `decode`, but do not inherit update inspection.
+Renamed endpoints register their exported name; feature selection follows the
+compiled endpoint. Duplicate explicit method registrations reject inspection.
+The Candid `// canic:payload-contract ` comment carries typed version-1 CBOR
+metadata used by the external-adapter qualification fixture. It is separate from
+native Wire schemas and the CLI's Wire inventory. The `payload_limit_probe` and
+`pic_ingress_payload_limits` cases compare compiled registrations with actual
+external/inter-canister boundary behavior.
 
-## Bounded decoding and plain replies
+## Bounded external Candid decoding and plain replies
 
-Select all five dimensions with a constant `canic::endpoint::ArgumentLimits`:
+For a protocol whose external owner specifies Candid, select all five dimensions
+with a constant `canic::endpoint::ArgumentLimits`:
 
 ```rust
 use canic::endpoint::ArgumentLimits;
@@ -123,25 +99,19 @@ const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
     max_header_len: 4096,
 };
 
-#[derive(ic_platform::candid::contract::CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct Receipt {
-    accepted_bytes: u64,
-}
-
 #[canic::canic_update(
     requires(caller::is_controller()),
     on_access_denied = "reject",
     decode = REQUEST_LIMITS
 )]
-fn accept(bytes: Vec<u8>) -> Receipt {
+fn accept(bytes: Vec<u8>) -> u64 {
     // Commit application intent synchronously here.
-    Receipt { accepted_bytes: bytes.len() as u64 }
+    bytes.len() as u64
 }
 
 #[canic::canic_query(public, decode = REQUEST_LIMITS)]
-fn size(bytes: Vec<u8>) -> Result<u64, canic::Error> {
-    Ok(bytes.len() as u64)
+fn size(bytes: Vec<u8>) -> u64 {
+    bytes.len() as u64
 }
 ```
 
@@ -169,11 +139,12 @@ retain their default behavior when this option is omitted.
 
 ## Initial lifecycle envelope
 
-The owning artifact may put `argument_limits` first in its lifecycle declaration:
+Managed initialization uses native Wire, including an empty post-upgrade tuple.
+The owning artifact may put an `ic_wire::Limits` value first in its lifecycle declaration:
 
 ```rust,ignore
 canic::start!(
-    argument_limits = REQUEST_LIMITS,
+    argument_limits = canic::protocol::initialization::LIMITS,
     lifecycle_participant(
         init = crate::lifecycle::after_init,
         post_upgrade = crate::lifecycle::after_post_upgrade,
@@ -186,16 +157,16 @@ canic::start!(
 entrypoint the selected macro owns. Choose limits for the complete framework
 envelope and application arguments. Decoding succeeds before restoration,
 participants or deferred hooks run. Invalid input fails installation/upgrade
-without running participants. A no-argument post-upgrade still validates and
-boundedly skips supplied arguments; an empty raw argument buffer represents
-the empty Candid envelope.
+without running participants. A no-argument post-upgrade accepts only the empty
+native tuple; supplied trailing bytes are rejected.
 
 The option bounds the outer envelope. An application-owned blob nested in that
 envelope still needs its own semantic validation and decoding limits. The public
-`REQUEST_LIMITS.decode::<(MyArgs,)>(&bytes)` helper can bound such a decode and
-returns `ArgumentDecodeError::TooLarge { actual, maximum }` or `InvalidCandid`.
-It does not replace selecting the initial lifecycle bound. Omitting the option
-retains the existing lifecycle decoder.
+`ic_wire::native::decode::<MyArgs>(&bytes, limits)` bounds that nested decode.
+It does not replace selecting the initial lifecycle allowance. Omitting the
+option selects the shared native initialization limits. Management install calls
+retain their external Candid envelope, with these exact opaque argument bytes
+retained across uncertain retries.
 
 ## Continue From Here
 

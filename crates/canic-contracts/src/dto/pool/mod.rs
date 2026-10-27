@@ -4,21 +4,27 @@ use crate::{
     cycles::Cycles,
     ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig},
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Identifies the durable Component allocation that has claimed one empty Canister.
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CanisterPoolClaim {
     pub component: ComponentInstanceId,
     pub operation_id: [u8; 32],
 }
 
 /// Reset outcome retained while a stopped workload is still Registry-owned.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum CanisterPoolRecycleReset {
     Pending,
     Ready,
@@ -26,8 +32,11 @@ pub enum CanisterPoolRecycleReset {
 }
 
 /// How one physical Canister entered the root-owned inventory.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum CanisterPoolAssetOrigin {
     InfrastructureStore,
     Created,
@@ -36,8 +45,7 @@ pub enum CanisterPoolAssetOrigin {
 }
 
 /// Exact Cycles Ledger receipt retained for one autonomously created pool asset.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolCreationReceipt {
     pub block_index: u64,
     pub operation_id: [u8; 32],
@@ -51,8 +59,7 @@ pub struct CanisterPoolCreationReceipt {
 }
 
 /// Current durable state of one root-owned physical Canister.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetStatus {
     Store,
     StoreDeletionPending {
@@ -79,8 +86,7 @@ pub enum CanisterPoolAssetStatus {
 }
 
 /// Controller-visible inventory row for one root-owned physical Canister.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolAsset {
     pub canister_id: Principal,
     pub creation_receipt: Option<CanisterPoolCreationReceipt>,
@@ -92,8 +98,7 @@ pub struct CanisterPoolAsset {
 }
 
 /// Durable transfer of one paid asset to replacement authority during root draining.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolHandoff {
     pub canister_id: Principal,
     pub recipient: Principal,
@@ -101,8 +106,11 @@ pub struct CanisterPoolHandoff {
 }
 
 /// Why one autonomous refill stopped without creating another Canister.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum CanisterPoolCreationFailure {
     UnresolvedAfterLedgerWindow,
     LedgerCreationFailed,
@@ -110,8 +118,7 @@ pub enum CanisterPoolCreationFailure {
 }
 
 /// Durable controller-visible progress of one autonomous refill.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolCreationProgress {
     Intent {
         uncertain_result: bool,
@@ -135,8 +142,7 @@ pub enum CanisterPoolCreationProgress {
 }
 
 /// Exact Cycles Ledger request retained until its principal is in inventory.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolCreation {
     pub attempt_count: u32,
     pub operation_id: [u8; 32],
@@ -154,31 +160,20 @@ pub struct CanisterPoolCreation {
 }
 
 /// Bounded controller query for one canonical inventory page.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CanisterPoolStatusRequest {
     pub start_after: Option<Principal>,
     pub limit: u16,
 }
 
 /// Selects one pool Canister for an import or reset retry command.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PoolCanisterRequest {
     pub canister_id: Principal,
 }
 
-/// Selects one pool Canister and its exact handoff recipient.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct PoolHandoffRequest {
-    pub canister_id: Principal,
-    pub recipient: Principal,
-}
-
 /// Exact pool policy and current exclusive root-owned physical inventory.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolResponse {
     pub config: FleetSubnetCanisterPoolConfig,
     pub tracked: u32,
@@ -201,8 +196,7 @@ pub struct CanisterPoolResponse {
 }
 
 /// Controller command for explicit pool maintenance.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum PoolAdminCommand {
     Maintain,
     RetryRefill,
@@ -219,8 +213,7 @@ pub enum PoolAdminCommand {
 }
 
 /// Result of one explicit pool maintenance command.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum PoolAdminResponse {
     Maintained,
     MaintenancePaused {
@@ -271,79 +264,20 @@ pub enum PoolAdminResponse {
     },
 }
 
-/// Narrow result of one explicit maintenance pass.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum PoolMaintenanceResponse {
-    Maintained,
-    MaintenancePaused {
-        reason: String,
-    },
-    Created {
-        canister_id: Principal,
-    },
-    RefillWaitingForCycles {
-        available: Cycles,
-        attempt_count: u32,
-        creation_amount: Cycles,
-        execution_margin: Cycles,
-        last_attempt_at_ns: Option<u64>,
-        ledger_fee: Cycles,
-        readiness_floor: Cycles,
-        required: Cycles,
-        retry_at_ns: u64,
-        shortfall: Cycles,
-    },
-    RefillPending {
-        operation_id: [u8; 32],
-        uncertain_result: bool,
-    },
-    RefillBlocked {
-        operation_id: [u8; 32],
-        failure: CanisterPoolCreationFailure,
-    },
-    ResetReady {
-        canister_id: Principal,
-    },
-    ResetFailed {
-        canister_id: Principal,
-        reason: String,
-    },
-}
-
 /// Narrow result of importing one existing physical Canister.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum PoolImportResponse {
     Imported {
-        canister_id: Principal,
+        canister_id: ic_platform::Principal,
     },
     ResetFailed {
-        canister_id: Principal,
+        canister_id: ic_platform::Principal,
         reason: String,
     },
-}
-
-/// Exact result of scheduling another blocked refill attempt.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct PoolRefillRetryResponse {
-    pub previous_operation_id: [u8; 32],
-}
-
-/// Exact result of scheduling another reset attempt.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct PoolResetRetryResponse {
-    pub canister_id: Principal,
-}
-
-/// Exact result of handing one physical Canister to replacement authority.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct PoolHandoffResponse {
-    pub canister_id: Principal,
-    pub recipient: Principal,
 }
 
 // -----------------------------------------------------------------------------
@@ -355,7 +289,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pool_status_and_admin_contracts_round_trip_through_candid() {
+    fn pool_status_and_admin_contracts_round_trip_through_wire() {
         let canister_id = Principal::from_slice(&[7; 29]);
         let response = CanisterPoolResponse {
             config: FleetSubnetCanisterPoolConfig {
@@ -408,28 +342,26 @@ mod tests {
             }],
             next_start_after: None,
         };
-        let bytes =
-            ic_platform::candid::contract::encode_one(&response).expect("encode pool status");
+        let bytes = crate::protocol::authority::encode(&response).expect("encode pool status");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<CanisterPoolResponse>(&bytes)
+            crate::protocol::authority::decode::<CanisterPoolResponse>(&bytes)
                 .expect("decode pool status"),
             response,
         );
 
         let command = PoolAdminCommand::Import { canister_id };
-        let bytes =
-            ic_platform::candid::contract::encode_one(&command).expect("encode pool command");
+        let bytes = crate::protocol::authority::encode(&command).expect("encode pool command");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<PoolAdminCommand>(&bytes)
+            crate::protocol::authority::decode::<PoolAdminCommand>(&bytes)
                 .expect("decode pool command"),
             command,
         );
 
         let command = PoolAdminCommand::RetryRefill;
-        let bytes = ic_platform::candid::contract::encode_one(&command)
-            .expect("encode refill retry command");
+        let bytes =
+            crate::protocol::authority::encode(&command).expect("encode refill retry command");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<PoolAdminCommand>(&bytes)
+            crate::protocol::authority::decode::<PoolAdminCommand>(&bytes)
                 .expect("decode refill retry command"),
             command,
         );

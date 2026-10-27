@@ -296,7 +296,12 @@ fn assert_import_timings(events: &[IcpRequestTiming], root: Principal, source: P
         .filter(|event| match event.kind {
             IcpRequestKind::AgentQuery => matches!(
                 event.method.as_deref(),
-                Some(protocol::CANIC_ROOT_STATUS | protocol::CANIC_COORDINATOR_REGISTRY)
+                Some(
+                    protocol::pool_inventory::METHOD
+                        | protocol::registry_discovery::snapshot::METHOD
+                        | protocol::pool_import_read::context::METHOD
+                        | protocol::pool_import_read::status::METHOD
+                )
             ),
             IcpRequestKind::AgentUpdate | IcpRequestKind::AgentRequestStatus => true,
             _ => false,

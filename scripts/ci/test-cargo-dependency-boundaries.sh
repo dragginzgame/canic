@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Shared companions: scripts/ci/check-cargo-dependency-boundaries.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
-root=$(cd -- "$(dirname -- "$0")/../.." && pwd -P)
-FIXTURE=$(mktemp -d "${TMPDIR:-/tmp}/cargo-boundaries.XXXXXX")
-FIXTURE="$(cd -P "$FIXTURE" && printf '%s/.' "$PWD")"
-FIXTURE="${FIXTURE%/.}"
+root="${BASH_SOURCE[0]}"
+[[ "$root" == /* ]] || root="$PWD/$root"
+root="$(CDPATH='' cd -P -- "${root%/*}/../.." && printf '%s/.' "$PWD")"
+root="${root%/.}"
 original_path="$PATH"
 real_cargo="$(command -v cargo)"
 # shellcheck source=scripts/ci/fixture-lifecycle.sh
 source "$root/scripts/ci/fixture-lifecycle.sh"
+FIXTURE="$(fixture_create "${TMPDIR:-/tmp}/cargo-boundaries.XXXXXX")"
 fixture_complete=false
 trap 'fixture_finish "$?" "$FIXTURE" "Boundary fixture retained"' EXIT
 mkdir -p "$FIXTURE/ci" "$FIXTURE/bin"
@@ -27,6 +28,22 @@ chmod +x "$FIXTURE/bin/cargo"
 export PATH="$FIXTURE/bin:$PATH"
 perl -MJSON::PP -e 'print encode_json({version => 1, workspace_root => $ARGV[0], workspace_members => ["consumer"], packages => [{id => "consumer", name => "consumer", dependencies => [{name => "substrate", rename => "hidden", kind => "dev", target => "cfg(windows)"}]}]})' "$FIXTURE" > "$FIXTURE/metadata.json"
 cp "$FIXTURE/metadata.json" "$FIXTURE/valid-metadata.json"
+# Common rules are opt-in, cover renamed non-production declarations, and
+# cannot be relaxed by a consumer allowlist. Platform remains the explicit owner.
+for package in consumer ic-platform; do
+    perl -MJSON::PP -e 'print encode_json({version=>1,workspace_root=>$ARGV[0],workspace_members=>["member"],packages=>[{id=>"member",name=>$ARGV[1],dependencies=>[{name=>"candid",rename=>"hidden",kind=>"dev",target=>"cfg(windows)"}]}]})' "$FIXTURE" "$package" > "$FIXTURE/metadata.json"
+    printf '[{"dependency":"candid","allowed_packages":["consumer","ic-platform"]}]\n' > "$FIXTURE/ci/cargo-dependency-boundaries.json"
+    bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE"
+    status=0
+    bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE" --external-ic > "$FIXTURE/common.log" 2>&1 || status=$?
+    if [[ "$package" == consumer ]]; then [[ "$status" != 0 ]] || exit 1
+    else [[ "$status" == 0 ]] || exit 1; fi
+done
+rm "$FIXTURE/ci/cargo-dependency-boundaries.json"
+bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE" --external-ic
+printf '[{"dependency":"candid","allowed_packages":[]}]\n' > "$FIXTURE/ci/cargo-dependency-boundaries.json"
+if bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE" --external-ic > "$FIXTURE/tightened.log" 2>&1; then exit 1; fi
+cp "$FIXTURE/valid-metadata.json" "$FIXTURE/metadata.json"
 printf '%s\n' '[{"dependency":"substrate","allowed_packages":["consumer"]}]' > "$FIXTURE/ci/cargo-dependency-boundaries.json"
 bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE"
 for policy in \

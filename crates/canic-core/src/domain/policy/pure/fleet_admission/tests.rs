@@ -67,9 +67,10 @@ fn every_matching_scope_intersects_without_widening() {
 
 #[test]
 fn fleet_removal_is_global_and_cannot_leave_a_widening_reference() {
-    let mut policy = policy_with_fleet_principals(vec![principal(1), principal(2)]);
+    let mut policy = policy_with_fleet_principals(vec![principal(1), principal(2), principal(3)]);
+    let selector = FleetAdmissionSelector::ComponentSpec(component_spec());
     policy.rules = vec![FleetAdmissionRule {
-        selector: FleetAdmissionSelector::ComponentSpec(component_spec()),
+        selector,
         principals: vec![principal(1), principal(2)],
     }];
 
@@ -77,12 +78,83 @@ fn fleet_removal_is_global_and_cannot_leave_a_widening_reference() {
         &policy,
         FleetAdmissionMutationActionModel::Remove,
         &FleetAdmissionSelector::Fleet,
-        principal(2),
+        principal(3),
     )
     .expect("global removal");
 
-    assert_eq!(mutation.fleet_principals, vec![principal(1)]);
-    assert_eq!(mutation.rules[0].principals, vec![principal(1)]);
+    assert_eq!(mutation.fleet_principals, vec![principal(1), principal(2)]);
+    assert!(mutation.rules.is_empty());
+    assert!(mutation.changed);
+
+    policy.fleet_principals = mutation.fleet_principals;
+    policy.rules = mutation.rules;
+    let added = mutate_fleet_admission_membership(
+        &policy,
+        FleetAdmissionMutationActionModel::Add,
+        &FleetAdmissionSelector::Fleet,
+        principal(4),
+    )
+    .expect("later global addition");
+    policy.fleet_principals = added.fleet_principals;
+    policy.rules = added.rules;
+    assert!(policy.rules.is_empty());
+    assert_eq!(
+        effective_fleet_admission_principals(
+            &policy,
+            &FleetAdmissionTarget {
+                component_spec: component_spec(),
+                component_instance: None,
+                fleet_subnet_root: SubnetId::from_principal(principal(9)),
+            }
+        ),
+        vec![principal(1), principal(2), principal(4)]
+    );
+}
+
+#[test]
+fn fleet_removal_preserves_real_restrictions_and_deny_all_rules() {
+    let mut policy = policy_with_fleet_principals(vec![principal(1), principal(2), principal(3)]);
+    let selectors = [
+        FleetAdmissionSelector::ComponentSpec(component_spec()),
+        FleetAdmissionSelector::ComponentInstance(ComponentInstanceId::from_generated_bytes(
+            [7; 32],
+        )),
+        FleetAdmissionSelector::FleetSubnetRoot(SubnetId::from_principal(principal(9))),
+    ];
+    // Each selector must collapse at equality while a strict subset, including
+    // an empty deny-all set, must remain an explicit restriction.
+    for selector in selectors {
+        for (members, retained) in [
+            (vec![principal(1), principal(3)], vec![principal(1)]),
+            (vec![principal(3)], Vec::new()),
+            (Vec::new(), Vec::new()),
+        ] {
+            policy.rules = vec![FleetAdmissionRule {
+                selector: selector.clone(),
+                principals: members,
+            }];
+            let mutation = mutate_fleet_admission_membership(
+                &policy,
+                FleetAdmissionMutationActionModel::Remove,
+                &FleetAdmissionSelector::Fleet,
+                principal(3),
+            )
+            .expect("remove without widening narrower access");
+            assert_eq!(mutation.rules[0].principals, retained);
+        }
+        policy.rules = vec![FleetAdmissionRule {
+            selector,
+            principals: vec![principal(1), principal(2)],
+        }];
+        let mutation = mutate_fleet_admission_membership(
+            &policy,
+            FleetAdmissionMutationActionModel::Remove,
+            &FleetAdmissionSelector::Fleet,
+            principal(3),
+        )
+        .expect("collapse redundant scope");
+        assert!(mutation.rules.is_empty());
+    }
 }
 
 #[test]

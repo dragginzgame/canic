@@ -54,9 +54,10 @@ role = "app"
 ```
 
 That package App must match `[app].name`, and the package role must
-exist in `canic.toml`. `role = "root"` selects the root lifecycle and root
-endpoint bundle; every other role selects the ordinary non-root lifecycle and
-endpoint bundle.
+exist in `canic.toml`. Application packages select a non-Root role and use
+`canic::start!` for its managed lifecycle and endpoint bundle. Declare Root as
+`[roles.root]` with `kind = "root"` and no `package`; the host generates its
+package, capabilities, lifecycle and endpoints from the selected App configuration.
 
 ---
 
@@ -806,7 +807,7 @@ This separation is deliberate:
 The top-level `public_metrics` selection is empty by default. Supported values
 are `application`, `cycles`, `operations`, `performance` and `shard_occupancy`.
 Enabling a family publishes only its bounded cached aggregate snapshot through
-`canic_public_status`; it never changes `canic_observability` authorization.
+`canic_public_metrics`; protected metric and observation methods remain controller-only.
 See [public observability](docs/features/runtime/public-observability.md) for
 sampling, staleness, units and application publication APIs.
 

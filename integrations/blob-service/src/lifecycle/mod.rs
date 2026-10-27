@@ -17,12 +17,8 @@ pub const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
     max_type_len: 64,
     max_header_len: 4096,
 };
-pub const ENVELOPE_LIMITS: ArgumentLimits = ArgumentLimits {
-    max_bytes: 65_536,
-    max_type_len: 512,
-    max_header_len: 16_384,
-    ..REQUEST_LIMITS
-};
+pub const ENVELOPE_LIMITS: canic::__internal::ic_wire::Limits =
+    canic::__internal::contracts::protocol::initialization::LIMITS;
 
 /// Install the blob owner after Canic restores its invariants and memory runtime.
 ///
@@ -49,7 +45,7 @@ pub fn install_from_args() {
     // The participant has no argument parameter: re-read only under the same
     // raw-byte/decoder bounds, then decode the nested service bytes once.
     let (_, application): (canic::dto::abi::v1::CanisterInitPayload, Option<Vec<u8>>) =
-        ENVELOPE_LIMITS.read().expect("admitted lifecycle envelope");
+        canic::endpoint::read_initialization(ENVELOPE_LIMITS).expect("admitted lifecycle envelope");
     let input: ServiceInstallationInput =
         crate::__private::ic_blob_storage_contracts::wire::decode_request(
             "blob_install",

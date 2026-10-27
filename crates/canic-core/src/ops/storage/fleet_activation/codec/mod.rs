@@ -204,13 +204,8 @@ fn decode_concrete<T: DeserializeOwned>(
             "activation encoding does not match the selected role",
         ));
     }
-    let mut reader = std::io::Cursor::new(&bytes[4..]);
-    let record = ciborium::de::from_reader(&mut reader)
-        .map_err(|_| invalid("invalid activation encoding"))?;
-    if usize::try_from(reader.position()).ok() != Some(bytes.len() - 4) {
-        return Err(invalid("activation encoding contains trailing bytes"));
-    }
-    Ok(record)
+    crate::cdk::serialize::deserialize(&bytes[4..])
+        .map_err(|_| invalid("invalid activation encoding"))
 }
 
 fn invalid(reason: &str) -> FleetActivationOpsError {
@@ -404,12 +399,12 @@ mod tests {
             decode_ordinary(&trailing),
             Err(FleetActivationOpsError::InvalidRecord { .. })
         ));
-        let mut value: ciborium::Value =
+        let mut value: serde_cbor::Value =
             crate::cdk::serialize::deserialize(&record.bytes[4..]).unwrap();
-        let ciborium::Value::Map(ref mut fields) = value else {
+        let serde_cbor::Value::Map(ref mut fields) = value else {
             panic!("record must be a map")
         };
-        fields.retain(|(key, _)| key.as_text() != Some("component_runtime"));
+        fields.remove(&serde_cbor::Value::Text("component_runtime".into()));
         let mut omitted = vec![b'C', b'A', 1, 1];
         omitted.extend(serialize(&value).unwrap());
         assert!(matches!(

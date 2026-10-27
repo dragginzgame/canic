@@ -1,7 +1,6 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test exercises direct application-owned native timer custody in PocketIC.
 
-use canic::testing::CANDID_REPLY_LIMITS as REPLY_LIMITS;
 use canic::{
     Error,
     dto::{
@@ -16,11 +15,10 @@ use canic::{
     },
     protocol,
 };
-use canic_contracts::dto::wire::projection::fixture_timer_authority::{
-    PublicStatusRequest, PublicStatusResponse, RoleStatusRequest, RoleStatusResponse,
+use canic_testing_internal::pic::{
+    CanicPicExt, install_lifecycle_boundary_fixture, runtime_probe as timer_probe, upgrade_args,
 };
-use canic_testing_internal::pic::{CanicPicExt, install_lifecycle_boundary_fixture, upgrade_args};
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 use std::time::Duration;
 use {
@@ -50,27 +48,19 @@ fn public_snapshots_preserve_observer_authority()
     let outsider = fixture.root;
     let query =
         |canister_id, family| cached_metrics(&fixture.pic, canister_id, outsider, family, 256);
-    let health: Result<PublicStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((PublicStatusRequest::Health,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).query_call(
-                    published,
-                    outsider,
-                    protocol::CANIC_PUBLIC_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)?;
-    let PublicStatusResponse::Health(health) = health.expect("public health") else {
-        panic!("expected summary health");
-    };
-    assert_eq!(health.canister_id, published);
+    let health: canic::dto::public_status::PublicHealth = ic_testkit::pic::query_wire(
+        &fixture.pic,
+        published,
+        outsider,
+        ic_testkit::pic::WireCallSpec {
+            method: canic::protocol::CANIC_PUBLIC_HEALTH,
+            method_id: canic::protocol::public_health::METHOD_ID,
+            request_limits: canic::protocol::public_health::REQUEST_LIMITS,
+            response_limits: canic::protocol::public_health::RESPONSE_LIMITS,
+        },
+        &(),
+    )?;
+    assert_eq!(health.canister_id, published.into());
     let disabled = query(restricted, PublicMetricFamily::Cycles);
     assert_eq!(disabled.state, PublicSnapshotState::Disabled);
     assert!(disabled.metrics.entries.is_empty());
@@ -79,42 +69,25 @@ fn public_snapshots_preserve_observer_authority()
         PublicSnapshotState::Unavailable
     );
     fixture.pic.advance_time(Duration::from_secs(11));
-    let scheduled: Result<(), Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).update_call(
-                    published,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "schedule_cost_probe_watchdog",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let scheduled: Result<(), Error> = ic_testkit::pic::update_wire(
+        &fixture.pic,
+        published,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::SCHEDULE_WATCHDOG,
+        &(),
+    )
+    .unwrap();
     scheduled.unwrap();
     for _ in 0..20 {
         fixture.pic.tick();
     }
-    let sampled: Result<(), Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (fixture.pic).update_call(
-                published,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "sample_public_metrics",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let sampled: Result<(), Error> = ic_testkit::pic::update_wire(
+        &fixture.pic,
+        published,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::SAMPLE_METRICS,
+        &(),
+    )
     .expect("trusted sampling transport");
     sampled.expect("trusted sampling");
     let snapshot = query(published, PublicMetricFamily::Application);
@@ -138,27 +111,30 @@ fn public_snapshots_preserve_observer_authority()
             .iter()
             .any(|row| row.name == "timer.events.scheduler_started")
     );
-    for request in sensitive_observability_requests(false) {
-        let denied: Result<RoleStatusResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (fixture.pic).query_call(
-                        published,
-                        outsider,
-                        protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)?;
-        assert!(
-            matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
-        );
-    }
+    let denied: Result<canic::dto::page::Page<canic::dto::metric_page::MetricEntry>, Error> =
+        ic_testkit::pic::query_wire(
+            &fixture.pic,
+            published,
+            outsider,
+            ic_testkit::pic::WireCallSpec {
+                method: protocol::protected_metrics::METHOD,
+                method_id: protocol::protected_metrics::METHOD_ID,
+                request_limits: protocol::protected_metrics::REQUEST_LIMITS,
+                response_limits: protocol::protected_metrics::RESPONSE_LIMITS,
+            },
+            &MetricsStatusRequest {
+                kind: MetricsKind::Runtime,
+                page: PageRequest {
+                    limit: 1,
+                    offset: 0,
+                },
+            },
+        )
+        .expect("protected metrics Wire transport");
+    assert!(
+        matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+    );
+
     fixture.pic.advance_time(Duration::from_secs(361));
     fixture.pic.tick();
     let stale = query(published, PublicMetricFamily::Application);
@@ -211,54 +187,37 @@ fn assert_timer_phase_measurements(rows: &[canic::dto::public_status::PublicMetr
     reason = "keep timer continuity observations and authority assertions together"
 )]
 fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
-    use canic::dto::public_status::{PublicMetricKind, PublicMetricsRequest};
+    use canic::dto::public_status::PublicMetricKind;
     let sample = || {
-        let sampled: Result<(), Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        canister,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "sample_public_metrics",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let sampled: Result<(), Error> = ic_testkit::pic::update_wire(
+            pic,
+            canister,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            timer_probe::SAMPLE_METRICS,
+            &(),
+        )
+        .unwrap();
         sampled.unwrap();
-        let reply: Result<PublicStatusResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    PublicStatusRequest::Metrics(PublicMetricsRequest {
-                        family: PublicMetricFamily::Performance,
-                        page: PageRequest {
-                            limit: 256,
-                            offset: 0,
-                        },
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        canister,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        protocol::CANIC_PUBLIC_STATUS,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let PublicStatusResponse::Metrics(snapshot) = reply.unwrap() else {
-            panic!();
-        };
+        let snapshot: canic::dto::public_status::PublicMetricsSnapshot =
+            ic_testkit::pic::query_wire(
+                pic,
+                canister,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::CANIC_PUBLIC_METRICS,
+                    method_id: canic::protocol::public_metrics::METHOD_ID,
+                    request_limits: canic::protocol::public_metrics::REQUEST_LIMITS,
+                    response_limits: canic::protocol::public_metrics::RESPONSE_LIMITS,
+                },
+                &canic::dto::public_status::PublicMetricsRequest {
+                    family: PublicMetricFamily::Performance,
+                    page: PageRequest {
+                        offset: 0,
+                        limit: 256,
+                    },
+                },
+            )
+            .expect("public metrics Wire query");
         snapshot
             .metrics
             .entries
@@ -266,47 +225,30 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
             .find(|row| row.name == "perf.timer.runtime-probe.application.cost-watchdog.work.calls")
             .unwrap()
     };
-    let invoke = |method: &str, unregister: bool| {
-        let reply: Result<(), Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((unregister,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        canister,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        method,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+    let invoke = |spec: ic_testkit::pic::WireCallSpec, unregister: bool| {
+        let reply: Result<(), Error> = ic_testkit::pic::update_wire(
+            pic,
+            canister,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            spec,
+            &unregister,
+        )
+        .unwrap();
         reply.unwrap();
     };
     let before = sample();
-    invoke("cancel_cost_probe_watchdog", false);
+    invoke(timer_probe::CANCEL_WATCHDOG, false);
     let cancelled = sample();
     assert_eq!(before.kind, cancelled.kind);
     assert_eq!(before.value, cancelled.value);
-    invoke("set_cost_probe_trap", true);
-    let reply: Result<(), Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "schedule_cost_probe_watchdog",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    invoke(timer_probe::SET_WATCHDOG_TRAP, true);
+    let reply: Result<(), Error> = ic_testkit::pic::update_wire(
+        pic,
+        canister,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::SCHEDULE_WATCHDOG,
+        &(),
+    )
     .unwrap();
     reply.unwrap();
     for _ in 0..10 {
@@ -315,26 +257,17 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
     let interrupted = sample();
     assert_eq!(interrupted.kind, before.kind);
     assert_eq!(interrupted.value, before.value);
-    invoke("set_cost_probe_trap", false);
-    invoke("cancel_cost_probe_watchdog", true);
+    invoke(timer_probe::SET_WATCHDOG_TRAP, false);
+    invoke(timer_probe::CANCEL_WATCHDOG, true);
     for _ in 0..3 {
-        let reply: Result<(), Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        canister,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "schedule_cost_probe_watchdog",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let reply: Result<(), Error> = ic_testkit::pic::update_wire(
+            pic,
+            canister,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            timer_probe::SCHEDULE_WATCHDOG,
+            &(),
+        )
+        .unwrap();
         reply.unwrap();
         for _ in 0..10 {
             pic.tick();
@@ -359,8 +292,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
     assert_ne!(old.sequence, new.sequence);
 }
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Deserialize)]
 struct PublicSamplingProbe {
     sample_instructions: u64,
     sample: Result<(), Error>,
@@ -378,62 +310,45 @@ fn public_memory_sampling_retains_bounded_history_at_the_source_ceiling() {
     // Cross the complete retained window and exercise ring replacement.
     for period in 0..300 {
         fixture.pic.advance_time(Duration::from_secs(301));
-        let response: Result<PublicSamplingProbe, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    if period == 0 { 4096_u16 } else { 0_u16 },
-                    false,
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (fixture.pic).update_call(
-                        canister,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "qualify_public_metrics_sampling",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let response: Result<PublicSamplingProbe, Error> = ic_testkit::pic::update_wire(
+            &fixture.pic,
+            canister,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            timer_probe::QUALIFY_SAMPLING,
+            &timer_probe::SamplingRequest {
+                checkpoints: if period == 0 { 4096_u16 } else { 0_u16 },
+                reject_family: false,
+            },
+        )
+        .unwrap();
         let response = response.unwrap();
         response.sample.unwrap();
         response.cycle_tracking.unwrap();
         assert!(response.allocation_unchanged);
         assert_eq!(response.allocation_ids_measured, 255);
         maximum = maximum.max(response.sample_instructions);
-        let response: Result<PublicStatusResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    PublicStatusRequest::History(PublicHistoryRequest {
-                        family: PublicMetricFamily::Performance,
-                        name: "memory.allocations.physical_extent".into(),
-                        canister_id: None,
-                        page: PageRequest {
-                            offset: 0,
-                            limit: 1000,
-                        },
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (fixture.pic).query_call(
-                        canister,
-                        fixture.root,
-                        protocol::CANIC_PUBLIC_STATUS,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+        let history: canic::dto::public_status::PublicHistorySnapshot =
+            ic_testkit::pic::query_wire(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                ic_testkit::pic::WireCallSpec {
+                    method: protocol::CANIC_PUBLIC_HISTORY,
+                    method_id: protocol::public_history::METHOD_ID,
+                    request_limits: protocol::public_history::REQUEST_LIMITS,
+                    response_limits: protocol::public_history::RESPONSE_LIMITS,
+                },
+                &PublicHistoryRequest {
+                    family: PublicMetricFamily::Performance,
+                    name: "memory.allocations.physical_extent".into(),
+                    canister_id: None,
+                    page: PageRequest {
+                        offset: 0,
+                        limit: 1000,
+                    },
+                },
+            )
             .unwrap();
-        let PublicStatusResponse::History(history) = response.unwrap() else {
-            panic!("history response");
-        };
         assert_eq!(history.state, PublicSnapshotState::Fresh);
         assert!(history.reserved_bytes <= history.byte_limit);
         assert!(history.points.entries.len() <= 288);
@@ -462,21 +377,16 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let canister = fixture.install_runtime_probe_canister();
     let query = |family| cached_metrics(&fixture.pic, canister, fixture.root, family, 1000);
     let sample = |limit: u16, reject: bool| -> Result<PublicSamplingProbe, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((limit, reject))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).update_call(
-                    canister,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "qualify_public_metrics_sampling",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::update_wire(
+            &fixture.pic,
+            canister,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            timer_probe::QUALIFY_SAMPLING,
+            &timer_probe::SamplingRequest {
+                checkpoints: limit,
+                reject_family: reject,
+            },
+        )
         .unwrap()
     };
     let baseline = sample(256, false);
@@ -513,31 +423,24 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let occupancy = query(PublicMetricFamily::ShardOccupancy);
     assert_eq!(occupancy.state, PublicSnapshotState::Fresh);
     assert!(occupancy.sampled_at_ns > performance.sampled_at_ns);
-    let history: Result<RoleStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RoleStatusRequest::CycleHistory(PageRequest {
-                    limit: 100,
-                    offset: 0,
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).query_call(
-                    canister,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+    let history: Result<canic::dto::page::Page<canic::dto::cycles::CycleTrackerEntry>, Error> =
+        ic_testkit::pic::query_wire(
+            &fixture.pic,
+            canister,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: protocol::cycle_history::METHOD,
+                method_id: protocol::cycle_history::METHOD_ID,
+                request_limits: protocol::cycle_history::REQUEST_LIMITS,
+                response_limits: protocol::cycle_history::RESPONSE_LIMITS,
+            },
+            &PageRequest {
+                limit: 100,
+                offset: 0,
+            },
+        )
         .unwrap();
-    let RoleStatusResponse::CycleHistory(history) = history.unwrap() else {
-        panic!("cycle history response")
-    };
+    let history = history.unwrap();
     assert!(
         history
             .entries
@@ -558,88 +461,143 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
         (managed, false),
         (automatic_topup, true),
     ] {
-        for request in sensitive_observability_requests(supports_topups) {
-            let denied: Result<RoleStatusResponse, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes =
-                        ic_platform::candid::contract::encode_args((request.clone(),))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (fixture.pic).query_call(
-                            canister_id,
-                            fixture.root,
-                            protocol::CANIC_OBSERVABILITY,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("query Candid harness call");
-            assert!(matches!(
-                denied,
-                Err(error)
-                    if error.code()
-                        == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
-            ));
-
-            let accepted: Result<RoleStatusResponse, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes =
-                        ic_platform::candid::contract::encode_args((request.clone(),))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (fixture.pic).query_call(
-                            canister_id,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            protocol::CANIC_OBSERVABILITY,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("controller observability transport");
-            let accepted = accepted.expect("controller observability application result");
-            assert!(matches!(
-                (&request, accepted),
-                (
-                    RoleStatusRequest::CycleBalance,
-                    RoleStatusResponse::CycleBalance(_)
-                ) | (
-                    RoleStatusRequest::CycleHistory(_),
-                    RoleStatusResponse::CycleHistory(_)
-                ) | (
-                    RoleStatusRequest::CycleTopups(_),
-                    RoleStatusResponse::CycleTopups(_)
-                ) | (
-                    RoleStatusRequest::Metrics(_),
-                    RoleStatusResponse::Metrics(_)
+        for (caller, allowed) in [(fixture.root, false), (Principal::anonymous(), true)] {
+            let health: Result<canic::dto::runtime::CanicHealthStatus, Error> =
+                ic_testkit::pic::query_wire(
+                    &fixture.pic,
+                    canister_id,
+                    caller,
+                    ic_testkit::pic::WireCallSpec {
+                        method: protocol::protected_health::METHOD,
+                        method_id: protocol::protected_health::METHOD_ID,
+                        request_limits: protocol::protected_health::REQUEST_LIMITS,
+                        response_limits: protocol::protected_health::RESPONSE_LIMITS,
+                    },
+                    &(),
                 )
-            ));
+                .expect("protected health Wire transport");
+            if allowed {
+                let health = health.expect("controller health");
+                assert_eq!(
+                    health.schema_version,
+                    canic::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION
+                );
+                assert!(health.observed_at_ns.is_some());
+            } else {
+                assert!(
+                    matches!(health, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+                );
+            }
+            let reply: Result<canic::dto::role::CycleBalanceStatusResponse, Error> =
+                ic_testkit::pic::query_wire(
+                    &fixture.pic,
+                    canister_id,
+                    caller,
+                    ic_testkit::pic::WireCallSpec {
+                        method: protocol::cycle_balance::METHOD,
+                        method_id: protocol::cycle_balance::METHOD_ID,
+                        request_limits: protocol::cycle_balance::REQUEST_LIMITS,
+                        response_limits: protocol::cycle_balance::RESPONSE_LIMITS,
+                    },
+                    &(),
+                )
+                .expect("cycle balance Wire transport");
+            if allowed {
+                assert!(reply.is_ok());
+            } else {
+                assert!(
+                    matches!(reply, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+                );
+            }
+        }
+        for (caller, allowed) in [(fixture.root, false), (Principal::anonymous(), true)] {
+            let reply: Result<
+                canic::dto::page::Page<canic::dto::cycles::CycleTrackerEntry>,
+                Error,
+            > = ic_testkit::pic::query_wire(
+                &fixture.pic,
+                canister_id,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: protocol::cycle_history::METHOD,
+                    method_id: protocol::cycle_history::METHOD_ID,
+                    request_limits: protocol::cycle_history::REQUEST_LIMITS,
+                    response_limits: protocol::cycle_history::RESPONSE_LIMITS,
+                },
+                &PageRequest {
+                    limit: 1,
+                    offset: 0,
+                },
+            )
+            .expect("cycle history Wire transport");
+            if allowed {
+                assert!(reply.is_ok());
+            } else {
+                assert!(
+                    matches!(reply, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+                );
+            }
+        }
+        if supports_topups {
+            for (caller, allowed) in [(fixture.root, false), (Principal::anonymous(), true)] {
+                let reply: Result<
+                    canic::dto::page::Page<canic::dto::cycle_topups::CycleTopupEvent>,
+                    Error,
+                > = ic_testkit::pic::query_wire(
+                    &fixture.pic,
+                    canister_id,
+                    caller,
+                    ic_testkit::pic::WireCallSpec {
+                        method: protocol::cycle_topups::METHOD,
+                        method_id: protocol::cycle_topups::METHOD_ID,
+                        request_limits: protocol::cycle_topups::REQUEST_LIMITS,
+                        response_limits: protocol::cycle_topups::RESPONSE_LIMITS,
+                    },
+                    &PageRequest {
+                        limit: 1,
+                        offset: 0,
+                    },
+                )
+                .expect("cycle topups Wire transport");
+                if allowed {
+                    assert!(reply.is_ok());
+                } else {
+                    assert!(
+                        matches!(reply, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+                    );
+                }
+            }
+        }
+        for (caller, allowed) in [(fixture.root, false), (Principal::anonymous(), true)] {
+            let reply: Result<canic::dto::page::Page<canic::dto::metric_page::MetricEntry>, Error> =
+                ic_testkit::pic::query_wire(
+                    &fixture.pic,
+                    canister_id,
+                    caller,
+                    ic_testkit::pic::WireCallSpec {
+                        method: canic::protocol::protected_metrics::METHOD,
+                        method_id: canic::protocol::protected_metrics::METHOD_ID,
+                        request_limits: canic::protocol::protected_metrics::REQUEST_LIMITS,
+                        response_limits: canic::protocol::protected_metrics::RESPONSE_LIMITS,
+                    },
+                    &MetricsStatusRequest {
+                        kind: MetricsKind::Runtime,
+                        page: PageRequest {
+                            limit: 1,
+                            offset: 0,
+                        },
+                    },
+                )
+                .expect("metrics Wire transport");
+            if allowed {
+                assert!(reply.is_ok());
+            } else {
+                assert!(
+                    matches!(reply, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+                );
+            }
         }
     }
-}
-
-fn sensitive_observability_requests(supports_topups: bool) -> Vec<RoleStatusRequest> {
-    let page = PageRequest {
-        limit: 1,
-        offset: 0,
-    };
-    let mut requests = vec![
-        RoleStatusRequest::CycleBalance,
-        RoleStatusRequest::CycleHistory(page),
-        RoleStatusRequest::Metrics(MetricsStatusRequest {
-            kind: MetricsKind::Runtime,
-            page,
-        }),
-    ];
-    if supports_topups {
-        requests.push(RoleStatusRequest::CycleTopups(page));
-    }
-    requests
 }
 
 #[test]
@@ -836,29 +794,66 @@ fn assert_interval_performance(interval: &canic::dto::runtime::CanisterTimerStat
 }
 
 #[test]
+fn malformed_timer_frames_cannot_register_work() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister = fixture.install_runtime_probe_canister();
+    wait_for_fixture_ready(&fixture.pic, canister, "install");
+    let spec = timer_probe::FILL_REGISTRY;
+    let request = ic_wire::native::encode_request(spec.method_id, &(), spec.request_limits)
+        .expect("bounded timer request");
+    let wrong_method = ic_wire::native::encode_request(
+        timer_probe::REJECT_INVALID_IDENTITY.method_id,
+        &(),
+        spec.request_limits,
+    )
+    .unwrap();
+    let wrong_direction =
+        ic_wire::native::encode_response(spec.method_id, &(), spec.request_limits).unwrap();
+    let mut trailing = request.clone();
+    trailing.push(0);
+    let truncated = request[..request.len() - 1].to_vec();
+    let oversized = vec![0; spec.request_limits.bytes + 1];
+    let identities = || {
+        runtime_status(&fixture.pic, canister)
+            .timers
+            .into_iter()
+            .map(|timer| (timer.owner, timer.subsystem, timer.name))
+            .collect::<Vec<_>>()
+    };
+    let before = identities();
+    for frame in [
+        wrong_method,
+        wrong_direction,
+        trailing,
+        truncated,
+        oversized,
+    ] {
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            fixture
+                .pic
+                .update_call(canister, Principal::anonymous(), spec.method, frame)
+        })
+        .expect("malformed timer ingress transport");
+        assert!(reply.is_err());
+        assert_eq!(identities(), before);
+    }
+}
+
+#[test]
 fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();
     wait_for_fixture_ready(&fixture.pic, canister_id, "install");
 
     let before_invalid = runtime_status(&fixture.pic, canister_id).timers.len();
-    let invalid: Result<bool, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).update_call(
-                    canister_id,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "reject_invalid_timer_identity",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("call invalid timer identity probe");
+    let invalid: Result<bool, Error> = ic_testkit::pic::update_wire(
+        &fixture.pic,
+        canister_id,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::REJECT_INVALID_IDENTITY,
+        &(),
+    )
+    .expect("call invalid timer identity probe");
     assert!(invalid.expect("invalid identity probe result"));
     assert_eq!(
         runtime_status(&fixture.pic, canister_id).timers.len(),
@@ -866,23 +861,14 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
         "rejected identity must not consume shared registry capacity"
     );
 
-    let fill: Result<(u64, bool), Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).update_call(
-                    canister_id,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "fill_timer_registry",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("fill shared timer registry");
+    let fill: Result<(u64, bool), Error> = ic_testkit::pic::update_wire(
+        &fixture.pic,
+        canister_id,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::FILL_REGISTRY,
+        &(),
+    )
+    .expect("fill shared timer registry");
     let (registered, rejected) = fill.expect("capacity probe result");
     assert!(registered > 0);
     assert!(
@@ -973,29 +959,21 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
 }
 
 fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus {
-    let result: Result<RoleStatusResponse, canic::Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((RoleStatusRequest::Runtime,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister_id,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query runtime status");
-    let RoleStatusResponse::Runtime(status) = result.expect("runtime status application result")
-    else {
-        panic!("canic_observability returned a non-Runtime response")
-    };
-    *status
+    let response: Result<canic::dto::runtime_observation::CanicRuntimeStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            canister_id,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_runtime::METHOD,
+                method_id: canic::protocol::protected_runtime::METHOD_ID,
+                request_limits: canic::protocol::protected_runtime::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_runtime::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("typed diagnostic transport");
+    response.expect("controller diagnostic").into()
 }
 
 fn intent_cleanup_status(
@@ -1015,42 +993,28 @@ fn begin_intent(
     resource_seed: u8,
     ttl_secs: Option<u64>,
 ) -> Result<u64, canic::Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((resource_seed, ttl_secs))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                canister_id,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "begin_timer_probe_intent",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire(
+        pic,
+        canister_id,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::BEGIN_INTENT,
+        &timer_probe::IntentRequest {
+            resource_seed,
+            ttl_secs,
+        },
+    )
     .expect("call intent reservation endpoint")
 }
 
 fn counts(pic: &PocketIc, canister_id: Principal) -> (u64, u64, u64) {
-    let result: Result<(u64, u64, u64), canic::Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister_id,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "timer_probe_counts",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query timer probe counts");
+    let result: Result<(u64, u64, u64), canic::Error> = ic_testkit::pic::query_wire(
+        pic,
+        canister_id,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::COUNTS,
+        &(),
+    )
+    .expect("query timer probe counts");
     result.expect("timer probe counts application result")
 }
 
@@ -1070,37 +1034,32 @@ fn assert_application_timer_rows(pic: &PocketIc, canister_id: Principal) {
 }
 
 fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
-    let response: Result<RoleStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RoleStatusRequest::Metrics(MetricsStatusRequest {
-                    kind: MetricsKind::Runtime,
-                    page: PageRequest {
-                        limit: 256,
-                        offset: 0,
-                    },
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister_id,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query runtime metrics");
-
-    let RoleStatusResponse::Metrics(page) = response.expect("runtime metrics application result")
-    else {
-        panic!("canic_observability returned a non-Metrics response")
-    };
-    page.entries
+    let response: Result<canic::dto::page::Page<canic::dto::metric_page::MetricEntry>, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            canister_id,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_metrics::METHOD,
+                method_id: canic::protocol::protected_metrics::METHOD_ID,
+                request_limits: canic::protocol::protected_metrics::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_metrics::RESPONSE_LIMITS,
+            },
+            &MetricsStatusRequest {
+                kind: MetricsKind::Runtime,
+                page: PageRequest {
+                    limit: 256,
+                    offset: 0,
+                },
+            },
+        )
+        .expect("controller metrics Wire transport");
+    response
+        .expect("controller metrics application result")
+        .entries
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
@@ -1195,21 +1154,13 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     assert_eq!(rejected.state, PublicSnapshotState::Stale);
     let recovered_history =
         assert_sampling_recovers_after_rejection(&fixture, canister, &supplied, &delayed);
-    (|| -> Result<(Result<(), Error>,), Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (fixture.pic).update_call(
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "suspend_public_sampler_fixture",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+        &fixture.pic,
+        canister,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::SUSPEND_SAMPLER,
+        &(),
+    )
     .unwrap()
     .unwrap();
     fixture.pic.advance_time(Duration::from_secs(601));
@@ -1283,37 +1234,27 @@ fn cached_cycle_history(
 ) -> canic::dto::public_status::PublicHistorySnapshot {
     use canic::dto::public_status::{PublicHistoryRequest, PublicMetricFamily};
 
-    let response: Result<PublicStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                PublicStatusRequest::History(PublicHistoryRequest {
-                    family: PublicMetricFamily::Cycles,
-                    name: "balance".into(),
-                    canister_id: Some(canister),
-                    page: PageRequest {
-                        offset: 0,
-                        limit: u64::MAX,
-                    },
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister,
-                    caller,
-                    protocol::CANIC_PUBLIC_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
-    let PublicStatusResponse::History(history) = response.unwrap() else {
-        panic!("history response")
-    };
-    history
+    ic_testkit::pic::query_wire(
+        pic,
+        canister,
+        caller,
+        ic_testkit::pic::WireCallSpec {
+            method: protocol::CANIC_PUBLIC_HISTORY,
+            method_id: protocol::public_history::METHOD_ID,
+            request_limits: protocol::public_history::REQUEST_LIMITS,
+            response_limits: protocol::public_history::RESPONSE_LIMITS,
+        },
+        &PublicHistoryRequest {
+            family: PublicMetricFamily::Cycles,
+            name: "balance".into(),
+            canister_id: Some(canister.into()),
+            page: PageRequest {
+                offset: 0,
+                limit: u64::MAX,
+            },
+        },
+    )
+    .expect("query native history")
 }
 
 fn cached_application_metrics(
@@ -1323,34 +1264,25 @@ fn cached_application_metrics(
 ) -> canic::dto::public_status::PublicMetricsSnapshot {
     use canic::dto::public_status::PublicMetricFamily;
 
-    let response: Result<PublicStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                PublicStatusRequest::Metrics(canic::dto::public_status::PublicMetricsRequest {
-                    family: PublicMetricFamily::Application,
-                    page: PageRequest {
-                        offset: 0,
-                        limit: 256,
-                    },
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister,
-                    caller,
-                    protocol::CANIC_PUBLIC_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
-    let PublicStatusResponse::Metrics(snapshot) = response.unwrap() else {
-        panic!("application snapshot")
-    };
+    let snapshot: canic::dto::public_status::PublicMetricsSnapshot = ic_testkit::pic::query_wire(
+        pic,
+        canister,
+        caller,
+        ic_testkit::pic::WireCallSpec {
+            method: canic::protocol::CANIC_PUBLIC_METRICS,
+            method_id: canic::protocol::public_metrics::METHOD_ID,
+            request_limits: canic::protocol::public_metrics::REQUEST_LIMITS,
+            response_limits: canic::protocol::public_metrics::RESPONSE_LIMITS,
+        },
+        &canic::dto::public_status::PublicMetricsRequest {
+            family: PublicMetricFamily::Application,
+            page: PageRequest {
+                offset: 0,
+                limit: 256,
+            },
+        },
+    )
+    .expect("public metrics Wire query");
     snapshot
 }
 
@@ -1396,47 +1328,44 @@ fn report_sampling_cost(label: &str, instructions: u64) {
 fn assert_anonymous_public_boundary(pic: &PocketIc, published: Principal, controller: Principal) {
     pic.set_controllers(published, None, vec![controller])
         .unwrap();
-    let anonymous_public: Result<PublicStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((PublicStatusRequest::Health,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    published,
-                    Principal::anonymous(),
-                    protocol::CANIC_PUBLIC_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
-    assert!(anonymous_public.is_ok());
-    for request in sensitive_observability_requests(false) {
-        let denied: Result<RoleStatusResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        published,
-                        Principal::anonymous(),
-                        protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("query Candid harness call");
-        assert!(
-            matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
-        );
-    }
+    let health: canic::dto::public_status::PublicHealth = ic_testkit::pic::query_wire(
+        pic,
+        published,
+        Principal::anonymous(),
+        ic_testkit::pic::WireCallSpec {
+            method: canic::protocol::CANIC_PUBLIC_HEALTH,
+            method_id: canic::protocol::public_health::METHOD_ID,
+            request_limits: canic::protocol::public_health::REQUEST_LIMITS,
+            response_limits: canic::protocol::public_health::RESPONSE_LIMITS,
+        },
+        &(),
+    )
+    .expect("public Wire health");
+    assert_eq!(health.canister_id, published.into());
+    let denied: Result<canic::dto::page::Page<canic::dto::metric_page::MetricEntry>, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            published,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: protocol::protected_metrics::METHOD,
+                method_id: protocol::protected_metrics::METHOD_ID,
+                request_limits: protocol::protected_metrics::REQUEST_LIMITS,
+                response_limits: protocol::protected_metrics::RESPONSE_LIMITS,
+            },
+            &MetricsStatusRequest {
+                kind: MetricsKind::Runtime,
+                page: PageRequest {
+                    limit: 1,
+                    offset: 0,
+                },
+            },
+        )
+        .expect("protected metrics Wire transport");
+    assert!(
+        matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+    );
+
     pic.set_controllers(published, Some(controller), vec![Principal::anonymous()])
         .unwrap();
 }
@@ -1500,8 +1429,7 @@ fn assert_public_process_projection(
     );
 }
 
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize)]
 struct HistoryCost {
     instructions: u64,
     points: u64,
@@ -1511,10 +1439,6 @@ struct HistoryCost {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "Keep the ordered timer observation scenario and explicit bounded calls together"
-)]
 fn public_history_costs_cover_sampling_and_independent_chart_queries() {
     let fixture = install_lifecycle_boundary_fixture();
     for rows in [1_u16, 100, 211, 256] {
@@ -1522,23 +1446,14 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
         let mut maximum = 0;
         for period in 0..300 {
             fixture.pic.advance_time(Duration::from_secs(301));
-            let sampled: Result<u64, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((rows,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (fixture.pic).update_call(
-                            canister,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "qualify_history_sampling_cost",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .unwrap();
+            let sampled: Result<u64, Error> = ic_testkit::pic::update_wire(
+                &fixture.pic,
+                canister,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                timer_probe::HISTORY_SAMPLING_COST,
+                &rows,
+            )
+            .unwrap();
             let instructions = sampled.unwrap();
             assert!(instructions > 0);
             maximum = maximum.max(instructions);
@@ -1547,25 +1462,14 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
                     "HISTORY_COST sample rows={rows} period={period} instructions={instructions}"
                 );
                 for limit in [1_u64, 12, 288] {
-                    let cost: Result<HistoryCost, Error> =
-                        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                            let request_bytes =
-                                ic_platform::candid::contract::encode_args((limit,))?;
-                            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                                (fixture.pic).query_call(
-                                    canister,
-                                    Principal::anonymous(),
-                                    "qualify_history_query_cost",
-                                    request_bytes,
-                                )
-                            })
-                            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                            ic_platform::candid::decode_args(&reply, REPLY_LIMITS)
-                                .map_err(Into::into)
-                        })()
-                        .map(|(reply,)| reply)
-                        .unwrap();
+                    let cost: Result<HistoryCost, Error> = ic_testkit::pic::query_wire(
+                        &fixture.pic,
+                        canister,
+                        Principal::anonymous(),
+                        timer_probe::HISTORY_QUERY_COST,
+                        &limit,
+                    )
+                    .unwrap();
                     let cost = cost.unwrap();
                     assert!(cost.instructions > 0);
                     assert!(cost.values_valid);
@@ -1584,42 +1488,24 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
         let sparse = fixture.install_runtime_probe_canister();
         for (gap, expected_points) in [(0_u64, 1), (200, 2), (0, 2), (1000, 1)] {
             fixture.pic.advance_time(Duration::from_secs(gap * 300));
-            let sampled: Result<u64, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((rows,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (fixture.pic).update_call(
-                            sparse,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "qualify_history_sampling_cost",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .unwrap();
+            let sampled: Result<u64, Error> = ic_testkit::pic::update_wire(
+                &fixture.pic,
+                sparse,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                timer_probe::HISTORY_SAMPLING_COST,
+                &rows,
+            )
+            .unwrap();
             let instructions = sampled.unwrap();
             assert!(instructions > 0);
-            let cost: Result<HistoryCost, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((288_u64,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (fixture.pic).query_call(
-                            sparse,
-                            Principal::anonymous(),
-                            "qualify_history_query_cost",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .unwrap();
+            let cost: Result<HistoryCost, Error> = ic_testkit::pic::query_wire(
+                &fixture.pic,
+                sparse,
+                Principal::anonymous(),
+                timer_probe::HISTORY_QUERY_COST,
+                &288_u64,
+            )
+            .unwrap();
             let cost = cost.unwrap();
             assert!(cost.values_valid);
             assert!(cost.reserved_bytes <= 8 * 1024 * 1024);
@@ -1638,50 +1524,33 @@ fn cached_metrics(
     family: PublicMetricFamily,
     limit: u64,
 ) -> canic::dto::public_status::PublicMetricsSnapshot {
-    let response: Result<PublicStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                PublicStatusRequest::Metrics(canic::dto::public_status::PublicMetricsRequest {
-                    family,
-                    page: PageRequest { limit, offset: 0 },
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister,
-                    caller,
-                    protocol::CANIC_PUBLIC_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("metrics transport");
-    let PublicStatusResponse::Metrics(snapshot) = response.expect("public metrics") else {
-        panic!("expected metrics snapshot");
-    };
+    let snapshot: canic::dto::public_status::PublicMetricsSnapshot = ic_testkit::pic::query_wire(
+        pic,
+        canister,
+        caller,
+        ic_testkit::pic::WireCallSpec {
+            method: canic::protocol::CANIC_PUBLIC_METRICS,
+            method_id: canic::protocol::public_metrics::METHOD_ID,
+            request_limits: canic::protocol::public_metrics::REQUEST_LIMITS,
+            response_limits: canic::protocol::public_metrics::RESPONSE_LIMITS,
+        },
+        &canic::dto::public_status::PublicMetricsRequest {
+            family,
+            page: PageRequest { offset: 0, limit },
+        },
+    )
+    .expect("public metrics Wire query");
     snapshot
 }
 
 fn configure_public_sampler(pic: &PocketIc, canister: Principal, reject: bool) {
-    (|| -> Result<(Result<(), Error>,), Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((reject,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "configure_public_sampler",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+        pic,
+        canister,
+        ic_platform::principal::ExternalPrincipal::anonymous(),
+        timer_probe::CONFIGURE_SAMPLER,
+        &reject,
+    )
     .unwrap()
     .unwrap();
 }

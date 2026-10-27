@@ -106,3 +106,24 @@ pub(in crate::release_set) fn materialize_qualified_release_artifact(
         bytes,
     })
 }
+
+/// Re-admit exact schema bytes against the final module before sealing their digest.
+pub(in crate::release_set) fn qualify_wire_schema(
+    wasm: &[u8],
+    schema: &[u8],
+) -> Result<[u8; 32], crate::artifact_io::WireArtifactError> {
+    let facts = ic_host_artifacts::wasm::inspect(
+        wasm,
+        ic_host_artifacts::wasm::InspectionLimits {
+            module_bytes: crate::MAX_ARTIFACT_READ_BYTES,
+            sections: 1024,
+            exports: 4096,
+            custom_sections: 1024,
+        },
+    )
+    .map_err(|_| crate::artifact_io::WireArtifactError::Wasm)?;
+    Ok(
+        crate::artifact_io::generate_wire_bindings(&facts, schema, "./wire-adapter.js")?
+            .schema_sha256,
+    )
+}

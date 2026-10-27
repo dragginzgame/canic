@@ -6,11 +6,9 @@ use canic_contracts::ids::{
     AppId, FleetAdmissionPolicy, FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority,
 };
 use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
-use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct FleetCoordinatorInitArgs {
     pub configured_app: AppId,
     pub authority: FleetRegistryAuthority,

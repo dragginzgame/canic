@@ -14,14 +14,23 @@ app = "test"
 role = "index_hub"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wire-schema = ["canic/wire-schema"]
 
 [dependencies]
 canic = { workspace = true, features = [] }
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-wire = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
+
+[[example]]
+name = "wire_schema"
+required-features = ["wire-schema"]
 
 [lints]
 workspace = true

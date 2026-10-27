@@ -6,7 +6,7 @@ use crate::{
         runtime::install_source::ApprovedModuleSource,
     },
 };
-use ic_platform::candid::contract::CandidType;
+use serde::Serialize;
 
 ///
 /// ModuleInstallWorkflow
@@ -16,7 +16,7 @@ pub struct ModuleInstallWorkflow;
 
 impl ModuleInstallWorkflow {
     /// Install one canister from an already resolved module source after a deployment permit.
-    pub async fn install_with_payload_with_permit<P: CandidType>(
+    pub async fn install_with_payload_with_permit<P: Serialize>(
         permit: &CostGuardPermit,
         target_canister: Principal,
         source: &ApprovedModuleSource,
@@ -29,7 +29,8 @@ impl ModuleInstallWorkflow {
             *source.source_canister(),
             source.chunk_hashes().to_vec(),
             source.module_hash().to_vec(),
-            (payload, extra_arg),
+            canic_contracts::protocol::initialization::encode((payload, extra_arg))
+                .map_err(|_| InternalError::resource_exhausted())?,
         )
         .await
     }

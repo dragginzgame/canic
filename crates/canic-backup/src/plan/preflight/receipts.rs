@@ -2,11 +2,10 @@
 //!
 //! Responsibility: validate execution preflight receipt bundles.
 //! Does not own: authority probing, topology observation, or quiescence enforcement.
-//! Boundary: gates backup mutation on accepted topology, authority, and quiescence receipts.
+//! Boundary: checks topology and quiescence evidence without applying capture authority.
 
 use crate::plan::{
-    BackupExecutionPreflightReceipts, BackupPlan, BackupPlanError, QuiescencePreflightReceipt,
-    TopologyPreflightReceipt,
+    BackupPlan, BackupPlanError, QuiescencePreflightReceipt, TopologyPreflightReceipt,
     validation::{
         validate_nonempty, validate_optional_nonempty, validate_preflight_id,
         validate_preflight_timestamp, validate_preflight_window, validate_required_hash,
@@ -28,52 +27,6 @@ impl BackupPlan {
         validate_topology_preflight_receipt(self, topology_receipt, preflight_id, as_of)?;
         validate_quiescence_preflight_receipt(self, quiescence_receipt, preflight_id, as_of)
     }
-
-    /// Apply and validate the full execution preflight receipt bundle.
-    pub fn apply_execution_preflight_receipts(
-        &mut self,
-        receipts: &BackupExecutionPreflightReceipts,
-        as_of: &str,
-    ) -> Result<(), BackupPlanError> {
-        validate_execution_preflight_bundle(self, receipts, as_of)?;
-        self.apply_authority_preflight_receipts(
-            &receipts.preflight_id,
-            &receipts.control_authority,
-            &receipts.snapshot_read_authority,
-            as_of,
-        )?;
-        self.validate_execution_preflight_receipts(
-            &receipts.topology,
-            &receipts.quiescence,
-            &receipts.preflight_id,
-            as_of,
-        )
-    }
-}
-
-fn validate_execution_preflight_bundle(
-    plan: &BackupPlan,
-    receipts: &BackupExecutionPreflightReceipts,
-    as_of: &str,
-) -> Result<(), BackupPlanError> {
-    validate_nonempty("preflight_receipts.plan_id", &receipts.plan_id)?;
-    validate_preflight_id(&receipts.preflight_id)?;
-    validate_preflight_timestamp("preflight_receipts.as_of", as_of)?;
-    validate_preflight_window(
-        &receipts.preflight_id,
-        &receipts.validated_at,
-        &receipts.expires_at,
-        as_of,
-    )?;
-
-    if receipts.plan_id != plan.plan_id {
-        return Err(BackupPlanError::PreflightReceiptPlanMismatch {
-            expected: plan.plan_id.clone(),
-            actual: receipts.plan_id.clone(),
-        });
-    }
-
-    Ok(())
 }
 
 fn validate_topology_preflight_receipt(

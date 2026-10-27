@@ -5,5 +5,6 @@
 
 pub mod canister;
 pub mod embedded_root;
+pub mod payload_contract;
 pub mod pic;
 pub mod workspace;

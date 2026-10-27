@@ -315,82 +315,54 @@ mod tests {
     };
 
     #[test]
-    fn q6_current_asset_record_encodings_are_measured() {
-        let asset_measurements = finite_asset_statuses()
-            .into_iter()
-            .map(|(name, status)| (name, maximum_asset(status).to_bytes().len()))
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            asset_measurements,
-            vec![
-                ("store", 653),
-                ("store_deletion_pending", 749),
-                ("pending_reset", 660),
-                ("ready", 653),
-                ("claimed", 812),
-                ("workload", 813),
-                ("recycling_pending", 835),
-                ("recycling_ready", 833),
-                ("recycling_failed_empty", 836),
-                ("handing_off", 701),
-                ("failed_empty", 656),
-            ]
-        );
+    fn asset_records_preserve_maximum_authority_and_every_status() {
+        for (name, status) in finite_asset_statuses() {
+            let record = maximum_asset(status);
+            assert_eq!(
+                CanisterPoolAssetRecord::from_bytes(record.to_bytes()),
+                record,
+                "{name}"
+            );
+        }
     }
 
     #[test]
-    fn q6_current_pool_state_and_receipt_encodings_are_measured() {
-        let state_measurements = [
-            (
-                "default",
-                CanisterPoolStateRecord::default().to_bytes().len(),
-            ),
-            (
-                "intent",
-                maximum_state(CanisterPoolCreationProgressRecord::Intent {
-                    uncertain_result: true,
-                })
-                .to_bytes()
-                .len(),
-            ),
-            (
-                "created",
-                maximum_state(CanisterPoolCreationProgressRecord::Created {
-                    block_index: u64::MAX,
-                    canister_id: maximum_principal(),
-                })
-                .to_bytes()
-                .len(),
-            ),
-            (
-                "blocked",
-                maximum_state(CanisterPoolCreationProgressRecord::Blocked {
-                    failure: CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow,
-                })
-                .to_bytes()
-                .len(),
-            ),
-        ];
-        assert_eq!(
-            state_measurements,
-            [
-                ("default", 130),
-                ("intent", 866),
-                ("created", 913),
-                ("blocked", 886),
-            ]
-        );
-        assert!(state_measurements.iter().all(|(_, bytes)| *bytes <= 4_096));
-
-        let handoff_receipt = CanisterPoolHandoffReceiptRecord {
-            recipient: canister_principal(),
+    fn pool_state_and_receipts_roundtrip_within_declared_bounds() {
+        let Bound::Bounded { max_size, .. } = CanisterPoolStateRecord::BOUND else {
+            panic!("pool state must remain bounded");
+        };
+        for state in [
+            CanisterPoolStateRecord::default(),
+            maximum_state(CanisterPoolCreationProgressRecord::Intent {
+                uncertain_result: true,
+            }),
+            maximum_state(CanisterPoolCreationProgressRecord::Created {
+                block_index: u64::MAX,
+                canister_id: maximum_principal(),
+            }),
+            maximum_state(CanisterPoolCreationProgressRecord::WaitingForFunding {
+                available_cycles: u128::MAX,
+                observed_at_ns: u64::MAX,
+                retry_at_ns: u64::MAX,
+            }),
+            maximum_state(CanisterPoolCreationProgressRecord::Blocked {
+                failure: CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow,
+            }),
+        ] {
+            let bytes = state.to_bytes();
+            assert!(bytes.len() <= max_size as usize);
+            assert_eq!(CanisterPoolStateRecord::from_bytes(bytes), state);
+        }
+        let receipt = CanisterPoolHandoffReceiptRecord {
+            recipient: maximum_principal(),
             completed_at_ns: u64::MAX,
         };
-        assert_eq!(maximum_principal().to_bytes().len(), 29);
-        assert_eq!(canister_principal().to_bytes().len(), 10);
-        assert_eq!(handoff_receipt.to_bytes().len(), 47);
-        assert!(handoff_receipt.to_bytes().len() <= 128);
+        let Bound::Bounded { max_size, .. } = CanisterPoolHandoffReceiptRecord::BOUND else {
+            panic!("handoff receipt must remain bounded");
+        };
+        let bytes = receipt.to_bytes();
+        assert!(bytes.len() <= max_size as usize);
+        assert_eq!(CanisterPoolHandoffReceiptRecord::from_bytes(bytes), receipt);
     }
 
     #[test]
@@ -400,7 +372,6 @@ mod tests {
             completed_at_ns: u64::MAX,
         };
 
-        assert_eq!(structurally_maximal.to_bytes().len(), 67);
         let runtime = ic_memory::testing::fixture_runtime(
             DefaultMemoryImpl::default(),
             "test",
@@ -425,37 +396,27 @@ mod tests {
     }
 
     #[test]
-    fn q6_failure_text_keeps_asset_encoding_structurally_unbounded() {
-        let failed_empty = maximum_asset(CanisterPoolAssetStatusRecord::Failed(String::new()))
-            .to_bytes()
-            .len();
-        let failed_1_kib = maximum_asset(CanisterPoolAssetStatusRecord::Failed("x".repeat(1_024)))
-            .to_bytes()
-            .len();
-        let recycling_empty = maximum_asset(CanisterPoolAssetStatusRecord::Recycling {
-            claim: maximum_claim(),
-            reset: CanisterPoolRecycleResetRecord::Failed(String::new()),
-        })
-        .to_bytes()
-        .len();
-        let recycling_1_kib = maximum_asset(CanisterPoolAssetStatusRecord::Recycling {
-            claim: maximum_claim(),
-            reset: CanisterPoolRecycleResetRecord::Failed("x".repeat(1_024)),
-        })
-        .to_bytes()
-        .len();
-
-        assert_eq!((failed_empty, failed_1_kib), (656, 1_682));
-        assert_eq!((recycling_empty, recycling_1_kib), (836, 1_862));
+    fn failure_text_survives_unbounded_asset_record_roundtrip() {
+        for detail in [String::new(), "x".repeat(1_024)] {
+            for status in [
+                CanisterPoolAssetStatusRecord::Failed(detail.clone()),
+                CanisterPoolAssetStatusRecord::Recycling {
+                    claim: maximum_claim(),
+                    reset: CanisterPoolRecycleResetRecord::Failed(detail.clone()),
+                },
+            ] {
+                let record = maximum_asset(status);
+                assert_eq!(
+                    CanisterPoolAssetRecord::from_bytes(record.to_bytes()),
+                    record
+                );
+            }
+        }
         assert!(matches!(CanisterPoolAssetRecord::BOUND, Bound::Unbounded));
     }
 
     fn maximum_principal() -> Principal {
         Principal::from_slice(&[u8::MAX; 29])
-    }
-
-    fn canister_principal() -> Principal {
-        Principal::from_slice(&[u8::MAX; 10])
     }
 
     fn finite_asset_statuses() -> [(&'static str, CanisterPoolAssetStatusRecord); 11] {

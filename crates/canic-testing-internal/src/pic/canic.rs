@@ -11,8 +11,7 @@ use canic::{
             FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
             FleetSubnetWasmStoreInitArgs,
         },
-        role::OperationStatusRequest,
-        runtime::{CanicReadinessStatus, ReadinessStatus},
+        runtime::ReadinessStatus,
     },
     ids::{
         CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
@@ -20,23 +19,16 @@ use canic::{
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreActivationAuthority,
         FleetSubnetWasmStoreAuthority, ReleaseSetDigest, SubnetId,
     },
-    protocol,
 };
-use canic_contracts::dto::{
-    role::OperationAcceptedResponse as RootCommandResponseFragment,
-    wire::projection::fixture_canic::{
-        CanisterStatusRequestFragment, CanisterStatusResponseFragment, RootCommandFragment,
-        RootStatusRequestFragment, RootStatusResponseFragment,
-    },
-};
+
+use canic_contracts::protocol::initialization::encode;
 use canic_contracts::{
     cycles::Cycles,
-    dto::root::RootOperationStatusResponse,
     ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId},
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
-use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -52,58 +44,6 @@ use {
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
-
-fn root_command(
-    pic: &PocketIc,
-    root: Principal,
-    command: RootCommandFragment,
-) -> Result<RootCommandResponseFragment, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                root,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                protocol::CANIC_ROOT_COMMAND,
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("Root command transport")
-}
-
-fn root_status(
-    pic: &PocketIc,
-    root: Principal,
-    request: RootStatusRequestFragment,
-) -> Result<RootStatusResponseFragment, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let call_method = match &request {
-            RootStatusRequestFragment::Readiness => protocol::CANIC_OBSERVABILITY,
-            RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
-        };
-        let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                root,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                call_method,
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("Root status transport")
-}
 
 ///
 /// ManagedRootInstallInput
@@ -157,7 +97,7 @@ pub(super) fn create_and_install_pre_adoption_root(
     pic.install_canister(
         wasm_store,
         wasm_store_wasm,
-        encode_one(store_args).map_err(|_| {
+        encode(store_args).map_err(|_| {
             Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED)
         })?,
         Some(installation_controller),
@@ -165,7 +105,7 @@ pub(super) fn create_and_install_pre_adoption_root(
     pic.install_canister(
         root_id,
         root_wasm,
-        encode_one(&root_args).map_err(|_| {
+        encode(&root_args).map_err(|_| {
             Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED)
         })?,
         None,
@@ -186,7 +126,7 @@ pub trait CanicPicExt {
         config_path: &Path,
     ) -> Result<Principal, Error>;
 
-    /// Wait until one ordinary managed canister reports `canic_observability(Readiness)`.
+    /// Wait until one ordinary managed canister reports `canic_readiness`.
     fn wait_for_ready(
         &self,
         canister_id: Principal,
@@ -195,7 +135,7 @@ pub trait CanicPicExt {
         context: &str,
     );
 
-    /// Wait until one Root reports `canic_root_status(Readiness)`.
+    /// Wait until one Root reports `canic_readiness`.
     fn wait_for_root_ready(
         &self,
         canister_id: Principal,
@@ -255,7 +195,7 @@ impl CanicPicExt for PocketIc {
     ) {
         for _ in 0..tick_limit {
             self.tick();
-            match fetch_root_ready(self, canister_id) {
+            match fetch_ready(self, canister_id) {
                 Ok(true) => return,
                 Ok(false) => {}
                 Err(error) => {
@@ -389,22 +329,11 @@ pub(super) fn adopt_sibling_wasm_store(
         operation_id: root_store_adoption_operation_id(root_args.install_id),
         authority: root_args.authority.wasm_store_authority.clone(),
     };
-    let RootCommandResponseFragment::OperationAccepted(receipt) =
-        root_command(pic, root, RootCommandFragment::AdoptStore(request.clone()))
-            .expect("adopt sibling Wasm Store application");
+    let receipt = crate::pic::canic::root_store_adopt(pic, root, request.clone())
+        .expect("adopt sibling Wasm Store application");
     assert_eq!(receipt.operation_id, request.operation_id);
-    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::AdoptStore(adopted)) =
-        root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest {
-                operation_id: request.operation_id,
-            }),
-        )
-        .expect("query sibling Wasm Store adoption application")
-    else {
-        panic!("Root returned a differently correlated operation status");
-    };
+    let adopted = crate::pic::canic::root_store_adoption_status(pic, root, request.operation_id)
+        .expect("query sibling Wasm Store adoption application");
     assert_eq!(adopted.authority, request.authority);
     let mut expected_controllers = vec![root, request.authority.installation_controller];
     expected_controllers.sort();
@@ -414,18 +343,8 @@ pub(super) fn adopt_sibling_wasm_store(
         .expect("observe adopted sibling Wasm Store controllers");
     live_controllers.settings.controllers.sort();
     assert_eq!(live_controllers.settings.controllers, expected_controllers);
-    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::AdoptStore(status)) =
-        root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest {
-                operation_id: request.operation_id,
-            }),
-        )
-        .expect("query sibling Wasm Store adoption application")
-    else {
-        panic!("Root returned a differently correlated operation status");
-    };
+    let status = crate::pic::canic::root_store_adoption_status(pic, root, request.operation_id)
+        .expect("query sibling Wasm Store adoption application");
     assert_eq!(status, adopted);
 }
 
@@ -442,7 +361,7 @@ fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] 
     operation_id
 }
 
-/// Wait until one Root reports `canic_root_status(Readiness)`.
+/// Wait until one Root reports `canic_readiness`.
 ///
 /// # Panics
 ///
@@ -450,28 +369,11 @@ fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] 
 /// if querying readiness traps.
 pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
-        if matches!(
-            (|| -> Result<(Result<RootStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((RootStatusRequestFragment::Readiness,))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(canister_id, Principal::anonymous(), protocol::CANIC_OBSERVABILITY, request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })()
-            .map(|(reply,)| reply),
-            Ok(Ok(RootStatusResponseFragment::Readiness(
-                CanicReadinessStatus {
-                    status: ReadinessStatus::Ready,
-                    ..
-                }
-            )))
-        ) {
+        if fetch_ready(pic, canister_id).unwrap_or(false) {
             return;
         }
         pic.tick();
     }
-
     panic!("canister did not report ready in time: {canister_id}");
 }
 
@@ -500,10 +402,7 @@ pub fn install_standalone_canister(
     let wasm = standalone_canister_wasm(crate_name, profile);
     let pocket_ic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let fixture = StandaloneCanisterFixture::try_install(
-        ic_testkit::pic::PocketIcInstance {
-            instance: pocket_ic,
-            server: None,
-        },
+        ic_testkit::pic::PocketIcInstance::from_borrowed_server(pocket_ic),
         InstallSpec {
             wasm,
             init_bytes: local_init_args(),
@@ -569,55 +468,27 @@ fn fetch_ready(
     pic: &PocketIc,
     canister_id: Principal,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    match (|| -> Result<(Result<CanisterStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((CanisterStatusRequestFragment::Readiness,))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(canister_id, ic_platform::principal::ExternalPrincipal::anonymous(), protocol::CANIC_OBSERVABILITY, request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })()
-    .map(|(reply,)| reply)
-    {
-        Ok(Ok(CanisterStatusResponseFragment::Readiness(readiness))) => {
-            Ok(readiness.status == ReadinessStatus::Ready)
-        }
-        Ok(Err(_)) => Ok(false),
-        Err(error) => Err(error),
-    }
+    let response: Result<canic::dto::runtime_observation::CanicReadinessStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            canister_id,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_readiness::METHOD,
+                method_id: canic::protocol::protected_readiness::METHOD_ID,
+                request_limits: canic::protocol::protected_readiness::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_readiness::RESPONSE_LIMITS,
+            },
+            &(),
+        )?;
+    Ok(response.is_ok_and(|value| value.status == ReadinessStatus::Ready))
 }
 
-fn fetch_root_ready(
-    pic: &PocketIc,
-    canister_id: Principal,
-) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    match (|| -> Result<(Result<RootStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((RootStatusRequestFragment::Readiness,))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(canister_id, ic_platform::principal::ExternalPrincipal::anonymous(), protocol::CANIC_OBSERVABILITY, request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })()
-    .map(|(reply,)| reply)
-    {
-        Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
-            Ok(readiness.status == ReadinessStatus::Ready)
-        }
-        Ok(Ok(_)) => panic!("Root returned a differently correlated readiness status"),
-        Ok(Err(_)) => Ok(false),
-        Err(error) => Err(error),
-    }
-}
-
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
     input: ManagedRootInstallInput<'_>,
 ) -> Result<Vec<u8>, Error> {
-    encode_one(managed_test_root_init_args(input)?)
+    encode(managed_test_root_init_args(input)?)
         .map_err(|_| Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED))
 }
 
@@ -681,7 +552,7 @@ pub fn standalone_canister_candid(crate_name: &str, profile: CanicWasmBuildProfi
 }
 
 fn local_init_args() -> Vec<u8> {
-    encode_one(None::<Vec<u8>>).expect("encode standalone-local init args")
+    encode(None::<Vec<u8>>).expect("encode standalone-local init args")
 }
 
 ///
@@ -839,36 +710,521 @@ fn workspace_root() -> PathBuf {
     crate::workspace::discover().expect("discover Canic test workspace through Cargo")
 }
 
-/// Exact read transport used by Coordinator fixtures after endpoint separation.
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
-pub(super) trait CoordinatorRead: ic_platform::candid::contract::CandidType {
-    type Response: ic_platform::candid::contract::CandidType + for<'de> serde::Deserialize<'de>;
-    const METHOD: &'static str;
+/// Read the complete protected treasury response through the actual native endpoint.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn coordinator_funding(
+    pic: &ic_platform::pocket_ic::PocketIc,
+    coordinator: Principal,
+) -> Result<canic_contracts::dto::fleet_coordinator::CoordinatorFundingStatusResponse, Error> {
+    let response: Result<canic_contracts::dto::funding_read::CoordinatorStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            coordinator,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::funding_read::coordinator_status::METHOD,
+                method_id: canic::protocol::funding_read::coordinator_status::METHOD_ID,
+                request_limits: canic::protocol::funding_read::REQUEST_LIMITS,
+                response_limits: canic::protocol::funding_read::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("Coordinator funding transport");
+    response.map(|native| {
+        let expected = ic_wire::native::encode_response(
+            canic::protocol::funding_read::coordinator_status::METHOD_ID,
+            &native,
+            canic::protocol::funding_read::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        let canonical =
+            canic_contracts::dto::fleet_coordinator::CoordinatorFundingStatusResponse::from(native);
+        let restored =
+            canic_contracts::dto::funding_read::CoordinatorStatus::from(canonical.clone());
+        assert_eq!(
+            ic_wire::native::encode_response(
+                canic::protocol::funding_read::coordinator_status::METHOD_ID,
+                &restored,
+                canic::protocol::funding_read::RESPONSE_LIMITS
+            )
+            .unwrap(),
+            expected
+        );
+        canonical
+    })
 }
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
-impl CoordinatorRead for canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityRequest {
-    type Response = canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityResponse;
-    const METHOD: &'static str = canic::protocol::CANIC_OBSERVABILITY;
+/// Observe exact Coordinator provisioning evidence through its native endpoint.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn coordinator_provisioning(
+    pic: &PocketIc,
+    coordinator: Principal,
+    caller: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    Error,
+> {
+    use canic::protocol::component_read as wire;
+    let response: Result<canic::dto::component_read::CoordinatorProvisioning, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            coordinator,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: wire::coordinator_provisioning::METHOD,
+                method_id: wire::coordinator_provisioning::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Coordinator provisioning transport");
+    response.map(|native| {
+        let canonical = canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse::from(native.clone());
+        assert_eq!(canic::dto::component_read::CoordinatorProvisioning::from(canonical.clone()), native);
+        canonical
+    })
 }
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
-impl CoordinatorRead for canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest {
-    type Response = canic_contracts::dto::fleet_coordinator::CoordinatorRegistryResponse;
-    const METHOD: &'static str = canic::protocol::CANIC_COORDINATOR_REGISTRY;
+
+/// Observe exact Root provisioning evidence through its native endpoint.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn root_provisioning(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse,
+    Error,
+> {
+    use canic::protocol::component_read as wire;
+    let response: Result<canic::dto::component_read::Provisioning, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: wire::provisioning::METHOD,
+                method_id: wire::provisioning::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Root provisioning transport");
+    response.map(|native| {
+        let canonical = canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse::from(native.clone());
+        assert_eq!(canic::dto::component_read::Provisioning::from(canonical.clone()), native);
+        canonical
+    })
 }
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
-impl CoordinatorRead for canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest {
-    type Response = canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadResponse;
-    const METHOD: &'static str = canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS;
+
+/// Observe exact Root component allocation evidence through its native endpoint.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn root_component_allocation(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    operation_id: [u8; 32],
+) -> Result<canic_contracts::dto::root::RootComponentOperationStatus, Error> {
+    use canic::protocol::component_read as wire;
+    let response: Result<canic::dto::component_read::ComponentAllocation, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: wire::allocation::METHOD,
+                method_id: wire::allocation::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Root component allocation transport");
+    response.map(|native| {
+        let canonical =
+            canic_contracts::dto::root::RootComponentOperationStatus::from(native.clone());
+        assert_eq!(
+            canic::dto::component_read::ComponentAllocation::from(canonical.clone()),
+            native
+        );
+        canonical
+    })
+}
+
+/// Observe exact Root subtree removal evidence through its native endpoint.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn root_subtree_removal(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    operation_id: [u8; 32],
+) -> Result<canic_contracts::dto::component_registry::RootComponentSubtreeRemovalResponse, Error> {
+    use canic::protocol::subtree_read as wire;
+    let response: Result<canic::dto::subtree_read::Status, Error> = ic_testkit::pic::query_wire(
+        pic,
+        root,
+        caller,
+        ic_testkit::pic::WireCallSpec {
+            method: wire::METHOD,
+            method_id: wire::METHOD_ID,
+            request_limits: wire::REQUEST_LIMITS,
+            response_limits: wire::RESPONSE_LIMITS,
+        },
+        &operation_id,
+    )
+    .expect("native Root subtree removal transport");
+    response.map(|native| {
+        let canonical =
+            canic_contracts::dto::component_registry::RootComponentSubtreeRemovalResponse::from(
+                native.clone(),
+            );
+        assert_eq!(
+            canic::dto::subtree_read::Status::from(canonical.clone()),
+            native
+        );
+        canonical
+    })
+}
+
+/// Observe exact Root removal evidence through its native endpoint.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn root_removal(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    operation_id: [u8; 32],
+) -> Result<canic_contracts::dto::root::RootRemovalOperationStatus, Error> {
+    use canic::protocol::root_removal_read as wire;
+    let response: Result<canic::dto::root_removal_read::Status, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: wire::METHOD,
+                method_id: wire::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Root removal transport");
+    response.map(|native| {
+        let canonical =
+            canic_contracts::dto::root::RootRemovalOperationStatus::from(native.clone());
+        assert_eq!(
+            canic::dto::root_removal_read::Status::from(canonical.clone()),
+            native
+        );
+        canonical
+    })
+}
+
+/// Observe exact Root child allocation evidence through its native endpoint.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn root_child_allocation(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    operation_id: [u8; 32],
+) -> Result<canic_contracts::dto::component_registry::RootComponentChildAllocationResponse, Error> {
+    use canic::protocol::component_read as wire;
+    let response: Result<canic::dto::component_read::ChildAllocation, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: wire::child_allocation::METHOD,
+                method_id: wire::child_allocation::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Root child allocation transport");
+    response.map(|native| {
+        let canonical =
+            canic_contracts::dto::component_registry::RootComponentChildAllocationResponse::from(
+                native.clone(),
+            );
+        assert_eq!(
+            canic::dto::component_read::ChildAllocation::from(canonical.clone()),
+            native
+        );
+        canonical
+    })
+}
+
+/// Read retained acknowledgement evidence through its controller-bound Wire endpoint.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn coordinator_root_acknowledgements(
+    pic: &ic_platform::pocket_ic::PocketIc,
+    coordinator: Principal,
+    caller: Principal,
+) -> Result<
+    Vec<canic_contracts::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement>,
+    canic::Error,
+> {
+    use canic::protocol::coordinator_acknowledgements as protocol;
+    let response: Result<
+        Vec<canic_contracts::dto::coordinator_acknowledgements::RootAcknowledgement>,
+        canic::Error,
+    > = ic_testkit::pic::query_wire(
+        pic,
+        coordinator,
+        caller,
+        ic_testkit::pic::WireCallSpec {
+            method: protocol::METHOD,
+            method_id: protocol::METHOD_ID,
+            request_limits: protocol::REQUEST_LIMITS,
+            response_limits: protocol::RESPONSE_LIMITS,
+        },
+        &(),
+    )
+    .expect("query Coordinator acknowledgement evidence");
+    response.map(|values| values.into_iter().map(Into::into).collect())
+}
+
+pub(super) fn root_store_adopt(
+    pic: &PocketIc,
+    root: Principal,
+    request: canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
+) -> Result<canic::dto::role::OperationReceipt, Error> {
+    use canic::protocol::root_store_control as wire;
+    ic_testkit::pic::update_wire(
+        pic,
+        root,
+        Principal::anonymous(),
+        ic_testkit::pic::WireCallSpec {
+            method: wire::adopt::METHOD,
+            method_id: wire::adopt::METHOD_ID,
+            request_limits: wire::REQUEST_LIMITS,
+            response_limits: wire::RESPONSE_LIMITS,
+        },
+        &canic::dto::root_store_control::AdoptRequest::from(request),
+    )
+    .expect("native Root Store control transport")
+}
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn root_store_bootstrap(
+    pic: &PocketIc,
+    root: Principal,
+    request: canic::dto::root_store::RootStoreBootstrapRequest,
+) -> Result<canic::dto::role::OperationReceipt, Error> {
+    use canic::protocol::root_store_control as wire;
+    ic_testkit::pic::update_wire(
+        pic,
+        root,
+        Principal::anonymous(),
+        ic_testkit::pic::WireCallSpec {
+            method: wire::bootstrap::METHOD,
+            method_id: wire::bootstrap::METHOD_ID,
+            request_limits: wire::REQUEST_LIMITS,
+            response_limits: wire::RESPONSE_LIMITS,
+        },
+        &request,
+    )
+    .expect("native Root Store control transport")
+}
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn root_store_prepare(
+    pic: &PocketIc,
+    root: Principal,
+    request: canic::dto::root_store::RootStoreFixturePrepareRequest,
+) -> Result<
+    Result<
+        canic::dto::fixture_provisioning::FixtureSourceStatus,
+        canic::dto::fixture_provisioning::FixtureStoreError,
+    >,
+    Error,
+> {
+    use canic::protocol::root_store_control as wire;
+    ic_testkit::pic::update_wire(
+        pic,
+        root,
+        Principal::anonymous(),
+        ic_testkit::pic::WireCallSpec {
+            method: wire::prepare::METHOD,
+            method_id: wire::prepare::METHOD_ID,
+            request_limits: wire::REQUEST_LIMITS,
+            response_limits: wire::RESPONSE_LIMITS,
+        },
+        &request,
+    )
+    .expect("native Root Store control transport")
+}
+
+/// Drive the production bounded pool step through its native controller endpoint.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn maintain_pool(
+    pic: &PocketIc,
+    root: Principal,
+) -> Result<canic::dto::pool_control::MaintenanceResponse, Error> {
+    use canic::protocol::pool_control as wire;
+    ic_testkit::pic::update_wire(
+        pic,
+        root,
+        Principal::anonymous(),
+        ic_testkit::pic::WireCallSpec {
+            method: wire::maintain::METHOD,
+            method_id: wire::maintain::METHOD_ID,
+            request_limits: wire::REQUEST_LIMITS,
+            response_limits: wire::RESPONSE_LIMITS,
+        },
+        &(),
+    )
+    .expect("native pool maintenance transport")
+}
+
+/// Submit one exact Component reservation as the actual installed caller.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn provision_component(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    request: canic::dto::component_registry::RootComponentAllocationRequest,
+) -> Result<canic::dto::role::OperationReceipt, Error> {
+    use canic::protocol::component_control as wire;
+    ic_testkit::pic::update_wire(
+        pic,
+        root,
+        caller,
+        ic_testkit::pic::WireCallSpec {
+            method: wire::provision::METHOD,
+            method_id: wire::provision::METHOD_ID,
+            request_limits: wire::REQUEST_LIMITS,
+            response_limits: wire::RESPONSE_LIMITS,
+        },
+        &request,
+    )
+    .expect("native Component reservation transport")
+}
+
+/// Prepare the actual Root and retain canonical authority for installed assertions.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn prepare_component_registry(
+    pic: &PocketIc,
+    root: Principal,
+    request: canic::dto::component_registry::RootComponentRegistryPreparationRequest,
+) -> Result<canic::dto::component_registry::RootComponentRegistryStatusResponse, Error> {
+    use canic::protocol::component_control as wire;
+    let response: Result<canic::dto::component_control::RegistryStatus, Error> =
+        ic_testkit::pic::update_wire(
+            pic,
+            root,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: wire::prepare::METHOD,
+                method_id: wire::prepare::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &canic::dto::component_control::PreparationRequest::from(request),
+        )
+        .expect("native Component registry preparation transport");
+    response.map(Into::into)
+}
+
+/// Read exact retained Store adoption evidence through the native production endpoint.
+pub(super) fn root_store_adoption_status(
+    pic: &PocketIc,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse, Error> {
+    use canic::protocol::root_store_control as wire;
+    let response: Result<canic::dto::root_store_control::Adoption, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: wire::adoption::METHOD,
+                method_id: wire::adoption::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Root Store observation transport");
+    response.map(|native| {
+        let canonical =
+            canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse::from(
+                native.clone(),
+            );
+        assert_eq!(
+            canic::dto::root_store_control::Adoption::from(canonical.clone()),
+            native
+        );
+        canonical
+    })
+}
+
+/// Read exact retained Store bootstrap evidence through the native production endpoint.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn root_store_bootstrap_status(
+    pic: &PocketIc,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<canic_contracts::dto::root_store::RootStoreBootstrapResponse, Error> {
+    use canic::protocol::root_store_control as wire;
+    let response: Result<canic::dto::root_store_control::Bootstrap, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: wire::bootstrap_status::METHOD,
+                method_id: wire::bootstrap_status::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Root Store observation transport");
+    response.map(|native| {
+        let canonical =
+            canic_contracts::dto::root_store::RootStoreBootstrapResponse::from(native.clone());
+        assert_eq!(
+            canic::dto::root_store_control::Bootstrap::from(canonical.clone()),
+            native
+        );
+        canonical
+    })
+}
+
+/// Observe the original activation identity and credentials without resuming it.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn root_activation_status(
+    pic: &PocketIc,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<canic_contracts::dto::fleet_activation::FleetActivationStatusResponse, Error> {
+    use canic::protocol::root_activation as wire;
+    let response: Result<canic::dto::runtime_reporting::FleetActivationStatusResponse, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: wire::status::METHOD,
+                method_id: wire::status::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &operation_id,
+        )
+        .expect("native Root activation observation transport");
+    response.map(|native| {
+        let canonical = canic_contracts::dto::fleet_activation::FleetActivationStatusResponse::from(
+            native.clone(),
+        );
+        assert_eq!(
+            canic::dto::runtime_reporting::FleetActivationStatusResponse::from(canonical.clone()),
+            native
+        );
+        canonical
+    })
 }

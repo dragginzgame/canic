@@ -72,6 +72,7 @@ impl<'a> RootReleaseSetEntryAuthority<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RootArtifactIdentity {
     raw_module_hash: [u8; 32],
+    wire_schema_sha256: [u8; 32],
     candid_sha256: [u8; 32],
     protocol_profile_digest: ProtocolProfileDigest,
 }
@@ -265,8 +266,13 @@ fn validate_artifact_shape(
     .into_iter()
     .all(|value| !value.is_empty());
     let sizes_are_positive = artifact.wasm_size_bytes > 0 && artifact.wasm_gz_size_bytes > 0;
-    let profile_is_complete = artifact.candid_sha256 != [0; 32]
-        && artifact.protocol_profile_digest.as_bytes() != &[0; 32];
+    let profile_is_complete = [
+        &artifact.candid_sha256,
+        &artifact.wire_schema_sha256,
+        artifact.protocol_profile_digest.as_bytes(),
+    ]
+    .into_iter()
+    .all(|hash| hash != &[0; 32]);
     if !paths_are_complete || !sizes_are_positive || !profile_is_complete {
         return Err(InternalError::invalid_input());
     }
@@ -330,6 +336,7 @@ fn artifact_identities(
     for entry in &manifest.entries {
         let identity = RootArtifactIdentity {
             raw_module_hash: decode_sha256(&entry.artifact.wasm_sha256_hex)?,
+            wire_schema_sha256: entry.artifact.wire_schema_sha256,
             candid_sha256: entry.artifact.candid_sha256,
             protocol_profile_digest: entry.artifact.protocol_profile_digest,
         };

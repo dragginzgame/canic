@@ -8,7 +8,7 @@ mod pages;
 mod tests;
 
 use crate::{
-    canister_protocol::query_with_candid,
+    canister_protocol::query_wire,
     fleet_ensure::view::startup_funding::{
         StartupChildFundingBinding, StartupFundingPlacement, StartupInventoryCoverage,
         StartupRootInventory, StartupUsageUnavailable,
@@ -16,19 +16,16 @@ use crate::{
     icp::IcpCli,
 };
 use canic_contracts::{
-    dto::{
-        component_registry::{
-            ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentLifecycleStatus,
-            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
-        },
-        wire::projection::startup_inventory::{Request, Response},
+    dto::component_registry::{
+        ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentLifecycleStatus,
+        ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
     },
     ids::{ComponentBinding, ComponentInstanceId, ComponentSpecId, FleetSubnetRootReleaseSet},
     protocol,
 };
 use canic_core::control_plane_support::config::ComponentTopology;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 /// Invocation-local evidence retained across ledger reads, with no durable spending authority.
 pub struct FundingInventoryObservation {
@@ -51,7 +48,6 @@ struct PartitionAuthority<'a> {
 /// Require the complete observed Workload set to appear in current Root-owned directories.
 pub fn observe(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
     placement: &StartupFundingPlacement,
     topology: &ComponentTopology,
@@ -62,11 +58,11 @@ pub fn observe(
     let mut components = Vec::with_capacity(groups.len());
     for members in groups.values() {
         let component = &members[0].component;
-        let partition = partition(icp, candid, root, component.component)?;
+        let partition = partition(icp, root, component.component)?;
         validate_partition(&partition, topology, members)?;
-        let directory = directory(icp, candid, root, component.component)?;
+        let directory = directory(icp, root, component.component)?;
         validate_directory(root, &partition, &directory)?;
-        pages::observe(icp, candid, root, &directory, members)?;
+        pages::observe(icp, root, &directory, members)?;
         components.push(ComponentInventory {
             partition,
             directory,
@@ -84,15 +80,29 @@ pub fn observe(
 /// Recheck every independent Component head after ledger reads, without replaying page reads.
 pub fn recheck(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
     evidence: &FundingInventoryObservation,
 ) -> Result<StartupInventoryCoverage, StartupUsageUnavailable> {
+    recheck_with(
+        evidence,
+        |id| partition(icp, root, id),
+        |id| directory(icp, root, id),
+    )
+}
+
+fn recheck_with(
+    evidence: &FundingInventoryObservation,
+    mut partition: impl FnMut(
+        ComponentInstanceId,
+    )
+        -> Result<ComponentRegistryPartitionResponse, StartupUsageUnavailable>,
+    mut directory: impl FnMut(
+        ComponentInstanceId,
+    ) -> Result<ComponentDirectoryHead, StartupUsageUnavailable>,
+) -> Result<StartupInventoryCoverage, StartupUsageUnavailable> {
     for component in &evidence.components {
         let id = component.partition.binding.component;
-        if partition(icp, candid, root, id)? != component.partition
-            || directory(icp, candid, root, id)? != component.directory
-        {
+        if partition(id)? != component.partition || directory(id)? != component.directory {
             return Err(StartupUsageUnavailable::PolicyTransition);
         }
     }
@@ -175,42 +185,33 @@ fn group<'a>(
 
 fn partition(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
     component: ComponentInstanceId,
 ) -> Result<ComponentRegistryPartitionResponse, StartupUsageUnavailable> {
-    let response = query_with_candid(
+    crate::canister_protocol::registry_read::partition(
         icp,
-        candid,
         root,
-        protocol::CANIC_ROOT_STATUS,
-        &Request::ComponentRegistryPartition(ComponentRegistryPartitionRequest { component }),
+        ComponentRegistryPartitionRequest { component },
     )
-    .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
-    let Response::ComponentRegistryPartition(partition) = response else {
-        return Err(StartupUsageUnavailable::ObservationFailed);
-    };
-    Ok(*partition)
+    .map_err(|_| StartupUsageUnavailable::ObservationFailed)
 }
 
 fn directory(
     icp: &IcpCli,
-    candid: &Path,
     root: Principal,
     component: ComponentInstanceId,
 ) -> Result<ComponentDirectoryHead, StartupUsageUnavailable> {
-    let response = query_with_candid(
+    let directory: canic_contracts::dto::component_directory::ComponentDirectoryHead = query_wire(
         icp,
-        candid,
         root,
-        protocol::CANIC_ROOT_STATUS,
-        &Request::ComponentDirectoryHead(ComponentDirectoryHeadRequest { component }),
+        protocol::component_directory::HEAD,
+        protocol::component_directory::HEAD_ID,
+        &ComponentDirectoryHeadRequest { component },
+        protocol::component_directory::REQUEST_LIMITS,
+        protocol::component_directory::RESPONSE_LIMITS,
     )
     .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
-    let Response::ComponentDirectoryHead(directory) = response else {
-        return Err(StartupUsageUnavailable::ObservationFailed);
-    };
-    Ok(*directory)
+    Ok(directory.into())
 }
 
 fn validate_partition(

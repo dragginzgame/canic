@@ -12,7 +12,7 @@ use crate::{
         IcInfraError,
         cycles_ledger::{
             CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess, CyclesLedgerInfra,
-            CyclesLedgerTransferError,
+            TransferError,
         },
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
@@ -48,7 +48,7 @@ impl CyclesLedgerOps {
     pub async fn transfer(
         _permit: &CostGuardPermit,
         intent: &FleetLedgerTransferIntent,
-    ) -> Result<Result<Nat, CyclesLedgerTransferError>, InternalError> {
+    ) -> Result<Result<Nat, TransferError>, InternalError> {
         if intent.source != crate::ops::ic::IcOps::canister_self() {
             return Err(InternalError::conflict());
         }

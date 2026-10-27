@@ -1,19 +1,19 @@
 //! Module: canic_cli::auth::codec
 //!
-//! Responsibility: decode delegated-auth responses and build small Candid arguments.
+//! Responsibility: project native auth observations into operator reports.
 //! Does not own: command execution, transport, or operator rendering.
 
-use super::{
+use crate::auth::{
     AuthCommandError, AuthIssuerObservedStatus, AuthRenewalBatchStatus, AuthRenewalStateStatus,
     AuthRenewalStatusSummary, AuthRenewalTemplateStatus,
 };
 use canic_contracts::dto::{
     auth::{ActiveDelegationProofStatus, RootIssuerRenewalBatchStatus},
-    wire::projection::auth_status::{CanisterStatusResponse, RootStatusResponse},
+    issuer_renewal::RootIssuerRenewalStatusResponse,
 };
 use canic_core::cdk::utils::hash::hex_bytes as encode_hex;
-use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
 use ic_platform::principal::ExternalPrincipal as Principal;
+use serde::{Serialize, Serializer};
 
 pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
     Principal::from_text(issuer)
@@ -23,17 +23,14 @@ pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommand
         })
 }
 
-pub(super) fn parse_renewal_status_summary(
-    output: &str,
-) -> Result<AuthRenewalStatusSummary, IcpJsonResponseError> {
-    let response = decode_json_result_response::<RootStatusResponse>(output)?;
-    let RootStatusResponse::IssuerRenewal(response) = response;
-
+pub(super) fn renewal_status_summary(
+    response: RootIssuerRenewalStatusResponse,
+) -> AuthRenewalStatusSummary {
     let template = response.template;
     let state = response.state;
     let latest_batch = response.latest_batch;
 
-    Ok(AuthRenewalStatusSummary {
+    AuthRenewalStatusSummary {
         template: AuthRenewalTemplateStatus {
             present: template.is_some(),
             enabled: template.as_ref().map(|template| template.enabled),
@@ -61,9 +58,7 @@ pub(super) fn parse_renewal_status_summary(
         },
         latest_batch: AuthRenewalBatchStatus {
             present: latest_batch.is_some(),
-            status: latest_batch
-                .as_ref()
-                .map(|batch| renewal_batch_status_label(&batch.status).to_string()),
+            status: latest_batch.as_ref().map(|batch| batch.status.clone()),
             batch_id: latest_batch
                 .as_ref()
                 .map(|batch| encode_hex(batch.batch_id)),
@@ -84,28 +79,23 @@ pub(super) fn parse_renewal_status_summary(
                 .map(|value| value.to_string()),
             failure: latest_batch.and_then(|batch| batch.failure),
         },
-    })
+    }
 }
 
-pub(super) fn parse_issuer_observed_status(
-    output: &str,
-) -> Result<AuthIssuerObservedStatus, IcpJsonResponseError> {
-    let CanisterStatusResponse::ActiveDelegationProof(response) =
-        decode_json_result_response::<CanisterStatusResponse>(output)?;
-
-    Ok(AuthIssuerObservedStatus {
-        status: active_proof_status_label(&response.status).to_string(),
+pub(super) fn issuer_observed_status(
+    response: canic_contracts::dto::issuer_proof::ActiveDelegationProofStatusResponse,
+) -> AuthIssuerObservedStatus {
+    AuthIssuerObservedStatus {
+        status: response.status,
         cert_hash: response.cert_hash.map(encode_hex),
         expires_at_ns: response.expires_at_ns.map(|value| value.to_string()),
         refresh_after_ns: response.refresh_after_ns.map(|value| value.to_string()),
-    })
+    }
 }
 
-pub(super) const fn issuer_active_proof_status_arg() -> &'static str {
-    "(variant { ActiveDelegationProof })"
-}
-
-const fn active_proof_status_label(status: &ActiveDelegationProofStatus) -> &'static str {
+pub(super) const fn active_proof_status_label(
+    status: &ActiveDelegationProofStatus,
+) -> &'static str {
     match status {
         ActiveDelegationProofStatus::Expired => "expired",
         ActiveDelegationProofStatus::Missing => "missing",
@@ -114,7 +104,9 @@ const fn active_proof_status_label(status: &ActiveDelegationProofStatus) -> &'st
     }
 }
 
-const fn renewal_batch_status_label(status: &RootIssuerRenewalBatchStatus) -> &'static str {
+pub(super) const fn renewal_batch_status_label(
+    status: &RootIssuerRenewalBatchStatus,
+) -> &'static str {
     match status {
         RootIssuerRenewalBatchStatus::FailedRetryable => "failed_retryable",
         RootIssuerRenewalBatchStatus::Installed => "installed",
@@ -125,6 +117,31 @@ const fn renewal_batch_status_label(status: &RootIssuerRenewalBatchStatus) -> &'
     }
 }
 
-pub(super) fn root_issuer_renewal_status_arg(issuer_pid: &str) -> String {
-    format!(r#"(variant {{ IssuerRenewal = record {{ issuer_pid = principal "{issuer_pid}" }} }})"#)
+#[expect(
+    clippy::ref_option,
+    reason = "Serde serialize_with passes a borrowed field"
+)]
+pub(super) fn serialize_issuer_status<S: Serializer>(
+    status: &Option<ActiveDelegationProofStatus>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    issuer_status_label(status.as_ref()).serialize(serializer)
+}
+
+pub(super) fn issuer_status_label(status: Option<&ActiveDelegationProofStatus>) -> &'static str {
+    status.map_or("unavailable", active_proof_status_label)
+}
+
+#[expect(
+    clippy::ref_option,
+    reason = "Serde serialize_with passes a borrowed field"
+)]
+pub(super) fn serialize_batch_status<S: Serializer>(
+    status: &Option<RootIssuerRenewalBatchStatus>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    status
+        .as_ref()
+        .map(renewal_batch_status_label)
+        .serialize(serializer)
 }

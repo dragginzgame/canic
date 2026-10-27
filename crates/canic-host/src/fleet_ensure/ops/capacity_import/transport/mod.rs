@@ -306,15 +306,11 @@ pub(super) fn validate_request(
     }
     let bytes = decode_hex(&request.signed_envelope_hex)
         .map_err(|_| CapacityImportJournalError::RequestInvalid)?;
-    let mut input = bytes.as_slice();
     // Principal's owned-byte visitor is reserved for Candid, so decode IC
     // envelope principals as raw CBOR bytes before constructing the typed call.
-    let envelope: EnvelopeWire = ciborium::de::from_reader_with_recursion_limit(&mut input, 32)
-        .map_err(|_| CapacityImportJournalError::RequestInvalid)?;
+    let envelope: EnvelopeWire =
+        serde_cbor::from_slice(&bytes).map_err(|_| CapacityImportJournalError::RequestInvalid)?;
     let content = envelope.content.into_call()?;
-    if !input.is_empty() {
-        return Err(CapacityImportJournalError::RequestInvalid);
-    }
     let EnvelopeContent::Call {
         ingress_expiry,
         sender,

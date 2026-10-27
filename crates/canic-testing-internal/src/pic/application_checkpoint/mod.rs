@@ -1,15 +1,19 @@
 //! Installed participant proof: durable business freeze, exact Root admission and restore.
-//! Root sequencing and paid snapshot orchestration remain separate product obligations.
+//! Root dispatch qualification lives in `root`; paid snapshot orchestration is separate.
 
-use canic::{Error, dto::application_checkpoint::ApplicationCheckpointParticipantStatus};
+mod protocol;
+mod root;
+
+use canic::{
+    Error, dto::application_checkpoint::ApplicationCheckpointCommand,
+    protocol::application_checkpoint as checkpoint_protocol,
+};
 use canic_contracts::{
-    dto::{
-        role::OperationStatusRequest,
-        wire::projection::caller_authority::{StatusRequest, StatusResponse},
-    },
+    dto::role::OperationStatusRequest,
     ids::{ApplicationCheckpointBinding as Binding, ApplicationCheckpointPhase as Phase},
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use canic_core::control_plane_support::ops::application_checkpoint::command;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 use {
     ic_platform::pocket_ic::PocketIc,
@@ -18,11 +22,12 @@ use {
     },
 };
 
+pub(super) use root::qualify_root_dispatch;
+
 /// Fixture-owned business and hook evidence returned by the participant.
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 struct CheckpointView {
-    retained: Option<ApplicationCheckpointParticipantStatus>,
+    retained: Option<protocol::ParticipantStatus>,
     counter: u64,
     prepare_runs: u64,
     release_runs: u64,
@@ -32,8 +37,7 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     let pic = &fixture.pic;
     pic.add_cycles(target, super::SNAPSHOT_RESTORE_MINIMUM_CYCLES);
     let root = fixture.root;
-    let response: Result<StatusResponse, Error> = caller_authority_status(pic, target, root);
-    let StatusResponse::CallerAuthority(status) = response.unwrap();
+    let status = caller_authority_status(pic, target, root).unwrap();
     let first = Binding {
         authority: status.authority,
         operation_id: [1; 32],
@@ -115,7 +119,8 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     .unwrap();
     assert_eq!(view(pic, target), prepared);
     assert_eq!(increment(pic, target), Err(invalid));
-    verify_restore_release(pic, target, root, first, prepared);
+    verify_restore_release(pic, target, root, first.clone(), prepared);
+    qualify_wire_hook(pic, target, root, first);
 }
 
 // Exercise fresh restore authority and effect-free release replay after snapshot load.
@@ -168,43 +173,25 @@ fn verify_restore_release(
 }
 
 fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
-    (|| -> Result<(Result<CheckpointView, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                target,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "checkpoint_view",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::query_wire::<_, Result<CheckpointView, Error>>(
+        pic,
+        target,
+        Principal::anonymous(),
+        super::application_probe::CHECKPOINT_VIEW,
+        &(),
+    )
     .unwrap()
     .unwrap()
 }
 
 fn increment(pic: &PocketIc, target: Principal) -> Result<u64, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                target,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "checkpoint_increment",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire(
+        pic,
+        target,
+        Principal::anonymous(),
+        super::application_probe::CHECKPOINT_INCREMENT,
+        &(),
+    )
     .unwrap()
 }
 
@@ -215,17 +202,16 @@ fn transition(
     binding: &Binding,
     phase: Phase,
 ) -> Result<Phase, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((binding, phase))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(target, root, "checkpoint_transition", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire(
+        pic,
+        target,
+        root,
+        super::application_probe::CHECKPOINT_TRANSITION,
+        &protocol::TransitionRequest {
+            binding: binding.clone().into(),
+            phase,
+        },
+    )
     .unwrap()
 }
 
@@ -247,17 +233,16 @@ fn restore(
     captured: &Binding,
     fresh: &Binding,
 ) -> Result<Phase, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((captured, fresh))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(target, root, "checkpoint_restore", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire(
+        pic,
+        target,
+        root,
+        super::application_probe::CHECKPOINT_RESTORE,
+        &protocol::RestoreRequest {
+            captured: captured.clone().into(),
+            binding: fresh.clone().into(),
+        },
+    )
     .unwrap()
 }
 
@@ -265,26 +250,93 @@ fn caller_authority_status(
     pic: &PocketIc,
     target: Principal,
     root: Principal,
-) -> Result<StatusResponse, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((
-            StatusRequest::CallerAuthority(OperationStatusRequest {
+) -> Result<canic::dto::caller_authority::CallerAuthorityStatus, Error> {
+    let response: Result<canic::dto::caller_authority_status::CallerAuthorityStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            target,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::caller_authority_status::METHOD,
+                method_id: canic::protocol::caller_authority_status::METHOD_ID,
+                request_limits: canic::protocol::caller_authority_status::REQUEST_LIMITS,
+                response_limits: canic::protocol::caller_authority_status::RESPONSE_LIMITS,
+            },
+            &OperationStatusRequest {
                 operation_id: [0; 32],
-            }),
-        ))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(
-                target,
-                root,
-                canic::protocol::CANIC_CONTROL_STATUS,
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+            },
+        )
+        .expect("caller authority Wire transport");
+    response.map(Into::into)
+}
+
+// Qualify the maintained hook codec and admission independently of Root scheduling.
+fn qualify_wire_hook(pic: &PocketIc, target: Principal, root: Principal, mut selected: Binding) {
+    selected.sequence = 4;
+    selected.operation_id = [4; 32];
+    let request = command(&selected, Phase::Preparing).unwrap();
+    let before = view(pic, target);
+    assert!(wire_hook(pic, target, Principal::anonymous(), &request).is_err());
+    let mut foreign = request.clone();
+    foreign.authority_digest[0] ^= 1;
+    assert!(wire_hook(pic, target, root, &foreign).is_err());
+    assert_eq!(view(pic, target), before);
+    let expected = ApplicationCheckpointCommand {
+        phase: Phase::Prepared,
+        ..request
+    };
+    assert_eq!(wire_hook(pic, target, root, &request), Ok(expected.clone()));
+    let prepared = view(pic, target);
+    assert_eq!(prepared.prepare_runs, before.prepare_runs + 1);
+    assert_eq!(wire_hook(pic, target, root, &request), Ok(expected));
+    assert_eq!(view(pic, target), prepared);
+    let release = ApplicationCheckpointCommand {
+        phase: Phase::Releasing,
+        ..request
+    };
+    let released = ApplicationCheckpointCommand {
+        phase: Phase::Released,
+        ..request
+    };
+    assert_eq!(wire_hook(pic, target, root, &release), Ok(released.clone()));
+    let completed = view(pic, target);
+    assert_eq!(completed.release_runs, before.release_runs + 1);
+    assert_eq!(wire_hook(pic, target, root, &release), Ok(released));
+    assert_eq!(
+        wire_hook(pic, target, root, &request),
+        Err(Error::from_registered(
+            canic::diagnostics::codes::AUTHORITY_INVALID_STATE
+        ))
+    );
+    assert_eq!(view(pic, target), completed);
+}
+
+fn wire_hook(
+    pic: &PocketIc,
+    target: Principal,
+    sender: Principal,
+    request: &canic::dto::application_checkpoint::ApplicationCheckpointCommand,
+) -> Result<canic::dto::application_checkpoint::ApplicationCheckpointCommand, Error> {
+    let bytes = ic_wire::native::encode_request(
+        checkpoint_protocol::PARTICIPANT,
+        request,
+        checkpoint_protocol::LIMITS,
+    )
+    .unwrap();
+    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+        pic.update_call(
+            target,
+            sender,
+            checkpoint_protocol::PARTICIPANT_METHOD,
+            bytes,
+        )
+    })
+    .unwrap()
+    .unwrap();
+    ic_wire::native::decode_response(
+        checkpoint_protocol::PARTICIPANT,
+        &reply,
+        checkpoint_protocol::LIMITS,
+    )
     .unwrap()
 }

@@ -1,10 +1,17 @@
+mod wire;
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by sibling macro adapter modules"
+)]
+pub(crate) use wire::WireArgs;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
     Expr, Ident, LitStr, Meta, MetaNameValue, Path, Token, parse::Parser, punctuated::Punctuated,
 };
 
-const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must use requires(...), public, internal, composite, name = \"...\", payload(...), decode = LIMITS, or on_access_denied = \"reject\"";
+const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must use requires(...), public, internal, composite, name = \"...\", payload(...), decode = LIMITS, wire(id = N, request = LIMITS, response = LIMITS), or on_access_denied = \"reject\"";
 
 //
 // ============================================================================
@@ -99,6 +106,7 @@ pub(super) struct ParsedArgs {
     pub export_name: Option<LitStr>,
     pub payload_max_bytes: Option<TokenStream2>,
     pub decode: Option<TokenStream2>,
+    pub wire: Option<WireArgs>,
     pub reject_access: bool,
     pub requires: Vec<AccessExprAst>,
     pub internal: bool,
@@ -125,10 +133,17 @@ pub(super) fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     let mut export_name = None;
     let mut payload_max_bytes = None;
     let mut decode = None;
+    let mut wire = None;
     let mut reject_access = false;
 
     for meta in metas {
         match meta {
+            Meta::List(list) if list.path.is_ident("wire") => {
+                if wire.is_some() {
+                    return Err(syn::Error::new_spanned(list, "wire must appear only once"));
+                }
+                wire = Some(wire::parse(&list)?);
+            }
             Meta::NameValue(nv) if nv.path.is_ident("decode") => {
                 if decode.is_some() {
                     return Err(syn::Error::new_spanned(nv, "decode must appear only once"));
@@ -267,6 +282,7 @@ pub(super) fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         export_name,
         payload_max_bytes,
         decode,
+        wire,
         reject_access,
         requires,
         internal,
@@ -276,7 +292,11 @@ pub(super) fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
 }
 
 fn parse_string_literal<'a>(nv: &'a MetaNameValue, label: &'static str) -> syn::Result<&'a LitStr> {
-    if let Expr::Lit(expr) = &nv.value
+    let mut value = &nv.value;
+    while let Expr::Group(group) = value {
+        value = &group.expr;
+    }
+    if let Expr::Lit(expr) = value
         && let syn::Lit::Str(lit) = &expr.lit
     {
         return Ok(lit);
@@ -323,6 +343,7 @@ const fn empty() -> ParsedArgs {
         export_name: None,
         payload_max_bytes: None,
         decode: None,
+        wire: None,
         reject_access: false,
         requires: Vec::new(),
         internal: false,

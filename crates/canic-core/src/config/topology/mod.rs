@@ -8,12 +8,15 @@
 mod tests;
 mod validation;
 
-use crate::config::schema::{
-    CanisterAuthConfig, ComponentChildConfig, ComponentChildKind, ComponentSpecConfig, ConfigModel,
-    CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, IndexConfig,
-    MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, MetricsCanisterConfig,
-    MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy, ShardingConfig,
-    StandardsCanisterConfig, TopupPolicy,
+use crate::config::{
+    provisioning_grants::{ProvisioningGrantGraph, ProvisioningGrantGraphError},
+    schema::{
+        CanisterAuthConfig, ComponentChildConfig, ComponentChildKind, ComponentSpecConfig,
+        ConfigModel, CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, IndexConfig,
+        MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, MetricsCanisterConfig,
+        MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy, ShardingConfig,
+        StandardsCanisterConfig, TopupPolicy,
+    },
 };
 use canic_contracts::{
     cycles::Cycles,
@@ -22,10 +25,9 @@ use canic_contracts::{
         CyclesFundingBudget,
     },
 };
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 const COMPONENT_SPEC_HASH_DOMAIN: &[u8] = b"canic/component-spec/v1";
@@ -48,8 +50,7 @@ impl ConfigModel {
 /// Canonically ordered Fleet Component admissions and flat potential child-role catalogs.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentTopology {
     pub component_specs: Vec<ComponentSpec>,
@@ -419,8 +420,7 @@ impl ComponentTopology {
 /// One compiled Component role, immutable Spec hash, limits, and child-role catalog.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentSpec {
     pub component_spec: ComponentSpecId,
@@ -465,8 +465,7 @@ impl ComponentSpec {
 /// Explicit aggregate quotas compiled for every concrete instance of one Spec.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentLimits {
     pub maximum_descendants: u32,
@@ -480,8 +479,7 @@ pub struct ComponentLimits {
 /// One canonically ordered role permitted anywhere below a Component.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildSpec {
     pub role: CanisterRole,
@@ -495,8 +493,7 @@ pub struct ComponentChildSpec {
 /// One explicit parent-role capability to create one direct child role.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentSpawnGrant {
     pub parent_role: CanisterRole,
@@ -518,8 +515,7 @@ pub struct ComponentSpawnGrant {
 /// Compiled child-level funding limits without configuration-only deserializers.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildFundingPolicy {
     pub max_per_request: Cycles,
@@ -793,12 +789,7 @@ pub enum ComponentTopologyError {
 fn compile_provisioning_grants(
     config: &ConfigModel,
 ) -> Result<Vec<ComponentProvisioningGrant>, ComponentTopologyError> {
-    let mut outgoing = BTreeMap::<ComponentSpecId, Vec<ComponentSpecId>>::new();
-    let mut incoming = BTreeMap::<ComponentSpecId, u32>::new();
-    for component_spec in config.component_specs.keys() {
-        outgoing.insert(component_spec.clone(), Vec::new());
-        incoming.insert(component_spec.clone(), 0);
-    }
+    let mut graph = ProvisioningGrantGraph::new(config.component_specs.keys());
     let mut grants = Vec::new();
 
     for (requester_component_spec, source) in &config.component_specs {
@@ -809,7 +800,6 @@ fn compile_provisioning_grants(
                 maximum: MAX_COMPONENT_PROVISIONING_GRANTS,
             });
         }
-
         for (target_component_spec, grant) in &source.provisions {
             if requester_component_spec == target_component_spec {
                 return Err(ComponentTopologyError::SelfProvisioningGrant {
@@ -823,23 +813,23 @@ fn compile_provisioning_grants(
                     target_component_spec: target_component_spec.clone(),
                 });
             }
-            let Some(target_incoming) = incoming.get_mut(target_component_spec) else {
-                return Err(ComponentTopologyError::UnknownProvisioningGrantTarget {
-                    requester_component_spec: requester_component_spec.clone(),
-                    target_component_spec: target_component_spec.clone(),
-                });
-            };
-            *target_incoming = target_incoming.checked_add(1).ok_or_else(|| {
-                ComponentTopologyError::ProvisioningGrantBoundExceeded {
-                    requester_component_spec: requester_component_spec.clone(),
-                    actual: source.provisions.len(),
-                    maximum: MAX_COMPONENT_PROVISIONING_GRANTS,
-                }
-            })?;
-            outgoing
-                .get_mut(requester_component_spec)
-                .expect("requester was initialized from the same Component Spec map")
-                .push(target_component_spec.clone());
+            graph
+                .add_grant(requester_component_spec, target_component_spec)
+                .map_err(|error| match error {
+                    ProvisioningGrantGraphError::UnknownTarget => {
+                        ComponentTopologyError::UnknownProvisioningGrantTarget {
+                            requester_component_spec: requester_component_spec.clone(),
+                            target_component_spec: target_component_spec.clone(),
+                        }
+                    }
+                    ProvisioningGrantGraphError::IncomingCountOverflow => {
+                        ComponentTopologyError::ProvisioningGrantBoundExceeded {
+                            requester_component_spec: requester_component_spec.clone(),
+                            actual: source.provisions.len(),
+                            maximum: MAX_COMPONENT_PROVISIONING_GRANTS,
+                        }
+                    }
+                })?;
             grants.push(ComponentProvisioningGrant {
                 requester_component_spec: requester_component_spec.clone(),
                 target_component_spec: target_component_spec.clone(),
@@ -848,87 +838,36 @@ fn compile_provisioning_grants(
             });
         }
     }
-
-    let mut ready = incoming
-        .iter()
-        .filter(|(_component_spec, count)| **count == 0)
-        .map(|(component_spec, _count)| component_spec.clone())
-        .collect::<VecDeque<_>>();
-    let mut visited = 0_usize;
-
-    while let Some(requester_component_spec) = ready.pop_front() {
-        visited += 1;
-        for target_component_spec in &outgoing[&requester_component_spec] {
-            let target_incoming = incoming
-                .get_mut(target_component_spec)
-                .expect("grant targets were validated above");
-            *target_incoming -= 1;
-            if *target_incoming == 0 {
-                ready.push_back(target_component_spec.clone());
-            }
-        }
+    if let Some(component_spec) = graph.cycle_blocked_spec() {
+        return Err(ComponentTopologyError::CyclicProvisioningGrant {
+            component_spec: component_spec.clone(),
+        });
     }
-
-    if visited != config.component_specs.len() {
-        let component_spec = incoming
-            .into_iter()
-            .find(|(_component_spec, count)| *count > 0)
-            .map(|(component_spec, _count)| component_spec)
-            .expect("an unvisited graph node must retain an incoming edge");
-        return Err(ComponentTopologyError::CyclicProvisioningGrant { component_spec });
-    }
-
     Ok(grants)
 }
 
 fn validate_projected_grant_cycles(
     topology: &ComponentTopology,
 ) -> Result<(), ComponentTopologyError> {
-    let mut outgoing = BTreeMap::<ComponentSpecId, Vec<ComponentSpecId>>::new();
-    let mut incoming = BTreeMap::<ComponentSpecId, u32>::new();
-    for spec in &topology.component_specs {
-        outgoing.insert(spec.component_spec.clone(), Vec::new());
-        incoming.insert(spec.component_spec.clone(), 0);
-    }
-
+    let mut graph = ProvisioningGrantGraph::new(
+        topology
+            .component_specs
+            .iter()
+            .map(|spec| &spec.component_spec),
+    );
     for grant in &topology.provisioning_grants {
-        let Some(requester_outgoing) = outgoing.get_mut(&grant.requester_component_spec) else {
-            continue;
-        };
-        requester_outgoing.push(grant.target_component_spec.clone());
-        *incoming
-            .get_mut(&grant.target_component_spec)
-            .expect("grant targets were validated before cycle detection") += 1;
+        graph
+            .add_grant(
+                &grant.requester_component_spec,
+                &grant.target_component_spec,
+            )
+            .expect("grant targets and bounds were validated before cycle detection");
     }
-
-    let mut ready = incoming
-        .iter()
-        .filter(|(_component_spec, count)| **count == 0)
-        .map(|(component_spec, _count)| component_spec.clone())
-        .collect::<VecDeque<_>>();
-    let mut visited = 0_usize;
-    while let Some(requester_component_spec) = ready.pop_front() {
-        visited += 1;
-        for target_component_spec in &outgoing[&requester_component_spec] {
-            let target_incoming = incoming
-                .get_mut(target_component_spec)
-                .expect("grant targets were validated before cycle detection");
-            *target_incoming -= 1;
-            if *target_incoming == 0 {
-                ready.push_back(target_component_spec.clone());
-            }
-        }
+    if let Some(component_spec) = graph.cycle_blocked_spec() {
+        return Err(ComponentTopologyError::CyclicProvisioningGrant {
+            component_spec: component_spec.clone(),
+        });
     }
-
-    if visited != topology.component_specs.len() {
-        let component_spec = incoming
-            .into_iter()
-            .find(|(_component_spec, count)| *count > 0)
-            .map(|(component_spec, _count)| component_spec)
-            .expect("an unvisited graph node must retain an incoming edge");
-        return Err(ComponentTopologyError::CyclicProvisioningGrant { component_spec });
-    }
-
     Ok(())
 }
 

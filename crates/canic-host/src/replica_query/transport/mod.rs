@@ -14,9 +14,17 @@ use ic_platform::{
     principal::ExternalPrincipal as Principal,
 };
 use reqwest::{Method, Url, blocking::Client, redirect::Policy};
-use std::{error::Error, io, path::Path, sync::Arc, time::Duration};
+use std::{
+    error::Error,
+    io::{self, Read},
+    path::Path,
+    sync::Arc,
+    time::Duration,
+};
 
 const LOCAL_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+// Allow a full replica query envelope, matching the authenticated read transport.
+const LOCAL_HTTP_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 
 pub(super) fn local_query(
     environment: Option<&str>,
@@ -84,6 +92,7 @@ fn local_query_with_timeout(
             .with_url(endpoint.as_str())
             .with_arc_http_middleware(Arc::new(client))
             .with_max_tcp_error_retries(0)
+            .with_max_response_body_size(LOCAL_HTTP_RESPONSE_BYTES)
             .with_verify_query_signatures(false)
             .build()
             .map_err(agent_error)?;
@@ -149,10 +158,31 @@ fn http_request(
             response.status()
         )));
     }
+    let mut body = Vec::new();
+    // Read one extra byte so an oversized stream cannot look like a valid prefix.
     response
-        .bytes()
-        .map(|body| body.to_vec())
-        .map_err(transport_error)
+        .take(LOCAL_HTTP_RESPONSE_BYTES as u64 + 1)
+        .read_to_end(&mut body)
+        .map_err(response_read_error)?;
+    if body.len() > LOCAL_HTTP_RESPONSE_BYTES {
+        return Err(ReplicaQueryError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("local replica HTTP response exceeds {LOCAL_HTTP_RESPONSE_BYTES} bytes"),
+        )));
+    }
+    Ok(body)
+}
+
+/// Preserve reqwest timeout classification when its streaming reader wraps an error.
+fn response_read_error(error: io::Error) -> ReplicaQueryError {
+    let kind = error.kind();
+    match error.into_inner() {
+        Some(source) => match source.downcast::<reqwest::Error>() {
+            Ok(error) => transport_error(*error),
+            Err(source) => ReplicaQueryError::Io(io::Error::new(kind, source)),
+        },
+        None => ReplicaQueryError::Io(io::Error::from(kind)),
+    }
 }
 
 fn local_http_url(endpoint: &str, path: &str) -> Result<Url, ReplicaQueryError> {

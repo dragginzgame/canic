@@ -3,13 +3,12 @@
 //! Exact immutable installation identities used by managed-caller publication.
 
 use crate::ids::{ComponentBinding, FleetRegistryAuthority, ManagedCanisterBinding};
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Registered source or receiver identity for one physical installation.
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CallerInstallation {
     pub binding: ManagedCanisterBinding,
     pub install_id: [u8; 32],
@@ -17,8 +16,7 @@ pub struct CallerInstallation {
 }
 
 /// Exact owning Component installation covered by a whole-tree denial fence.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CallerComponentInstallation {
     pub binding: ComponentBinding,
     pub install_id: [u8; 32],
@@ -54,8 +52,7 @@ impl CallerInstallation {
 }
 
 /// Issuing Root installation and its exact Fleet Registry authority.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CallerRootAuthority {
     pub registry: FleetRegistryAuthority,
     pub root: Principal,
@@ -63,8 +60,7 @@ pub struct CallerRootAuthority {
 }
 
 /// Complete receiver publication audience, including immutable compiled policy identity.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CallerReceiverAuthority {
     pub receiver: CallerInstallation,
     pub issuer: CallerRootAuthority,

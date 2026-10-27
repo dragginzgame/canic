@@ -2,10 +2,7 @@
 // This test relies on embedded production config by design.
 
 use canic::{Error, dto::page::PageRequest, protocol};
-use canic_contracts::dto::wire::projection::current_inventory::{
-    ChildrenStatusRequest as CanisterStatusRequest,
-    ChildrenStatusResponse as CanisterStatusResponse,
-};
+use canic_contracts::dto::{canister::CanisterInfo, page::Page};
 use canic_testing_internal::pic::{CanicPicExt, report_canister_diagnostics};
 use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -17,31 +14,21 @@ const DEFAULT_FUNDING_COOLDOWN_SECS: u64 = 60;
 /// Create a worker canister via the given hub canister.
 ///
 /// # Panics
-/// Panics on a Candid harness failure or if the worker fails readiness checks.
+/// Panics on a Wire harness failure or if the worker fails readiness checks.
 pub fn create_worker(
     pic: &PocketIc,
     root_pid: Principal,
     hub_pid: Principal,
 ) -> Result<Principal, Error> {
-    let worker_pid: Result<Principal, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    hub_pid,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "create_worker",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
-    let worker_pid = worker_pid?;
+    let worker_pid: Result<ic_platform::Principal, Error> = ic_testkit::pic::update_wire(
+        pic,
+        hub_pid,
+        Principal::anonymous(),
+        canic_testing_internal::pic::application_probe::CREATE_WORKER,
+        &(),
+    )
+    .expect("create worker Wire transport");
+    let worker_pid: Principal = worker_pid?.into();
     wait_for_worker_sync(pic, root_pid, hub_pid, worker_pid);
     Ok(worker_pid)
 }
@@ -66,36 +53,27 @@ fn wait_for_worker_sync(
     for _ in 0..50 {
         pic.tick();
 
-        let children: Result<CanisterStatusResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CanisterStatusRequest::Children(PageRequest {
-                        limit: 100,
-                        offset: 0,
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        hub_pid,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        protocol::CANIC_PUBLIC_STATUS,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("query Candid harness call");
-
-        let CanisterStatusResponse::Children(children) =
-            children.expect("query child list application");
+        let children: Result<Page<CanisterInfo>, Error> = ic_testkit::pic::query_wire(
+            pic,
+            hub_pid,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: protocol::CANIC_PUBLIC_CHILDREN,
+                method_id: protocol::public_children::METHOD_ID,
+                request_limits: protocol::public_children::REQUEST_LIMITS,
+                response_limits: protocol::public_children::RESPONSE_LIMITS,
+            },
+            &PageRequest {
+                limit: 100,
+                offset: 0,
+            },
+        )
+        .expect("query child inventory Wire frame");
+        let children = children.expect("query child inventory application");
         if children
             .entries
             .into_iter()
-            .any(|entry| entry.pid == worker_pid)
+            .any(|entry| entry.pid == worker_pid.into())
         {
             return;
         }

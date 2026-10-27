@@ -36,7 +36,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-DEPENDENCY-001` | `3` | `e0e4474467664e46a56243ccf41c5b29b9786a0052a9ccf9117e499226384d40` | `docs/audits/recurring/system/dependency-hygiene.md` |
 | `CANIC-DUPLICATION-001` | `3` | `5a417c934b44b2d1e3f31980aebcfa9c6b396cda5440ee64c4f917c964418021` | `docs/audits/recurring/system/dry-consolidation.md` |
 | `CANIC-INSTRUCTION-001` | `4` | `ea0af560838e43eb92206ec847dfc1117f655a19151fd5e73d2a1336a18e4048` | `docs/audits/recurring/system/instruction-footprint.md` |
-| `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` |
+| `CANIC-LAYERING-001` | `3` | `4d11a4f9307b9acab04b039dab8b99606e94f71b7a1f415f60b053da2f7b49b5` | `docs/audits/recurring/system/layer-violations.md` |
 | `CANIC-STRUCTURE-001` | `3` | `635df6921e39cb0a780252248f4d6961d4f33d2a72e5b60535a872c2aa9846e8` | `docs/audits/recurring/system/module-structure.md` |
 | `CANIC-PUBLISH-001` | `2` | `5c6f38395c02454e861115c6a06638944d7841b331f1758c247601b69675e341` | `docs/audits/recurring/system/publish-surface.md` |
 | `CANIC-RELEASE-INTEGRITY-001` | `2` | `4eb3d6f45df9ee9b64df901dc891ebfd37e8aaa1ede45a02eadbc3018b8a6609` | `docs/audits/recurring/system/release-integrity.md` |
@@ -51,11 +51,29 @@ The October 2 maintainer-directed removal of dedicated secret scanning advances
 release integrity to revision 2. Earlier scanner results remain historical
 evidence; revision 2 reviews credential handling without requiring a scanner.
 
+## Layering Method Correction — 2026-10-26
+
+- Finding kind: `audit_method_defect`; owner: [#364](https://github.com/dragginzgame/canic/issues/364).
+- Affected method: `CANIC-LAYERING-001/v2`.
+- Corrected method: `CANIC-LAYERING-001/v3`.
+- Affected-result disposition: `result_validity: invalid`.
+- Corrected baseline/current comparison: `blocked` pending paired manual audits.
+
+The v2 invariant incorrectly permits policy-to-ops dependencies. Revision 3
+states the independent workflow-to-policy and workflow-to-ops branches and
+keeps policy pure. This entry supersedes conclusions that rely on that incorrect
+direction; unaffected source observations and executable regressions retain their
+own evidence. Historical reports remain unchanged. Before comparative closeout,
+rerun the original frozen product baseline and the current committed source with
+v3, then compare only corrected-method results. This documentation correction
+does not claim those product audits ran or establish a new architecture score.
+
 ## Superseded Definition Identities
 
 
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` | `CANIC-LAYERING-001/v3` |
 | `CANIC-DUPLICATION-001` | `2` | `7d2369e2cafa2f10128c97044c0853d56dc9a58dd912277ba5dcdcc4e82169dc` | `docs/audits/historical/shared-adoption-20261006/dry-consolidation.md` | `CANIC-DUPLICATION-001/v3` |
 | `CANIC-COMPLEXITY-001` | `3` | `4e20ddfbf9b33e5cc9ca2b6535aaeab0b5f30ffbf053b06b55f4d9a3c0831a2a` | `docs/audits/historical/shared-adoption-20261006/complexity-accretion.md` | `CANIC-COMPLEXITY-001/v4` |
 | `CANIC-CHANGE-FRICTION-001` | `3` | `c23af3f87879a3223893b11ef4568340789a291d4c98b33f83d7fab5efa67cda` | `docs/audits/historical/shared-adoption-20261006/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v4` |
@@ -126,7 +144,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `f831745b25e82adbe5a231ba622c17f4717ce79f427f94734b47fc9f421959a9` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `bff7fe8449b05cca312ce81e9628fdf6277c00f346a42573df426fc628e610ec` | `docs/audits/AUDIT-HOWTO.md` |
 | `140cf49f47755c7a036662e88fbbdc67e7de64feaf88ef548fd43a5ded100dea` | `docs/audits/META-AUDIT.md` |
-| `e9333a68cb8dd8eb19178249828348e0f38e057a7ef42add350697dec00b0257` | `docs/audits/METHODS.md` |
+| `0598212dce967b70bd9b2a1f95e6c34718129936214374462066ccb9e159782e` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |

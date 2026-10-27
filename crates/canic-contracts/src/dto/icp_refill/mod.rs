@@ -3,8 +3,11 @@ use crate::{cycles::Cycles, dto::prelude::*};
 pub use crate::values::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger};
 
 /// Exact input shared by the Root's preview and durable refill commands.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct CycleRefillInput {
     pub operation_id: [u8; 32],
     pub source_subaccount: Option<[u8; 32]>,
@@ -15,8 +18,7 @@ pub struct CycleRefillInput {
 /// IcpRefillRequest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct IcpRefillRequest {
     pub operation_id: [u8; 32],
     pub source_subaccount: Option<[u8; 32]>,
@@ -28,8 +30,7 @@ pub struct IcpRefillRequest {
 /// IcpRefillResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct IcpRefillResponse {
     pub operation_id: [u8; 32],
     pub status: IcpRefillStatus,
@@ -43,8 +44,11 @@ pub struct IcpRefillResponse {
 /// IcpRefillDryRun
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct IcpRefillDryRun {
     pub operation_id: [u8; 32],
     pub amount_e8s: u64,
@@ -57,8 +61,7 @@ pub struct IcpRefillDryRun {
 /// IcpRefillEndpointResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 #[remain::sorted]
 pub enum IcpRefillEndpointResponse {
     DryRun(IcpRefillDryRun),
@@ -70,7 +73,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reexported_status_and_error_code_roundtrip_through_candid() {
+    fn reexported_status_and_error_code_roundtrip_through_wire() {
         let response = IcpRefillResponse {
             operation_id: [7; 32],
             status: crate::values::icp_refill::IcpRefillStatus::Failed,
@@ -80,10 +83,10 @@ mod tests {
             error_message: Some("bounded failure summary".to_string()),
         };
 
-        let bytes = ic_platform::candid::contract::encode_one(&response)
-            .expect("encode ICP refill response");
+        let bytes =
+            crate::protocol::authority::encode(&response).expect("encode ICP refill response");
         let decoded: IcpRefillResponse =
-            ic_platform::candid::decoder::decode_one(&bytes).expect("decode ICP refill response");
+            crate::protocol::authority::decode(&bytes).expect("decode ICP refill response");
 
         let dto_status: IcpRefillStatus = crate::values::icp_refill::IcpRefillStatus::Failed;
         let dto_error_code: IcpRefillErrorCode =
@@ -101,17 +104,25 @@ mod tests {
     }
 
     #[test]
-    fn narrowed_root_request_roundtrips_through_candid() {
+    fn refill_input_roundtrips_through_native_wire() {
         let input = CycleRefillInput {
             operation_id: [9; 32],
             source_subaccount: None,
             amount_e8s: 10_000,
         };
-        let bytes =
-            ic_platform::candid::contract::encode_one(&input).expect("encode cycle refill input");
+        let bytes = ic_wire::native::encode_request(
+            crate::protocol::cycle_refill::execute::METHOD_ID,
+            &input,
+            crate::protocol::cycle_refill::REQUEST_LIMITS,
+        )
+        .expect("encode cycle refill input");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<CycleRefillInput>(&bytes)
-                .expect("decode cycle refill input"),
+            ic_wire::native::decode_request::<CycleRefillInput>(
+                crate::protocol::cycle_refill::execute::METHOD_ID,
+                &bytes,
+                crate::protocol::cycle_refill::REQUEST_LIMITS
+            )
+            .expect("decode cycle refill input"),
             input,
         );
 
@@ -123,9 +134,9 @@ mod tests {
         };
 
         let bytes =
-            ic_platform::candid::contract::encode_one(&request).expect("encode ICP refill request");
+            crate::protocol::authority::encode(&request).expect("encode ICP refill request");
         let decoded: IcpRefillRequest =
-            ic_platform::candid::decoder::decode_one(&bytes).expect("decode ICP refill request");
+            crate::protocol::authority::decode(&bytes).expect("decode ICP refill request");
 
         assert_eq!(decoded.operation_id, [9; 32]);
         assert_eq!(decoded.source_subaccount, None);

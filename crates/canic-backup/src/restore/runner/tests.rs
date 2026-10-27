@@ -454,6 +454,12 @@ fn prove_restore_pending_claim(
     }
 
     let recovering = barrier == "after-directory-sync";
+    if recovering && operation_kind == RestoreApplyOperationKind::LoadSnapshot {
+        assert_unsettled_load_refused(&fixture.config);
+        fs::remove_dir_all(fixture.root).unwrap();
+        fs::remove_dir_all(handshake_root).unwrap();
+        return;
+    }
     let outputs = restore_claim_outputs(&operation_kind, recovering);
     let mut executor = ScriptedExecutor::new(outputs);
     let response = restore_run_execute_with_executor(&fixture.config, &mut executor)
@@ -613,6 +619,12 @@ fn prove_restore_terminal_publication(
         receipt_count + usize::from(barrier == "after-directory-sync")
     );
 
+    if barrier == "before-rename" && operation_kind == RestoreApplyOperationKind::LoadSnapshot {
+        assert_unsettled_load_refused(&fixture.config);
+        fs::remove_dir_all(fixture.root).unwrap();
+        fs::remove_dir_all(handshake_root).unwrap();
+        return;
+    }
     let outputs = if barrier == "before-rename" {
         restore_terminal_recovery_outputs(&operation_kind)
     } else {
@@ -682,21 +694,13 @@ fn assert_restore_effect_gap_recovery(
             assert_eq!(commands.len(), 1);
             assert_eq!(commands[0].args.get(1).map(String::as_str), Some("status"));
         }
-        RestoreApplyOperationKind::LoadSnapshot => {
-            assert_eq!(commands.len(), 2);
-            assert_eq!(commands[0].args.get(1).map(String::as_str), Some("status"));
-            assert_eq!(
-                commands[1].args.get(1).map(String::as_str),
-                Some("snapshot")
-            );
-            assert_eq!(commands[1].args.get(2).map(String::as_str), Some("restore"));
-        }
+        RestoreApplyOperationKind::LoadSnapshot => assert!(commands.is_empty()),
     }
 }
 
 #[cfg(unix)]
 #[test]
-fn interrupted_stopped_canister_precondition_is_rechecked_before_load() {
+fn interrupted_stopped_canister_precondition_preserves_unsettled_load() {
     let Some(root) = std::env::var_os(PRECONDITION_CHILD_ROOT_ENV) else {
         assert_case_defined("CANIC-094-R05/stopped-canister-precondition/interrupted");
         prove_interrupted_stopped_canister_precondition();
@@ -726,7 +730,7 @@ fn prove_interrupted_stopped_canister_precondition() {
     let mut child = Command::new(std::env::current_exe().expect("resolve test executable"))
         .args([
             "--exact",
-            "restore::runner::tests::interrupted_stopped_canister_precondition_is_rechecked_before_load",
+            "restore::runner::tests::interrupted_stopped_canister_precondition_preserves_unsettled_load",
             "--nocapture",
         ])
         .env(PRECONDITION_CHILD_ROOT_ENV, &fixture.root)
@@ -746,28 +750,7 @@ fn prove_interrupted_stopped_canister_precondition() {
     .expect("decode interrupted precondition journal");
     assert_restore_terminal_pair(&interrupted, 1, false);
 
-    let mut executor = ScriptedExecutor::new([
-        status_output("Stopped"),
-        RestoreRunnerCommandOutput {
-            success: true,
-            status: "0".to_string(),
-            stdout: Vec::new(),
-            stderr: Vec::new(),
-        },
-    ]);
-    let response = restore_run_execute_with_executor(&fixture.config, &mut executor)
-        .expect("resume after interrupted stopped-canister precondition");
-    let recovered: RestoreApplyJournal = serde_json::from_slice(
-        &fs::read(&fixture.config.journal).expect("read recovered precondition journal"),
-    )
-    .expect("decode recovered precondition journal");
-
-    assert!(response.complete);
-    assert_restore_terminal_pair(&recovered, 1, true);
-    assert_restore_effect_gap_recovery(
-        &executor.commands,
-        &RestoreApplyOperationKind::LoadSnapshot,
-    );
+    assert_unsettled_load_refused(&fixture.config);
 
     fs::remove_dir_all(fixture.root).expect("remove restore precondition fixture");
     fs::remove_dir_all(handshake_root).expect("remove restore precondition handshake root");
@@ -803,6 +786,17 @@ fn stopped_canister_precondition_parse_failure_is_durable() {
         RestoreApplyOperationState::Failed
     );
     assert_eq!(failed.operation_receipts.len(), 2);
+
+    restore_run_retry_failed(&fixture.config).unwrap();
+    let mut executor = ScriptedExecutor::new(restore_claim_outputs(
+        &RestoreApplyOperationKind::LoadSnapshot,
+        false,
+    ));
+    assert!(
+        restore_run_execute_with_executor(&fixture.config, &mut executor)
+            .unwrap()
+            .complete
+    );
 
     fs::remove_dir_all(fixture.root).expect("remove parse-failure fixture");
 }
@@ -1043,26 +1037,59 @@ fn execute_reconciles_pending_start_from_authoritative_status() {
 }
 
 #[test]
-fn execute_replays_exact_pending_load_while_target_is_stopped() {
+fn execute_preserves_unsettled_pending_load_without_dispatch() {
     let (root, config) = pending_load_fixture();
+    assert_unsettled_load_refused(&config);
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn assert_unsettled_load_refused(config: &RestoreRunnerConfig) {
+    let original = fs::read(&config.journal).unwrap();
+    for _ in 0..2 {
+        let mut executor = ScriptedExecutor::new([]);
+        assert!(matches!(
+            restore_run_execute_with_executor(config, &mut executor),
+            Err(RestoreRunnerError::SnapshotLoadUnsettled { sequence: 1 })
+        ));
+        assert!(executor.commands.is_empty());
+        assert_eq!(fs::read(&config.journal).unwrap(), original);
+    }
+}
+
+#[test]
+fn failed_load_exit_cannot_authorize_another_load() {
+    let fixture = ready_restore_operation_fixture(
+        "canic-restore-failed-load-settlement",
+        RestoreApplyOperationKind::LoadSnapshot,
+    );
     let mut executor = ScriptedExecutor::new([
         status_output("Stopped"),
         RestoreRunnerCommandOutput {
-            success: true,
-            status: "0".to_string(),
+            success: false,
+            status: "1".to_string(),
             stdout: Vec::new(),
             stderr: Vec::new(),
         },
     ]);
+    assert!(matches!(
+        restore_run_execute_with_executor(&fixture.config, &mut executor),
+        Err(RestoreRunnerError::CommandFailed { sequence: 1, .. })
+    ));
+    let original = fs::read(&fixture.config.journal).unwrap();
+    assert!(matches!(
+        restore_run_retry_failed(&fixture.config),
+        Err(RestoreRunnerError::SnapshotLoadUnsettled { sequence: 1 })
+    ));
+    assert_eq!(fs::read(&fixture.config.journal).unwrap(), original);
 
-    let response = restore_run_execute_with_executor(&config, &mut executor)
-        .expect("replay exact pending load");
-
-    assert!(response.complete);
-    assert_eq!(executor.commands.len(), 2);
-    assert_eq!(executor.commands[0].args[1], "status");
-    assert_eq!(executor.commands[1].args[1..3], ["snapshot", "restore"]);
-    fs::remove_dir_all(root).expect("remove fixture");
+    // A Ready projection cannot erase evidence of the original dispatched command.
+    let mut journal: RestoreApplyJournal = serde_json::from_slice(&original).unwrap();
+    journal
+        .retry_failed_operation_at(1, Some("unix:4".to_string()))
+        .unwrap();
+    write_restore_apply_journal(&fixture.config.journal, &journal).unwrap();
+    assert_unsettled_load_refused(&fixture.config);
+    fs::remove_dir_all(fixture.root).unwrap();
 }
 
 #[test]
@@ -1578,12 +1605,6 @@ fn restore_claim_outputs(
 fn restore_terminal_recovery_outputs(
     operation: &RestoreApplyOperationKind,
 ) -> Vec<RestoreRunnerCommandOutput> {
-    let command_success = || RestoreRunnerCommandOutput {
-        success: true,
-        status: "0".to_string(),
-        stdout: Vec::new(),
-        stderr: Vec::new(),
-    };
     match operation {
         RestoreApplyOperationKind::UploadSnapshot => {
             vec![snapshot_inventory_output(
@@ -1592,9 +1613,7 @@ fn restore_terminal_recovery_outputs(
         }
         RestoreApplyOperationKind::StopCanister => vec![status_output("Stopped")],
         RestoreApplyOperationKind::StartCanister => vec![status_output("Running")],
-        RestoreApplyOperationKind::LoadSnapshot => {
-            vec![status_output("Stopped"), command_success()]
-        }
+        RestoreApplyOperationKind::LoadSnapshot => Vec::new(),
         RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyDeployment => {
             vec![status_output("Running")]
         }
@@ -2097,10 +2116,7 @@ mod command_in_flight {
             } if sequence == target_sequence && blocked_operation == operation
         );
         assert!(blocked_executor.commands.is_empty());
-        assert_eq!(
-            fs::read(&fixture.config.journal).expect("read blocked restore journal"),
-            pending_bytes
-        );
+        assert_eq!(fs::read(&fixture.config.journal).unwrap(), pending_bytes);
         assert!(!effect_marker(&handshake_root).exists());
 
         fs::write(effect_release_marker(&handshake_root), b"commit effect\n")
@@ -2117,14 +2133,17 @@ mod command_in_flight {
         }
         wait_for_command_quiescence(&fixture.config.journal, target_sequence);
 
+        if operation == RestoreApplyOperationKind::LoadSnapshot {
+            assert_unsettled_load_refused(&fixture.config);
+            fs::remove_dir_all(fixture.root).unwrap();
+            fs::remove_dir_all(handshake_root).unwrap();
+            return;
+        }
         let mut recovery_executor =
             ScriptedExecutor::new(restore_terminal_recovery_outputs(&operation));
         let response = restore_run_execute_with_executor(&fixture.config, &mut recovery_executor)
             .expect("recover quiescent restore command tree");
-        let recovered: RestoreApplyJournal = serde_json::from_slice(
-            &fs::read(&fixture.config.journal).expect("read recovered command-tree journal"),
-        )
-        .expect("decode recovered command-tree journal");
+        let recovered = super::super::io::read_apply_journal_file(&fixture.config.journal).unwrap();
 
         assert!(response.complete);
         assert_restore_terminal_pair(&recovered, target_sequence, true);

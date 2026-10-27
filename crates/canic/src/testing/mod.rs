@@ -35,7 +35,12 @@ fn build_pocketic() -> Result<PocketIc, String> {
         timeout: Duration::from_secs(30),
     }
     .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .map(|owned| owned.instance)
+    .map(|owned| {
+        // Connect borrows the caller-owned server; no server custody is transferred.
+        let (instance, server) = owned.into_parts();
+        assert!(server.is_none(), "Connect must not acquire server custody");
+        instance
+    })
     .map_err(|error| error.to_string())
 }
 

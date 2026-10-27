@@ -77,6 +77,10 @@ pub struct RestoreRunnerCommandOutput {
 
 #[derive(Debug, ThisError)]
 pub enum RestoreRunnerError {
+    #[error(
+        "snapshot load operation {sequence} has an unsettled outcome; automatic retry cannot establish whether the original load committed"
+    )]
+    SnapshotLoadUnsettled { sequence: usize },
     #[error("operation {sequence} omits original issued command custody")]
     MissingOriginalCommandCustody { sequence: usize },
     #[error(transparent)]

@@ -357,7 +357,8 @@ fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
                 dependency: Some(
                     canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
                         target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
-                        method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                        method: canic_contracts::protocol::store_publication::inspect::METHOD
+                            .into(),
                         step: "inspect_template".into(),
                         rejection_code: Some(5),
                         rejection_detail: Some("Store stopped\nunsafe\u{1b}\u{202e}".into()),

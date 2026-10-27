@@ -28,7 +28,7 @@ use std::{ffi::OsString, io};
 
 use canic_host::{
     CanisterProtocolError, fleet_ensure::CurrentFleetInventoryError, icp_config::IcpConfigError,
-    protocol_binding::ProtocolBindingError,
+    protocol_binding::ReleaseProtocolBindingError,
 };
 use clap::Command as ClapCommand;
 use thiserror::Error as ThisError;
@@ -57,7 +57,7 @@ pub enum InfoSubnetsCommandError {
     Protocol(#[from] CanisterProtocolError),
 
     #[error(transparent)]
-    ProtocolBinding(#[from] ProtocolBindingError),
+    ProtocolBinding(#[from] ReleaseProtocolBindingError),
 
     #[error("{0}")]
     Usage(String),

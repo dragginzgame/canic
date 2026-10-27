@@ -14,23 +14,13 @@ use canic::{
         rpc::RootRequestMetadata,
     },
     ids::{CanisterRole, ComponentBinding},
-    protocol::CANIC_ROOT_COMMAND,
+};
+use canic_contracts::{
+    dto::role_attestation as native_attestation, protocol::role_attestation as attestation_wire,
 };
 use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::time::Duration;
-
-use canic_contracts::dto::wire::projection::fixture_role_attestation::RootCommand;
-
-use canic_contracts::dto::wire::projection::fixture_role_attestation::RootCommandResponse;
-
-use canic_contracts::dto::wire::projection::fixture_role_attestation::RootStatusRequest;
-
-use canic_contracts::dto::wire::projection::fixture_role_attestation::RootStatusResponse;
-
-use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusRequest;
-
-use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusResponse;
 
 /// Exercise issuance, verification, and guard metrics through an active issuer Component.
 pub(super) fn assert_registry_bound_role_attestation(
@@ -211,21 +201,7 @@ fn assert_role_prepare_forbidden(
     request: RoleAttestationRequest,
     expected_code: canic_contracts::diagnostics::DiagnosticCode,
 ) {
-    let response: Result<RootCommandResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RootCommand::PrepareRoleAttestation(request),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(root, caller, CANIC_ROOT_COMMAND, request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("role attestation rejection transport");
+    let response = prepare_attestation(pic, root, caller, request);
     assert_eq!(
         response
             .expect_err("invalid Component attestation request must fail")
@@ -256,48 +232,61 @@ fn issue_requested_role_attestation(
     issuer: &ComponentBinding,
     request: RoleAttestationRequest,
 ) -> SignedRoleAttestation {
-    let prepared: Result<RootCommandResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RootCommand::PrepareRoleAttestation(request),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(root, issuer.canister_id, CANIC_ROOT_COMMAND, request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("role attestation prepare transport");
-    let RootCommandResponse::PrepareRoleAttestation(prepared) =
-        prepared.expect("role attestation prepare");
-    let signed: Result<RootStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RootStatusRequest::RoleAttestation(RoleAttestationGetRequest {
-                    payload_hash: prepared.payload_hash,
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    issuer.canister_id,
-                    canic_contracts::protocol::CANIC_ROOT_AUTH_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("role attestation retrieval transport");
-    let RootStatusResponse::RoleAttestation(attestation) =
-        signed.expect("role attestation retrieval");
-    attestation
+    let prepared = prepare_attestation(pic, root, issuer.canister_id, request)
+        .expect("role attestation prepare");
+    let request = RoleAttestationGetRequest {
+        payload_hash: prepared.payload_hash,
+    };
+    let bytes = ic_wire::native::encode_request(
+        attestation_wire::get::METHOD_ID,
+        &request,
+        attestation_wire::REQUEST_LIMITS,
+    )
+    .unwrap();
+    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+        pic.query_call(
+            root,
+            issuer.canister_id,
+            attestation_wire::get::METHOD,
+            bytes,
+        )
+    })
+    .unwrap()
+    .unwrap();
+    let signed: Result<native_attestation::SignedRoleAttestation, Error> =
+        ic_wire::native::decode_response(
+            attestation_wire::get::METHOD_ID,
+            &reply,
+            attestation_wire::RESPONSE_LIMITS,
+        )
+        .unwrap();
+    signed.expect("role attestation retrieval").into()
+}
+
+fn prepare_attestation(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+    request: RoleAttestationRequest,
+) -> Result<native_attestation::RoleAttestationPrepareResponse, Error> {
+    let request = native_attestation::RoleAttestationRequest::from(request);
+    let bytes = ic_wire::native::encode_request(
+        attestation_wire::prepare::METHOD_ID,
+        &request,
+        attestation_wire::REQUEST_LIMITS,
+    )
+    .unwrap();
+    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+        pic.update_call(root, caller, attestation_wire::prepare::METHOD, bytes)
+    })
+    .unwrap()
+    .unwrap();
+    ic_wire::native::decode_response(
+        attestation_wire::prepare::METHOD_ID,
+        &reply,
+        attestation_wire::RESPONSE_LIMITS,
+    )
+    .unwrap()
 }
 
 fn require_attested_local_subnet(
@@ -306,22 +295,13 @@ fn require_attested_local_subnet(
     caller: Principal,
     attestation: SignedRoleAttestation,
 ) -> Result<(), Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((attestation,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                verifier,
-                caller,
-                "issuer_require_attested_local_subnet",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire(
+        pic,
+        verifier,
+        caller,
+        crate::pic::issuer_probe::ATTESTED,
+        &canic::dto::role_attestation::SignedRoleAttestation::from(attestation),
+    )
     .expect("attested local-Subnet access transport")
 }
 
@@ -332,23 +312,16 @@ fn verify_role_attestation(
     attestation: SignedRoleAttestation,
     minimum_epoch: u64,
 ) -> Result<(), Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes =
-            ic_platform::candid::contract::encode_args((attestation, minimum_epoch))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                verifier,
-                caller,
-                "issuer_verify_role_attestation",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire(
+        pic,
+        verifier,
+        caller,
+        crate::pic::issuer_probe::VERIFY,
+        &crate::pic::issuer_probe::VerifyRequest {
+            attestation: attestation.into(),
+            min_accepted_epoch: minimum_epoch,
+        },
+    )
     .expect("role attestation verification transport")
 }
 
@@ -356,22 +329,13 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let denial_labels = ["access", "issuer_guard_is_root", "auth", "caller_is_root"];
     let before_denial =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Security, &denial_labels);
-    let denied: Result<(), Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(
-                issuer,
-                Principal::anonymous(),
-                "issuer_guard_is_root",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    let denied: Result<(), Error> = ic_testkit::pic::update_wire(
+        pic,
+        issuer,
+        Principal::anonymous(),
+        crate::pic::issuer_probe::ROOT_GUARD,
+        &(),
+    )
     .expect("issuer root-guard denial transport");
     assert_eq!(
         denied.expect_err("anonymous root guard").code(),
@@ -385,18 +349,9 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let success_labels = ["perf", "endpoint", "update", "issuer_guard_is_root"];
     let before_success =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels);
-    let allowed: Result<(), Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(issuer, root, "issuer_guard_is_root", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
-    .expect("issuer root-guard success transport");
+    let allowed: Result<(), Error> =
+        ic_testkit::pic::update_wire(pic, issuer, root, crate::pic::issuer_probe::ROOT_GUARD, &())
+            .expect("issuer root-guard success transport");
     allowed.expect("Fleet Subnet Root caller must satisfy issuer root guard");
     assert_eq!(
         metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels),
@@ -434,35 +389,32 @@ fn query_metric_entries(
     canister: Principal,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {
-    let response: Result<ManagedStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                ManagedStatusRequest::Metrics(MetricsStatusRequest {
-                    kind,
-                    page: PageRequest {
-                        limit: 10_000,
-                        offset: 0,
-                    },
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister,
-                    caller,
-                    canic_contracts::protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("controller-authenticated metrics query transport");
-    let ManagedStatusResponse::Metrics(page) =
-        response.expect("controller-authenticated metrics query");
-    page.entries
+    let response: Result<canic::dto::page::Page<canic::dto::metric_page::MetricEntry>, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            canister,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_metrics::METHOD,
+                method_id: canic::protocol::protected_metrics::METHOD_ID,
+                request_limits: canic::protocol::protected_metrics::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_metrics::RESPONSE_LIMITS,
+            },
+            &MetricsStatusRequest {
+                kind,
+                page: PageRequest {
+                    limit: 10_000,
+                    offset: 0,
+                },
+            },
+        )
+        .expect("controller metrics Wire transport");
+    response
+        .expect("controller metrics application result")
+        .entries
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 fn labels_match(entry: &MetricEntry, labels: &[&str]) -> bool {

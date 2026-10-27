@@ -17,8 +17,7 @@ pub const MEMORY_KEY: &str = "test.fixture_import.v1";
 
 const PAYLOAD: &[u8] = b"reviewed fixture source";
 
-#[derive(ic_platform::candid::contract::CandidType, canic::__internal::serde::Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(canic::__internal::serde::Deserialize, canic::__internal::serde::Serialize)]
 #[serde(crate = "canic::__internal::serde")]
 struct ImportRecord {
     bytes: Vec<u8>,
@@ -52,7 +51,7 @@ fn load() -> ImportRecord {
                 progress: None,
             }
         } else {
-            ic_platform::candid::decoder::decode_one(cell.get())
+            canic::__internal::contracts::serialization::deserialize(cell.get())
                 .expect("decode application import record")
         }
     })
@@ -61,7 +60,7 @@ fn load() -> ImportRecord {
 fn persist(record: &ImportRecord) {
     IMPORT.with_borrow_mut(|cell| {
         cell.set(
-            ic_platform::candid::contract::encode_one(record)
+            canic::__internal::contracts::serialization::serialize(record)
                 .expect("encode application import record"),
         );
     });

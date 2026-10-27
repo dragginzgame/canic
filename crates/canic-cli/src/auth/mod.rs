@@ -19,30 +19,28 @@ use crate::{
         globals::{internal_environment_arg, internal_icp_arg},
         help::{print_help_or_version, print_nested_help},
     },
-    support::candid::registry_entry_candid_path,
     version_text,
 };
-use canic_contracts::protocol::{CANIC_AUTH_STATUS, CANIC_ROOT_STATUS};
+use canic_contracts::{
+    dto::{
+        auth::{ActiveDelegationProofStatus, RootIssuerRenewalBatchStatus},
+        issuer_proof::ActiveDelegationProofStatusResponse,
+        issuer_renewal::{RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse},
+    },
+    protocol::{issuer_proof::status as proof_status, issuer_renewal as renewal_protocol},
+};
 use canic_host::{
-    candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
+    icp::{IcpCli, IcpCommandError},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    protocol_binding::resolve_registry_protocol_binding,
+    protocol_binding::{InstalledDeclarationError, load_installed_wire_schema},
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
-use codec::{
-    issuer_active_proof_status_arg, parse_issuer_observed_status, parse_issuer_principal,
-    parse_renewal_status_summary, root_issuer_renewal_status_arg,
-};
+use codec::{issuer_observed_status, parse_issuer_principal, renewal_status_summary};
 use render::{render_issuer_observation, write_renewal_status_result};
 use serde::Serialize;
-use std::{
-    ffi::OsString,
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const COMMAND_NAME: &str = "auth";
@@ -53,7 +51,6 @@ const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
 const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 1;
-const ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON: &str = "issuer_not_in_component_registry";
 
 const HELP_AFTER: &str = "\
 Examples:
@@ -81,51 +78,53 @@ pub enum AuthCommandError {
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
-    #[error(
-        "root target in Fleet {fleet} has no local Candid sidecar; rebuild or register local metadata before using auth renewal commands"
-    )]
-    CandidUnavailable { fleet: String },
-
+    #[error("failed to resolve installed Root protocol: {0}")]
+    RootProtocolBinding(#[source] InstalledDeclarationError),
+    #[error("Root rejected renewal status: {0}")]
+    RootRejected(canic_contracts::dto::error::Error),
+    #[error("Root renewal query failed: {0}")]
+    RootQuery(#[source] canic_host::icp::IcpWireQueryError),
     #[error("issuer must be a valid principal: {issuer}")]
     InvalidIssuerPrincipal { issuer: String },
 
-    #[error("failed to read local Candid sidecar {path}: {source}")]
-    CandidRead { path: PathBuf, source: io::Error },
-
-    #[error("failed to parse local Candid sidecar {path}: {source}")]
-    CandidParse {
-        path: PathBuf,
-        source: CandidEndpointError,
+    #[error("failed to resolve exact local protocol metadata for issuer {issuer}: {source}")]
+    IssuerProtocolBinding {
+        issuer: String,
+        #[source]
+        source: Box<InstalledDeclarationError>,
     },
 
-    #[error("local Candid sidecar {path} does not define auth renewal method {method}")]
-    MethodUnavailable { path: PathBuf, method: String },
+    #[error("installed schema does not admit the selected auth method: {0}")]
+    ProtocolMethod(#[from] canic_host::protocol_binding::WireArtifactError),
 
-    #[error(
-        "local Candid sidecar {path} declares auth renewal method {method} as update, expected query"
-    )]
-    MethodModeMismatch { path: PathBuf, method: String },
-
-    #[error("failed to parse auth renewal response: {0}")]
-    ResponseParse(#[from] IcpJsonResponseError),
+    #[error(transparent)]
+    IssuerQuery(#[from] canic_host::icp::IcpWireQueryError),
+    #[error("issuer rejected proof-status query: {0}")]
+    IssuerRejected(canic_contracts::dto::error::Error),
 }
 
 impl AuthCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
             Self::Icp(IcpCommandError::Io(_))
+            | Self::RootQuery(
+                canic_host::icp::IcpWireQueryError::Icp(IcpCommandError::Io(_))
+                | canic_host::icp::IcpWireQueryError::File(_),
+            )
             | Self::Usage(_)
             | Self::Json(_)
             | Self::IcpRoot(_)
-            | Self::CandidUnavailable { .. }
+            | Self::RootProtocolBinding(_)
             | Self::InvalidIssuerPrincipal { .. }
-            | Self::CandidRead { .. }
-            | Self::CandidParse { .. }
-            | Self::MethodUnavailable { .. }
-            | Self::MethodModeMismatch { .. }
+            | Self::IssuerProtocolBinding { .. }
+            | Self::ProtocolMethod(_)
             | Self::CurrentFleet(_) => 1,
-            Self::Icp(_) => 2,
-            Self::ResponseParse(_) => 3,
+            Self::RootQuery(
+                canic_host::icp::IcpWireQueryError::Wire(_)
+                | canic_host::icp::IcpWireQueryError::Response(_),
+            )
+            | Self::RootRejected(_) => 3,
+            Self::Icp(_) | Self::IssuerQuery(_) | Self::IssuerRejected(_) | Self::RootQuery(_) => 2,
         }
     }
 }
@@ -281,34 +280,27 @@ trait AuthRenewalRuntime {
         &self,
         options: &CommonOptions,
         fleet: &str,
-        method: &str,
     ) -> Result<AuthRootCallTarget, AuthCommandError>;
 
-    fn query_output(
+    fn query_renewal_status(
         &self,
         options: &CommonOptions,
         target: &AuthRootCallTarget,
-        method: &str,
-        arg: Option<&str>,
-        output: Option<&str>,
-    ) -> Result<String, AuthCommandError>;
+        issuer_pid: &str,
+    ) -> Result<RootIssuerRenewalStatusResponse, AuthCommandError>;
 
     fn resolve_issuer_target(
         &self,
         options: &CommonOptions,
         root_target: &AuthRootCallTarget,
         issuer_pid: &str,
-        method: &str,
     ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError>;
 
-    fn query_issuer_output(
+    fn query_issuer_status(
         &self,
         options: &CommonOptions,
         target: &AuthIssuerCallTarget,
-        method: &str,
-        arg: Option<&str>,
-        output: Option<&str>,
-    ) -> Result<String, AuthCommandError>;
+    ) -> Result<ActiveDelegationProofStatusResponse, AuthCommandError>;
 }
 
 fn renewal_status_result_with_runtime(
@@ -316,15 +308,9 @@ fn renewal_status_result_with_runtime(
     options: &RenewalStatusOptions,
 ) -> Result<AuthRenewalStatusResult, AuthCommandError> {
     let issuer_pid = parse_issuer_principal(&options.issuer)?;
-    let target = runtime.resolve_root_target(&options.common, &options.fleet, CANIC_ROOT_STATUS)?;
-    let output = runtime.query_output(
-        &options.common,
-        &target,
-        CANIC_ROOT_STATUS,
-        Some(&root_issuer_renewal_status_arg(&issuer_pid)),
-        Some("json"),
-    )?;
-    let status = parse_renewal_status_summary(&output)?;
+    let target = runtime.resolve_root_target(&options.common, &options.fleet)?;
+    let response = runtime.query_renewal_status(&options.common, &target, &issuer_pid)?;
+    let status = renewal_status_summary(response);
     let issuer_observation =
         issuer_observation_with_runtime(runtime, &options.common, &target, &issuer_pid, &status);
 
@@ -348,20 +334,17 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         &self,
         options: &CommonOptions,
         fleet: &str,
-        method: &str,
     ) -> Result<AuthRootCallTarget, AuthCommandError> {
-        resolve_auth_root_call_target(options, fleet, method)
+        resolve_auth_root_call_target(options, fleet)
     }
 
-    fn query_output(
+    fn query_renewal_status(
         &self,
         options: &CommonOptions,
         target: &AuthRootCallTarget,
-        method: &str,
-        arg: Option<&str>,
-        output: Option<&str>,
-    ) -> Result<String, AuthCommandError> {
-        live_query_output(options, target, method, arg, output)
+        issuer_pid: &str,
+    ) -> Result<RootIssuerRenewalStatusResponse, AuthCommandError> {
+        live_query_renewal_status(options, target, issuer_pid)
     }
 
     fn resolve_issuer_target(
@@ -369,20 +352,16 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         options: &CommonOptions,
         root_target: &AuthRootCallTarget,
         issuer_pid: &str,
-        method: &str,
     ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
-        resolve_auth_issuer_call_target(options, root_target, issuer_pid, method)
+        resolve_auth_issuer_call_target(options, root_target, issuer_pid)
     }
 
-    fn query_issuer_output(
+    fn query_issuer_status(
         &self,
         options: &CommonOptions,
         target: &AuthIssuerCallTarget,
-        method: &str,
-        arg: Option<&str>,
-        output: Option<&str>,
-    ) -> Result<String, AuthCommandError> {
-        live_query_issuer_output(options, target, method, arg, output)
+    ) -> Result<ActiveDelegationProofStatusResponse, AuthCommandError> {
+        live_query_issuer_status(options, target)
     }
 }
 
@@ -397,13 +376,13 @@ enum AuthRenewalReportKind {
 }
 
 ///
-/// AuthRenewalCandidSource
+/// AuthRenewalProtocolSource
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-enum AuthRenewalCandidSource {
-    #[serde(rename = "current_ensure_inventory")]
-    CurrentEnsureInventory,
+enum AuthRenewalProtocolSource {
+    #[serde(rename = "installed_release")]
+    InstalledRelease,
 }
 
 ///
@@ -449,7 +428,7 @@ struct AuthRootTarget {
     input: String,
     role: String,
     canister_id: String,
-    candid_source: AuthRenewalCandidSource,
+    protocol_source: AuthRenewalProtocolSource,
 }
 
 ///
@@ -458,32 +437,16 @@ struct AuthRootTarget {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AuthRootCallTarget {
+    fleet: String,
     target: AuthRootTarget,
-    candid_path: PathBuf,
     icp_root: PathBuf,
     registry_entries: Vec<RegistryEntry>,
 }
 
-///
-/// AuthIssuerTarget
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct AuthIssuerTarget {
-    input: String,
-    role: Option<String>,
-    canister_id: String,
-    candid_source: AuthRenewalCandidSource,
-}
-
-///
-/// AuthIssuerCallTarget
-///
-
+/// Admitted issuer from the exact installed release, using the selected ICP identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AuthIssuerCallTarget {
-    target: AuthIssuerTarget,
-    candid_path: PathBuf,
+    canister_id: String,
     icp_root: PathBuf,
 }
 
@@ -518,7 +481,8 @@ struct AuthRenewalStateStatus {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct AuthRenewalBatchStatus {
     present: bool,
-    status: Option<String>,
+    #[serde(serialize_with = "codec::serialize_batch_status")]
+    status: Option<RootIssuerRenewalBatchStatus>,
     batch_id: Option<String>,
     cert_hash: Option<String>,
     proof_epoch: Option<u64>,
@@ -546,12 +510,39 @@ struct AuthRenewalStatusSummary {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct AuthIssuerObservation {
     available: bool,
-    status: String,
+    #[serde(serialize_with = "codec::serialize_issuer_status")]
+    status: Option<ActiveDelegationProofStatus>,
     drift_detected: bool,
-    reason: Option<String>,
+    reason: Option<AuthIssuerUnavailableReason>,
     cert_hash: Option<String>,
     expires_at_ns: Option<String>,
     refresh_after_ns: Option<String>,
+}
+
+///
+/// AuthIssuerUnavailableReason
+///
+/// Typed issuer-observation refusal retained until operator report rendering.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum AuthIssuerUnavailableReason {
+    IssuerNotInComponentRegistry,
+    IssuerStatusMetadataUnavailable,
+    IssuerStatusParseFailed,
+    IssuerStatusQueryFailed,
+}
+
+impl AuthIssuerUnavailableReason {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::IssuerNotInComponentRegistry => "issuer_not_in_component_registry",
+            Self::IssuerStatusMetadataUnavailable => "issuer_status_metadata_unavailable",
+            Self::IssuerStatusParseFailed => "issuer_status_parse_failed",
+            Self::IssuerStatusQueryFailed => "issuer_status_query_failed",
+        }
+    }
 }
 
 ///
@@ -595,7 +586,6 @@ pub struct AuthRenewalMedicSummary {
 fn resolve_auth_root_call_target(
     options: &CommonOptions,
     fleet: &str,
-    method: &str,
 ) -> Result<AuthRootCallTarget, AuthCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(AuthCommandError::IcpRoot)?;
     let current = resolve_current_fleet(&icp_root, &options.environment, fleet)?;
@@ -603,35 +593,25 @@ fn resolve_auth_root_call_target(
         .topology
         .unique_fleet_subnet_root(fleet)?
         .to_string();
-    let root_entry = current
-        .registry
-        .entries
-        .iter()
-        .find(|entry| entry.pid == root_canister_id)
-        .ok_or_else(|| AuthCommandError::CandidUnavailable {
-            fleet: fleet.to_string(),
-        })?;
-    let candid_path =
-        registry_entry_candid_path(Some(icp_root.as_path()), &options.environment, root_entry)
-            .map_err(|_| AuthCommandError::CandidUnavailable {
-                fleet: fleet.to_string(),
-            })?
-            .candid_path()
-            .to_path_buf();
-    let candid =
-        fs::read_to_string(&candid_path).map_err(|source| AuthCommandError::CandidRead {
-            path: candid_path.clone(),
-            source,
-        })?;
-    validate_auth_query_method(&candid_path, &candid, method)?;
+    let schema =
+        load_installed_wire_schema(&icp_root, &options.environment, fleet, &root_canister_id)
+            .map_err(AuthCommandError::RootProtocolBinding)?;
+    canic_host::protocol_binding::require_wire_method(
+        &schema.schema,
+        renewal_protocol::METHOD,
+        renewal_protocol::METHOD_ID,
+        canic_contracts::protocol::wire_declaration::MethodKind::Query,
+        renewal_protocol::REQUEST_LIMITS,
+        renewal_protocol::RESPONSE_LIMITS,
+    )?;
     Ok(AuthRootCallTarget {
+        fleet: fleet.to_string(),
         target: AuthRootTarget {
             input: ROOT_ROLE.to_string(),
             role: ROOT_ROLE.to_string(),
             canister_id: root_canister_id,
-            candid_source: AuthRenewalCandidSource::CurrentEnsureInventory,
+            protocol_source: AuthRenewalProtocolSource::InstalledRelease,
         },
-        candid_path,
         icp_root,
         registry_entries: current.registry.entries,
     })
@@ -641,7 +621,6 @@ fn resolve_auth_issuer_call_target(
     options: &CommonOptions,
     root_target: &AuthRootCallTarget,
     issuer_pid: &str,
-    method: &str,
 ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
     let Some(entry) = root_target
         .registry_entries
@@ -650,120 +629,78 @@ fn resolve_auth_issuer_call_target(
     else {
         return Ok(None);
     };
-    let Some(_role) = entry.role.as_deref() else {
-        return Ok(None);
-    };
-    let candid_path =
-        match resolve_registry_protocol_binding(&root_target.icp_root, &options.environment, entry)
-        {
-            Ok(binding) => binding.candid_path().to_path_buf(),
-            Err(_) => return Ok(None),
-        };
-    let candid =
-        fs::read_to_string(&candid_path).map_err(|source| AuthCommandError::CandidRead {
-            path: candid_path.clone(),
-            source,
-        })?;
-    validate_auth_query_method(&candid_path, &candid, method)?;
-
+    // The owner checks retained release hashes and the registry's installed module.
+    // An unrelated local sidecar or latest build is never a substitute.
+    let schema = load_installed_wire_schema(
+        &root_target.icp_root,
+        &options.environment,
+        &root_target.fleet,
+        &entry.pid,
+    )
+    .map_err(|source| AuthCommandError::IssuerProtocolBinding {
+        issuer: issuer_pid.to_string(),
+        source: Box::new(source),
+    })?;
+    canic_host::protocol_binding::require_wire_method(
+        &schema.schema,
+        proof_status::METHOD,
+        proof_status::METHOD_ID,
+        canic_contracts::protocol::wire_declaration::MethodKind::Query,
+        proof_status::REQUEST_LIMITS,
+        proof_status::RESPONSE_LIMITS,
+    )?;
     Ok(Some(AuthIssuerCallTarget {
-        target: AuthIssuerTarget {
-            input: issuer_pid.to_string(),
-            role: entry.role.clone(),
-            canister_id: issuer_pid.to_string(),
-            candid_source: AuthRenewalCandidSource::CurrentEnsureInventory,
-        },
-        candid_path,
+        canister_id: issuer_pid.to_string(),
         icp_root: root_target.icp_root.clone(),
     }))
-}
-
-fn validate_auth_query_method(
-    path: &Path,
-    candid: &str,
-    method: &str,
-) -> Result<(), AuthCommandError> {
-    let endpoints =
-        parse_candid_service_endpoints(candid).map_err(|source| AuthCommandError::CandidParse {
-            path: path.to_path_buf(),
-            source,
-        })?;
-    let endpoint = endpoints
-        .iter()
-        .find(|endpoint| endpoint.name == method)
-        .ok_or_else(|| AuthCommandError::MethodUnavailable {
-            path: path.to_path_buf(),
-            method: method.to_string(),
-        })?;
-    if !endpoint
-        .modes
-        .iter()
-        .any(|mode| matches!(mode, EndpointMode::Query | EndpointMode::CompositeQuery))
-    {
-        return Err(AuthCommandError::MethodModeMismatch {
-            path: path.to_path_buf(),
-            method: method.to_string(),
-        });
-    }
-    Ok(())
 }
 
 fn icp_cli(options: &CommonOptions) -> IcpCli {
     IcpCli::new(&options.icp, Some(options.environment.clone()))
 }
 
-fn live_query_output(
+fn live_query_renewal_status(
     options: &CommonOptions,
     target: &AuthRootCallTarget,
-    method: &str,
-    arg: Option<&str>,
-    output: Option<&str>,
-) -> Result<String, AuthCommandError> {
-    let icp = icp_cli(options).with_cwd(&target.icp_root);
-    let result = if let Some(arg) = arg {
-        icp.canister_query_arg_output_with_candid(
-            &target.target.canister_id,
-            method,
-            arg,
-            output,
-            Some(target.candid_path.as_path()),
-        )
-    } else {
-        icp.canister_query_output_with_candid(
-            &target.target.canister_id,
-            method,
-            output,
-            Some(target.candid_path.as_path()),
-        )
+    issuer_pid: &str,
+) -> Result<RootIssuerRenewalStatusResponse, AuthCommandError> {
+    let request = RootIssuerRenewalStatusRequest {
+        issuer_pid: ic_platform::Principal::from_text(issuer_pid).map_err(|_| {
+            AuthCommandError::InvalidIssuerPrincipal {
+                issuer: issuer_pid.to_string(),
+            }
+        })?,
     };
-    result.map_err(AuthCommandError::from)
+    let result: Result<RootIssuerRenewalStatusResponse, canic_contracts::dto::error::Error> =
+        icp_cli(options)
+            .with_cwd(&target.icp_root)
+            .canister_query_wire(
+                &target.target.canister_id,
+                renewal_protocol::METHOD,
+                renewal_protocol::METHOD_ID,
+                &request,
+                renewal_protocol::REQUEST_LIMITS,
+                renewal_protocol::RESPONSE_LIMITS,
+            )
+            .map_err(AuthCommandError::RootQuery)?;
+    result.map_err(AuthCommandError::RootRejected)
 }
 
-fn live_query_issuer_output(
+fn live_query_issuer_status(
     options: &CommonOptions,
     target: &AuthIssuerCallTarget,
-    method: &str,
-    arg: Option<&str>,
-    output: Option<&str>,
-) -> Result<String, AuthCommandError> {
+) -> Result<ActiveDelegationProofStatusResponse, AuthCommandError> {
     let icp = icp_cli(options).with_cwd(&target.icp_root);
-    let result = if let Some(arg) = arg {
-        icp.canister_query_arg_output_with_candid(
-            &target.target.canister_id,
-            method,
-            arg,
-            output,
-            Some(target.candid_path.as_path()),
-        )
-    } else {
-        icp.canister_query_output_with_candid(
-            &target.target.canister_id,
-            method,
-            output,
-            Some(target.candid_path.as_path()),
-        )
-    };
-    result.map_err(AuthCommandError::from)
+    let result: Result<ActiveDelegationProofStatusResponse, canic_contracts::dto::error::Error> =
+        icp.canister_query_wire(
+            &target.canister_id,
+            proof_status::METHOD,
+            proof_status::METHOD_ID,
+            &(),
+            proof_status::REQUEST_LIMITS,
+            proof_status::RESPONSE_LIMITS,
+        )?;
+    result.map_err(AuthCommandError::IssuerRejected)
 }
 
 fn issuer_observation_with_runtime(
@@ -773,35 +710,49 @@ fn issuer_observation_with_runtime(
     issuer_pid: &str,
     status: &AuthRenewalStatusSummary,
 ) -> AuthIssuerObservation {
-    let target =
-        match runtime.resolve_issuer_target(options, root_target, issuer_pid, CANIC_AUTH_STATUS) {
-            Ok(Some(target)) => target,
-            Ok(None) => {
-                return unavailable_issuer_observation(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON);
-            }
-            Err(_) => return unavailable_issuer_observation("issuer_status_metadata_unavailable"),
-        };
-    let Ok(output) = runtime.query_issuer_output(
-        options,
-        &target,
-        canic_contracts::protocol::CANIC_AUTH_STATUS,
-        Some(issuer_active_proof_status_arg()),
-        Some("json"),
-    ) else {
-        return unavailable_issuer_observation("issuer_status_query_failed");
+    let target = match runtime.resolve_issuer_target(options, root_target, issuer_pid) {
+        Ok(Some(target)) => target,
+        Ok(None) => {
+            return unavailable_issuer_observation(
+                AuthIssuerUnavailableReason::IssuerNotInComponentRegistry,
+            );
+        }
+        Err(_) => {
+            return unavailable_issuer_observation(
+                AuthIssuerUnavailableReason::IssuerStatusMetadataUnavailable,
+            );
+        }
     };
-    let Ok(observed) = parse_issuer_observed_status(&output) else {
-        return unavailable_issuer_observation("issuer_status_parse_failed");
+    let observed = match runtime.query_issuer_status(options, &target) {
+        Ok(response) => issuer_observed_status(response),
+        Err(
+            AuthCommandError::IssuerQuery(
+                canic_host::icp::IcpWireQueryError::Wire(_)
+                | canic_host::icp::IcpWireQueryError::Response(_),
+            )
+            | AuthCommandError::IssuerRejected(_),
+        ) => {
+            return unavailable_issuer_observation(
+                AuthIssuerUnavailableReason::IssuerStatusParseFailed,
+            );
+        }
+        Err(_) => {
+            return unavailable_issuer_observation(
+                AuthIssuerUnavailableReason::IssuerStatusQueryFailed,
+            );
+        }
     };
     issuer_observation_from_status(status, observed)
 }
 
-fn unavailable_issuer_observation(reason: &str) -> AuthIssuerObservation {
+const fn unavailable_issuer_observation(
+    reason: AuthIssuerUnavailableReason,
+) -> AuthIssuerObservation {
     AuthIssuerObservation {
         available: false,
-        status: AuthRenewalStatusCode::Unavailable.label().to_string(),
+        status: None,
         drift_detected: false,
-        reason: Some(reason.to_string()),
+        reason: Some(reason),
         cert_hash: None,
         expires_at_ns: None,
         refresh_after_ns: None,
@@ -810,7 +761,7 @@ fn unavailable_issuer_observation(reason: &str) -> AuthIssuerObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AuthIssuerObservedStatus {
-    status: String,
+    status: ActiveDelegationProofStatus,
     cert_hash: Option<String>,
     expires_at_ns: Option<String>,
     refresh_after_ns: Option<String>,
@@ -822,7 +773,7 @@ fn issuer_observation_from_status(
     let drift_detected = issuer_observation_drift_detected(status, &observed);
     AuthIssuerObservation {
         available: true,
-        status: observed.status,
+        status: Some(observed.status),
         drift_detected,
         reason: None,
         cert_hash: observed.cert_hash,
@@ -850,46 +801,58 @@ fn issuer_observation_drift_detected(
     status.state.last_installed_expires_at_ns.is_some()
         && status.state.last_installed_expires_at_ns != observed.expires_at_ns
 }
+
 fn renewal_status_code(
     status: &AuthRenewalStatusSummary,
     issuer_observation: &AuthIssuerObservation,
 ) -> AuthRenewalStatusCode {
-    if issuer_observation.reason.as_deref() == Some(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON) {
+    if issuer_observation.reason == Some(AuthIssuerUnavailableReason::IssuerNotInComponentRegistry)
+    {
         AuthRenewalStatusCode::IssuerUnregistered
     } else if issuer_observation.drift_detected {
         AuthRenewalStatusCode::DriftDetected
     } else if status.template.enabled == Some(false) {
         AuthRenewalStatusCode::Disabled
     } else if status.latest_batch.failure.is_some()
-        || status.latest_batch.status.as_deref() == Some("failed_retryable")
+        || status.latest_batch.status == Some(RootIssuerRenewalBatchStatus::FailedRetryable)
     {
         AuthRenewalStatusCode::BatchFailed
     } else if matches!(
-        status.latest_batch.status.as_deref(),
-        Some("prepared" | "signing" | "signed" | "installing")
+        status.latest_batch.status,
+        Some(
+            RootIssuerRenewalBatchStatus::Prepared
+                | RootIssuerRenewalBatchStatus::Signing
+                | RootIssuerRenewalBatchStatus::Signed
+                | RootIssuerRenewalBatchStatus::Installing
+        )
     ) {
         AuthRenewalStatusCode::BatchPending
     } else if !status.template.present {
         AuthRenewalStatusCode::Missing
-    } else if issuer_observation.available && !issuer_observation_is_usable(issuer_observation) {
+    } else if !issuer_observation.available {
+        AuthRenewalStatusCode::Unavailable
+    } else if !issuer_observation_is_usable(issuer_observation) {
         AuthRenewalStatusCode::ProofUnavailable
     } else {
         AuthRenewalStatusCode::Configured
     }
 }
 
-fn issuer_observation_is_usable(observation: &AuthIssuerObservation) -> bool {
-    matches!(observation.status.as_str(), "valid" | "refresh_needed")
+const fn issuer_observation_is_usable(observation: &AuthIssuerObservation) -> bool {
+    matches!(
+        observation.status,
+        Some(ActiveDelegationProofStatus::Valid | ActiveDelegationProofStatus::RefreshNeeded)
+    )
 }
 
 fn auth_renewal_medic_summary_from_result(
     result: &AuthRenewalStatusResult,
 ) -> AuthRenewalMedicSummary {
     let observation = &result.issuer_observation;
-    let status = if observation.available
+    let issuer_ready = observation.available
         && !observation.drift_detected
-        && issuer_observation_is_usable(observation)
-    {
+        && issuer_observation_is_usable(observation);
+    let status = if result.status == AuthRenewalStatusCode::Configured && issuer_ready {
         AuthRenewalMedicStatus::Ready
     } else {
         AuthRenewalMedicStatus::Warning
@@ -914,10 +877,27 @@ fn auth_renewal_medic_summary_from_result(
             "restore the registered topology for issuer {} by reinstalling the affected dependency closure; do not provision delegation proof state manually",
             result.issuer_pid
         )
+    } else if observation.reason
+        == Some(AuthIssuerUnavailableReason::IssuerStatusMetadataUnavailable)
+    {
+        format!(
+            "restore exact local protocol metadata for issuer {} from the selected release, then rerun canic auth renewal status {} --issuer {}",
+            result.issuer_pid, result.fleet, result.issuer_pid
+        )
     } else if observation.drift_detected {
         format!(
             "run canic auth renewal status {} --issuer {}; if drift persists, wait for root chain-key renewal or retry an issuer login/update so lazy repair can run",
             result.fleet, result.issuer_pid
+        )
+    } else if result.status == AuthRenewalStatusCode::Disabled {
+        format!(
+            "review and enable root-managed renewal configuration for issuer {} when issuance is intended",
+            result.issuer_pid
+        )
+    } else if result.status == AuthRenewalStatusCode::Missing {
+        format!(
+            "configure issuer {} through canic_root_configure_issuer with the intended Fleet audience and grants",
+            result.issuer_pid
         )
     } else if result.status == AuthRenewalStatusCode::BatchFailed {
         format!(

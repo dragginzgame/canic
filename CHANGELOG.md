@@ -8,659 +8,137 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
-- Adopt Shared Tooling 0.26.6 for Cargo graph checks and retained failure evidence.
-
-- Align published IC dependency minimums and both Blob consumer locks with
-  Auth 0.14.3 and Platform 0.6.7. Adopt Backup 0.38, Query 0.68 and
-  Host/Build/Testkit 0.64 together.
-
-- Refuse successful replica shutdown while its configured gateway still accepts
-  connections, including unhealthy HTTP listeners
-  ([#589](https://github.com/dragginzgame/canic/issues/589)).
-
-- **Breaking:** include the offending role in Host pool-capacity errors and
-  reject child-role cycle allocations above their Root pool target
-  ([#433 — Validate child-role pool capacity](https://github.com/dragginzgame/canic/issues/433)).
-
-- Bind approved bootstrap templates to the Wasm Store identity registered by Root
-  ([#558 — Approved template names an unregistered store binding](https://github.com/dragginzgame/canic/issues/558)).
-
-- Report the dedicated Fleet Coordinator role consistently in public Health and
-  Overview, including snapshot restoration
-  ([#534](https://github.com/dragginzgame/canic/issues/534)).
-
-- Emit plain severity labels in replica logs so CLI readers can render text
-  ([#554](https://github.com/dragginzgame/canic/issues/554)).
-
-- Export the shared ICRC-10 standards query from the Fleet Coordinator
-  ([#536](https://github.com/dragginzgame/canic/issues/536)).
-
-- Accept the ICP amount in `cycles mint --icp`, independently of the global
-  ICP executable selection
-  ([#578](https://github.com/dragginzgame/canic/issues/578)).
-
-- Add a managed fixture update helper that settles newly created children before
-  decoding the bounded application reply
-  ([#585](https://github.com/dragginzgame/canic/issues/585)).
-
-- Make pool-child cycle allocations explicit in index/sharding examples and
-  document admission limits for application-driven creation
-  ([#586](https://github.com/dragginzgame/canic/issues/586)).
-
-- Add validated Component Group member lookup by role, returning all matching
-  Component canisters in directory order
-  ([#584](https://github.com/dragginzgame/canic/issues/584)).
-
-- Keep Blob public fence metrics consistent with the shared installation owner
-  after background framework activity and same-release restoration. Qualify mounted
-  upload recovery, bounded certificate decoding and permission withdrawal.
-  Cover mounted Blob inspection, original receipt recovery and tenant isolation
-  across both managed compositions (#622).
-  Verify operator-only status and funding inspection preserve empty outcomes,
-  scope bindings and explicit payment-readiness blockers through restoration.
-  Exercise mounted gateway refresh/revocation/cancellation and account balance
-  inspection against controlled provider replies, including lost replies and fences.
-  Reject oversized provider replies while preserving account state and exact
-  gateway-attempt cancellation. Qualify payment-relationship bindings, provider
-  refusals and exact reported values without granting funding authority.
-
-- **Breaking:** adopt Blob Storage 0.41.1 trusted registration across both managed
-  consumers, removing verifier/attestation integration. Adopt Testkit 0.64 and
-  route native PocketIC types through Platform. Blob installations require reinstall.
-
-- **Breaking:** remove unused delegated-token error producers. E159 remains
-  identifiable as a retired diagnostic; portable admission uses shared Auth's
-  typed refusals, while active proof and attestation diagnostics remain available.
-
-- Keep Fleet status discovery usable when the optional journal `release` field
-  is omitted; preserve strict release payload and plan-authority checks
-  ([#543](https://github.com/dragginzgame/canic/issues/543)).
-
-- **Breaking:** remove the unused topology-based application subject validator and
-  its denial surface. Account authentication belongs to the issuer; portable
-  admission binds the browser caller through IC Auth.
-
-- Keep replica-stop fallback inspection read-only and bound to the selected ICP
-  root, refusing an unidentified reachable gateway
-  ([#298](https://github.com/dragginzgame/canic/issues/298)).
-
-- Close application-session indexes on maintenance clock rollback, preserving
-  saved leases and requiring valid restoration before local authorization resumes.
-
-- Clarify that Root's funding timer uses Root funding configuration independently
-  of the child `AutomaticTopup` capability
-  ([#568](https://github.com/dragginzgame/canic/issues/568)).
-
-- Bound standalone backup-manifest validation by the shared 64 MiB record reader
-  before JSON parsing, retaining typed I/O and schema errors
-  ([#562](https://github.com/dragginzgame/canic/issues/562)).
-
-- Qualify restored Auth sessions against refreshed authority: changed issuer/key,
-  expired or shortened authority and newer reset floors refuse access without
-  rewriting the original lease.
-
-- Keep workspace membership in sync with App creation/deletion, preview affected
-  entries and preserve the App if the manifest update fails
-  ([#295](https://github.com/dragginzgame/canic/issues/295)).
-
-- Reject invalid artifact paths consistently in backup manifests, journals and
-  saved restore plans before persistence or file access
-  ([#317](https://github.com/dragginzgame/canic/issues/317)).
-
-- Qualify portable admission against independent receiver authority; reject
-  credential-selected issuers, excess grants, foreign audiences and key bindings.
-
-- Recheck time after Auth signing before returning or installing proofs. Ignore
-  stale failed callbacks as well as successful ones, preserving newer batch state.
-  Timestamp signing and retry backoff at completion; discard results after expiry.
-  Schedule renewal from sweep completion and use normal backoff once proofs expire.
-
-- Reject local application authority whose configured Root differs from the
-  installed Root, before retaining or changing authority.
-
-- **Breaking:** remove unused `auth.allowed_token_scopes` from configuration,
-  generated runtime data and fixtures. Local application policy no longer requires
-  the token-verifier flag; protected Root enrollment must independently constrain
-  issuer grants before portable activation.
-
-- **Breaking:** pass a family to history cache truncation reads. The flag now
-  describes that family's latest admission pass and recovers after capacity
-  is released ([#105](https://github.com/dragginzgame/canic/issues/105)).
-
-- Adopt published Auth and protocol types 0.14.1 across framework and Blob
-  consumer locks. Qualify typed future-start, expiry and caller-mismatch refusals;
-  portable production activation remains closed.
-
-- Escape terminal controls in plain inspection, status and admission reports and
-  list headings while preserving raw JSON values
-  ([#301](https://github.com/dragginzgame/canic/issues/301)).
-
-- **Breaking:** reject zero top-up amounts and enforce the half-threshold limit
-  across the full cycle range. Clarify startup funding and lifetime child caps
-  ([#72](https://github.com/dragginzgame/canic/issues/72)).
-
-- Qualify portable admission with an independently supplied receiver caller:
-  reject the account principal and another browser device without storage changes,
-  and preserve issuer/subject identity for the admitted browser.
-
-- **Breaking:** remove the diagnostic-only config-path argument from Root
-  lifecycle helpers and stop embedding that absolute builder path at runtime
-  ([#330](https://github.com/dragginzgame/canic/issues/330)).
-
-- **Breaking:** include fetched/total counts and truncation in metrics JSON;
-  follow pages within `--limit` and show incomplete coverage in text, including
-  empty `--nonzero` results ([#284](https://github.com/dragginzgame/canic/issues/284)).
-
-- Check trusted IC time against the persisted Auth clock during synchronous
-  restoration. Refuse rollback with indexes unavailable; retain original session
-  leases and replay/login records when restoration succeeds.
-
-- Qualify shared Auth admission retries with one retained signed credential:
-  future-start refusal writes no session, an exact retry recovers its original
-  live session, and a fresh receiver rejects the closed admission window.
-
-- Stream Store staging-status payload verification, read each chunk once and
-  reject oversized preparation declarations before writing records
-  ([#149](https://github.com/dragginzgame/canic/issues/149)).
-
-- Add shared-engine login pruning to the test-gated durable Auth adapter: commit
-  expired rows and pool counts atomically, retain clock observations on failure,
-  and refuse incomplete ledgers or orphaned sessions. Production timer and
-  endpoint integration remain unavailable.
-
-- Preserve multiline values, defaults and host-resolved fields in Root's diagnostic
-  TOML by serializing the validated model
-  ([#75](https://github.com/dragginzgame/canic/issues/75)).
-
-- **Breaking:** require Root/Store package metadata to name the selected App and
-  remove unused build-helper exports
-  ([#329](https://github.com/dragginzgame/canic/issues/329)).
-
-- **Breaking:** retain the application Auth cleanup clock in its stable header.
-  Refuse backward time and preserve accepted observations through empty or failed
-  cleanup; reinstall the current pre-1.0 state contract. This does not activate
-  portable Auth or qualify a production clock-skew bound.
-
-- Reject inconsistent session/login state before expiry cleanup can erase the
-  broken association; preserve the original records on refusal.
-
-- **Breaking:** report Store creation time in epoch seconds, matching publication,
-  GC and retirement times; retain nanoseconds on the adoption receipt
-  ([#538](https://github.com/dragginzgame/canic/issues/538)).
-
-- Report the Coordinator's Observatory subnet from its exact validated Fleet
-  binding, preserving Root-based placement for other canisters
-  ([#541](https://github.com/dragginzgame/canic/issues/541)).
-
-- **Breaking:** cap configured log messages at 64 KiB; reduce larger
-  `max_entry_bytes` values before rebuilding. Keep unreachable retention deadlines
-  from failing runtime startup
-  ([#73 — Bound log entry sizes](https://github.com/dragginzgame/canic/issues/73),
-  [#102 — Prevent log retention deadline overflow](https://github.com/dragginzgame/canic/issues/102)).
-
-- Record issuer-effective delegation expiry and refresh deadlines in Root renewal
-  state. Validate returned proof identity and read completion time after each
-  installation call; reject invalid evidence and superseded batch responses.
-  Select the complete certified portable verifier in the production Auth feature.
-
-- **Breaking:** include the issuer in application authorization results and scope
-  preserve issuer/subject account identity while accounting session and replay
-  capacity by browser caller. Distinct issuers naming one subject remain separate
-  accounts; independent devices retain independent logout state.
-
-- Adopt IC Tooling 0.63.2 and Shared Tooling 0.26.2. Use Host Tools' bounded ICP
-  transfer decoder while retaining Canic's certificate and payment checks;
-  move the local protobuf projection and direct dependency to test fixtures.
-
-- Align private fixtures with Auth 0.13.3 and remove unused session-policy/error
-  adapters and the unused authority-snapshot generation copy. Retain the atomic
-  session backend and closed application-admission boundary. Qualify direct signed
-  admission, exact retries and commit refusal against Canic’s durable storage.
-  Reject restored login records from a different Fleet or mixed audiences.
-
-- Adopt Blob 0.40.3 across the managed consumers and source endpoint ingress
-  limits directly from its published contracts, removing the duplicated table.
-
-- Reject ineffective Auth revocation-floor role names, signing versions below
-  their acceptance floor, oversized derivation paths and overflowing TTLs during
-  configuration validation ([#63](https://github.com/dragginzgame/canic/issues/63),
-  [#70](https://github.com/dragginzgame/canic/issues/70)).
-
-- Discover all framework endpoint modules for exact replay-policy coverage;
-  check both manifests for duplicates and classify existing standards queries.
-
-- **Breaking:** remove the Blob adapter’s obsolete Candid configuration-limit
-  export. Blob owns its Wire installation limit; embedded applications own their
-  outer configuration decoder.
-
-- Keep bounded session cleanup running when intent maintenance fails, retaining
-  diagnostics and a delayed retry. Remove GNU-only document inventory formatting.
-
-- Keep internal access-evaluation errors from granting permission through negation
-  or alternative branches.
-
-- Seek cycle-event sequences within their timestamp instead of scanning history
-  ([#95 — Avoid whole-history cycle-event sequence scans](https://github.com/dragginzgame/canic/issues/95)).
-
-- **Breaking:** remove the ignored settings-update sender-version argument;
-  management calls retain the current execution's version binding
-  ([#87 — Remove the ignored settings-update sender version](https://github.com/dragginzgame/canic/issues/87)).
-
-- Make the Backup writerless-FIFO regression portable across Unix hosts while
-  preserving private permissions and rejection before reading.
-
-- Restore explicit Candid service registration for the bare payload-limit probe
-  endpoint after Platform separated export and codec ownership.
-
-- Select the verified repository-local ICP tool in PocketIC runs, preventing
-  an older global installation from blocking the pinned test environment.
-
-- Move managed fixture calls to Platform's explicit bounded codecs and Testkit's
-  raw transport handling; remove obsolete Candid helper reexports.
-
-- Align fixture locks with Platform 0.6, Timers 0.30.1, Memory/Storage 0.50
-  and Metrics 0.15.1; use explicit bounded Platform codecs for external-ledger
-  funding probes instead of Testkit's version-coupled Candid helpers. Bind
-  session-store method signatures to Auth's canonical principal type.
-
-- Align all IC Tooling libraries on 0.63, Backup on 0.37, Query on 0.67 and
-  Auth on 0.13. Move internal/runtime fixtures to explicit bounded Platform
-  codecs and raw Testkit transport, retaining the existing Candid protocols.
-
-- Select Platform 0.6 across owned catalogs, explicitly enabling principal support
-  for Backup, and retain Timers 0.30 in all workspace locks.
-
-- Run dependency admission automatically in complete release validation, then
-  workspace and fixture Clippy and read-only embedded-peer qualification.
-  Retain the focused development command.
-
-- Align the dedicated and embedded Blob fixture locks with published Blob 0.40,
-  Platform 0.6 and Memory/Storage 0.50, removing split runtime type identities.
-
-- Adopt Shared Tooling 0.26.1 with explicit IC executable selection and focused
-  dependency-adoption guidance; retain Clippy-first release barriers.
-
-- Reconcile root and Blob consumer lockfiles with the selected dependencies so
-  locked release preparation uses the declared graphs.
-
-- Declare Platform's explicit Candid service-generation feature.
-
-- Use the aligned Query/Backup/Host evidence and artifact-error types directly,
-  removing redundant conversions while preserving error categories.
-
-- Select Metrics 0.15 with the updated Timers and Wire dependency resolutions.
-
-- Publish cache-test executable scripts through Host's isolated writer to avoid
-  intermittent Linux text-file-busy failures during parallel tests.
-
-- Require exact fixture codec options in the managed-endpoint gate and route
-  runtime and generated endpoint traps through the existing IC operations owner.
-
-- Align Root fixture compilation with the governed PocketIC feature gate while
-  retaining ordinary native snapshot-inventory coverage.
-
-- Refresh the embedded allocation peer and its provenance for the current
-  dependency graph, including Memory 0.50.1 and Host Text 0.62.1, on Rust 1.99.1.
-
-- Adapt Cargo discovery and build grouping to IC Build 0.23 command recipes,
-  retaining Host-owned capture limits and successful, complete-output checks.
-
-- Give funding/refill fixture calls and the Root audit endpoint explicit Candid
-  codecs for Platform's raw transport, preserving their existing protocols.
-
-- Align the Wasm crypto gate with Platform-owned canister-signature code while
-  retaining exact signature package sets and duplicate-provider checks.
-
-- Clear Core lint failures while preserving auth session admission ordering; adapt
-  Auth 0.11 principal identities at existing DTO/storage boundaries. Use Clap in
-  the four maintainer utilities, preserving their operations and selected inputs.
-  Materialize 151 historical evidence symlinks with identical resolved bytes.
-  Use Host Tools' ledger-evidence types with Query 0.65 certificate authentication.
-  Match the test canister's auth features to its declared verifier capability.
-  Enforce explicit tooling exclusions in the framework Wasm graph check.
-
-- Give the funding, Cycles Ledger and ICP refill probes explicit Candid codecs
-  for Platform endpoints, retaining their installation and RPC formats.
-
-- Route authority-recovery traps through the existing IC operations boundary,
-  fixing the layering check while preserving atomic rollback.
-
-- Select Rust 1.99.1 for development and matching CI checks, retaining existing
-  package MSRVs.
-
-- Adapt Blob 0.38 installation and service calls to method-bound Wire frames,
-  including dedicated/embedded consumers and qualification callers. Preserve
-  external provider Candid. Generate explicit Candid codecs for ordinary Canic
-  endpoints and retain synchronous lifecycle decoding through the shared adapter;
-  update Hub/Shard fixture stores to governed storage adapters. Require Storage
-  0.5.7 so independent consumer locks cannot retain incompatible Memory types.
-  Use Blob’s owned Platform principals at service boundaries, retaining external
-  principals at existing Canic and PocketIC boundaries. Align both consumer locks
-  on Blob 0.38, Platform 0.4.1 and Timers 0.29.5.
-
-- Align mint receipt authentication with IC Query 0.64 and IC Host’s bounded
-  certificate codec. Remove the obsolete certificate-depth setting and redundant
-  authentication forwarding function; retain certificate byte budgets and
-  independent ledger-value depth limits.
-
-- Align host-side ICP and CI YAML parsing with IC Host Tools' `serde_yaml_ng`,
-  removing `serde-saphyr` and its parser dependencies. Preserve the 1 MiB ICP
-  input limit, strict structural refusals and scalar-name interpretation; reserve
-  the `<<` mapping key even when quoted.
-
-- Select published Platform 0.4.1 across the framework and Blob consumer catalogs.
-  Retain existing Candid principal identities through its explicit external type,
-  with conversions at CDK boundaries. Protocols and storage formats stay unchanged;
-  remove the unused CDK `export_candid` re-export while retaining the canonical
-  Candid service generator and existing protocol formats.
-  Generated application manifests select 0.4. Testkit 0.59 uses the same Platform
-  decoder-limit type, removing the `ic-testkit-platform` alias without changing
-  any of the five decoder budgets.
-
-- Adapt raw Platform calls to explicit Candid encoding/decoding while preserving
-  the existing response decoder configuration, cycle payments and transport
-  failures. Keep malformed responses as typed codec errors. Preserve Backup's
-  artifact error categories through Backup 0.35’s current Host conversion, removing
-  the temporary local conversion helper.
-  Qualify catalog cancellation by successful retry with Query’s persistent lock
-  files rather than requiring coordination-file deletion.
-
-- Select published IC Host 0.31.1 for direct host dependencies, keeping optional
-  filesystem capability and temporary-file backends disabled where unused.
-
-- Remove the unused Root-fixture activation driver and redundant prepared-Root
-  fields after consolidation onto managed Fleet bootstrap. Fixture build inputs
-  leave target-directory selection to IC Build’s typed specification, including
-  embedded-peer verification, bootstrap Store and release-artifact preparation.
-
-- Route managed Fleet/Root fixture gzip encoding and decoding through Host
-  Artifacts, removing internal test support’s direct compression-backend dependency.
-  Retained gzip artifacts must contain exactly one complete member.
-
-- Remove five unused integration-test dependency declarations; shared test support
-  remains the owner of Control Plane feature selection. Enable Host Tools’ explicit
-  Candid feature required by artifact-service validation.
-
-- Adopt Platform 0.1.17 and route ECDSA signing fixtures through its native/Wasm
-  crypto boundary. Remove direct K256 declarations and forbid their reintroduction
-  across the framework and both Blob consumer workspaces; ECDSA stays dev-only.
-
-- Identify runtime memory stores by stable key in the guides; obtain physical
-  manager IDs from the selected canister's allocation report rather than stale
-  fixed-ID examples ([#566](https://github.com/dragginzgame/canic/issues/566)).
-
-- Use consistent IEC sizes in chunk-upload logs: a full chunk reports `1.00 MiB`.
-  Upload bytes and management-call behavior are unchanged
-  ([#606](https://github.com/dragginzgame/canic/pull/606)).
-- Timer guides inherit the workspace provider and inspect the selected locked
-  Wasm graph, avoiding stale examples that introduce a second timer runtime
-  ([#605](https://github.com/dragginzgame/canic/pull/605)).
-
-- Route configured Root test baselines through the managed Fleet bootstrap helpers,
-  including release-set publication, Coordinator synchronization and Component
-  provisioning. Remove the ordinary-template staging path. Restore Coordinator
-  snapshots and reset unused pool custody alongside Root and its installed children.
-
-- Route auth-fixture Ed25519 signing through Platform 0.1.16’s dev-only feature.
-  Remove the direct Dalek dependency and separate Dalek 3 selection; use Platform’s
-  original Dalek 2.2 signing types without changing credential construction or
-  verification policy. Enforce the direct Dalek boundary in all three workspaces.
-
-- Route all Host canister Cargo builds through IC Build 0.19's typed invocation
-  and observed execution, retaining explicit features, profiles, compiler wrappers,
-  declaration environments and primary compiler failures. Share the invocation
-  builder with infrastructure roles and remove the raw profile-argument helper.
-  Resolve fixture role paths to Cargo package names before constructing cache keys.
-  Import fixture artifacts from their qualified release namespace and check the
-  builder-returned Root artifact size; remove duplicate fixture path settings.
-  Align the capability fixture and issuer-only signature-store build with their
-  Root-signature feature contracts. Add destructive-state pooled restoration proofs.
-
-- Project Timers 0.29 measurement counters only when their totals and combined
-  values fit Canic's existing u64 reports exactly. Refuse incomplete runtime/public
-  process reports and omit unrepresentable unified metric rows instead of clipping.
-
-- Use Blob's shared service workflow and canonical method-bound Wire codecs, including
-  bounded nested installation bytes. Remove the duplicate adapter dispatch,
-  account and gateway flows. Keep the provider certificate and Canic framework
-  protocol on Candid. Raw endpoints retain Canic admission, payload limits and
-  tracking executor ownership, with method declarations preserved through Wasm
-  shrinking and checked alongside Candid against callable exports.
-
-- Use Host FS's fresh-directory allocator and cleanup owner after Build 0.18's
-  staging API removal, preserving bounded allocation and failed-build cleanup.
-  Require Storage 0.5.3 for the collection APIs Canic uses; align Blob consumer
-  locks and move the embedded counter onto the current governed Storage cell.
-  Restore the archived release-binding harness's original dependency graph.
-
-- Restore framework fixture builds against current Build and Testkit APIs,
-  retaining explicit Cargo inputs, cache retention, process custody, snapshot
-  funding and reset policy. Let Testkit own pooled snapshot restoration and Blob
-  own platform-version tracking; remove the duplicate local state and callbacks.
-  Keep deliberate raw-memory corruption access confined to development fixtures.
-
-- Route offline chain-key public derivation through Platform 0.1.13’s native-only
-  secp256k1 feature. Remove the direct dependency and local pin exception; retain
-  upstream 0.3.0 identities, derivation policy and Wasm exclusion. Align consumer
-  catalogs and scaffold templates, and enforce the dependency boundary.
-
-- Align Host build reuse with IC Build’s typed Cargo selections and validated
-  post-build evidence. Preserve source-drift checks, configured features and
-  exact Candid bytes; use explicit Testkit server ownership and reply-argument
-  calls throughout the maintained harnesses, retaining callers and decoder limits.
-
-- **Breaking:** use IC Storage’s governed collections and bounded cells with exclusive Memory
-  leases. Preserve record encodings and capacity policy; retain collection ownership
-  through reservation failures and chunk-vector resets. Remove the duplicate local
-  bounded-cell implementation and raw collection reexports; callers use the
-  canonical adapter types. Migrate memory fixtures to the supported APIs.
-
-- Adopt Platform 0.1.12 and remove remaining direct CDK dependencies. Route system,
-  signing-cost and typed call-error APIs through their canonical exports; preserve
-  endpoint and policy guard coverage for Platform paths.
-
-
-- Adopt Platform 0.1.11 for call-context instruction accounting and incoming-cycle
-  observation/acceptance, preserving existing measurement and funding policy.
-
-
-- Adopt Platform 0.1.10 entrypoint macros, supported CDK runtime APIs and Host BLS
-  fixture types. Remove direct Candid throughout maintained workspaces and from
-  Fleet/scaffold generators; retain only unsupported CDK API dependencies.
-
-
-- Remove direct `ic-testkit-candid` dependencies and use Platform decoder limits
-  for Testkit 0.54 callers, preserving all existing reply budgets. The published
-  testing facade uses explicit reply-argument calls and caller-owned server
-  configuration; its removed call-trait reexport is a hard cut.
-
-- Share Cargo graph observation with Shared Tooling, retaining Canic’s roots,
-  features and exclusion policy. One preflight gate enforces a single Memory and
-  Timers provider and rejects the raw CDK timer dependency; source and lifecycle
-  guards remain ([Shared #285](https://github.com/dragginzgame/shared-tooling/pull/285)).
-
-- Delegate Cargo communication and typed artifact selection to IC Build; remove
-  the local JSON selector and heartbeat thread while retaining Canic export policy.
-
-- **Shared Tooling:** adopt 0.25.8, label dependency roles, preserve grouped
-  manifest ordering through formatting and release checks, and explicitly own
-  Candid extractor setup. Use the pinned IC Build editor for manifest and lock
-  candidates instead of Cargo Edit and the removed Perl renderer. Deployment
-  role exclusions retain explicit graph checks; automatic artifact-bound admission
-  remains incomplete. Run Clippy before expensive release and publication stages.
-
-- **Platform boundary:** use IC Platform for principal identities, contract
-  types/encoding, bounded decoding, certification, native Agent APIs, management
-  HTTP/ledger types, raw argument APIs and generated executor contexts.
-  Route default decoders and structural subtyping through Platform; remove six
-  direct Candid dependencies and five duplicated management DTOs. Enforce
-  exceptions across all three workspaces.
-
-- **Canonical owners:** use IC Platform’s bounded Candid decoder for release
-  observations; retire the unused backup capture executor while retaining
-  planning, evidence inspection and active restore recovery.
-
-- **Session ownership:** persist canonical Auth sessions without mirrored identity,
-  scope or lifetime fields. Remove the parallel session model and decision policy;
-  use Auth’s scope parser while retaining Canic’s protected authority and quotas.
-
-- **Auth capabilities:** keep ECDSA-only Root proofs separate from certified
-  receiver verification. Delegate grant validation to Auth while preserving Canic's
-  bounds, configuration normalization and typed rejection order.
-
-- **Backup dependencies:** use featureless IC Platform for principal parsing and
-  topology data; remove Backup’s direct Candid dependency.
-
-- **Endpoint inspection:** resolve deployed interfaces through retained release and
-  protocol authority; JSON reports `installed` with its exact release build ID.
-
-- **Host diagnostics:** share identity timing and counters across diagnostic modes;
-  render provenance paths without reopening and hashing the manifest.
-
-- **Host ownership and validation:** move admission operations out of CLI, share
-  frontend bundle validation, and consolidate canonical byte-encoding primitives.
-
-- **Auth and runtime integration:** adapt Root-proof verification to Auth 0.9 while
-  retaining explicit Canic Candid contracts. Memory reports expose permanent
-  bindings without lifecycle states; Canic owns shared timer-health projection.
-
-- **Build inputs:** capture one sanitized base environment for commands and cache
-  evidence; retain per-command overrides. Remove unused package-version readers.
-
-- **Storage boundary:** source stable record codecs from IC Storage 0.4 and
-  backing-memory types from Memory 0.47's narrow public exports.
-
-- **Build and JSON simplification:** unify Coordinator, Root and Store artifact
-  orchestration; print build context per invocation without process-marker state.
-  Cycle amounts own their decimal-text JSON encoding, removing Fleet's recursive
-  serializer while retaining numeric binary/Candid representation.
-
-Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
-
-- Share Backup and CLI restore crash-test handshakes through Host Process,
-  retaining existing timeout allowances and recovery assertions.
+### 📝 Summary
+
+Canic 0.112 moves owned application protocols and generated clients to native
+Wire, consolidates shared runtime and host mechanisms under their upstream
+owners, and strengthens release-bound observations and interruption recovery.
 
 ### ⚠️ Breaking
 
-- **Host rendering and backup checksums:** remove Canic's table engine and checksum
-  record in favor of Host Text and IC Backup. Build tables use underlined columns;
-  malformed checksum records reject during decoding. Consumers must use upstream
-  types and APIs directly.
+- **CBOR storage:** use the IC Rust stack's pinned `serde_cbor` and encode stored
+  unsigned 128-bit values as exactly 16 big-endian bytes. Preserve the full cycle
+  range and numeric Wire transport; regenerate artifacts and cleanly reinstall.
+- **Blob funding:** remove the unqualified Canic independent-credit reconciliation
+  wrapper. Uncertain payments retain their obligations, renewal refusals and
+  duplicate-payment protection.
+- **Owned Candid removal:** remove owned `CandidType` implementations and move
+  managed initialization, authority/receipt hash inputs and directory cursors to
+  bounded native Wire. Retained evidence uses Wire-specific fields; fixture and
+  replay records use canonical storage encoding. Reinstall and regenerate current
+  artifacts; external IC/provider protocols retain Candid and use available
+  published Platform DTOs. ICRC-21 handlers use standard `Result` in place of the
+  copied response enum.
+- **Wire contracts:** replace owned Candid dispatchers with typed, method-bound
+  endpoints across runtime, control plane, Host, CLI and generated clients.
+  Fleet transitions use the same typed Wire path; remove the unused Candid-text
+  transition runner and its retained journal fields. Release profiles identify
+  native schemas
+  ([#613 — Hard-cut frontend bindings and release artifacts to Wire](https://github.com/dragginzgame/canic/issues/613)).
+- **Memory and access APIs:** require explicit checked memory composition and
+  synchronous access predicates. Public memory, storage, Auth and Backup types
+  follow their canonical dependency owners
+  ([#527 — Qualify Memory composition and diagnostics](https://github.com/dragginzgame/canic/issues/527),
+  [#531 — Avoid async wrappers for synchronous access](https://github.com/dragginzgame/canic/issues/531)).
+- **Application Auth:** remove delegated-token application/session surfaces and
+  unused scope configuration. Root proofs and role attestations remain; portable
+  application admission remains unavailable
+  ([#491 — Extract shared authentication and session machinery](https://github.com/dragginzgame/canic/issues/491)).
+- **Reports and configuration:** change endpoint inspection to native schemas,
+  render human-readable cycle amounts as decimal strings, extend metrics JSON
+  coverage fields, and tighten log/top-up configuration. Metric clients must
+  handle bounded overflow observations
+  ([#284 — Report metrics pagination coverage](https://github.com/dragginzgame/canic/issues/284),
+  [#321 — Bound performance checkpoint identities](https://github.com/dragginzgame/canic/issues/321)).
 
-- **Memory admission identity:** accept host-issued 32-byte policy tokens and
-  bind the optional admission token into Canic’s bootstrap identity. Callers
-  must derive their token from the callback’s complete semantics and configuration.
+### 🧭 Migration Notes
 
-- **Memory runtime:** adopt Memory 0.45 with one Canic-owned runtime and injected
-  component handles, including test App and embedded Blob fixtures. Allocation reports
-  derive byte totals from measured pages
-  and buckets; pools use explicit excluded IDs and allocation diagnostics omit
-  removed schema metadata. The storage-format hard cut requires a clean reinstall.
-
-- **Host filesystem APIs:** adopt Host 0.23's explicit publication, path-resolution
-  and lock-acquisition APIs, preserving write permissions and operation exclusion.
-  Candid normalization uses Host Text directly.
-
-- **Application Auth hard cut:** remove delegated-token issuance/retrieval,
-  `auth::authenticated(...)` guards, and delegated-token session commands/status.
-  Root proof provisioning and role attestations remain supported. Portable Auth
-  enrollment and endpoint integration remain unfinished; application session
-  admission is unavailable ([#491](https://github.com/dragginzgame/canic/issues/491)).
-
-- **Runtime contracts:** use explicit host memory composition and synchronous
-  access guards; Auth/Backup reexports and wide performance fields change Rust
-  types. Memory allocation slots use checked numeric IDs and declarations drop
-  unused labels. Memory diagnostics expose one current snapshot and use the current bootstrap
-  policy contract; provisioning failures
-  add structured dependency evidence.
-- **Upgrade action:** rebuild clients and the complete Canic family against the
-  selected contracts, update guard and memory providers, and cleanly reinstall
-  across releases. Same-release interruption recovery remains supported.
-
-### 🔧 Changed
-
-- **Auth dependency resolution:** select Auth 0.9's certified-proof verification
-  feature for Root verification and native tests after token-feature retirement.
-
-- **Memory diagnostics:** derive owner labels and pool eligibility from the
-  committed runtime beside numeric allocation measurements. Remove duplicate
-  pool retention so ledger reports use the same authoritative runtime.
-
-- **Host 0.25:** remove retired feature selections and own replica structural
-  limits beside Wasm enforcement, preserving the existing code, function and
-  global thresholds. Generic Wasm inspection remains upstream.
-
-- **Toolchain installation:** accept verified Binaryen bundles whose executable
-  resolves beneath the public install directory, fixing macOS setup
-  ([#579](https://github.com/dragginzgame/canic/issues/579)).
-
-- **Developer setup:** explicitly select Canic as the hook-install destination
-  ([PR #588](https://github.com/dragginzgame/canic/pull/588)).
-- **Build guidance:** show the accepted explicit Canic feature declaration in
-  diagnostics and the managed-Fleet example
-  ([#583](https://github.com/dragginzgame/canic/issues/583)).
-
-- **Fleet diagnostics:** missing import reviews and idle attempt recovery now report
-  their actual state instead of a controller-handoff mismatch
-  ([#577](https://github.com/dragginzgame/canic/issues/577),
-  [#576](https://github.com/dragginzgame/canic/issues/576)).
-
-- **Fixture decoding:** select finite Candid reply budgets explicitly; native HTTP
-  fixtures use Host Process capture with bounded headers and bodies.
-
-- **Release checks:** include the shared version validator in isolated release
-  fixtures so preflight and failure-recovery checks can run after tooling updates.
-  Align record-export checks with the crate-private storage boundary.
-
-- **Diagnostic lookup:** distinguish out-of-range numbers from malformed codes
-  ([#547](https://github.com/dragginzgame/canic/issues/547)).
-
-- **Auth status:** emit delegation-proof status only for issuer-capable canisters,
-  avoiding empty Candid types in local-authorization-only applications.
-
-- **Auth enrollment:** adopt Auth 0.7, introduce the Root-managed enrollment
-  contract and separate transport callers from account identity in session/replay
-  projections. Persist login denial atomically with session admission/logout
-  and preserve its original account binding on repeated logout. Restoration
-  rejects conflicting session/login records.
-  Enrollment delivery and endpoint integration remain unfinished
-  ([#491](https://github.com/dragginzgame/canic/issues/491)).
-- **Builds:** IC Build 0.9 owns bounded Cargo metadata/tree observations,
-  declaration caching, artifact retention and selected input evidence. Canic
-  retains release admission, recipe selection and observation budgets; embedded
-  fixture normalization uses the same canonical metadata owner
-  ([Build #33 — Share Cargo observations](https://github.com/dragginzgame/ic-build/issues/33)).
-- **Build-script inputs:** bind retained include exports to exact Cargo producers
-  and the selected recipe, preserving external-input change and discovery refusals
-  ([#553 — Scope retained build-script exports](https://github.com/dragginzgame/canic/issues/553)).
-- **Restore:** IC Backup and Host own original command custody, bounded process
-  capture and guarded reference release. Backup record acquisition shares bounded
-  Host reads; publication and acquisition enforce the same 64 MiB document limit.
-- **Record decoding:** share required-nullable JSON decoding and Backup timestamp
-  parsing across validation and CLI reports, retaining each caller's error policy.
-- **Backup staging:** use Host's private directory creation and parent sync for
-  download and restore staging; retain Canic's journal and cleanup policy.
-- **Blob and authentication:** shared owners supply endpoint declarations,
-  installation memory, continuity checks, certificate issuance, proof verification
-  and session machinery; Canic retains
-  endpoint admission, lifecycle and Fleet authority.
-- **Blob composition:** align published Blob 0.31 and both private consumers
-  with Memory 0.45. Use shared reply-decoding limits while preserving each
-  account and gateway query budget.
-- **Provisioning diagnostics:** retain exact rejection evidence and approved
-  resume inputs ([#516 — Expose failed provisioning dependencies](https://github.com/dragginzgame/canic/issues/516)).
-- **Funding replies:** decode the Registry response once, preserving typed remote
-  rejection ([#436 — Fix Registry reply decoding in cycles funding](https://github.com/dragginzgame/canic/issues/436)).
-- **Contributor tools:** adopt shared tool preparation and Host/Testkit tooling;
-  repair CI/dev installer callers after shared wrapper retirement
-  ([#563 — Converge CI and maintainer setup](https://github.com/dragginzgame/canic/issues/563)).
+- Rebuild the complete Canic family, regenerate Rust/TypeScript clients and
+  release artifacts, update affected memory/access/configuration callers, and
+  **cleanly reinstall across releases**. Same-release interruption recovery remains
+  required; predecessor-state migration and mixed-version operation are unsupported.
+- Frontend export requires explicit prepared Node and TypeScript executables.
+  Owned SDK Core integration uses published `@tokostudios/ic-platform` exports;
+  trust roots, network selection and retries remain application-owned.
+- Live `backup create` remains unavailable. The checkpoint participant SDK and
+  restore recovery do not establish complete live Fleet capture
+  ([#394 — Implement live Fleet backup capture](https://github.com/dragginzgame/canic/issues/394)).
 
 ### ➕ Added
 
-- **Checkpoint SDK:** provide durable participant transitions and exact Root
-  authentication, including public checkpoint bindings. **Limitation:** live backup
-  creation remains unavailable while coordinated capture is implemented
+- Add the checkpoint participant SDK with durable freeze/release state, exact
+  installation bindings and original-operation replay
   ([#550 — Coordinated Fleet backup checkpoints](https://github.com/dragginzgame/canic/issues/550)).
+- Add canonical role-based Component member lookup without a new endpoint or
+  authorization grant
+  ([#584 — Resolve Component Group members by role](https://github.com/dragginzgame/canic/issues/584)).
+
+### 🔧 Changed
+
+- Delegate installed Blob funding access and preparation to its upstream owner.
+  Measure Store request sizes without allocating discarded Wire frames.
+- Validate final endpoint exports against their declared codecs before replacing
+  build artifacts; canonical infrastructure DIDs describe lifecycle arguments and
+  required external Candid methods.
+- Adopt Auth 0.17.1 and matching protocol types, preserving existing proof,
+  session-storage and production activation boundaries.
+
+- Seal native schemas, generated browser runtimes and bindings with final Wasm;
+  share release admission across builds, inspection, frontend and Observatory.
+  Preserve the distinction between raw artifact hashes and installed payload hashes.
+- Use IC Platform for external IC APIs and IC Build/Host for bounded Cargo
+  observations, artifact transactions, filesystem custody and process handling.
+  Canic retains product policy, release authority and paid-effect recovery.
+- Share provisioning cursor commits, borrowed plan-authority comparisons,
+  Component/subtree retirement, grant-cycle checking and retained timer custody.
+  Centralize refill outcome and budget decisions without replacing spending authority.
+- Bound metrics, cycles and live-list reporting to eight ordered workers, and
+  keep auth states and failure reasons typed until rendering.
+
+### 🩹 Fixed
+
+- Bind absence and funding decisions to the exact queried canister and configured
+  parent; refuse ambiguous or missing authority
+  ([#261 — Bind canister absence to the queried Principal](https://github.com/dragginzgame/canic/issues/261),
+  [#435 — Resolve pool funding from the topology parent](https://github.com/dragginzgame/canic/issues/435)).
+- Preserve nonzero Component apply failure exits and safe resume instructions;
+  reject global CLI options the selected command cannot consume
+  ([#302 — Fail incomplete Component apply operations](https://github.com/dragginzgame/canic/issues/302),
+  [#304 — Reject unused global target options](https://github.com/dragginzgame/canic/issues/304)).
+- Bound local replica HTTP reads while preserving selected-origin and timeout
+  policy ([#260 — Bound local replica HTTP reads](https://github.com/dragginzgame/canic/issues/260)).
+- Bound workspace discovery and maintain Cargo membership when creating or
+  deleting Apps
+  ([#266 — Bound workspace-root discovery](https://github.com/dragginzgame/canic/issues/266),
+  [#295 — Maintain workspace membership for Apps](https://github.com/dragginzgame/canic/issues/295)).
+- Strengthen bounded Store publication, Backup record acquisition, auth completion
+  fencing, log retention and per-family metric history without weakening existing
+  custody or uncertain-effect checks.
+
+### 🧹 Cleanup
+
+- Remove exhausted owned-Candid transports, selectors, projections and duplicate
+  local mechanisms. Retain external IC/provider Candid and separately owned
+  lifecycle, signed-byte and persistence contracts.
+- Retire the completed B1 ablation execution lane while preserving its evidence
+  and revision-bound sources
+  ([#499 — Retire the completed B1 ablation runner](https://github.com/dragginzgame/canic/issues/499)).
+
+### 🧪 Testing
+
+- Expand framework-owned installed recovery, generated-client conformance, Blob
+  composition, bounded-input and refusal coverage, including network-authority
+  refusal and typed Store operation status. Keep native, PocketIC,
+  browser/provider and production activation evidence distinct.
+
+### 🥾 Governance and tooling
+
+- Adopt Shared Tooling 0.26.20's compact baseline, focused-check guidance and
+  opt-in metrics. Share verified tool installations and release adapters;
+  normal releases start fresh, with exact-attempt recovery through `release-resume`.
+
+Detailed changes, consumer actions and issue coverage:
+[Canic 0.112 notes](docs/changelog/0.112.md).
 
 ## [0.111.0] - 2026-10-10
 

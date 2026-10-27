@@ -2,32 +2,18 @@
 // TemplateManifestInput
 //
 
-use crate::{
-    dto::{
-        capability::{NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1},
-        cascade::{StateSnapshotInput, TopologySnapshotInput},
-        fixture_provisioning::{
-            FixtureDescriptor, FixtureGrant, FixtureGrantRequest, FixtureSourceStatus,
-            FixtureStoreError,
-        },
-        fleet_activation::{
-            FleetActivationRequest, FleetActivationStatusResponse, FleetCredentialGenerationRequest,
-        },
-        role::{OperationReceipt, OperationStatusRequest},
-    },
-    ids::{
-        CanisterRole, FleetSubnetWasmStoreAuthority, TemplateChunkingMode, TemplateId,
-        TemplateManifestState, TemplateVersion, WasmStoreBinding, WasmStoreGcMode,
-    },
+use crate::ids::{
+    CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
+    WasmStoreBinding, WasmStoreGcMode,
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 
-#[cfg(test)]
-mod chunk_encoding_tests;
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateManifestInput {
     pub template_id: TemplateId,
     pub role: CanisterRole,
@@ -45,8 +31,11 @@ pub struct TemplateManifestInput {
 // TemplateManifestResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateManifestResponse {
     pub template_id: TemplateId,
     pub role: CanisterRole,
@@ -64,8 +53,11 @@ pub struct TemplateManifestResponse {
 // TemplateChunkSetPrepareInput
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateChunkSetPrepareInput {
     /// Optional approved manifest admitted atomically with this exact chunk set.
     pub manifest: Option<TemplateManifestInput>,
@@ -80,8 +72,7 @@ pub struct TemplateChunkSetPrepareInput {
 // TemplateChunkInput
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct TemplateChunkInput {
     /// Exact metadata admitted with chunk zero; absent for subsequent chunks.
     pub preparation: Option<TemplateChunkSetPrepareInput>,
@@ -91,24 +82,15 @@ pub struct TemplateChunkInput {
     pub bytes: Vec<u8>,
 }
 
-/// Borrowed encoding of [`TemplateChunkInput`] without copying retained chunk bytes.
-/// Its complete Candid shape and encoded bytes match the owned request.
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct TemplateChunkInputRef<'a> {
-    pub preparation: Option<&'a TemplateChunkSetPrepareInput>,
-    pub template_id: &'a TemplateId,
-    pub version: &'a TemplateVersion,
-    pub chunk_index: u32,
-    pub bytes: &'a [u8],
-}
-
 //
 // TemplateChunkSetInfoResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateChunkSetInfoResponse {
     pub chunk_hashes: Vec<Vec<u8>>,
 }
@@ -117,23 +99,33 @@ pub struct TemplateChunkSetInfoResponse {
 // TemplateChunkResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateChunkResponse {
+    #[serde(with = "serde_bytes")]
     pub bytes: Vec<u8>,
 }
 
 /// Exact template release key used by Store command inspection.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateLookupRequest {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
 }
 
 /// Exact template chunk key used by the Store's bounded read lane.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateChunkRequest {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -144,8 +136,11 @@ pub struct TemplateChunkRequest {
 // WasmStoreCatalogEntryResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreCatalogEntryResponse {
     pub role: CanisterRole,
     pub template_id: TemplateId,
@@ -158,8 +153,11 @@ pub struct WasmStoreCatalogEntryResponse {
 // WasmStoreTemplateStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreTemplateStatusResponse {
     pub template_id: TemplateId,
     pub versions: u16,
@@ -169,8 +167,11 @@ pub struct WasmStoreTemplateStatusResponse {
 // WasmStoreGcStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreGcStatusResponse {
     pub mode: WasmStoreGcMode,
     /// Whole seconds since the Unix epoch; zero means no transition yet.
@@ -188,8 +189,11 @@ pub struct WasmStoreGcStatusResponse {
 // WasmStoreStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreStatusResponse {
     pub inventory: WasmStoreInventoryResponse,
     pub gc: WasmStoreGcStatusResponse,
@@ -210,8 +214,11 @@ pub struct WasmStoreStatusResponse {
 }
 
 /// Aggregate retained inventory; template and opaque fixture chunks stay distinct.
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreInventoryResponse {
     pub approved_catalog_entries: u64,
     pub expected_template_chunks: u64,
@@ -222,127 +229,36 @@ pub struct WasmStoreInventoryResponse {
 }
 
 /// Store garbage-collection detail projected through the operation lane.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreGcOperationStatus {
     pub operation_id: [u8; 32],
     pub gc: WasmStoreGcStatusResponse,
 }
 
 /// Exact outcome requested from the existing Store retirement operation.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum WasmStoreGcTarget {
     Complete,
     Prepared,
 }
 
 /// Root-owned retirement intent; preparation replay never authorizes collection.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreGcRequest {
     pub operation_id: [u8; 32],
     pub target: WasmStoreGcTarget,
-}
-
-/// Closed Store control-plane command union.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreCommand {
-    ActivateFleet(FleetActivationRequest),
-    InspectTemplate(TemplateLookupRequest),
-    PrepareChunkSet(TemplateChunkSetPrepareInput),
-    PrepareFleetCredential(FleetCredentialGenerationRequest),
-    PrepareFixture(FixtureDescriptor),
-    ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationRequest),
-    RespondCapability(NonrootCyclesCapabilityEnvelopeV1),
-    RunGc(WasmStoreGcRequest),
-    StageManifest(TemplateManifestInput),
-    SetFixtureGrant(Box<FixtureGrantRequest>),
-    SynchronizeState(StateSnapshotInput),
-    SynchronizeTopology(TopologySnapshotInput),
-}
-
-/// Closed response union correlated to one accepted Store command.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreCommandResponse {
-    FixtureSource(Result<FixtureSourceStatus, FixtureStoreError>),
-    FixtureGrant(Box<Result<FixtureGrant, FixtureStoreError>>),
-    InspectTemplate(TemplateChunkSetInfoResponse),
-    OperationAccepted(OperationReceipt),
-    PrepareChunkSet(TemplateChunkSetInfoResponse),
-    ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationResponse),
-    RespondCapability(NonrootCyclesCapabilityResponseV1),
-    StageManifest,
-    SynchronizeState(crate::dto::cascade::StateCascadeReport),
-    SynchronizeTopology,
-}
-
-/// Store diagnostics are uniformly controller-authorized.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreObservabilityRequest {
-    CycleBalance,
-    CycleHistory(crate::dto::page::PageRequest),
-}
-
-/// Store diagnostic results under one controller rule.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreObservabilityResponse {
-    CycleBalance(crate::dto::role::CycleBalanceStatusResponse),
-    CycleHistory(crate::dto::page::Page<crate::dto::cycles::CycleTrackerEntry>),
-}
-
-/// Store catalog reads share the existing Store publication-caller authority.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreCatalogRequest {
-    Catalog,
-    Fixture([u8; 32]),
-    FixtureGrant(Principal),
-    Storage,
-    Template(TemplateLookupRequest),
-}
-
-/// Catalog results under one Store publication-caller rule.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreCatalogResponse {
-    Catalog(Vec<WasmStoreCatalogEntryResponse>),
-    Fixture(Result<FixtureSourceStatus, FixtureStoreError>),
-    FixtureGrant(Option<Box<FixtureGrant>>),
-    Storage(WasmStoreStatusResponse),
-    Template(TemplateStagingStatusResponse),
-}
-
-/// Controller-owned Store authority and operation reads.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreStatusRequest {
-    Authority,
-    Operation(OperationStatusRequest),
-}
-
-/// Store-owned durable operation detail selected by one operation ID.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the accepted Candid union carries each existing status DTO directly"
-)]
-pub enum StoreOperationStatusResponse {
-    FleetActivation(FleetActivationStatusResponse),
-    GarbageCollection(WasmStoreGcOperationStatus),
-}
-
-/// Responses to controller-owned Store authority and operation reads.
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum StoreStatusResponse {
-    Authority(FleetSubnetWasmStoreAuthority),
-    Operation(StoreOperationStatusResponse),
 }
 
 /// Minimum operational headroom retained above the live freezing reserve while
@@ -356,8 +272,11 @@ pub const WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000_000_00
 // WasmStoreDeletionCycleReclamationRequest
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStoreDeletionCycleReclamationRequest {
     pub retained_cycles_target: u128,
 }
@@ -366,8 +285,7 @@ pub struct WasmStoreDeletionCycleReclamationRequest {
 // WasmStoreDeletionCycleReclamationResponse
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct WasmStoreDeletionCycleReclamationResponse {
     pub destination: Principal,
     pub cycles_before: u128,
@@ -380,8 +298,11 @@ pub struct WasmStoreDeletionCycleReclamationResponse {
 // WasmStorePublicationSlotResponse
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum WasmStorePublicationSlotResponse {
     Active,
     Detached,
@@ -392,8 +313,7 @@ pub enum WasmStorePublicationSlotResponse {
 // WasmStoreOverviewStoreResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreOverviewStoreResponse {
     pub binding: WasmStoreBinding,
     pub pid: Principal,
@@ -421,8 +341,7 @@ pub struct WasmStoreOverviewStoreResponse {
 // WasmStoreOverviewResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreOverviewResponse {
     pub publication: WasmStorePublicationStateResponse,
     pub stores: Vec<WasmStoreOverviewStoreResponse>,
@@ -432,8 +351,11 @@ pub struct WasmStoreOverviewResponse {
 // TemplateStagingStatusResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct TemplateStagingStatusResponse {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -452,8 +374,11 @@ pub struct TemplateStagingStatusResponse {
 // WasmStorePublicationStateResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct WasmStorePublicationStateResponse {
     pub active_binding: Option<WasmStoreBinding>,
     pub detached_binding: Option<WasmStoreBinding>,
@@ -469,8 +394,7 @@ pub struct WasmStorePublicationStateResponse {
 // WasmStoreAdminCommand
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum WasmStoreAdminCommand {
     PublishActiveReleaseSet,
 }
@@ -479,32 +403,7 @@ pub enum WasmStoreAdminCommand {
 // WasmStoreAdminResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub enum WasmStoreAdminResponse {
     PublishedActiveReleaseSet,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ic_platform::candid::contract::{Decode, Encode};
-
-    #[test]
-    fn store_status_request_keeps_the_manifest_exact_flat_variants() {
-        let requests = [
-            StoreStatusRequest::Authority,
-            StoreStatusRequest::Operation(OperationStatusRequest {
-                operation_id: [5; 32],
-            }),
-        ];
-
-        for request in requests {
-            let bytes = Encode!(&request).expect("encode Store status request");
-            assert_eq!(
-                Decode!(&bytes, StoreStatusRequest).expect("decode Store status request"),
-                request
-            );
-        }
-    }
 }

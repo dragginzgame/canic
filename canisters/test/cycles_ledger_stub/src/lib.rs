@@ -1,6 +1,9 @@
 //! Exact Cycles Ledger and NNS routing boundaries for Root pool-refill PocketIC tests.
 
 mod codec;
+mod protocol;
+#[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
+mod schema;
 
 use ic_platform::cdk::call::Call;
 use ic_platform::{
@@ -167,8 +170,11 @@ enum CreateCanisterError {
 }
 
 /// Retry-only fault leaves the original debit and creation identity retained.
-#[derive(CandidType, Clone, Copy, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 enum CreationRetryRefusal {
     InsufficientFunds,
     CreatedInFuture,
@@ -320,20 +326,25 @@ fn icrc1_fee() -> Nat {
 }
 
 // Models a fee change between the host's final fee query and its transfer.
-#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_unit")]
-fn set_transfer_fee_override(fee: Option<Nat>) {
+#[ic_platform::cdk::update(
+    decode_with = "codec::set_transfer_fee_override::decode",
+    encode_with = "codec::set_transfer_fee_override::encode"
+)]
+fn set_transfer_fee_override(fee: Option<u128>) {
     STATE.with_borrow_mut(|state| {
         state
             .as_mut()
             .expect("initialized Ledger fixture")
-            .transfer_fee_override =
-            fee.map(|fee| u128::try_from(fee.0).expect("fixture fee fits u128"));
+            .transfer_fee_override = fee;
     });
 }
 
 // Reject after committing one exact transfer to exercise uncertain-response reconciliation.
-#[ic_platform::cdk::update(decode_with = "codec::decode_args", encode_with = "codec::encode_unit")]
-fn lose_next_transfer_reply() {
+#[ic_platform::cdk::update(
+    decode_with = "codec::lose_next_transfer_reply::decode",
+    encode_with = "codec::lose_next_transfer_reply::encode"
+)]
+fn lose_next_transfer_reply(_request: ()) {
     STATE.with_borrow_mut(|state| {
         state
             .as_mut()
@@ -505,10 +516,10 @@ async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
 }
 
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::withdrawal_count::decode",
+    encode_with = "codec::withdrawal_count::encode"
 )]
-fn withdrawal_count() -> u64 {
+fn withdrawal_count(_request: ()) -> u64 {
     STATE.with_borrow(|state| {
         u64::try_from(
             state
@@ -521,7 +532,10 @@ fn withdrawal_count() -> u64 {
     })
 }
 
-#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_unit")]
+#[ic_platform::cdk::update(
+    decode_with = "codec::set_creation_retry_refusal::decode",
+    encode_with = "codec::set_creation_retry_refusal::encode"
+)]
 fn set_creation_retry_refusal(refusal: Option<CreationRetryRefusal>) {
     assert!(ic_platform::cdk::api::is_controller(
         &ic_platform::cdk::api::msg_caller()
@@ -619,10 +633,10 @@ fn get_subnet_for_canister(
 }
 
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::transfer_count::decode",
+    encode_with = "codec::transfer_count::encode"
 )]
-fn transfer_count() -> u64 {
+fn transfer_count(_request: ()) -> u64 {
     STATE.with_borrow(|state| {
         u64::try_from(
             state
@@ -636,10 +650,10 @@ fn transfer_count() -> u64 {
 }
 
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::request_count::decode",
+    encode_with = "codec::request_count::encode"
 )]
-fn request_count() -> u64 {
+fn request_count(_request: ()) -> u64 {
     STATE.with_borrow(|state| {
         state
             .as_ref()
@@ -649,17 +663,20 @@ fn request_count() -> u64 {
 }
 
 #[ic_platform::cdk::query(
-    decode_with = "codec::decode_args",
-    encode_with = "codec::encode_reply"
+    decode_with = "codec::requested_amounts::decode",
+    encode_with = "codec::requested_amounts::encode"
 )]
-fn requested_amounts() -> Vec<Nat> {
+fn requested_amounts(_request: ()) -> Vec<ic_wire::Bytes<{ protocol::MAGNITUDE_BYTES }>> {
     STATE.with_borrow(|state| {
         state
             .as_ref()
             .expect("Cycles Ledger stub is initialized")
             .requests
             .iter()
-            .map(|request| request.amount.clone())
+            .map(|request| {
+                canic_contracts::ops::unsigned_magnitude::from_nat(&request.amount)
+                    .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()))
+            })
             .collect()
     })
 }

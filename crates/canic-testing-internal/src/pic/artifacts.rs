@@ -10,15 +10,9 @@ use ic_build::artifacts::{
     WasmBuildBatchReport, WasmBuildPhase, WasmBuildProgressConfig, WasmBuildProgressEvent,
     WasmBuildRecord, WasmBuildSpec, build_wasm_canisters_cached_batch, resolve_cargo_build_inputs,
 };
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 use ic_build::artifacts::{ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache};
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 use std::sync::OnceLock;
 use std::{
     fs,
@@ -62,6 +56,7 @@ pub(super) fn with_canonical_root_cargo_inputs(
         target_dir,
         &[evidence.role_package_name.as_str()],
         crate::workspace::wasm_build_environment(),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_cargo_selection(profile.cargo_selection())
     .with_environment(crate::workspace::wasm_build_environment().chain(
@@ -87,13 +82,19 @@ pub(super) const INTERNAL_TEST_PROTOCOL_PROFILE_DIGEST: (&str, &str) = (
     "0404040404040404040404040404040404040404040404040404040404040404",
 );
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
-pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> Vec<u8> {
-    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
-    WASM.get_or_init(|| {
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+struct CanonicalCoordinatorArtifacts {
+    wasm: Vec<u8>,
+    #[cfg(all(test, feature = "governed-pocketic-tests"))]
+    schema: Vec<u8>,
+}
+
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+fn canonical_fleet_coordinator_artifacts(
+    workspace_root: &Path,
+) -> &'static CanonicalCoordinatorArtifacts {
+    static ARTIFACTS: OnceLock<CanonicalCoordinatorArtifacts> = OnceLock::new();
+    ARTIFACTS.get_or_init(|| {
         let config_path = workspace_root.join("apps/test/canic.toml");
         let target_dir = canic_host::canister_build::canister_build_target_root(workspace_root);
         let artifact_path = workspace_root
@@ -121,6 +122,12 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
                     .import_output("fleet_coordinator", &artifact_path)
                     .expect("import canonical Fleet Coordinator artifact");
                 transaction
+                    .import_output(
+                        "fleet_coordinator_schema",
+                        &artifact_path.with_extension("wire.json"),
+                    )
+                    .expect("import canonical Fleet Coordinator schema");
+                transaction
                     .commit()
                     .expect("commit canonical Fleet Coordinator artifact cache")
             }
@@ -140,15 +147,38 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
             "canonical-fleet-coordinator",
             outcome.record().maintenance(),
         );
-        let artifact_path = retained_artifact_path(outcome.record(), "fleet_coordinator");
-        fs::read(artifact_path).unwrap_or_else(|error| {
-            panic!(
-                "read canonical Fleet Coordinator artifact {}: {error}",
-                artifact_path.display()
-            )
-        })
+        let wasm = fs::read(retained_artifact_path(
+            outcome.record(),
+            "fleet_coordinator",
+        ))
+        .expect("read retained canonical Coordinator Wasm");
+        let schema = fs::read(retained_artifact_path(
+            outcome.record(),
+            "fleet_coordinator_schema",
+        ))
+        .expect("read retained canonical Coordinator Wire schema");
+        #[cfg(not(all(test, feature = "governed-pocketic-tests")))]
+        drop(schema);
+        CanonicalCoordinatorArtifacts {
+            wasm,
+            #[cfg(all(test, feature = "governed-pocketic-tests"))]
+            schema,
+        }
     })
-    .clone()
+}
+
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> Vec<u8> {
+    canonical_fleet_coordinator_artifacts(workspace_root)
+        .wasm
+        .clone()
+}
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) fn build_canonical_fleet_coordinator_schema(workspace_root: &Path) -> Vec<u8> {
+    canonical_fleet_coordinator_artifacts(workspace_root)
+        .schema
+        .clone()
 }
 
 /// Borrow one named immutable cache artifact while its record owns retention.
@@ -200,7 +230,6 @@ pub(super) fn build_generated_fleet_wasm(
 
 /// Output directory for the internal cached test-Wasm fixtures.
 #[must_use]
-#[cfg(any(test, feature = "pocketic-fixtures"))]
 pub(super) fn internal_test_artifact_build_target(workspace_root: &Path) -> PathBuf {
     workspace_root.join("target/pic-wasm")
 }
@@ -256,10 +285,7 @@ pub(super) fn preflight_governed_shared_artifacts() {
     let _ = build_canonical_fleet_coordinator_wasm(&workspace_root);
 }
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 fn canonical_fleet_coordinator_cache_spec(
     workspace_root: &Path,
     target_dir: &Path,
@@ -276,6 +302,7 @@ fn canonical_fleet_coordinator_cache_spec(
         target_dir,
         &["canic", "canic-host"],
         crate::workspace::wasm_build_environment(),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("fast".into()),
@@ -323,6 +350,10 @@ fn canonical_fleet_coordinator_cache_spec(
     )
     .with_cargo_build_inputs("coordinator-cargo", &cargo_build, &cargo_inputs)
     .with_output("fleet_coordinator", artifact_path)
+    .with_output(
+        "fleet_coordinator_schema",
+        &artifact_path.with_extension("wire.json"),
+    )
     .with_prune_policy_at_most_every(
         internal_test_artifact_prune_policy(),
         internal_test_artifact_maintenance_interval(),
@@ -489,6 +520,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
                             )
                         }),
                     ),
+                    canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
                 )
                 .with_cargo_selection(selection.clone())
                 .with_additional_inputs(additional_inputs.iter().cloned())
@@ -1073,6 +1105,7 @@ mod tests {
             &root.join("target/exact"),
             &["retention_fixture"],
             crate::workspace::wasm_build_environment(),
+            canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
         )
         .with_shared_incremental_target(&target);
         // Sparse files exercise the actual logical-byte accounting without

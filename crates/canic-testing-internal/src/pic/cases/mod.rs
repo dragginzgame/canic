@@ -36,11 +36,14 @@ pub(super) fn rust_test_path<T>(test: &T) -> &'static str {
 // These native modules are also compiled and executed by ordinary discovery.
 const ORDINARY_NATIVE_MODULES: &[&str] = &[
     "embedded_root::tests::",
+    "payload_contract::tests::",
+    "pic::application_probe::tests::",
     "pic::artifacts::tests::",
     "pic::journey_policy::tests::",
     "pic::lifecycle::fast_tests::",
     "pic::progress::tests::",
     "pic::root::snapshot::tests::",
+    "pic::runtime_probe::tests::",
     "pic::timing::tests::",
 ];
 
@@ -49,6 +52,7 @@ const ORDINARY_NATIVE_MODULES: &[&str] = &[
 const EXPLICIT_SELECTIONS: &[&str] = &[
     "embedded_root::tests::embedded_peer_reproduces_across_paths_and_release_versions",
     "pic::artifacts::tests::infrastructure_direct_builds_match_examples_and_cached_coordinator",
+    "pic::blob_service::tests::managed_browser_compositions",
     "pic::fleet_registry::baseline::tests::completed_reset::incident_estate_reset_recovers_and_replays",
     "pic::fleet_registry::baseline::tests::frontend_handoff_public_cli_and_sdk_preserve_admission_and_local_trust",
     "pic::fleet_registry::baseline::tests::persistent_local_fleet_converges_two_roots_through_public_host",

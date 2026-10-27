@@ -9,7 +9,7 @@ fn certificate(
     module: Option<HashTree>,
 ) -> Certificate {
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(controllers, &mut bytes).unwrap();
+    serde_cbor::to_writer(&mut bytes, &controllers).unwrap();
     let controllers = labeled(b"controllers", leaf(bytes));
     let fields = module.map_or_else(
         || controllers.clone(),

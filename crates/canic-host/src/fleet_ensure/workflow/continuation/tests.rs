@@ -124,10 +124,10 @@ fn fixture() -> (
             fixture_publication_retry_attempts: 0,
             app_config_sha256: "11".repeat(32),
             application_artifact_union_sha256: "22".repeat(32),
-            coordinator_candid_sha256: "33".repeat(32),
+            coordinator_wire_schema_sha256: "33".repeat(32),
             maximum_successor_actions: 2,
-            root_candid_sha256: "44".repeat(32),
-            store_candid_sha256: "55".repeat(32),
+            root_wire_schema_sha256: "44".repeat(32),
+            store_wire_schema_sha256: "55".repeat(32),
         }),
         conservation,
         desired_sha256: "66".repeat(32),
@@ -155,8 +155,8 @@ fn fixture() -> (
             minimum_ready: 1,
             readiness_floor: Cycles::new(5),
         }),
-        candid: "root.did".into(),
-        candid_sha256: "44".repeat(32),
+        wire_schema: "root.wire.json".into(),
+        wire_schema_sha256: "44".repeat(32),
         maximum_execution_burn_cycles: 0,
         name: "readiness".into(),
         principal: ROOT.into(),
@@ -190,7 +190,6 @@ fn observation() -> FleetObservation {
         estate_funding_domains: BTreeMap::new(),
         ledger_fee_cycles: 0,
         operator_cycles: 2000,
-        protocol_ready: BTreeMap::new(),
     }
 }
 

@@ -19,7 +19,7 @@ use crate::{
 use canic_contracts::ids::BuildNetwork;
 use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 
-pub use crate::infra::ic::icp_refill::Icrc1Account;
+pub use crate::infra::ic::icp_refill::Account;
 
 ///
 /// IcpRefillOps
@@ -81,7 +81,7 @@ impl IcpRefillOps {
 
     pub async fn icrc1_balance_of(
         ledger_id: Principal,
-        account: Icrc1Account,
+        account: Account,
     ) -> Result<Nat, InternalError> {
         map_infra(IcpRefillInfra::icrc1_balance_of(ledger_id, account).await)
     }

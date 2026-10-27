@@ -75,7 +75,7 @@ use canic_core::control_plane_support::{
     },
 };
 use failure::{failure_response, failure_view};
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -85,8 +85,7 @@ const CLAIM_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-claim-cur
 const INSTALL_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-install-cursor/v1";
 const REGISTRY_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-registry-cursor/v1";
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentProvisioningMemberOperationAuthority<'a> {
     fleet_subnet_root: Principal,
     operation_id: [u8; 32],
@@ -95,8 +94,7 @@ struct RootComponentProvisioningMemberOperationAuthority<'a> {
     member_path: &'a ComponentGroupMemberPath,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentProvisioningReservationCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -105,8 +103,7 @@ struct RootComponentProvisioningReservationCursorAuthority {
     reserved_component_count: u32,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentProvisioningClaimCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -115,8 +112,7 @@ struct RootComponentProvisioningClaimCursorAuthority {
     claimed_component_count: u32,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentProvisioningInstallCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -125,8 +121,7 @@ struct RootComponentProvisioningInstallCursorAuthority {
     installed_component_count: u32,
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(serde::Serialize)]
 struct RootComponentProvisioningRegistryCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -149,6 +144,14 @@ struct ProvisioningCursorRecords {
     claim: RootComponentProvisioningClaimCursorRecord,
     install: RootComponentProvisioningInstallCursorRecord,
     registry: RootComponentProvisioningRegistryCursorRecord,
+}
+
+/// One stage-specific cursor replacement after exact member evidence is validated.
+enum ProvisioningCursorAdvance {
+    Reservation(RootComponentProvisioningReservationCursorRecord),
+    Claim(RootComponentProvisioningClaimCursorRecord),
+    Install(RootComponentProvisioningInstallCursorRecord),
+    Registry(RootComponentProvisioningRegistryCursorRecord),
 }
 
 struct ProvisionedMemberEvidence {
@@ -580,45 +583,11 @@ impl RootComponentProvisioningOps {
         request: RootComponentProvisioningAdvanceRequest,
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
-        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(InternalError::unavailable)?;
-        let current = validated_record(current_record.clone())?;
-        if Self::advance_disposition(request, &current)?
-            != RootComponentProvisioningAdvanceDisposition::Advance
-            || current.reservation_cursor.reserved_component_count == current.component_count
-        {
-            return Err(InternalError::conflict());
-        }
-        let member = Self::next_member_reservation(&current)?;
-        validate_reserved_member(&current, &member, allocation)?;
-        let next_cursor = advance_reservation_cursor(&current)?;
-        let mut next_record = current_record.clone();
-        let RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            claim_cursor,
-            install_cursor,
-            registry_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-            ..
-        } = next_record.state
-        else {
-            return Err(InternalError::invariant());
-        };
-        next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            reservation_cursor: next_cursor,
-            claim_cursor,
-            install_cursor,
-            registry_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-        };
-        RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
-            .map_err(map_commit_error)?;
-        validated_record(next_record)
+        commit_member_advance(request, |current| {
+            let member = Self::next_member_reservation(current)?;
+            validate_reserved_member(current, &member, allocation)?;
+            advance_reservation_cursor(current).map(ProvisioningCursorAdvance::Reservation)
+        })
     }
 
     /// Commit one exact reconciled prepaid-Canister claim to the aggregate cursor.
@@ -626,46 +595,12 @@ impl RootComponentProvisioningOps {
         request: RootComponentProvisioningAdvanceRequest,
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
-        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(InternalError::unavailable)?;
-        let current = validated_record(current_record.clone())?;
-        if Self::advance_disposition(request, &current)?
-            != RootComponentProvisioningAdvanceDisposition::Advance
-            || current.reservation_cursor.reserved_component_count != current.component_count
-        {
-            return Err(InternalError::conflict());
-        }
-        let member = Self::next_member_claim(&current)?;
-        validate_member_authority(&current, &member, allocation)?;
-        claimed_allocation_canister(&allocation.progress)?;
-        let next_cursor = advance_claim_cursor(&current)?;
-        let mut next_record = current_record.clone();
-        let RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            reservation_cursor,
-            install_cursor,
-            registry_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-            ..
-        } = next_record.state
-        else {
-            return Err(InternalError::invariant());
-        };
-        next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            reservation_cursor,
-            claim_cursor: next_cursor,
-            install_cursor,
-            registry_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-        };
-        RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
-            .map_err(map_commit_error)?;
-        validated_record(next_record)
+        commit_member_advance(request, |current| {
+            let member = Self::next_member_claim(current)?;
+            validate_member_authority(current, &member, allocation)?;
+            claimed_allocation_canister(&allocation.progress)?;
+            advance_claim_cursor(current).map(ProvisioningCursorAdvance::Claim)
+        })
     }
 
     /// Commit one exact verified Store-backed install to the aggregate cursor.
@@ -673,92 +608,24 @@ impl RootComponentProvisioningOps {
         request: RootComponentProvisioningAdvanceRequest,
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
-        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(InternalError::unavailable)?;
-        let current = validated_record(current_record.clone())?;
-        if Self::advance_disposition(request, &current)?
-            != RootComponentProvisioningAdvanceDisposition::Advance
-            || current.claim_cursor.claimed_component_count != current.component_count
-        {
-            return Err(InternalError::conflict());
-        }
-        let member = Self::next_member_install(&current)?;
-        validate_installed_member(&current, &member, allocation)?;
-        let next_cursor = advance_install_cursor(&current)?;
-        let mut next_record = current_record.clone();
-        let RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            reservation_cursor,
-            claim_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-            registry_cursor,
-            ..
-        } = next_record.state
-        else {
-            return Err(InternalError::invariant());
-        };
-        next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            reservation_cursor,
-            claim_cursor,
-            install_cursor: next_cursor,
-            registry_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-        };
-        RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
-            .map_err(map_commit_error)?;
-        validated_record(next_record)
+        commit_member_advance(request, |current| {
+            let member = Self::next_member_install(current)?;
+            validate_installed_member(current, &member, allocation)?;
+            advance_install_cursor(current).map(ProvisioningCursorAdvance::Install)
+        })
     }
 
     /// Commit one exact reconciled Component Registry partition to the aggregate cursor.
     pub(crate) fn mark_member_registry_committed(
         request: RootComponentProvisioningAdvanceRequest,
         allocation: &RootComponentAllocationView,
-        partition: &crate::view::component_registry::ComponentRegistryPartitionView,
+        partition: &ComponentRegistryPartitionView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
-        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(InternalError::unavailable)?;
-        let current = validated_record(current_record.clone())?;
-        if Self::advance_disposition(request, &current)?
-            != RootComponentProvisioningAdvanceDisposition::Advance
-            || current.install_cursor.installed_component_count != current.component_count
-        {
-            return Err(InternalError::conflict());
-        }
-        let member = Self::next_member_registry_commit(&current)?;
-        validate_registry_committed_member(&current, &member, allocation, partition)?;
-        let next_cursor = advance_registry_cursor(&current)?;
-        let mut next_record = current_record.clone();
-        let RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            reservation_cursor,
-            claim_cursor,
-            install_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-            ..
-        } = next_record.state
-        else {
-            return Err(InternalError::invariant());
-        };
-        next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
-            placement_count,
-            component_count,
-            reservation_cursor,
-            claim_cursor,
-            install_cursor,
-            registry_cursor: next_cursor,
-            accepted_at_ns,
-            receipt_content_hash,
-        };
-        RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
-            .map_err(map_commit_error)?;
-        validated_record(next_record)
+        commit_member_advance(request, |current| {
+            let member = Self::next_member_registry_commit(current)?;
+            validate_registry_committed_member(current, &member, allocation, partition)?;
+            advance_registry_cursor(current).map(ProvisioningCursorAdvance::Registry)
+        })
     }
 
     /// Freeze one complete group-partitioned result after every Registry commit.
@@ -2750,6 +2617,43 @@ fn provisioned_receipt_hash(
     )
 }
 
+fn commit_member_advance(
+    request: RootComponentProvisioningAdvanceRequest,
+    prepare: impl FnOnce(
+        &RootComponentProvisioningView,
+    ) -> Result<ProvisioningCursorAdvance, InternalError>,
+) -> Result<RootComponentProvisioningView, InternalError> {
+    let current_record = RootComponentProvisioningStore::operation(request.operation_id)
+        .ok_or_else(InternalError::unavailable)?;
+    let current = validated_record(current_record.clone())?;
+    if RootComponentProvisioningOps::advance_disposition(request, &current)?
+        != RootComponentProvisioningAdvanceDisposition::Advance
+    {
+        return Err(InternalError::conflict());
+    }
+    let next_cursor = prepare(&current)?;
+    let mut next_record = current_record.clone();
+    let RootComponentProvisioningStateRecordPhase::Accepted {
+        reservation_cursor,
+        claim_cursor,
+        install_cursor,
+        registry_cursor,
+        ..
+    } = &mut next_record.state
+    else {
+        return Err(InternalError::invariant());
+    };
+    match next_cursor {
+        ProvisioningCursorAdvance::Reservation(cursor) => *reservation_cursor = cursor,
+        ProvisioningCursorAdvance::Claim(cursor) => *claim_cursor = cursor,
+        ProvisioningCursorAdvance::Install(cursor) => *install_cursor = cursor,
+        ProvisioningCursorAdvance::Registry(cursor) => *registry_cursor = cursor,
+    }
+    RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
+        .map_err(map_commit_error)?;
+    validated_record(next_record)
+}
+
 fn validate_record_cursors(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -3091,7 +2995,7 @@ fn reservation_cursor_record(
         placement_index,
         member_index,
         reserved_component_count,
-        content_hash: domain_separated_candid_hash(RESERVATION_CURSOR_DOMAIN, authority)?,
+        content_hash: domain_separated_wire_hash(RESERVATION_CURSOR_DOMAIN, authority)?,
     })
 }
 
@@ -3113,7 +3017,7 @@ fn claim_cursor_record(
         placement_index,
         member_index,
         claimed_component_count,
-        content_hash: domain_separated_candid_hash(CLAIM_CURSOR_DOMAIN, authority)?,
+        content_hash: domain_separated_wire_hash(CLAIM_CURSOR_DOMAIN, authority)?,
     })
 }
 
@@ -3135,7 +3039,7 @@ fn install_cursor_record(
         placement_index,
         member_index,
         installed_component_count,
-        content_hash: domain_separated_candid_hash(INSTALL_CURSOR_DOMAIN, authority)?,
+        content_hash: domain_separated_wire_hash(INSTALL_CURSOR_DOMAIN, authority)?,
     })
 }
 
@@ -3157,7 +3061,7 @@ fn registry_cursor_record(
         placement_index,
         member_index,
         registry_committed_component_count,
-        content_hash: domain_separated_candid_hash(REGISTRY_CURSOR_DOMAIN, authority)?,
+        content_hash: domain_separated_wire_hash(REGISTRY_CURSOR_DOMAIN, authority)?,
     })
 }
 
@@ -3168,7 +3072,7 @@ fn member_operation_id(
     group_placement: &ComponentGroupPlacementId,
     member_path: &ComponentGroupMemberPath,
 ) -> Result<[u8; 32], InternalError> {
-    domain_separated_candid_hash(
+    domain_separated_wire_hash(
         MEMBER_OPERATION_DOMAIN,
         RootComponentProvisioningMemberOperationAuthority {
             fleet_subnet_root,
@@ -3371,11 +3275,11 @@ const fn claimed_allocation_canister(
     }
 }
 
-fn domain_separated_candid_hash<T: CandidType>(
+fn domain_separated_wire_hash<T: serde::Serialize>(
     domain: &[u8],
     value: T,
 ) -> Result<[u8; 32], InternalError> {
-    let bytes = ic_platform::candid::contract::encode_one(value)
+    let bytes = canic_contracts::protocol::authority::encode(value)
         .map_err(|_error| InternalError::invariant())?;
     let byte_count = u64::try_from(bytes.len()).map_err(|_| InternalError::resource_exhausted())?;
     let mut hasher = Sha256::new();

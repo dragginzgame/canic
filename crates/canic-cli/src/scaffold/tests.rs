@@ -241,7 +241,11 @@ fn scaffold_canister_writes_declared_only_role_files() {
     assert!(manifest.contains("name = \"canister_demo_store\""));
     assert!(manifest.contains("app = \"demo\""));
     assert!(manifest.contains("role = \"store\""));
-    assert!(manifest.contains("crate-type = [\"cdylib\"]"));
+    assert!(manifest.contains("crate-type = [\"cdylib\", \"rlib\"]"));
+    assert!(manifest.contains("wire-schema = [\"canic/wire-schema\"]"));
+    let producer = fs::read_to_string(app_dir.join("store/examples/wire_schema/main.rs")).unwrap();
+    assert!(producer.contains("use canister_demo_store as _;"));
+    assert!(producer.contains("canic::endpoint::schema::producer::run()"));
     assert!(manifest.contains("Add runtime Canic features here"));
     let parsed_manifest: toml::Value = toml::from_str(&manifest).expect("valid role manifest");
     assert_eq!(

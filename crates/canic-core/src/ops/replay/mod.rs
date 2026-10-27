@@ -9,12 +9,11 @@ pub mod receipt;
 pub mod ttl;
 
 use crate::{
-    cdk::types::Principal,
-    dto::{
-        auth::RoleAttestationPrepareResponse,
-        icp_refill::IcpRefillResponse,
-        rpc::{CyclesResponse, Response},
+    cdk::{
+        serialize::{deserialize, serialize},
+        types::Principal,
     },
+    dto::{auth::RoleAttestationPrepareResponse, icp_refill::IcpRefillResponse, rpc::Response},
     model::replay::{ExternalEffectDescriptor, RecoveryReason, ReplayActor, ReplayReceipt},
     ops::{
         replay::{
@@ -30,16 +29,11 @@ use crate::{
         storage::replay::ReplayReceiptOps,
     },
 };
-use ic_platform::candid::{
-    contract::{CandidType, encode_one},
-    decoder::decode_one,
-};
+use serde::Serialize;
 
 pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
-const ROOT_REPLAY_COMPACT_TAG: &[u8] = b"RR1";
-const ROOT_REPLAY_COMPACT_CYCLES_V1: u8 = 0;
 const ROOT_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
 ///
@@ -161,8 +155,7 @@ pub fn stage_root_replay_response(
     response: &Response,
     now_ns: u64,
 ) -> Result<(), ReplayFinalizeError> {
-    let response_bytes =
-        encode_root_replay_response(response).map_err(ReplayFinalizeError::Encode)?;
+    let response_bytes = encode_replay_response(response).map_err(ReplayFinalizeError::Encode)?;
     stage_receipt_response(
         &pending.receipt_token,
         ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
@@ -202,11 +195,7 @@ pub fn mark_root_replay_recovery_required(
 ///
 /// Decode cached replay bytes back into the canonical root response payload.
 pub fn decode_root_replay_response(bytes: &[u8]) -> Result<Response, ReplayDecodeError> {
-    if let Some(response) = try_decode_compact_root_replay_response(bytes)? {
-        return Ok(response);
-    }
-
-    decode_one(bytes).map_err(|err| ReplayDecodeError::DecodeFailed(err.to_string()))
+    deserialize(bytes).map_err(|err| ReplayDecodeError::DecodeFailed(err.to_string()))
 }
 
 /// decode_icp_refill_replay_response
@@ -220,7 +209,7 @@ pub fn decode_icp_refill_replay_response(
         ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
         "ICP refill",
     )?;
-    decode_one(response_bytes).map_err(|err| {
+    deserialize(response_bytes).map_err(|err| {
         ReplayDecodeError::DecodeFailed(format!(
             "failed to decode ICP refill replay response: {err}"
         ))
@@ -228,8 +217,8 @@ pub fn decode_icp_refill_replay_response(
 }
 
 /// Encode one typed response payload stored in shared replay receipts.
-pub fn encode_replay_response<T: CandidType>(response: &T) -> Result<Vec<u8>, ReplayCommitError> {
-    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
+pub fn encode_replay_response<T: Serialize>(response: &T) -> Result<Vec<u8>, ReplayCommitError> {
+    serialize(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
 }
 
 /// decode_role_attestation_prepare_replay_response
@@ -243,7 +232,7 @@ pub fn decode_role_attestation_prepare_replay_response(
         ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
         "role attestation prepare",
     )?;
-    decode_one(response_bytes).map_err(|err| {
+    deserialize(response_bytes).map_err(|err| {
         ReplayDecodeError::DecodeFailed(format!(
             "failed to decode role attestation prepare replay response: {err}"
         ))
@@ -255,27 +244,6 @@ pub fn decode_role_attestation_prepare_replay_response(
 /// Remove an in-flight replay reservation after failed capability execution.
 pub fn abort_root_replay(pending: ReplayPending) -> Result<(), ReplayReceiptStoreError> {
     abort_reserved_receipt(&pending.receipt_token)
-}
-
-fn encode_root_replay_response(response: &Response) -> Result<Vec<u8>, ReplayCommitError> {
-    if let Some(bytes) = try_encode_compact_root_replay_response(response) {
-        return Ok(bytes);
-    }
-
-    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
-}
-
-fn try_encode_compact_root_replay_response(response: &Response) -> Option<Vec<u8>> {
-    let Response::Cycles(CyclesResponse::Transferred { cycles_transferred }) = response else {
-        return None;
-    };
-
-    let payload = cycles_transferred.to_be_bytes();
-    let mut bytes = Vec::with_capacity(ROOT_REPLAY_COMPACT_TAG.len() + 1 + payload.len());
-    bytes.extend_from_slice(ROOT_REPLAY_COMPACT_TAG);
-    bytes.push(ROOT_REPLAY_COMPACT_CYCLES_V1);
-    bytes.extend_from_slice(&payload);
-    Some(bytes)
 }
 
 fn committed_response_bytes<'a>(
@@ -300,64 +268,12 @@ fn committed_response_bytes<'a>(
     })
 }
 
-fn try_decode_compact_root_replay_response(
-    bytes: &[u8],
-) -> Result<Option<Response>, ReplayDecodeError> {
-    if !bytes.starts_with(ROOT_REPLAY_COMPACT_TAG) {
-        return Ok(None);
-    }
-
-    let Some((&kind, mut payload)) = bytes[ROOT_REPLAY_COMPACT_TAG.len()..].split_first() else {
-        return Err(ReplayDecodeError::DecodeFailed(
-            "root replay compact payload missing variant tag".to_string(),
-        ));
-    };
-
-    match kind {
-        ROOT_REPLAY_COMPACT_CYCLES_V1 => {
-            let cycles_transferred = decode_u128(&mut payload)?;
-            if !payload.is_empty() {
-                return Err(ReplayDecodeError::DecodeFailed(
-                    "root replay compact cycles payload had trailing bytes".to_string(),
-                ));
-            }
-            Ok(Some(Response::Cycles(CyclesResponse::Transferred {
-                cycles_transferred,
-            })))
-        }
-        other => Err(ReplayDecodeError::DecodeFailed(format!(
-            "unknown root replay compact variant tag: {other}"
-        ))),
-    }
-}
-
-fn decode_u128(payload: &mut &[u8]) -> Result<u128, ReplayDecodeError> {
-    let raw = take_exact(payload, 16, "u128 field")?;
-    let mut bytes = [0u8; 16];
-    bytes.copy_from_slice(raw);
-    Ok(u128::from_be_bytes(bytes))
-}
-
-fn take_exact<'a>(
-    payload: &mut &'a [u8],
-    len: usize,
-    context: &'static str,
-) -> Result<&'a [u8], ReplayDecodeError> {
-    if payload.len() < len {
-        return Err(ReplayDecodeError::DecodeFailed(format!(
-            "root replay compact payload truncated while reading {context}"
-        )));
-    }
-    let (value, rest) = payload.split_at(len);
-    *payload = rest;
-    Ok(value)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
+        dto::rpc::CyclesResponse,
         model::replay::{CommandKind, OperationId, ReplayActor},
         ops::{
             replay::{
@@ -399,24 +315,22 @@ mod tests {
     }
 
     #[test]
-    fn compact_root_replay_round_trips_cycles_response() {
-        let response = Response::Cycles(CyclesResponse::Transferred {
-            cycles_transferred: 123_456_789_012_345_678_901_234_567_890u128,
-        });
-        let encoded = encode_root_replay_response(&response).expect("encode");
-
-        assert!(
-            encoded.starts_with(ROOT_REPLAY_COMPACT_TAG),
-            "cycles replay should use compact encoding"
-        );
-        assert_eq!(&encoded[..ROOT_REPLAY_COMPACT_TAG.len()], b"RR1");
-
-        let decoded = decode_root_replay_response(&encoded).expect("decode");
-        match (decoded, response) {
-            (Response::Cycles(decoded), Response::Cycles(expected)) => {
-                assert_eq!(decoded.cycles_transferred(), expected.cycles_transferred());
-            }
-            _ => panic!("expected cycles replay response"),
+    fn stored_root_replay_preserves_full_range_cycles_and_rejects_trailing_data() {
+        for amount in [0, u128::from(u64::MAX) + 1, u128::MAX] {
+            let response = Response::Cycles(CyclesResponse::Transferred {
+                cycles_transferred: amount,
+            });
+            let mut encoded = encode_replay_response(&response).expect("encode");
+            let Response::Cycles(decoded) = decode_root_replay_response(&encoded).expect("decode")
+            else {
+                panic!("expected cycles response");
+            };
+            assert_eq!(decoded.cycles_transferred(), Some(amount));
+            encoded.push(0);
+            assert!(matches!(
+                decode_root_replay_response(&encoded),
+                Err(ReplayDecodeError::DecodeFailed(_))
+            ));
         }
     }
 

@@ -6,17 +6,14 @@ use super::*;
 use ic_platform::pocket_ic::common::rest::RawMessageId;
 
 fn probe(pic: &PocketIc, hub: Principal, caller: Principal) -> Result<Principal, Error> {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(hub, caller, "test_caller_probe", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+        pic,
+        hub,
+        caller,
+        crate::pic::application_probe::CALLER_PROBE,
+        &(),
+    )
+    .map(|reply| reply.map(Into::into))
     .expect("caller probe transport")
 }
 
@@ -33,45 +30,36 @@ pub(super) fn qualify_live_projection(
     assert_eq!(probe(pic, hub, hub), denied);
     assert_eq!(probe(pic, hub, Principal::anonymous()), denied);
     let target: Result<Principal, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((shard,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(hub, root, "test_caller_target", request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+            pic,
+            hub,
+            root,
+            crate::pic::application_probe::CALLER_TARGET,
+            &ic_platform::Principal::from(shard),
+        )
+        .map(|reply| reply.map(Into::into))
         .unwrap();
     assert_eq!(target, Ok(shard));
     let invalid: Result<Principal, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((hub,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(hub, root, "test_caller_target", request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+            pic,
+            hub,
+            root,
+            crate::pic::application_probe::CALLER_TARGET,
+            &ic_platform::Principal::from(hub),
+        )
+        .map(|reply| reply.map(Into::into))
         .unwrap();
     assert_eq!(invalid, denied);
     let unauthorized_proxy: Result<Principal, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((shard,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(hub, shard, "test_caller_target", request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+            pic,
+            hub,
+            shard,
+            crate::pic::application_probe::CALLER_TARGET,
+            &ic_platform::Principal::from(shard),
+        )
+        .map(|reply| reply.map(Into::into))
         .unwrap();
     assert_eq!(
         unauthorized_proxy,
@@ -100,17 +88,13 @@ pub(super) fn hold_effect(
     shard: Principal,
 ) -> (RawMessageId, u64) {
     assert_eq!(probe(pic, hub, shard), Ok(shard));
-    (|| -> Result<(Result<(), Error>,), Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((true,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(hub, root, "test_caller_hold", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+        pic,
+        hub,
+        root,
+        crate::pic::application_probe::CALLER_HOLD,
+        &true,
+    )
     .unwrap()
     .unwrap();
     let before = effects(pic, root, hub).1;
@@ -119,7 +103,12 @@ pub(super) fn hold_effect(
             hub,
             shard,
             "test_caller_effect",
-            ic_platform::candid::contract::encode_args(()).unwrap(),
+            ic_wire::native::encode_request(
+                crate::pic::application_probe::CALLER_EFFECT.method_id,
+                &(),
+                crate::pic::application_probe::CALLER_EFFECT.request_limits,
+            )
+            .unwrap(),
         )
         .unwrap();
     for _ in 0..24 {
@@ -138,21 +127,21 @@ pub(super) fn assert_effect_fenced(
     shard: Principal,
     held: (RawMessageId, u64),
 ) {
-    (|| -> Result<(Result<(), Error>,), Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args((false,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).update_call(hub, root, "test_caller_hold", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-            .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+        pic,
+        hub,
+        root,
+        crate::pic::application_probe::CALLER_HOLD,
+        &false,
+    )
     .unwrap()
     .unwrap();
-    let result: Result<u64, Error> =
-        ic_platform::candid::decoder::decode_one(&pic.await_call(held.0).unwrap()).unwrap();
+    let result: Result<u64, Error> = ic_wire::native::decode_response(
+        crate::pic::application_probe::CALLER_EFFECT.method_id,
+        &pic.await_call(held.0).unwrap(),
+        crate::pic::application_probe::CALLER_EFFECT.response_limits,
+    )
+    .unwrap();
     assert_eq!(
         result,
         Err(Error::from_registered(
@@ -169,20 +158,13 @@ pub(super) fn assert_effect_fenced(
 }
 
 fn effects(pic: &PocketIc, root: Principal, hub: Principal) -> (bool, u64) {
-    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (pic).query_call(hub, root, "test_caller_effect_status", request_bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-        ic_platform::candid::decode_args::<(Result<(bool, u64), Error>,)>(
-            &reply,
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map_err(Into::into)
-    })()
-    .map(|(reply,)| reply)
+    ic_testkit::pic::query_wire::<_, Result<(bool, u64), Error>>(
+        pic,
+        hub,
+        root,
+        crate::pic::application_probe::CALLER_EFFECT_STATUS,
+        &(),
+    )
     .unwrap()
     .unwrap()
 }
@@ -196,13 +178,7 @@ pub(super) fn hold_during_pending_denial(
     let hub = binding.component.canister_id;
     let shard = binding.canister_id;
     pic.stop_canister(hub, Some(root)).unwrap();
-    let unavailable_receiver = root_command(
-        pic,
-        root,
-        RootCommandFragment::RemoveSubtree(request.clone()),
-    )
-    .err()
-    .unwrap();
+    let unavailable_receiver = remove_subtree(pic, root, request.clone()).err().unwrap();
     assert_eq!(
         unavailable_receiver,
         Error::from_registered(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
@@ -218,17 +194,14 @@ pub(super) fn hold_during_pending_denial(
     root_membership::assert_child_discovery(pic, root, &binding.component, binding);
     pic.start_canister(hub, Some(root)).unwrap();
     let competing: Result<Principal, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(([0xd9_u8; 32],))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(hub, root, "test_create_fixture_child", request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+            pic,
+            hub,
+            root,
+            crate::pic::application_probe::CREATE_FIXTURE_CHILD,
+            &[0xd9_u8; 32],
+        )
+        .map(|reply| reply.map(Into::into))
         .unwrap();
     assert_eq!(
         competing,

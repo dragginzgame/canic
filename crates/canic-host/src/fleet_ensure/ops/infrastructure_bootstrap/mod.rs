@@ -43,8 +43,7 @@ use canic_core::{
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
 use ic_platform::{
-    candid::contract::{CandidType, Nat},
-    principal::ExternalPrincipal as Principal,
+    candid::contract::Nat, icrc_ledger_types::Account, principal::ExternalPrincipal as Principal,
 };
 use sha2_host::{Digest, Sha256};
 use std::{
@@ -408,7 +407,7 @@ pub(in crate::fleet_ensure) fn fleet_observation(
     FleetObservation {
         additional_controlled_cycles: BTreeMap::new(),
         estate_funding_domains: BTreeMap::new(),
-        protocol_ready: BTreeMap::new(),
+
         operator_cycles: view.operator_cycles,
         ledger_fee_cycles: view.ledger_fee_cycles,
         canisters: view
@@ -451,11 +450,11 @@ fn verify_ready_coordinator(
         return Ok(());
     }
     let encoded = record
-        .coordinator_registry_candid_hex
+        .coordinator_registry_wire_hex
         .as_ref()
         .ok_or(InfrastructureBootstrapError::Integrity)?;
     let bytes = decode_hex(encoded).map_err(|_| InfrastructureBootstrapError::Integrity)?;
-    let observed: FleetRegistry = ic_platform::candid::decoder::decode_one(&bytes)
+    let observed: FleetRegistry = canic_contracts::protocol::authority::decode(&bytes)
         .map_err(|_| InfrastructureBootstrapError::Integrity)?;
     let principals = desired
         .canisters
@@ -555,13 +554,6 @@ pub(in crate::fleet_ensure::ops) fn verify_registry(
     Ok(())
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct LedgerAccount {
-    owner: Principal,
-    subaccount: Option<Vec<u8>>,
-}
-
 /// Read exact management custody; the caller has reserved the phase's observation allowance.
 pub(in crate::fleet_ensure::ops) fn observe(
     icp: &IcpCli,
@@ -624,7 +616,7 @@ pub(in crate::fleet_ensure::ops) fn observe(
         .canister_query_candid(
             &desired.cycles_ledger,
             "icrc1_balance_of",
-            &LedgerAccount {
+            &Account {
                 owner: record.operator,
                 subaccount: None,
             },
@@ -740,11 +732,11 @@ pub(in crate::fleet_ensure) fn verify_initial(
     let actual_registry = observed
         .coordinator_registry
         .as_ref()
-        .map(ic_platform::candid::contract::encode_one)
+        .map(canic_contracts::protocol::authority::encode)
         .transpose()
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
         .map(hex_bytes);
-    if source.coordinator_registry_candid_hex != actual_registry {
+    if source.coordinator_registry_wire_hex != actual_registry {
         return Err(InfrastructureBootstrapError::Integrity);
     }
     Ok(())

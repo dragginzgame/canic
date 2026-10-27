@@ -42,7 +42,7 @@ pub fn observe(
         .filter(|_| page.has_more)
         .map(|entry| entry.slot);
     Ok(ReplayReleaseResponse {
-        owner,
+        owner: owner.into(),
         entry,
         next_after,
     })
@@ -83,7 +83,7 @@ fn project(entry: ReplayReceiptEntryRecord) -> Result<ReplayReleaseEntry, Intern
         slot: entry.key.0,
         command_kind: record.command_kind,
         operation_id: record.operation_id,
-        actor: record.actor.effective_principal,
+        actor: record.actor.effective_principal.into(),
         authentication,
         payload_hash_schema_version: record.payload_hash_schema_version,
         payload_hash: record.payload_hash,
@@ -140,7 +140,10 @@ fn project_effect(effect: ExternalEffectDescriptor) -> Result<Effect, InternalEr
         }
         ExternalEffectDescriptor::ManagementCall { canister, method } => {
             bounded_identity(&method)?;
-            Effect::ManagementCall { canister, method }
+            Effect::ManagementCall {
+                canister: canister.into(),
+                method,
+            }
         }
         ExternalEffectDescriptor::IcpTransfer { operation_id } => Effect::IcpTransfer {
             operation_id: operation_id.into_bytes(),

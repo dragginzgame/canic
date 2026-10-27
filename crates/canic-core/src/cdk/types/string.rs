@@ -5,7 +5,6 @@
 //! Boundary: enforces byte-size caps at construction and stable decoding.
 
 use crate::cdk::structures::{Storable, storable::Bound};
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize, de::Deserializer};
 use std::{
     borrow::Cow,
@@ -19,11 +18,10 @@ use thiserror::Error as ThisError;
 /// BoundedString
 ///
 /// String wrapper enforcing a compile-time maximum byte length across
-/// construction, Serde/Candid decoding, and stable storage.
+/// construction, Serde/Wire decoding, and stable storage.
 ///
 
-#[derive(CandidType, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct BoundedString<const N: u32>(String);
 
 impl<const N: u32> BoundedString<N> {
@@ -237,18 +235,18 @@ mod tests {
     #[test]
     fn candid_decode_enforces_the_bound() {
         let bounded = BoundedString::<16>::new("bounded");
-        let bounded_encoded = ic_platform::candid::contract::encode_one(&bounded)
+        let bounded_encoded = canic_contracts::protocol::authority::encode(&bounded)
             .expect("bounded string Candid-encodes");
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<BoundedString<16>>(&bounded_encoded)
+            canic_contracts::protocol::authority::decode::<BoundedString<16>>(&bounded_encoded)
                 .expect("valid bounded string Candid-decodes"),
             bounded
         );
 
-        let oversized = ic_platform::candid::contract::encode_one("a".repeat(17))
+        let oversized = canic_contracts::protocol::authority::encode("a".repeat(17))
             .expect("string Candid-encodes");
         assert!(
-            ic_platform::candid::decoder::decode_one::<BoundedString<16>>(&oversized).is_err(),
+            canic_contracts::protocol::authority::decode::<BoundedString<16>>(&oversized).is_err(),
             "Candid decoding must not bypass construction validation"
         );
     }

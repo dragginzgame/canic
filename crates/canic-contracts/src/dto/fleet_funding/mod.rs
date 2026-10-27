@@ -9,7 +9,7 @@ use crate::{
     dto::fleet_registry::FleetRegistryVersion,
     ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingPolicy, SubnetId},
 };
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Frozen ingress envelope used by both sides of the funding command exchange.
@@ -25,8 +25,11 @@ pub const MAX_FLEET_FUNDING_POLICY_ROTATION_HISTORY_ROOTS: usize =
     crate::ids::MAX_FLEET_ROOT_FUNDING_SLOTS;
 
 /// Current-generation and retained predecessor automatic-funding usage.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetFundingPolicyUsage {
     pub historical_automatic_grants: u64,
     pub historical_automatic_cycles: Cycles,
@@ -35,8 +38,7 @@ pub struct FleetFundingPolicyUsage {
 }
 
 /// Exact protected physical-placement evidence reviewed for one rotation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationPlacementEvidence {
     pub subnet: SubnetId,
     pub node_count: u64,
@@ -47,15 +49,17 @@ pub struct FleetFundingPolicyRotationPlacementEvidence {
 }
 
 /// Sole future value source authorized by a funding-policy rotation.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetFundingPolicyRotationFundingSource {
     CoordinatorTreasury,
 }
 
 /// Immutable header of one no-effect operator-reviewed rotation plan.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationPlanHeader {
     pub predecessor_registry: FleetRegistryVersion,
     pub predecessor_generation: u64,
@@ -73,8 +77,7 @@ pub struct FleetFundingPolicyRotationPlanHeader {
 }
 
 /// Exact current and proposed authority for one affected Root.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationRootPlan {
     pub fleet_subnet_root: Principal,
     pub predecessor_policy_hash: [u8; 32],
@@ -84,16 +87,14 @@ pub struct FleetFundingPolicyRotationRootPlan {
 }
 
 /// Complete read-only rotation plan whose digest is accepted by apply.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationPlan {
     pub header: FleetFundingPolicyRotationPlanHeader,
     pub roots: Vec<FleetFundingPolicyRotationRootPlan>,
 }
 
 /// Begin staging one accepted no-effect rotation plan.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationBeginRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -101,8 +102,7 @@ pub struct FleetFundingPolicyRotationBeginRequest {
 }
 
 /// Stage one digest-bound Root policy beneath the current rotation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationStageRootRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -110,8 +110,11 @@ pub struct FleetFundingPolicyRotationStageRootRequest {
 }
 
 /// Start or exactly resume the fully staged rotation operation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct FleetFundingPolicyRotationApplyRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -119,8 +122,7 @@ pub struct FleetFundingPolicyRotationApplyRequest {
 }
 
 /// Coordinator-authored request that fences one Root beneath a staged plan.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationRootPrepareRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -131,8 +133,7 @@ pub struct FleetFundingPolicyRotationRootPrepareRequest {
 }
 
 /// Coordinator-authored request that converges one prepared Root.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationRootActivateRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -144,8 +145,7 @@ pub struct FleetFundingPolicyRotationRootActivateRequest {
 }
 
 /// Idempotent Root receipt for one exact rotation phase.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationRootReceipt {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -158,8 +158,7 @@ pub struct FleetFundingPolicyRotationRootReceipt {
 }
 
 /// Terminal Coordinator receipt for a converged policy generation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetFundingPolicyRotationReceipt {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -177,8 +176,7 @@ pub struct FleetFundingPolicyRotationReceipt {
 }
 
 /// Root-authored request for one exact Coordinator operating-cycle decision.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRootFundingRequest {
     pub operation_id: [u8; 32],
     pub operation_sequence: u64,
@@ -189,8 +187,7 @@ pub struct FleetRootFundingRequest {
 }
 
 /// Coordinator-authored exact same-Root acceptance request carrying cycles.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRootFundingAcceptanceRequest {
     pub operation_id: [u8; 32],
     pub operation_sequence: u64,
@@ -201,8 +198,7 @@ pub struct FleetRootFundingAcceptanceRequest {
 }
 
 /// Root-authored exact receipt for one fresh or replayed grant acceptance.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRootFundingAcceptanceReceipt {
     pub request: FleetRootFundingAcceptanceRequest,
     pub fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
@@ -211,8 +207,11 @@ pub struct FleetRootFundingAcceptanceReceipt {
 }
 
 /// Terminal reason that one authenticated request transferred no cycles.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FleetRootFundingNoGrantReason {
     CooldownActive,
     CoordinatorReserveUnavailable,
@@ -229,8 +228,7 @@ pub enum FleetRootFundingNoGrantReason {
 }
 
 /// Durable exact zero-transfer result for one Root operation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRootFundingNoGrantReceipt {
     pub request: FleetRootFundingRequest,
     pub reason: FleetRootFundingNoGrantReason,
@@ -238,8 +236,7 @@ pub struct FleetRootFundingNoGrantReceipt {
 }
 
 /// Exact terminal outcome returned to the authenticated requesting Root.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FleetRootFundingResponse {
     Granted(FleetRootFundingAcceptanceReceipt),
     NoGrant(FleetRootFundingNoGrantReceipt),
@@ -253,7 +250,7 @@ mod tests {
         FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetId, FleetKey,
         FleetRegistryAuthority, FleetSubnetRootFundingPolicy, SubnetId,
     };
-    use ic_platform::candid::contract::{Decode, Encode};
+    use crate::{dto::funding_control as native, protocol::funding_control as wire};
     use ic_platform::principal::ExternalPrincipal as Principal;
 
     #[test]
@@ -266,10 +263,22 @@ mod tests {
             requested_cycles: Cycles::new(u128::MAX),
             policy_hash: [2; 32],
         };
-        let bytes = Encode!(&request).expect("encode Root funding request");
+        let bytes = ic_wire::native::encode_request(
+            wire::request::METHOD_ID,
+            &native::Request::from(request.clone()),
+            wire::REQUEST_LIMITS,
+        )
+        .expect("encode Root funding request");
         assert!(bytes.len() <= MAX_FLEET_ROOT_FUNDING_COMMAND_PAYLOAD_BYTES);
         assert_eq!(
-            Decode!(&bytes, FleetRootFundingRequest).expect("decode Root funding request"),
+            FleetRootFundingRequest::from(
+                ic_wire::native::decode_request::<native::Request>(
+                    wire::request::METHOD_ID,
+                    &bytes,
+                    wire::REQUEST_LIMITS
+                )
+                .expect("decode Root funding request")
+            ),
             request
         );
 
@@ -281,11 +290,22 @@ mod tests {
             granted_cycles: request.requested_cycles,
             policy_hash: request.policy_hash,
         };
-        let bytes = Encode!(&acceptance).expect("encode funding acceptance request");
+        let bytes = ic_wire::native::encode_request(
+            wire::root_accept::METHOD_ID,
+            &native::AcceptanceRequest::from(acceptance.clone()),
+            wire::REQUEST_LIMITS,
+        )
+        .expect("encode funding acceptance request");
         assert!(bytes.len() <= MAX_FLEET_ROOT_FUNDING_COMMAND_PAYLOAD_BYTES);
         assert_eq!(
-            Decode!(&bytes, FleetRootFundingAcceptanceRequest)
-                .expect("decode funding acceptance request"),
+            FleetRootFundingAcceptanceRequest::from(
+                ic_wire::native::decode_request::<native::AcceptanceRequest>(
+                    wire::root_accept::METHOD_ID,
+                    &bytes,
+                    wire::REQUEST_LIMITS
+                )
+                .expect("decode funding acceptance request")
+            ),
             acceptance
         );
     }
@@ -355,42 +375,62 @@ mod tests {
             funding_source: FleetFundingPolicyRotationFundingSource::CoordinatorTreasury,
         };
         let commands = [
-            Encode!(&FleetFundingPolicyRotationBeginRequest {
-                operation_id: [37; 32],
-                plan_digest: [38; 32],
-                header,
-            })
+            ic_wire::native::encode_request(
+                wire::begin::METHOD_ID,
+                &native::BeginRequest::from(FleetFundingPolicyRotationBeginRequest {
+                    operation_id: [37; 32],
+                    plan_digest: [38; 32],
+                    header,
+                }),
+                wire::REQUEST_LIMITS,
+            )
             .expect("encode begin"),
-            Encode!(&FleetFundingPolicyRotationStageRootRequest {
-                operation_id: [37; 32],
-                plan_digest: [38; 32],
-                root: root.clone(),
-            })
+            ic_wire::native::encode_request(
+                wire::stage::METHOD_ID,
+                &native::StageRequest::from(FleetFundingPolicyRotationStageRootRequest {
+                    operation_id: [37; 32],
+                    plan_digest: [38; 32],
+                    root: root.clone(),
+                }),
+                wire::REQUEST_LIMITS,
+            )
             .expect("encode staged Root"),
-            Encode!(&FleetFundingPolicyRotationApplyRequest {
-                operation_id: [37; 32],
-                plan_digest: [38; 32],
-                expected_predecessor_generation: u64::MAX - 1,
-            })
+            ic_wire::native::encode_request(
+                wire::apply::METHOD_ID,
+                &FleetFundingPolicyRotationApplyRequest {
+                    operation_id: [37; 32],
+                    plan_digest: [38; 32],
+                    expected_predecessor_generation: u64::MAX - 1,
+                },
+                wire::REQUEST_LIMITS,
+            )
             .expect("encode apply"),
-            Encode!(&FleetFundingPolicyRotationRootPrepareRequest {
-                operation_id: [37; 32],
-                plan_digest: [38; 32],
-                predecessor_registry: registry.clone(),
-                predecessor_generation: u64::MAX - 1,
-                successor_generation: u64::MAX,
-                root,
-            })
+            ic_wire::native::encode_request(
+                wire::root_prepare::METHOD_ID,
+                &native::PrepareRequest::from(FleetFundingPolicyRotationRootPrepareRequest {
+                    operation_id: [37; 32],
+                    plan_digest: [38; 32],
+                    predecessor_registry: registry.clone(),
+                    predecessor_generation: u64::MAX - 1,
+                    successor_generation: u64::MAX,
+                    root,
+                }),
+                wire::REQUEST_LIMITS,
+            )
             .expect("encode Root prepare"),
-            Encode!(&FleetFundingPolicyRotationRootActivateRequest {
-                operation_id: [37; 32],
-                plan_digest: [38; 32],
-                predecessor_registry: registry.clone(),
-                successor_registry: registry,
-                predecessor_generation: u64::MAX - 1,
-                successor_generation: u64::MAX,
-                fleet_subnet_root: Principal::from_slice(&[32; 29]),
-            })
+            ic_wire::native::encode_request(
+                wire::root_activate::METHOD_ID,
+                &native::ActivateRequest::from(FleetFundingPolicyRotationRootActivateRequest {
+                    operation_id: [37; 32],
+                    plan_digest: [38; 32],
+                    predecessor_registry: registry.clone(),
+                    successor_registry: registry,
+                    predecessor_generation: u64::MAX - 1,
+                    successor_generation: u64::MAX,
+                    fleet_subnet_root: Principal::from_slice(&[32; 29]),
+                }),
+                wire::REQUEST_LIMITS,
+            )
             .expect("encode Root activate"),
         ];
         assert!(

@@ -1,8 +1,4 @@
 use super::*;
-use canic_contracts::dto::wire::projection::fixture_instruction_audit::RootCommand;
-use canic_contracts::dto::wire::projection::fixture_instruction_audit::RootCommandResponse;
-use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusRequest as RoleStatusRequest;
-use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusResponse as RoleStatusResponse;
 
 fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {
@@ -215,7 +211,7 @@ fn prepare_scenario(
     };
 
     match scenario.key {
-        "root:canic_root_command:respond-capability-request-cycles-replay" => {
+        "root:canic_root_capability_cycles:request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
             PreparedScenario {
                 target_pid,
@@ -238,75 +234,48 @@ fn execute_scenario(
     let target_pid = prepared.target_pid;
     match scenario.key {
         "scale:request_cycles_from_parent:fresh" => {
-            let response: Result<u128, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((999u128,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (setup.pic).update_call(
-                            target_pid,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "request_cycles_from_parent",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("scale request_cycles_from_parent transport failed");
+            let response: Result<canic::dto::rpc::CyclesResponse, Error> =
+                ic_testkit::pic::update_wire(
+                    &setup.pic,
+                    target_pid,
+                    Principal::anonymous(),
+                    canic_testing_internal::pic::application_probe::REQUEST_CYCLES,
+                    &999_u128,
+                )
+                .expect("scale parent funding Wire transport");
             assert_eq!(
-                response.expect("scale request_cycles_from_parent application failed"),
-                999
+                response.expect("scale parent funding application"),
+                canic::dto::rpc::CyclesResponse::Transferred {
+                    cycles_transferred: 999
+                }
             );
         }
-        "root:canic_root_command:respond-capability-request-cycles-fresh"
-        | "root:canic_root_command:respond-capability-request-cycles-replay" => {
+        "root:canic_root_capability_cycles:request-cycles-fresh"
+        | "root:canic_root_capability_cycles:request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
         }
         "user_hub:create_account:new-principal" => {
             let created: Result<Principal, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((
-                        Principal::from_slice(&[51; 29]),
-                    ))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (setup.pic).update_call(
-                            target_pid,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "create_account",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
+                ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                    &setup.pic,
+                    target_pid,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    canic_testing_internal::pic::application_probe::CREATE_ACCOUNT,
+                    &ic_platform::Principal::from(Principal::from_slice(&[51; 29])),
+                )
+                .map(|reply| reply.map(Into::into))
                 .expect("create_account transport failed");
             created.expect("create_account application failed");
         }
         "scale_hub:create_worker:empty-pool" => {
-            let created: Result<Principal, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (setup.pic).update_call(
-                            target_pid,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "create_worker",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("create_worker transport failed");
+            let created: Result<ic_platform::Principal, Error> = ic_testkit::pic::update_wire(
+                &setup.pic,
+                target_pid,
+                Principal::anonymous(),
+                canic_testing_internal::pic::application_probe::CREATE_WORKER,
+                &(),
+            )
+            .expect("create_worker Wire transport");
             created.expect("create_worker application failed");
         }
         other => panic!("unsupported audit scenario: {other}"),
@@ -314,24 +283,29 @@ fn execute_scenario(
 }
 
 fn provision_delegation_proof(pic: &PocketIc, root: Principal, issuer_pid: Principal) {
-    let provisioned: Result<(), Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((issuer_pid,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "test_provision_chain_key_delegation_proof_for_issuer",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("root proof provisioning transport failed");
+    let provisioned: Result<(), Error> = ic_testkit::pic::update_wire(
+        pic,
+        root,
+        Principal::anonymous(),
+        ic_testkit::pic::WireCallSpec {
+            method: "test_provision_chain_key_delegation_proof_for_issuer",
+            method_id: 0x5445_5354_0000_0700,
+            request_limits: ic_wire::Limits {
+                bytes: 16_384,
+                allocation: 65_536,
+                nodes: 128,
+                depth: 16,
+            },
+            response_limits: ic_wire::Limits {
+                bytes: 16_384,
+                allocation: 65_536,
+                nodes: 128,
+                depth: 16,
+            },
+        },
+        &ic_platform::Principal::from(issuer_pid),
+    )
+    .expect("root proof provisioning transport failed");
     provisioned.expect("root proof provisioning application failed");
 }
 
@@ -341,42 +315,46 @@ fn configure_delegation_issuer(
     issuer_pid: Principal,
     verifier_role: &canic::ids::CanisterRole,
 ) {
-    let registered: Result<RootCommandResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
-                    issuer_pid,
-                    enabled: true,
-                    aud: DelegationAudience::Fleet(test_fleet()),
-                    grants: vec![role_grant(
-                        verifier_role.clone(),
-                        vec![cap::VERIFY.to_string()],
-                    )],
-                    cert_ttl_ns: 60_000_000_000,
-                    refresh_after_ratio_bps: 8_000,
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("root issuer registration transport failed");
-    let RootCommandResponse::ConfigureIssuer(registered) =
-        registered.expect("root issuer registration application failed")
-    else {
-        panic!("unexpected Root command response");
+    use canic_contracts::{
+        dto::issuer_control as native,
+        protocol::issuer_control::{self, configure},
     };
-    assert_eq!(registered.issuer.issuer_pid, issuer_pid);
+    let request = native::RootIssuerConfigureRequest::from(RootIssuerConfigureRequest {
+        issuer_pid,
+        enabled: true,
+        aud: DelegationAudience::Fleet(test_fleet()),
+        grants: vec![role_grant(
+            verifier_role.clone(),
+            vec![cap::VERIFY.to_string()],
+        )],
+        cert_ttl_ns: 60_000_000_000,
+        refresh_after_ratio_bps: 8_000,
+    });
+    let bytes = ic_wire::native::encode_request(
+        configure::METHOD_ID,
+        &request,
+        issuer_control::REQUEST_LIMITS,
+    )
+    .unwrap();
+    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+        pic.update_call(root, Principal::anonymous(), configure::METHOD, bytes)
+    })
+    .unwrap()
+    .unwrap();
+    let registered: Result<native::RootIssuerConfigureResponse, Error> =
+        ic_wire::native::decode_response(
+            configure::METHOD_ID,
+            &reply,
+            issuer_control::RESPONSE_LIMITS,
+        )
+        .unwrap();
+    assert_eq!(
+        registered
+            .expect("root issuer registration application failed")
+            .issuer
+            .issuer_pid,
+        issuer_pid.into()
+    );
 }
 
 // Execute the fresh root cycles request scenario through the root dispatcher.
@@ -401,36 +379,32 @@ fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Pr
 
 // Read the current perf metrics table for one canister.
 fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
-    let response: Result<RoleStatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RoleStatusRequest::Metrics(MetricsStatusRequest {
-                    kind: MetricsKind::Runtime,
-                    page: PageRequest {
-                        limit: PERF_PAGE_LIMIT,
-                        offset: 0,
-                    },
-                }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    canister_id,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    protocol::CANIC_OBSERVABILITY,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("perf metrics transport query failed");
-
-    let RoleStatusResponse::Metrics(page) =
-        response.expect("perf metrics application query failed");
-    page.entries
+    let response: Result<canic::dto::page::Page<canic::dto::metric_page::MetricEntry>, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            canister_id,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_metrics::METHOD,
+                method_id: canic::protocol::protected_metrics::METHOD_ID,
+                request_limits: canic::protocol::protected_metrics::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_metrics::RESPONSE_LIMITS,
+            },
+            &MetricsStatusRequest {
+                kind: MetricsKind::Runtime,
+                page: PageRequest {
+                    limit: PERF_PAGE_LIMIT,
+                    offset: 0,
+                },
+            },
+        )
+        .expect("controller metrics Wire transport");
+    response
+        .expect("controller metrics application result")
+        .entries
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 // Derive one endpoint/timer delta from two perf snapshots.
@@ -571,29 +545,19 @@ fn root_capability_response_as(
         },
     };
 
-    let result: Result<Result<RootCommandResponse, Error>, _> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RootCommand::RespondCapability(envelope),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (setup.pic).update_call(
-                    target_pid,
-                    caller,
-                    protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply);
+    let result = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let call = canic_contracts::ops::root_capability::encode_request(envelope)?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            setup
+                .pic
+                .update_call(target_pid, caller, call.method, call.bytes)
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        canic_contracts::ops::root_capability::decode_response(call.method_id, &reply)
+            .map_err(Into::into)
+    })();
     let response = result.expect("root capability transport call failed")?;
-    let RootCommandResponse::RespondCapability(response) = response else {
-        panic!("root capability command returned an uncorrelated response")
-    };
     Ok(response.response)
 }
 

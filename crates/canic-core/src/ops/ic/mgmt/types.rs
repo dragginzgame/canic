@@ -6,15 +6,14 @@
 
 use crate::{
     infra::ic::mgmt::{
-        InfraCanisterSettings, InfraCanisterStatusResult, InfraCanisterStatusType,
-        InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs,
-        InfraEcdsaPublicKeyResult, InfraEnvironmentVariable, InfraLogVisibility,
-        InfraMemoryMetrics, InfraQueryStats, InfraSignWithEcdsaArgs, InfraSignWithEcdsaResult,
-        InfraUpdateSettingsArgs,
+        InfraCanisterSettings, InfraCanisterStatusResult, InfraDefiniteCanisterSettings,
+        InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult,
+        InfraEnvironmentVariable, InfraLogVisibility, InfraSignWithEcdsaArgs,
+        InfraSignWithEcdsaResult, InfraUpdateSettingsArgs,
     },
     ops::prelude::*,
 };
-use ic_platform::candid::contract::Nat;
+use ic_platform::{candid::contract::Nat, management_canister_types as management};
 
 pub use crate::domain::canister::{CanisterStatusType, LogVisibility};
 
@@ -223,11 +222,11 @@ pub(super) fn canister_status_from_infra(status: InfraCanisterStatusResult) -> C
     }
 }
 
-const fn status_type_from_infra(status: InfraCanisterStatusType) -> CanisterStatusType {
+const fn status_type_from_infra(status: management::CanisterStatusType) -> CanisterStatusType {
     match status {
-        InfraCanisterStatusType::Running => CanisterStatusType::Running,
-        InfraCanisterStatusType::Stopping => CanisterStatusType::Stopping,
-        InfraCanisterStatusType::Stopped => CanisterStatusType::Stopped,
+        management::CanisterStatusType::Running => CanisterStatusType::Running,
+        management::CanisterStatusType::Stopping => CanisterStatusType::Stopping,
+        management::CanisterStatusType::Stopped => CanisterStatusType::Stopped,
     }
 }
 
@@ -265,7 +264,7 @@ fn environment_variable_from_infra(variable: InfraEnvironmentVariable) -> Enviro
     }
 }
 
-fn memory_metrics_from_infra(metrics: InfraMemoryMetrics) -> MemoryMetricsSnapshot {
+fn memory_metrics_from_infra(metrics: management::MemoryMetrics) -> MemoryMetricsSnapshot {
     MemoryMetricsSnapshot {
         wasm_memory_size: metrics.wasm_memory_size,
         stable_memory_size: metrics.stable_memory_size,
@@ -278,7 +277,7 @@ fn memory_metrics_from_infra(metrics: InfraMemoryMetrics) -> MemoryMetricsSnapsh
     }
 }
 
-fn query_stats_from_infra(stats: InfraQueryStats) -> QueryStatsSnapshot {
+fn query_stats_from_infra(stats: management::QueryStats) -> QueryStatsSnapshot {
     QueryStatsSnapshot {
         num_calls_total: stats.num_calls_total,
         num_instructions_total: stats.num_instructions_total,

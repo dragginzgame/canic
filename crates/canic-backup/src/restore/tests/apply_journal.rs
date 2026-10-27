@@ -1141,7 +1141,12 @@ fn apply_journal_validation_rejects_duplicate_sequences() {
         .validate()
         .expect_err("duplicate sequence should fail");
 
-    std::assert_matches!(err, RestoreApplyJournalError::DuplicateSequence(0));
+    std::assert_matches!(
+        err,
+        RestoreApplyJournalError::EffectGraph(
+            ic_backup::model::effect_graph::EffectGraphError::DuplicateOperation(0)
+        )
+    );
 }
 
 // Ensure failed journal operations must explain why execution failed.
@@ -1544,4 +1549,47 @@ fn apply_journal_rejects_blocked_operation_completion() {
         err,
         RestoreApplyJournalError::InvalidOperationTransition { sequence: 0, .. }
     );
+}
+
+#[test]
+fn apply_journal_uses_backup_readiness_for_reordered_sparse_operation_identities() {
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::StopCanister, None);
+    journal.operations[0].sequence = 9;
+    let mut earlier = journal.operations[0].clone();
+    earlier.sequence = 2;
+    journal.operations.push(earlier);
+    journal.operation_count = 2;
+    journal.ready_operations = 2;
+    journal.operation_counts =
+        RestoreApplyOperationKindCounts::from_operations(&journal.operations);
+    journal.validate().unwrap();
+    assert_eq!(journal.next_transition_operation().unwrap().sequence, 2);
+    journal.mark_operation_pending_at(2, None).unwrap();
+    journal.mark_operation_completed_at(2, None).unwrap();
+    assert_eq!(journal.next_transition_operation().unwrap().sequence, 9);
+    let restored: RestoreApplyJournal =
+        serde_json::from_slice(&serde_json::to_vec(&journal).unwrap()).unwrap();
+    restored.validate().unwrap();
+    assert_eq!(restored.next_transition_operation().unwrap().sequence, 9);
+}
+
+#[test]
+fn apply_journal_rejects_completed_effect_without_completed_prerequisite() {
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::StopCanister, None);
+    let mut later = journal.operations[0].clone();
+    later.sequence = 1;
+    later.state = RestoreApplyOperationState::Completed;
+    journal.operations.push(later);
+    journal.operation_count = 2;
+    journal.completed_operations = 1;
+    journal.operation_counts =
+        RestoreApplyOperationKindCounts::from_operations(&journal.operations);
+    std::assert_matches!(
+        journal.validate(),
+        Err(RestoreApplyJournalError::UnmetCompletedDependency {
+            operation_sequence: 1,
+            dependency: 0
+        })
+    );
+    assert!(journal.next_transition_operation().is_none());
 }

@@ -44,27 +44,22 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn supplied_capacity_fences_
     let initial = root_pool_status(&pic, root);
     assert_eq!(initial.tracked, initial.store);
     assert!(initial.config.minimum_size > 0);
-    root_command(&pic, root, RootCommandFragment::MaintainPool).unwrap();
+    crate::pic::canic::maintain_pool(&pic, root).unwrap();
     assert_eq!(root_pool_status(&pic, root).entries, initial.entries);
-    let unregistered: Result<StatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((StatusRequest::PoolImportContext,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    operator,
-                    canic::protocol::CANIC_ROOT_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+    let unregistered: Result<canic_contracts::dto::pool_import_read::Context, Error> =
+        ic_testkit::pic::query_wire(
+            &pic,
+            root,
+            operator,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::pool_import_read::context::METHOD,
+                method_id: canic::protocol::pool_import_read::context::METHOD_ID,
+                request_limits: canic::protocol::pool_import_read::REQUEST_LIMITS,
+                response_limits: canic::protocol::pool_import_read::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("native unregistered import context");
     assert!(matches!(unregistered, Err(error) if error == InternalError::unavailable().into()));
     install_fixture_coordinator(&pic, coordinator, build_test_coordinator_wasm(), &fixture);
     let (version, sync) = join_and_synchronize_root(&pic, coordinator, &fixture);

@@ -9,8 +9,9 @@
 /// Application-owned durable checkpoint participant transitions.
 pub mod application_checkpoint {
     pub use crate::__internal::core::api::application_checkpoint::{
-        ApplicationCheckpointError, ApplicationCheckpointPhase, ApplicationCheckpointRecord,
-        ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition,
+        ApplicationCheckpointCommandPredicate, ApplicationCheckpointError,
+        ApplicationCheckpointPhase, ApplicationCheckpointRecord,
+        ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition, binding_from_command,
     };
 }
 

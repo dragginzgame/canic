@@ -93,7 +93,6 @@ pub struct FleetObservation {
     pub ledger_fee_cycles: u128,
     #[serde(with = "u128_text")]
     pub operator_cycles: u128,
-    pub protocol_ready: BTreeMap<String, bool>,
 }
 
 /// Exact read-only observation of one Root-owned Cycles Ledger account.
@@ -284,26 +283,6 @@ pub enum DesiredCanisterInit {
     Store { root: String },
 }
 
-/// One current-only idempotent protocol transition owned by the Fleet journal.
-///
-/// The three argument documents use Candid text. They may bind a dynamically
-/// created canister with `{{principal:<logical-name>}}`, the retained operation
-/// string with `{{operation_id}}`, or its 32-byte value with
-/// `{{operation_id_blob}}`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct DesiredProtocolStep {
-    pub canister: String,
-    pub candid: String,
-    pub command_args: String,
-    pub command_method: String,
-    pub expected_status: String,
-    pub maximum_execution_burn_cycles: String,
-    pub name: String,
-    pub status_args: String,
-    pub status_method: String,
-}
-
 /// Current-only desired Fleet contract consumed by `canic fleet ensure`.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -325,8 +304,6 @@ pub struct DesiredFleet {
     pub operator: String,
     #[serde(default)]
     pub protocol: Option<DesiredFleetProtocol>,
-    #[serde(skip)]
-    pub(crate) protocol_steps: Vec<DesiredProtocolStep>,
     pub schema_version: u16,
     /// Logical name of the present controlled canister that owns retirement receipts.
     pub treasury: String,
@@ -379,12 +356,10 @@ pub struct DesiredFleetProtocol {
     pub app_config: String,
     /// Exact initial group placements assigned to declared Root roles.
     pub component_group_placements: Vec<DesiredComponentGroupPlacement>,
-    /// Exact Coordinator Candid used only by Canic's typed protocol adapter.
-    pub coordinator_candid: String,
-    /// Exact Root Candid used only by Canic's typed protocol adapter.
-    pub root_candid: String,
-    /// Exact Store Candid used only by Canic's typed protocol adapter.
-    pub store_candid: String,
+    /// Exact native schemas used by journalled Fleet mutations.
+    pub coordinator_wire_schema: String,
+    pub root_wire_schema: String,
+    pub store_wire_schema: String,
 }
 
 /// One typed initial Component Group placement owned by Canic policy.
@@ -405,7 +380,6 @@ pub struct DesiredFleetArtifacts {
     pub init_candid_sha256_by_canister: BTreeMap<String, String>,
     pub wasm_sha256_by_canister: BTreeMap<String, String>,
     pub startup_funding_by_root: BTreeMap<String, StartupFundingRequirement>,
-    pub(crate) protocol_by_step: BTreeMap<String, ProtocolArtifactDigests>,
 }
 
 /// Configuration-bound startup demand; live grant usage and execution are separate inputs.
@@ -426,15 +400,6 @@ pub struct StartupRoleShortfall {
     pub cycles: u128,
 }
 
-/// Content identities for one declarative protocol transition.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ProtocolArtifactDigests {
-    pub candid_sha256: String,
-    pub command_args_sha256: String,
-    pub expected_status_sha256: String,
-    pub status_args_sha256: String,
-}
-
 /// Validated numeric funding bounds for one desired canister.
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -452,8 +417,8 @@ pub struct ReinstallHistoryWitness {
     /// Exact installed module retained before this reviewed reinstall.
     pub prior_module_sha256: String,
     pub authority: RootManagementBinding,
-    pub candid: String,
-    pub candid_sha256: String,
+    pub wire_schema: String,
+    pub wire_schema_sha256: String,
     /// Exact replacement Root admitted only while reconciling its own durable intent.
     #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub replacement: Option<Box<ReinstallRootWitnessRecord>>,
@@ -464,8 +429,8 @@ pub struct ReinstallHistoryWitness {
 #[serde(deny_unknown_fields)]
 pub struct ReinstallRootWitnessRecord {
     pub authority: RootManagementBinding,
-    pub candid: String,
-    pub candid_sha256: String,
+    pub wire_schema: String,
+    pub wire_schema_sha256: String,
 }
 
 /// Exact effect kind retained before execution.
@@ -543,28 +508,12 @@ pub enum EnsureAction {
     },
     FleetProtocol {
         action: Box<CurrentFleetProtocolAction>,
-        candid: String,
-        candid_sha256: String,
+        wire_schema: String,
+        wire_schema_sha256: String,
         #[serde(with = "u128_text")]
         maximum_execution_burn_cycles: u128,
         name: String,
         principal: String,
-    },
-    Protocol {
-        candid: String,
-        candid_sha256: String,
-        command_args: String,
-        command_args_sha256: String,
-        command_method: String,
-        expected_status: String,
-        expected_status_sha256: String,
-        #[serde(with = "u128_text")]
-        maximum_execution_burn_cycles: u128,
-        name: String,
-        principal: String,
-        status_args: String,
-        status_args_sha256: String,
-        status_method: String,
     },
     SetControllers {
         controller_canisters: Vec<String>,
@@ -628,7 +577,6 @@ impl EnsureAction {
             | Self::Fund { name, .. }
             | Self::FundEstate { name, .. }
             | Self::Install { name, .. }
-            | Self::Protocol { name, .. }
             | Self::SetControllers { name, .. }
             | Self::Start { name, .. }
             | Self::Stop { name, .. }
@@ -956,11 +904,8 @@ pub(crate) const fn create_balance_is_terminal(
 }
 
 /// Exact normalized desired input retained by one in-progress operation.
-///
-/// The public desired document cannot declare internal protocol steps. This
-/// wrapper persists those Canic-owned steps without making them an input
-/// surface and restores them before any resumed observation or effect.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReviewedDesiredFleetRecord {
     desired: DesiredFleet,
 }
@@ -972,7 +917,7 @@ impl ReviewedDesiredFleetRecord {
         }
     }
 
-    /// Borrow the complete normalized desired input, including internal steps.
+    /// Borrow the complete normalized desired input, including native protocol configuration.
     #[must_use]
     pub const fn desired(&self) -> &DesiredFleet {
         &self.desired
@@ -982,38 +927,6 @@ impl ReviewedDesiredFleetRecord {
     #[must_use]
     pub fn into_desired(self) -> DesiredFleet {
         self.desired
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-struct ReviewedDesiredFleetRecordProjection {
-    desired: DesiredFleet,
-    protocol_steps: Vec<DesiredProtocolStep>,
-}
-
-impl Serialize for ReviewedDesiredFleetRecord {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        ReviewedDesiredFleetRecordProjection {
-            desired: self.desired.clone(),
-            protocol_steps: self.desired.protocol_steps.clone(),
-        }
-        .serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for ReviewedDesiredFleetRecord {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let mut projection = ReviewedDesiredFleetRecordProjection::deserialize(deserializer)?;
-        projection.desired.protocol_steps = projection.protocol_steps;
-        Ok(Self {
-            desired: projection.desired,
-        })
     }
 }
 
@@ -1045,7 +958,7 @@ pub struct FleetEnsurePlan {
     pub root_start_authority: Option<Box<RetainedRootStartAuthorityRecord>>,
     /// Exact installed Root authority approved for replacement by this plan.
     pub root_reinstall_bindings: Vec<RootManagementBinding>,
-    /// Required for execution; normalization may clear it when comparing action projections.
+    /// Required for execution; excluded from action-authority comparison.
     #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub reviewed_desired: Option<Box<ReviewedDesiredFleetRecord>>,
     pub schema_version: u16,
@@ -1155,13 +1068,13 @@ pub struct ActivationResetAdoptionRecord {
     pub complete: bool,
 }
 
-/// Exact retained Candid and target used only to observe a source protocol owner.
+/// Exact retained Wire schema and target used only to observe a source protocol owner.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetProtocolReadRecord {
-    pub candid: String,
-    pub candid_sha256: String,
+    pub wire_schema: String,
+    pub wire_schema_sha256: String,
     pub principal: String,
 }
 
@@ -1471,10 +1384,10 @@ pub struct FleetEnsureContinuationAuthority {
     pub fixture_publication_retry_attempts: u32,
     pub app_config_sha256: String,
     pub application_artifact_union_sha256: String,
-    pub coordinator_candid_sha256: String,
+    pub coordinator_wire_schema_sha256: String,
     pub maximum_successor_actions: u32,
-    pub root_candid_sha256: String,
-    pub store_candid_sha256: String,
+    pub root_wire_schema_sha256: String,
+    pub store_wire_schema_sha256: String,
 }
 
 /// One immutable successor plan retained before its first effect intent.

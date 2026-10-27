@@ -217,6 +217,18 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
         cmp "$selected_pins" "$fixture/caller-pins"
     done
     selected_pins="$pins"
+    # Receipt membership is admitted once, before any executable is probed.
+    for damage in missing duplicate; do
+        if [[ "$damage" == missing ]]; then
+            awk '$2 != "bin/quill"' "$fixture/original-receipt" > "$consumer/.tools/ic/files.sha256"
+        else
+            { cat "$fixture/original-receipt"; head -n 1 "$fixture/original-receipt"; } > "$consumer/.tools/ic/files.sha256"
+        fi
+        : > "$fixture/executions"
+        expect_failure install --check
+        [[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+    done
+    cp "$fixture/original-receipt" "$consumer/.tools/ic/files.sha256"
     # Compaction retains distinct caller and installation provenance too.
     bash "$ROOT/scripts/ci/test-tool-evidence.sh" "$consumer" ic "$fixture/comments.tsv"
     # A malformed active link must not authenticate its newline-trimmed sibling.

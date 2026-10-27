@@ -3,7 +3,7 @@
 //
 
 use crate::{
-    dto::icrc21::{ConsentMessageRequest, ConsentMessageResponse, ErrorInfo, Icrc21Error},
+    dto::icrc21::{ConsentInfo, ConsentMessageRequest, ErrorInfo, Icrc21Error},
     log,
     log::Topic,
 };
@@ -15,20 +15,20 @@ thread_local! {
 
 #[derive(Clone)]
 struct RegisteredConsentHandler {
-    handler: Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>,
+    handler: Arc<dyn Fn(ConsentMessageRequest) -> Result<ConsentInfo, Icrc21Error> + 'static>,
 }
 
 impl RegisteredConsentHandler {
     fn new<F>(handler: F) -> Self
     where
-        F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
+        F: Fn(ConsentMessageRequest) -> Result<ConsentInfo, Icrc21Error> + 'static,
     {
         Self {
             handler: Arc::new(handler),
         }
     }
 
-    fn handle(&self, req: ConsentMessageRequest) -> ConsentMessageResponse {
+    fn handle(&self, req: ConsentMessageRequest) -> Result<ConsentInfo, Icrc21Error> {
         self.handler.as_ref()(req)
     }
 }
@@ -56,7 +56,7 @@ impl Icrc21Dispatcher {
 
     pub fn register<F>(method: &str, handler: F)
     where
-        F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
+        F: Fn(ConsentMessageRequest) -> Result<ConsentInfo, Icrc21Error> + 'static,
     {
         ICRC_21_REGISTRY.with_borrow_mut(|reg| {
             let replaced = reg.insert(method.to_string(), RegisteredConsentHandler::new(handler));
@@ -75,12 +75,11 @@ impl Icrc21Dispatcher {
         ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).cloned())
     }
 
-    #[must_use]
     /// Resolve and execute the registered consent handler for the request.
-    pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
+    pub fn consent_message(req: ConsentMessageRequest) -> Result<ConsentInfo, Icrc21Error> {
         match Self::get_handler(&req.method) {
             Some(handler) => handler.handle(req),
-            None => ConsentMessageResponse::Err(Icrc21Error::UnsupportedCanisterCall(ErrorInfo {
+            None => Err(Icrc21Error::UnsupportedCanisterCall(ErrorInfo {
                 description: "No handler registered for this method.".to_string(),
             })),
         }

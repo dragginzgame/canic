@@ -76,7 +76,7 @@ fn authority() -> ComponentAuthorityRecord {
             manifest_digest: ReleaseSetDigest::from_bytes([5; 32]),
         },
         root_module_sha256: "66".repeat(32),
-        root_candid_sha256: [7; 32],
+        root_wire_schema_sha256: [7; 32],
         root_controllers: vec![operator.to_text()],
         registry_sha256: [8; 32],
         operator,
@@ -271,7 +271,7 @@ fn release_spec_and_controller_drift_reject_the_existing_review() {
     variants[4].registry_sha256 = [45; 32];
     variants[5].release_set.manifest_digest = ReleaseSetDigest::from_bytes([46; 32]);
     variants[6].binding.placement_subnet = SubnetId::from_principal(Principal::from_slice(&[79]));
-    variants[7].root_candid_sha256 = [47; 32];
+    variants[7].root_wire_schema_sha256 = [47; 32];
     for changed in variants {
         let mut transport = TransportProbe::new();
         let plan = transport.plan();

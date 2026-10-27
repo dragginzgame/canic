@@ -38,7 +38,6 @@ mod tests {
     #[cfg(test)]
     mod child_startup;
     #[cfg(test)]
-    #[cfg(test)]
     mod completed_reset;
     #[cfg(test)]
     mod funding_deadline;
@@ -48,6 +47,8 @@ mod tests {
     mod infrastructure_bootstrap;
     #[cfg(test)]
     mod native_funding;
+    #[cfg(test)]
+    mod observation_relay;
     #[cfg(test)]
     mod operator_shortfall;
     #[cfg(test)]
@@ -76,7 +77,6 @@ mod tests {
     use super::*;
     use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
     #[cfg(test)]
-    use canic::dto::authority_restore::AuthorityRestoreFencePhase;
     #[cfg(test)]
     use canic::dto::authority_restore::AuthoritySnapshotRequest;
     #[cfg(test)]
@@ -93,8 +93,8 @@ mod tests {
     use ic_platform::candid::contract::CandidType;
     #[cfg(test)]
     use ic_platform::candid::contract::Nat;
+    #[cfg(test)]
     use ic_platform::candid::contract::encode_one;
-    use ic_platform::candid::decoder::decode_one;
     #[cfg(test)]
     use serde::Deserialize;
 
@@ -109,35 +109,26 @@ mod tests {
     #[cfg(test)]
     use canic::dto::metrics::MetricsKind;
     #[cfg(test)]
-    use canic::dto::observability::CanisterObservabilityRequest;
-    #[cfg(test)]
     use canic::dto::observability::CanisterObservabilityResponse;
-    #[cfg(test)]
-    use canic::dto::observability::FleetCanisterObservabilityRequest;
-    #[cfg(test)]
     use canic::dto::pool::PoolCanisterRequest;
-    #[cfg(test)]
     use canic::dto::pool::PoolImportResponse;
-    #[cfg(test)]
-    use canic::dto::pool::PoolMaintenanceResponse;
     #[cfg(test)]
     use canic::dto::pool::{CanisterPoolAssetOrigin, CanisterPoolAssetStatus};
     use canic::dto::pool::{CanisterPoolResponse, CanisterPoolStatusRequest};
+    #[cfg(test)]
+    use canic::dto::pool_control::MaintenanceResponse as PoolMaintenanceResponse;
+    use canic::dto::root_store::{
+        ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
+        RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
+        RootStoreFixturePrepareRequest, RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind,
+        RootStoreReleaseSetManifest,
+    };
     use canic::dto::{
         fleet_registry::{
             FleetRegistryActivationRequest, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
             FleetSubnetRootRegistrySyncRequest, FleetSubnetRootStatus,
         },
         fleet_subnet_root::{FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs},
-    };
-    use canic::dto::{
-        role::OperationStatusRequest,
-        root_store::{
-            ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
-            RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
-            RootStoreFixturePrepareRequest, RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind,
-            RootStoreReleaseSetManifest,
-        },
     };
     use canic::ids::{CanisterRole, ComponentBinding, FleetId};
     use canic::ids::{ReleaseSetDigest, SubnetId};
@@ -180,10 +171,6 @@ mod tests {
     #[cfg(test)]
     use canic_contracts::dto::fleet_admission::FleetAdmissionRootTransitionPhase;
     #[cfg(test)]
-    use canic_contracts::dto::fleet_coordinator::{
-        CoordinatorOperationReadRequest, CoordinatorOperationReadResponse,
-    };
-    #[cfg(test)]
     use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationApplyRequest;
     #[cfg(test)]
     use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationBeginRequest;
@@ -217,14 +204,7 @@ mod tests {
     use canic_contracts::dto::root::RootFundingStatusResponse;
     #[cfg(test)]
     use canic_contracts::dto::template::{
-        StoreCatalogRequest, StoreCatalogResponse, StoreObservabilityRequest,
-        StoreObservabilityResponse, TemplateLookupRequest, TemplateManifestResponse,
-        TemplateStagingStatusResponse,
-    };
-    #[cfg(test)]
-    use canic_contracts::dto::wire::projection::fixture_root_topology::{
-        RootStatusRequest as RootStoreOverviewRequest,
-        RootStatusResponse as RootStoreOverviewResponse,
+        TemplateLookupRequest, TemplateManifestResponse, TemplateStagingStatusResponse,
     };
     #[cfg(test)]
     use canic_contracts::ids::BuildNetwork;
@@ -246,17 +226,9 @@ mod tests {
         FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority, ReleaseBuildId,
     };
     use canic_contracts::{
-        dto::{
-            fleet_coordinator::{
-                CoordinatorCommand, CoordinatorCommandResponse, CoordinatorObservabilityRequest,
-                CoordinatorObservabilityResponse, CoordinatorRegistryRequest,
-                CoordinatorRegistryResponse,
-            },
-            root::RootOperationStatusResponse,
-            template::{
-                StoreCommand, StoreCommandResponse, TemplateChunkInput,
-                TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateManifestInput,
-            },
+        dto::template::{
+            TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+            TemplateManifestInput,
         },
         ids::{
             TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
@@ -372,10 +344,8 @@ mod tests {
     #[cfg(test)]
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
     #[cfg(test)]
-    #[cfg(test)]
     use canic_contracts::dto::fleet_coordinator::{
-        CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
-        FleetFundingPolicyRotationStatusPhase,
+        CoordinatorFundingStatusResponse, FleetFundingPolicyRotationStatusPhase,
     };
 
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
@@ -406,34 +376,6 @@ mod tests {
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
-
-    use canic_contracts::dto::wire::projection::fixture_baseline::RootCommandFragment;
-
-    /// Exact host command type table used to inject loss at a binary request boundary.
-    #[cfg(test)]
-    use canic_contracts::dto::wire::projection::fleet_setup::RootCommandFragment as HostRootCommandFragment;
-
-    use canic_contracts::dto::wire::projection::fixture_baseline::RootCommandResponseFragment;
-
-    use canic_contracts::dto::wire::projection::fixture_baseline::RootStatusRequestFragment;
-
-    use canic_contracts::dto::wire::projection::fixture_baseline::RootStatusResponseFragment;
-
-    use canic_contracts::dto::wire::projection::fixture_baseline::ManagedStatusRequestFragment;
-
-    use canic_contracts::dto::wire::projection::fixture_baseline::ManagedStatusResponseFragment;
-
-    #[cfg(test)]
-    use canic_contracts::dto::wire::projection::admission::RemoteRootStatusRequest as ManagedAdmissionStatusRequestFragment;
-
-    #[cfg(test)]
-    use canic_contracts::dto::wire::projection::fixture_baseline::ManagedAdmissionStatusResponseFragment;
-
-    use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponseFragment;
-
-    use canic_contracts::dto::wire::projection::overview::RoleStatusRequest as RoleOverviewStatusRequestFragment;
-
-    use canic_contracts::dto::wire::projection::overview::RoleStatusResponse as RoleOverviewStatusResponseFragment;
 
     #[derive(Debug)]
     enum RoleOverviewReadinessObservation {
@@ -466,37 +408,99 @@ mod tests {
         }
     }
 
-    fn root_command(
+    #[cfg(test)]
+    fn remove_subtree(
         pic: &PocketIc,
-        root: Principal,
-        command: RootCommandFragment,
-    ) -> Result<RootCommandResponseFragment, Error> {
-        root_command_as(pic, root, Principal::anonymous(), command)
+        root: ic_platform::principal::ExternalPrincipal,
+        request: canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
+    ) -> Result<canic::dto::role::OperationReceipt, canic::Error> {
+        use canic::protocol::component_control as wire;
+        ic_testkit::pic::update_wire(
+            pic,
+            root,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: wire::subtree::METHOD,
+                method_id: wire::subtree::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &canic::dto::component_control::SubtreeRequest::from(request),
+        )
+        .expect("native subtree removal transport")
     }
 
-    fn root_command_as(
+    #[cfg(test)]
+    fn import_canister(
+        pic: &PocketIc,
+        root: Principal,
+        request: PoolCanisterRequest,
+    ) -> Result<PoolImportResponse, Error> {
+        import_canister_as(pic, root, Principal::anonymous(), request)
+    }
+
+    #[cfg(test)]
+    fn import_canister_as(
         pic: &PocketIc,
         root: Principal,
         caller: Principal,
-        command: RootCommandFragment,
-    ) -> Result<RootCommandResponseFragment, Error> {
+        request: PoolCanisterRequest,
+    ) -> Result<PoolImportResponse, Error> {
+        ic_testkit::pic::update_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::pool_control::import::METHOD,
+                method_id: canic::protocol::pool_control::import::METHOD_ID,
+                request_limits: canic::protocol::pool_control::REQUEST_LIMITS,
+                response_limits: canic::protocol::pool_control::RESPONSE_LIMITS,
+            },
+            &canic::dto::pool_control::ImportRequest {
+                canister_id: request.canister_id.into(),
+            },
+        )
+        .expect("native physical import transport")
+    }
+
+    fn encode_pool_import(request: PoolCanisterRequest) -> Result<Vec<u8>, ic_wire::Error> {
+        ic_wire::native::encode_request(
+            canic::protocol::pool_control::import::METHOD_ID,
+            &canic::dto::pool_control::ImportRequest {
+                canister_id: request.canister_id.into(),
+            },
+            canic::protocol::pool_control::REQUEST_LIMITS,
+        )
+    }
+
+    fn decode_pool_import(
+        reply: &[u8],
+    ) -> Result<Result<PoolImportResponse, Error>, ic_wire::Error> {
+        ic_wire::native::decode_response(
+            canic::protocol::pool_control::import::METHOD_ID,
+            reply,
+            canic::protocol::pool_control::RESPONSE_LIMITS,
+        )
+    }
+
+    #[cfg(test)]
+    fn root_capability_as(
+        pic: &PocketIc,
+        root: Principal,
+        caller: Principal,
+        request: canic::dto::capability::RootCapabilityEnvelopeV1,
+    ) -> Result<canic::dto::capability::RootCapabilityResponseV1, Error> {
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
+            let call = canic_contracts::ops::root_capability::encode_request(request)?;
             let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    caller,
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
+                pic.update_call(root, caller, call.method, call.bytes)
             })
             .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
             .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            canic_contracts::ops::root_capability::decode_response(call.method_id, &reply)
                 .map_err(Into::into)
         })()
-        .map(|(reply,)| reply)
-        .expect("Root command transport")
+        .expect("Root capability transport")
     }
 
     #[cfg(test)]
@@ -521,16 +525,8 @@ mod tests {
         descendant: Principal,
         request: canic::dto::capability::RootCapabilityEnvelopeV1,
     ) -> canic::dto::rpc::CyclesResponse {
-        let response = root_command_as(
-            pic,
-            root,
-            descendant,
-            RootCommandFragment::RespondCapability(request),
-        )
-        .expect("Root accepts registered descendant funding request");
-        let RootCommandResponseFragment::RespondCapability(response) = response else {
-            panic!("Root returned a differently correlated capability response");
-        };
+        let response = root_capability_as(pic, root, descendant, request)
+            .expect("Root accepts registered descendant funding request");
         let canic::dto::rpc::Response::Cycles(response) = response.response else {
             panic!("Root returned a differently correlated cycles response");
         };
@@ -538,66 +534,148 @@ mod tests {
     }
 
     #[cfg(test)]
-    fn root_operation_status_as(
-        pic: &PocketIc,
-        root: Principal,
-        operator: Principal,
-        operation_id: [u8; 32],
-    ) -> Result<RootStatusResponseFragment, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((
-                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-            ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                pic.query_call(
-                    root,
-                    operator,
-                    canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap()
+    fn root_runtime(pic: &PocketIc, root: Principal) -> canic::dto::runtime::CanicRuntimeStatus {
+        let response: Result<canic::dto::runtime_observation::CanicRuntimeStatus, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                root,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::protected_runtime::METHOD,
+                    method_id: canic::protocol::protected_runtime::METHOD_ID,
+                    request_limits: canic::protocol::protected_runtime::REQUEST_LIMITS,
+                    response_limits: canic::protocol::protected_runtime::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .expect("Root runtime Wire transport");
+        response.expect("Root runtime application result").into()
     }
 
-    fn root_status(
+    #[cfg(test)]
+    fn root_registry(
         pic: &PocketIc,
         root: Principal,
-        request: RootStatusRequestFragment,
-    ) -> Result<RootStatusResponseFragment, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let call_method = match &request {
-                RootStatusRequestFragment::Operation(_) => {
-                    canic::protocol::CANIC_ROOT_OPERATION_STATUS
-                }
-                #[cfg(test)]
-                RootStatusRequestFragment::CycleBalance
-                | RootStatusRequestFragment::CycleHistory(_)
-                | RootStatusRequestFragment::Metrics(_)
-                | RootStatusRequestFragment::Runtime => canic::protocol::CANIC_OBSERVABILITY,
-                _ => canic::protocol::CANIC_ROOT_STATUS,
-            };
-            let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    call_method,
-                    request_bytes,
+        request: canic_contracts::dto::component_registry::RootComponentRegistryPreparationRequest,
+    ) -> Result<canic_contracts::dto::component_registry::RootComponentRegistryStatusResponse, Error>
+    {
+        let request: canic_contracts::dto::component_control::PreparationRequest = request.into();
+        let response: Result<canic_contracts::dto::component_control::RegistryStatus, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                root,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::registry_read::status::METHOD,
+                    method_id: canic::protocol::registry_read::status::METHOD_ID,
+                    request_limits: canic::protocol::registry_read::REQUEST_LIMITS,
+                    response_limits: canic::protocol::registry_read::RESPONSE_LIMITS,
+                },
+                &request,
+            )
+            .expect("native registry read transport");
+        response.map(Into::into)
+    }
+
+    #[cfg(test)]
+    fn root_partition(
+        pic: &PocketIc,
+        root: Principal,
+        request: canic_contracts::dto::component_registry::ComponentRegistryPartitionRequest,
+    ) -> Result<canic_contracts::dto::component_registry::ComponentRegistryPartitionResponse, Error>
+    {
+        let response: Result<canic_contracts::dto::registry_read::Partition, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                root,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::registry_read::partition::METHOD,
+                    method_id: canic::protocol::registry_read::partition::METHOD_ID,
+                    request_limits: canic::protocol::registry_read::REQUEST_LIMITS,
+                    response_limits: canic::protocol::registry_read::RESPONSE_LIMITS,
+                },
+                &request,
+            )
+            .expect("native registry read transport");
+        response.map(|native| {
+            let original = ic_wire::native::encode_response(
+                canic::protocol::registry_read::partition::METHOD_ID,
+                &native,
+                canic::protocol::registry_read::RESPONSE_LIMITS,
+            )
+            .unwrap();
+            let canonical =
+                canic_contracts::dto::component_registry::ComponentRegistryPartitionResponse::from(
+                    native,
+                );
+            let round_trip =
+                canic_contracts::dto::registry_read::Partition::from(canonical.clone());
+            assert_eq!(
+                original,
+                ic_wire::native::encode_response(
+                    canic::protocol::registry_read::partition::METHOD_ID,
+                    &round_trip,
+                    canic::protocol::registry_read::RESPONSE_LIMITS
                 )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Root status transport")
+                .unwrap()
+            );
+            canonical
+        })
+    }
+
+    #[cfg(test)]
+    fn root_active_partition(
+        pic: &PocketIc,
+        root: Principal,
+        request: canic_contracts::dto::component_registry::ComponentRegistryActivePartitionRequest,
+    ) -> Result<
+        canic_contracts::dto::component_registry::ComponentRegistryActivePartitionResponse,
+        Error,
+    > {
+        let response: Result<canic_contracts::dto::registry_read::ActivePartition, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                root,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::registry_read::active_partition::METHOD,
+                    method_id: canic::protocol::registry_read::active_partition::METHOD_ID,
+                    request_limits: canic::protocol::registry_read::REQUEST_LIMITS,
+                    response_limits: canic::protocol::registry_read::RESPONSE_LIMITS,
+                },
+                &request,
+            )
+            .expect("native registry read transport");
+        response.map(|native| {
+            let original = ic_wire::native::encode_response(0, &native, canic::protocol::registry_read::RESPONSE_LIMITS).unwrap();
+            let canonical = canic_contracts::dto::component_registry::ComponentRegistryActivePartitionResponse::from(native);
+            let round_trip = canic_contracts::dto::registry_read::ActivePartition::from(canonical.clone());
+            assert_eq!(original, ic_wire::native::encode_response(0, &round_trip, canic::protocol::registry_read::RESPONSE_LIMITS).unwrap());
+            canonical
+        })
+    }
+
+    fn root_authority_as(
+        pic: &PocketIc,
+        root: Principal,
+        caller: Principal,
+    ) -> Result<canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority, Error> {
+        use canic_contracts::{dto::root_authority::Authority, protocol::root_authority as wire};
+        let response: Result<Authority, Error> = ic_testkit::pic::query_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: wire::METHOD,
+                method_id: wire::METHOD_ID,
+                request_limits: wire::REQUEST_LIMITS,
+                response_limits: wire::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("Root authority Wire transport");
+        response.map(Into::into)
     }
 
     #[cfg(test)]
@@ -619,108 +697,158 @@ mod tests {
     }
 
     #[cfg(test)]
-    fn validate_root_sensitive_observation<F>(
+    fn validate_root_metrics_authority(
         pic: &PocketIc,
         root: Principal,
         outsider: Principal,
-        request: F,
-        accepted: fn(&RootStatusResponseFragment) -> bool,
-    ) -> Result<(), ActiveComponentRegistryBaselineError>
-    where
-        F: Fn() -> RootStatusRequestFragment,
-    {
-        let denied: Result<RootStatusResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((request(),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        root,
-                        outsider,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)?;
-        if !controller_authority_unavailable(&denied) {
-            return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Root sensitive observability accepted a non-controller".to_string(),
-            ));
-        }
-        let response = baseline_application_result(
-            root_status(pic, root, request()),
-            "query controller-authenticated Root observability",
-        )?;
-        if !accepted(&response) {
-            return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Root sensitive observability returned the wrong response variant".to_string(),
-            ));
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        for (caller, allowed) in [(outsider, false), (Principal::anonymous(), true)] {
+            let response: Result<
+                canic::dto::page::Page<canic::dto::metric_page::MetricEntry>,
+                Error,
+            > = ic_testkit::pic::query_wire(
+                pic,
+                root,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::protected_metrics::METHOD,
+                    method_id: canic::protocol::protected_metrics::METHOD_ID,
+                    request_limits: canic::protocol::protected_metrics::REQUEST_LIMITS,
+                    response_limits: canic::protocol::protected_metrics::RESPONSE_LIMITS,
+                },
+                &MetricsStatusRequest {
+                    kind: MetricsKind::Runtime,
+                    page: PageRequest {
+                        limit: 1,
+                        offset: 0,
+                    },
+                },
+            )
+            .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
+            if allowed {
+                baseline_application_result(response, "Root controller metrics")?;
+            } else if !controller_authority_unavailable(&response) {
+                return Err(ActiveComponentRegistryBaselineError::Invariant(
+                    "Root metrics accepted a non-controller".to_string(),
+                ));
+            }
         }
         Ok(())
     }
 
     #[cfg(test)]
-    fn validate_store_sensitive_observation<F>(
+    fn validate_cycle_history_authority(
         pic: &PocketIc,
-        store: Principal,
+        canister: Principal,
         controller: Principal,
         outsider: Principal,
-        request: F,
-        accepted: fn(&StoreObservabilityResponse) -> bool,
-    ) -> Result<(), ActiveComponentRegistryBaselineError>
-    where
-        F: Fn() -> StoreObservabilityRequest,
-    {
-        let denied: Result<StoreObservabilityResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((request(),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        store,
-                        outsider,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)?;
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        let denied = read_cycle_history(pic, canister, outsider)?;
         if !controller_authority_unavailable(&denied) {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Store sensitive observability accepted a non-controller".to_string(),
+                "cycle history accepted a non-controller".into(),
             ));
         }
-        let response: Result<StoreObservabilityResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((request(),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        store,
-                        controller,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)?;
-        let response = baseline_application_result(
-            response,
-            "query controller-authenticated Store observability",
+        baseline_application_result(
+            read_cycle_history(pic, canister, controller)?,
+            "controller cycle history",
         )?;
-        if !accepted(&response) {
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn read_cycle_history(
+        pic: &PocketIc,
+        canister: Principal,
+        caller: Principal,
+    ) -> Result<
+        Result<canic::dto::page::Page<canic::dto::cycles::CycleTrackerEntry>, Error>,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
+        Ok(ic_testkit::pic::query_wire(
+            pic,
+            canister,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::cycle_history::METHOD,
+                method_id: canic::protocol::cycle_history::METHOD_ID,
+                request_limits: canic::protocol::cycle_history::REQUEST_LIMITS,
+                response_limits: canic::protocol::cycle_history::RESPONSE_LIMITS,
+            },
+            &PageRequest {
+                limit: 1,
+                offset: 0,
+            },
+        )?)
+    }
+
+    #[cfg(test)]
+    fn validate_cycle_balance_authority(
+        pic: &PocketIc,
+        canister: Principal,
+        controller: Principal,
+        outsider: Principal,
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        let read = |caller| -> Result<
+            Result<canic::dto::role::CycleBalanceStatusResponse, Error>,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            Ok(ic_testkit::pic::query_wire(
+                pic,
+                canister,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::cycle_balance::METHOD,
+                    method_id: canic::protocol::cycle_balance::METHOD_ID,
+                    request_limits: canic::protocol::cycle_balance::REQUEST_LIMITS,
+                    response_limits: canic::protocol::cycle_balance::RESPONSE_LIMITS,
+                },
+                &(),
+            )?)
+        };
+        if !controller_authority_unavailable(&read(outsider)?) {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Store sensitive observability returned the wrong response variant".to_string(),
+                "cycle balance accepted a non-controller".into(),
+            ));
+        }
+        baseline_application_result(read(controller)?, "controller cycle balance")?;
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn validate_root_config_authority(
+        pic: &PocketIc,
+        root: Principal,
+        outsider: Principal,
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        use canic::protocol::root_config as protocol;
+        let read = |caller| -> Result<
+            Result<canic::dto::role::ConfigStatusResponse, Error>,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            Ok(ic_testkit::pic::query_wire(
+                pic,
+                root,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: protocol::METHOD,
+                    method_id: protocol::METHOD_ID,
+                    request_limits: protocol::REQUEST_LIMITS,
+                    response_limits: protocol::RESPONSE_LIMITS,
+                },
+                &(),
+            )?)
+        };
+        if !controller_authority_unavailable(&read(outsider)?) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root configuration accepted a non-controller".into(),
+            ));
+        }
+        let config =
+            baseline_application_result(read(Principal::anonymous())?, "Root configuration")?;
+        if config.toml.is_empty() {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root configuration omitted its retained source".into(),
             ));
         }
         Ok(())
@@ -732,53 +860,13 @@ mod tests {
         metadata: &ActiveComponentRegistryBaselineMetadata,
     ) -> Result<(), ActiveComponentRegistryBaselineError> {
         let outsider = Principal::from_slice(&[0x7f; 29]);
-        let page = || PageRequest {
-            limit: 1,
-            offset: 0,
-        };
 
-        validate_root_sensitive_observation(
-            pic,
-            metadata.root,
-            outsider,
-            || RootStatusRequestFragment::CycleBalance,
-            matches_root_cycle_balance,
-        )?;
-        validate_root_sensitive_observation(
-            pic,
-            metadata.root,
-            outsider,
-            || RootStatusRequestFragment::CycleHistory(page()),
-            matches_root_cycle_history,
-        )?;
-        validate_root_sensitive_observation(
-            pic,
-            metadata.root,
-            outsider,
-            || {
-                RootStatusRequestFragment::Metrics(MetricsStatusRequest {
-                    kind: MetricsKind::Runtime,
-                    page: page(),
-                })
-            },
-            matches_root_metrics,
-        )?;
-        validate_store_sensitive_observation(
-            pic,
-            metadata.wasm_store,
-            metadata.root,
-            outsider,
-            || StoreObservabilityRequest::CycleBalance,
-            matches_store_cycle_balance,
-        )?;
-        validate_store_sensitive_observation(
-            pic,
-            metadata.wasm_store,
-            metadata.root,
-            outsider,
-            || StoreObservabilityRequest::CycleHistory(page()),
-            matches_store_cycle_history,
-        )?;
+        validate_cycle_balance_authority(pic, metadata.root, Principal::anonymous(), outsider)?;
+        validate_cycle_history_authority(pic, metadata.root, Principal::anonymous(), outsider)?;
+        validate_root_metrics_authority(pic, metadata.root, outsider)?;
+        validate_root_config_authority(pic, metadata.root, outsider)?;
+        validate_cycle_balance_authority(pic, metadata.wasm_store, metadata.root, outsider)?;
+        validate_cycle_history_authority(pic, metadata.wasm_store, metadata.root, outsider)?;
 
         validate_managed_observability_authority(pic, metadata, outsider)
     }
@@ -793,112 +881,45 @@ mod tests {
             limit: 1,
             offset: 0,
         };
-        let direct_denied: Result<ManagedStatusResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    ManagedStatusRequestFragment::CycleHistory(page()),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        metadata.issuer.canister_id,
-                        outsider,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)?;
+        let direct_denied = read_cycle_history(pic, metadata.issuer.canister_id, outsider)?;
         if !controller_authority_unavailable(&direct_denied) {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
                 "managed cycle history accepted a non-controller".to_string(),
             ));
         }
 
-        let relay_request = || {
-            RootCommandFragment::ObserveCanister(FleetCanisterObservabilityRequest {
-                canister_id: metadata.issuer.canister_id,
-                request: CanisterObservabilityRequest::CycleHistory(page()),
-            })
+        let relay = |caller| -> Result<
+            Result<canic::dto::page::Page<canic::dto::cycles::CycleTrackerEntry>, Error>,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            Ok(ic_testkit::pic::update_wire(
+                pic,
+                metadata.root,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::root_observation::cycle_history::METHOD,
+                    method_id: canic::protocol::root_observation::cycle_history::METHOD_ID,
+                    request_limits:
+                        canic::protocol::root_observation::cycle_history::REQUEST_LIMITS,
+                    response_limits:
+                        canic::protocol::root_observation::cycle_history::RESPONSE_LIMITS,
+                },
+                &canic::dto::root_observation::Request {
+                    canister_id: metadata.issuer.canister_id.into(),
+                    input: page(),
+                },
+            )?)
         };
-        let relay_denied: Result<RootCommandResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((relay_request(),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        metadata.root,
-                        outsider,
-                        canic::protocol::CANIC_ROOT_COMMAND,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)?;
-        if !controller_authority_unavailable(&relay_denied) {
+        if !controller_authority_unavailable(&relay(outsider)?) {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
                 "Root observability relay accepted a non-controller".to_string(),
             ));
         }
-        let relayed: Result<RootCommandResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((relay_request(),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        metadata.root,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        canic::protocol::CANIC_ROOT_COMMAND,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)?;
-        if !matches!(
-            baseline_application_result(relayed, "relay managed cycle history through Root")?,
-            RootCommandResponseFragment::ObserveCanister(
-                CanisterObservabilityResponse::CycleHistory(_)
-            )
-        ) {
-            return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Root observability relay returned the wrong response variant".to_string(),
-            ));
-        }
+        baseline_application_result(
+            relay(Principal::anonymous())?,
+            "relay managed cycle history through Root",
+        )?;
         Ok(())
-    }
-
-    #[cfg(test)]
-    const fn matches_root_cycle_balance(response: &RootStatusResponseFragment) -> bool {
-        matches!(response, RootStatusResponseFragment::CycleBalance(_))
-    }
-
-    #[cfg(test)]
-    const fn matches_root_cycle_history(response: &RootStatusResponseFragment) -> bool {
-        matches!(response, RootStatusResponseFragment::CycleHistory(_))
-    }
-
-    #[cfg(test)]
-    const fn matches_root_metrics(response: &RootStatusResponseFragment) -> bool {
-        matches!(response, RootStatusResponseFragment::Metrics(_))
-    }
-
-    #[cfg(test)]
-    const fn matches_store_cycle_balance(response: &StoreObservabilityResponse) -> bool {
-        matches!(response, StoreObservabilityResponse::CycleBalance(_))
-    }
-
-    #[cfg(test)]
-    const fn matches_store_cycle_history(response: &StoreObservabilityResponse) -> bool {
-        matches!(response, StoreObservabilityResponse::CycleHistory(_))
     }
 
     #[cfg(test)]
@@ -907,32 +928,21 @@ mod tests {
         root: Principal,
         canister: Principal,
     ) -> ManagedCanisterBinding {
-        let response: Result<ManagedStatusResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    ManagedStatusRequestFragment::Binding,
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        canister,
-                        root,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("managed binding status transport");
-        let ManagedStatusResponseFragment::Binding(binding) =
-            response.expect("Root reads exact managed binding")
-        else {
-            panic!("managed canister returned a differently correlated status");
-        };
-        *binding
+        let response: Result<canic::dto::component_directory::ManagedCanisterBinding, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                canister,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::protected_binding::METHOD,
+                    method_id: canic::protocol::protected_binding::METHOD_ID,
+                    request_limits: canic::protocol::protected_binding::REQUEST_LIMITS,
+                    response_limits: canic::protocol::protected_binding::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .expect("managed binding transport");
+        response.expect("managed binding authority").into()
     }
 
     #[cfg(test)]
@@ -941,17 +951,16 @@ mod tests {
         root: Principal,
         successor: &FleetAdmissionPolicy,
     ) -> canic_core::shared_support::fleet_admission_authority::FleetAdmissionRootCatalogAuthorityModel{
-        let RootStatusResponseFragment::Admission(status) = root_status(
+        let status = crate::pic::admission_control::root_status(
             pic,
             root,
-            RootStatusRequestFragment::Admission(PageRequest {
+            Principal::anonymous(),
+            PageRequest {
                 limit: 32,
                 offset: 0,
-            }),
+            },
         )
-        .expect("query Root admission catalog") else {
-            panic!("Root returned a differently correlated admission status");
-        };
+        .expect("query Root admission catalog");
         assert!(status.operation_id.is_none());
         assert!(status.phase.is_none());
         assert_eq!(
@@ -1030,34 +1039,40 @@ mod tests {
         root: Principal,
         caller: Principal,
     ) -> CanisterPoolResponse {
-        let response: Result<RootStatusResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    RootStatusRequestFragment::Pool(CanisterPoolStatusRequest {
-                        start_after: None,
-                        limit: 256,
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        root,
-                        caller,
-                        canic::protocol::CANIC_ROOT_STATUS,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("query Canister pool transport");
-        let RootStatusResponseFragment::Pool(status) = response.expect("query Canister pool")
-        else {
-            panic!("Root returned a differently correlated pool status");
-        };
-        status
+        root_pool_page(
+            pic,
+            root,
+            caller,
+            CanisterPoolStatusRequest {
+                start_after: None,
+                limit: 256,
+            },
+        )
+        .expect("query Canister pool")
+    }
+
+    fn root_pool_page(
+        pic: &PocketIc,
+        root: Principal,
+        caller: Principal,
+        request: CanisterPoolStatusRequest,
+    ) -> Result<CanisterPoolResponse, Error> {
+        let request = canic_contracts::dto::pool_inventory::Request::from(request);
+        let response: Result<canic_contracts::dto::pool_inventory::Page, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                root,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::pool_inventory::METHOD,
+                    method_id: canic::protocol::pool_inventory::METHOD_ID,
+                    request_limits: canic::protocol::pool_inventory::REQUEST_LIMITS,
+                    response_limits: canic::protocol::pool_inventory::RESPONSE_LIMITS,
+                },
+                &request,
+            )
+            .expect("pool Wire transport");
+        response.map(Into::into)
     }
 
     fn wait_for_role_overviews_ready<I, L>(
@@ -1142,17 +1157,21 @@ mod tests {
         pic: &PocketIc,
         canister_id: Principal,
     ) -> Result<RoleOverviewReadinessObservation, Box<dyn std::error::Error + Send + Sync>> {
-        match (|| -> Result<(Result<RoleOverviewStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((RoleOverviewStatusRequestFragment::Overview,))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(canister_id, ic_platform::principal::ExternalPrincipal::anonymous(), canic::protocol::CANIC_PUBLIC_STATUS, request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })()
-        .map(|(reply,)| reply)
-        {
-            Ok(Ok(RoleOverviewStatusResponseFragment::Overview(overview))) => {
+        let response: Result<canic::dto::role::RoleOverviewResponse, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                canister_id,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::CANIC_PUBLIC_OVERVIEW,
+                    method_id: canic::protocol::public_overview::METHOD_ID,
+                    request_limits: canic::protocol::public_overview::REQUEST_LIMITS,
+                    response_limits: canic::protocol::public_overview::RESPONSE_LIMITS,
+                },
+                &(),
+            )?;
+        match response {
+            Ok(overview) => {
                 if overview.bootstrap.ready {
                     Ok(RoleOverviewReadinessObservation::Ready)
                 } else {
@@ -1162,57 +1181,30 @@ mod tests {
                     })
                 }
             }
-            Ok(Err(error)) => Ok(RoleOverviewReadinessObservation::Rejected(error)),
-            Err(error) => Err(error),
+            Err(error) => Ok(RoleOverviewReadinessObservation::Rejected(error)),
         }
     }
 
-    fn coordinator_command(
+    #[cfg(test)]
+    fn coordinator_admission_mutate(
         pic: &PocketIc,
         coordinator: Principal,
-        command: CoordinatorCommand,
-    ) -> Result<CoordinatorCommandResponse, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    coordinator,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    canic::protocol::CANIC_COORDINATOR_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Coordinator command transport")
-    }
-
-    fn coordinator_status<R: crate::pic::canic::CoordinatorRead>(
-        pic: &PocketIc,
-        coordinator: Principal,
-        request: R,
-    ) -> Result<R::Response, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    coordinator,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    R::METHOD,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Coordinator status transport")
+        request: canic::dto::fleet_admission::FleetAdmissionMutationRequest,
+    ) -> Result<canic::dto::fleet_admission::FleetAdmissionMutationResponse, Error> {
+        use canic::protocol::admission_control as protocol;
+        ic_testkit::pic::update_wire(
+            pic,
+            coordinator,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: protocol::mutate::METHOD,
+                method_id: protocol::mutate::METHOD_ID,
+                request_limits: protocol::REQUEST_LIMITS,
+                response_limits: protocol::RESPONSE_LIMITS,
+            },
+            &canic::dto::admission_control::MutationRequest::from(request),
+        )
+        .expect("native admission mutation transport")
     }
 
     #[cfg(test)]
@@ -1233,35 +1225,13 @@ mod tests {
     ) -> FleetAdmissionMutationResponse {
         let mut last_phase = String::new();
         for _ in 0..128 {
-            let status: Result<CoordinatorOperationReadResponse, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((
-                        CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                            operation_id,
-                        }),
-                    ))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).query_call(
-                            coordinator,
-                            caller,
-                            canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("query Fleet admission transport");
-            let status = status.expect("query Fleet admission operation");
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::Admission(operation),
-            ) = status
-            else {
-                panic!("Coordinator returned a differently correlated admission operation")
-            };
+            let operation = crate::pic::admission_control::operation_status(
+                pic,
+                coordinator,
+                caller,
+                operation_id,
+            )
+            .expect("query Fleet admission operation");
             let observed_phase = format!("{:?}", operation.phase);
             if observed_phase != last_phase {
                 eprintln!("[pic_fleet_admission] Coordinator phase={observed_phase}");
@@ -1298,18 +1268,13 @@ mod tests {
         let mut restarted_roots = std::collections::BTreeSet::new();
         let mut stopped_targets = std::collections::BTreeSet::new();
         for _ in 0..192 {
-            let status = coordinator_status(
+            let operation = crate::pic::admission_control::operation_status(
                 pic,
                 coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
             .expect("query interrupted Fleet admission operation");
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::Admission(operation),
-            ) = status
-            else {
-                panic!("Coordinator returned a differently correlated admission operation")
-            };
             let boundary = match &operation.phase {
                 FleetAdmissionOperationPhase::Preparing { .. } => Some("preparing"),
                 FleetAdmissionOperationPhase::Releasing { .. } => Some("releasing"),
@@ -1364,15 +1329,16 @@ mod tests {
                     .expect("restart Coordinator at retained admission boundary");
             }
             for (root, target) in roots.iter().zip(targets) {
-                let response = root_status(
+                let response = crate::pic::admission_control::root_status(
                     pic,
                     *root,
-                    RootStatusRequestFragment::Admission(PageRequest {
+                    Principal::anonymous(),
+                    PageRequest {
                         limit: 1,
                         offset: 0,
-                    }),
+                    },
                 );
-                let Ok(RootStatusResponseFragment::Admission(status)) = response else {
+                let Ok(status) = response else {
                     continue;
                 };
                 if status.operation_id != Some(operation_id) {
@@ -1416,57 +1382,175 @@ mod tests {
         canister_id: Principal,
         root: Principal,
     ) -> FleetAdmissionProjectionStatusResponse {
-        let response: Result<ManagedAdmissionStatusResponseFragment, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    ManagedAdmissionStatusRequestFragment::Admission(PageRequest {
-                        limit: 128,
-                        offset: 0,
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        canister_id,
-                        root,
-                        canic::protocol::CANIC_ADMISSION_STATUS,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("managed admission status transport");
-        let ManagedAdmissionStatusResponseFragment::Admission(status) =
-            response.expect("managed admission status");
-        status
+        let response: Result<canic_contracts::dto::admission_control::ManagedStatus, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                canister_id,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic_contracts::protocol::CANIC_ADMISSION_STATUS,
+                    method_id:
+                        canic_contracts::protocol::admission_control::managed_status::METHOD_ID,
+                    request_limits: canic_contracts::protocol::admission_control::REQUEST_LIMITS,
+                    response_limits: canic_contracts::protocol::admission_control::RESPONSE_LIMITS,
+                },
+                &PageRequest {
+                    limit: 128,
+                    offset: 0,
+                },
+            )
+            .expect("native managed admission status transport");
+        response.expect("protected admission status").into()
     }
 
-    fn store_command_as(
+    #[cfg(test)]
+    fn store_grant_as(
         pic: &PocketIc,
         store: Principal,
         caller: Principal,
-        command: StoreCommand,
-    ) -> Result<StoreCommandResponse, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    store,
-                    caller,
-                    canic::protocol::CANIC_WASM_STORE_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .expect("Store command transport")
+        request: canic::dto::fixture_provisioning::FixtureGrantRequest,
+    ) -> Result<Result<canic::dto::runtime_reporting::FixtureGrant, FixtureStoreError>, Error> {
+        ic_testkit::pic::update_wire(
+            pic,
+            store,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::store_control::grant::METHOD,
+                method_id: canic::protocol::store_control::grant::METHOD_ID,
+                request_limits: canic::protocol::store_control::REQUEST_LIMITS,
+                response_limits: canic::protocol::store_control::RESPONSE_LIMITS,
+            },
+            &canic::dto::store_control::FixtureGrantRequest::from(request),
+        )
+        .expect("native Store grant transport")
+    }
+
+    fn publish_template_chunk_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        request: &TemplateChunkInput,
+    ) -> Result<(), Error> {
+        ic_testkit::pic::update_wire(
+            pic,
+            store,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                method_id: canic::protocol::template_bytes::METHOD_ID,
+                request_limits: canic::protocol::template_bytes::REQUEST_LIMITS,
+                response_limits: canic::protocol::template_bytes::RESPONSE_LIMITS,
+            },
+            &canic::dto::template_bytes::PublishRequestRef::from(request),
+        )
+        .expect("native template publication transport")
+    }
+
+    #[cfg(test)]
+    fn template_chunk_frame(request: &TemplateChunkInput) -> Vec<u8> {
+        ic_wire::native::encode_request(
+            canic::protocol::template_bytes::METHOD_ID,
+            &canic::dto::template_bytes::PublishRequestRef::from(request),
+            canic::protocol::template_bytes::REQUEST_LIMITS,
+        )
+        .expect("native template publication frame")
+    }
+
+    fn store_upload_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        request: FixtureChunkUpload,
+    ) -> Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> {
+        ic_testkit::pic::update_wire(
+            pic,
+            store,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
+                method_id: canic::protocol::fixture_bytes::upload::METHOD_ID,
+                request_limits: canic::protocol::fixture_bytes::CHUNK_LIMITS,
+                response_limits: canic::protocol::fixture_bytes::UPLOAD_RESPONSE_LIMITS,
+            },
+            &canic::dto::fixture_bytes::UploadRequest::from(request),
+        )
+        .expect("native fixture upload transport")
+    }
+
+    #[cfg(test)]
+    fn store_fixture_grant_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        target: Principal,
+    ) -> Result<Option<canic::dto::fixture_provisioning::FixtureGrant>, Error> {
+        let response: Result<Option<canic::dto::runtime_reporting::FixtureGrant>, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                store,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::store_catalog::grant::METHOD,
+                    method_id: canic::protocol::store_catalog::grant::METHOD_ID,
+                    request_limits: canic::protocol::store_catalog::REQUEST_LIMITS,
+                    response_limits: canic::protocol::store_catalog::RESPONSE_LIMITS,
+                },
+                &ic_platform::Principal::from(target),
+            )
+            .expect("native Store observation transport");
+        response.map(|grant| grant.map(Into::into))
+    }
+
+    #[cfg(test)]
+    fn store_fixture_status_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        content: [u8; 32],
+    ) -> Result<
+        Result<canic::dto::fixture_provisioning::FixtureSourceStatus, FixtureStoreError>,
+        Error,
+    > {
+        let response: Result<
+            Result<canic::dto::fixture_provisioning::FixtureSourceStatus, FixtureStoreError>,
+            Error,
+        > = ic_testkit::pic::query_wire(
+            pic,
+            store,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::store_catalog::fixture::METHOD,
+                method_id: canic::protocol::store_catalog::fixture::METHOD_ID,
+                request_limits: canic::protocol::store_catalog::REQUEST_LIMITS,
+                response_limits: canic::protocol::store_catalog::RESPONSE_LIMITS,
+            },
+            &content,
+        )
+        .expect("native Store observation transport");
+        response
+    }
+
+    #[cfg(test)]
+    fn store_template_status_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        request: TemplateLookupRequest,
+    ) -> Result<TemplateStagingStatusResponse, Error> {
+        let response: Result<TemplateStagingStatusResponse, Error> = ic_testkit::pic::query_wire(
+            pic,
+            store,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::store_catalog::template::METHOD,
+                method_id: canic::protocol::store_catalog::template::METHOD_ID,
+                request_limits: canic::protocol::store_catalog::REQUEST_LIMITS,
+                response_limits: canic::protocol::store_catalog::RESPONSE_LIMITS,
+            },
+            &request,
+        )
+        .expect("native Store observation transport");
+        response
     }
 
     fn store_prepare_as(
@@ -1475,12 +1559,28 @@ mod tests {
         caller: Principal,
         request: TemplateChunkSetPrepareInput,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
-        let response =
-            store_command_as(pic, store, caller, StoreCommand::PrepareChunkSet(request))?;
-        let StoreCommandResponse::PrepareChunkSet(prepared) = response else {
-            panic!("Store returned a differently correlated prepare response");
-        };
-        Ok(prepared)
+        let bytes = ic_wire::native::encode_request(
+            canic::protocol::store_publication::prepare::METHOD_ID,
+            &request,
+            canic::protocol::store_publication::REQUEST_LIMITS,
+        )
+        .unwrap();
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            pic.update_call(
+                store,
+                caller,
+                canic::protocol::store_publication::prepare::METHOD,
+                bytes,
+            )
+        })
+        .unwrap()
+        .unwrap();
+        ic_wire::native::decode_response(
+            canic::protocol::store_publication::prepare::METHOD_ID,
+            &reply,
+            canic::protocol::store_publication::RESPONSE_LIMITS,
+        )
+        .unwrap()
     }
 
     fn store_stage_manifest_as(
@@ -1489,11 +1589,28 @@ mod tests {
         caller: Principal,
         request: TemplateManifestInput,
     ) -> Result<(), Error> {
-        let response = store_command_as(pic, store, caller, StoreCommand::StageManifest(request))?;
-        let StoreCommandResponse::StageManifest = response else {
-            panic!("Store returned a differently correlated manifest response");
-        };
-        Ok(())
+        let bytes = ic_wire::native::encode_request(
+            canic::protocol::store_publication::stage::METHOD_ID,
+            &request,
+            canic::protocol::store_publication::REQUEST_LIMITS,
+        )
+        .unwrap();
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            pic.update_call(
+                store,
+                caller,
+                canic::protocol::store_publication::stage::METHOD,
+                bytes,
+            )
+        })
+        .unwrap()
+        .unwrap();
+        ic_wire::native::decode_response(
+            canic::protocol::store_publication::stage::METHOD_ID,
+            &reply,
+            canic::protocol::store_publication::RESPONSE_LIMITS,
+        )
+        .unwrap()
     }
 
     ///
@@ -1523,19 +1640,6 @@ mod tests {
                 ActiveComponentRegistryRuntime::Fresh(pic) => pic,
                 ActiveComponentRegistryRuntime::Pooled(baseline) => baseline.pocket_ic(),
             }
-        }
-
-        /// Start the HTTP gateway for a fresh, exclusively owned fixture.
-        ///
-        /// # Panics
-        ///
-        /// Panics when called for an immutable pooled fixture.
-        #[must_use]
-        pub fn start_http_gateway(&mut self) -> String {
-            let ActiveComponentRegistryRuntime::Fresh(pic) = &mut self.runtime else {
-                panic!("the HTTP gateway requires a fresh Component Registry fixture")
-            };
-            pic.make_live(None).to_string()
         }
 
         /// Return the exact issuer Wasm installed by this fixture.
@@ -1679,10 +1783,7 @@ mod tests {
                 },
             ];
             CachedPocketIcBaseline::capture(
-                ic_testkit::pic::PocketIcInstance {
-                    instance: *pic,
-                    server: None,
-                },
+                ic_testkit::pic::PocketIcInstance::from_borrowed_server(*pic),
                 snapshot_targets,
                 metadata,
             )
@@ -1979,7 +2080,7 @@ export XDG_CONFIG_HOME="$wrapper_root/xdg-config"
 export XDG_DATA_HOME="$wrapper_root/xdg-data"
 export DO_NOT_TRACK=1
 case " $* " in
-  *" canister call "*" canic_root_command "*)
+  *" canister call "*" canic_root_synchronize_registry "*)
     if [ -f "$wrapper_root/lose-registration-response" ] && [ ! -e "$wrapper_root/lost-registration-response" ]; then
       icp "$@"
       : > "$wrapper_root/lost-registration-response"
@@ -2040,7 +2141,7 @@ case " $* " in
     ;;
 esac
 case " $* " in
-  *" canister call "*" canic_root_command "*)
+  *" canister call "*" canic_root_import_canister "*)
     previous=""
     for argument in "$@"; do
       if [ "$previous" = "--args-file" ] &&
@@ -2449,6 +2550,7 @@ exec icp "$@"
             "Root must accept the request before losing its reply: {interrupted:?}"
         );
         let path = ops::record_path(directory, &local.environment, &source.fleet, "extra").unwrap();
+        assert!(!directory.join("root-key.der.lose-reply").exists());
         assert_eq!(ops::read(&path).unwrap().unwrap().submission_attempts, 1);
 
         // Local builds require explicit supply: create outside the harness allocation journal,
@@ -2469,19 +2571,20 @@ exec icp "$@"
                 .canister_call_candid(&source.cycles_ledger, "create_canister", &creation, None)
                 .unwrap();
         let imported = created.unwrap().canister_id;
-        let response: Result<RootCommandResponseFragment, canic_contracts::dto::error::Error> =
-            ledger_icp
-                .canister_call_candid(
-                    &root.to_text(),
-                    canic_contracts::protocol::CANIC_ROOT_COMMAND,
-                    &HostRootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
-                        canister_id: imported,
-                    }),
-                    Some(&directory.join(&source.protocol.as_ref().unwrap().root_candid)),
-                )
-                .unwrap();
+        let response: Result<PoolImportResponse, Error> = ledger_icp
+            .canister_update_wire(
+                &root.to_text(),
+                canic::protocol::pool_control::import::METHOD,
+                canic::protocol::pool_control::import::METHOD_ID,
+                &canic::dto::pool_control::ImportRequest {
+                    canister_id: imported.into(),
+                },
+                canic::protocol::pool_control::REQUEST_LIMITS,
+                canic::protocol::pool_control::RESPONSE_LIMITS,
+            )
+            .unwrap();
         assert!(
-            matches!(response.unwrap(), RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == imported)
+            matches!(response.unwrap(), PoolImportResponse::Imported { canister_id } if canister_id == ic_platform::Principal::from(imported))
         );
 
         // Refresh Fleet authority while the local Component record still holds only its issued intent.
@@ -2650,7 +2753,9 @@ exec icp "$@"
         } else {
             browser.clone()
         };
-        let manifest = workflow::prepare_handoff(directory, fleet, &input, &output).unwrap();
+        let manifest =
+            workflow::prepare_handoff(directory, fleet, &input, &output, &frontend_compiler())
+                .unwrap();
         assert_eq!(
             manifest.local_root_key_der_hex.as_deref(),
             Some(local.root_key_der_hex.as_str())
@@ -3211,18 +3316,15 @@ exec icp "$@"
         let funded_balance = pic.cycle_balance(large);
         assert_eq!(funded_balance, 5_000_000_000_000);
         for attempt in 0..2 {
-            let RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported {
-                canister_id,
-            }) = root_command(
+            let PoolImportResponse::Imported { canister_id } = import_canister(
                 &pic,
                 fixture.root_id,
-                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest { canister_id: large }),
+                PoolCanisterRequest { canister_id: large },
             )
-            .expect("refresh topped-up import")
-            else {
+            .expect("refresh topped-up import") else {
                 panic!("Root did not publish the refreshed imported asset");
             };
-            assert_eq!(canister_id, large);
+            assert_eq!(canister_id, ic_platform::Principal::from(large));
             assert_eq!(
                 pic.cycle_balance(large),
                 funded_balance,
@@ -3254,17 +3356,13 @@ exec icp "$@"
         let mut last_status = None;
         let mut terminal = None;
         for _ in 0..120 {
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-            ) = coordinator_status(
+            let status = crate::pic::canic::coordinator_provisioning(
                 &pic,
                 coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
-            .expect("query retained-pool provisioning")
-            else {
-                panic!("Coordinator returned a differently correlated operation status");
-            };
+            .expect("query retained-pool provisioning");
             if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
                 terminal = Some(status);
                 break;
@@ -3280,22 +3378,18 @@ exec icp "$@"
         assert_eq!(terminal.runtime_activated_root_count, 1);
         assert!(terminal.pending_root_failure.is_none());
 
-        let RootCommandResponseFragment::PrepareComponentRegistry(first_proof) = root_command(
+        let first_proof = crate::pic::canic::prepare_component_registry(
             &pic,
             fixture.root_id,
-            RootCommandFragment::PrepareComponentRegistry(component_registry_request.clone()),
+            component_registry_request.clone(),
         )
-        .expect("replay advanced retained Component Registry without mutation") else {
-            panic!("Root returned a differently correlated Component Registry proof");
-        };
-        let RootCommandResponseFragment::PrepareComponentRegistry(replayed_proof) = root_command(
+        .expect("replay advanced retained Component Registry without mutation");
+        let replayed_proof = crate::pic::canic::prepare_component_registry(
             &pic,
             fixture.root_id,
-            RootCommandFragment::PrepareComponentRegistry(component_registry_request),
+            component_registry_request,
         )
-        .expect("replay advanced retained Component Registry proof") else {
-            panic!("Root returned a differently correlated Component Registry proof");
-        };
+        .expect("replay advanced retained Component Registry proof");
         assert_eq!(replayed_proof, first_proof);
         assert_eq!(first_proof.fleet_subnet_root, fixture.root_id);
         assert_eq!(first_proof.reserved_component_instances, 0);
@@ -3430,17 +3524,13 @@ exec icp "$@"
         let mut provisioned = None;
         let mut last_status = None;
         for _ in 0..240 {
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-            ) = coordinator_status(
+            let status = crate::pic::canic::coordinator_provisioning(
                 &pic,
                 coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
-            .expect("query fresh Component provisioning")
-            else {
-                panic!("Coordinator returned a differently correlated operation status");
-            };
+            .expect("query fresh Component provisioning");
             if status.provisioned_root_count == status.root_batch_count
                 && status.components_provisioned_at_ns.is_some()
             {
@@ -3452,14 +3542,8 @@ exec icp "$@"
             pic.tick();
         }
         let provisioned = provisioned.unwrap_or_else(|| {
-            let root_progress = match root_status(
-                &pic,
-                fixture.root_id,
-                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-            ) {
-                Ok(RootStatusResponseFragment::Operation(
-                    RootOperationStatusResponse::ProvisionComponents(status),
-                )) => format!(
+            let root_progress = match crate::pic::canic::root_provisioning(&pic, fixture.root_id, Principal::anonymous(), operation_id) {
+                Ok(status) => format!(
                     "phase={:?} reserved={} claimed={} installed={} committed={}",
                     status.phase,
                     status.reserved_component_count,
@@ -3467,7 +3551,6 @@ exec icp "$@"
                     status.installed_component_count,
                     status.registry_committed_component_count,
                 ),
-                Ok(_) => "differently correlated operation status".to_string(),
                 Err(error) => format!("error={error}"),
             };
             report_canister_diagnostics_batch(
@@ -3501,31 +3584,16 @@ exec icp "$@"
         }
         let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
             .expect("canonical Cycles Ledger principal");
-        let request_count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "request_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let request_count: u64 = ic_testkit::pic::query_wire(
+            &pic,
+            cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+            &(),
+        )
         .expect("query pool creation request count");
         assert_eq!(request_count, 5);
     }
-
-    #[cfg(test)]
-    use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusRequestFragment as FixtureReadinessRequest;
-
-    #[cfg(test)]
-    use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusResponseFragment as FixtureReadinessResponse;
 
     #[cfg(test)]
     fn fixture_readiness(
@@ -3533,28 +3601,23 @@ exec icp "$@"
         root: Principal,
         target: Principal,
     ) -> canic::dto::runtime::CanicReadinessStatus {
-        let response: Result<FixtureReadinessResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    FixtureReadinessRequest::Readiness,
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        target,
-                        root,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("protected readiness remains observable");
-        let FixtureReadinessResponse::Readiness(response) = response.unwrap();
+        let response: Result<canic::dto::runtime_observation::CanicReadinessStatus, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                target,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::protected_readiness::METHOD,
+                    method_id: canic::protocol::protected_readiness::METHOD_ID,
+                    request_limits: canic::protocol::protected_readiness::REQUEST_LIMITS,
+                    response_limits: canic::protocol::protected_readiness::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .expect("protected readiness Wire transport");
         response
+            .expect("protected readiness application result")
+            .into()
     }
 
     #[cfg(test)]
@@ -3572,21 +3635,24 @@ exec icp "$@"
             .iter()
             .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
             .filter_map(|entry| {
-                let response = (|| -> Result<(Result<ManagedStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((ManagedStatusRequestFragment::Binding,))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(entry.canister_id, root, canic::protocol::CANIC_OBSERVABILITY, request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })()
-                .map(|(reply,)| reply)
-                .ok()?
+                let response: Result<
+                    canic::dto::component_directory::ManagedCanisterBinding,
+                    Error,
+                > = ic_testkit::pic::query_wire(
+                    pic,
+                    entry.canister_id,
+                    root,
+                    ic_testkit::pic::WireCallSpec {
+                        method: canic::protocol::protected_binding::METHOD,
+                        method_id: canic::protocol::protected_binding::METHOD_ID,
+                        request_limits: canic::protocol::protected_binding::REQUEST_LIMITS,
+                        response_limits: canic::protocol::protected_binding::RESPONSE_LIMITS,
+                    },
+                    &(),
+                )
                 .ok()?;
-                let ManagedStatusResponseFragment::Binding(binding) = response else {
-                    return None;
-                };
-                let role = match binding.as_ref() {
+                let binding: ManagedCanisterBinding = response.ok()?.into();
+                let role = match &binding {
                     ManagedCanisterBinding::Component(binding) => &binding.role,
                     ManagedCanisterBinding::ComponentChild(binding) => &binding.role,
                 };
@@ -3603,18 +3669,9 @@ exec icp "$@"
         root: Principal,
         operation_id: [u8; 32],
     ) {
-        let response = root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-        )
-        .expect("observe Root provisioning while fixtures are held");
-        let RootStatusResponseFragment::Operation(
-            RootOperationStatusResponse::ProvisionComponents(status),
-        ) = response
-        else {
-            panic!("expected exact Component provisioning status");
-        };
+        let status =
+            crate::pic::canic::root_provisioning(pic, root, Principal::anonymous(), operation_id)
+                .expect("observe Root provisioning while fixtures are held");
         assert!(
             !status.root_runtime_active,
             "initial child must progress while Root remains Prepared"
@@ -3624,10 +3681,6 @@ exec icp "$@"
 
     /// The initial child completes autonomously while the parent's data remains held.
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "keep the ordered PocketIC scenario and its authority assertions together"
-    )]
     fn qualify_pending_fixture_bootstrap(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
@@ -3672,34 +3725,24 @@ exec icp "$@"
         );
         assert_eq!(readiness.fixture, Err(FixtureImportError::NotReady));
         assert!(
-            (|| -> Result<(Result<String, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        hub,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "test_recovery_generation",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::query_wire::<_, Result<String, Error>>(
+                pic,
+                hub,
+                Principal::anonymous(),
+                crate::pic::application_probe::GENERATION,
+                &()
+            )
             .is_err()
         );
         assert!(
-            (|| -> Result<(Result<Principal, Error>,), Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((Principal::anonymous(),))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).update_call(hub, ic_platform::principal::ExternalPrincipal::anonymous(), "create_account", request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                pic,
+                hub,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::application_probe::CREATE_ACCOUNT,
+                &ic_platform::Principal::from(Principal::anonymous())
+            )
+            .map(|reply| reply.map(Principal::from))
             .is_err()
         );
         for _ in 0..160 {
@@ -3732,17 +3775,13 @@ exec icp "$@"
             Err(FixtureImportError::NotReady)
         );
         assert_root_waits_for_fixture_membership(pic, fixture.root_id, operation_id);
-        (|| -> Result<((),), Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(hub, fixture.root_id, "test_release_fixture", request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::update_wire::<_, ()>(
+            pic,
+            hub,
+            fixture.root_id,
+            crate::pic::application_probe::RELEASE_FIXTURE,
+            &(),
+        )
         .unwrap();
     }
 
@@ -3835,14 +3874,13 @@ exec icp "$@"
     /// Prepared fixture funding cannot authorize an unknown caller or recycling.
     #[cfg(test)]
     fn assert_pending_fixture_funding_rejections(pic: &PocketIc, root: Principal, hub: Principal) {
-        let error = root_command_as(
+        let error = root_capability_as(
             pic,
             root,
             Principal::from_slice(&[0xb4; 29]),
-            RootCommandFragment::RespondCapability(descendant_funding_request(pic, 0xb4)),
+            descendant_funding_request(pic, 0xb4),
         )
-        .err()
-        .expect("unregistered caller cannot acquire a fixture funding allowance");
+        .expect_err("unregistered caller cannot acquire a fixture funding allowance");
         assert_eq!(
             error.code(),
             canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
@@ -3854,14 +3892,9 @@ exec icp "$@"
                 canister_pid: hub,
                 metadata: None,
             });
-        let error = root_command_as(
-            pic,
-            root,
-            hub,
-            RootCommandFragment::RespondCapability(forbidden),
-        )
-        .err()
-        .expect("membership publication must not enable recycling while Root remains Prepared");
+        let error = root_capability_as(pic, root, hub, forbidden).expect_err(
+            "membership publication must not enable recycling while Root remains Prepared",
+        );
         assert_eq!(
             error.code(),
             canic::diagnostics::codes::STATE_INACTIVE.raw_code()
@@ -3904,22 +3937,14 @@ exec icp "$@"
         for index in 1..capacity {
             let user = Principal::from_slice(&index.to_be_bytes());
             let assigned: Result<Principal, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((user,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).update_call(
-                            hub,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "create_account",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
+                ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                    pic,
+                    hub,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    crate::pic::application_probe::CREATE_ACCOUNT,
+                    &ic_platform::Principal::from(user),
+                )
+                .map(|reply| reply.map(Principal::from))
                 .expect("fill the configured initial Shard capacity");
             assert_eq!(assigned.unwrap(), initial_shard);
         }
@@ -3936,22 +3961,14 @@ exec icp "$@"
             .expect("interrupt retained source access");
         let user = Principal::from_slice(&[0xe4; 29]);
         let interrupted: Result<Principal, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((user,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        hub,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "create_account",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                pic,
+                hub,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::application_probe::CREATE_ACCOUNT,
+                &ic_platform::Principal::from(user),
+            )
+            .map(|reply| reply.map(Principal::from))
             .expect("source outage returns an application result");
         assert!(
             interrupted.is_err(),
@@ -3963,22 +3980,14 @@ exec icp "$@"
         let mut assigned = None;
         for _ in 0..120 {
             let result: Result<Principal, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((user,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).update_call(
-                            hub,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "create_account",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
+                ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                    pic,
+                    hub,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    crate::pic::application_probe::CREATE_ACCOUNT,
+                    &ic_platform::Principal::from(user),
+                )
+                .map(|reply| reply.map(Principal::from))
                 .expect("retry the same account allocation");
             match result {
                 Ok(shard) => {
@@ -3995,27 +4004,8 @@ exec icp "$@"
         let after = root_pool_status(pic, fixture.root_id);
         assert_eq!(after.workload, before.workload + 1);
         assert_eq!(after.failed, before.failed);
-        let response: Result<StoreCatalogResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    StoreCatalogRequest::FixtureGrant(shard),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        store,
-                        fixture.root_id,
-                        canic::protocol::CANIC_WASM_STORE_CATALOG,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let StoreCatalogResponse::FixtureGrant(Some(grant)) = response.unwrap() else {
+        let response = store_fixture_grant_as(pic, store, fixture.root_id, shard);
+        let Some(grant) = response.unwrap() else {
             panic!("the later Shard must receive an autonomous exact grant");
         };
         assert_eq!(grant.revision, 1);
@@ -4052,22 +4042,14 @@ exec icp "$@"
         );
         // Discard the first successful assignment response and reconcile by the same key.
         let replay: Result<Principal, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((user,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        hub,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "create_account",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                pic,
+                hub,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::application_probe::CREATE_ACCOUNT,
+                &ic_platform::Principal::from(user),
+            )
+            .map(|reply| reply.map(Principal::from))
             .unwrap();
         assert_eq!(replay.unwrap(), shard);
         assert_eq!(root_pool_status(pic, fixture.root_id), after);
@@ -4091,16 +4073,12 @@ exec icp "$@"
         let component = binding.component.component;
         let root = fixture.root_id;
         let store = fixture.response.wasm_store;
-        let RootStatusResponseFragment::ComponentRegistryPartition(partition) = root_status(
+        let partition = root_partition(
             pic,
             root,
-            RootStatusRequestFragment::ComponentRegistryPartition(
-                canic::dto::component_registry::ComponentRegistryPartitionRequest { component },
-            ),
+            canic::dto::component_registry::ComponentRegistryPartitionRequest { component },
         )
-        .unwrap() else {
-            panic!("expected current Component partition");
-        };
+        .unwrap();
         let request = canic::dto::component_registry::RootComponentSubtreeRemovalRequest {
             operation_id,
             component,
@@ -4121,13 +4099,7 @@ exec icp "$@"
             .find(|entry| entry.canister_id == shard)
             .unwrap();
         pic.stop_canister(store, Some(root)).unwrap();
-        let unavailable = root_command(
-            pic,
-            root,
-            RootCommandFragment::RemoveSubtree(request.clone()),
-        )
-        .err()
-        .unwrap();
+        let unavailable = remove_subtree(pic, root, request.clone()).err().unwrap();
         assert_eq!(
             unavailable,
             Error::from_registered(canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE)
@@ -4148,12 +4120,7 @@ exec icp "$@"
         pic.start_canister(store, Some(root)).unwrap();
         let hub = binding.component.canister_id;
         let held_effect = caller_authority::hold_during_pending_denial(pic, binding, &request);
-        root_command(
-            pic,
-            root,
-            RootCommandFragment::RemoveSubtree(request.clone()),
-        )
-        .unwrap();
+        remove_subtree(pic, root, request.clone()).unwrap();
         caller_authority::assert_effect_fenced(pic, root, hub, shard, held_effect);
         wait_for_fixture_subtree_removal(pic, root, request.operation_id);
         root_membership::assert_removed_child_absent(pic, root, binding);
@@ -4174,26 +4141,33 @@ exec icp "$@"
 
     #[cfg(test)]
     fn wait_for_fixture_subtree_removal(pic: &PocketIc, root: Principal, operation_id: [u8; 32]) {
+        let denied = crate::pic::canic::root_subtree_removal(
+            pic,
+            root,
+            Principal::from_slice(&[0x94; 29]),
+            operation_id,
+        )
+        .expect_err("subtree evidence requires controller authority");
+        assert_eq!(
+            denied.code(),
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        );
         let mut latest = None;
         for _ in 0..180 {
-            let response = root_status(
+            let status = crate::pic::canic::root_subtree_removal(
                 pic,
                 root,
-                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
-            .unwrap();
-            if let RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::RemoveSubtree(status),
-            ) = response
-            {
-                let completed = matches!(
-                    status.phase,
-                    canic::dto::component_registry::RootComponentSubtreeRemovalPhase::Completed(_)
-                );
-                latest = Some(status);
-                if completed {
-                    break;
-                }
+            .expect("native subtree removal observation");
+            let completed = matches!(
+                status.phase,
+                canic::dto::component_registry::RootComponentSubtreeRemovalPhase::Completed(_)
+            );
+            latest = Some(status);
+            if completed {
+                break;
             }
             pic.advance_time(Duration::from_secs(1));
             pic.tick();
@@ -4217,27 +4191,8 @@ exec icp "$@"
         request: canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
     ) {
         let read_grant = || {
-            let response: Result<StoreCatalogResponse, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((
-                        StoreCatalogRequest::FixtureGrant(shard),
-                    ))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).query_call(
-                            store,
-                            root,
-                            canic::protocol::CANIC_WASM_STORE_CATALOG,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .unwrap();
-            let StoreCatalogResponse::FixtureGrant(Some(revoked)) = response.unwrap() else {
+            let response = store_fixture_grant_as(pic, store, root, shard);
+            let Some(revoked) = response.unwrap() else {
                 panic!("revoked grant remains retained");
             };
             revoked
@@ -4252,7 +4207,7 @@ exec icp "$@"
             .find(|entry| entry.canister_id == shard)
             .unwrap();
         assert_eq!(before.status, CanisterPoolAssetStatus::Ready);
-        root_command(pic, root, RootCommandFragment::RemoveSubtree(request)).unwrap();
+        remove_subtree(pic, root, request).unwrap();
         assert_eq!(
             root_pool_status(pic, root)
                 .entries
@@ -4261,22 +4216,18 @@ exec icp "$@"
             Some(&before)
         );
         assert_eq!(read_grant(), revoked);
-        let StoreCommandResponse::FixtureGrant(stale) = store_command_as(
+        let stale = store_grant_as(
             pic,
             store,
             root,
-            StoreCommand::SetFixtureGrant(Box::new(
-                canic::dto::fixture_provisioning::FixtureGrantRequest {
-                    expected_revision: 0,
-                    binding: grant.binding.clone(),
-                    enabled: true,
-                },
-            )),
+            canic::dto::fixture_provisioning::FixtureGrantRequest {
+                expected_revision: 0,
+                binding: grant.binding.clone(),
+                enabled: true,
+            },
         )
-        .unwrap() else {
-            panic!("exact grant response");
-        };
-        assert_eq!(*stale, Err(FixtureStoreError::Conflict));
+        .unwrap();
+        assert_eq!(stale, Err(FixtureStoreError::Conflict));
     }
 
     /// A new operation reuses the physical target with a retained successor grant.
@@ -4295,17 +4246,14 @@ exec icp "$@"
         let operation_id: [u8; 32] = [0xe6; 32];
         let mut last = None;
         let create_child = || -> Result<Principal, Error> {
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((operation_id,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(hub, root, "test_create_fixture_child", request_bytes)
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                pic,
+                hub,
+                root,
+                crate::pic::application_probe::CREATE_FIXTURE_CHILD,
+                &operation_id,
+            )
+            .map(|reply| reply.map(Principal::from))
             .unwrap()
         };
         let mut replacement = None;
@@ -4330,27 +4278,8 @@ exec icp "$@"
             "replacement must reuse the recycled asset: {last:?}"
         );
         let store = fixture.response.wasm_store;
-        let response: Result<StoreCatalogResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    StoreCatalogRequest::FixtureGrant(shard),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        store,
-                        root,
-                        canic::protocol::CANIC_WASM_STORE_CATALOG,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let StoreCatalogResponse::FixtureGrant(Some(grant)) = response.unwrap() else {
+        let response = store_fixture_grant_as(pic, store, root, shard);
+        let Some(grant) = response.unwrap() else {
             panic!("replacement grant must be retained");
         };
         assert_eq!(grant.revision, previous.revision + 2);
@@ -4386,7 +4315,7 @@ exec icp "$@"
                 .unwrap()
         };
         let after_second_recycle = target_asset();
-        root_command(pic, root, RootCommandFragment::RemoveSubtree(first_removal)).unwrap();
+        remove_subtree(pic, root, first_removal).unwrap();
         assert_eq!(target_asset(), after_second_recycle);
         qualify_recycled_asset_reinspection_recovery(pic, root, shard);
     }
@@ -4417,23 +4346,9 @@ exec icp "$@"
                 metadata: None,
             });
         for _ in 0..2 {
-            root_command(
-                pic,
-                root,
-                RootCommandFragment::RemoveSubtree(removal.clone()),
-            )
-            .unwrap();
+            remove_subtree(pic, root, removal.clone()).unwrap();
             assert_eq!(target_asset(), before);
-            let response = root_command_as(
-                pic,
-                root,
-                hub,
-                RootCommandFragment::RespondCapability(request.clone()),
-            )
-            .unwrap();
-            let RootCommandResponseFragment::RespondCapability(response) = response else {
-                panic!("recycle capability response");
-            };
+            let response = root_capability_as(pic, root, hub, request.clone()).unwrap();
             assert!(matches!(
                 response.response,
                 canic::dto::rpc::Response::RecycleCanister
@@ -4465,14 +4380,8 @@ exec icp "$@"
                 allocation_operation_id: previous.binding.installation,
                 metadata: None,
             });
-        let error = root_command_as(
-            pic,
-            root,
-            hub,
-            RootCommandFragment::RespondCapability(obsolete),
-        )
-        .err()
-        .expect("old allocation cannot recycle its replacement");
+        let error = root_capability_as(pic, root, hub, obsolete)
+            .expect_err("old allocation cannot recycle its replacement");
         assert_eq!(
             error.code(),
             canic::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
@@ -4483,91 +4392,48 @@ exec icp "$@"
             .find(|entry| entry.canister_id == shard)
             .unwrap();
         assert_eq!(after_rejected_recycle, before_rejected_recycle);
-        let StoreCommandResponse::FixtureGrant(stale) = store_command_as(
+        let stale = store_grant_as(
             pic,
             store,
             root,
-            StoreCommand::SetFixtureGrant(Box::new(
-                canic::dto::fixture_provisioning::FixtureGrantRequest {
-                    expected_revision: previous.revision,
-                    binding: previous.binding.clone(),
-                    enabled: false,
-                },
-            )),
+            canic::dto::fixture_provisioning::FixtureGrantRequest {
+                expected_revision: previous.revision,
+                binding: previous.binding.clone(),
+                enabled: false,
+            },
         )
-        .unwrap() else {
-            panic!("exact grant response");
-        };
-        assert_eq!(*stale, Err(FixtureStoreError::Conflict));
-        let response: Result<StoreCatalogResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    StoreCatalogRequest::FixtureGrant(shard),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        store,
-                        root,
-                        canic::protocol::CANIC_WASM_STORE_CATALOG,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let StoreCatalogResponse::FixtureGrant(retained) = response.unwrap() else {
-            panic!("exact grant response");
-        };
-        assert_eq!(retained.as_deref(), Some(grant));
+        .unwrap();
+        assert_eq!(stale, Err(FixtureStoreError::Conflict));
+        let response = store_fixture_grant_as(pic, store, root, shard);
+        let retained = response.unwrap();
+        assert_eq!(retained.as_ref(), Some(grant));
     }
 
     /// Reusing a canister ID never restores a key assigned to its earlier allocation.
     #[cfg(test)]
     fn assert_retired_shard_routing_unavailable(pic: &PocketIc, hub: Principal) {
         let user = Principal::from_slice(&[0xe4; 29]);
-        let plan: Result<String, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((user,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        hub,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "plan_create_account",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let plan: Result<String, Error> = ic_testkit::pic::query_wire::<_, Result<String, Error>>(
+            pic,
+            hub,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            crate::pic::application_probe::PLAN_ACCOUNT,
+            &ic_platform::Principal::from(user),
+        )
+        .unwrap();
         assert_eq!(
             plan.unwrap_err().code(),
             canic::diagnostics::codes::POSITION_UNAVAILABLE.raw_code()
         );
         let result: Result<Principal, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((user,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        hub,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "create_account",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                pic,
+                hub,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::application_probe::CREATE_ACCOUNT,
+                &ic_platform::Principal::from(user),
+            )
+            .map(|reply| reply.map(Principal::from))
             .unwrap();
         assert_eq!(
             result.unwrap_err().code(),
@@ -4589,12 +4455,10 @@ exec icp "$@"
             .controllers;
         pic.set_controllers(canister, Some(root), vec![Principal::anonymous()])
             .unwrap();
-        let request = RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+        let request = PoolCanisterRequest {
             canister_id: canister,
-        });
-        let rejected = root_command(pic, root, request)
-            .err()
-            .expect("management rejection");
+        };
+        let rejected = import_canister(pic, root, request).expect_err("management rejection");
         assert_eq!(
             rejected,
             Error::from_registered(canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE)
@@ -4610,16 +4474,16 @@ exec icp "$@"
             canic::dto::pool::CanisterPoolAssetOrigin::Recycled
         );
         pic.set_controllers(canister, None, controllers).unwrap();
-        let response = root_command(
+        let response = import_canister(
             pic,
             root,
-            RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+            PoolCanisterRequest {
                 canister_id: canister,
-            }),
+            },
         )
         .unwrap();
         assert!(
-            matches!(response, RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == canister)
+            matches!(response, PoolImportResponse::Imported { canister_id } if canister_id == ic_platform::Principal::from(canister))
         );
         let ready = root_pool_status(pic, root)
             .entries
@@ -4634,17 +4498,15 @@ exec icp "$@"
     /// Concurrent manual resets share one live execution owner for the physical target.
     #[cfg(test)]
     fn qualify_concurrent_pool_reinspection(pic: &PocketIc, root: Principal, canister: Principal) {
-        let args = encode_one(RootCommandFragment::ImportPoolCanister(
-            PoolCanisterRequest {
-                canister_id: canister,
-            },
-        ))
+        let args = encode_pool_import(PoolCanisterRequest {
+            canister_id: canister,
+        })
         .unwrap();
         let first = pic
             .submit_call(
                 root,
                 Principal::anonymous(),
-                canic::protocol::CANIC_ROOT_COMMAND,
+                canic::protocol::pool_control::import::METHOD,
                 args.clone(),
             )
             .unwrap();
@@ -4652,33 +4514,29 @@ exec icp "$@"
             .submit_call(
                 root,
                 Principal::anonymous(),
-                canic::protocol::CANIC_ROOT_COMMAND,
+                canic::protocol::pool_control::import::METHOD,
                 args,
             )
             .unwrap();
-        let replies = [first, second].map(|message| {
-            decode_one::<Result<RootCommandResponseFragment, Error>>(
-                &pic.await_call(message).unwrap(),
-            )
-            .unwrap()
-        });
-        assert!(replies.iter().any(|reply| matches!(reply, Ok(RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id })) if *canister_id == canister)));
+        let replies = [first, second]
+            .map(|message| decode_pool_import(&pic.await_call(message).unwrap()).unwrap());
+        assert!(replies.iter().any(|reply| matches!(reply, Ok(PoolImportResponse::Imported { canister_id }) if *canister_id == ic_platform::Principal::from(canister))));
         let busy = Error::from_registered(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE);
         assert!(
             replies
                 .iter()
                 .any(|reply| reply.as_ref().err() == Some(&busy))
         );
-        let response = root_command(
+        let response = import_canister(
             pic,
             root,
-            RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+            PoolCanisterRequest {
                 canister_id: canister,
-            }),
+            },
         )
         .unwrap();
         assert!(
-            matches!(response, RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == canister)
+            matches!(response, PoolImportResponse::Imported { canister_id } if canister_id == ic_platform::Principal::from(canister))
         );
     }
 
@@ -4688,23 +4546,18 @@ exec icp "$@"
             if entry.canister_id == shard {
                 eprintln!("replacement target pool entry: {entry:?}");
             }
-            if let CanisterPoolAssetStatus::Workload { claim } = entry.status {
-                let response = root_status(
+            if let CanisterPoolAssetStatus::Workload { claim } = entry.status
+                && let Ok(operation) = crate::pic::canic::root_child_allocation(
                     pic,
                     root,
-                    RootStatusRequestFragment::Operation(OperationStatusRequest {
-                        operation_id: claim.operation_id,
-                    }),
+                    Principal::anonymous(),
+                    claim.operation_id,
+                )
+            {
+                eprintln!(
+                    "retained child phase: {:?}, creation: {:?}",
+                    operation.phase, operation.creation
                 );
-                if let Ok(RootStatusResponseFragment::Operation(
-                    RootOperationStatusResponse::ProvisionChild(operation),
-                )) = response
-                {
-                    eprintln!(
-                        "retained child phase: {:?}, creation: {:?}",
-                        operation.allocation.phase, operation.allocation.creation
-                    );
-                }
             }
         }
     }
@@ -4718,7 +4571,6 @@ exec icp "$@"
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root =
             crate::workspace::discover().expect("discover Canic test workspace through Cargo");
-        root_membership::assert_candid_contract(&operator_cli_root_candid(&workspace_root));
         let config_path = initial_shard_root_canister_config_path(&workspace_root);
         let config = AppConfigSnapshot::load(&config_path).expect("load initial-Shard config");
         let pic = build_pic();
@@ -4740,29 +4592,27 @@ exec icp "$@"
             joining_version,
             sync_request,
         );
-        let CoordinatorRegistryResponse::Registry(registry) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let registry =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
                 .expect("query active Registry");
         let operation_id = [0x71; 32];
         let compiled = fixture_fresh_component_plan(config.model(), &registry, operation_id);
         let request = compiled.request;
-        let CoordinatorCommandResponse::OperationAccepted(first_receipt) = coordinator_command(
+        let first_receipt = crate::pic::batch_control::prepare(
             &pic,
             coordinator,
-            CoordinatorCommand::ProvisionComponents(request.clone()),
+            Principal::anonymous(),
+            request.clone(),
         )
-        .expect("begin one-Hub Component provisioning") else {
-            panic!("Coordinator returned a differently correlated provisioning response");
-        };
+        .expect("begin one-Hub Component provisioning");
         assert_eq!(first_receipt.operation_id, operation_id);
-        let CoordinatorCommandResponse::OperationAccepted(replayed_receipt) = coordinator_command(
+        let replayed_receipt = crate::pic::batch_control::prepare(
             &pic,
             coordinator,
-            CoordinatorCommand::ProvisionComponents(request.clone()),
+            Principal::anonymous(),
+            request.clone(),
         )
-        .expect("replay the response-lost provisioning command") else {
-            panic!("Coordinator returned a differently correlated replay response");
-        };
+        .expect("replay the response-lost provisioning command");
         assert_eq!(replayed_receipt, first_receipt);
         qualify_pending_fixture_bootstrap(
             &pic,
@@ -4773,18 +4623,14 @@ exec icp "$@"
 
         let mut last_status = None;
         let terminal = (0..240).find_map(|_| {
-            let status = coordinator_status(
+            let status = crate::pic::canic::coordinator_provisioning(
                 &pic,
                 coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
             .expect("query initial-Shard Component provisioning");
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-            ) = status
-            else {
-                panic!("Coordinator returned a differently correlated operation status");
-            };
+
             if status.components_provisioned_at_ns.is_some()
                 && status.runtimes_activated_at_ns.is_some()
                 && status.runtime_activated_root_count == status.root_batch_count
@@ -4816,26 +4662,11 @@ exec icp "$@"
                 })
                 .filter_map(|operation_id| {
                     workload_callers.iter().find_map(|caller| {
-                        let response: Result<RootStatusResponseFragment, Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((RootStatusRequestFragment::Operation(OperationStatusRequest {
-                                    operation_id,
-                                }),))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| pic.query_call(fixture.root_id, *caller, canic::protocol::CANIC_ROOT_OPERATION_STATUS, request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })().map(|(reply,)| reply)
-                            .expect("Root child-operation status transport");
-                        match response {
-                            Ok(RootStatusResponseFragment::Operation(
-                                RootOperationStatusResponse::ProvisionChild(status),
-                            )) => Some(format!(
-                                "caller={caller} operation={operation_id:?} phase={:?}",
-                                status.allocation.phase
-                            )),
-                            _ => None,
-                        }
+                        crate::pic::canic::root_child_allocation(
+                            &pic, fixture.root_id, *caller, operation_id,
+                        ).ok().map(|status| format!(
+                            "caller={caller} operation={operation_id:?} phase={:?}", status.phase
+                        ))
                     })
                 })
                 .collect::<Vec<_>>();
@@ -4854,28 +4685,21 @@ exec icp "$@"
                     format!("canister={} {readiness}", entry.canister_id)
                 })
                 .collect::<Vec<_>>();
-            let component_registry_summary = match root_status(
+            let component_registry_summary = match root_registry(
                 &pic,
                 fixture.root_id,
-                RootStatusRequestFragment::ComponentRegistry(component_registry_request.clone()),
+                component_registry_request.clone(),
             ) {
-                Ok(RootStatusResponseFragment::ComponentRegistry(status)) => format!(
+                Ok(status) => format!(
                     "committed={} descendants={} created={}",
                     status.committed_component_instances,
                     status.managed_descendants,
                     status.known_created_component_canisters
                 ),
-                Ok(_) => "differently correlated Root status".to_string(),
                 Err(error) => format!("error={error}"),
             };
-            let root_provisioning_summary = match root_status(
-                &pic,
-                fixture.root_id,
-                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-            ) {
-                Ok(RootStatusResponseFragment::Operation(
-                    RootOperationStatusResponse::ProvisionComponents(status),
-                )) => format!(
+            let root_provisioning_summary = match crate::pic::canic::root_provisioning(&pic, fixture.root_id, Principal::anonymous(), operation_id) {
+                Ok(status) => format!(
                     "phase={:?} activated={}/{} root_active={} accepted={} published={:?} activation_started={:?} completed={:?} receipt={:?}",
                     status.phase,
                     status.activated_component_count,
@@ -4887,7 +4711,6 @@ exec icp "$@"
                     status.runtimes_activated_at_ns,
                     status.receipt_content_hash
                 ),
-                Ok(_) => "differently correlated Root operation status".to_string(),
                 Err(error) => format!("error={error}"),
             };
             report_canister_diagnostics_batch(
@@ -4916,14 +4739,8 @@ exec icp "$@"
         assert_eq!(terminal.component_count, 3);
         assert!(terminal.pending_root_failure.is_none());
 
-        let RootStatusResponseFragment::ComponentRegistry(component_registry) = root_status(
-            &pic,
-            fixture.root_id,
-            RootStatusRequestFragment::ComponentRegistry(component_registry_request),
-        )
-        .expect("query terminal initial-Shard Component Registry") else {
-            panic!("Root returned a differently correlated Component Registry status");
-        };
+        let component_registry = root_registry(&pic, fixture.root_id, component_registry_request)
+            .expect("query terminal initial-Shard Component Registry");
         assert_eq!(component_registry.committed_component_instances, 3);
         assert_eq!(component_registry.managed_descendants, 2);
         assert_eq!(component_registry.known_created_component_canisters, 5);
@@ -4993,32 +4810,8 @@ exec icp "$@"
         let grants = bindings
             .iter()
             .filter_map(|(canister, binding)| {
-                let response: Result<StoreCatalogResponse, Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes = ic_platform::candid::contract::encode_args((
-                            StoreCatalogRequest::FixtureGrant(*canister),
-                        ))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).query_call(
-                                store,
-                                controller,
-                                canic::protocol::CANIC_WASM_STORE_CATALOG,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .unwrap();
-                let StoreCatalogResponse::FixtureGrant(grant) = response.unwrap() else {
-                    panic!("Store returned a different status variant");
-                };
+                let response = store_fixture_grant_as(&pic, store, controller, *canister);
+                let grant = response.unwrap();
                 let role = match binding {
                     ManagedCanisterBinding::Component(binding) => &binding.role,
                     ManagedCanisterBinding::ComponentChild(binding) => &binding.role,
@@ -5045,35 +4838,14 @@ exec icp "$@"
                     fixture.response.release_set.release_build_id
                 );
                 assert_eq!(grant.binding.content_id, source.content_id);
-                let runtime: Result<ManagedStatusResponseFragment, Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes = ic_platform::candid::contract::encode_args((
-                            ManagedStatusRequestFragment::Operation(OperationStatusRequest {
-                                operation_id: grant.binding.installation,
-                            }),
-                        ))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).query_call(
-                                *canister,
-                                fixture.root_id,
-                                canic::protocol::CANIC_CONTROL_STATUS,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .unwrap();
-                let ManagedStatusResponseFragment::Operation(operation) = runtime.unwrap() else {
-                    panic!("expected exact installed runtime operation");
-                };
-                let ManagedOperationStatusResponseFragment::ConfigureRuntime(runtime) = *operation;
+                let runtime = crate::pic::protected_state::runtime_operation(
+                    &pic,
+                    *canister,
+                    fixture.root_id,
+                    grant.binding.installation,
+                )
+                .unwrap()
+                .unwrap();
                 assert_eq!(runtime.runtime.operation_id, grant.binding.installation);
                 assert_eq!(&runtime.runtime.binding, binding);
                 let assignment = runtime
@@ -5081,7 +4853,7 @@ exec icp "$@"
                     .fixture
                     .expect("installed fixture assignment");
                 assert_eq!(assignment.store, store);
-                assert_eq!(assignment.grant, *grant);
+                assert_eq!(assignment.grant, grant);
                 assert_eq!(assignment.descriptor, source.descriptor);
                 let ready = fixture_readiness(&pic, fixture.root_id, *canister);
                 let Ok(canic::dto::fixture_provisioning::FixtureProvisioningStatus::Complete(
@@ -5095,7 +4867,7 @@ exec icp "$@"
                     receipt.completion_summary,
                     source.descriptor.completion_summary
                 );
-                Some((*canister, *grant))
+                Some((*canister, grant))
             })
             .collect::<Vec<_>>();
         for canister in workload_principals {
@@ -5109,22 +4881,14 @@ exec icp "$@"
         let user = Principal::from_slice(&[0xe3; 29]);
         for _ in 0..2 {
             let assigned: Result<Principal, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((user,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).update_call(
-                            *hub,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "create_account",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
+                ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                    &pic,
+                    *hub,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    crate::pic::application_probe::CREATE_ACCOUNT,
+                    &ic_platform::Principal::from(user),
+                )
+                .map(|reply| reply.map(Principal::from))
                 .expect("ready Hub application dispatch");
             assert_eq!(assigned.unwrap(), child_binding.canister_id);
         }
@@ -5133,17 +4897,13 @@ exec icp "$@"
             terminal_pool.workload
         );
 
-        let RootStatusResponseFragment::Operation(
-            RootOperationStatusResponse::ProvisionComponents(root_terminal),
-        ) = root_status(
+        let root_terminal = crate::pic::canic::root_provisioning(
             &pic,
             fixture.root_id,
-            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+            Principal::anonymous(),
+            operation_id,
         )
-        .expect("query terminal Root provisioning result")
-        else {
-            panic!("Root returned a differently correlated terminal operation");
-        };
+        .expect("query terminal Root provisioning result");
         let result = root_terminal.result.expect("terminal Root result");
         let placement = result
             .placements
@@ -5160,22 +4920,18 @@ exec icp "$@"
             .iter()
             .find(|member| member.binding.canister_id == *hub)
             .expect("initial-Shard Hub terminal member");
-        let RootStatusResponseFragment::ComponentRegistryActivePartition(coverage) = root_status(
+        let coverage = root_active_partition(
             &pic,
             fixture.root_id,
-            RootStatusRequestFragment::ComponentRegistryActivePartition(
-                ComponentRegistryActivePartitionRequest {
-                    component: member.binding.component,
-                    provisioning_operation_id: operation_id,
-                    plan_hash: root_terminal.plan_hash,
-                    group_placement: placement.group_placement.clone(),
-                    member_path: member.member_path.clone(),
-                },
-            ),
+            ComponentRegistryActivePartitionRequest {
+                component: member.binding.component,
+                provisioning_operation_id: operation_id,
+                plan_hash: root_terminal.plan_hash,
+                group_placement: placement.group_placement.clone(),
+                member_path: member.member_path.clone(),
+            },
         )
-        .expect("query Root-qualified active partition coverage") else {
-            panic!("Root returned a differently correlated partition coverage");
-        };
+        .expect("query Root-qualified active partition coverage");
         assert_eq!(coverage.allocation_operation_id, member.member_operation_id);
         assert_eq!(
             coverage.prepared.head.revision,
@@ -5209,14 +4965,9 @@ exec icp "$@"
         );
 
         let replay_pool = root_pool_status(&pic, fixture.root_id);
-        let CoordinatorCommandResponse::OperationAccepted(terminal_receipt) = coordinator_command(
-            &pic,
-            coordinator,
-            CoordinatorCommand::ProvisionComponents(request),
-        )
-        .expect("replay terminal initial-Shard provisioning") else {
-            panic!("Coordinator returned a differently correlated terminal replay");
-        };
+        let terminal_receipt =
+            crate::pic::batch_control::prepare(&pic, coordinator, Principal::anonymous(), request)
+                .expect("replay terminal initial-Shard provisioning");
         assert_eq!(terminal_receipt, first_receipt);
         let replayed_pool = root_pool_status(&pic, fixture.root_id);
         assert_eq!(replayed_pool.tracked, replay_pool.tracked);
@@ -5232,30 +4983,11 @@ exec icp "$@"
         };
         assert_eq!(workloads(replayed_pool), workloads(replay_pool));
         for (canister, grant) in grants {
-            let response: Result<StoreCatalogResponse, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((
-                        StoreCatalogRequest::FixtureGrant(canister),
-                    ))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).query_call(
-                            store,
-                            controller,
-                            canic::protocol::CANIC_WASM_STORE_CATALOG,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .unwrap();
-            let StoreCatalogResponse::FixtureGrant(Some(replayed)) = response.unwrap() else {
+            let response = store_fixture_grant_as(&pic, store, controller, canister);
+            let Some(replayed) = response.unwrap() else {
                 panic!("terminal replay must retain the exact grant");
             };
-            assert_eq!(*replayed, grant);
+            assert_eq!(replayed, grant);
         }
         qualify_later_fixture_shard(
             &pic,
@@ -5271,20 +5003,15 @@ exec icp "$@"
                 .capacity,
         );
         assert_retained_fixtures(&pic, &fixture);
-        let CoordinatorRegistryResponse::Registry(before) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
-        let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
+        let before =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
+                .unwrap();
+        let version = crate::pic::registry_discovery::version(&pic, coordinator).unwrap();
+        let Err(rejected) = crate::pic::retirement_control::remove(
             &pic,
             coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .unwrap() else {
-            panic!("Registry version correlation");
-        };
-        let Err(rejected) = coordinator_command(
-            &pic,
-            coordinator,
-            CoordinatorCommand::RemoveRoot(FleetSubnetRootDrainingReservationRequest {
+            Principal::anonymous(),
+            FleetSubnetRootDrainingReservationRequest {
                 asset_recipient: Principal::from_slice(&[0xe7; 29]),
                 operation_id: [0xd1; 32],
                 expected_registry: version,
@@ -5294,7 +5021,7 @@ exec icp "$@"
                     .find(|entry| entry.fleet_subnet_root == fixture.root_id)
                     .unwrap()
                     .clone(),
-            }),
+            },
         ) else {
             panic!("grouped service references must fence standalone Root retirement");
         };
@@ -5302,8 +5029,9 @@ exec icp "$@"
             rejected.code(),
             canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
-        let CoordinatorRegistryResponse::Registry(after) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+        let after =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
+                .unwrap();
         assert_eq!(after, before);
         assert_retained_fixtures(&pic, &fixture);
     }
@@ -5312,27 +5040,8 @@ exec icp "$@"
     fn assert_retained_fixtures(pic: &PocketIc, fixture: &BootstrappedRootFixture) {
         let store = fixture.response.wasm_store;
         for source in &fixture.response.fixtures {
-            let retained: Result<StoreCatalogResponse, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((
-                        StoreCatalogRequest::Fixture(source.content_id),
-                    ))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).query_call(
-                            store,
-                            fixture.root_id,
-                            canic::protocol::CANIC_WASM_STORE_CATALOG,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("retained fixture catalog before whole-Root retirement");
-            let Ok(StoreCatalogResponse::Fixture(Ok(retained))) = retained else {
+            let retained = store_fixture_status_as(pic, store, fixture.root_id, source.content_id);
+            let Ok(Ok(retained)) = retained else {
                 panic!("completed imports must retain their exact source");
             };
             assert_eq!(retained.content_id, source.content_id);
@@ -5452,55 +5161,43 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    #[derive(CandidType)]
-    #[candid_path("ic_platform::candid::contract")]
-    enum FixtureHeldReply {
-        Grant,
-        Revoke,
-    }
-
-    #[cfg(test)]
     fn arm_fixture_reply(
         pic: &PocketIc,
         store: Principal,
         root: Principal,
-        kind: FixtureHeldReply,
+        kind: canic::dto::fixture_reply::ReplyKind,
     ) {
-        assert!(
-            (|| -> Result<(bool,), Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((kind,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(store, root, "canic_test_fixture_reply_arm", request_bytes)
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap()
-        );
+        let armed: bool = ic_testkit::pic::update_wire(
+            pic,
+            store,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::fixture_reply::arm::METHOD,
+                method_id: canic::protocol::fixture_reply::arm::METHOD_ID,
+                request_limits: canic::protocol::fixture_reply::LIMITS,
+                response_limits: canic::protocol::fixture_reply::LIMITS,
+            },
+            &kind,
+        )
+        .expect("native reply barrier arm");
+        assert!(armed);
     }
 
     #[cfg(test)]
     fn fixture_replies_waiting(pic: &PocketIc, store: Principal, root: Principal) -> u32 {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    store,
-                    root,
-                    "canic_test_fixture_reply_waiting",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap()
+        ic_testkit::pic::query_wire(
+            pic,
+            store,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::fixture_reply::waiting::METHOD,
+                method_id: canic::protocol::fixture_reply::waiting::METHOD_ID,
+                request_limits: canic::protocol::fixture_reply::LIMITS,
+                response_limits: canic::protocol::fixture_reply::LIMITS,
+            },
+            &(),
+        )
+        .expect("native reply barrier status")
     }
 
     #[cfg(test)]
@@ -5525,30 +5222,11 @@ exec icp "$@"
         root: Principal,
         target: Principal,
     ) -> canic::dto::fixture_provisioning::FixtureGrant {
-        let response: Result<StoreCatalogResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    StoreCatalogRequest::FixtureGrant(target),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        store,
-                        root,
-                        canic::protocol::CANIC_WASM_STORE_CATALOG,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let StoreCatalogResponse::FixtureGrant(Some(grant)) = response.unwrap() else {
+        let response = store_fixture_grant_as(pic, store, root, target);
+        let Some(grant) = response.unwrap() else {
             panic!("actual Store grant");
         };
-        *grant
+        grant
     }
 
     #[test]
@@ -5582,16 +5260,18 @@ exec icp "$@"
             version,
             sync,
         );
-        let CoordinatorRegistryResponse::Registry(registry) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+        let registry =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
+                .unwrap();
         let request = fixture_fresh_component_plan(config.model(), &registry, [0xc7; 32]).request;
-        arm_fixture_reply(&pic, store, root, FixtureHeldReply::Grant);
-        coordinator_command(
+        arm_fixture_reply(
             &pic,
-            coordinator,
-            CoordinatorCommand::ProvisionComponents(request),
-        )
-        .unwrap();
+            store,
+            root,
+            canic::dto::fixture_reply::ReplyKind::Grant,
+        );
+        crate::pic::batch_control::prepare(&pic, coordinator, Principal::anonymous(), request)
+            .unwrap();
         wait_for_held_fixture_reply(&pic, store, root);
         let selected = selected_fixture_targets(&pic, root);
         let shard = selected
@@ -5632,23 +5312,19 @@ exec icp "$@"
 
     #[cfg(test)]
     fn release_fixture_reply(pic: &PocketIc, store: Principal, root: Principal) {
-        (|| -> Result<((),), Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    store,
-                    root,
-                    "canic_test_fixture_reply_release",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
+        let _: () = ic_testkit::pic::update_wire(
+            pic,
+            store,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::fixture_reply::release::METHOD,
+                method_id: canic::protocol::fixture_reply::release::METHOD_ID,
+                request_limits: canic::protocol::fixture_reply::LIMITS,
+                response_limits: canic::protocol::fixture_reply::LIMITS,
+            },
+            &(),
+        )
+        .expect("native reply barrier release");
         for _ in 0..40 {
             if fixture_replies_waiting(pic, store, root) == 0 {
                 return;
@@ -5698,17 +5374,13 @@ exec icp "$@"
     ) {
         let mut last = None;
         for _ in 0..240 {
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-            ) = coordinator_status(
+            let status = crate::pic::canic::coordinator_provisioning(
                 pic,
                 coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
-            .unwrap()
-            else {
-                panic!("exact fixture provisioning operation");
-            };
+            .unwrap();
             if status.components_provisioned_at_ns.is_some()
                 && status.runtimes_activated_at_ns.is_some()
                 && status.runtime_activated_root_count == status.root_batch_count
@@ -5737,29 +5409,35 @@ exec icp "$@"
             unreachable!()
         };
         let component = binding.component.component;
-        let RootStatusResponseFragment::ComponentRegistryPartition(partition) = root_status(
+        let partition = root_partition(
             pic,
             root,
-            RootStatusRequestFragment::ComponentRegistryPartition(
-                canic::dto::component_registry::ComponentRegistryPartitionRequest { component },
-            ),
+            canic::dto::component_registry::ComponentRegistryPartitionRequest { component },
         )
-        .unwrap() else {
-            panic!("Component partition");
-        };
+        .unwrap();
         let request = canic::dto::component_registry::RootComponentSubtreeRemovalRequest {
             operation_id: [0xc9; 32],
             component,
             target_canister_id: shard,
             expected_registry: partition.head,
         };
-        arm_fixture_reply(pic, store, root, FixtureHeldReply::Revoke);
+        arm_fixture_reply(
+            pic,
+            store,
+            root,
+            canic::dto::fixture_reply::ReplyKind::Revoke,
+        );
         let _message = pic
             .submit_call(
                 root,
                 Principal::anonymous(),
-                canic::protocol::CANIC_ROOT_COMMAND,
-                encode_one(RootCommandFragment::RemoveSubtree(request.clone())).unwrap(),
+                canic::protocol::component_control::subtree::METHOD,
+                ic_wire::native::encode_request(
+                    canic::protocol::component_control::subtree::METHOD_ID,
+                    &canic::dto::component_control::SubtreeRequest::from(request.clone()),
+                    canic::protocol::component_control::REQUEST_LIMITS,
+                )
+                .unwrap(),
             )
             .unwrap();
         wait_for_held_fixture_reply(pic, store, root);
@@ -5776,12 +5454,7 @@ exec icp "$@"
         restart_root_with_held_fixture_reply(pic, root, store, root_wasm);
         assert_eq!(fixture_replies_waiting(pic, store, root), 1);
         release_fixture_reply(pic, store, root);
-        root_command(
-            pic,
-            root,
-            RootCommandFragment::RemoveSubtree(request.clone()),
-        )
-        .unwrap();
+        remove_subtree(pic, root, request.clone()).unwrap();
         wait_for_fixture_subtree_removal(pic, root, request.operation_id);
         assert!(
             pic.canister_status(shard, Some(root))
@@ -5833,16 +5506,13 @@ exec icp "$@"
             version,
             sync,
         );
-        let CoordinatorRegistryResponse::Registry(registry) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+        let registry =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
+                .unwrap();
         let operation_id = [0xb6; 32];
         let plan = fixture_fresh_component_plan(config.model(), &registry, operation_id);
-        coordinator_command(
-            &pic,
-            coordinator,
-            CoordinatorCommand::ProvisionComponents(plan.request),
-        )
-        .unwrap();
+        crate::pic::batch_control::prepare(&pic, coordinator, Principal::anonymous(), plan.request)
+            .unwrap();
         let hub = await_initial_fixture_hub(&pic, coordinator, fixture.root_id, operation_id);
         qualify_automatic_fixture_funding(
             &pic,
@@ -5856,17 +5526,13 @@ exec icp "$@"
             Err(canic::dto::fixture_provisioning::FixtureImportError::NotReady)
         );
         let selected = selected_fixture_targets(&pic, fixture.root_id);
-        (|| -> Result<((),), Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(hub, fixture.root_id, "test_release_fixture", request_bytes)
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        ic_testkit::pic::update_wire::<_, ()>(
+            &pic,
+            hub,
+            fixture.root_id,
+            crate::pic::application_probe::RELEASE_FIXTURE,
+            &(),
+        )
         .unwrap();
         for _ in 0..240 {
             if fixture_readiness(&pic, fixture.root_id, hub).status
@@ -5905,20 +5571,14 @@ exec icp "$@"
                 hub
             })
             .unwrap_or_else(|| {
-                let status = coordinator_status(
+                let status = crate::pic::canic::coordinator_provisioning(
                     pic,
                     coordinator,
-                    CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                        operation_id,
-                    }),
+                    Principal::anonymous(),
+                    operation_id,
                 )
                 .unwrap();
-                let CoordinatorOperationReadResponse::Operation(
-                    CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-                ) = status
-                else {
-                    panic!("Component provisioning status correlation");
-                };
+
                 panic!(
                     "initial Hub unavailable: {status:?}; pool={:?}",
                     root_pool_status(pic, root)
@@ -5931,33 +5591,27 @@ exec icp "$@"
         pic: &PocketIc,
         root: Principal,
         target: Principal,
-    ) -> Vec<canic::dto::cycles::CycleTopupEvent> {
-        let response: Result<CanisterObservabilityResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CanisterObservabilityRequest::CycleTopups(canic::dto::page::PageRequest {
-                        offset: 0,
-                        limit: 100,
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        target,
-                        root,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let CanisterObservabilityResponse::CycleTopups(page) = response.unwrap() else {
-            panic!("cycle top-up history response");
-        };
+    ) -> Vec<canic::dto::cycle_topups::CycleTopupEvent> {
+        let response: Result<
+            canic::dto::page::Page<canic::dto::cycle_topups::CycleTopupEvent>,
+            Error,
+        > = ic_testkit::pic::query_wire(
+            pic,
+            target,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::cycle_topups::METHOD,
+                method_id: canic::protocol::cycle_topups::METHOD_ID,
+                request_limits: canic::protocol::cycle_topups::REQUEST_LIMITS,
+                response_limits: canic::protocol::cycle_topups::RESPONSE_LIMITS,
+            },
+            &canic::dto::page::PageRequest {
+                offset: 0,
+                limit: 100,
+            },
+        )
+        .expect("topup history transport");
+        let page = response.unwrap();
         assert_eq!(
             page.entries.len() as u64,
             page.total,
@@ -6030,15 +5684,13 @@ exec icp "$@"
                 }
             )
         );
-        let history = ic_platform::candid::contract::encode_one(&events).unwrap();
         for _ in 0..5 {
             pic.advance_time(Duration::from_secs(60));
             pic.tick();
         }
         assert_eq!(
-            ic_platform::candid::contract::encode_one(fixture_topup_events(pic, root, hub))
-                .unwrap(),
-            history,
+            fixture_topup_events(pic, root, hub),
+            events,
             "exhausted automatic funding stops issuing further requests"
         );
     }
@@ -6074,24 +5726,14 @@ exec icp "$@"
         );
         activate_root(&pic, fixture.root_id);
         let assigned: Result<Principal, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    Principal::from_slice(&[0xe3; 29]),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        installed_component_binding(&hub).canister_id,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "create_account",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                &pic,
+                installed_component_binding(&hub).canister_id,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::application_probe::CREATE_ACCOUNT,
+                &ic_platform::Principal::from(Principal::from_slice(&[0xe3; 29])),
+            )
+            .map(|reply| reply.map(Principal::from))
             .unwrap();
         let shard = assigned.expect("initial Shard assignment after its import completes");
         let readiness = fixture_readiness(&pic, fixture.root_id, shard);
@@ -6279,7 +5921,12 @@ exec icp "$@"
                     wasm_store,
                     installation_controller,
                     canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
-                    encode_one(request).unwrap(),
+                    ic_wire::native::encode_request(
+                        canic::protocol::fixture_bytes::upload::METHOD_ID,
+                        &canic::dto::fixture_bytes::UploadRequest::from(request.clone()),
+                        canic::protocol::fixture_bytes::CHUNK_LIMITS,
+                    )
+                    .unwrap(),
                 )
                 .expect("publish fixture with lost response");
                 fixture_updates += 1;
@@ -6293,30 +5940,13 @@ exec icp "$@"
                     &reopened,
                     installation_controller
                 ));
-                let status: Result<StoreCatalogResponse, Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes = ic_platform::candid::contract::encode_args((
-                            StoreCatalogRequest::Fixture(source.content_id),
-                        ))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).query_call(
-                                wasm_store,
-                                installation_controller,
-                                canic::protocol::CANIC_WASM_STORE_CATALOG,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .unwrap();
-                let Ok(StoreCatalogResponse::Fixture(Ok(observed))) = status else {
+                let status = store_fixture_status_as(
+                    &pic,
+                    wasm_store,
+                    installation_controller,
+                    source.content_id,
+                );
+                let Ok(Ok(observed)) = status else {
                     panic!("exact fixture source status");
                 };
                 assert_eq!(&observed, expected);
@@ -6335,24 +5965,25 @@ exec icp "$@"
             nonterminal.is_empty(),
             "an immediate Store/Root replay must issue no update; nonterminal={nonterminal:?}"
         );
-        let reply = pic
-            .query_call(
+        let overview: Result<canic::dto::root_store_reporting::Overview, Error> =
+            ic_testkit::pic::query_wire(
+                &pic,
                 installed.root_id,
                 Principal::anonymous(),
-                canic::protocol::CANIC_ROOT_STATUS,
-                encode_one(RootStoreOverviewRequest::StoreOverview).unwrap(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::root_store_reporting::overview::METHOD,
+                    method_id: canic::protocol::root_store_reporting::overview::METHOD_ID,
+                    request_limits: canic::protocol::root_store_reporting::REQUEST_LIMITS,
+                    response_limits: canic::protocol::root_store_reporting::RESPONSE_LIMITS,
+                },
+                &(),
             )
-            .expect("query registered Store bindings");
-        let (overview,): (Result<RootStoreOverviewResponse, Error>,) =
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .expect("decode Store overview");
-        let RootStoreOverviewResponse::StoreOverview(overview) = overview.unwrap() else {
-            panic!("Root returned a differently correlated Store overview");
-        };
+            .expect("native registered Store overview");
+        let overview = overview.unwrap();
         let store = overview
             .stores
             .iter()
-            .find(|store| store.pid == wasm_store)
+            .find(|store| store.pid == wasm_store.into())
             .expect("bootstrapped Store is registered");
         assert_eq!(
             overview.publication.active_binding.as_ref(),
@@ -6375,6 +6006,9 @@ exec icp "$@"
             assert!(status.complete);
             assert_eq!(status.stored_chunk_count, status.expected_chunk_count);
             let manifest = status.manifest.expect("approved catalog manifest");
+            assert!(manifest.created_at > 0);
+            assert_eq!(manifest.approved_at, Some(manifest.created_at));
+            assert!(manifest.created_at <= overview.publication.changed_at);
             assert_eq!(manifest.store_binding, store.binding);
             assert_eq!(manifest.manifest_state, TemplateManifestState::Approved);
             assert_eq!(manifest.template_id, template_id);
@@ -6406,25 +6040,8 @@ exec icp "$@"
             chunk_index: u32::try_from(index).unwrap(),
             bytes: chunks[index].clone(),
         };
-        let publish_chunk = |chunk: TemplateChunkInput| -> Result<(), Error> {
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((chunk,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        store,
-                        caller,
-                        canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap()
-        };
+        let publish_chunk =
+            |chunk: TemplateChunkInput| publish_template_chunk_as(pic, store, caller, &chunk);
         let prepared: Result<(), Error> = publish_chunk(request(0));
         prepared.expect("chunk zero admits metadata before concurrent suffix");
         // Submit the whole suffix before awaiting replies, then drain in reverse
@@ -6435,7 +6052,7 @@ exec icp "$@"
                     store,
                     caller,
                     canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-                    encode_one(request(index)).unwrap(),
+                    template_chunk_frame(&request(index)),
                 )
                 .unwrap()
             })
@@ -6443,7 +6060,13 @@ exec icp "$@"
         for (index, message) in messages.into_iter().enumerate().rev() {
             let reply = pic.await_call(message).expect("drain independent upload");
             if index != 0 {
-                decode_one::<Result<(), Error>>(&reply).unwrap().unwrap();
+                ic_wire::native::decode_response::<Result<(), Error>>(
+                    canic::protocol::template_bytes::METHOD_ID,
+                    &reply,
+                    canic::protocol::template_bytes::RESPONSE_LIMITS,
+                )
+                .unwrap()
+                .unwrap();
             }
         }
         let observed = current_store_staging_status(pic, store, caller, &template_id, &version);
@@ -6489,16 +6112,7 @@ exec icp "$@"
         operation_id: [u8; 32],
     ) -> Option<canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse>
     {
-        match root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
-        ) {
-            Ok(RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::ProvisionComponents(status),
-            )) => Some(status),
-            _ => None,
-        }
+        crate::pic::canic::root_provisioning(pic, root, Principal::anonymous(), operation_id).ok()
     }
 
     #[cfg(test)]
@@ -6540,17 +6154,13 @@ exec icp "$@"
         for _ in 0..240 {
             let root_status = observed_root_provisioning(pic, root, operation_id)
                 .expect("accepted Root operation stays readable");
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::ComponentProvisioning(coordinator_status),
-            ) = coordinator_status(
+            let coordinator_status = crate::pic::canic::coordinator_provisioning(
                 pic,
                 coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
-            .expect("Coordinator operation stays readable during Store outage")
-            else {
-                panic!("exact Coordinator provisioning operation");
-            };
+            .expect("Coordinator operation stays readable during Store outage");
             if let Some(failure) = root_status.last_failure.as_ref()
                 && failure.stage == ProvisioningFailureStage::StoreStatus
                 && let Some(observed) = coordinator_status.pending_root_failure.as_ref()
@@ -6564,7 +6174,10 @@ exec icp "$@"
                     .as_ref()
                     .expect("precise Store dependency");
                 assert_eq!(dependency.target, failure.target);
-                assert_eq!(dependency.method, canic::protocol::CANIC_WASM_STORE_COMMAND);
+                assert_eq!(
+                    dependency.method,
+                    canic::protocol::store_publication::inspect::METHOD
+                );
                 assert_eq!(dependency.step, "inspect_template");
                 assert!(dependency.rejection_code.is_some());
                 assert!(
@@ -6748,8 +6361,8 @@ exec icp "$@"
             "Running"
         );
         assert!(pic.cycle_balance(coordinator) <= coordinator_cycles_before_start);
-        let CoordinatorRegistryResponse::Registry(genesis) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let genesis =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
                 .expect("query current genesis Registry");
         let desired = current_protocol_desired(&configuration, coordinator, &installed.init_args);
         let state = FleetEnsureStateRecord {
@@ -6802,17 +6415,14 @@ exec icp "$@"
                 issue_current_protocol_step(&pic, step, installation_controller);
                 let failure = (0..160)
                     .find_map(|_| {
-                        let status = coordinator_status(
+                        let status = crate::pic::canic::coordinator_provisioning(
                             &pic,
                             step.target,
-                            CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                                operation_id: request.operation_id,
-                            }),
+                            Principal::anonymous(),
+                            request.operation_id,
                         );
                         let failure = match status {
-                            Ok(CoordinatorOperationReadResponse::Operation(
-                                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-                            )) => status.pending_root_failure,
+                            Ok(status) => status.pending_root_failure,
                             _ => None,
                         };
                         if failure.is_none() {
@@ -6891,31 +6501,12 @@ exec icp "$@"
                 assert_eq!(first.target, wasm_store);
                 assert_eq!(first.operation_id, expected_operation);
                 assert!(!failed.root_runtime_active);
-                let forbidden: Result<RootStatusResponseFragment, Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes = ic_platform::candid::contract::encode_args((
-                            RootStatusRequestFragment::Operation(OperationStatusRequest {
-                                operation_id: request.operation_id,
-                            }),
-                        ))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).query_call(
-                                installed.root_id,
-                                Principal::from_slice(&[0x92; 29]),
-                                canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .expect("unauthorized protected status transport");
+                let forbidden = crate::pic::canic::root_provisioning(
+                    &pic,
+                    installed.root_id,
+                    Principal::from_slice(&[0x92; 29]),
+                    request.operation_id,
+                );
                 assert!(forbidden.is_err_and(|error| error.code()
                     == canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()));
                 if fault == ActivationFailureFixture::StoreIdentity {
@@ -6932,19 +6523,13 @@ exec icp "$@"
                     assert_eq!(suspended.last_failure, Some(first.clone()));
                     assert_eq!(suspended.receipt_content_hash, failed.receipt_content_hash);
                     assert!(!suspended.root_runtime_active);
-                    let CoordinatorOperationReadResponse::Operation(
-                        CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-                    ) = coordinator_status(
+                    let status = crate::pic::canic::coordinator_provisioning(
                         &pic,
                         coordinator,
-                        CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                            operation_id: request.operation_id,
-                        }),
+                        Principal::anonymous(),
+                        request.operation_id,
                     )
-                    .unwrap()
-                    else {
-                        panic!("exact Coordinator provisioning operation");
-                    };
+                    .unwrap();
                     let origin = status.pending_root_failure.unwrap().origin.unwrap();
                     assert_eq!(origin.target, first.target);
                     assert_eq!(origin.stage, first.stage);
@@ -6988,24 +6573,19 @@ exec icp "$@"
             operation_id,
             canic_contracts::dto::root::RootProvisioningReleasePhase::RuntimesActive,
         );
-        let _coordinator_receipts =
-            replay_release::collect(&pic, coordinator, canic::protocol::CANIC_OBSERVABILITY);
+        let _coordinator_receipts = replay_release::collect(&pic, coordinator);
 
-        let CoordinatorRegistryResponse::Registry(terminal_registry) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let terminal_registry =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
                 .expect("query terminal Fleet Registry");
         assert_eq!(terminal_registry.revision, 4);
-        let CoordinatorOperationReadResponse::Operation(
-            CoordinatorOperationStatusResponse::ComponentProvisioning(terminal_status),
-        ) = coordinator_status(
+        let terminal_status = crate::pic::canic::coordinator_provisioning(
             &pic,
             coordinator,
-            CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+            Principal::anonymous(),
+            operation_id,
         )
-        .expect("query terminal Component operation")
-        else {
-            panic!("Coordinator returned a differently correlated Component operation");
-        };
+        .expect("query terminal Component operation");
         let terminal_sequence = compile_current_registry_sequence_with_status(
             &desired,
             &state,
@@ -7175,35 +6755,28 @@ exec icp "$@"
             joining_version,
             sync_request,
         );
-        let CoordinatorRegistryResponse::Registry(registry) =
-            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let registry =
+            crate::pic::registry_discovery::snapshot(&pic, coordinator, Principal::anonymous())
                 .expect("query active Registry");
         let operation_id = [0x72; 32];
         let request = fixture_fresh_component_plan(config.model(), &registry, operation_id).request;
-        let CoordinatorCommandResponse::OperationAccepted(first) = coordinator_command(
+        let first = crate::pic::batch_control::prepare(
             &pic,
             coordinator,
-            CoordinatorCommand::ProvisionComponents(request.clone()),
+            Principal::anonymous(),
+            request.clone(),
         )
-        .expect("provision the exact configured Component tree") else {
-            panic!("expected provisioning receipt");
-        };
+        .expect("provision the exact configured Component tree");
         let mut last = None;
         let terminal = (0..240_u32.saturating_add(descendants.saturating_mul(32)))
             .find_map(|_| {
-                let CoordinatorOperationReadResponse::Operation(
-                    CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-                ) = coordinator_status(
+                let status = crate::pic::canic::coordinator_provisioning(
                     &pic,
                     coordinator,
-                    CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                        operation_id,
-                    }),
+                    Principal::anonymous(),
+                    operation_id,
                 )
-                .expect("query initial Root activation")
-                else {
-                    panic!("expected provisioning status");
-                };
+                .expect("query initial Root activation");
                 if status.runtimes_activated_at_ns.is_some()
                     && status.runtime_activated_root_count == status.root_batch_count
                 {
@@ -7230,23 +6803,12 @@ exec icp "$@"
             (pool.workload, pool.ready, pool.pending_reset, pool.failed),
             (workload, ready, 0, 0)
         );
-        let RootStatusResponseFragment::ComponentRegistry(registry) = root_status(
-            &pic,
-            fixture.root_id,
-            RootStatusRequestFragment::ComponentRegistry(registry_request),
-        )
-        .expect("query terminal Registry") else {
-            panic!("expected Component Registry status");
-        };
+        let registry = root_registry(&pic, fixture.root_id, registry_request)
+            .expect("query terminal Registry");
         assert_eq!(registry.managed_descendants, descendants);
-        let CoordinatorCommandResponse::OperationAccepted(replay) = coordinator_command(
-            &pic,
-            coordinator,
-            CoordinatorCommand::ProvisionComponents(request),
-        )
-        .expect("replay exact provisioning operation") else {
-            panic!("expected replayed provisioning receipt");
-        };
+        let replay =
+            crate::pic::batch_control::prepare(&pic, coordinator, Principal::anonymous(), request)
+                .expect("replay exact provisioning operation");
         assert_eq!(replay, first);
         assert_eq!(root_pool_status(&pic, fixture.root_id), pool);
     }
@@ -7309,12 +6871,25 @@ exec icp "$@"
         FailedReserve,
         FundingPause,
         NativeChildFunding,
+        OperatorComponent,
     }
 
     #[test]
     #[ignore = "requires Node.js and the pinned frontend-consumer npm dependencies; run explicitly for OP2 qualification"]
     fn frontend_handoff_public_cli_and_sdk_preserve_admission_and_local_trust() {
         assert_literal_zero_host_journey(FundingJourney::Fresh, 1);
+    }
+
+    #[cfg(test)]
+    fn frontend_compiler() -> canic_host::frontend::ops::compiler::BrowserCompiler {
+        canic_host::frontend::ops::compiler::BrowserCompiler {
+            node: std::env::var_os("CANIC_FRONTEND_NODE")
+                .expect("prepared pinned Node")
+                .into(),
+            typescript: std::env::var_os("CANIC_FRONTEND_TYPESCRIPT")
+                .expect("prepared pinned TypeScript")
+                .into(),
+        }
     }
 
     #[cfg(test)]
@@ -7351,22 +6926,27 @@ exec icp "$@"
         } else {
             "unadmitted-identity.json"
         };
-        let result = std::process::Command::new("node")
-            .arg(frontend_consumer_script())
-            .arg(if admitted { "call" } else { "denied" })
-            .arg(root.join("browser"))
-            .arg(&manifest.manifest_sha256)
-            .arg(manifest.roles[0].canister_id.to_text())
-            .arg("audit_frontend_admission_probe")
-            .env("CANIC_FRONTEND_IDENTITY", root.join(identity))
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-        println!("{}", String::from_utf8_lossy(&result.stdout));
+        for method in [
+            "audit_frontend_admission_probe",
+            "audit_frontend_update_probe",
+        ] {
+            let result = std::process::Command::new("node")
+                .arg(frontend_consumer_script())
+                .arg(if admitted { "call" } else { "denied" })
+                .arg(root.join("browser"))
+                .arg(&manifest.manifest_sha256)
+                .arg(manifest.roles[0].canister_id.to_text())
+                .arg(method)
+                .env("CANIC_FRONTEND_IDENTITY", root.join(identity))
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            println!("{}", String::from_utf8_lossy(&result.stdout));
+        }
     }
 
     #[cfg(test)]
@@ -7392,9 +6972,6 @@ exec icp "$@"
             &candid,
         )
         .unwrap();
-        let sidecar = canic_host::icp::local_canister_candid_path(root, "local", "app");
-        std::fs::create_dir_all(sidecar.parent().unwrap()).unwrap();
-        std::fs::copy(candid, &sidecar).unwrap();
         let gateway = pic.make_live(None);
         let input = FrontendEnvironmentInput {
             schema_version: 1,
@@ -7431,18 +7008,47 @@ exec icp "$@"
         .unwrap();
         std::fs::write(root.join("root-key.der"), pic.root_key().unwrap()).unwrap();
         let wrapper = operator_cli_gateway_wrapper(root, gateway.as_str(), isolated_icp);
+        let manifest = export_frontend_cli(root, &wrapper, &desired.fleet);
+        assert_eq!(
+            manifest.local_root_key_der_hex,
+            Some(hex_bytes(pic.root_key().unwrap()))
+        );
+        assert_frontend_sdk_call(root, &manifest, true);
+        prepare_frontend_identity(root, "unadmitted-identity.json");
+        assert_frontend_sdk_call(root, &manifest, false);
+        assert_frontend_invalid_inputs(
+            root,
+            desired,
+            &input,
+            &literal_zero_role_artifact_path(root, release, "app", "wire.json"),
+        );
+        assert_frontend_asset_capacity(root, &wrapper, pic, desired);
+        assert_observatory_handoff(root, &wrapper, desired);
+    }
+
+    #[cfg(test)]
+    fn export_frontend_cli(
+        root: &Path,
+        wrapper: &Path,
+        fleet: &str,
+    ) -> canic_host::frontend::model::FrontendManifestRecord {
+        use canic_host::frontend::model::FrontendManifestRecord;
         run_environment_cli(
             root,
-            &wrapper,
+            wrapper,
             "local",
             &[
                 "frontend",
                 "export",
-                &desired.fleet,
+                fleet,
                 "--input",
                 "frontend.json",
                 "--out",
                 "browser",
+                "--node",
+                frontend_compiler().node.to_str().unwrap(),
+                "--typescript",
+                frontend_compiler().typescript.to_str().unwrap(),
                 "--json",
             ],
         )
@@ -7453,7 +7059,7 @@ exec icp "$@"
         .unwrap();
         run_environment_cli(
             root,
-            &wrapper,
+            wrapper,
             "local",
             &[
                 "frontend",
@@ -7464,27 +7070,37 @@ exec icp "$@"
             ],
         )
         .unwrap();
-        assert_eq!(
-            manifest.local_root_key_der_hex,
-            Some(hex_bytes(pic.root_key().unwrap()))
-        );
-        assert_frontend_sdk_call(root, &manifest, true);
-        prepare_frontend_identity(root, "unadmitted-identity.json");
-        assert_frontend_sdk_call(root, &manifest, false);
-        assert_frontend_invalid_inputs(root, desired, &input, &sidecar);
-        assert_frontend_asset_capacity(root, &wrapper, pic, desired);
-        assert_observatory_handoff(root, &wrapper, desired);
+        manifest
     }
 
     #[cfg(test)]
     fn assert_observatory_handoff(root: &Path, wrapper: &Path, desired: &DesiredFleet) {
         use canic_host::observatory::view::ObservatorySnapshotView;
-        let release = desired.bootstrap.as_ref().unwrap().release_build_id;
-        for role in ["app", "fleet_coordinator", "root", "wasm_store"] {
-            let source = literal_zero_role_artifact_path(root, release, role, "did");
-            let target = canic_host::icp::local_canister_candid_path(root, "local", role);
-            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
-            std::fs::copy(source, target).unwrap();
+        let current = canic_host::fleet_ensure::resolve_current_fleet(
+            root,
+            &desired.environment,
+            &desired.fleet,
+        )
+        .unwrap();
+        for entry in current.registry.entries.iter().filter(|entry| {
+            matches!(
+                entry.role.as_deref(),
+                Some("fleet_coordinator" | "root" | "wasm_store" | "app")
+            )
+        }) {
+            let schema = canic_host::protocol_binding::resolve_current_registry_wire_schema(
+                root, &current, entry,
+            )
+            .unwrap_or_else(|error| panic!("{} release binding: {error:?}", entry.pid));
+            canic_host::protocol_binding::require_wire_method(
+                &schema.schema,
+                canic::protocol::CANIC_PUBLIC_OVERVIEW,
+                canic::protocol::public_overview::METHOD_ID,
+                canic_contracts::protocol::wire_declaration::MethodKind::Query,
+                canic::protocol::public_overview::REQUEST_LIMITS,
+                canic::protocol::public_overview::RESPONSE_LIMITS,
+            )
+            .unwrap_or_else(|error| panic!("{} overview declaration: {error:?}", entry.pid));
         }
         let started = Instant::now();
         run_environment_cli(
@@ -7611,8 +7227,13 @@ exec icp "$@"
         }
         // An independently broken Store binding leaves other roles observable.
         std::fs::write(
-            canic_host::icp::local_canister_candid_path(root, "local", "wasm_store"),
-            "service : {};\n",
+            literal_zero_role_artifact_path(
+                root,
+                desired.bootstrap.as_ref().unwrap().release_build_id,
+                "wasm_store",
+                "wire.json",
+            ),
+            "{}",
         )
         .unwrap();
         run_environment_cli(
@@ -7671,6 +7292,7 @@ exec icp "$@"
             &desired.fleet,
             input,
             &root.join("incomplete"),
+            &frontend_compiler(),
         );
         std::fs::rename(held, &paths.journal).unwrap();
         assert!(matches!(
@@ -7687,20 +7309,28 @@ exec icp "$@"
                 root,
                 &desired.fleet,
                 &wrong,
-                &root.join("wrong")
+                &root.join("wrong"),
+                &frontend_compiler(),
             ),
             Err(FrontendError::AdmissionOrigin)
         ));
-        std::fs::write(sidecar, b"service : {};").unwrap();
+        let original_schema = std::fs::read(sidecar).unwrap();
+        std::fs::write(sidecar, b"{}").unwrap();
         assert!(matches!(
             canic_host::frontend::workflow::prepare_handoff(
                 root,
                 &desired.fleet,
                 input,
-                &root.join("stale")
+                &root.join("stale"),
+                &frontend_compiler(),
             ),
-            Err(FrontendError::ProtocolBinding(_))
+            Err(FrontendError::Release(
+                canic_host::protocol_binding::ReleaseProtocolBindingError::Declaration(
+                    canic_host::release_set::BuiltDeclarationError::DigestMismatch(_)
+                )
+            ))
         ));
+        std::fs::write(sidecar, original_schema).unwrap();
     }
 
     #[cfg(test)]
@@ -7729,7 +7359,20 @@ exec icp "$@"
                 .with_cwd(root);
         let report = ops::asset_capacity(&icp, &input).unwrap();
         assert!(report.sufficient);
-        assert_eq!(report.payload.files, 5);
+        let manifest: canic_host::frontend::model::FrontendManifestRecord = serde_json::from_slice(
+            &std::fs::read(root.join("browser/canic-frontend.json")).unwrap(),
+        )
+        .unwrap();
+        let declared_files = manifest
+            .roles
+            .iter()
+            .map(|role| 3 + role.modules.len())
+            .sum::<usize>();
+        // The manifest and alternative origins accompany every role's declared files.
+        assert_eq!(
+            report.payload.files,
+            u32::try_from(declared_files + 2).unwrap()
+        );
         let result = run_environment_cli(
             root,
             wrapper,
@@ -7755,243 +7398,6 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    fn operator_cli_root_candid(workspace: &Path) -> Vec<u8> {
-        use crate::pic::artifacts::{
-            CanicWasmBuildProfile, build_internal_test_wasm_canisters_with_env,
-        };
-        let target = workspace.join("target/pic-wasm/operator-candid");
-        let config = root_canister_config_path(workspace);
-        let wasms = build_internal_test_wasm_canisters_with_env(
-            workspace,
-            &target,
-            &["delegation_root_stub"],
-            CanicWasmBuildProfile::Fast,
-            &[
-                (
-                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
-                    config.to_str().unwrap(),
-                ),
-                (canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1"),
-            ],
-        );
-        let output = Command::new("candid-extractor")
-            .arg(wasms.path("delegation_root_stub"))
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "extract Root companion Candid: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        output.stdout
-    }
-
-    #[cfg(test)]
-    fn operator_cli_protocol(
-        directory: &Path,
-        role: &str,
-        wasm: &[u8],
-    ) -> canic_host::protocol_binding::RegistryProtocolBinding {
-        let wasm_path = directory.join(format!("{role}.wasm"));
-        std::fs::write(&wasm_path, wasm).unwrap();
-        let workspace =
-            crate::workspace::discover().expect("discover Canic test workspace through Cargo");
-        let candid = if role == "root" {
-            operator_cli_root_candid(&workspace)
-        } else {
-            std::fs::read(workspace.join("crates/canic/candid/fleet_coordinator.did")).unwrap()
-        };
-        let path = canic_host::icp::local_canister_candid_path(directory, "ic", role);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, &candid).unwrap();
-        canic_host::canister_build::validate_wasm_endpoints(&wasm_path, &path).unwrap();
-        let role = canic_contracts::ids::CanisterRole::from(role.to_string());
-        let capabilities = std::collections::BTreeSet::new();
-        let release_identity = "operator-cli-runtime-fixture".to_string();
-        let hashes = canic_core::role_contract::derive_protocol_profile_hashes(
-            &release_identity,
-            &role,
-            &capabilities,
-            &candid,
-        );
-        canic_host::protocol_binding::RegistryProtocolBinding {
-            release_identity,
-            role,
-            capabilities,
-            candid_sha256: hashes.candid_sha256,
-            protocol_profile_digest: hashes.protocol_profile_digest,
-        }
-    }
-
-    // An explicit terminal starting fixture, not evidence of Ensure convergence or
-    // publication. Real management/Registry observations bind its operator inputs.
-    #[cfg(test)]
-    fn operator_cli_terminal_fixture(
-        directory: &Path,
-        fixture: &ActiveComponentRegistryFixture,
-        operator: Principal,
-    ) {
-        use canic_host::fleet_ensure::{
-            model::{
-                DesiredCanisterKind, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureStateRecord,
-                FleetEnsureTopologyRecord,
-            },
-            ops, policy,
-        };
-        let CoordinatorRegistryResponse::Registry(registry) = coordinator_status(
-            fixture.pic(),
-            fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
-        )
-        .unwrap();
-        let mut canisters = Vec::new();
-        let mut principals = std::collections::BTreeMap::new();
-        let mut topology = std::collections::BTreeMap::new();
-        for (name, kind, principal, role, wasm) in [
-            (
-                "coordinator",
-                DesiredCanisterKind::Coordinator,
-                fixture.coordinator,
-                "fleet_coordinator",
-                build_test_coordinator_wasm(),
-            ),
-            (
-                "root",
-                DesiredCanisterKind::Root,
-                fixture.root,
-                "root",
-                build_test_root_wasm(),
-            ),
-        ] {
-            let status = fixture.pic().canister_status(principal, None).unwrap();
-            let controllers = status
-                .settings
-                .controllers
-                .iter()
-                .map(Principal::to_text)
-                .collect::<Vec<_>>();
-            let parent = (name == "root").then_some("coordinator");
-            canisters.push(serde_json::json!({
-                "controllers": controllers, "drain": null, "initial_cycles": "0",
-                "init_arg": null, "init_candid": null, "kind": kind,
-                "minimum_cycles": "0", "name": name, "parent": parent,
-                "presence": "present", "principal": principal.to_text(), "replace": false,
-                "subnet": fixture.pic().get_subnet(principal).unwrap().to_text(), "wasm": null
-            }));
-            principals.insert(name.to_string(), principal.to_text());
-            topology.insert(
-                name.to_string(),
-                FleetEnsureTopologyRecord {
-                    kind,
-                    module_hash: Some(hex_bytes(status.module_hash.unwrap())),
-                    parent: parent.map(str::to_owned),
-                    role: Some(role.to_owned()),
-                    protocol_binding: Some(operator_cli_protocol(directory, role, &wasm)),
-                },
-            );
-        }
-        let desired = serde_json::json!({
-            "canisters": canisters, "cycles_ledger": Principal::management_canister().to_text(),
-            "environment": "ic", "fleet": "fixture", "ledger_fee_cycles": "0",
-            "management_creation_fee_cycles": "0", "material_cycle_threshold": "0",
-            "maximum_observation_burn_cycles": "0", "maximum_stalled_observations": 10,
-            "maximum_update_burn_cycles": "0", "operator": operator.to_text(),
-            "schema_version": 1, "treasury": "coordinator"
-        });
-        let mut plan = operator_cli_terminal_plan(desired);
-        plan.plan_sha256 = policy::expected_plan_sha256(&plan);
-        let journal = operator_cli_terminal_journal(&plan);
-        let state = FleetEnsureStateRecord {
-            active_registry: Some(registry),
-            completed_reinstall_action_sha256: BTreeMap::new(),
-            completed_reinstall_operation_id: None,
-            completed_reinstalls: BTreeMap::new(),
-            fleet: plan.fleet.clone(),
-            pending_principals: BTreeMap::new(),
-            principals,
-            retained_cycles_by_principal: BTreeMap::new(),
-            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-            topology,
-        };
-        let paths = ops::EnsurePaths::under(directory, "ic", "fixture");
-        ops::write_plan(&paths, &plan).unwrap();
-        ops::write_journal(&paths, &journal).unwrap();
-        ops::write_state(&paths, &state).unwrap();
-    }
-
-    // Keep durable fixture records typed so schema drift fails before PocketIC runs.
-    #[cfg(test)]
-    fn operator_cli_terminal_journal(
-        plan: &FleetEnsurePlan,
-    ) -> canic_host::fleet_ensure::model::FleetEnsureJournalRecord {
-        use canic_host::fleet_ensure::model::{
-            FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion, FleetEnsureJournalRecord,
-        };
-        FleetEnsureJournalRecord {
-            release: None,
-            bootstrap_registration_recovery: None,
-            funding_observations: BTreeMap::new(),
-            funding_reviews: Vec::new(),
-            successor_phases: Vec::new(),
-            completion: FleetEnsureCompletion::Converged,
-            estate_funding_required: None,
-            effects: Vec::new(),
-            fleet: plan.fleet.clone(),
-            initial_controlled_cycles: 0,
-            initial_estate_funding_cycles_by_root: BTreeMap::new(),
-            initial_operator_cycles: 0,
-            operation_id: plan.operation_id.clone(),
-            plan_sha256: plan.plan_sha256.clone(),
-            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-            stalled_observations: 0,
-        }
-    }
-
-    // Build current authority with typed fields so schema changes fail at compilation.
-    #[cfg(test)]
-    fn operator_cli_terminal_plan(desired: serde_json::Value) -> FleetEnsurePlan {
-        use canic_host::fleet_ensure::model::{
-            CycleConservation, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlanScope,
-        };
-        FleetEnsurePlan {
-            infrastructure_bootstrap: None,
-            recovery_review: None,
-            reinstall: None,
-            continuation: None,
-            canisters: Vec::new(),
-            conservation: CycleConservation {
-                estate_funding_domains: Vec::new(),
-                expected_post_operation_cycles: 0,
-                maximum_execution_burn_cycles: 0,
-                maximum_new_funding_cycles: 0,
-                maximum_operator_debit_cycles: 0,
-                maximum_unavoidable_fee_cycles: 0,
-                observed_controlled_cycles: 0,
-                retained_in_reused_canisters_cycles: 0,
-                scheduled_transfer_cycles: 0,
-            },
-            desired_sha256: "operator-cli-starting-fixture".into(),
-            environment: "ic".into(),
-            fleet: "fixture".into(),
-            operation_id: "operator-cli-starting-fixture".into(),
-            plan_sha256: String::new(),
-            planned_at_time: 0,
-            protocol_actions: Vec::new(),
-            root_start_authority: None,
-            root_reinstall_bindings: Vec::new(),
-            reviewed_desired: Some(Box::new(
-                serde_json::from_value(serde_json::json!({
-                    "desired": desired, "protocol_steps": []
-                }))
-                .unwrap(),
-            )),
-            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-            scope: FleetEnsurePlanScope::Full,
-            terminal_inventory_operation_id: None,
-        }
-    }
-
-    #[cfg(test)]
     fn operator_cli_gateway_wrapper(directory: &Path, gateway: &str, isolated: &Path) -> PathBuf {
         use std::os::unix::fs::PermissionsExt as _;
         let wrapper = directory.join("operator-cli-icp");
@@ -7999,12 +7405,25 @@ exec icp "$@"
         let key = directory.join("root-key.der");
         let key_hex = hex_bytes(std::fs::read(&key).unwrap());
         let key = key.to_str().unwrap();
+        let network = directory.join("operator-network.json");
+        std::fs::write(
+            &network,
+            serde_json::to_vec(&serde_json::json!({
+                "api_url": gateway,
+                "root_key": key_hex,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let network = network.to_str().unwrap();
+        let provision = canic::protocol::component_control::provision::METHOD;
         std::fs::write(
             &wrapper,
             format!(
                 r#"#!/bin/bash
 set -euo pipefail
 case " $* " in
+  *" network status "*) cat '{network}' ;;
   *" canister "*|*" cycles "*)
     unset ICP_ENVIRONMENT
     args=()
@@ -8016,7 +7435,7 @@ case " $* " in
     done
     '{isolated}' "${{args[@]}}" -n '{gateway}' -k '{key_hex}'
     case " $* ${{args[*]}} " in
-      *" canic_root_command "*)
+      *" {provision} "*)
         if [ -f '{key}.lose-reply' ]; then
           rm '{key}.lose-reply'
           exit 79
@@ -8033,12 +7452,24 @@ esac
     }
 
     #[cfg(test)]
-    fn run_operator_cli(
+    fn prepare_operator_cli(
         directory: &Path,
-        wrapper: &Path,
-        args: &[&str],
-    ) -> Result<(), canic_cli::CliError> {
-        run_environment_cli(directory, wrapper, "ic", args)
+        isolated_icp: &Path,
+        pic: &PocketIc,
+        desired: &DesiredFleet,
+        replica: &LocalReplicaTarget,
+    ) -> PathBuf {
+        std::fs::write(directory.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        std::fs::write(directory.join("icp.yaml"), "canisters: []\n").unwrap();
+        let app = directory.join("apps/qualification");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::copy(
+            directory.join(&desired.protocol.as_ref().unwrap().app_config),
+            app.join("canic.toml"),
+        )
+        .unwrap();
+        std::fs::write(directory.join("root-key.der"), pic.root_key().unwrap()).unwrap();
+        operator_cli_gateway_wrapper(directory, &replica.url, isolated_icp)
     }
 
     #[cfg(test)]
@@ -8049,17 +7480,7 @@ esac
         desired: &DesiredFleet,
         replica: &LocalReplicaTarget,
     ) {
-        std::fs::write(directory.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
-        std::fs::write(directory.join("icp.yaml"), "canisters: []\n").unwrap();
-        let app = directory.join("apps/admission");
-        std::fs::create_dir_all(&app).unwrap();
-        std::fs::copy(
-            directory.join(&desired.protocol.as_ref().unwrap().app_config),
-            app.join("canic.toml"),
-        )
-        .unwrap();
-        std::fs::write(directory.join("root-key.der"), pic.root_key().unwrap()).unwrap();
-        let wrapper = operator_cli_gateway_wrapper(directory, &replica.url, isolated_icp);
+        let wrapper = prepare_operator_cli(directory, isolated_icp, pic, desired, replica);
         let added = Principal::self_authenticating([0xa8; 32]);
         let added_text = added.to_text();
         let plan_path = directory.join("admission-add.json");
@@ -8119,27 +7540,8 @@ esac
             ],
         )
         .expect("replay exact completed admission");
-        let registry: Result<CoordinatorRegistryResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CoordinatorRegistryRequest::Registry,
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        coordinator,
-                        operator,
-                        canic::protocol::CANIC_COORDINATOR_REGISTRY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let CoordinatorRegistryResponse::Registry(registry) = registry.unwrap();
+        let registry = crate::pic::registry_discovery::snapshot(pic, coordinator, operator);
+        let registry = registry.unwrap();
         assert!(registry.admission.fleet_principals.contains(&added));
         assert_eq!(
             registry.admission.generation,
@@ -8177,20 +7579,23 @@ esac
     fn resume_operator_cli(
         directory: &Path,
         wrapper: &Path,
+        desired: &DesiredFleet,
     ) -> canic_host::component_operation::model::ComponentOperationRecord {
         use canic_host::component_operation::ops;
-        let path = ops::record_path(directory, "ic", "fixture", "extra").unwrap();
+        let path =
+            ops::record_path(directory, &desired.environment, &desired.fleet, "extra").unwrap();
         let planned = ops::read(&path).unwrap().unwrap();
         assert_eq!(planned.submission_attempts, 0);
         let review = &planned.plan.review_sha256;
         assert!(
-            run_operator_cli(
+            run_environment_cli(
                 directory,
                 wrapper,
+                &desired.environment,
                 &[
                     "component",
                     "apply",
-                    "fixture",
+                    &desired.fleet,
                     "extra",
                     "--review",
                     "wrong"
@@ -8201,13 +7606,14 @@ esac
         assert_eq!(ops::read(&path).unwrap().unwrap(), planned);
         std::fs::write(directory.join("root-key.der.lose-reply"), []).unwrap();
         assert!(
-            run_operator_cli(
+            run_environment_cli(
                 directory,
                 wrapper,
+                &desired.environment,
                 &[
                     "component",
                     "apply",
-                    "fixture",
+                    &desired.fleet,
                     "extra",
                     "--review",
                     review,
@@ -8218,13 +7624,14 @@ esac
             .is_err()
         );
         assert_eq!(ops::read(&path).unwrap().unwrap().submission_attempts, 1);
-        run_operator_cli(
+        run_environment_cli(
             directory,
             wrapper,
+            &desired.environment,
             &[
                 "component",
                 "apply",
-                "fixture",
+                &desired.fleet,
                 "extra",
                 "--review",
                 review,
@@ -8239,15 +7646,21 @@ esac
     }
 
     #[cfg(test)]
-    fn assert_operator_cli_export(directory: &Path, wrapper: &Path, binding: &ComponentBinding) {
+    fn assert_operator_cli_export(
+        directory: &Path,
+        wrapper: &Path,
+        desired: &DesiredFleet,
+        binding: &ComponentBinding,
+    ) {
         let destination = directory.join("frontend-environment.json");
-        run_operator_cli(
+        run_environment_cli(
             directory,
             wrapper,
+            &desired.environment,
             &[
                 "info",
                 "env",
-                "fixture",
+                &desired.fleet,
                 "--component-operation",
                 "extra",
                 "--json",
@@ -8266,60 +7679,48 @@ esac
 
     #[test]
     fn operator_component_public_cli_uses_real_icp_and_exports_terminal_binding() {
+        assert_literal_zero_host_journey(FundingJourney::OperatorComponent, 1);
+    }
+
+    #[cfg(test)]
+    fn assert_operator_component_cli(
+        directory: &Path,
+        isolated_icp: &Path,
+        pic: &PocketIc,
+        desired: &DesiredFleet,
+        replica: &LocalReplicaTarget,
+    ) {
         use canic_host::component_operation::{ComponentOperationError, ops, workflow};
-        let mut fixture = setup_active_component_registry_with_pic(build_management_pic);
-        let directory =
-            std::env::temp_dir().join(format!("canic-operator-cli-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).unwrap();
-        let (isolated, operator, _) = prepare_isolated_icp(&directory);
-        for principal in [fixture.root, fixture.coordinator] {
-            fixture
-                .pic()
-                .update_canister_settings(
-                    principal,
-                    None,
-                    ic_platform::pocket_ic::CanisterSettings {
-                        controllers: Some(vec![Principal::anonymous(), operator]),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-        }
-        operator_cli_terminal_fixture(&directory, &fixture, operator);
-        std::fs::write(directory.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
-        std::fs::write(directory.join("icp.yaml"), "canisters: []\n").unwrap();
-        std::fs::create_dir_all(directory.join("apps/test")).unwrap();
-        std::fs::copy(
-            root_canister_config_path(
-                &crate::workspace::discover().expect("discover Canic test workspace through Cargo"),
-            ),
-            directory.join("apps/test/canic.toml"),
+        let root_name = desired
+            .canisters
+            .iter()
+            .find(|entry| entry.kind == canic_host::fleet_ensure::model::DesiredCanisterKind::Root)
+            .unwrap()
+            .name
+            .as_str();
+        let config = AppConfigSnapshot::load(
+            &directory.join(&desired.protocol.as_ref().unwrap().app_config),
         )
         .unwrap();
-        std::fs::write(
-            directory.join("root-key.der"),
-            fixture.pic().root_key().unwrap(),
-        )
-        .unwrap();
-        let gateway = fixture.start_http_gateway();
-        let wrapper = operator_cli_gateway_wrapper(&directory, &gateway, &isolated);
-        let spec = fixture.issuer.component_spec.to_string();
-        run_operator_cli(
-            &directory,
+        let spec = &config.component_topology().component_specs[0];
+        let wrapper = prepare_operator_cli(directory, isolated_icp, pic, desired, replica);
+        run_environment_cli(
+            directory,
             &wrapper,
+            &desired.environment,
             &[
                 "component",
                 "plan",
-                "fixture",
+                &desired.fleet,
                 "extra",
                 "--root",
-                "root",
+                root_name,
                 "--spec",
-                &spec,
+                spec.component_spec.as_ref(),
             ],
         )
         .unwrap();
-        let terminal = resume_operator_cli(&directory, &wrapper);
+        let terminal = resume_operator_cli(directory, &wrapper, desired);
         let review = &terminal.plan.review_sha256;
         let binding = terminal
             .progress
@@ -8328,27 +7729,48 @@ esac
             .binding
             .as_ref()
             .unwrap();
-        assert_eq!(binding.role, fixture.issuer.role);
-        assert_ne!(binding.canister_id, fixture.issuer.canister_id);
-        assert_operator_cli_export(&directory, &wrapper, binding);
+        assert_eq!(binding.role, spec.component_role);
+        let operator = Principal::from_text(&desired.operator).unwrap();
+        assert_eq!(
+            root_pool_status_as(
+                pic,
+                terminal.plan.authority.binding.fleet_subnet_root,
+                operator
+            )
+            .workload,
+            2
+        );
+        assert_operator_cli_export(directory, &wrapper, desired, binding);
 
         let mut broken = ops::transport::IcpComponentTransport::new(
-            &directory,
-            canic_host::icp::IcpCli::new("/does-not-exist", Some("ic".to_string())),
+            directory,
+            canic_host::icp::IcpCli::new("/does-not-exist", Some(desired.environment.clone())),
         );
         assert_eq!(
-            workflow::apply(&directory, "ic", "fixture", "extra", review, &mut broken).unwrap(),
+            workflow::apply(
+                directory,
+                &desired.environment,
+                &desired.fleet,
+                "extra",
+                review,
+                &mut broken
+            )
+            .unwrap(),
             terminal
         );
-        // A modified sidecar must fail before another observation or command is accepted.
-        let candid = canic_host::icp::local_canister_candid_path(&directory, "ic", "root");
-        std::fs::write(candid, "service : {};").unwrap();
+        let schema = directory.join(&desired.protocol.as_ref().unwrap().root_wire_schema);
+        let original = std::fs::read(&schema).unwrap();
+        std::fs::write(&schema, "{}").unwrap();
         assert!(matches!(
-            broken.authority("ic", "fixture", "root", &fixture.issuer.component_spec),
+            broken.authority(
+                &desired.environment,
+                &desired.fleet,
+                root_name,
+                &spec.component_spec
+            ),
             Err(ComponentOperationError::ProtocolBinding(_))
         ));
-        drop(fixture);
-        std::fs::remove_dir_all(directory).unwrap();
+        std::fs::write(schema, original).unwrap();
     }
 
     #[cfg(test)]
@@ -8364,39 +7786,21 @@ esac
     impl OperatorComponentTransport<'_> {
         fn query(
             &self,
-            request: RootStatusRequestFragment,
+            operation_id: [u8; 32],
         ) -> Result<
-            RootStatusResponseFragment,
+            canic_contracts::dto::root::RootComponentOperationStatus,
             canic_host::component_operation::ComponentOperationError,
         > {
-            let method = match request {
-                RootStatusRequestFragment::Operation(_) => {
-                    canic::protocol::CANIC_ROOT_OPERATION_STATUS
-                }
-                _ => canic::protocol::CANIC_ROOT_STATUS,
-            };
-            let response: Result<RootStatusResponseFragment, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (self.fixture.pic()).query_call(
-                            self.fixture.root,
-                            self.caller,
-                            method,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("operator Root query transport");
-            response.map_err(|error| {
+            crate::pic::canic::root_component_allocation(
+                self.fixture.pic(),
+                self.fixture.root,
+                self.caller,
+                operation_id,
+            )
+            .map_err(|error| {
                 canic_host::CanisterProtocolError::Response {
                     canister: self.fixture.root,
-                    method,
+                    method: canic::protocol::component_read::allocation::METHOD,
                     source: canic_host::icp::IcpJsonResponseError::Rejected(error),
                 }
                 .into()
@@ -8413,11 +7817,12 @@ esac
             canic_host::component_operation::view::ComponentObservation,
             canic_host::component_operation::ComponentOperationError,
         > {
-            let RootStatusResponseFragment::FleetAuthority(authority) =
-                self.query(RootStatusRequestFragment::FleetAuthority)?
-            else {
-                panic!("Root authority response");
-            };
+            let authority = root_authority_as(self.fixture.pic(), self.fixture.root, self.caller)
+                .map_err(|source| canic_host::CanisterProtocolError::Response {
+                canister: self.fixture.root,
+                method: canic::protocol::root_authority::METHOD,
+                source: canic_host::icp::IcpJsonResponseError::Rejected(source),
+            })?;
             assert_eq!(authority.binding, plan.authority.binding);
             assert_eq!(authority.initial_release_set, plan.authority.release_set);
             Ok(
@@ -8438,11 +7843,7 @@ esac
             use canic_host::component_operation::{
                 ComponentOperationError, view::ComponentProgressObservation,
             };
-            let response = self.query(RootStatusRequestFragment::Operation(
-                OperationStatusRequest {
-                    operation_id: plan.operation_id,
-                },
-            ));
+            let response = self.query(plan.operation_id);
             let response = match response {
                 Err(ComponentOperationError::Protocol(
                     canic_host::CanisterProtocolError::Response {
@@ -8456,36 +7857,28 @@ esac
                 }
                 other => other?,
             };
-            let RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::ProvisionComponent(status),
-            ) = response
-            else {
-                panic!("Root Component status");
-            };
-            canic_host::component_operation::ops::project_progress(plan, status)
+            canic_host::component_operation::ops::project_progress(plan, response)
         }
 
         fn submit(
             &mut self,
             plan: &canic_host::component_operation::model::ComponentPlanRecord,
         ) -> Result<(), canic_host::component_operation::ComponentOperationError> {
-            let response = root_command_as(
+            let response = crate::pic::canic::provision_component(
                 self.fixture.pic(),
                 self.fixture.root,
                 self.caller,
-                RootCommandFragment::ProvisionComponent(RootComponentAllocationRequest {
+                RootComponentAllocationRequest {
                     operation_id: plan.operation_id,
                     component_spec: plan.authority.component_spec.clone(),
-                }),
+                },
             )
             .map_err(|error| canic_host::CanisterProtocolError::Response {
                 canister: self.fixture.root,
-                method: canic::protocol::CANIC_ROOT_COMMAND,
+                method: canic::protocol::component_control::provision::METHOD,
                 source: canic_host::icp::IcpJsonResponseError::Rejected(error),
             })?;
-            let RootCommandResponseFragment::OperationAccepted(receipt) = response else {
-                panic!("Root Component receipt");
-            };
+            let receipt = response;
             assert_eq!(receipt.operation_id, plan.operation_id);
             self.submissions += 1;
             if self.lose_reply {
@@ -8499,14 +7892,8 @@ esac
     fn operator_component_authority(
         fixture: &ActiveComponentRegistryFixture,
     ) -> canic_host::component_operation::model::ComponentAuthorityRecord {
-        let RootStatusResponseFragment::FleetAuthority(root_authority) = root_status(
-            fixture.pic(),
-            fixture.root,
-            RootStatusRequestFragment::FleetAuthority,
-        )
-        .unwrap() else {
-            panic!("Root authority");
-        };
+        let root_authority =
+            root_authority_as(fixture.pic(), fixture.root, Principal::anonymous()).unwrap();
         canic_host::component_operation::model::ComponentAuthorityRecord {
             environment: "local".to_string(),
             fleet: "fixture".to_string(),
@@ -8517,7 +7904,7 @@ esac
             binding: root_authority.binding,
             release_set: root_authority.initial_release_set,
             root_module_sha256: hex_bytes(root_authority.expected_module_hash),
-            root_candid_sha256: [1; 32],
+            root_wire_schema_sha256: [1; 32],
             root_controllers: vec![Principal::anonymous().to_text()],
             registry_sha256: [2; 32],
             operator: Principal::anonymous(),
@@ -8710,6 +8097,9 @@ esac
                 RETAINED_ESTATE_WORKLOADS,
             ) => "canisters/audit/root_probe/retained-estate.toml",
             (FundingJourney::Fresh, 1) => "canisters/audit/root_probe/frontend.toml",
+            (FundingJourney::OperatorComponent, 1) => {
+                "canisters/audit/root_probe/operator-component.toml"
+            }
             (_, 1) => "canisters/audit/root_probe/activation.toml",
             (FundingJourney::Estate | FundingJourney::FailedReserve, 2) => {
                 "canisters/audit/root_probe/two-workloads.toml"
@@ -8818,7 +8208,10 @@ esac
                 .expect("fixture readiness floor")
         } else if matches!(
             funding,
-            FundingJourney::Fresh | FundingJourney::Reinstall | FundingJourney::CompletedReset
+            FundingJourney::Fresh
+                | FundingJourney::OperatorComponent
+                | FundingJourney::Reinstall
+                | FundingJourney::CompletedReset
         ) {
             canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
                 .expect("generator-owned initial pool funding")
@@ -8847,7 +8240,10 @@ esac
                     },
                 )
                 .expect("prepare one deterministic Cycles Ledger result");
-            if matches!(funding, FundingJourney::Fresh) {
+            if matches!(
+                funding,
+                FundingJourney::Fresh | FundingJourney::OperatorComponent
+            ) {
                 assert_eq!(
                     pic.cycle_balance(canister),
                     cycles,
@@ -8987,9 +8383,18 @@ esac
         let protocol = DesiredFleetProtocol {
             app_config: config_path.to_string_lossy().into_owned(),
             component_group_placements,
-            coordinator_candid: release_artifacts.coordinator_candid.clone(),
-            root_candid: release_artifacts.root_candid.clone(),
-            store_candid: release_artifacts.store_candid.clone(),
+            coordinator_wire_schema: std::path::Path::new(&release_artifacts.coordinator_candid)
+                .with_extension("wire.json")
+                .to_string_lossy()
+                .into_owned(),
+            root_wire_schema: std::path::Path::new(&release_artifacts.root_candid)
+                .with_extension("wire.json")
+                .to_string_lossy()
+                .into_owned(),
+            store_wire_schema: std::path::Path::new(&release_artifacts.store_candid)
+                .with_extension("wire.json")
+                .to_string_lossy()
+                .into_owned(),
         };
         let mut desired = literal_zero_fleet_desired(LiteralZeroFleetInput {
             bootstrap,
@@ -9115,7 +8520,10 @@ esac
         };
         let desired = if matches!(
             funding,
-            FundingJourney::Fresh | FundingJourney::Reinstall | FundingJourney::CompletedReset
+            FundingJourney::Fresh
+                | FundingJourney::OperatorComponent
+                | FundingJourney::Reinstall
+                | FundingJourney::CompletedReset
         ) {
             generate_journey_desired(GeneratedJourneyInput {
                 root: &adapter_root,
@@ -9129,6 +8537,7 @@ esac
                 workload_count: initial_workload_count,
                 ready_count,
                 frontend_identity,
+                operator_component: matches!(funding, FundingJourney::OperatorComponent),
             })
         } else {
             desired
@@ -9163,7 +8572,10 @@ esac
             &icp_wrapper,
             &adapter_root,
             local_replica.clone(),
-            !matches!(funding, FundingJourney::Fresh),
+            !matches!(
+                funding,
+                FundingJourney::Fresh | FundingJourney::OperatorComponent
+            ),
         );
         let infrastructure_started_at = Instant::now();
         super::super::fixture::progress("planning literal-zero infrastructure");
@@ -9462,16 +8874,17 @@ esac
             &icp_wrapper,
             &adapter_root,
             local_replica.clone(),
-            !matches!(funding, FundingJourney::Fresh),
+            !matches!(
+                funding,
+                FundingJourney::Fresh | FundingJourney::OperatorComponent
+            ),
         );
         if !funded_import_repair {
             std::fs::write(
                 adapter_root.join("lost-reset-args.bin"),
-                encode_one(HostRootCommandFragment::ImportPoolCanister(
-                    PoolCanisterRequest {
-                        canister_id: pools[0],
-                    },
-                ))
+                encode_pool_import(PoolCanisterRequest {
+                    canister_id: pools[0],
+                })
                 .expect("encode exact automatic import"),
             )
             .expect("enable automatic reset response loss");
@@ -9508,22 +8921,13 @@ esac
                 pool_count,
                 "lost response and replay must not repeat a controller effect"
             );
-            let request_count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "request_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            let request_count: u64 = ic_testkit::pic::query_wire(
+                &pic,
+                cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+                &(),
+            )
             .expect("query literal-zero creation count");
             assert_eq!(
                 request_count,
@@ -9540,19 +8944,17 @@ esac
             for asset in &pools {
                 pic.install_canister(*asset, b"\0asm\x01\0\0\0".to_vec(), Vec::new(), Some(root));
             }
-            let failed = root_command_as(
+            let failed = import_canister_as(
                 &pic,
                 root,
                 operator,
-                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                PoolCanisterRequest {
                     canister_id: pools[0],
-                }),
+                },
             )
             .expect("observe the real underfunded import failure before repair review");
             assert!(
-                matches!(failed, RootCommandResponseFragment::ImportPoolCanister(
-                PoolImportResponse::ResetFailed { canister_id, .. }
-            ) if canister_id == pools[0])
+                matches!(failed, PoolImportResponse::ResetFailed { canister_id, .. } if canister_id == ic_platform::Principal::from(pools[0]))
             );
             let pool = root_pool_status_as(&pic, root, operator);
             assert_eq!((pool.failed, pool.pending_reset, pool.ready), (1, 1, 0));
@@ -9618,22 +9020,13 @@ esac
                 assert!(matches!(rejected, Err(EnsureWorkflowError::Platform(
                     canic_host::fleet_ensure::ops::IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. }
                 ))));
-                let before: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).query_call(
-                            cycles_ledger,
-                            ic_platform::principal::ExternalPrincipal::anonymous(),
-                            "withdrawal_count",
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
+                let before: u64 = ic_testkit::pic::query_wire(
+                    &pic,
+                    cycles_ledger,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    ledger_control_spec("withdrawal_count", 0x5445_5354_0000_0c02),
+                    &(),
+                )
                 .unwrap();
                 assert_eq!(before, 0);
                 pic.set_controllers(pools[1], Some(operator), vec![root])
@@ -9653,27 +9046,14 @@ esac
                     matches!(lost_funding, Err(EnsureWorkflowError::Platform(_))),
                     "lose one completed withdrawal reply: {lost_funding:?}"
                 );
-                let withdrawals: u64 =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).query_call(
-                                cycles_ledger,
-                                ic_platform::principal::ExternalPrincipal::anonymous(),
-                                "withdrawal_count",
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .expect("query withdrawal receipts");
+                let withdrawals: u64 = ic_testkit::pic::query_wire(
+                    &pic,
+                    cycles_ledger,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    ledger_control_spec("withdrawal_count", 0x5445_5354_0000_0c02),
+                    &(),
+                )
+                .expect("query withdrawal receipts");
                 assert_eq!(withdrawals, 1);
                 let funded_ceiling = native_before_funding + funded_assets[&pools[0].to_text()];
                 let observed_after_funding = pic.cycle_balance(pools[0]);
@@ -9696,18 +9076,19 @@ esac
                     &icp_wrapper,
                     &adapter_root,
                     local_replica.clone(),
-                    !matches!(funding, FundingJourney::Fresh),
+                    !matches!(
+                        funding,
+                        FundingJourney::Fresh | FundingJourney::OperatorComponent
+                    ),
                 );
             } else {
                 assert_eq!(repair_funding, 0);
             }
             std::fs::write(
                 adapter_root.join("lost-reset-args.bin"),
-                encode_one(HostRootCommandFragment::ImportPoolCanister(
-                    PoolCanisterRequest {
-                        canister_id: pools[0],
-                    },
-                ))
+                encode_pool_import(PoolCanisterRequest {
+                    canister_id: pools[0],
+                })
                 .expect("encode exact reset fault boundary"),
             )
             .expect("retain the exact reset request for lost-response injection");
@@ -9728,7 +9109,10 @@ esac
                 &icp_wrapper,
                 &adapter_root,
                 local_replica.clone(),
-                !matches!(funding, FundingJourney::Fresh),
+                !matches!(
+                    funding,
+                    FundingJourney::Fresh | FundingJourney::OperatorComponent
+                ),
             );
             let repaired = fleet_ensure_workflow::apply(
                 &adapter_root,
@@ -9760,22 +9144,13 @@ esac
                 1,
                 "protected Ready status must prevent replaying a completed reset"
             );
-            let withdrawals: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "withdrawal_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            let withdrawals: u64 = ic_testkit::pic::query_wire(
+                &pic,
+                cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                ledger_control_spec("withdrawal_count", 0x5445_5354_0000_0c02),
+                &(),
+            )
             .expect("query repaired withdrawal receipts");
             assert_eq!(
                 withdrawals,
@@ -9795,7 +9170,10 @@ esac
                 &icp_wrapper,
                 &adapter_root,
                 local_replica.clone(),
-                !matches!(funding, FundingJourney::Fresh),
+                !matches!(
+                    funding,
+                    FundingJourney::Fresh | FundingJourney::OperatorComponent
+                ),
             );
             let protocol_started_at = Instant::now();
             super::super::fixture::progress("converging literal-zero control plane");
@@ -9858,7 +9236,10 @@ esac
                 &icp_wrapper,
                 &adapter_root,
                 local_replica.clone(),
-                !matches!(funding, FundingJourney::Fresh),
+                !matches!(
+                    funding,
+                    FundingJourney::Fresh | FundingJourney::OperatorComponent
+                ),
             );
             if !generated_fixtures.manifest.entries.is_empty() {
                 std::fs::write(adapter_root.join("lose-fixture-response"), []).unwrap();
@@ -9982,7 +9363,10 @@ esac
             &icp_wrapper,
             &adapter_root,
             local_replica.clone(),
-            !matches!(funding, FundingJourney::Fresh),
+            !matches!(
+                funding,
+                FundingJourney::Fresh | FundingJourney::OperatorComponent
+            ),
         );
         phase = phase.next("initial_terminal_replay");
         let replay_started_at = Instant::now();
@@ -10031,27 +9415,14 @@ esac
             if funded_import_repair { 0 } else { pool_count },
             "protocol convergence and terminal replay must not repeat controller effects"
         );
-        let replay_withdrawals: u64 =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "withdrawal_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(
-                    &response_bytes,
-                    canic::testing::CANDID_REPLY_LIMITS,
-                )
-                .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("query replayed withdrawal receipts");
+        let replay_withdrawals: u64 = ic_testkit::pic::query_wire(
+            &pic,
+            cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("withdrawal_count", 0x5445_5354_0000_0c02),
+            &(),
+        )
+        .expect("query replayed withdrawal receipts");
         assert_eq!(replay_withdrawals, withdrawals);
         assert_eq!(
             ledger_account_balance(&pic, cycles_ledger, operator),
@@ -10099,6 +9470,16 @@ esac
         if let Some(caller) = frontend_identity {
             phase = phase.next("frontend_cli_and_sdk");
             assert_frontend_handoff(&adapter_root, &icp_wrapper, &mut pic, &desired, caller);
+        }
+        if matches!(funding, FundingJourney::OperatorComponent) {
+            phase = phase.next("operator_component_cli");
+            assert_operator_component_cli(
+                &adapter_root,
+                &icp_wrapper,
+                &pic,
+                &desired,
+                &local_replica,
+            );
         }
         phase = phase.next("cleanup");
         pic.stop_live();
@@ -10170,27 +9551,8 @@ esac
         fixtures: &canic_host::release_set::fixture::PersistedFixtureArtifactManifest,
     ) {
         for source in &fixtures.manifest.entries {
-            let status: Result<StoreCatalogResponse, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((
-                        StoreCatalogRequest::Fixture(source.content_id),
-                    ))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).query_call(
-                            store,
-                            operator,
-                            canic::protocol::CANIC_WASM_STORE_CATALOG,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .unwrap();
-            let StoreCatalogResponse::Fixture(Ok(status)) = status.unwrap() else {
+            let status = store_fixture_status_as(pic, store, operator, source.content_id);
+            let Ok(status) = status.unwrap() else {
                 panic!("generated apply must retain the selected source");
             };
             assert!(status.complete);
@@ -10234,46 +9596,29 @@ esac
     }
 
     #[cfg(test)]
-    use canic_contracts::dto::wire::projection::fixture_baseline::PublicMemoryRequest;
-
-    #[cfg(test)]
-    use canic_contracts::dto::wire::projection::fixture_baseline::PublicMemoryResponse;
-
-    #[cfg(test)]
     fn public_memory_snapshot(
         pic: &PocketIc,
         target: Principal,
     ) -> canic::dto::public_status::PublicMetricsSnapshot {
-        let response: Result<PublicMemoryResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    PublicMemoryRequest::Metrics(canic::dto::public_status::PublicMetricsRequest {
-                        family: canic::dto::public_status::PublicMetricFamily::Performance,
-                        page: canic::dto::page::PageRequest {
-                            offset: 0,
-                            limit: 256,
-                        },
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        target,
-                        Principal::anonymous(),
-                        canic::protocol::CANIC_PUBLIC_STATUS,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("anonymous public memory transport");
-        let PublicMemoryResponse::Metrics(snapshot) = response.expect("public memory cache") else {
-            panic!("metrics response");
-        };
-        snapshot
+        ic_testkit::pic::query_wire(
+            pic,
+            target,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::CANIC_PUBLIC_METRICS,
+                method_id: canic::protocol::public_metrics::METHOD_ID,
+                request_limits: canic::protocol::public_metrics::REQUEST_LIMITS,
+                response_limits: canic::protocol::public_metrics::RESPONSE_LIMITS,
+            },
+            &canic::dto::public_status::PublicMetricsRequest {
+                family: canic::dto::public_status::PublicMetricFamily::Performance,
+                page: canic::dto::page::PageRequest {
+                    offset: 0,
+                    limit: 256,
+                },
+            },
+        )
+        .expect("public metrics Wire query")
     }
 
     #[cfg(test)]
@@ -10332,28 +9677,19 @@ esac
         store: Principal,
         operator: Principal,
     ) -> String {
-        let health: Result<PublicMemoryResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes =
-                    ic_platform::candid::contract::encode_args((PublicMemoryRequest::Health,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        target,
-                        Principal::anonymous(),
-                        canic::protocol::CANIC_PUBLIC_STATUS,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
-        let PublicMemoryResponse::Health(health) = health.unwrap() else {
-            panic!("public health");
-        };
+        let health: canic::dto::public_status::PublicHealth = ic_testkit::pic::query_wire(
+            pic,
+            target,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::CANIC_PUBLIC_HEALTH,
+                method_id: canic::protocol::public_health::METHOD_ID,
+                request_limits: canic::protocol::public_health::REQUEST_LIMITS,
+                response_limits: canic::protocol::public_health::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("public Wire health");
         let role = health.role.unwrap();
         let before = wasm_hash(&pic.get_stable_memory(target));
         let snapshot = public_memory_snapshot(pic, target);
@@ -10405,48 +9741,44 @@ esac
                 .filter(|row| row.name.starts_with("memory.allocations."))
                 .all(|row| row.canister_id.is_none() && row.observed_at_ns > 0)
         );
-        let denied: Result<CanisterObservabilityResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CanisterObservabilityRequest::MemoryAllocations,
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        target,
-                        Principal::anonymous(),
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let denied: Result<CanisterObservabilityResponse, Error> = ic_testkit::pic::query_wire(
+            pic,
+            target,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_memory_allocations::METHOD,
+                method_id: canic::protocol::protected_memory_allocations::METHOD_ID,
+                request_limits: canic::protocol::protected_memory_allocations::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_memory_allocations::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .map(
+            |reply: Result<canic::dto::memory::MemoryAllocationsResponse, Error>| {
+                reply.map(CanisterObservabilityResponse::MemoryAllocations)
+            },
+        )
+        .unwrap();
         assert!(controller_authority_unavailable(&denied));
         let controller = if target == root { operator } else { root };
-        let diagnostic: Result<CanisterObservabilityResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CanisterObservabilityRequest::MemoryAllocations,
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        target,
-                        controller,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let diagnostic: Result<CanisterObservabilityResponse, Error> = ic_testkit::pic::query_wire(
+            pic,
+            target,
+            controller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::protected_memory_allocations::METHOD,
+                method_id: canic::protocol::protected_memory_allocations::METHOD_ID,
+                request_limits: canic::protocol::protected_memory_allocations::REQUEST_LIMITS,
+                response_limits: canic::protocol::protected_memory_allocations::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .map(
+            |reply: Result<canic::dto::memory::MemoryAllocationsResponse, Error>| {
+                reply.map(CanisterObservabilityResponse::MemoryAllocations)
+            },
+        )
+        .unwrap();
         let CanisterObservabilityResponse::MemoryAllocations(report) = diagnostic.unwrap() else {
             panic!("allocation diagnostic");
         };
@@ -10481,8 +9813,7 @@ esac
 
     /// Passive application row returned by both fixture roles.
     #[cfg(test)]
-    #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-    #[candid_path("ic_platform::candid::contract")]
+    #[derive(Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
     struct ReinstallUserRow {
         id: u64,
         value: u64,
@@ -10522,11 +9853,18 @@ esac
         let mut desired = source.clone();
         desired.bootstrap.as_mut().unwrap().release_build_id = artifacts.release_build_id;
         let protocol = desired.protocol.as_mut().unwrap();
-        protocol
-            .coordinator_candid
-            .clone_from(&artifacts.coordinator_candid);
-        protocol.root_candid.clone_from(&artifacts.root_candid);
-        protocol.store_candid.clone_from(&artifacts.store_candid);
+        protocol.coordinator_wire_schema = std::path::Path::new(&artifacts.coordinator_candid)
+            .with_extension("wire.json")
+            .to_string_lossy()
+            .into_owned();
+        protocol.root_wire_schema = std::path::Path::new(&artifacts.root_candid)
+            .with_extension("wire.json")
+            .to_string_lossy()
+            .into_owned();
+        protocol.store_wire_schema = std::path::Path::new(&artifacts.store_candid)
+            .with_extension("wire.json")
+            .to_string_lossy()
+            .into_owned();
         for canister in &mut desired.canisters {
             let wasm = match canister.kind {
                 DesiredCanisterKind::Coordinator => &artifacts.coordinator_wasm,
@@ -10548,25 +9886,13 @@ esac
         let root = input.adapter_root;
         let operator = Principal::from_text(&input.desired.operator).unwrap();
         let rows = |id| {
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (input.pic).query_call(
-                        id,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "test_user_rows",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args::<(Result<Vec<ReinstallUserRow>, Error>,)>(
-                    &reply,
-                    canic::testing::CANDID_REPLY_LIMITS,
-                )
-                .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::query_wire::<_, Result<Vec<ReinstallUserRow>, Error>>(
+                input.pic,
+                id,
+                Principal::anonymous(),
+                crate::pic::application_probe::ROWS,
+                &(),
+            )
             .ok()
             .and_then(Result::ok)
         };
@@ -10580,26 +9906,13 @@ esac
         for id in applications {
             for (key, value) in [(0_u64, 99_u64), (42, 1001)] {
                 let result: Result<(), Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes =
-                            ic_platform::candid::contract::encode_args((key, value))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (input.pic).update_call(
-                                id,
-                                ic_platform::principal::ExternalPrincipal::anonymous(),
-                                "test_set_user_row",
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
+                    ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+                        input.pic,
+                        id,
+                        Principal::anonymous(),
+                        crate::pic::application_probe::SET_ROW,
+                        &ReinstallUserRow { id: key, value },
+                    )
                     .unwrap();
                 result.unwrap();
             }
@@ -11194,19 +10507,17 @@ exec '{}' "$@"
         pools: &[Principal],
     ) {
         for asset in pools {
-            let response = root_command_as(
+            let response = import_canister_as(
                 pic,
                 root,
                 operator,
-                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                PoolCanisterRequest {
                     canister_id: *asset,
-                }),
+                },
             )
             .expect("prepare Ready import through the public Root protocol");
             assert!(
-                matches!(response, RootCommandResponseFragment::ImportPoolCanister(
-                PoolImportResponse::Imported { canister_id, .. }
-            ) if canister_id == *asset)
+                matches!(response, PoolImportResponse::Imported { canister_id, .. } if canister_id == ic_platform::Principal::from(*asset))
             );
         }
     }
@@ -11466,24 +10777,14 @@ exec '{}' "$@"
         } else {
             planned.plan.plan_sha256.clone()
         };
-        let _: () = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((Some(Nat::from(
-                MAINNET_REFILL_LEDGER_FEE * 2,
-            )),))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).update_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "set_transfer_fee_override",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let _: () = ic_testkit::pic::update_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("set_transfer_fee_override", 0x5445_5354_0000_0c00),
+            &((Some(Nat::from(MAINNET_REFILL_LEDGER_FEE * 2)))
+                .map(|fee: Nat| u128::try_from(fee.0).expect("fixture fee fits u128"))),
+        )
         .unwrap();
         let fee_rejection = fleet_ensure_workflow::apply(
             input.adapter_root,
@@ -11501,22 +10802,13 @@ exec '{}' "$@"
         )) if expected_fee_cycles == MAINNET_REFILL_LEDGER_FEE * 2),
             "a changed fee must reject before debit: {fee_rejection:?}"
         );
-        let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).query_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "transfer_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let transfers: u64 = ic_testkit::pic::query_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+            &(),
+        )
         .unwrap();
         assert_eq!(transfers, 0);
         assert_eq!(
@@ -11527,22 +10819,13 @@ exec '{}' "$@"
             ledger_account_balance(input.pic, input.cycles_ledger, input.root),
             Nat::from(0_u8)
         );
-        let _: () = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args((None::<Nat>,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).update_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "set_transfer_fee_override",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let _: () = ic_testkit::pic::update_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("set_transfer_fee_override", 0x5445_5354_0000_0c00),
+            &((None::<Nat>).map(|fee: Nat| u128::try_from(fee.0).expect("fixture fee fits u128"))),
+        )
         .unwrap();
         std::fs::write(input.adapter_root.join("lose-estate-funding-response"), []).unwrap();
         let lost = fleet_ensure_workflow::apply(
@@ -11564,22 +10847,13 @@ exec '{}' "$@"
                 .is_file(),
             "the transfer must reach response-loss injection: {lost:?}"
         );
-        let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).query_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "transfer_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let transfers: u64 = ic_testkit::pic::query_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+            &(),
+        )
         .unwrap();
         assert_eq!(transfers, 1);
         assert_eq!(
@@ -11701,22 +10975,13 @@ exec '{}' "$@"
             assert_eq!(status.settings.controllers, vec![input.root]);
             assert!(status.cycles >= input.readiness_floor);
         }
-        let requests: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).query_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "request_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let requests: u64 = ic_testkit::pic::query_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+            &(),
+        )
         .unwrap();
         assert_eq!(
             requests,
@@ -11739,39 +11004,21 @@ exec '{}' "$@"
         .expect("effect-free funded estate replay");
         assert!(replay.terminal);
         assert_eq!(replay.effects_applied, 0);
-        let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).query_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "transfer_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let transfers: u64 = ic_testkit::pic::query_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+            &(),
+        )
         .unwrap();
-        let replay_requests: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).query_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "request_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let replay_requests: u64 = ic_testkit::pic::query_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+            &(),
+        )
         .unwrap();
         assert_eq!((transfers, replay_requests), (1, requests));
         let replay_pool = root_pool_status_as(input.pic, input.root, input.operator);
@@ -11860,22 +11107,13 @@ exec '{}' "$@"
             ledger_account_balance(input.pic, input.cycles_ledger, input.root),
             Nat::from(0_u8)
         );
-        let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (input.pic).query_call(
-                    input.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "transfer_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let transfers: u64 = ic_testkit::pic::query_wire(
+            input.pic,
+            input.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+            &(),
+        )
         .unwrap();
         assert_eq!(transfers, 0);
         progress_elapsed("Workloads active with no Ready reserve", started_at);
@@ -11884,19 +11122,17 @@ exec '{}' "$@"
     #[cfg(test)]
     fn register_failed_reserve(input: &AutonomousFundingJourney<'_>) {
         for asset in input.assets {
-            let response = root_command_as(
+            let response = import_canister_as(
                 input.pic,
                 input.root,
                 input.operator,
-                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                PoolCanisterRequest {
                     canister_id: *asset,
-                }),
+                },
             )
             .expect("import the existing underfunded reserve identity");
             assert!(
-                matches!(response, RootCommandResponseFragment::ImportPoolCanister(
-                PoolImportResponse::ResetFailed { canister_id, .. }
-            ) if canister_id == *asset)
+                matches!(response, PoolImportResponse::ResetFailed { canister_id, .. } if canister_id == ic_platform::Principal::from(*asset))
             );
         }
         let pool = root_pool_status_as(input.pic, input.root, input.operator);
@@ -11923,56 +11159,29 @@ exec '{}' "$@"
         platform: &mut IcpEnsurePlatform,
     ) {
         let counts = || {
-            let withdrawals: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (input.pic).query_call(
-                        input.cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "withdrawal_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            let withdrawals: u64 = ic_testkit::pic::query_wire(
+                input.pic,
+                input.cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                ledger_control_spec("withdrawal_count", 0x5445_5354_0000_0c02),
+                &(),
+            )
             .unwrap();
-            let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (input.pic).query_call(
-                        input.cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "transfer_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            let transfers: u64 = ic_testkit::pic::query_wire(
+                input.pic,
+                input.cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+                &(),
+            )
             .unwrap();
-            let creates: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (input.pic).query_call(
-                        input.cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "request_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            let creates: u64 = ic_testkit::pic::query_wire(
+                input.pic,
+                input.cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+                &(),
+            )
             .unwrap();
             (withdrawals, transfers, creates)
         };
@@ -12060,11 +11269,9 @@ exec '{}' "$@"
         assert_eq!(counts(), (1, 0, initial_creations));
         std::fs::write(
             input.adapter_root.join("lost-reset-args.bin"),
-            encode_one(HostRootCommandFragment::ImportPoolCanister(
-                PoolCanisterRequest {
-                    canister_id: input.assets[0],
-                },
-            ))
+            encode_pool_import(PoolCanisterRequest {
+                canister_id: input.assets[0],
+            })
             .unwrap(),
         )
         .unwrap();
@@ -12212,6 +11419,7 @@ exec '{}' "$@"
         workload_count: usize,
         ready_count: usize,
         frontend_identity: Option<Principal>,
+        operator_component: bool,
     }
 
     #[cfg(test)]
@@ -12267,27 +11475,38 @@ exec '{}' "$@"
     }
 
     #[cfg(test)]
-    fn generate_journey_desired(input: GeneratedJourneyInput<'_>) -> DesiredFleet {
-        let root = input.root;
-        let config = retain_generated_journey_source(root, input.config);
+    fn enroll_journey_network(root: &Path, root_key: &[u8]) {
         let trust = root.join("pocket-ic-root-key.der");
-        std::fs::write(&trust, input.root_key).expect("retain PocketIC trust anchor");
+        std::fs::write(&trust, root_key).expect("retain PocketIC trust anchor");
         canic_host::network::enroll_network(canic_host::network::NetworkEnrollmentOptions {
             workspace_root: root,
             environment: "local",
             root_key: &trust,
-            fingerprint: &canic_core::cdk::utils::hash::sha256_hex(input.root_key),
+            fingerprint: &canic_core::cdk::utils::hash::sha256_hex(root_key),
         })
         .expect("enroll the exact generator network");
-        let source = root.join("fleet-policy.toml");
-        let seed = root.join("fleet-seed.toml");
+    }
+
+    #[cfg(test)]
+    fn reviewed_journey_policy(input: &GeneratedJourneyInput<'_>, config: &Path) -> String {
         let mut source_text = generated_journey_policy(
             input.operator,
             input.subnet,
             input.workload_count,
             input.ready_count,
-            &config,
+            config,
         );
+        if input.operator_component {
+            // Review capacity for the later CLI allocation before Ensure installs authority.
+            // The initial group still contains exactly one Component.
+            let mut policy: toml::Value = toml::from_str(&source_text).unwrap();
+            let root = &mut policy["fleet_subnet_roots"][0];
+            let admissions = root["component_admissions"].as_table_mut().unwrap();
+            assert_eq!(admissions.len(), 1);
+            *admissions.iter_mut().next().unwrap().1 = toml::Value::Integer(2);
+            root["limits"]["maximum_component_instances"] = toml::Value::Integer(2);
+            source_text = toml::to_string_pretty(&policy).unwrap();
+        }
         if let Some(caller) = input.frontend_identity {
             let mut policy: toml::Value = toml::from_str(&source_text).unwrap();
             policy["admission"].as_table_mut().unwrap().insert(
@@ -12300,6 +11519,17 @@ exec '{}' "$@"
                 .push(toml::Value::String(caller.to_text()));
             source_text = toml::to_string_pretty(&policy).unwrap();
         }
+        source_text
+    }
+
+    #[cfg(test)]
+    fn generate_journey_desired(input: GeneratedJourneyInput<'_>) -> DesiredFleet {
+        let root = input.root;
+        let config = retain_generated_journey_source(root, input.config);
+        enroll_journey_network(root, input.root_key);
+        let source = root.join("fleet-policy.toml");
+        let seed = root.join("fleet-seed.toml");
+        let source_text = reviewed_journey_policy(&input, &config);
         std::fs::write(&source, source_text).expect("write reviewed generator policy");
         canic_host::fleet_ensure::initialize_fresh_estate_seed(
             &canic_host::fleet_ensure::FreshEstateSeedRequest {
@@ -12518,6 +11748,7 @@ cycles = "80T"
                 wasm_gz_relative_path: artifact.wasm_gz_relative_path.clone(),
                 wasm_gz_size_bytes: artifact.wasm_gz_size_bytes,
                 wasm_gz_sha256_hex: artifact.wasm_gz_sha256_hex.clone(),
+                wire_schema_sha256: artifact.wire_schema_sha256,
                 candid_sha256: artifact.candid_sha256,
                 protocol_profile_digest: artifact.protocol_profile_digest,
             };
@@ -12624,9 +11855,9 @@ cycles = "80T"
             "protocol": {
                 "app_config": "canic.toml",
                 "component_group_placements": placements,
-                "coordinator_candid": "coordinator.did",
-                "root_candid": "root.did",
-                "store_candid": "store.did",
+                "coordinator_wire_schema": "coordinator.wire.json",
+                "root_wire_schema": "root.wire.json",
+                "store_wire_schema": "store.wire.json",
             },
             "schema_version": FLEET_ENSURE_SCHEMA_VERSION,
             "treasury": coordinator.to_string(),
@@ -12655,10 +11886,6 @@ cycles = "80T"
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one exhaustive fixture issuer mirrors every closed current protocol action"
-    )]
     fn issue_current_protocol_step(
         pic: &PocketIc,
         step: &CompiledCurrentProtocolStep,
@@ -12669,165 +11896,91 @@ cycles = "80T"
         match &step.action {
             CurrentFleetProtocolAction::ObservePoolReadiness { .. } => {}
             CurrentFleetProtocolAction::MaintainPoolReadiness { .. } => {
-                root_command(pic, step.target, RootCommandFragment::MaintainPool)
+                crate::pic::canic::maintain_pool(pic, step.target)
                     .expect("drive the current Root Ready reserve");
             }
             CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } => {
-                root_command(
-                    pic,
-                    step.target,
-                    RootCommandFragment::ImportPoolCanister(*request),
-                )
-                .expect("reconcile the exact retained pool asset");
+                import_canister(pic, step.target, *request)
+                    .expect("reconcile the exact retained pool asset");
             }
             CurrentFleetProtocolAction::ActivateRegistry { request, .. } => {
-                let response = coordinator_command(
+                let response = crate::pic::registry_discovery::activate(
                     pic,
                     step.target,
-                    CoordinatorCommand::ActivateRegistry(request.clone()),
+                    Principal::anonymous(),
+                    request.clone(),
                 )
                 .expect("activate current Registry");
-                assert!(matches!(
-                    response,
-                    CoordinatorCommandResponse::ActivateRegistry(_)
-                ));
+                assert_eq!(response.previous_version, request.expected_registry);
             }
             CurrentFleetProtocolAction::ActivateRegistryMirror { request, .. }
             | CurrentFleetProtocolAction::SynchronizeRegistry { request, .. } => {
-                let response = root_command(
-                    pic,
-                    step.target,
-                    RootCommandFragment::SynchronizeRegistry(request.clone()),
-                )
-                .expect("synchronize current Root Registry");
-                assert!(matches!(
-                    response,
-                    RootCommandResponseFragment::OperationAccepted(_)
-                ));
+                let response =
+                    crate::pic::registry_discovery::synchronize(pic, step.target, request.clone())
+                        .expect("synchronize current Root Registry");
+                assert_eq!(response.operation_id, request.operation_id);
             }
             CurrentFleetProtocolAction::AdoptStore { request } => {
-                let response = root_command(
-                    pic,
-                    step.target,
-                    RootCommandFragment::AdoptStore(request.clone()),
-                )
-                .expect("adopt current Store");
-                assert!(matches!(
-                    response,
-                    RootCommandResponseFragment::OperationAccepted(_)
-                ));
+                let response =
+                    crate::pic::canic::root_store_adopt(pic, step.target, request.clone())
+                        .expect("adopt current Store");
+                assert_eq!(response.operation_id, request.operation_id);
             }
             CurrentFleetProtocolAction::BootstrapStore { request, .. } => {
-                let response = root_command(
-                    pic,
-                    step.target,
-                    RootCommandFragment::BootstrapStore(request.clone()),
-                )
-                .expect("bootstrap current Store");
-                assert!(matches!(
-                    response,
-                    RootCommandResponseFragment::OperationAccepted(_)
-                ));
+                let response =
+                    crate::pic::canic::root_store_bootstrap(pic, step.target, request.clone())
+                        .expect("bootstrap current Store");
+                assert_eq!(response.operation_id, request.operation_id);
             }
             CurrentFleetProtocolAction::JoinRoot { request, .. } => {
-                let response = coordinator_command(
+                let response = crate::pic::registry_discovery::join(
                     pic,
                     step.target,
-                    CoordinatorCommand::JoinRoot(request.clone()),
+                    Principal::anonymous(),
+                    request.clone(),
                 )
                 .expect("join current Root");
-                assert!(matches!(response, CoordinatorCommandResponse::JoinRoot(_)));
+                assert_eq!(response.entry, request.entry);
             }
             CurrentFleetProtocolAction::PrepareStoreFixture {
                 request, source, ..
             } => {
-                let response = root_command(
-                    pic,
-                    step.target,
-                    RootCommandFragment::PrepareStoreFixture(request.clone()),
-                )
-                .unwrap();
-                assert!(
-                    matches!(response, RootCommandResponseFragment::PrepareStoreFixture(Ok(status)) if status.content_id == source.content_id)
-                );
+                let response =
+                    crate::pic::canic::root_store_prepare(pic, step.target, request.clone())
+                        .unwrap();
+                assert!(matches!(response, Ok(status) if status.content_id == source.content_id));
             }
             CurrentFleetProtocolAction::PublishStoreFixtureChunk {
                 request, expected, ..
             } => {
-                let response: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes =
-                            ic_platform::candid::contract::encode_args((request.clone(),))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).update_call(
-                                step.target,
-                                store_controller,
-                                canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .unwrap();
+                let response = store_upload_as(pic, step.target, store_controller, request.clone());
                 let status = response.unwrap().unwrap();
                 assert_eq!(status.content_id, expected.content_id);
                 assert!(status.next_chunk >= expected.next_chunk);
             }
             CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
-                let response = root_command(
+                let response = crate::pic::canic::prepare_component_registry(
                     pic,
                     step.target,
-                    RootCommandFragment::PrepareComponentRegistry(request.clone()),
+                    request.clone(),
                 )
                 .expect("prepare current Component Registry");
-                let RootCommandResponseFragment::PrepareComponentRegistry(observed) = response
-                else {
-                    panic!("Root returned a differently correlated Component Registry response");
-                };
+                let observed = response;
                 assert!(current_component_registry_progresses(expected, &observed));
             }
             CurrentFleetProtocolAction::ProvisionComponents { request, .. } => {
-                let response = coordinator_command(
+                let response = crate::pic::batch_control::prepare(
                     pic,
                     step.target,
-                    CoordinatorCommand::ProvisionComponents(request.clone()),
+                    Principal::anonymous(),
+                    request.clone(),
                 )
                 .expect("provision current Components");
-                assert!(matches!(
-                    response,
-                    CoordinatorCommandResponse::OperationAccepted(_)
-                ));
+                assert_eq!(response.operation_id, request.operation_id);
             }
             CurrentFleetProtocolAction::PublishStoreChunk { request } => {
-                let response: Result<(), Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes =
-                            ic_platform::candid::contract::encode_args((request.clone(),))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).update_call(
-                                step.target,
-                                store_controller,
-                                canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .expect("publish current Store chunk transport");
+                let response =
+                    publish_template_chunk_as(pic, step.target, store_controller, request);
                 response.expect("publish current Store chunk");
             }
         }
@@ -12847,18 +12000,14 @@ cycles = "80T"
             pic.tick();
         }
         if let CurrentFleetProtocolAction::ProvisionComponents { request, .. } = &step.action {
-            let status = coordinator_status(
+            let status = crate::pic::canic::coordinator_provisioning(
                 pic,
                 step.target,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                    operation_id: request.operation_id,
-                }),
+                Principal::anonymous(),
+                request.operation_id,
             );
             let detail = match status {
-                Ok(CoordinatorOperationReadResponse::Operation(
-                    CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-                )) => format!("{status:?}"),
-                Ok(_) => "differently correlated status".to_string(),
+                Ok(status) => format!("{status:?}"),
                 Err(error) => format!("{error:?}"),
             };
             panic!(
@@ -12918,126 +12067,68 @@ cycles = "80T"
             | CurrentFleetProtocolAction::JoinRoot {
                 expected_registry, ..
             } => matches!(
-                coordinator_status(pic, step.target, CoordinatorRegistryRequest::Registry),
-                Ok(CoordinatorRegistryResponse::Registry(observed)) if observed == *expected_registry
+                crate::pic::registry_discovery::snapshot(pic, step.target, Principal::anonymous()),
+                Ok(observed) if observed == *expected_registry
             ),
             CurrentFleetProtocolAction::ActivateRegistryMirror { expected, request } => {
                 matches!(
-                    root_status(
-                        pic,
-                        step.target,
-                        RootStatusRequestFragment::Operation(OperationStatusRequest {
-                            operation_id: request.operation_id,
-                        }),
-                    ),
-                    Ok(RootStatusResponseFragment::Operation(
-                        RootOperationStatusResponse::SynchronizeRegistry(observed)
-                    )) if observed.activation.as_ref() == Some(expected)
+                    crate::pic::registry_discovery::synchronization_status(pic, step.target, request.operation_id), Ok(observed) if observed.activation.as_ref() == Some(expected)
                 )
             }
             CurrentFleetProtocolAction::AdoptStore { request } => matches!(
-                root_status(
-                    pic,
-                    step.target,
-                    RootStatusRequestFragment::Operation(OperationStatusRequest {
-                        operation_id: request.operation_id,
-                    }),
-                ),
-                Ok(RootStatusResponseFragment::Operation(
-                    RootOperationStatusResponse::AdoptStore(observed)
-                )) if observed.operation_id == request.operation_id
+                crate::pic::canic::root_store_adoption_status(pic, step.target, request.operation_id), Ok(observed) if observed.operation_id == request.operation_id
                     && observed.authority == request.authority
                     && observed.controllers == current_store_controllers(&request.authority)
             ),
             CurrentFleetProtocolAction::BootstrapStore { expected, request } => matches!(
-                root_status(
-                    pic,
-                    step.target,
-                    RootStatusRequestFragment::Operation(OperationStatusRequest {
-                        operation_id: request.operation_id,
-                    }),
-                ),
-                Ok(RootStatusResponseFragment::Operation(
-                    RootOperationStatusResponse::BootstrapStore(observed)
-                )) if observed == *expected
+                crate::pic::canic::root_store_bootstrap_status(pic, step.target, request.operation_id), Ok(observed) if observed == *expected
             ),
             CurrentFleetProtocolAction::PrepareStoreFixture { source, .. } => {
                 let status: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes =
-                            ic_platform::candid::contract::encode_args((source.content_id,))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).query_call(
-                                step.target,
-                                ic_platform::principal::ExternalPrincipal::anonymous(),
-                                canic::protocol::CANIC_ROOT_FIXTURE_STATUS,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .unwrap();
+                    ic_testkit::pic::query_wire(
+                        pic,
+                        step.target,
+                        Principal::anonymous(),
+                        ic_testkit::pic::WireCallSpec {
+                            method: canic::protocol::CANIC_ROOT_FIXTURE_STATUS,
+                            method_id: canic::protocol::root_store_reporting::fixture::METHOD_ID,
+                            request_limits: canic::protocol::root_store_reporting::REQUEST_LIMITS,
+                            response_limits: canic::protocol::root_store_reporting::RESPONSE_LIMITS,
+                        },
+                        &source.content_id,
+                    )
+                    .expect("native Root fixture progress");
                 matches!(status, Ok(Ok(status)) if status.content_id == source.content_id
                     && status.chunk_count as usize == source.descriptor.chunks.len())
             }
             CurrentFleetProtocolAction::PublishStoreFixtureChunk { expected, .. } => {
-                let response: Result<canic_contracts::dto::template::StoreCatalogResponse, Error> =
-                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                        let request_bytes = ic_platform::candid::contract::encode_args((
-                            canic_contracts::dto::template::StoreCatalogRequest::Fixture(
-                                expected.content_id,
-                            ),
-                        ))?;
-                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                            (pic).query_call(
-                                step.target,
-                                store_controller,
-                                canic::protocol::CANIC_WASM_STORE_CATALOG,
-                                request_bytes,
-                            )
-                        })
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                        ic_platform::candid::decode_args(
-                            &reply,
-                            canic::testing::CANDID_REPLY_LIMITS,
-                        )
-                        .map_err(Into::into)
-                    })()
-                    .map(|(reply,)| reply)
-                    .unwrap();
-                matches!(response, Ok(canic_contracts::dto::template::StoreCatalogResponse::Fixture(Ok(status)))
+                let response = store_fixture_status_as(
+                    pic,
+                    step.target,
+                    store_controller,
+                    expected.content_id,
+                );
+                matches!(response, Ok(Ok(status))
                     if status.content_id == expected.content_id && status.next_chunk >= expected.next_chunk)
             }
             CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
                 matches!(
-                    root_status(
+                    root_registry(
                         pic,
                         step.target,
-                        RootStatusRequestFragment::ComponentRegistry(request.clone()),
+                        request.clone(),
                     ),
-                    Ok(RootStatusResponseFragment::ComponentRegistry(observed))
+                    Ok(observed)
                         if current_component_registry_progresses(expected, &observed)
                 )
             }
             CurrentFleetProtocolAction::ProvisionComponents { request, plan_hash } => matches!(
-                coordinator_status(
+                crate::pic::canic::coordinator_provisioning(
                     pic,
                     step.target,
-                    CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
-                        operation_id: request.operation_id,
-                    }),
+                    Principal::anonymous(), request.operation_id,
                 ),
-                Ok(CoordinatorOperationReadResponse::Operation(
-                    CoordinatorOperationStatusResponse::ComponentProvisioning(observed)
-                )) if observed.operation_id == request.operation_id
+                Ok(observed) if observed.operation_id == request.operation_id
                     && observed.plan_hash == *plan_hash
                     && observed.phase == FleetComponentProvisioningPhase::RuntimesActivated
                     && observed.published_fleet_registry.is_some()
@@ -13057,29 +12148,15 @@ cycles = "80T"
                     .get(request.chunk_index as usize)
                     .is_some_and(|actual| actual.as_ref() == Some(&expected))
                     && request.preparation.as_ref().is_none_or(|preparation| {
-                        status.chunk_set_present
-                            && status.expected_chunk_hashes == preparation.chunk_hashes
-                            && status.payload_hash.as_deref()
-                                == Some(preparation.payload_hash.as_slice())
-                            && status.payload_size_bytes == Some(preparation.payload_size_bytes)
-                            && preparation.manifest.as_ref().is_none_or(|manifest| {
-                                status.manifest.as_ref()
-                                    == Some(&current_manifest_response(manifest))
-                            })
+                        canic_host::fleet_ensure::prepared_store_status_matches(
+                            preparation,
+                            &status,
+                        )
                     })
             }
             CurrentFleetProtocolAction::SynchronizeRegistry { expected, request } => {
                 matches!(
-                    root_status(
-                        pic,
-                        step.target,
-                        RootStatusRequestFragment::Operation(OperationStatusRequest {
-                            operation_id: request.operation_id,
-                        }),
-                    ),
-                    Ok(RootStatusResponseFragment::Operation(
-                        RootOperationStatusResponse::SynchronizeRegistry(observed)
-                    )) if observed.synchronization == *expected
+                    crate::pic::registry_discovery::synchronization_status(pic, step.target, request.operation_id), Ok(observed) if observed.synchronization == *expected
                 )
             }
         }
@@ -13093,34 +12170,17 @@ cycles = "80T"
         template_id: &TemplateId,
         version: &TemplateVersion,
     ) -> TemplateStagingStatusResponse {
-        let response: Result<StoreCatalogResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    StoreCatalogRequest::Template(TemplateLookupRequest {
-                        template_id: template_id.clone(),
-                        version: version.clone(),
-                    }),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        store,
-                        caller,
-                        canic::protocol::CANIC_WASM_STORE_CATALOG,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("query current Store staging transport");
-        let StoreCatalogResponse::Template(status) = response.expect("query current Store staging")
-        else {
-            panic!("Store returned a differently correlated staging status");
-        };
-        status
+        let response = store_template_status_as(
+            pic,
+            store,
+            caller,
+            TemplateLookupRequest {
+                template_id: template_id.clone(),
+                version: version.clone(),
+            },
+        );
+
+        response.expect("query current Store staging")
     }
 
     #[cfg(test)]
@@ -13188,14 +12248,8 @@ cycles = "80T"
         assert_eq!(status.automatic_cycles, grant.request.granted_cycles);
         assert!(fixture.pic.cycle_balance(fixture.root) > fixture.root_balance_before_activation);
 
-        let CoordinatorObservabilityResponse::Funding(coordinator) = coordinator_status(
-            &fixture.pic,
-            fixture.coordinator,
-            CoordinatorObservabilityRequest::Funding,
-        )
-        .expect("query protected Coordinator funding status") else {
-            panic!("Coordinator returned a differently correlated funding status");
-        };
+        let coordinator = crate::pic::canic::coordinator_funding(&fixture.pic, fixture.coordinator)
+            .expect("query protected Coordinator funding status");
         let root = coordinator.roots.first().expect("one registered Root");
         assert_eq!(root.last_result, status.last_result);
         assert_eq!(root.automatic_grants, 1);
@@ -13250,14 +12304,8 @@ cycles = "80T"
                 .expect("two Root grants fit in u128");
         }
 
-        let CoordinatorObservabilityResponse::Funding(coordinator) = coordinator_status(
-            &fixture.pic,
-            fixture.coordinator,
-            CoordinatorObservabilityRequest::Funding,
-        )
-        .expect("query multi-Root Coordinator funding status") else {
-            panic!("Coordinator returned a differently correlated funding status");
-        };
+        let coordinator = crate::pic::canic::coordinator_funding(&fixture.pic, fixture.coordinator)
+            .expect("query multi-Root Coordinator funding status");
         assert_eq!(coordinator.automatic_grants, 2);
         assert_eq!(coordinator.automatic_cycles.to_u128(), expected_fleet_spend);
         let fleet_window = coordinator
@@ -13386,7 +12434,9 @@ cycles = "80T"
         assert_rotation_command_accepted(
             &fixture,
             "begin",
-            CoordinatorCommand::BeginFundingPolicyRotation(begin.clone()),
+            canic::protocol::funding_control::begin::METHOD,
+            canic::protocol::funding_control::begin::METHOD_ID,
+            &canic::dto::funding_control::BeginRequest::from(begin.clone()),
             operation_id,
         );
         let mut before_replay = coordinator_funding_status(&fixture);
@@ -13398,29 +12448,21 @@ cycles = "80T"
             requested_cycles: first_grant.request.granted_cycles.clone(),
             policy_hash: first_grant.request.policy_hash,
         };
-        let replay: Result<CoordinatorCommandResponse, Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CoordinatorCommand::RequestRootFunding(request),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (fixture.pic).update_call(
-                        fixture.coordinator,
-                        fixture.root,
-                        canic::protocol::CANIC_COORDINATOR_COMMAND,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("retained grant replay should reach the Coordinator during rotation");
-        let CoordinatorCommandResponse::RequestRootFunding(replayed) = replay.unwrap() else {
-            panic!("expected a funding receipt");
-        };
+        let replay: Result<canic::dto::funding_control::Response, Error> =
+            ic_testkit::pic::update_wire(
+                &fixture.pic,
+                fixture.coordinator,
+                fixture.root,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::funding_control::request::METHOD,
+                    method_id: canic::protocol::funding_control::request::METHOD_ID,
+                    request_limits: canic::protocol::funding_control::REQUEST_LIMITS,
+                    response_limits: canic::protocol::funding_control::RESPONSE_LIMITS,
+                },
+                &canic::dto::funding_control::Request::from(request),
+            )
+            .expect("retained grant replay transport during rotation");
+        let replayed: FleetRootFundingResponse = replay.unwrap().into();
         assert_eq!(
             replayed,
             FleetRootFundingResponse::Granted(first_grant.clone())
@@ -13438,13 +12480,17 @@ cycles = "80T"
         assert_rotation_command_accepted(
             &fixture,
             "stage Root",
-            CoordinatorCommand::StageFundingPolicyRotationRoot(stage.clone()),
+            canic::protocol::funding_control::stage::METHOD,
+            canic::protocol::funding_control::stage::METHOD_ID,
+            &canic::dto::funding_control::StageRequest::from(stage.clone()),
             operation_id,
         );
         assert_rotation_command_accepted(
             &fixture,
             "apply",
-            CoordinatorCommand::ApplyFundingPolicyRotation(apply.clone()),
+            canic::protocol::funding_control::apply::METHOD,
+            canic::protocol::funding_control::apply::METHOD_ID,
+            &apply,
             operation_id,
         );
 
@@ -13471,28 +12517,36 @@ cycles = "80T"
         assert_rotation_command_accepted(
             &fixture,
             "terminal begin replay",
-            CoordinatorCommand::BeginFundingPolicyRotation(begin.clone()),
+            canic::protocol::funding_control::begin::METHOD,
+            canic::protocol::funding_control::begin::METHOD_ID,
+            &canic::dto::funding_control::BeginRequest::from(begin.clone()),
             operation_id,
         );
         assert_rotation_command_accepted(
             &fixture,
             "terminal stage replay",
-            CoordinatorCommand::StageFundingPolicyRotationRoot(stage.clone()),
+            canic::protocol::funding_control::stage::METHOD,
+            canic::protocol::funding_control::stage::METHOD_ID,
+            &canic::dto::funding_control::StageRequest::from(stage.clone()),
             operation_id,
         );
         assert_rotation_command_accepted(
             &fixture,
             "terminal apply replay",
-            CoordinatorCommand::ApplyFundingPolicyRotation(apply),
+            canic::protocol::funding_control::apply::METHOD,
+            canic::protocol::funding_control::apply::METHOD_ID,
+            &apply,
             operation_id,
         );
         let mut drifted_begin = begin;
         drifted_begin.header.topology_catalog_digest[0] ^= 1;
         assert!(
-            coordinator_command(
+            coordinator_rotation(
                 &fixture.pic,
                 fixture.coordinator,
-                CoordinatorCommand::BeginFundingPolicyRotation(drifted_begin),
+                canic::protocol::funding_control::begin::METHOD,
+                canic::protocol::funding_control::begin::METHOD_ID,
+                &canic::dto::funding_control::BeginRequest::from(drifted_begin),
             )
             .is_err(),
             "terminal begin replay must reject payload drift"
@@ -13500,10 +12554,12 @@ cycles = "80T"
         let mut drifted_stage = stage;
         drifted_stage.root.placement.node_count += 1;
         assert!(
-            coordinator_command(
+            coordinator_rotation(
                 &fixture.pic,
                 fixture.coordinator,
-                CoordinatorCommand::StageFundingPolicyRotationRoot(drifted_stage),
+                canic::protocol::funding_control::stage::METHOD,
+                canic::protocol::funding_control::stage::METHOD_ID,
+                &canic::dto::funding_control::StageRequest::from(drifted_stage),
             )
             .is_err(),
             "terminal stage replay must reject payload drift"
@@ -14272,23 +13328,13 @@ cycles = "80T"
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "two-Root activation fixture is one ordered proof"
-    )]
     fn activate_multi_root_registry(
         pic: &PocketIc,
         coordinator: Principal,
         fixtures: [&BootstrappedRootFixture; 2],
     ) -> [ComponentBinding; 2] {
-        let CoordinatorObservabilityResponse::RegistryVersion(mut version) = coordinator_status(
-            pic,
-            coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .expect("query multi-Root Registry genesis") else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let mut version = crate::pic::registry_discovery::version(pic, coordinator)
+            .expect("query multi-Root Registry genesis");
         for fixture in fixtures {
             let binding = &fixture.init_args.authority.binding;
             let request = FleetSubnetRootJoinRequest {
@@ -14304,12 +13350,13 @@ cycles = "80T"
                     status: FleetSubnetRootStatus::Joining,
                 },
             };
-            let CoordinatorCommandResponse::JoinRoot(joined) =
-                coordinator_command(pic, coordinator, CoordinatorCommand::JoinRoot(request))
-                    .expect("join one Root to the multi-Root Registry")
-            else {
-                panic!("Coordinator returned a differently correlated join response");
-            };
+            let joined = crate::pic::registry_discovery::join(
+                pic,
+                coordinator,
+                Principal::anonymous(),
+                request,
+            )
+            .expect("join one Root to the multi-Root Registry");
             version = joined.version;
         }
 
@@ -14321,44 +13368,31 @@ cycles = "80T"
                 store_bootstrap: fixtures[index].request.clone(),
             });
         for (fixture, request) in fixtures.into_iter().zip(sync_requests.iter()) {
-            let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
-                pic,
-                fixture.root_id,
-                RootCommandFragment::SynchronizeRegistry(request.clone()),
-            )
-            .expect("synchronize one Root to the final multi-Root Registry") else {
-                panic!("Root returned a differently correlated synchronization response");
-            };
+            let receipt =
+                crate::pic::registry_discovery::synchronize(pic, fixture.root_id, request.clone())
+                    .expect("synchronize one Root to the final multi-Root Registry");
             assert_eq!(receipt.operation_id, request.operation_id);
         }
 
-        let CoordinatorCommandResponse::ActivateRegistry(activated) = coordinator_command(
+        let activated = crate::pic::registry_discovery::activate(
             pic,
             coordinator,
-            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+            Principal::anonymous(),
+            FleetRegistryActivationRequest {
                 expected_registry: version,
-            }),
+            },
         )
-        .expect("activate the multi-Root Registry") else {
-            panic!("Coordinator returned a differently correlated activation response");
-        };
+        .expect("activate the multi-Root Registry");
         let mut components = Vec::with_capacity(2);
         for (index, (fixture, request)) in fixtures.into_iter().zip(sync_requests).enumerate() {
             let mut mirror_active = false;
             for _ in 0..32 {
-                let RootStatusResponseFragment::Operation(
-                    RootOperationStatusResponse::SynchronizeRegistry(status),
-                ) = root_status(
+                let status = crate::pic::registry_discovery::synchronization_status(
                     pic,
                     fixture.root_id,
-                    RootStatusRequestFragment::Operation(OperationStatusRequest {
-                        operation_id: request.operation_id,
-                    }),
+                    request.operation_id,
                 )
-                .expect("query multi-Root Registry synchronization")
-                else {
-                    panic!("Root returned a differently correlated synchronization status");
-                };
+                .expect("query multi-Root Registry synchronization");
                 if status.activation.is_some() {
                     mirror_active = true;
                     break;
@@ -14504,12 +13538,39 @@ cycles = "80T"
 
     #[cfg(test)]
     fn root_funding_status(pic: &PocketIc, root: Principal) -> RootFundingStatusResponse {
-        let RootStatusResponseFragment::Funding(status) =
-            root_status(pic, root, RootStatusRequestFragment::Funding)
-                .expect("query protected Root funding status")
-        else {
-            panic!("Root returned a differently correlated funding status");
-        };
+        let response: Result<canic::dto::funding_read::RootStatus, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                root,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::funding_read::root_status::METHOD,
+                    method_id: canic::protocol::funding_read::root_status::METHOD_ID,
+                    request_limits: canic::protocol::funding_read::REQUEST_LIMITS,
+                    response_limits: canic::protocol::funding_read::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .expect("query protected Root funding status");
+        let native = response.expect("Root funding status");
+        let original = ic_wire::native::encode_response(
+            canic::protocol::funding_read::root_status::METHOD_ID,
+            &native,
+            canic::protocol::funding_read::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        let status =
+            RootFundingStatusResponse::try_from(native).expect("complete funding evidence");
+        let roundtrip = canic::dto::funding_read::RootStatus::try_from(status.clone()).unwrap();
+        assert_eq!(
+            ic_wire::native::encode_response(
+                canic::protocol::funding_read::root_status::METHOD_ID,
+                &roundtrip,
+                canic::protocol::funding_read::RESPONSE_LIMITS
+            )
+            .unwrap(),
+            original
+        );
         status
     }
 
@@ -14539,15 +13600,8 @@ cycles = "80T"
     fn coordinator_funding_status(
         fixture: &RootFundingJourneyFixture,
     ) -> CoordinatorFundingStatusResponse {
-        let CoordinatorObservabilityResponse::Funding(status) = coordinator_status(
-            &fixture.pic,
-            fixture.coordinator,
-            CoordinatorObservabilityRequest::Funding,
-        )
-        .expect("query protected Coordinator funding status") else {
-            panic!("Coordinator returned a differently correlated funding status");
-        };
-        status
+        crate::pic::canic::coordinator_funding(&fixture.pic, fixture.coordinator)
+            .expect("query protected Coordinator funding status")
     }
 
     #[cfg(test)]
@@ -14556,16 +13610,9 @@ cycles = "80T"
     ) -> FleetFundingPolicyRotationPlan {
         let coordinator = coordinator_funding_status(fixture);
         let root = root_funding_status(&fixture.pic, fixture.root);
-        let CoordinatorObservabilityResponse::RegistryVersion(predecessor_registry) =
-            coordinator_status(
-                &fixture.pic,
-                fixture.coordinator,
-                CoordinatorObservabilityRequest::RegistryVersion,
-            )
-            .expect("query predecessor Registry version")
-        else {
-            panic!("Coordinator returned a differently correlated Registry version");
-        };
+        let predecessor_registry =
+            crate::pic::registry_discovery::version(&fixture.pic, fixture.coordinator)
+                .expect("query predecessor Registry version");
         assert_eq!(coordinator.policy_generation, root.policy_generation);
         assert!(coordinator.rotation.is_none());
         assert!(root.rotation_current.is_none());
@@ -14638,19 +13685,45 @@ cycles = "80T"
     }
 
     #[cfg(test)]
-    fn assert_rotation_command_accepted(
+    fn coordinator_rotation<T: serde::Serialize>(
+        pic: &PocketIc,
+        coordinator: Principal,
+        method: &'static str,
+        method_id: u64,
+        request: &T,
+    ) -> Result<canic::dto::role::OperationReceipt, Error> {
+        ic_testkit::pic::update_wire(
+            pic,
+            coordinator,
+            Principal::anonymous(),
+            ic_testkit::pic::WireCallSpec {
+                method,
+                method_id,
+                request_limits: canic::protocol::funding_control::REQUEST_LIMITS,
+                response_limits: canic::protocol::funding_control::RESPONSE_LIMITS,
+            },
+            request,
+        )
+        .expect("native rotation command transport")
+    }
+
+    #[cfg(test)]
+    fn assert_rotation_command_accepted<T: serde::Serialize>(
         fixture: &RootFundingJourneyFixture,
         label: &str,
-        command: CoordinatorCommand,
+        method: &'static str,
+        method_id: u64,
+        request: &T,
         operation_id: [u8; 32],
     ) {
-        let response = coordinator_command(&fixture.pic, fixture.coordinator, command)
-            .unwrap_or_else(|error| {
-                panic!("accept exact funding-policy rotation {label}: {error:?}")
-            });
-        let CoordinatorCommandResponse::OperationAccepted(receipt) = response else {
-            panic!("Coordinator returned a differently correlated rotation response");
-        };
+        let receipt = coordinator_rotation(
+            &fixture.pic,
+            fixture.coordinator,
+            method,
+            method_id,
+            request,
+        )
+        .unwrap_or_else(|error| panic!("accept exact funding-policy rotation {label}: {error:?}"));
         assert_eq!(receipt.operation_id, operation_id);
     }
 
@@ -14660,17 +13733,25 @@ cycles = "80T"
         operation_id: [u8; 32],
     ) -> FleetFundingPolicyRotationReceipt {
         for _ in 0..128 {
-            let CoordinatorOperationReadResponse::Operation(
-                CoordinatorOperationStatusResponse::FundingPolicyRotation(status),
-            ) = coordinator_status(
-                &fixture.pic,
-                fixture.coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
-            )
-            .expect("query funding-policy rotation status")
-            else {
-                panic!("Coordinator returned a differently correlated operation status");
-            };
+            use canic::protocol::funding_read as wire;
+            let response: Result<canic::dto::funding_read::RotationStatus, Error> =
+                ic_testkit::pic::query_wire(
+                    &fixture.pic,
+                    fixture.coordinator,
+                    Principal::anonymous(),
+                    ic_testkit::pic::WireCallSpec {
+                        method: wire::rotation::METHOD,
+                        method_id: wire::rotation::METHOD_ID,
+                        request_limits: wire::REQUEST_LIMITS,
+                        response_limits: wire::RESPONSE_LIMITS,
+                    },
+                    &operation_id,
+                )
+                .expect("native funding rotation transport");
+            let status: canic::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse =
+                response
+                    .expect("query funding-policy rotation status")
+                    .into();
             if let FleetFundingPolicyRotationStatusPhase::Completed(receipt) = status.phase {
                 return *receipt;
             }
@@ -14857,14 +13938,8 @@ cycles = "80T"
             if status.ready == required_ready_assets {
                 break;
             }
-            let RootCommandResponseFragment::MaintainPool(_) = root_command(
-                &fixture.pic,
-                fixture.root,
-                RootCommandFragment::MaintainPool,
-            )
-            .expect("automatic pool maintenance") else {
-                panic!("Root returned a differently correlated pool response");
-            };
+            crate::pic::canic::maintain_pool(&fixture.pic, fixture.root)
+                .expect("automatic pool maintenance");
         }
     }
 
@@ -14891,42 +13966,30 @@ cycles = "80T"
                     < MAINNET_REFILL_READINESS_FLOOR + MAINNET_REFILL_EXECUTION_MARGIN
             );
         }
-        let request_count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).query_call(
-                    fixture.cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "request_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let request_count: u64 = ic_testkit::pic::query_wire(
+            &fixture.pic,
+            fixture.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+            &(),
+        )
         .expect("query ledger request count");
         assert_eq!(request_count, expected_request_count);
-        let requested_amounts: Vec<Nat> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (fixture.pic).query_call(
-                        fixture.cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "requested_amounts",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("query exact Ledger creation amounts");
+        let requested_amounts: Vec<Nat> = ic_testkit::pic::query_wire(
+            &fixture.pic,
+            fixture.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("requested_amounts", 0x5445_5354_0000_0c06),
+            &(),
+        )
+        .map(|values: Vec<ic_wire::Bytes<4_194_304>>| {
+            values
+                .iter()
+                .map(canic_contracts::ops::unsigned_magnitude::to_nat)
+                .collect::<Result<Vec<Nat>, _>>()
+                .expect("canonical ledger amount magnitudes")
+        })
+        .expect("query exact Ledger creation amounts");
         assert_eq!(
             requested_amounts,
             vec![
@@ -14939,32 +14002,16 @@ cycles = "80T"
             ]
         );
 
-        let RootCommandResponseFragment::MaintainPool(_) = root_command(
+        crate::pic::canic::maintain_pool(&fixture.pic, fixture.root)
+            .expect("effect-free terminal pool replay");
+        let replay_request_count: u64 = ic_testkit::pic::query_wire(
             &fixture.pic,
-            fixture.root,
-            RootCommandFragment::MaintainPool,
+            fixture.cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("request_count", 0x5445_5354_0000_0c05),
+            &(),
         )
-        .expect("effect-free terminal pool replay") else {
-            panic!("Root returned a differently correlated pool response");
-        };
-        let replay_request_count: u64 =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args(())?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (fixture.pic).query_call(
-                        fixture.cycles_ledger,
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        "request_count",
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("query replayed ledger request count");
+        .expect("query replayed ledger request count");
         assert_eq!(replay_request_count, expected_request_count);
     }
 
@@ -15064,28 +14111,16 @@ cycles = "80T"
             "root Store catalog must contain the exact canonical application role closure"
         );
 
-        let RootCommandResponseFragment::OperationAccepted(retried) = root_command(
-            &pic,
-            fixture.root_id,
-            RootCommandFragment::BootstrapStore(fixture.request.clone()),
-        )
-        .expect("root Store bootstrap retry") else {
-            panic!("Root returned a differently correlated bootstrap response");
-        };
+        let retried =
+            crate::pic::canic::root_store_bootstrap(&pic, fixture.root_id, fixture.request.clone())
+                .expect("root Store bootstrap retry");
         assert_eq!(retried.operation_id, fixture.request.operation_id);
-        let RootStatusResponseFragment::Operation(RootOperationStatusResponse::BootstrapStore(
-            observed,
-        )) = root_status(
+        let observed = crate::pic::canic::root_store_bootstrap_status(
             &pic,
             fixture.root_id,
-            RootStatusRequestFragment::Operation(OperationStatusRequest {
-                operation_id: fixture.request.operation_id,
-            }),
+            fixture.request.operation_id,
         )
-        .expect("root Store status")
-        else {
-            panic!("Root returned a differently correlated bootstrap status");
-        };
+        .expect("root Store status");
         assert_eq!(
             observed, fixture.response,
             "composite status must independently reverify the exact live catalog"
@@ -15168,7 +14203,7 @@ cycles = "80T"
             fixture.response.wasm_store,
             retained_installation_controller,
             canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-            encode_one(upload.clone()).unwrap(),
+            template_chunk_frame(&upload),
         )
         .expect("combined Store preparation with lost response");
         let retained = current_store_staging_status(
@@ -15191,24 +14226,12 @@ cycles = "80T"
         );
         assert!(retained.complete);
         assert_eq!(retained.stored_chunk_hashes, vec![Some(wasm_hash(payload))]);
-        let replay: Result<(), Error> =
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((upload,))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        fixture.response.wasm_store,
-                        retained_installation_controller,
-                        canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap();
+        let replay = publish_template_chunk_as(
+            &pic,
+            fixture.response.wasm_store,
+            retained_installation_controller,
+            &upload,
+        );
         replay.expect("retained installation controller replays the exact first chunk");
         assert_eq!(
             current_store_staging_status(
@@ -15269,11 +14292,8 @@ cycles = "80T"
             expected_registry: first_joined,
             store_bootstrap: second.request.clone(),
         };
-        let rejected = root_command(
-            &pic,
-            second.root_id,
-            RootCommandFragment::SynchronizeRegistry(foreign_sync),
-        );
+        let rejected =
+            crate::pic::registry_discovery::synchronize(&pic, second.root_id, foreign_sync);
         assert_eq!(
             application_rejection(
                 rejected,
@@ -15372,8 +14392,8 @@ cycles = "80T"
         owned: &[BootstrappedRootFixture],
         foreign: &BootstrappedRootFixture,
     ) {
-        let CoordinatorRegistryResponse::Registry(registry) =
-            coordinator_status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let registry =
+            crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous())
                 .expect("query isolated Coordinator Registry");
         assert_eq!(
             registry.authority.binding.fleet,
@@ -15425,10 +14445,10 @@ cycles = "80T"
         let pic = fixture.pic();
         let added = Principal::self_authenticating([0xd1; 32]);
 
-        let CoordinatorRegistryResponse::Registry(initial_registry) = coordinator_status(
+        let initial_registry = crate::pic::registry_discovery::snapshot(
             pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query initial Fleet Registry");
         assert!(!initial_registry.admission.fleet_principals.contains(&added));
@@ -15458,14 +14478,9 @@ cycles = "80T"
             participant_catalog_digest,
             participant_count,
         };
-        let CoordinatorCommandResponse::MutateAdmission(planned_add) = coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(add_request.clone()),
-        )
-        .expect("plan Fleet admission addition") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let planned_add =
+            coordinator_admission_mutate(pic, fixture.coordinator, add_request.clone())
+                .expect("plan Fleet admission addition");
         assert_eq!(planned_add.outcome, FleetAdmissionMutationOutcome::Planned);
 
         let completed_add =
@@ -15486,24 +14501,18 @@ cycles = "80T"
             assert!(status.prepared.is_none());
         }
 
-        let CoordinatorCommandResponse::MutateAdmission(replayed_add) = coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(add_request),
-        )
-        .expect("replay completed Fleet admission addition") else {
-            panic!("Coordinator returned a differently correlated admission replay")
-        };
+        let replayed_add = coordinator_admission_mutate(pic, fixture.coordinator, add_request)
+            .expect("replay completed Fleet admission addition");
         assert_eq!(
             replayed_add.outcome,
             FleetAdmissionMutationOutcome::Converged
         );
         assert_eq!(replayed_add.operation_id, add_operation_id);
 
-        let CoordinatorRegistryResponse::Registry(added_registry) = coordinator_status(
+        let added_registry = crate::pic::registry_discovery::snapshot(
             pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query added Fleet Registry");
         assert_eq!(added_registry.admission, added_policy);
@@ -15532,14 +14541,8 @@ cycles = "80T"
             participant_catalog_digest,
             participant_count,
         };
-        let CoordinatorCommandResponse::MutateAdmission(planned_remove) = coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(remove_request),
-        )
-        .expect("plan Fleet admission removal") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let planned_remove = coordinator_admission_mutate(pic, fixture.coordinator, remove_request)
+            .expect("plan Fleet admission removal");
         assert_eq!(
             planned_remove.outcome,
             FleetAdmissionMutationOutcome::Planned
@@ -15563,10 +14566,10 @@ cycles = "80T"
             assert!(status.prepared.is_none());
         }
 
-        let CoordinatorRegistryResponse::Registry(removed_registry) = coordinator_status(
+        let removed_registry = crate::pic::registry_discovery::snapshot(
             pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query removed Fleet Registry");
         drop(fixture);
@@ -15585,10 +14588,10 @@ cycles = "80T"
         let added = Principal::self_authenticating([0xd4; 32]);
         let operation_id = [0xd5; 32];
 
-        let CoordinatorRegistryResponse::Registry(initial_registry) = coordinator_status(
+        let initial_registry = crate::pic::registry_discovery::snapshot(
             pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query initial Fleet Registry");
         let mut successor_principals = initial_registry.admission.fleet_principals.clone();
@@ -15618,40 +14621,30 @@ cycles = "80T"
 
         pic.stop_canister(fixture.verifier.canister_id, Some(fixture.root))
             .expect("stop one managed admission participant");
-        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(request),
-        )
-        .expect("plan admission mutation with unavailable participant") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let planned = coordinator_admission_mutate(pic, fixture.coordinator, request)
+            .expect("plan admission mutation with unavailable participant");
         assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
 
         for _ in 0..16 {
             pic.advance_time(Duration::from_secs(1));
             pic.tick();
         }
-        let CoordinatorOperationReadResponse::Operation(
-            CoordinatorOperationStatusResponse::Admission(blocked),
-        ) = coordinator_status(
+        let blocked = crate::pic::admission_control::operation_status(
             pic,
             fixture.coordinator,
-            CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+            Principal::anonymous(),
+            operation_id,
         )
-        .expect("query blocked admission operation")
-        else {
-            panic!("Coordinator returned a differently correlated admission operation")
-        };
+        .expect("query blocked admission operation");
         assert!(matches!(
             blocked.phase,
             FleetAdmissionOperationPhase::Planned { .. }
                 | FleetAdmissionOperationPhase::Preparing { .. }
         ));
-        let CoordinatorRegistryResponse::Registry(blocked_registry) = coordinator_status(
+        let blocked_registry = crate::pic::registry_discovery::snapshot(
             pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query blocked Fleet Registry");
         assert_eq!(blocked_registry.admission, initial_registry.admission);
@@ -15675,10 +14668,11 @@ cycles = "80T"
             component_spec: fixture.issuer.component_spec.clone(),
         };
         let rejected = application_rejection(
-            root_command(
+            crate::pic::canic::provision_component(
                 pic,
                 fixture.root,
-                RootCommandFragment::ProvisionComponent(allocation_request.clone()),
+                Principal::anonymous(),
+                allocation_request.clone(),
             ),
             "active admission transition must fence Component allocation",
         );
@@ -15720,10 +14714,10 @@ cycles = "80T"
         let pic = fixture.pic();
         let added = Principal::self_authenticating([0xe0; 32]);
 
-        let CoordinatorRegistryResponse::Registry(initial_registry) = coordinator_status(
+        let initial_registry = crate::pic::registry_discovery::snapshot(
             pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query initial Fleet Registry");
         let mut successor_principals = initial_registry.admission.fleet_principals.clone();
@@ -15765,14 +14759,8 @@ cycles = "80T"
             participant_catalog_digest: stale_catalog.0,
             participant_count: stale_catalog.1,
         };
-        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(stale_request.clone()),
-        )
-        .expect("retain mutation with pre-reservation catalog") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let planned = coordinator_admission_mutate(pic, fixture.coordinator, stale_request.clone())
+            .expect("retain mutation with pre-reservation catalog");
         assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
         let released =
             await_fleet_admission_convergence(pic, fixture.coordinator, stale_operation_id);
@@ -15785,20 +14773,15 @@ cycles = "80T"
             released.policy_digest,
             initial_registry.admission.policy_digest
         );
-        let CoordinatorCommandResponse::MutateAdmission(replayed_release) = coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(stale_request),
-        )
-        .expect("replay released stale-catalog mutation") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let replayed_release =
+            coordinator_admission_mutate(pic, fixture.coordinator, stale_request)
+                .expect("replay released stale-catalog mutation");
         assert_eq!(replayed_release, released);
 
-        let CoordinatorRegistryResponse::Registry(unchanged_registry) = coordinator_status(
+        let unchanged_registry = crate::pic::registry_discovery::snapshot(
             pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query Registry after stale-catalog release");
         assert_eq!(unchanged_registry.admission, initial_registry.admission);
@@ -15829,14 +14812,8 @@ cycles = "80T"
             participant_catalog_digest: exact_catalog.0,
             participant_count: exact_catalog.1,
         };
-        let CoordinatorCommandResponse::MutateAdmission(retry) = coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(exact_request),
-        )
-        .expect("retry mutation with exact reserved catalog") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let retry = coordinator_admission_mutate(pic, fixture.coordinator, exact_request)
+            .expect("retry mutation with exact reserved catalog");
         assert_eq!(retry.outcome, FleetAdmissionMutationOutcome::Planned);
         let converged =
             await_fleet_admission_convergence(pic, fixture.coordinator, exact_operation_id);
@@ -15864,10 +14841,10 @@ cycles = "80T"
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_multi_root_funding_journey();
         let added = Principal::self_authenticating([0xd9; 32]);
-        let CoordinatorRegistryResponse::Registry(initial) = coordinator_status(
+        let initial = crate::pic::registry_discovery::snapshot(
             &fixture.pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query initial two-Root Registry");
         let mut added_principals = initial.admission.fleet_principals.clone();
@@ -15895,14 +14872,8 @@ cycles = "80T"
             participant_catalog_digest,
             participant_count,
         };
-        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
-            &fixture.pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(add),
-        )
-        .expect("plan two-Root admission addition") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let planned = coordinator_admission_mutate(&fixture.pic, fixture.coordinator, add)
+            .expect("plan two-Root admission addition");
         assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
         let completed = await_fleet_admission_convergence_across_coordinator_restarts(
             &fixture.pic,
@@ -15924,10 +14895,10 @@ cycles = "80T"
             assert!(status.principals.entries.contains(&added));
         }
 
-        let CoordinatorRegistryResponse::Registry(added_registry) = coordinator_status(
+        let added_registry = crate::pic::registry_discovery::snapshot(
             &fixture.pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query added two-Root Registry");
         let mut removed_principals = added_registry.admission.fleet_principals.clone();
@@ -15954,14 +14925,8 @@ cycles = "80T"
             participant_catalog_digest,
             participant_count,
         };
-        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
-            &fixture.pic,
-            fixture.coordinator,
-            CoordinatorCommand::MutateAdmission(remove),
-        )
-        .expect("plan two-Root admission removal") else {
-            panic!("Coordinator returned a differently correlated admission response")
-        };
+        let planned = coordinator_admission_mutate(&fixture.pic, fixture.coordinator, remove)
+            .expect("plan two-Root admission removal");
         assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
         let completed = await_fleet_admission_convergence(
             &fixture.pic,
@@ -15988,14 +14953,8 @@ cycles = "80T"
         let initial = acquire_active_component_registry();
         drop(initial);
         let fixture = acquire_active_component_registry();
-        let RootStatusResponseFragment::Inventory(before) = root_status(
-            fixture.pic(),
-            fixture.root,
-            RootStatusRequestFragment::Inventory,
-        )
-        .expect("query root inventory before snapshot") else {
-            panic!("Root returned a differently correlated inventory status");
-        };
+        let before = crate::pic::registry_discovery::root_inventory(fixture.pic(), fixture.root)
+            .expect("query root inventory before snapshot");
         assert_root_native_timer_state(
             fixture.pic(),
             fixture.root,
@@ -16007,37 +14966,56 @@ cycles = "80T"
         };
         seal_capture_live_resume_and_restore(&fixture, snapshot_request);
 
-        let RootStatusResponseFragment::AuthorityRestore(restored_fence) = root_status(
+        let restored_fence = crate::pic::protected_state::authority_restore(
             fixture.pic(),
             fixture.root,
-            RootStatusRequestFragment::AuthorityRestore,
-        )
-        .expect("restored root authority fence status") else {
-            panic!("Root returned a differently correlated authority status");
-        };
-        assert_eq!(restored_fence.phase, AuthorityRestoreFencePhase::Sealed);
+            Principal::anonymous(),
+        );
+        let outsider_fence = crate::pic::protected_state::authority_restore(
+            fixture.pic(),
+            fixture.root,
+            Principal::from_slice(&[0x7e; 29]),
+        );
+        assert!(controller_authority_unavailable(&outsider_fence));
+        let fleet_state = crate::pic::protected_state::fleet_state(
+            fixture.pic(),
+            fixture.root,
+            Principal::anonymous(),
+        );
+        assert!(fleet_state.is_ok());
+        let outsider_state = crate::pic::protected_state::fleet_state(
+            fixture.pic(),
+            fixture.root,
+            Principal::from_slice(&[0x7e; 29]),
+        );
+        assert!(controller_authority_unavailable(&outsider_state));
+        let restored_fence = restored_fence.expect("restored Root fence");
+        assert_eq!(restored_fence.authority_canister, fixture.root.into());
+        assert_eq!(
+            restored_fence.phase,
+            canic::dto::authority_restore_status::Phase::Sealed
+        );
+        assert_eq!(
+            restored_fence.operation_id,
+            Some(snapshot_request.operation_id)
+        );
         assert_root_native_timer_state(
             fixture.pic(),
             fixture.root,
             TimerRegistrationStatus::Unregistered,
         );
-        let RootStatusResponseFragment::Inventory(after) = root_status(
-            fixture.pic(),
-            fixture.root,
-            RootStatusRequestFragment::Inventory,
-        )
-        .expect("query restored root inventory") else {
-            panic!("Root returned a differently correlated inventory status");
-        };
+        let after = crate::pic::registry_discovery::root_inventory(fixture.pic(), fixture.root)
+            .expect("query restored root inventory");
         assert_eq!(
             after, before,
             "snapshot restore must preserve the exact physical inventory"
         );
 
-        let rejected_resume = root_command(
+        let rejected_resume = crate::pic::protected_state::resume_snapshot(
             fixture.pic(),
             fixture.root,
-            RootCommandFragment::ResumeAuthoritySnapshot(snapshot_request),
+            Principal::anonymous(),
+            snapshot_request,
         );
         assert_eq!(
             application_rejection(
@@ -16047,13 +15025,14 @@ cycles = "80T"
             .code(),
             canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
-        let fresh_allocation = root_command(
+        let fresh_allocation = crate::pic::canic::provision_component(
             fixture.pic(),
             fixture.root,
-            RootCommandFragment::ProvisionComponent(RootComponentAllocationRequest {
+            Principal::anonymous(),
+            RootComponentAllocationRequest {
                 operation_id: [0xb5; 32],
                 component_spec: fixture.verifier.component_spec.clone(),
-            }),
+            },
         );
         assert!(
             fresh_allocation.is_err(),
@@ -16066,15 +15045,17 @@ cycles = "80T"
         fixture: &ActiveComponentRegistryFixture,
         request: AuthoritySnapshotRequest,
     ) {
-        let RootCommandResponseFragment::PrepareAuthoritySnapshot(sealed) = root_command(
+        let sealed = crate::pic::protected_state::prepare_snapshot(
             fixture.pic(),
             fixture.root,
-            RootCommandFragment::PrepareAuthoritySnapshot(request),
+            Principal::anonymous(),
+            request,
         )
-        .expect("root authority snapshot prepare") else {
-            panic!("Root returned a differently correlated authority response");
-        };
-        assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
+        .expect("root authority snapshot prepare");
+        assert_eq!(
+            sealed.phase,
+            canic::dto::authority_restore_status::Phase::Sealed
+        );
         let funding_request = descendant_funding_request(fixture.pic(), 0xb6);
         assert_sealed_root_rejects_child_funding(fixture, funding_request.clone());
         fixture.pic().add_cycles(fixture.root, 4_000_000_000_000);
@@ -16091,15 +15072,17 @@ cycles = "80T"
                 sender: None,
             }])
             .expect("root authority snapshot capture");
-        let RootCommandResponseFragment::ResumeAuthoritySnapshot(resumed) = root_command(
+        let resumed = crate::pic::protected_state::resume_snapshot(
             fixture.pic(),
             fixture.root,
-            RootCommandFragment::ResumeAuthoritySnapshot(request),
+            Principal::anonymous(),
+            request,
         )
-        .expect("live root authority snapshot resume") else {
-            panic!("Root returned a differently correlated authority response");
-        };
-        assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
+        .expect("live root authority snapshot resume");
+        assert_eq!(
+            resumed.phase,
+            canic::dto::authority_restore_status::Phase::Open
+        );
         let child_before = fixture.pic().cycle_balance(fixture.issuer.canister_id);
         assert_eq!(
             request_descendant_funding(
@@ -16146,11 +15129,11 @@ cycles = "80T"
     ) {
         let child_before = fixture.pic().cycle_balance(fixture.issuer.canister_id);
         let root_before = fixture.pic().cycle_balance(fixture.root);
-        let response = root_command_as(
+        let response = root_capability_as(
             fixture.pic(),
             fixture.root,
             fixture.issuer.canister_id,
-            RootCommandFragment::RespondCapability(request),
+            request,
         );
         assert_eq!(
             application_rejection(response, "sealed Root must reject child funding").code(),
@@ -16168,12 +15151,7 @@ cycles = "80T"
         root: Principal,
         expected: TimerRegistrationStatus,
     ) {
-        let RootStatusResponseFragment::Runtime(status) =
-            root_status(pic, root, RootStatusRequestFragment::Runtime)
-                .expect("query Root timer inventory")
-        else {
-            panic!("Root returned a differently correlated Runtime status");
-        };
+        let status = root_runtime(pic, root);
         let scheduled = status
             .timers
             .iter()
@@ -16273,20 +15251,14 @@ cycles = "80T"
             .set_controllers(fixture.coordinator, None, controllers)
             .expect("reviewed retirement operator controls Coordinator");
 
-        let CoordinatorRegistryResponse::Registry(registry) = coordinator_status(
+        let registry = crate::pic::registry_discovery::snapshot(
             fixture.pic,
             fixture.coordinator,
-            CoordinatorRegistryRequest::Registry,
+            Principal::anonymous(),
         )
         .expect("query active Registry before root removal");
-        let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
-            fixture.pic,
-            fixture.coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .expect("query active Registry version before root removal") else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let version = crate::pic::registry_discovery::version(fixture.pic, fixture.coordinator)
+            .expect("query active Registry version before root removal");
         let expected_root = registry
             .fleet_subnet_roots
             .iter()
@@ -16300,24 +15272,22 @@ cycles = "80T"
             expected_registry: version,
             expected_root,
         };
-        let CoordinatorCommandResponse::OperationAccepted(receipt) = coordinator_command(
+        let receipt = crate::pic::retirement_control::remove(
             fixture.pic,
             fixture.coordinator,
-            CoordinatorCommand::RemoveRoot(request.clone()),
+            Principal::anonymous(),
+            request.clone(),
         )
-        .expect("submit autonomous root removal") else {
-            panic!("Coordinator returned a differently correlated removal response");
-        };
+        .expect("submit autonomous root removal");
         assert_eq!(receipt.operation_id, operation_id);
 
-        let CoordinatorCommandResponse::OperationAccepted(retried) = coordinator_command(
+        let retried = crate::pic::retirement_control::remove(
             fixture.pic,
             fixture.coordinator,
-            CoordinatorCommand::RemoveRoot(request),
+            Principal::anonymous(),
+            request,
         )
-        .expect("retry autonomous root removal") else {
-            panic!("Coordinator returned a differently correlated removal response");
-        };
+        .expect("retry autonomous root removal");
         assert_eq!(retried, receipt);
 
         let mut terminal = None;
@@ -16328,12 +15298,11 @@ cycles = "80T"
             for _ in 0..ROOT_REMOVAL_TICKS_PER_SECOND {
                 fixture.pic.tick();
             }
-            if let Ok(RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::RemoveRoot(status),
-            )) = root_status(
+            if let Ok(status) = crate::pic::canic::root_removal(
                 fixture.pic,
                 fixture.root,
-                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             ) {
                 let complete = status.deletion_preparation.is_some();
                 if last_status.as_ref() == Some(&status) {
@@ -16351,17 +15320,11 @@ cycles = "80T"
             fixture.pic.advance_time(Duration::from_secs(1));
         }
         let terminal = terminal.unwrap_or_else(|| {
-            let storage: Result<StoreCatalogResponse, Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-
-       let request_bytes = ic_platform::candid::contract::encode_args((StoreCatalogRequest::Storage,))?;
-       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (fixture.pic).query_call(fixture.wasm_store, fixture.root, canic::protocol::CANIC_WASM_STORE_CATALOG, request_bytes))
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
-   })().map(|(reply,)| reply).expect("retirement Store diagnostic transport");
+            let bytes = ic_wire::native::encode_request(canic::protocol::store_inventory::storage::METHOD_ID, &(), canic::protocol::store_inventory::REQUEST_LIMITS).unwrap();
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| fixture.pic.query_call(fixture.wasm_store, fixture.root, canic::protocol::store_inventory::storage::METHOD, bytes)).unwrap().unwrap();
+            let storage: Result<canic::dto::template::WasmStoreStatusResponse, Error> = ic_wire::native::decode_response(canic::protocol::store_inventory::storage::METHOD_ID, &reply, canic::protocol::store_inventory::RESPONSE_LIMITS).unwrap();
             match storage {
-                Ok(StoreCatalogResponse::Storage(storage)) => eprintln!("retirement Store: {storage:?}"),
-                Ok(_) => eprintln!("retirement Store returned another response variant"),
+                Ok(storage) => eprintln!("retirement Store: {storage:?}"),
                 Err(error) => eprintln!("retirement Store status: {error:?}"),
             }
             report_canister_diagnostics(
@@ -16376,18 +15339,9 @@ cycles = "80T"
                 Principal::anonymous(),
                 "autonomous Coordinator Root-removal timeout",
             );
-            let coordinator = coordinator_status(
-                fixture.pic,
-                fixture.coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
-            )
-            .ok()
-            .and_then(|response| match response {
-                CoordinatorOperationReadResponse::Operation(
-                    CoordinatorOperationStatusResponse::RootRemoval(status),
-                ) => Some(status),
-                CoordinatorOperationReadResponse::Operation(_) => None,
-            });
+            let coordinator = crate::pic::retirement_control::removal_status(
+                fixture.pic, fixture.coordinator, Principal::anonymous(), operation_id,
+            ).ok();
             let root_progress = last_status.as_ref().map(|status| {
                 (
                     status.final_inventory.is_some(),
@@ -16455,17 +15409,13 @@ cycles = "80T"
             "autonomous removal must delete the retained Store"
         );
 
-        let CoordinatorOperationReadResponse::Operation(
-            CoordinatorOperationStatusResponse::RootRemoval(coordinator),
-        ) = coordinator_status(
+        let coordinator = crate::pic::retirement_control::removal_status(
             fixture.pic,
             fixture.coordinator,
-            CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+            Principal::anonymous(),
+            operation_id,
         )
-        .expect("query Coordinator root-removal status")
-        else {
-            panic!("Coordinator returned a differently correlated operation status");
-        };
+        .expect("query Coordinator root-removal status");
         assert!(coordinator.draining.is_some());
         assert!(coordinator.removal.is_some());
         assert!(coordinator.readiness_intent.is_some());
@@ -16478,22 +15428,13 @@ cycles = "80T"
         assert_eq!(ledger_receipt.intent.balance_before, 1_000_000_000);
         assert_eq!(ledger_receipt.intent.fee, 100_000_000);
         assert!(ledger_receipt.block_index.is_some());
-        let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pic).query_call(
-                    cycles_ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "transfer_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let transfers: u64 = ic_testkit::pic::query_wire(
+            fixture.pic,
+            cycles_ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+            &(),
+        )
         .expect("one transfer despite lost reply");
         assert_eq!(transfers, 1);
         assert_eq!(
@@ -16519,10 +15460,6 @@ cycles = "80T"
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "keep the ordered PocketIC scenario and its authority assertions together"
-    )]
     fn finish_coordinator_retirement(
         fixture: &RootRetirementFixture<'_>,
         ledger: Principal,
@@ -16531,40 +15468,16 @@ cycles = "80T"
     ) {
         use canic_contracts::dto::fleet_registry::FleetRetirementRequest;
         let pic = fixture.pic;
-        let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
-            pic,
-            fixture.coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .expect("removed Registry") else {
-            panic!("Registry version correlation");
-        };
+        let version = crate::pic::registry_discovery::version(pic, fixture.coordinator)
+            .expect("removed Registry");
         let request = FleetRetirementRequest {
             operation_id: [0xe8; 32],
             expected_registry: version,
             destination: operator,
             maximum_ledger_fee: 100_000_000,
         };
-        let call = |request| -> Result<CoordinatorCommandResponse, Error> {
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CoordinatorCommand::Retire(request),
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        fixture.coordinator,
-                        operator,
-                        canic::protocol::CANIC_COORDINATOR_COMMAND,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("retirement transport")
+        let call = |request| {
+            crate::pic::retirement_control::retire(pic, fixture.coordinator, operator, request)
         };
         let Err(premature) = call(request.clone()) else {
             panic!("Root deletion must precede final Coordinator transfer");
@@ -16587,33 +15500,36 @@ cycles = "80T"
             ledger_account_balance(pic, ledger, fixture.coordinator),
             Nat::from(900_000_000_u128)
         );
-        let (): () = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "lose_next_transfer_reply",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let (): () = ic_testkit::pic::update_wire(
+            pic,
+            ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("lose_next_transfer_reply", 0x5445_5354_0000_0c01),
+            &(),
+        )
         .expect("lose Coordinator transfer reply");
         assert!(call(request.clone()).is_err());
         assert_eq!(
             ledger_account_balance(pic, ledger, fixture.coordinator),
             Nat::from(0_u8)
         );
-        let CoordinatorCommandResponse::Retire(completed) =
-            call(request.clone()).expect("reconcile exact transfer")
-        else {
-            panic!("retirement response correlation");
-        };
+        let pending = crate::pic::retirement_control::status(
+            pic,
+            fixture.coordinator,
+            operator,
+            request.operation_id,
+        )
+        .expect("observe uncertain transfer without retrying it");
+        assert_eq!(pending.request, request);
+        let completed = call(request.clone()).expect("reconcile exact transfer");
+        let observed = crate::pic::retirement_control::status(
+            pic,
+            fixture.coordinator,
+            operator,
+            request.operation_id,
+        )
+        .expect("observe reconciled transfer");
+        assert_eq!(observed, completed);
         let receipt = completed
             .ledger_receipt
             .as_ref()
@@ -16626,28 +15542,15 @@ cycles = "80T"
             ledger_account_balance(pic, ledger, operator),
             Nat::from(800_000_000_u128)
         );
-        let CoordinatorCommandResponse::Retire(replayed) =
-            call(request).expect("effect-free retirement replay")
-        else {
-            panic!("retirement replay correlation");
-        };
+        let replayed = call(request).expect("effect-free retirement replay");
         assert_eq!(replayed, completed);
-        let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "transfer_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let transfers: u64 = ic_testkit::pic::query_wire(
+            pic,
+            ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+            &(),
+        )
         .expect("exact transfer count");
         assert_eq!(transfers, 2);
         for asset in fixture.pool_assets {
@@ -16664,6 +15567,7 @@ cycles = "80T"
         fixture: &RootRetirementFixture<'_>,
         readiness: canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
     ) {
+        use canic::protocol::root_deletion as wire;
         use canic_contracts::dto::fleet_registry::{
             FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
         };
@@ -16673,40 +15577,44 @@ cycles = "80T"
             .expect("exact Root deletion authority");
         let mut controllers = status.settings.controllers;
         controllers.sort();
-        let CoordinatorCommandResponse::PrepareRootDeletionExecution(execution) =
-            coordinator_command(
+        let request = FleetSubnetRootDeletionExecutionRequest {
+            operation_id: readiness.request.operation_id,
+            fleet_subnet_root: fixture.root,
+            expected_readiness_hash: readiness.readiness_hash,
+            observed_module_hash: status
+                .module_hash
+                .expect("installed Root")
+                .try_into()
+                .expect("SHA-256"),
+            observed_controllers: controllers,
+            observed_cycles_after_reclamation: u128::try_from(status.cycles.0)
+                .expect("native balance"),
+            observed_reserved_cycles: u128::try_from(status.reserved_cycles.0)
+                .expect("reserved cycles"),
+            observed_idle_cycles_burned_per_day: u128::try_from(
+                status.idle_cycles_burned_per_day.0,
+            )
+            .expect("idle burn"),
+            observed_freezing_threshold_seconds: u128::try_from(
+                status.settings.freezing_threshold.0,
+            )
+            .expect("freezing threshold"),
+        };
+        let execution: Result<canic::dto::root_deletion::Execution, Error> =
+            ic_testkit::pic::update_wire(
                 pic,
                 fixture.coordinator,
-                CoordinatorCommand::PrepareRootDeletionExecution(
-                    FleetSubnetRootDeletionExecutionRequest {
-                        operation_id: readiness.request.operation_id,
-                        fleet_subnet_root: fixture.root,
-                        expected_readiness_hash: readiness.readiness_hash,
-                        observed_module_hash: status
-                            .module_hash
-                            .expect("installed Root")
-                            .try_into()
-                            .expect("SHA-256"),
-                        observed_controllers: controllers,
-                        observed_cycles_after_reclamation: u128::try_from(status.cycles.0)
-                            .expect("native balance"),
-                        observed_reserved_cycles: u128::try_from(status.reserved_cycles.0)
-                            .expect("reserved cycles"),
-                        observed_idle_cycles_burned_per_day: u128::try_from(
-                            status.idle_cycles_burned_per_day.0,
-                        )
-                        .expect("idle burn"),
-                        observed_freezing_threshold_seconds: u128::try_from(
-                            status.settings.freezing_threshold.0,
-                        )
-                        .expect("freezing threshold"),
-                    },
-                ),
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: wire::prepare::METHOD,
+                    method_id: wire::prepare::METHOD_ID,
+                    request_limits: wire::REQUEST_LIMITS,
+                    response_limits: wire::RESPONSE_LIMITS,
+                },
+                &canic::dto::root_deletion::PrepareRequest::from(request),
             )
-            .expect("freeze Root deletion intent")
-        else {
-            panic!("execution response correlation");
-        };
+            .expect("native deletion preparation transport");
+        let execution = execution.expect("freeze Root deletion intent");
         pic.stop_canister(fixture.root, None)
             .expect("stop reclaimed Root");
         pic.delete_canister(fixture.root, None)
@@ -16717,12 +15625,24 @@ cycles = "80T"
             expected_execution_hash: execution.execution_hash,
             observed_absent_at_ns: pic.get_time().as_nanos_since_unix_epoch(),
         };
-        coordinator_command(
-            pic,
-            fixture.coordinator,
-            CoordinatorCommand::CompleteRootDeletion(completion),
-        )
-        .expect("retain Root absence receipt");
+        let receipt: Result<canic::dto::root_deletion::Receipt, Error> =
+            ic_testkit::pic::update_wire(
+                pic,
+                fixture.coordinator,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: wire::complete::METHOD,
+                    method_id: wire::complete::METHOD_ID,
+                    request_limits: wire::REQUEST_LIMITS,
+                    response_limits: wire::RESPONSE_LIMITS,
+                },
+                &canic::dto::root_deletion::CompleteRequest::from(completion),
+            )
+            .expect("native deletion completion transport");
+        let receipt = receipt.expect("retain Root absence receipt");
+        assert_eq!(receipt.execution_hash, execution.execution_hash);
+        assert_eq!(receipt.operation_id, readiness.request.operation_id);
+        assert_eq!(receipt.fleet_subnet_root, fixture.root.into());
     }
 
     #[test]
@@ -16754,7 +15674,8 @@ cycles = "80T"
         pic.reinstall_canister(
             fixture.root,
             root_wasm,
-            encode_one(&fresh.init_args).expect("current Root initializer"),
+            canic_contracts::protocol::initialization::encode(&fresh.init_args)
+                .expect("current Root initializer"),
             None,
         )
         .expect("explicit management reinstall without old runtime queries");
@@ -16769,12 +15690,8 @@ cycles = "80T"
             root_before.settings.controllers
         );
         assert!(root_after.version > root_before.version);
-        let RootStatusResponseFragment::FleetAuthority(authority) =
-            root_status(pic, fixture.root, RootStatusRequestFragment::FleetAuthority)
-                .expect("current authority after hard cut")
-        else {
-            panic!("Root authority response correlation");
-        };
+        let authority =
+            root_authority_as(pic, fixture.root, Principal::anonymous()).expect("Root authority");
         assert_eq!(authority, fresh.init_args.authority);
         let mut native_after = pic.cycle_balance(fixture.root);
         for asset in &assets {
@@ -16794,22 +15711,13 @@ cycles = "80T"
             ledger_account_balance(pic, ledger, fixture.coordinator),
             Nat::from(0_u128)
         );
-        let transfers: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "transfer_count",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let transfers: u64 = ic_testkit::pic::query_wire(
+            pic,
+            ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("transfer_count", 0x5445_5354_0000_0c04),
+            &(),
+        )
         .expect("Ledger transfer count");
         drop(fixture);
         assert_eq!(transfers, 0);
@@ -16876,22 +15784,13 @@ cycles = "80T"
             .expect("retirement Ledger init"),
             None,
         );
-        let (): () = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes = ic_platform::candid::contract::encode_args(())?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "lose_next_transfer_reply",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
+        let (): () = ic_testkit::pic::update_wire(
+            pic,
+            ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            ledger_control_spec("lose_next_transfer_reply", 0x5445_5354_0000_0c01),
+            &(),
+        )
         .expect("lose committed transfer reply");
         ledger
     }
@@ -17008,6 +15907,7 @@ cycles = "80T"
         pub root: Principal,
         pub coordinator: Principal,
         pub pool_assets: Vec<Principal>,
+        pub components: Vec<RootComponentAllocationResponse>,
     }
 
     /// Install a configured Root through the same managed Fleet bootstrap owner.
@@ -17052,13 +15952,8 @@ cycles = "80T"
             &modules,
             release_id,
         );
-        store.wasm = Some(
-            std::fs::read(crate::pic::artifacts::retained_artifact_path(
-                artifacts,
-                "wasm_store",
-            ))
-            .expect("read retained Store artifact"),
-        );
+        let store_path = crate::pic::artifacts::retained_artifact_path(artifacts, "wasm_store");
+        store.wasm = Some(std::fs::read(store_path).expect("read retained Store artifact"));
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
         let fixture = install_bootstrapped_root_with_config_and_pool_setup(
@@ -17098,23 +15993,25 @@ cycles = "80T"
             version,
             synchronization,
         );
+        let mut components = Vec::new();
         for (index, component) in topology.component_specs.iter().enumerate() {
             let mut operation_id = [0xa3; 32];
             operation_id[..8].copy_from_slice(&u64::try_from(index).unwrap().to_be_bytes());
-            provision_component_request(
+            components.push(provision_component_request(
                 pic,
                 fixture.root_id,
                 RootComponentAllocationRequest {
                     operation_id,
                     component_spec: component.component_spec.clone(),
                 },
-            );
+            ));
         }
         activate_root(pic, fixture.root_id);
         ConfiguredRootAuthority {
             root: fixture.root_id,
             coordinator,
             pool_assets: fixture.init_args.canister_pool_imports,
+            components,
         }
     }
 
@@ -17187,14 +16084,8 @@ cycles = "80T"
         canic::dto::fleet_registry::FleetRegistryVersion,
         FleetSubnetRootRegistrySyncRequest,
     ) {
-        let CoordinatorObservabilityResponse::RegistryVersion(genesis) = coordinator_status(
-            pic,
-            coordinator,
-            CoordinatorObservabilityRequest::RegistryVersion,
-        )
-        .expect("query Registry genesis") else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let genesis = crate::pic::registry_discovery::version(pic, coordinator)
+            .expect("query Registry genesis");
         let binding = &fixture.init_args.authority.binding;
         let join_request = FleetSubnetRootJoinRequest {
             expected_registry: genesis,
@@ -17209,62 +16100,42 @@ cycles = "80T"
                 status: FleetSubnetRootStatus::Joining,
             },
         };
-        let CoordinatorCommandResponse::JoinRoot(joined) =
-            coordinator_command(pic, coordinator, CoordinatorCommand::JoinRoot(join_request))
-                .expect("join root")
-        else {
-            panic!("Coordinator returned a differently correlated join response");
-        };
+        let joined = crate::pic::registry_discovery::join(
+            pic,
+            coordinator,
+            Principal::anonymous(),
+            join_request,
+        )
+        .expect("join root");
         let sync_request = FleetSubnetRootRegistrySyncRequest {
             operation_id: [20; 32],
             expected_registry: joined.version.clone(),
             store_bootstrap: fixture.request.clone(),
         };
-        let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
-            pic,
-            fixture.root_id,
-            RootCommandFragment::SynchronizeRegistry(sync_request.clone()),
-        )
-        .expect("root Registry synchronization") else {
-            panic!("Root returned a differently correlated synchronization response");
-        };
+        let receipt =
+            crate::pic::registry_discovery::synchronize(pic, fixture.root_id, sync_request.clone())
+                .expect("root Registry synchronization");
         assert_eq!(receipt.operation_id, sync_request.operation_id);
-        let RootStatusResponseFragment::Operation(
-            RootOperationStatusResponse::SynchronizeRegistry(synchronization),
-        ) = root_status(
+        let synchronization = crate::pic::registry_discovery::synchronization_status(
             pic,
             fixture.root_id,
-            RootStatusRequestFragment::Operation(OperationStatusRequest {
-                operation_id: sync_request.operation_id,
-            }),
+            sync_request.operation_id,
         )
-        .expect("root Registry synchronization status")
-        else {
-            panic!("Root returned a differently correlated synchronization status");
-        };
+        .expect("root Registry synchronization status");
         let synchronized = synchronization.synchronization;
         assert_eq!(synchronized.fleet_subnet_root, fixture.root_id);
         assert_eq!(synchronized.version, joined.version);
 
-        let RootCommandResponseFragment::OperationAccepted(retried) = root_command(
-            pic,
-            fixture.root_id,
-            RootCommandFragment::SynchronizeRegistry(sync_request.clone()),
-        )
-        .expect("root Registry synchronization retry") else {
-            panic!("Root returned a differently correlated synchronization response");
-        };
+        let retried =
+            crate::pic::registry_discovery::synchronize(pic, fixture.root_id, sync_request.clone())
+                .expect("root Registry synchronization retry");
         assert_eq!(retried, receipt);
-        let CoordinatorObservabilityResponse::RootAcknowledgements(acknowledgements) =
-            coordinator_status(
-                pic,
-                coordinator,
-                CoordinatorObservabilityRequest::RootAcknowledgements,
-            )
-            .expect("query root acknowledgements")
-        else {
-            panic!("Coordinator returned a differently correlated acknowledgement status");
-        };
+        let acknowledgements = crate::pic::canic::coordinator_root_acknowledgements(
+            pic,
+            coordinator,
+            Principal::anonymous(),
+        )
+        .expect("query Root acknowledgement inventory");
         assert_eq!(acknowledgements, vec![synchronized.acknowledgement]);
         (joined.version, sync_request)
     }
@@ -17329,27 +16200,28 @@ cycles = "80T"
         let target = fixture.issuer.canister_id;
         let outsider = Principal::from_slice(&[0x7f; 29]);
 
+        observation_relay::qualify(&fixture);
+
         let observe = |canister: Principal,
                        caller: Principal|
          -> Result<CanisterObservabilityResponse, Error> {
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((
-                    CanisterObservabilityRequest::MemoryAllocations,
-                ))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).query_call(
-                        canister,
-                        caller,
-                        canic::protocol::CANIC_OBSERVABILITY,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
+            ic_testkit::pic::query_wire(
+                pic,
+                canister,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::protected_memory_allocations::METHOD,
+                    method_id: canic::protocol::protected_memory_allocations::METHOD_ID,
+                    request_limits: canic::protocol::protected_memory_allocations::REQUEST_LIMITS,
+                    response_limits: canic::protocol::protected_memory_allocations::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .map(
+                |reply: Result<canic::dto::memory::MemoryAllocationsResponse, Error>| {
+                    reply.map(CanisterObservabilityResponse::MemoryAllocations)
+                },
+            )
             .expect("direct observation transport")
         };
         for canister in [fixture.root, target] {
@@ -17376,33 +16248,28 @@ cycles = "80T"
                 .sum::<u64>()
         );
 
-        let relay_request = || {
-            RootCommandFragment::ObserveCanister(FleetCanisterObservabilityRequest {
-                canister_id: target,
-                request: CanisterObservabilityRequest::MemoryAllocations,
-            })
-        };
-        let relay = |caller: Principal| -> Result<RootCommandResponseFragment, Error> {
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((relay_request(),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        fixture.root,
-                        caller,
-                        canic::protocol::CANIC_ROOT_COMMAND,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .expect("relay refusal transport")
-        };
-        let denied: Result<RootCommandResponseFragment, Error> = relay(outsider);
-        assert!(controller_authority_unavailable(&denied));
+        let relay =
+            |caller: Principal| -> Result<canic::dto::memory::MemoryAllocationsResponse, Error> {
+                ic_testkit::pic::update_wire(
+                    pic,
+                    fixture.root,
+                    caller,
+                    ic_testkit::pic::WireCallSpec {
+                        method: canic::protocol::root_observation::memory_allocations::METHOD,
+                        method_id: canic::protocol::root_observation::memory_allocations::METHOD_ID,
+                        request_limits:
+                            canic::protocol::root_observation::memory_allocations::REQUEST_LIMITS,
+                        response_limits:
+                            canic::protocol::root_observation::memory_allocations::RESPONSE_LIMITS,
+                    },
+                    &canic::dto::root_observation::Request {
+                        canister_id: target.into(),
+                        input: (),
+                    },
+                )
+                .expect("relay transport")
+            };
+        assert!(controller_authority_unavailable(&relay(outsider)));
 
         let before = pic.get_stable_memory(target);
         let physical_extent = before.len() as u64;
@@ -17410,14 +16277,7 @@ cycles = "80T"
         drop(before);
         let mut previous = None;
         for _ in 0..2 {
-            let response: Result<RootCommandResponseFragment, Error> =
-                relay(Principal::anonymous());
-            let RootCommandResponseFragment::ObserveCanister(
-                CanisterObservabilityResponse::MemoryAllocations(report),
-            ) = response.expect("controller relay accepted")
-            else {
-                panic!("expected current memory allocations");
-            };
+            let report = relay(Principal::anonymous()).expect("controller relay accepted");
             assert_memory_allocation_conservation(&report, physical_extent);
             if let Some(previous) = previous {
                 assert_eq!(report, previous);
@@ -17491,11 +16351,11 @@ cycles = "80T"
         let metadata = baseline.metadata();
         #[cfg(test)]
         validate_sensitive_observability_authority(pic, metadata)?;
-        let CoordinatorRegistryResponse::Registry(registry) = baseline_application_result(
-            coordinator_status(
+        let registry = baseline_application_result(
+            crate::pic::registry_discovery::snapshot(
                 pic,
                 metadata.coordinator,
-                CoordinatorRegistryRequest::Registry,
+                Principal::anonymous(),
             ),
             "query active Fleet Registry",
         )?;
@@ -17508,15 +16368,10 @@ cycles = "80T"
             ));
         }
 
-        let RootStatusResponseFragment::Inventory(inventory) = baseline_application_result(
-            root_status(pic, metadata.root, RootStatusRequestFragment::Inventory),
+        let inventory = baseline_application_result(
+            crate::pic::registry_discovery::root_inventory(pic, metadata.root),
             "query root inventory",
-        )?
-        else {
-            return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Root returned a differently correlated inventory status".to_string(),
-            ));
-        };
+        )?;
         if inventory.status != FleetSubnetRootStatus::Active {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
                 "Fleet Subnet Root is not active".to_string(),
@@ -17527,35 +16382,16 @@ cycles = "80T"
             (&metadata.issuer, metadata.issuer_runtime_operation_id),
             (&metadata.verifier, metadata.verifier_runtime_operation_id),
         ] {
-            let runtime: Result<ManagedStatusResponseFragment, Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes = ic_platform::candid::contract::encode_args((
-                        ManagedStatusRequestFragment::Operation(OperationStatusRequest {
-                            operation_id,
-                        }),
-                    ))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).query_call(
-                            binding.canister_id,
-                            metadata.root,
-                            canic::protocol::CANIC_CONTROL_STATUS,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)?;
-            let ManagedStatusResponseFragment::Operation(operation) =
-                baseline_application_result(runtime, "query Component runtime")?
-            else {
-                return Err(ActiveComponentRegistryBaselineError::Invariant(
-                    "Component returned a differently correlated runtime status".to_string(),
-                ));
-            };
-            let ManagedOperationStatusResponseFragment::ConfigureRuntime(runtime) = *operation;
+            let runtime = baseline_application_result(
+                crate::pic::protected_state::runtime_operation(
+                    pic,
+                    binding.canister_id,
+                    metadata.root,
+                    operation_id,
+                )
+                .map_err(|error| ActiveComponentRegistryBaselineError::Call(Box::new(error)))?,
+                "query Component runtime",
+            )?;
             if runtime.runtime.phase != ComponentRuntimePhase::Active {
                 return Err(ActiveComponentRegistryBaselineError::Invariant(format!(
                     "Component {} is not active",
@@ -17564,22 +16400,18 @@ cycles = "80T"
             }
         }
 
-        let RootStatusResponseFragment::Pool(pool) = baseline_application_result(
-            root_status(
+        let pool = baseline_application_result(
+            root_pool_page(
                 pic,
                 metadata.root,
-                RootStatusRequestFragment::Pool(CanisterPoolStatusRequest {
+                Principal::anonymous(),
+                CanisterPoolStatusRequest {
                     start_after: None,
                     limit: 256,
-                }),
+                },
             ),
             "query root Canister pool",
-        )?
-        else {
-            return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Root returned a differently correlated pool status".to_string(),
-            ));
-        };
+        )?;
         let expected_ready = u32::try_from(metadata.pool_assets.len().saturating_sub(2))
             .expect("bounded test asset count");
         if pool.ready != expected_ready || pool.workload != 2 || pool.pending_reset != 0 {
@@ -17601,24 +16433,11 @@ cycles = "80T"
     }
 
     fn assert_root_canister_summary(fixture: &ActiveComponentRegistryFixture) {
-        let RootStatusResponseFragment::Inventory(summary) = root_status(
-            fixture.pic(),
-            fixture.root,
-            RootStatusRequestFragment::Inventory,
-        )
-        .expect("query Fleet Subnet Root Canister summary") else {
-            panic!("Root returned a differently correlated inventory status");
-        };
-        let CoordinatorObservabilityResponse::RegistryVersion(coordinator_version) =
-            coordinator_status(
-                fixture.pic(),
-                fixture.coordinator,
-                CoordinatorObservabilityRequest::RegistryVersion,
-            )
-            .expect("query Coordinator Registry version")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let summary = crate::pic::registry_discovery::root_inventory(fixture.pic(), fixture.root)
+            .expect("query Fleet Subnet Root Canister summary");
+        let coordinator_version =
+            crate::pic::registry_discovery::version(fixture.pic(), fixture.coordinator)
+                .expect("query Coordinator Registry version");
 
         assert_eq!(summary.fleet_registry, coordinator_version);
         assert_eq!(summary.fleet_subnet_root, fixture.root);
@@ -17696,7 +16515,8 @@ cycles = "80T"
         pic.install_canister(
             coordinator,
             coordinator_wasm,
-            encode_one(coordinator_args).expect("encode Coordinator init"),
+            canic_contracts::protocol::initialization::encode(coordinator_args)
+                .expect("encode Coordinator init"),
             None,
         );
     }
@@ -17757,20 +16577,19 @@ cycles = "80T"
             joining_version,
             sync_request,
         );
-        let CoordinatorRegistryResponse::Registry(registry) =
-            coordinator_status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+        let registry =
+            crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous())
                 .expect("query active Registry");
         let config =
             AppConfigSnapshot::load(config_path).expect("load provisioning fixture config");
         let compiled = fixture_fresh_component_plan(config.model(), &registry, operation_id);
-        let CoordinatorCommandResponse::OperationAccepted(receipt) = coordinator_command(
+        let receipt = crate::pic::batch_control::prepare(
             pic,
             coordinator,
-            CoordinatorCommand::ProvisionComponents(compiled.request),
+            Principal::anonymous(),
+            compiled.request,
         )
-        .expect("begin fresh Component provisioning") else {
-            panic!("Coordinator returned a differently correlated provisioning response");
-        };
+        .expect("begin fresh Component provisioning");
         assert_eq!(receipt.operation_id, operation_id);
         component_registry_request
     }
@@ -17799,18 +16618,17 @@ cycles = "80T"
         joining_version: canic::dto::fleet_registry::FleetRegistryVersion,
         joining_sync_request: FleetSubnetRootRegistrySyncRequest,
     ) -> RootComponentRegistryPreparationRequest {
-        let CoordinatorCommandResponse::ActivateRegistry(activated) = coordinator_command(
+        let activated = crate::pic::registry_discovery::activate(
             pic,
             coordinator,
-            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+            Principal::anonymous(),
+            FleetRegistryActivationRequest {
                 expected_registry: joining_version,
-            }),
+            },
         )
-        .expect("activate Registry") else {
-            panic!("Coordinator returned a differently correlated activation response");
-        };
-        let CoordinatorRegistryResponse::Registry(active) =
-            coordinator_status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+        .expect("activate Registry");
+        let active =
+            crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous())
                 .expect("query active Registry");
         assert_eq!(
             active.fleet_subnet_roots.first().expect("one root").status,
@@ -17819,19 +16637,12 @@ cycles = "80T"
 
         let mut synchronized = None;
         for _ in 0..32 {
-            let RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::SynchronizeRegistry(status),
-            ) = root_status(
+            let status = crate::pic::registry_discovery::synchronization_status(
                 pic,
                 fixture.root_id,
-                RootStatusRequestFragment::Operation(OperationStatusRequest {
-                    operation_id: joining_sync_request.operation_id,
-                }),
+                joining_sync_request.operation_id,
             )
-            .expect("query active Registry synchronization")
-            else {
-                panic!("Root returned a differently correlated synchronization status");
-            };
+            .expect("query active Registry synchronization");
             if status.activation.is_some() {
                 synchronized = Some(status);
                 break;
@@ -17865,14 +16676,9 @@ cycles = "80T"
         fixture: &BootstrappedRootFixture,
         request: RootComponentRegistryPreparationRequest,
     ) -> RootComponentRegistryPreparationRequest {
-        let RootCommandResponseFragment::PrepareComponentRegistry(prepared) = root_command(
-            pic,
-            fixture.root_id,
-            RootCommandFragment::PrepareComponentRegistry(request.clone()),
-        )
-        .expect("prepare root Component Registry") else {
-            panic!("Root returned a differently correlated Component Registry response");
-        };
+        let prepared =
+            crate::pic::canic::prepare_component_registry(pic, fixture.root_id, request.clone())
+                .expect("prepare root Component Registry");
         assert_eq!(prepared.fleet_subnet_root, fixture.root_id);
         assert_eq!(
             prepared.release_set,
@@ -17890,14 +16696,9 @@ cycles = "80T"
         assert_eq!(prepared.reserved_component_instances, 0);
         assert_eq!(prepared.committed_component_instances, 0);
 
-        let RootCommandResponseFragment::PrepareComponentRegistry(retried) = root_command(
-            pic,
-            fixture.root_id,
-            RootCommandFragment::PrepareComponentRegistry(request.clone()),
-        )
-        .expect("retry root Component Registry preparation") else {
-            panic!("Root returned a differently correlated Component Registry response");
-        };
+        let retried =
+            crate::pic::canic::prepare_component_registry(pic, fixture.root_id, request.clone())
+                .expect("retry root Component Registry preparation");
         assert_eq!(retried, prepared);
         request
     }
@@ -17908,14 +16709,12 @@ cycles = "80T"
         component_registry_request: RootComponentRegistryPreparationRequest,
     ) -> ActiveComponentBindings {
         let issuer = provision_component(pic, fixture, [0xa1; 32]);
-        let RootCommandResponseFragment::PrepareComponentRegistry(advanced) = root_command(
+        let advanced = crate::pic::canic::prepare_component_registry(
             pic,
             fixture.root_id,
-            RootCommandFragment::PrepareComponentRegistry(component_registry_request),
+            component_registry_request,
         )
-        .expect("read protected Component Registry after allocation without mutation") else {
-            panic!("Root returned a differently correlated Component Registry status");
-        };
+        .expect("read protected Component Registry after allocation without mutation");
         assert_eq!(advanced.fleet_subnet_root, fixture.root_id);
         assert_eq!(advanced.next_allocation_sequence, 2);
         assert_eq!(advanced.reserved_component_instances, 0);
@@ -17948,45 +16747,41 @@ cycles = "80T"
         provision_component_request(pic, fixture.root_id, request)
     }
 
-    fn provision_component_request(
+    pub(in crate::pic) fn provision_component_request(
         pic: &PocketIc,
         root: Principal,
         request: RootComponentAllocationRequest,
     ) -> RootComponentAllocationResponse {
         let operation_id = request.operation_id;
-        let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
+        let receipt = crate::pic::canic::provision_component(
             pic,
             root,
-            RootCommandFragment::ProvisionComponent(request.clone()),
+            Principal::anonymous(),
+            request.clone(),
         )
-        .expect("submit Component provisioning") else {
-            panic!("Root returned a differently correlated provisioning response");
-        };
+        .expect("submit Component provisioning");
         assert_eq!(receipt.operation_id, operation_id);
 
         let mut last_allocation = None;
         for _ in 0..80 {
-            let RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::ProvisionComponent(status),
-            ) = root_status(
+            let status = crate::pic::canic::root_component_allocation(
                 pic,
                 root,
-                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+                Principal::anonymous(),
+                operation_id,
             )
-            .expect("query Component provisioning")
-            else {
-                panic!("Root returned a differently correlated provisioning status");
-            };
+            .expect("query native Component allocation");
             if status.complete
                 && status.allocation.phase == RootComponentAllocationPhase::Committed
                 && status.allocation.installation.is_some()
             {
-                let RootCommandResponseFragment::OperationAccepted(retried) =
-                    root_command(pic, root, RootCommandFragment::ProvisionComponent(request))
-                        .expect("retry Component provisioning")
-                else {
-                    panic!("Root returned a differently correlated provisioning response");
-                };
+                let retried = crate::pic::canic::provision_component(
+                    pic,
+                    root,
+                    Principal::anonymous(),
+                    request,
+                )
+                .expect("retry Component provisioning");
                 assert_eq!(retried, receipt);
                 return status.allocation;
             }
@@ -18001,6 +16796,17 @@ cycles = "80T"
             Principal::anonymous(),
             "autonomous Component provisioning",
         );
+        if let Some(installation) = last_allocation
+            .as_ref()
+            .and_then(|allocation| allocation.installation.as_ref())
+        {
+            let child = installation.binding.canister_id;
+            report_canister_diagnostics(pic, child, root, "installed Component admission");
+            eprintln!(
+                "installed Component runtime: {:?}",
+                crate::pic::protected_state::runtime_operation(pic, child, root, operation_id)
+            );
+        }
         panic!(
             "Root did not autonomously complete Component provisioning; last allocation: {last_allocation:?}"
         );
@@ -18018,57 +16824,53 @@ cycles = "80T"
     }
 
     fn activate_root(pic: &PocketIc, root: Principal) {
-        let RootCommandResponseFragment::OperationAccepted(preparation) =
-            root_command(pic, root, RootCommandFragment::PrepareFleetActivation)
-                .expect("prepare root Fleet activation")
-        else {
-            panic!("Root returned a differently correlated activation response");
-        };
-        let RootStatusResponseFragment::Operation(RootOperationStatusResponse::FleetActivation(
-            prepared,
-        )) = root_status(
-            pic,
-            root,
-            RootStatusRequestFragment::Operation(OperationStatusRequest {
-                operation_id: preparation.operation_id,
-            }),
-        )
-        .expect("query prepared root Fleet activation")
-        else {
-            panic!("Root returned a differently correlated activation status");
-        };
+        let preparation: Result<canic::dto::role::OperationReceipt, Error> =
+            ic_testkit::pic::update_wire(
+                pic,
+                root,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::root_activation::prepare::METHOD,
+                    method_id: canic::protocol::root_activation::prepare::METHOD_ID,
+                    request_limits: canic::protocol::root_activation::REQUEST_LIMITS,
+                    response_limits: canic::protocol::root_activation::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .expect("native Root activation preparation transport");
+        let preparation = preparation.expect("prepare root Fleet activation");
+        let prepared =
+            crate::pic::canic::root_activation_status(pic, root, preparation.operation_id)
+                .expect("query prepared root Fleet activation");
         assert_eq!(prepared.phase, FleetActivationPhase::Prepared);
         let credential = prepared
             .credential
             .expect("prepared root credential generation");
 
-        let RootCommandResponseFragment::OperationAccepted(resumed) = root_command(
-            pic,
-            root,
-            RootCommandFragment::ResumeFleetActivation(FleetActivationResumeRequest {
-                operation_id: preparation.operation_id,
-                credential,
-            }),
-        )
-        .expect("resume root Fleet activation") else {
-            panic!("Root returned a differently correlated activation response");
-        };
+        let resumed: Result<canic::dto::role::OperationReceipt, Error> =
+            ic_testkit::pic::update_wire(
+                pic,
+                root,
+                Principal::anonymous(),
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::root_activation::resume::METHOD,
+                    method_id: canic::protocol::root_activation::resume::METHOD_ID,
+                    request_limits: canic::protocol::root_activation::REQUEST_LIMITS,
+                    response_limits: canic::protocol::root_activation::RESPONSE_LIMITS,
+                },
+                &FleetActivationResumeRequest {
+                    operation_id: preparation.operation_id,
+                    credential,
+                },
+            )
+            .expect("native Root activation resume transport");
+        let resumed = resumed.expect("resume root Fleet activation");
         assert_eq!(resumed.operation_id, preparation.operation_id);
 
         for _ in 0..32 {
-            let RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::FleetActivation(status),
-            ) = root_status(
-                pic,
-                root,
-                RootStatusRequestFragment::Operation(OperationStatusRequest {
-                    operation_id: preparation.operation_id,
-                }),
-            )
-            .expect("query active root Fleet activation")
-            else {
-                panic!("Root returned a differently correlated activation status");
-            };
+            let status =
+                crate::pic::canic::root_activation_status(pic, root, preparation.operation_id)
+                    .expect("query active root Fleet activation");
             if status.phase == FleetActivationPhase::Active {
                 return;
             }
@@ -18340,11 +17142,12 @@ cycles = "80T"
         pic.install_canister(
             wasm_store,
             wasm_store_wasm,
-            encode_one(store_init_args).expect("encode live PocketIC Store authority"),
+            canic_contracts::protocol::initialization::encode(store_init_args)
+                .expect("encode live PocketIC Store authority"),
             Some(installation_controller),
         );
-        let init_bytes =
-            encode_one(&installed.init_args).expect("encode live PocketIC root authority");
+        let init_bytes = canic_contracts::protocol::initialization::encode(&installed.init_args)
+            .expect("encode live PocketIC root authority");
         pic.install_canister(root_id, root_wasm, init_bytes, None);
         installed
     }
@@ -18389,8 +17192,10 @@ cycles = "80T"
                 release_set_digest: digest,
             })
             .expect("encode exact root authority");
-        let mut init_args =
-            decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        let mut init_args = canic_contracts::protocol::initialization::decode::<
+            FleetSubnetRootInitArgs,
+        >(&init_bytes)
+        .expect("decode root init authority");
         rebind_fixture_release_build_id(&mut init_args, manifest.release_build_id);
         let pool = &mut init_args.authority.binding.limits.canister_pool;
         if let Some(maximum_size) = placement.canister_pool_maximum_size {
@@ -18549,28 +17354,12 @@ cycles = "80T"
                 source,
             );
         }
-        let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
-            pic,
-            root_id,
-            RootCommandFragment::BootstrapStore(request.clone()),
-        )
-        .expect("root Store bootstrap") else {
-            panic!("Root returned a differently correlated bootstrap response");
-        };
+        let receipt = crate::pic::canic::root_store_bootstrap(pic, root_id, request.clone())
+            .expect("root Store bootstrap");
         assert_eq!(receipt.operation_id, request.operation_id);
-        let RootStatusResponseFragment::Operation(RootOperationStatusResponse::BootstrapStore(
-            response,
-        )) = root_status(
-            pic,
-            root_id,
-            RootStatusRequestFragment::Operation(OperationStatusRequest {
-                operation_id: request.operation_id,
-            }),
-        )
-        .expect("root Store bootstrap status")
-        else {
-            panic!("Root returned a differently correlated bootstrap status");
-        };
+        let response =
+            crate::pic::canic::root_store_bootstrap_status(pic, root_id, request.operation_id)
+                .expect("root Store bootstrap status");
         (request, response)
     }
 
@@ -18591,79 +17380,40 @@ cycles = "80T"
             ..request.clone()
         };
         assert!(matches!(
-            root_command(pic, root, RootCommandFragment::PrepareStoreFixture(unknown)).unwrap(),
-            RootCommandResponseFragment::PrepareStoreFixture(Err(FixtureStoreError::NotFound))
+            crate::pic::canic::root_store_prepare(pic, root, unknown).unwrap(),
+            Err(FixtureStoreError::NotFound)
         ));
         let mut wrong_size = request.clone();
         wrong_size.bootstrap.manifest_payload_size_bytes += 1;
-        assert!(
-            root_command(
-                pic,
-                root,
-                RootCommandFragment::PrepareStoreFixture(wrong_size)
-            )
-            .is_err()
-        );
-        let RootCommandResponseFragment::PrepareStoreFixture(Ok(prepared)) = root_command(
-            pic,
-            root,
-            RootCommandFragment::PrepareStoreFixture(request.clone()),
-        )
-        .unwrap() else {
+        assert!(crate::pic::canic::root_store_prepare(pic, root, wrong_size).is_err());
+        let Ok(prepared) =
+            crate::pic::canic::root_store_prepare(pic, root, request.clone()).unwrap()
+        else {
             panic!("Root fixture preparation failed")
         };
         assert_eq!(prepared.content_id, source.content_id);
         assert_eq!(prepared.next_chunk, 0);
         assert!(!prepared.complete);
         // Ignore the first acknowledgement and recover only from a repeated command.
-        let RootCommandResponseFragment::PrepareStoreFixture(Ok(repeated)) = root_command(
-            pic,
-            root,
-            RootCommandFragment::PrepareStoreFixture(request.clone()),
-        )
-        .unwrap() else {
+        let Ok(repeated) =
+            crate::pic::canic::root_store_prepare(pic, root, request.clone()).unwrap()
+        else {
             panic!("Root fixture preparation replay failed")
         };
         assert_eq!(repeated, prepared);
-        assert!(
-            root_command(
-                pic,
-                root,
-                RootCommandFragment::BootstrapStore(bootstrap.clone())
-            )
-            .is_err()
-        );
+        assert!(crate::pic::canic::root_store_bootstrap(pic, root, bootstrap.clone()).is_err());
         assert_prepared(pic, root);
         let upload = FixtureChunkUpload {
             content_id: source.content_id,
             index: 0,
             bytes: b"reviewed fixture source".to_vec(),
         };
-        let publish = || -> Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> {
-            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                let request_bytes = ic_platform::candid::contract::encode_args((upload.clone(),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (pic).update_call(
-                        store,
-                        controller,
-                        canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                    .map_err(Into::into)
-            })()
-            .map(|(reply,)| reply)
-            .unwrap()
-        };
+        let publish = || store_upload_as(pic, store, controller, upload.clone());
         let uploaded = publish().unwrap().unwrap();
         assert!(uploaded.complete);
         let replayed = publish().unwrap().unwrap();
         assert_eq!(replayed, uploaded);
-        let RootCommandResponseFragment::PrepareStoreFixture(Ok(recovered)) =
-            root_command(pic, root, RootCommandFragment::PrepareStoreFixture(request)).unwrap()
+        let Ok(recovered) = crate::pic::canic::root_store_prepare(pic, root, request).unwrap()
         else {
             panic!("Root completed fixture observation failed")
         };
@@ -18742,12 +17492,10 @@ cycles = "80T"
                     pic.submit_call(
                         root,
                         caller,
-                        canic::protocol::CANIC_ROOT_COMMAND,
-                        encode_one(RootCommandFragment::ImportPoolCanister(
-                            canic::dto::pool::PoolCanisterRequest {
-                                canister_id: asset.canister_id,
-                            },
-                        ))
+                        canic::protocol::pool_control::import::METHOD,
+                        encode_pool_import(canic::dto::pool::PoolCanisterRequest {
+                            canister_id: asset.canister_id,
+                        })
                         .unwrap(),
                     )
                 })
@@ -18761,12 +17509,9 @@ cycles = "80T"
                 let reply = reply
                     .expect("submit prepaid import")
                     .expect("await prepaid import");
-                let result: Result<RootCommandResponseFragment, Error> =
-                    decode_one(&reply).unwrap();
+                let result: Result<PoolImportResponse, Error> = decode_pool_import(&reply).unwrap();
                 assert!(
-                    matches!(result.unwrap(), RootCommandResponseFragment::ImportPoolCanister(
-                    canic::dto::pool::PoolImportResponse::Imported { canister_id }
-                ) if canister_id == asset.canister_id)
+                    matches!(result.unwrap(), canic::dto::pool::PoolImportResponse::Imported { canister_id } if canister_id == ic_platform::Principal::from(asset.canister_id))
                 );
             }
         }
@@ -18933,6 +17678,7 @@ cycles = "80T"
                 wasm_gz_relative_path: format!("{role}.wasm.gz"),
                 wasm_gz_size_bytes: compressed.len() as u64,
                 wasm_gz_sha256_hex: hex_bytes(wasm_hash(&compressed)),
+                wire_schema_sha256: [7; 32],
                 candid_sha256: [3; 32],
                 protocol_profile_digest:
                     canic_core::role_contract::ProtocolProfileDigest::from_bytes([4; 32]),
@@ -19072,42 +17818,25 @@ cycles = "80T"
         );
         prepared.expect("prepare staged payload");
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
-            let published: Result<(), Error> =
-                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-                    let request_bytes =
-                        ic_platform::candid::contract::encode_args((TemplateChunkInput {
-                            preparation: None,
-                            template_id: template_id.clone(),
-                            version: version.clone(),
-                            chunk_index: u32::try_from(chunk_index).expect("bounded chunk index"),
-                            bytes,
-                        },))?;
-                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                        (pic).update_call(
-                            store,
-                            installation_controller,
-                            canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-                            request_bytes,
-                        )
-                    })
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                        .map_err(Into::into)
-                })()
-                .map(|(reply,)| reply)
-                .expect("publish staged payload transport");
+            let published = publish_template_chunk_as(
+                pic,
+                store,
+                installation_controller,
+                &TemplateChunkInput {
+                    preparation: None,
+                    template_id: template_id.clone(),
+                    version: version.clone(),
+                    chunk_index: u32::try_from(chunk_index).expect("bounded chunk index"),
+                    bytes,
+                },
+            );
             published.expect("publish staged payload");
         }
     }
 
     fn assert_prepared(pic: &PocketIc, root_id: Principal) {
-        let RootStatusResponseFragment::FleetAuthority(authority) =
-            root_status(pic, root_id, RootStatusRequestFragment::FleetAuthority)
-                .expect("query root authority")
-        else {
-            panic!("Root returned a differently correlated authority status");
-        };
+        let authority =
+            root_authority_as(pic, root_id, Principal::anonymous()).expect("Root authority");
         assert_eq!(authority.binding.fleet_subnet_root, root_id);
     }
 
@@ -19389,4 +18118,25 @@ pub use tests::{
     setup_fresh_active_component_registry,
 };
 
+#[cfg(test)]
+pub(in crate::pic) use tests::provision_component_request;
 pub(in crate::pic) use tests::{install_configured_root, reset_pool_assets};
+
+#[cfg(test)]
+const fn ledger_control_spec(
+    method: &'static str,
+    method_id: u64,
+) -> ic_testkit::pic::WireCallSpec {
+    let limits = ic_wire::Limits {
+        bytes: 4_194_304,
+        allocation: 16_777_216,
+        nodes: 262_144,
+        depth: 64,
+    };
+    ic_testkit::pic::WireCallSpec {
+        method,
+        method_id,
+        request_limits: limits,
+        response_limits: limits,
+    }
+}

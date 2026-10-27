@@ -12,64 +12,17 @@ use crate::{
     },
 };
 use canic_contracts::{
-    dto::{
-        canister::{CanisterInspectionRequest, CanisterStatusType},
-        error::Error,
-        wire::projection::{
-            capacity_management::{RootRequest, RootResponse},
-            inspection_reserve::{InspectionReserveRequest, InspectionReserveResponse},
-        },
-    },
+    dto::{canister::CanisterStatusType, error::Error},
     protocol,
 };
 use ic_platform::{
     agent::Agent,
-    candid::contract::{CandidType, Nat},
+    management_canister_types::{
+        CanisterIdRecord, CanisterStatusResult, CanisterStatusType as ManagementCanisterStatusType,
+    },
     principal::ExternalPrincipal as Principal,
 };
-use serde::Deserialize;
 use std::time::Duration;
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct Request {
-    canister_id: Principal,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct Status {
-    version: u64,
-    status: RunState,
-    settings: Settings,
-    module_hash: Option<Vec<u8>>,
-    memory_metrics: Memory,
-    cycles: Nat,
-    reserved_cycles: Nat,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum RunState {
-    #[serde(rename = "running")]
-    Running,
-    #[serde(rename = "stopping")]
-    Stopping,
-    #[serde(rename = "stopped")]
-    Stopped,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct Settings {
-    controllers: Vec<Principal>,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct Memory {
-    snapshots_size: Nat,
-}
 
 /// Free custody checks and encoded arguments retained until the allowance is durable.
 pub(in crate::fleet_ensure) struct PreparedManagementObservation {
@@ -123,32 +76,39 @@ pub(in crate::fleet_ensure) async fn prepare_root_owned(
     if !before.controllers.contains(&root) {
         return Err(invalid());
     }
-    let reserve_argument = ic_platform::candid::contract::encode_one(
-        InspectionReserveRequest::InspectionReserve(CanisterInspectionRequest {
-            canister_id: canister,
-        }),
+    let target: ic_platform::Principal = canister.into();
+    let reserve_argument = ic_wire::native::encode_request(
+        protocol::inspection_reserve::METHOD_ID,
+        &target,
+        protocol::inspection_reserve::REQUEST_LIMITS,
     )
     .map_err(|_| invalid())?;
     let reserve_bytes = tokio::time::timeout(
         Duration::from_secs(30),
         agent
-            .query(&root, protocol::CANIC_OBSERVABILITY)
+            .query(&root, protocol::inspection_reserve::METHOD)
             .with_arg(reserve_argument)
             .call(),
     )
     .await
     .map_err(|_| invalid())?
     .map_err(|_| invalid())?;
-    let reserve: Result<InspectionReserveResponse, Error> =
-        ic_platform::candid::decoder::decode_one(&reserve_bytes).map_err(|_| invalid())?;
-    let InspectionReserveResponse::InspectionReserve(evidence) =
-        reserve.map_err(CapacityImportJournalError::RootRejected)?;
-    validate_inspection_reserve(root, canister, evidence)?;
-    let argument = ic_platform::candid::contract::encode_one(RootRequest::InspectCanister(
-        CanisterInspectionRequest {
-            canister_id: canister,
+    let reserve: Result<canic_contracts::dto::inspection_reserve::InspectionReserve, Error> =
+        ic_wire::native::decode_response(
+            protocol::inspection_reserve::METHOD_ID,
+            &reserve_bytes,
+            protocol::inspection_reserve::RESPONSE_LIMITS,
+        )
+        .map_err(|_| invalid())?;
+    let evidence = reserve.map_err(CapacityImportJournalError::RootRejected)?;
+    validate_inspection_reserve(root, canister, evidence.into())?;
+    let argument = ic_wire::native::encode_request(
+        protocol::inspection::METHOD_ID,
+        &canic_contracts::dto::inspection::Request {
+            canister_id: canister.into(),
         },
-    ))
+        protocol::inspection::REQUEST_LIMITS,
+    )
     .map_err(|_| invalid())?;
     Ok(PreparedManagementObservation {
         agent: agent.clone(),
@@ -174,18 +134,27 @@ async fn observe_root_prepared(
     let bytes = tokio::time::timeout(
         Duration::from_secs(45),
         agent
-            .update(&root, protocol::CANIC_ROOT_COMMAND)
+            .update(&root, protocol::inspection::METHOD)
             .with_arg(argument)
             .call_and_wait(),
     )
     .await
     .map_err(|_| invalid())?
     .map_err(|_| invalid())?;
-    let response: Result<RootResponse, Error> =
-        ic_platform::candid::decoder::decode_one(&bytes).map_err(|_| invalid())?;
-    let mut status = match response.map_err(CapacityImportJournalError::RootRejected)? {
-        RootResponse::InspectCanister(status) => status,
-        RootResponse::InspectionReserveRequired(evidence) => {
+    let response: Result<canic_contracts::dto::inspection::Response, Error> =
+        ic_wire::native::decode_response(
+            protocol::inspection::METHOD_ID,
+            &bytes,
+            protocol::inspection::RESPONSE_LIMITS,
+        )
+        .map_err(|_| invalid())?;
+    let outcome: canic_contracts::dto::canister::CanisterInspectionOutcome = response
+        .map_err(CapacityImportJournalError::RootRejected)?
+        .try_into()
+        .map_err(|_| invalid())?;
+    let mut status = match outcome {
+        canic_contracts::dto::canister::CanisterInspectionOutcome::Status(status) => status,
+        canic_contracts::dto::canister::CanisterInspectionOutcome::ReserveRequired(evidence) => {
             return Err(CanisterProtocolError::inspection_reserve(root, canister, evidence).into());
         }
     };
@@ -246,7 +215,7 @@ pub(in crate::fleet_ensure) async fn prepare(
     let before = certified_custody::observe_one(agent, canister)
         .await
         .map_err(|_| invalid())?;
-    let argument = ic_platform::candid::contract::encode_one(Request {
+    let argument = ic_platform::candid::contract::encode_one(CanisterIdRecord {
         canister_id: canister,
     })
     .map_err(|_| invalid())?;
@@ -281,7 +250,7 @@ async fn observe_direct_prepared(
     .await
     .map_err(|_| invalid())?
     .map_err(|_| invalid())?;
-    let mut status: Status =
+    let mut status: CanisterStatusResult =
         ic_platform::candid::decoder::decode_one(&bytes).map_err(|_| invalid())?;
     status.settings.controllers.sort_unstable();
     let module_sha256 = status
@@ -298,7 +267,7 @@ async fn observe_direct_prepared(
     if expected != actual
         || after.controllers != status.settings.controllers
         || after_module != module_sha256
-        || matches!(status.status, RunState::Stopping)
+        || matches!(status.status, ManagementCanisterStatusType::Stopping)
     {
         return Err(invalid());
     }
@@ -309,7 +278,7 @@ async fn observe_direct_prepared(
             controllers: status.settings.controllers,
             module_sha256,
             canister_version: status.version,
-            stopped: matches!(status.status, RunState::Stopped),
+            stopped: matches!(status.status, ManagementCanisterStatusType::Stopped),
             snapshots_size_bytes: status
                 .memory_metrics
                 .snapshots_size

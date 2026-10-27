@@ -225,8 +225,8 @@ pub(in crate::fleet_ensure::ops) fn capacity_import_in_progress(
                     .get("publication_started")
                     .and_then(Value::as_bool)
                     == Some(true)
-                || receipt_present(operation, "settled_status_candid_hex")
-                || receipt_present(operation, "released_status_candid_hex")
+                || receipt_present(operation, "settled_status_wire_hex")
+                || receipt_present(operation, "released_status_wire_hex")
         });
         if reservation
             || issued
@@ -250,8 +250,8 @@ pub(in crate::fleet_ensure::ops) fn capacity_import_in_progress(
             .and_then(Value::as_bool)
             == Some(true);
     if !released
-        || !receipt_present(operation, "settled_status_candid_hex")
-        || !receipt_present(operation, "released_status_candid_hex")
+        || !receipt_present(operation, "settled_status_wire_hex")
+        || !receipt_present(operation, "released_status_wire_hex")
     {
         return Ok(true);
     }

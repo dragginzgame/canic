@@ -9,6 +9,7 @@ mod component_deployment_configuration;
 mod component_group;
 mod component_group_deployment;
 mod fleet_service;
+mod provisioning_grants;
 mod runtime;
 pub mod schema;
 mod topology;

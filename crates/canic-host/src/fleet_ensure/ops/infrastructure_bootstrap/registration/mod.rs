@@ -184,18 +184,15 @@ pub(in crate::fleet_ensure) fn bind_state(
             .iter()
             .find(|entry| configured.wasm.as_ref() == Some(&entry.wasm_relative_path))
             .ok_or_else(invalid)?;
-        let protocol = crate::protocol_binding::resolve_infrastructure_protocol_binding(
-            workspace,
-            &desired.environment,
-            artifact,
-        )
-        .map_err(|_| invalid())?;
+        let protocol =
+            crate::protocol_binding::resolve_infrastructure_wire_profile(workspace, artifact)
+                .map_err(|_| invalid())?;
         let topology = state.topology.get_mut(&target.name).ok_or_else(invalid)?;
         if topology.module_hash.as_ref() != Some(&artifact.wasm_sha256_hex) {
             return Err(invalid());
         }
-        topology.protocol_binding = Some(protocol.binding().clone());
-        topology.role = Some(protocol.binding().role.to_string());
+        topology.protocol_binding = Some(protocol.clone());
+        topology.role = Some(protocol.role.to_string());
     }
     state.active_registry = Some(registry(phase)?);
     Ok(())

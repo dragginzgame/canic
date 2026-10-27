@@ -9,10 +9,6 @@ use canic::dto::pool_import::{
     PoolImportCommand, PoolImportContext, PoolImportIdentity, PoolImportPhase,
     PoolImportReservation, PoolImportSource, PoolImportSourceProgress, PoolImportStatus,
 };
-use canic_contracts::dto::wire::projection::capacity_import::Command;
-use canic_contracts::dto::wire::projection::capacity_import::Response;
-use canic_contracts::dto::wire::projection::fixture_baseline_capacity_import::StatusRequest;
-use canic_contracts::dto::wire::projection::fixture_baseline_capacity_import::StatusResponse;
 use canic_core::control_plane_support::error::InternalError;
 use ic_platform::pocket_ic::common::rest::BlobCompression;
 
@@ -412,7 +408,7 @@ fn install_capacity_root_with_wasm(
     pic.install_canister(
         wasm_store,
         store_wasm,
-        encode_one(FleetSubnetWasmStoreInitArgs {
+        canic_contracts::protocol::initialization::encode(FleetSubnetWasmStoreInitArgs {
             authority: installed.init_args.authority.wasm_store_authority.clone(),
             install_id: installed.init_args.wasm_store_activation.operation_id,
         })
@@ -422,7 +418,7 @@ fn install_capacity_root_with_wasm(
     pic.install_canister(
         root_id,
         root_wasm,
-        encode_one(&installed.init_args).unwrap(),
+        canic_contracts::protocol::initialization::encode(&installed.init_args).unwrap(),
         None,
     );
     let (request, response) = bootstrap_root_store_release_set(
@@ -451,52 +447,86 @@ pub(super) fn command(
     caller: Principal,
     action: PoolImportCommand,
 ) -> Result<PoolImportStatus, Error> {
-    let response: Result<Response, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((Command::ImportPoolCapacity(action),))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).update_call(
-                    root,
-                    caller,
-                    canic::protocol::CANIC_ROOT_COMMAND,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
-    response.map(|Response::ImportPoolCapacity(status)| status)
+    use canic_contracts::{
+        dto::{import_control, pool_census},
+        protocol::import_control as wire,
+    };
+    let (method, method_id, argument) = match action {
+        PoolImportCommand::Reserve(reservation) => (
+            wire::reserve::METHOD,
+            wire::reserve::METHOD_ID,
+            ic_wire::native::encode_request(
+                wire::reserve::METHOD_ID,
+                &pool_census::Reservation::from(*reservation),
+                wire::REQUEST_LIMITS,
+            ),
+        ),
+        PoolImportCommand::Advance {
+            identity,
+            canister_id,
+        } => (
+            wire::advance::METHOD,
+            wire::advance::METHOD_ID,
+            ic_wire::native::encode_request(
+                wire::advance::METHOD_ID,
+                &import_control::AdvanceRequest {
+                    identity,
+                    canister_id: canister_id.into(),
+                },
+                wire::REQUEST_LIMITS,
+            ),
+        ),
+        PoolImportCommand::Settle(identity) => (
+            wire::settle::METHOD,
+            wire::settle::METHOD_ID,
+            ic_wire::native::encode_request(
+                wire::settle::METHOD_ID,
+                &identity,
+                wire::REQUEST_LIMITS,
+            ),
+        ),
+        PoolImportCommand::Release {
+            identity,
+            publication_sha256,
+        } => (
+            wire::release::METHOD,
+            wire::release::METHOD_ID,
+            ic_wire::native::encode_request(
+                wire::release::METHOD_ID,
+                &import_control::ReleaseRequest {
+                    identity,
+                    publication_sha256,
+                },
+                wire::REQUEST_LIMITS,
+            ),
+        ),
+    };
+    let argument = argument.expect("native import request");
+    let bytes = pic
+        .update_call(root, caller, method, argument)
+        .expect("native import transport");
+    let response: Result<pool_census::ImportStatus, Error> =
+        ic_wire::native::decode_response(method_id, &bytes, wire::RESPONSE_LIMITS)
+            .expect("native import response");
+    response.map(Into::into)
 }
 
 pub(super) fn context(pic: &PocketIc, root: Principal, caller: Principal) -> PoolImportContext {
-    let response: Result<StatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((StatusRequest::PoolImportContext,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    caller,
-                    canic::protocol::CANIC_ROOT_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
-    let StatusResponse::PoolImportContext(context) = response.unwrap() else {
-        panic!("Root import context response");
-    };
-    *context
+    let response: Result<canic_contracts::dto::pool_import_read::Context, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::pool_import_read::context::METHOD,
+                method_id: canic::protocol::pool_import_read::context::METHOD_ID,
+                request_limits: canic::protocol::pool_import_read::REQUEST_LIMITS,
+                response_limits: canic::protocol::pool_import_read::RESPONSE_LIMITS,
+            },
+            &(),
+        )
+        .expect("native import context transport");
+    response.unwrap().into()
 }
 
 pub(super) fn status(
@@ -505,27 +535,19 @@ pub(super) fn status(
     caller: Principal,
     identity: PoolImportIdentity,
 ) -> PoolImportStatus {
-    let response: Result<StatusResponse, Error> =
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((StatusRequest::PoolImport(identity),))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    caller,
-                    canic::protocol::CANIC_ROOT_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap();
-    let StatusResponse::PoolImport(status) = response.unwrap() else {
-        panic!("Root import status response");
-    };
-    *status
+    let response: Result<canic_contracts::dto::pool_census::ImportStatus, Error> =
+        ic_testkit::pic::query_wire(
+            pic,
+            root,
+            caller,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::pool_import_read::status::METHOD,
+                method_id: canic::protocol::pool_import_read::status::METHOD_ID,
+                request_limits: canic::protocol::pool_import_read::REQUEST_LIMITS,
+                response_limits: canic::protocol::pool_import_read::RESPONSE_LIMITS,
+            },
+            &identity,
+        )
+        .expect("native import progress transport");
+    response.unwrap().into()
 }

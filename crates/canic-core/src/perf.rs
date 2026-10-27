@@ -19,12 +19,26 @@ use std::{
     task::{Context, Poll},
 };
 
+// Each checkpoint produces an instruction row and a sample-count row.
+const MAX_CHECKPOINT_KEYS: usize = crate::model::public_metrics::MAX_PUBLIC_METRICS / 2;
+const CHECKPOINT_NAME_OVERHEAD: usize = "perf.checkpoint.".len() + ".".len() + ".calls".len();
+
+/// Heap-owned counters and the number of distinct admitted checkpoint identities.
+
+struct PerfTable {
+    entries: BTreeMap<PerfKey, ic_metrics::MeasurementAggregate>,
+    checkpoint_count: usize,
+}
+
 thread_local! {
     // Installed only during a synchronous invocation or one future poll.
     static ACTIVE_CONTEXT: RefCell<Option<Rc<RefCell<PerfContext>>>> = const { RefCell::new(None) };
 
     /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
-    static PERF_TABLE: RefCell<BTreeMap<PerfKey, ic_metrics::MeasurementAggregate>> = const { RefCell::new(BTreeMap::new()) };
+    static PERF_TABLE: RefCell<PerfTable> = const { RefCell::new(PerfTable {
+        entries: BTreeMap::new(),
+        checkpoint_count: 0,
+    }) };
 
 
 }
@@ -73,6 +87,8 @@ pub fn perf_counter() -> u64 {
 
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum PerfKey {
+    /// Samples whose checkpoint identity could not be retained within the bounds.
+    CheckpointOverflow,
     Endpoint {
         kind: EndpointCallKind,
         name: String,
@@ -95,6 +111,7 @@ impl<'view> Borrow<dyn PerfKeyView + 'view> for PerfKey {
 impl PerfKeyView for PerfKey {
     fn key_ref(&self) -> PerfKeyRef<'_> {
         match self {
+            Self::CheckpointOverflow => PerfKeyRef::CheckpointOverflow,
             Self::Endpoint { kind, name } => PerfKeyRef::Endpoint { kind: *kind, name },
             Self::Checkpoint { scope, label } => PerfKeyRef::Checkpoint { scope, label },
         }
@@ -103,6 +120,7 @@ impl PerfKeyView for PerfKey {
 
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 enum PerfKeyRef<'key> {
+    CheckpointOverflow,
     Endpoint {
         kind: EndpointCallKind,
         name: &'key str,
@@ -116,6 +134,7 @@ enum PerfKeyRef<'key> {
 impl PerfKeyRef<'_> {
     fn into_owned(self) -> PerfKey {
         match self {
+            Self::CheckpointOverflow => PerfKey::CheckpointOverflow,
             Self::Endpoint { kind, name } => PerfKey::Endpoint {
                 kind,
                 name: name.to_owned(),
@@ -182,11 +201,7 @@ pub struct PerfEntry {
 
 /// Record a counter under the provided key.
 pub fn record(key: PerfKey, delta: u64) {
-    PERF_TABLE.with(|table| {
-        let mut table = table.borrow_mut();
-        let slot = table.entry(key).or_default();
-        slot.record(delta);
-    });
+    record_borrowed(key.key_ref(), delta);
 }
 
 pub fn record_endpoint_call(call: EndpointCall, delta_instructions: u64) {
@@ -199,19 +214,59 @@ pub fn record_endpoint_call(call: EndpointCall, delta_instructions: u64) {
     );
 }
 
+/// Record a bounded checkpoint identity, accounting for excess samples as overflow.
 pub fn record_checkpoint(scope: &str, label: &str, delta_instructions: u64) {
     record_borrowed(PerfKeyRef::Checkpoint { scope, label }, delta_instructions);
 }
 
 fn record_borrowed(key: PerfKeyRef<'_>, delta: u64) {
     PERF_TABLE.with_borrow_mut(|table| {
-        let slot = if let Some(slot) = table.get_mut(&key as &dyn PerfKeyView) {
-            slot
-        } else {
-            table.entry(key.into_owned()).or_default()
-        };
-        slot.record(delta);
+        let mut key = key;
+        if let PerfKeyRef::Checkpoint { scope, label } = key
+            && !checkpoint_name_fits(scope, label)
+        {
+            key = PerfKeyRef::CheckpointOverflow;
+        }
+        if let Some(slot) = table.entries.get_mut(&key as &dyn PerfKeyView) {
+            slot.record(delta);
+            return;
+        }
+        if matches!(key, PerfKeyRef::Checkpoint { .. }) {
+            if table.checkpoint_count < MAX_CHECKPOINT_KEYS {
+                table.checkpoint_count += 1;
+            } else if table
+                .entries
+                .last_key_value()
+                .is_some_and(|(last, _)| key < last.key_ref())
+            {
+                // Keep the same lexicographic prefix regardless of observation order.
+                let (_, evicted) = table
+                    .entries
+                    .pop_last()
+                    .expect("checkpoint capacity has a greatest key");
+                table
+                    .entries
+                    .entry(PerfKey::CheckpointOverflow)
+                    .or_default()
+                    .merge(evicted);
+            } else {
+                key = PerfKeyRef::CheckpointOverflow;
+            }
+        }
+        table
+            .entries
+            .entry(key.into_owned())
+            .or_default()
+            .record(delta);
     });
+}
+
+fn checkpoint_name_fits(scope: &str, label: &str) -> bool {
+    scope
+        .len()
+        .checked_add(label.len())
+        .and_then(|bytes| bytes.checked_add(CHECKPOINT_NAME_OVERHEAD))
+        .is_some_and(|bytes| bytes <= crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES)
 }
 
 /// Invocation-owned accounting state; no frames or checkpoint bases cross futures.
@@ -427,6 +482,7 @@ pub fn entries() -> Vec<PerfEntry> {
         let table = table.borrow();
 
         table
+            .entries
             .iter()
             .map(|(key, slot)| PerfEntry {
                 key: key.clone(),
@@ -437,14 +493,30 @@ pub fn entries() -> Vec<PerfEntry> {
     })
 }
 
+/// Read admission-loss accounting without narrowing the instruction total.
+pub(crate) fn checkpoint_overflow_entry() -> Option<PerfEntry> {
+    PERF_TABLE.with_borrow(|table| {
+        table
+            .entries
+            .get(&PerfKey::CheckpointOverflow)
+            .map(|slot| PerfEntry {
+                key: PerfKey::CheckpointOverflow,
+                count: slot.samples(),
+                total_instructions: slot.total(),
+            })
+    })
+}
+
 /// Read a key-ordered prefix without cloning arbitrarily large checkpoint labels.
 pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::InternalError> {
     PERF_TABLE.with_borrow(|table| {
         table
+            .entries
             .iter()
             .take(limit)
             .map(|(key, slot)| {
                 let valid = match key {
+                    PerfKey::CheckpointOverflow => true,
                     PerfKey::Endpoint { name, .. } => {
                         name.len() <= crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES
                     }
@@ -473,7 +545,10 @@ pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::Int
 
 #[cfg(test)]
 pub fn reset() {
-    PERF_TABLE.with(|t| t.borrow_mut().clear());
+    PERF_TABLE.with_borrow_mut(|table| {
+        table.entries.clear();
+        table.checkpoint_count = 0;
+    });
     ACTIVE_CONTEXT.with_borrow_mut(|active| *active = None);
 }
 
@@ -564,6 +639,134 @@ mod tests {
                 )
             })
             .expect("expected checkpoint perf entry to exist")
+    }
+
+    #[test]
+    fn checkpoint_names_admit_the_complete_public_identity_in_bytes() {
+        reset();
+        let budget =
+            crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES - CHECKPOINT_NAME_OVERHEAD;
+        let label = "x".repeat(budget - 1);
+        record_checkpoint("s", &label, 0);
+        record_checkpoint("s", &"é".repeat((budget - 1) / 2), 5);
+        record_checkpoint("s", &format!("{label}x"), 7);
+        record_checkpoint(&"m".repeat(129), "short", 11);
+        record(
+            PerfKey::Checkpoint {
+                scope: "s".into(),
+                label: "é".repeat(budget.div_ceil(2)),
+            },
+            13,
+        );
+        let valid = checkpoint_entry_for("s", &label);
+        assert_eq!(valid.count, 1);
+        assert_eq!(valid.total_instructions, 0);
+        let rows = bounded_entries(MAX_CHECKPOINT_KEYS + 1).unwrap();
+        assert_eq!(rows.len(), 3);
+        let overflow = &rows[0];
+        assert!(matches!(overflow.key, PerfKey::CheckpointOverflow));
+        assert_eq!(overflow.count, 3);
+        assert_eq!(overflow.total_instructions, 31);
+        for row in rows {
+            if let PerfKey::Checkpoint { scope, label } = row.key {
+                assert!(
+                    format!("perf.checkpoint.{scope}.{label}.calls").len()
+                        <= crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn checkpoint_capacity_preserves_key_order_and_all_observations() {
+        let count = MAX_CHECKPOINT_KEYS * 4;
+        let snapshot = |reverse| {
+            reset();
+            for position in 0..count {
+                let index = if reverse {
+                    count - position - 1
+                } else {
+                    position
+                };
+                let label = format!("sample_{index:04}");
+                let delta = u64::try_from(index).unwrap();
+                if index % 2 == 0 {
+                    record(
+                        PerfKey::Checkpoint {
+                            scope: "bounded".into(),
+                            label,
+                        },
+                        delta,
+                    );
+                } else {
+                    record_checkpoint("bounded", &label, delta);
+                }
+            }
+            record_checkpoint("bounded", "sample_0000", 25);
+            record_endpoint_call(call("unrelated", EndpointCallKind::Query), 3);
+            assert_eq!(checkpoint_entry_for("bounded", "sample_0000").count, 2);
+            assert_eq!(entry_for(EndpointCallKind::Query, "unrelated").count, 1);
+            PERF_TABLE.with_borrow(|table| {
+                assert_eq!(table.checkpoint_count, MAX_CHECKPOINT_KEYS);
+                assert_eq!(table.entries.len(), MAX_CHECKPOINT_KEYS + 2);
+            });
+            entries()
+                .into_iter()
+                .map(|row| (row.key, row.count, row.total_instructions))
+                .collect::<Vec<_>>()
+        };
+        let forward = snapshot(false);
+        let reverse = snapshot(true);
+        assert!(forward == reverse);
+        assert!(matches!(forward[0].0, PerfKey::CheckpointOverflow));
+        assert_eq!(
+            forward[0].1,
+            u64::try_from(count - MAX_CHECKPOINT_KEYS).unwrap()
+        );
+        assert_eq!(
+            forward.iter().map(|row| row.1).sum::<u64>(),
+            u64::try_from(count + 2).unwrap()
+        );
+        assert_eq!(
+            forward.iter().map(|row| row.2).sum::<u128>(),
+            (0..count).map(|value| value as u128).sum::<u128>() + 28
+        );
+        assert!(matches!(
+            bounded_entries(1).unwrap()[0].key,
+            PerfKey::CheckpointOverflow
+        ));
+    }
+
+    #[test]
+    fn checkpoint_eviction_moves_prior_samples_to_overflow_once() {
+        reset();
+        for index in 0..MAX_CHECKPOINT_KEYS {
+            record_checkpoint("z", &format!("sample_{index:04}"), 4);
+        }
+        let last = format!("sample_{:04}", MAX_CHECKPOINT_KEYS - 1);
+        record_checkpoint("z", &last, 6);
+        record_checkpoint("a", "first", 3);
+        record_checkpoint("z", &last, 8);
+        let rows = entries();
+        assert!(matches!(rows[0].key, PerfKey::CheckpointOverflow));
+        assert_eq!(rows[0].count, 3);
+        assert_eq!(rows[0].total_instructions, 18);
+        assert_eq!(checkpoint_entry_for("a", "first").total_instructions, 3);
+        assert!(!rows.iter().any(|row| matches!(&row.key, PerfKey::Checkpoint { scope, label } if scope == "z" && label == &last)));
+    }
+
+    #[test]
+    fn checkpoint_overflow_preserves_wide_totals_and_resets_with_the_table() {
+        reset();
+        assert!(checkpoint_overflow_entry().is_none());
+        let scope = "x".repeat(129);
+        record_checkpoint(&scope, "wide", u64::MAX);
+        record_checkpoint(&scope, "wide", u64::MAX);
+        let overflow = checkpoint_overflow_entry().unwrap();
+        assert_eq!(overflow.count, 2);
+        assert_eq!(overflow.total_instructions, u128::from(u64::MAX) * 2);
+        reset();
+        assert!(checkpoint_overflow_entry().is_none());
     }
 
     #[test]

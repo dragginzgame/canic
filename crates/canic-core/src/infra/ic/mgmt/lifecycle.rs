@@ -7,14 +7,13 @@
 use super::{
     MgmtInfra,
     types::{
-        InfraCanisterIdRecordExtended, InfraCanisterInstallMode, InfraClearChunkStoreArgs,
-        InfraInstallChunkedCodeArgs, InfraUploadChunkArgs,
+        InfraCanisterIdRecordExtended, InfraCanisterInstallMode, InfraInstallChunkedCodeArgs,
+        InfraUploadChunkArgs,
     },
 };
 use crate::infra::ic::{IcInfraError, call::Call};
 use ic_platform::cdk::api;
 use ic_platform::{
-    candid::contract::{ArgumentEncoder, encode_args},
     management_canister_types::{CanisterIdRecord, ChunkHash},
     principal::ExternalPrincipal as Principal,
 };
@@ -55,7 +54,7 @@ impl MgmtInfra {
 
     /// Clear the chunk store of one canister.
     pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), IcInfraError> {
-        let args = InfraClearChunkStoreArgs {
+        let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
 
@@ -68,14 +67,13 @@ impl MgmtInfra {
     }
 
     /// Install a canister from chunks stored in a same-subnet store canister.
-    pub async fn install_chunked_code<T: ArgumentEncoder>(
+    pub async fn install_chunked_code(
         target_canister: Principal,
         store_canister: Principal,
         chunk_hashes_list: Vec<Vec<u8>>,
         wasm_module_hash: Vec<u8>,
-        args: T,
+        arg: Vec<u8>,
     ) -> Result<(), IcInfraError> {
-        let arg = encode_args(args).map_err(IcInfraError::from)?;
         let install_args = InfraInstallChunkedCodeArgs {
             mode: InfraCanisterInstallMode::Install,
             target_canister,

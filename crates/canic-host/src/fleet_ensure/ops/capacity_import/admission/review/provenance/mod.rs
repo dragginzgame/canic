@@ -14,7 +14,7 @@ use crate::{
             certified_custody,
         },
     },
-    protocol_binding::resolve_infrastructure_protocol_binding,
+    protocol_binding::resolve_infrastructure_wire_profile,
     release_set::{
         CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest,
         load_persisted_current_release_set_manifest,
@@ -74,18 +74,14 @@ pub(super) async fn inspect(
             .ok_or_else(missing)?;
         let expected = hash(&artifact.wasm_sha256_hex)?;
         let retained = state.topology.get(&canister.name).ok_or_else(missing)?;
-        let protocol = resolve_infrastructure_protocol_binding(
-            &paths.workspace,
-            &desired.environment,
-            artifact,
-        )
-        .map_err(|_| missing())?;
+        let protocol = resolve_infrastructure_wire_profile(&paths.workspace, artifact)
+            .map_err(|_| missing())?;
         if artifact.protocol_release_identity != env!("CARGO_PKG_VERSION")
             || canister.wasm.as_ref() != Some(&artifact.wasm_relative_path)
             || retained.module_hash.as_ref() != Some(&artifact.wasm_sha256_hex)
             || retained.kind != canister.kind
             || retained.parent != canister.parent
-            || retained.protocol_binding.as_ref() != Some(protocol.binding())
+            || retained.protocol_binding.as_ref() != Some(&protocol)
         {
             return Err(changed());
         }

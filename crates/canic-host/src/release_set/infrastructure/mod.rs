@@ -91,6 +91,7 @@ pub struct CanicInfrastructureArtifactInput<'a> {
     pub wasm: &'a [u8],
     pub wasm_gz_relative_path: &'a str,
     pub wasm_gz: &'a [u8],
+    pub wire_schema: &'a [u8],
     pub candid_sha256: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
 }
@@ -193,6 +194,7 @@ pub struct CanicInfrastructureArtifactEntry {
     pub wasm_gz_relative_path: String,
     pub wasm_gz_size_bytes: u64,
     pub wasm_gz_sha256_hex: String,
+    pub wire_schema_sha256: [u8; 32],
     pub candid_sha256: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
 }
@@ -205,6 +207,12 @@ pub struct CanicInfrastructureArtifactEntry {
 
 #[derive(Debug, ThisError)]
 pub enum CanicInfrastructureArtifactManifestError {
+    #[error("artifact {role:?} failed final Wire schema admission: {source}")]
+    WireSchema {
+        role: CanicInfrastructureRole,
+        #[source]
+        source: crate::artifact_io::WireArtifactError,
+    },
     #[error("infrastructure artifact {role:?} {kind} size cannot be represented")]
     ArtifactSizeOverflow {
         role: CanicInfrastructureRole,
@@ -294,6 +302,12 @@ fn compile_entry(
     release_build_id: ReleaseBuildId,
     input: &CanicInfrastructureArtifactInput<'_>,
 ) -> Result<CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifestError> {
+    if input.wire_schema.is_empty() {
+        return Err(CanicInfrastructureArtifactManifestError::EmptyArtifact {
+            role: input.role,
+            kind: "Wire schema",
+        });
+    }
     if input.release_build_id != release_build_id {
         return Err(
             CanicInfrastructureArtifactManifestError::ReleaseBuildMismatch {
@@ -333,6 +347,14 @@ fn compile_entry(
             }
         })?;
 
+    let wire_schema_sha256 =
+        crate::release_set::artifact::qualify_wire_schema(input.wasm, input.wire_schema).map_err(
+            |source| CanicInfrastructureArtifactManifestError::WireSchema {
+                role: input.role,
+                source,
+            },
+        )?;
+
     let entry = CanicInfrastructureArtifactEntry {
         role: input.role,
         package: input.package.to_string(),
@@ -346,6 +368,7 @@ fn compile_entry(
         wasm_gz_relative_path: input.wasm_gz_relative_path.to_string(),
         wasm_gz_size_bytes: qualified.wasm_gz_size_bytes,
         wasm_gz_sha256_hex: qualified.wasm_gz_sha256_hex,
+        wire_schema_sha256,
         candid_sha256: input.candid_sha256,
         protocol_profile_digest: input.protocol_profile_digest,
     };

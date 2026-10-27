@@ -28,6 +28,12 @@ auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]
 auth-issuer-canister-sig-verify = ["canic-core/auth-issuer-canister-sig-verify"]
 auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
 internal-test-fixtures = ["canic-core/internal-test-fixtures"]
+wire-schema = [
+    "canic-contracts/wire-schema",
+    "dep:serde_json",
+    "dep:ic-host-artifacts",
+    "dep:clap",
+]
 testing = ["dep:ic-testkit", "ic-platform/pocket-ic"]
 
 [dependencies]
@@ -36,10 +42,14 @@ canic-control-plane = { workspace = true, default-features = false, optional = t
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
 ic-platform = { workspace = true, features = ["cdk", "candid-service", "executor", "ic0"] }
+ic-wire.workspace = true
 serde = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ic-testkit = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+ic-host-artifacts = { workspace = true, features = ["wasm"], optional = true }
+ic-testkit = { workspace = true, features = ["wire"], optional = true }
+serde_json = { workspace = true, optional = true }
 toml = { workspace = true }
 
 [dev-dependencies]
@@ -48,3 +58,8 @@ syn = { workspace = true, features = ["full", "visit"] }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "wire_schema"
+path = "tests/wire_schema/mod.rs"
+required-features = ["wire-schema"]

@@ -97,6 +97,7 @@ pub struct CanisterArtifactBuildOutput {
     pub wasm_gz_path: PathBuf,
     pub did_path: PathBuf,
     pub candid_sha256: [u8; 32],
+    pub wire_schema_sha256: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
     pub transforms: Vec<ArtifactTransformOutput>,
 }
@@ -160,4 +161,12 @@ pub struct WasmArtifactMetrics {
     pub code_section_bytes: u64,
     pub data_section_bytes: u64,
     pub defined_functions: u32,
+}
+
+/// Exact runtime selection reused by a native schema producer.
+pub struct NativeSchemaBuildRecipe {
+    pub manifest: PathBuf,
+    pub workspace: PathBuf,
+    pub package: String,
+    pub invocation: ic_build::cargo::execution::CargoInvocation,
 }

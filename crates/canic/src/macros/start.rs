@@ -467,47 +467,19 @@ macro_rules! __canic_after_optional_start_init_hook {
 #[macro_export]
 macro_rules! __canic_start_ingress_payload_inspect {
     () => {
-        #[doc(hidden)]
-        const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] = &[];
         #[$crate::__internal::cdk::inspect_message]
         fn canic_inspect_message() {
             $crate::__internal::core::ingress::payload::inspect_update_message();
         }
     };
     (root) => {
-        #[doc(hidden)]
-        const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] =
-            &[$crate::__internal::contracts::protocol::CANIC_ROOT_COMMAND];
-        #[$crate::__internal::cdk::inspect_message]
-        fn canic_inspect_message() {
-            __canic_inspect_root_update_message();
-        }
+        $crate::__canic_start_ingress_payload_inspect!();
     };
     (fleet_coordinator) => {
-        #[doc(hidden)]
-        const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] =
-            &[$crate::__internal::contracts::protocol::CANIC_COORDINATOR_COMMAND];
-        #[$crate::__internal::cdk::inspect_message]
-        fn canic_inspect_message() {
-            __canic_inspect_fleet_coordinator_update_message();
-        }
-    };
-    (managed) => {
-        #[doc(hidden)]
-        const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] = &[];
-        #[$crate::__internal::cdk::inspect_message]
-        fn canic_inspect_message() {
-            __canic_inspect_managed_update_message();
-        }
+        $crate::__canic_start_ingress_payload_inspect!();
     };
     (wasm_store) => {
-        #[doc(hidden)]
-        const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] =
-            &[$crate::__internal::contracts::protocol::CANIC_WASM_STORE_COMMAND];
-        #[$crate::__internal::cdk::inspect_message]
-        fn canic_inspect_message() {
-            __canic_inspect_wasm_store_update_message();
-        }
+        $crate::__canic_start_ingress_payload_inspect!();
     };
 }
 
@@ -552,7 +524,7 @@ macro_rules! finish {
             #[unsafe(no_mangle)]
             pub fn get_candid_pointer() -> *mut ::std::os::raw::c_char {
                 let candid = $crate::__internal::core::ingress::payload_contract::annotate_candid(
-                    __export_service(), __CANIC_VARIANT_PAYLOAD_METHODS,
+                    __export_service(),
                 );
                 ::std::ffi::CString::new(candid).expect("Candid contains no NUL").into_raw()
             }
@@ -647,7 +619,7 @@ macro_rules! start {
         );
 
         #[cfg(not(canic_is_root))]
-        $crate::__canic_start_ingress_payload_inspect!(managed);
+        $crate::__canic_start_ingress_payload_inspect!();
 
         #[cfg(not(canic_is_root))]
         $crate::__canic_emit_managed_command_endpoint!();

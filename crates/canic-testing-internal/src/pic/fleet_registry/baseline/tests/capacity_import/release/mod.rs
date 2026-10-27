@@ -15,34 +15,27 @@ pub(super) fn assert_census(
         .iter()
         .map(|source| pic.cycle_balance(source.canister_id))
         .collect::<Vec<_>>();
-    let read = |caller| -> Result<StatusResponse, Error> {
-        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
-            let request_bytes =
-                ic_platform::candid::contract::encode_args((StatusRequest::PoolRelease,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (pic).query_call(
-                    root,
-                    caller,
-                    canic::protocol::CANIC_ROOT_STATUS,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .map_err(Into::into)
-        })()
-        .map(|(reply,)| reply)
-        .unwrap()
+    let read = |caller| -> Result<canic_contracts::dto::root::RootPoolReleaseResponse, Error> {
+        let reply: Result<canic_contracts::dto::pool_census::Census, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                root,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::pool_census::METHOD,
+                    method_id: canic::protocol::pool_census::METHOD_ID,
+                    request_limits: canic::protocol::pool_census::REQUEST_LIMITS,
+                    response_limits: canic::protocol::pool_census::RESPONSE_LIMITS,
+                },
+                &(),
+            )
+            .expect("native pool release transport");
+        reply.map(Into::into)
     };
-    let StatusResponse::PoolRelease(observed) = read(controller).unwrap() else {
-        panic!("expected pool release census");
-    };
+    let observed = read(controller).unwrap();
     assert_eq!(observed.root, root);
     assert_eq!(observed.capacity_import.as_ref(), Some(expected));
-    let StatusResponse::PoolRelease(replayed) = read(controller).unwrap() else {
-        panic!("expected pool release census replay");
-    };
+    let replayed = read(controller).unwrap();
     assert_eq!(observed, replayed);
     let denied = read(Principal::self_authenticating(b"pool release outsider"))
         .err()

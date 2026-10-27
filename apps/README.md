@@ -46,9 +46,11 @@ The test App exposes top-level Component Specs for `app`, `index_hub`,
 occurrences from explicit Component Group deployments; declaring a Spec alone
 does not install it. `index_child`, `scale_replica`, and `user_shard`
 descendants are created only by later application/runtime requests. The demo
-sharding walkthrough is `demo_user_hub_plan("alice")`,
+sharding walkthrough uses the generated Wire client: `demo_user_hub_plan("alice")`,
 `demo_user_hub_assign("alice")`, then
-`demo_user_shard_describe("alice")` on the returned shard.
+`demo_user_shard_describe("alice")` on the returned shard. These demo-owned
+methods use native Wire framing; their schema supplies method identities and
+request/response budgets. Candid text arguments are not their call format.
 
 The separate desired Fleet format is documented in
 [Fleet ensure](../docs/features/operations/fleet-ensure.md).

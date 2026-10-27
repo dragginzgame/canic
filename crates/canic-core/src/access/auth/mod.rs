@@ -105,11 +105,6 @@ pub fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
     predicates::is_same_canister(caller)
 }
 
-/// Require a root-signed caller attestation bound to this canister's live Subnet.
-pub fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
-    attestation::is_attested_local_subnet(caller)
-}
-
 pub(crate) fn verify_decoded_attestation(
     attestation: &crate::dto::auth::SignedRoleAttestation,
     caller: Principal,

@@ -6,13 +6,13 @@
 
 use super::ROLE_ATTESTATION_PROOF_HASH_DOMAIN;
 use crate::{InternalError, dto::auth::RoleAttestation, ops::auth::AuthValidationError};
-use ic_platform::candid::contract::encode_one;
+use canic_contracts::protocol::authority::encode;
 use sha2::{Digest, Sha256};
 
 pub(super) fn role_attestation_hash(
     attestation: &RoleAttestation,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = encode_one(attestation).map_err(|err| AuthValidationError::EncodeFailed {
+    let payload = encode(attestation).map_err(|err| AuthValidationError::EncodeFailed {
         context: "role attestation",
         source: err,
     })?;

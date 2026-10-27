@@ -37,11 +37,11 @@ use canic_host::{
         PackageValidationMode, RolePackageValidation, validate_declared_role_packages,
     },
 };
-use ciborium::Value;
 use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
     prepare_artifact_cache, resolve_cargo_build_inputs,
 };
+use serde_cbor::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -211,6 +211,7 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &packages,
         crate::workspace::wasm_build_environment(),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("fast".into()),
@@ -290,6 +291,7 @@ fn bind_host_producer_inputs(
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &["canic-host"],
         crate::workspace::wasm_build_environment(),
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("fast".into()),
@@ -406,7 +408,7 @@ pub(super) fn literal_zero_release_artifact_outputs(
         CanicInfrastructureRole::WasmStore.as_str().to_string(),
     ]);
     for role in roles {
-        for extension in ["did", "wasm", "wasm.gz"] {
+        for extension in ["did", "wasm", "wasm.gz", "wire.json"] {
             outputs.insert(
                 format!("{role}-{extension}"),
                 literal_zero_role_artifact_path(adapter_root, release_build_id, &role, extension),
@@ -651,7 +653,7 @@ pub(super) fn persist_internal_test_release_build_plan(
         Value::Array(vec![Value::Integer(0.into())]),
     ]);
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(&value, &mut bytes)
+    serde_cbor::to_writer(&mut bytes, &value)
         .expect("encode deterministic internal release-build plan");
     let path = canic_host::release_build::release_build_plan_path(root, release_build_id);
     std::fs::create_dir_all(path.parent().expect("release-build plan parent"))

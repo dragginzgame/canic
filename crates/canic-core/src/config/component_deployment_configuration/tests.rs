@@ -289,10 +289,11 @@ fn compiled_configuration_round_trips_with_the_exact_semantic_digest() {
         .expect("configuration digest");
 
     assert_eq!(compiled.digest().expect("compiled digest"), expected);
-    let encoded = ic_platform::candid::contract::encode_one(&compiled)
+    let encoded = canic_contracts::protocol::authority::encode(&compiled)
         .expect("encode compiled configuration");
     let decoded: ComponentDeploymentConfiguration =
-        ic_platform::candid::decoder::decode_one(&encoded).expect("decode compiled configuration");
+        canic_contracts::protocol::authority::decode(&encoded)
+            .expect("decode compiled configuration");
     assert_eq!(decoded, compiled);
     assert_eq!(decoded.digest().expect("decoded digest"), expected);
 }
@@ -348,9 +349,9 @@ fn group_member_context_matches_only_the_exact_compiled_projection() {
     let runtime = assert_compiled_role_runtime_projection(&config, &binding);
     assert_runtime_projection_rejects_substitutions(&runtime, &context, &binding);
     let encoded =
-        ic_platform::candid::contract::encode_one(&context).expect("encode protected context");
+        canic_contracts::protocol::authority::encode(&context).expect("encode protected context");
     let decoded: ProtectedComponentDeployment =
-        ic_platform::candid::decoder::decode_one(&encoded).expect("decode protected context");
+        canic_contracts::protocol::authority::decode(&encoded).expect("decode protected context");
     assert_eq!(decoded, context);
 
     let mut wrong_digest = context.clone();

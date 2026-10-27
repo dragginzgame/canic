@@ -13,17 +13,11 @@ use canic_contracts::{
     dto::{
         error::Error,
         fleet_registry::FleetRegistry,
-        pool::{CanisterPoolAssetStatus, CanisterPoolResponse, CanisterPoolStatusRequest},
-        wire::projection::capacity_inventory::{
-            CoordinatorRequest, CoordinatorResponse, RootRequest, RootResponse,
-        },
+        pool::{CanisterPoolAssetStatus, CanisterPoolResponse},
     },
     protocol,
 };
-use ic_platform::{
-    agent::Agent, candid::contract::CandidType, principal::ExternalPrincipal as Principal,
-};
-use serde::Deserialize;
+use ic_platform::{agent::Agent, principal::ExternalPrincipal as Principal};
 use std::{collections::BTreeSet, time::Duration};
 
 const MAXIMUM_ASSETS: usize = 16_384;
@@ -43,19 +37,29 @@ pub(in crate::fleet_ensure::ops) async fn registry(
     agent: &Agent,
     coordinator: Principal,
 ) -> Result<FleetRegistry, CapacityImportJournalError> {
-    let argument = ic_platform::candid::contract::encode_one(CoordinatorRequest::Registry)
-        .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
+    let argument = ic_wire::native::encode_request(
+        protocol::registry_discovery::snapshot::METHOD_ID,
+        &(),
+        protocol::registry_discovery::REQUEST_LIMITS,
+    )
+    .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
     let bytes = query(
         agent,
         coordinator,
-        protocol::CANIC_COORDINATOR_REGISTRY,
+        protocol::registry_discovery::snapshot::METHOD,
         argument,
     )
     .await?;
-    let response: Result<CoordinatorResponse, Error> = decode(coordinator, &bytes)?;
-    let CoordinatorResponse::Registry(registry) =
-        response.map_err(CapacityImportJournalError::CoordinatorRejected)?;
-    Ok(*registry)
+    let response: Result<canic_contracts::dto::fleet_snapshot::FleetRegistry, Error> =
+        ic_wire::native::decode_response(
+            protocol::registry_discovery::snapshot::METHOD_ID,
+            &bytes,
+            protocol::registry_discovery::RESPONSE_LIMITS,
+        )
+        .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
+    response
+        .map(Into::into)
+        .map_err(CapacityImportJournalError::CoordinatorRejected)
 }
 
 pub(in crate::fleet_ensure::ops::capacity_import) async fn observe(
@@ -132,22 +136,24 @@ pub(in crate::fleet_ensure::ops) async fn root_inventory(
     let canister = root.fleet_subnet_root;
     let mut inventory = Pages::new(store, scope);
     loop {
-        let argument = ic_platform::candid::contract::encode_one(RootRequest::Pool(
-            CanisterPoolStatusRequest {
-                start_after: inventory.cursor,
+        let argument = ic_wire::native::encode_request(
+            protocol::pool_inventory::METHOD_ID,
+            &canic_contracts::dto::pool_inventory::Request {
+                start_after: inventory.cursor.map(Into::into),
                 limit: PAGE_SIZE,
             },
-        ))
+            protocol::pool_inventory::REQUEST_LIMITS,
+        )
         .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
-        let bytes = query(agent, canister, protocol::CANIC_ROOT_STATUS, argument).await?;
-        let response: Result<RootResponse, Error> = decode(canister, &bytes)?;
-        let RootResponse::Pool(page) =
-            response.map_err(CapacityImportJournalError::RootRejected)?;
+        let bytes = query(agent, canister, protocol::pool_inventory::METHOD, argument).await?;
+        let response = decode(canister, &bytes)?;
+        let page =
+            CanisterPoolResponse::from(response.map_err(CapacityImportJournalError::RootRejected)?);
         if page.config != root.limits.canister_pool {
             return Err(failed(canister, CapacityImportInventoryStage::Policy));
         }
         if inventory
-            .push(*page)
+            .push(page)
             .map_err(|_| failed(canister, CapacityImportInventoryStage::Page))?
         {
             break;
@@ -181,21 +187,19 @@ pub(in crate::fleet_ensure::ops) enum PoolScope {
     OtherRoot,
 }
 
-fn decode<'a, T: CandidType + Deserialize<'a>>(
+fn decode(
     canister: Principal,
-    bytes: &'a [u8],
-) -> Result<T, CapacityImportJournalError> {
-    let invalid = || failed(canister, CapacityImportInventoryStage::Decode);
+    bytes: &[u8],
+) -> Result<Result<canic_contracts::dto::pool_inventory::Page, Error>, CapacityImportJournalError> {
     if bytes.len() > RESPONSE_BYTES {
-        return Err(invalid());
+        return Err(failed(canister, CapacityImportInventoryStage::Decode));
     }
-    let mut config = ic_platform::candid::decoder::DecoderConfig::new();
-    config
-        .set_decoding_quota(RESPONSE_BYTES * 64)
-        .set_skipping_quota(RESPONSE_BYTES * 64)
-        .set_max_type_len(4096)
-        .set_max_header_len(64 * 1024);
-    ic_platform::candid::decoder::decode_one_with_config(bytes, &config).map_err(|_| invalid())
+    ic_wire::native::decode_response(
+        protocol::pool_inventory::METHOD_ID,
+        bytes,
+        protocol::pool_inventory::RESPONSE_LIMITS,
+    )
+    .map_err(|_| failed(canister, CapacityImportInventoryStage::Decode))
 }
 
 impl Pages {

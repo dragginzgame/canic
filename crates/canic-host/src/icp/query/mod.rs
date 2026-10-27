@@ -9,7 +9,6 @@ mod tests;
 use crate::icp::{IcpCli, IcpManagementCallError};
 use ic_platform::{
     agent::{Agent, AgentError, TransportError},
-    candid::contract::CandidType,
     principal::ExternalPrincipal as Principal,
 };
 use serde::de::DeserializeOwned;
@@ -39,11 +38,8 @@ pub enum IcpQueryError {
     #[error("authenticated query exceeded its bounded read deadline")]
     Deadline,
 
-    #[error("query response decoding failed: {0}")]
-    Decode(#[source] ic_platform::candid::contract::Error),
-
-    #[error("query argument encoding failed: {0}")]
-    Encode(#[source] ic_platform::candid::contract::Error),
+    #[error("query Wire codec failed: {0}")]
+    Wire(#[from] ic_wire::Error),
 
     #[error("query runtime failed: {0}")]
     Runtime(#[source] std::io::Error),
@@ -110,39 +106,46 @@ impl IcpCli {
         Ok(transport)
     }
 
-    /// Query one immutable request with at most three logical attempts in 30 seconds
-    /// after local identity/network resolution. Agent-internal HTTP retries and
-    /// certificate reads share that deadline but are not separate logical attempts.
-    /// The same verified signer, network, target, method and argument bind every attempt.
-    pub(crate) fn query_candid_readonly<I: CandidType, O: CandidType + DeserializeOwned>(
+    /// Query a native Wire contract with the same authenticated bounded read owner.
+    pub(crate) fn query_wire_readonly<I: serde::Serialize, O: DeserializeOwned>(
         &self,
         canister: Principal,
         method: &str,
+        method_id: u64,
         input: &I,
+        request_limits: ic_wire::Limits,
+        response_limits: ic_wire::Limits,
     ) -> Result<O, IcpQueryError> {
         self.measure_request(
             crate::icp::IcpRequestKind::AgentQuery,
             Some(&canister.to_text()),
             Some(method),
             || {
-                let argument = ic_platform::candid::contract::encode_one(input)
-                    .map_err(IcpQueryError::Encode)?;
-                let transport = self.query_transport()?;
-                let agent = self
-                    .build_authenticated_agent(
-                        Agent::builder()
-                            .with_http_client(transport.client.clone())
-                            .with_max_response_body_size(RESPONSE_BYTES),
-                    )
-                    .map_err(|error| IcpQueryError::Authority(Box::new(error)))?;
-                let bytes = query_bytes(self, &agent, canister, method, &argument)?;
-                let mut config = ic_platform::candid::decoder::DecoderConfig::new();
-                config.set_decoding_quota(RESPONSE_BYTES * 64);
-                config.set_skipping_quota(RESPONSE_BYTES);
-                ic_platform::candid::decoder::decode_one_with_config(&bytes, &config)
-                    .map_err(IcpQueryError::Decode)
+                let argument = ic_wire::native::encode_request(method_id, input, request_limits)?;
+                let bytes = self.query_readonly_bytes(canister, method, &argument)?;
+                ic_wire::native::decode_response(method_id, &bytes, response_limits)
+                    .map_err(IcpQueryError::Wire)
             },
         )
+    }
+
+    fn query_readonly_bytes(
+        &self,
+        canister: Principal,
+        method: &str,
+        argument: &[u8],
+    ) -> Result<Vec<u8>, IcpQueryError> {
+        let transport = self.query_transport()?;
+        let agent = self
+            .build_authenticated_agent(
+                Agent::builder()
+                    .with_http_client(transport.client.clone())
+                    .with_max_response_body_size(RESPONSE_BYTES),
+            )
+            .map_err(|error| IcpQueryError::Authority(Box::new(error)))?;
+        let bytes = query_bytes(self, &agent, canister, method, argument)?;
+
+        Ok(bytes)
     }
 }
 

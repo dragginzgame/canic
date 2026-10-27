@@ -33,7 +33,12 @@ pub fn start_pocket_ic(builder: PocketIcBuilder) -> PocketIc {
     .build_instance(builder)
     .map_or_else(
         |error| panic!("start governed PocketIC instance: {error}"),
-        |owned| owned.instance,
+        |owned| {
+            // Connect borrows the caller-owned server; no server custody is transferred.
+            let (instance, server) = owned.into_parts();
+            assert!(server.is_none(), "Connect must not acquire server custody");
+            instance
+        },
     )
 }
 
@@ -153,3 +158,88 @@ pub const CANDID_REPLY_LIMITS: ic_platform::candid::DecodeLimits =
         type_entries: 256,
         header_bytes: 16 * 1024,
     };
+
+/// Complete native observation for process fixtures; installed proofs use the actual Root.
+pub fn inspection_status(
+    status: canic_contracts::dto::canister::CanisterStatusType,
+    controllers: Vec<ic_platform::principal::ExternalPrincipal>,
+    module_hash: Option<Vec<u8>>,
+    cycles: ic_platform::candid::contract::Nat,
+) -> canic_contracts::dto::inspection::Response {
+    use canic_contracts::dto::canister as dto;
+    use ic_platform::candid::contract::Nat;
+    let status = dto::CanisterStatusResponse {
+        version: 0,
+        status,
+        module_hash,
+        cycles,
+        settings: dto::CanisterSettings {
+            controllers,
+            compute_allocation: Nat::from(0_u8),
+            memory_allocation: Nat::from(0_u8),
+            freezing_threshold: Nat::from(0_u8),
+            reserved_cycles_limit: Nat::from(0_u8),
+            log_visibility: dto::LogVisibility::Controllers,
+            log_memory_limit: Nat::from(0_u8),
+            wasm_memory_limit: Nat::from(0_u8),
+            wasm_memory_threshold: Nat::from(0_u8),
+            environment_variables: Vec::new(),
+        },
+        memory_size: Nat::from(0_u8),
+        reserved_cycles: Nat::from(0_u8),
+        idle_cycles_burned_per_day: Nat::from(0_u8),
+        memory_metrics: dto::MemoryMetrics {
+            wasm_memory_size: Nat::from(0_u8),
+            stable_memory_size: Nat::from(0_u8),
+            global_memory_size: Nat::from(0_u8),
+            wasm_binary_size: Nat::from(0_u8),
+            custom_sections_size: Nat::from(0_u8),
+            canister_history_size: Nat::from(0_u8),
+            wasm_chunk_store_size: Nat::from(0_u8),
+            snapshots_size: Nat::from(0_u8),
+        },
+        query_stats: dto::QueryStats {
+            num_calls_total: Nat::from(0_u8),
+            num_instructions_total: Nat::from(0_u8),
+            request_payload_bytes_total: Nat::from(0_u8),
+            response_payload_bytes_total: Nat::from(0_u8),
+        },
+    };
+    canic_contracts::dto::inspection::Response::InspectCanister(Box::new(
+        status.try_into().unwrap(),
+    ))
+}
+
+/// Hex-only ICP native output, with the same identity and budgets as the Root endpoint.
+pub fn inspection_reply(
+    response: Result<
+        canic_contracts::dto::inspection::Response,
+        canic_contracts::dto::error::Error,
+    >,
+) -> String {
+    use canic_contracts::protocol::inspection as wire;
+    canic_core::cdk::utils::hash::hex_bytes(
+        ic_wire::native::encode_response(wire::METHOD_ID, &response, wire::RESPONSE_LIMITS)
+            .unwrap(),
+    )
+}
+
+/// Encode a complete native pool fixture with the production query identity.
+pub fn pool_reply(
+    response: Result<
+        canic_contracts::dto::pool::CanisterPoolResponse,
+        canic_contracts::dto::error::Error,
+    >,
+) -> String {
+    let response = response.map(canic_contracts::dto::pool_inventory::Page::from);
+    canic_core::cdk::utils::hash::hex_bytes(
+        ic_wire::native::encode_response(
+            canic_contracts::protocol::pool_inventory::METHOD_ID,
+            &response,
+            canic_contracts::protocol::pool_inventory::RESPONSE_LIMITS,
+        )
+        .unwrap(),
+    )
+}
+
+pub use crate::release_set::test_artifact::{WIRE_SCHEMA, wire_wasm};

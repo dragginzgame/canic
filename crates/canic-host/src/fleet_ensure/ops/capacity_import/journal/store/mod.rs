@@ -68,7 +68,7 @@ impl CapacityImportJournalStore {
         let matches = |record: &CapacityImportJournalRecord| {
             record.operation.as_ref().is_some_and(|operation| {
                 operation.review.review_sha256 == review_sha256
-                    && operation.released_status_candid_hex.is_some()
+                    && operation.released_status_wire_hex.is_some()
             })
         };
         if let Some(current) = self.read()?.filter(matches) {
@@ -277,8 +277,8 @@ pub(in crate::fleet_ensure) fn require_completion_fits(
             .insert(record.plan.authority.root.to_text(), u32::MAX);
         let status = "f"
             .repeat(crate::fleet_ensure::ops::capacity_import::publication::MAX_STATUS_HEX_BYTES);
-        operation.settled_status_candid_hex = Some(status.clone());
-        operation.released_status_candid_hex = Some(status);
+        operation.settled_status_wire_hex = Some(status.clone());
+        operation.released_status_wire_hex = Some(status);
     }
     if serde_json::to_vec_pretty(&largest)?.len() > MAXIMUM_JOURNAL_BYTES {
         return Err(CapacityImportJournalError::Integrity);

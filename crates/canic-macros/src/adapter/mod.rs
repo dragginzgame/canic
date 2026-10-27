@@ -1,5 +1,11 @@
 //! Raw IC entrypoints shared by bounded endpoint and lifecycle adapters.
 
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by the sibling endpoint expander while unreachable_pub forbids public visibility"
+)]
+pub(crate) mod wire;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Signature, Type};
@@ -44,10 +50,7 @@ impl EntryKind {
             Self::Update => {
                 quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(update, rename = #method)])
             }
-            Self::Init => {
-                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(init)])
-            }
-            Self::PostUpgrade => quote!(),
+            Self::Init | Self::PostUpgrade => quote!(),
         }
     }
 }
@@ -55,7 +58,7 @@ impl EntryKind {
 ///
 /// RawAdapter
 ///
-/// The original signature owns Candid; the wrapper may separately return an access refusal.
+/// The signature owns the value shape; the wrapper may separately return an access refusal.
 /// Shared by endpoint and lifecycle expansion.
 ///
 
@@ -68,6 +71,7 @@ pub(crate) struct RawAdapter<'a> {
     pub kind: EntryKind,
     pub method: String,
     pub decode: Option<&'a TokenStream>,
+    pub wire: Option<&'a crate::endpoint::WireArgs>,
     pub max_bytes: Option<&'a TokenStream>,
     pub reject_access: bool,
     pub wrapper_async: bool,
@@ -116,7 +120,12 @@ impl RawAdapter<'_> {
             quote!(let __canic_result = #invoke;)
         };
         let reply = if lifecycle { quote!() } else { self.reply() };
-        let execute = quote! { #decode #invoke #reply };
+        let declaration = if let Some(wire) = self.wire {
+            wire::declaration(wire, &self.kind, &self.method, self.signature)?
+        } else {
+            quote!()
+        };
+        let execute = quote! { #declaration #decode #invoke #reply };
         let execute = if self.wrapper_async {
             quote!(::canic::__internal::cdk::futures::spawn(async { #execute });)
         } else {
@@ -132,6 +141,19 @@ impl RawAdapter<'_> {
     }
 
     fn decode(&self, names: &[syn::Ident], types: &[&Type]) -> TokenStream {
+        if matches!(self.kind, EntryKind::Init | EntryKind::PostUpgrade) {
+            let limits = self.decode.cloned().unwrap_or_else(|| {
+                quote!(::canic::__internal::contracts::protocol::initialization::LIMITS)
+            });
+            return quote! {
+                let (#(#names,)*): (#(#types,)*) =
+                    ::canic::endpoint::read_initialization(#limits)
+                    .unwrap_or_else(|error| ::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()));
+            };
+        }
+        if let Some(wire) = self.wire {
+            return wire::decode(wire, names, types);
+        }
         if let Some(limits) = self.decode {
             return quote! {
                 const __CANIC_ARGUMENT_LIMITS: ::canic::endpoint::ArgumentLimits = #limits;
@@ -172,6 +194,9 @@ impl RawAdapter<'_> {
     }
 
     fn reply(&self) -> TokenStream {
+        if let Some(wire) = self.wire {
+            return wire::reply(wire);
+        }
         let encode = match &self.signature.output {
             syn::ReturnType::Type(_, ty) if matches!(&**ty, Type::Tuple(tuple) if tuple.elems.len() > 1) =>
             {

@@ -113,7 +113,7 @@ mod tests {
         },
         config::schema::NAME_MAX_BYTES,
     };
-    use ciborium::value::Value;
+    use serde_cbor::Value;
 
     #[test]
     fn child_allocation_field_is_bounded_and_required_even_when_null() {
@@ -142,11 +142,11 @@ mod tests {
                 panic!("child record encodes as a map");
             };
             let key = Value::Text("allocation_operation_id".into());
-            let (_, value) = fields.iter().find(|(field, _)| field == &key).unwrap();
+            let value = fields.get(&key).unwrap();
             if allocation_operation_id.is_none() {
                 assert_eq!(value, &Value::Null);
             }
-            fields.retain(|(field, _)| field != &key);
+            fields.retain(|field, _| field != &key);
             let missing = serialize(&Value::Map(fields)).unwrap();
             assert!(deserialize::<CanisterChildRecord>(&missing).is_err());
         }

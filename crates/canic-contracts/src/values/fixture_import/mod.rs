@@ -4,13 +4,15 @@
 //! Does not own: callbacks, retries, records or application progress.
 //! Boundary: concrete diagnostic codes retain the originating owner.
 
-use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 /// Durable reason why automatic import requires review instead of another attempt.
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum FixtureImportFailure {
     Application { code: u32 },
     Authority,

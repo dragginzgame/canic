@@ -243,7 +243,6 @@ pub(in crate::fleet_ensure) fn assert_activation_reset_reviews(
         estate_funding_domains: BTreeMap::new(),
         ledger_fee_cycles: 100_000_000,
         operator_cycles: 0,
-        protocol_ready: BTreeMap::new(),
     };
     let mut authorities = BTreeMap::new();
     let mut assets = Vec::new();

@@ -611,6 +611,33 @@ fn package_feature_forwarding_is_rejected() {
 }
 
 #[test]
+fn native_schema_forwarding_preserves_runtime_feature_rejections() {
+    let mut package = package("role", "role@1", "/tmp/role/Cargo.toml");
+    package
+        .features
+        .insert("wire-schema".into(), vec!["canic/wire-schema".into()]);
+    reject_package_feature_forwarding(&package, "canic").unwrap();
+    for (feature, member) in [
+        ("wire-schema", "canic/sharding"),
+        ("wire-schema", "canic?/sharding"),
+        ("wire-schema", "dep:canic"),
+        ("wire-schema", "canic?/wire-schema"),
+        ("runtime", "canic/wire-schema"),
+    ] {
+        let mut changed = package.clone();
+        changed
+            .features
+            .entry(feature.into())
+            .or_default()
+            .push(member.into());
+        assert!(matches!(
+            reject_package_feature_forwarding(&changed, "canic"),
+            Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+        ));
+    }
+}
+
+#[test]
 fn composition_library_shares_the_exact_selected_canic_facade() {
     let packages = [
         package("role", "role@1", "/tmp/role/Cargo.toml"),

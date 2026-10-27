@@ -1,5 +1,22 @@
 # Resolved Cargo graph checks
 
+`--json` emits a complete structured result after successful Cargo observation
+and parsing: selected consumer, exact command, target, roots, pass/fail and
+package-labelled violations. A policy failure returns 1 in JSON mode. Failed or
+malformed observations emit no JSON result and still return nonzero.
+
+Add `--explain` to ask the same Cargo invocation for ASCII tree prefixes. Violations
+then include the first observed package or feature path in that selected tree;
+text mode also prints the path. Targets, features, depth limits and edge kinds
+remain unchanged. These are representative paths, not every introducing path
+or a new resolver; Cargo can deduplicate repeated subtrees. Missing required
+packages have no path. For example:
+
+```bash
+perl scripts/ci/check-cargo-graph.pl --consumer . --package example \
+  --target wasm32-unknown-unknown --forbid candid --json --explain
+```
+
 Shared Tooling owns the observation/checking mechanics. Consumers own the roots,
 targets, features, forbidden packages and required identity counts. This helper
 complements direct declaration checks; it does not replace them or infer policy
@@ -58,6 +75,27 @@ A passing graph check does not compile or deploy anything. Bind successful locke
 build evidence, source/lock identities, actual target/features and final artifact
 digest to any deployment. Native hosts and installed IC behavior retain separate
 qualification.
+
+## Coordinated release adoption
+
+A coordinated workspace version simplifies selection; it does not prove that
+consumers have adopted the same dependency identities. After an authorized
+upgrade, inspect each affected consumer's selected locked graph, including
+public types exchanged with other libraries. A commit label or pending changelog
+heading is not proof of a finalized version, registry publication or adoption.
+
+Use targeted identity counts where multiple generations would violate an actual
+consumer contract. Reuse `--require NAME=1` when the package must be present, or
+`--max-count NAME=1` when it is optional. Match the production roots, target and
+features, and qualify native tooling separately. Do not infer duplicate Wasm
+code or a defect from multiple entries in a whole-workspace lockfile; independent
+test, host and runtime graphs can legitimately select different versions.
+
+Finish an accepted migration before treating its temporary mixed selections as
+a permanent design defect. Add or tighten a consumer guard with the completed
+adoption when justified; do not create a blanket duplicate-dependency ban or
+restructure workspaces merely to make a lockfile uniform. Existing ownership,
+focused validation and release authority still apply.
 
 ## Focused dependency-adoption contract
 

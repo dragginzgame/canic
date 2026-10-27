@@ -1,4 +1,6 @@
 //! Control-plane workflows for bootstrap and publication runtime.
+#[cfg(feature = "root-control-plane")]
+pub mod application_checkpoint;
 #[cfg(feature = "wasm-store-canister")]
 pub mod fixture_store;
 

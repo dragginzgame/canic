@@ -38,7 +38,7 @@ use crate::cli::{
     clap::parse_matches,
     globals::{
         DISPATCH_ARGS, apply_global_environment, apply_global_icp, global_environment_conflict,
-        misplaced_global_option,
+        misplaced_global_option, unsupported_global_option,
     },
 };
 use clap::error::ErrorKind;
@@ -223,6 +223,17 @@ where
         .get_many::<OsString>(DISPATCH_ARGS)
         .map(|values| values.cloned().collect::<Vec<_>>())
         .unwrap_or_default();
+    if let Some(option) = unsupported_global_option(
+        command,
+        &tail,
+        global_icp.as_deref(),
+        global_environment.as_deref(),
+    ) {
+        return Err(CliError::Clap(top_level_command().error(
+            ErrorKind::UnknownArgument,
+            format!("global option '{option}' is not supported by '{command}'"),
+        )));
+    }
     if let Some(conflict) =
         global_environment_conflict(command, &tail, global_environment.as_deref())
     {

@@ -7,11 +7,11 @@ use crate::{
         model::{
             CanisterDisposition, CanisterRuntimeStatus, CurrentFleetProtocolAction,
             CycleConservation, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
-            DesiredFleet, DesiredFleetProtocol, DesiredPresence, DesiredProtocolStep,
-            DrainAuthority, EffectRecord, EffectState, EnsureAction,
-            EstateFundingDomainObservation, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion,
-            FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord, FleetObservation,
-            LiveCanister, RootOwnedCanisterLifecycle, create_balance_is_terminal,
+            DesiredFleet, DesiredFleetProtocol, DesiredPresence, DrainAuthority, EffectRecord,
+            EffectState, EnsureAction, EstateFundingDomainObservation, FLEET_ENSURE_SCHEMA_VERSION,
+            FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
+            FleetEnsureStateRecord, FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
+            create_balance_is_terminal,
             operator_mint::{
                 OperatorMintAuthority, OperatorMintNotificationOutcomeRecord,
                 OperatorMintReceiptRecord, OperatorMintTransferOutcomeRecord,
@@ -343,7 +343,6 @@ impl MockPlatform {
             | EnsureAction::Fund { principal, .. }
             | EnsureAction::FundEstate { principal, .. }
             | EnsureAction::Install { principal, .. }
-            | EnsureAction::Protocol { principal, .. }
             | EnsureAction::SetControllers { principal, .. }
             | EnsureAction::Start { principal, .. }
             | EnsureAction::Stop { principal, .. }
@@ -512,9 +511,7 @@ impl MockPlatform {
                         live.canister_version,
                     )
                 }),
-            EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
-                self.protocol_ready.contains(name)
-            }
+            EnsureAction::FleetProtocol { name, .. } => self.protocol_ready.contains(name),
             EnsureAction::SetControllers {
                 controller_canisters,
                 controllers,
@@ -721,7 +718,7 @@ impl MockPlatform {
                 }
                 empty_outcome()
             }
-            EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
+            EnsureAction::FleetProtocol { name, .. } => {
                 if !self.protocol_command_only {
                     self.protocol_ready.insert(name.clone());
                 }
@@ -1004,12 +1001,6 @@ impl EnsurePlatform for MockPlatform {
             estate_funding_domains,
             ledger_fee_cycles: self.ledger_fee_cycles,
             operator_cycles: self.operator_cycles,
-            protocol_ready: self
-                .desired
-                .protocol_steps
-                .iter()
-                .map(|step| (step.name.clone(), self.protocol_ready.contains(&step.name)))
-                .collect(),
         })
     }
 
@@ -1604,9 +1595,9 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
     fixture.desired.protocol = Some(DesiredFleetProtocol {
         app_config: "canic.toml".to_string(),
         component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
+        coordinator_wire_schema: "coordinator.wire.json".to_string(),
+        root_wire_schema: "root.wire.json".to_string(),
+        store_wire_schema: "store.wire.json".to_string(),
     });
     fixture
         .desired
@@ -2090,9 +2081,9 @@ fn configure_fixture_publication(fixture: &mut Fixture) {
     fixture.desired.protocol = Some(DesiredFleetProtocol {
         app_config: "canic.toml".into(),
         component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".into(),
-        root_candid: "root.did".into(),
-        store_candid: "store.did".into(),
+        coordinator_wire_schema: "coordinator.wire.json".into(),
+        root_wire_schema: "root.wire.json".into(),
+        store_wire_schema: "store.wire.json".into(),
     });
     fixture.platform.reviewed_protocol_actions = fixture_publication_actions(root, store);
 }
@@ -2168,13 +2159,18 @@ fn fixture_publication_actions(root: Principal, store: Principal) -> Vec<EnsureA
         if let EnsureAction::FleetProtocol {
             action,
             principal,
-            candid,
+            wire_schema,
             ..
         } = outer
         {
             let is_root = action.target_kind() == DesiredCanisterKind::Root;
             *principal = if is_root { root } else { store }.to_text();
-            *candid = if is_root { "root.did" } else { "store.did" }.to_string();
+            *wire_schema = if is_root {
+                "root.wire.json"
+            } else {
+                "store.wire.json"
+            }
+            .to_string();
         }
     }
     actions
@@ -2428,10 +2424,6 @@ fn fixture_publication_review_accounts_for_each_retry_and_rejects_zero_attempts(
 fn interruption_at_every_effect_converges_once_and_second_run_has_zero_effects() {
     let mut fixture = fixture();
     configure_fixture_publication(&mut fixture);
-    fixture
-        .desired
-        .protocol_steps
-        .push(protocol_step(&fixture.root));
     fixture.platform.desired = fixture.desired.clone();
     let root = fixture.root.clone();
     let desired_sha256 = "a".repeat(64);
@@ -2556,9 +2548,9 @@ fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command
     fixture.desired.protocol = Some(DesiredFleetProtocol {
         app_config: "canic.toml".to_string(),
         component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
+        coordinator_wire_schema: "coordinator.wire.json".to_string(),
+        root_wire_schema: "root.wire.json".to_string(),
+        store_wire_schema: "store.wire.json".to_string(),
     });
     fixture
         .desired
@@ -2923,9 +2915,9 @@ fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_appli
     fixture.desired.protocol = Some(DesiredFleetProtocol {
         app_config: "canic.toml".to_string(),
         component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
+        coordinator_wire_schema: "coordinator.wire.json".to_string(),
+        root_wire_schema: "root.wire.json".to_string(),
+        store_wire_schema: "store.wire.json".to_string(),
     });
     let roles = [
         (
@@ -4756,10 +4748,15 @@ fn retirement_never_stops_or_deletes_until_treasury_credit_is_observed() {
 #[test]
 fn protocol_response_is_only_issuance_and_terminal_status_gates_later_actions() {
     let mut fixture = fixture();
+    fixture.desired.protocol = Some(protocol_configuration());
+    fixture.platform.typed_protocol = true;
     fixture
         .desired
-        .protocol_steps
-        .push(protocol_step(&fixture.root));
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .unwrap()
+        .wasm = None;
     fixture.platform.desired = fixture.desired.clone();
     fixture.platform.protocol_command_only = true;
     let source = "8".repeat(64);
@@ -4806,7 +4803,7 @@ fn protocol_response_is_only_issuance_and_terminal_status_gates_later_actions() 
 
     platform
         .protocol_ready
-        .insert("fleet-catalog-terminal".to_string());
+        .insert("fleet-component-provisioning".to_string());
     let terminal = workflow::apply(
         &fixture.root,
         &fixture.desired,
@@ -4866,9 +4863,9 @@ fn in_progress_operation_resumes_reviewed_desired_before_newer_input() {
     fixture.desired.protocol = Some(DesiredFleetProtocol {
         app_config: "canic.toml".to_string(),
         component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
+        coordinator_wire_schema: "coordinator.wire.json".to_string(),
+        root_wire_schema: "root.wire.json".to_string(),
+        store_wire_schema: "store.wire.json".to_string(),
     });
     fixture
         .desired
@@ -4966,9 +4963,9 @@ fn typed_fleet_protocol_is_issued_once_and_requires_terminal_status() {
     fixture.desired.protocol = Some(DesiredFleetProtocol {
         app_config: "canic.toml".to_string(),
         component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
+        coordinator_wire_schema: "coordinator.wire.json".to_string(),
+        root_wire_schema: "root.wire.json".to_string(),
+        store_wire_schema: "store.wire.json".to_string(),
     });
     fixture
         .desired
@@ -5059,9 +5056,9 @@ fn long_running_component_provisioning_is_paced_past_eight_observations_without_
     fixture.desired.protocol = Some(DesiredFleetProtocol {
         app_config: "canic.toml".to_string(),
         component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
+        coordinator_wire_schema: "coordinator.wire.json".to_string(),
+        root_wire_schema: "root.wire.json".to_string(),
+        store_wire_schema: "store.wire.json".to_string(),
     });
     fixture.desired.maximum_stalled_observations = 12;
     fixture
@@ -5758,7 +5755,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
         mutations: BTreeMap<String, u32>,
         operator_cycles: u128,
         pic: PocketIc,
-        protocol_ready: BTreeSet<String>,
         reinstall_required: BTreeSet<String>,
     }
 
@@ -5851,12 +5847,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     .map(|cycles| cycles.to_u128())
                     .expect("PocketIC fixture ledger fee"),
                 operator_cycles: self.operator_cycles,
-                protocol_ready: self
-                    .desired
-                    .protocol_steps
-                    .iter()
-                    .map(|step| (step.name.clone(), self.protocol_ready.contains(&step.name)))
-                    .collect(),
             })
         }
 
@@ -5915,7 +5905,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::FleetProtocol { principal, .. }
                 | EnsureAction::FundEstate { principal, .. }
                 | EnsureAction::Install { principal, .. }
-                | EnsureAction::Protocol { principal, .. }
                 | EnsureAction::SetControllers { principal, .. }
                 | EnsureAction::Start { principal, .. }
                 | EnsureAction::Stop { principal, .. }
@@ -5953,8 +5942,10 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 EnsureAction::Stop { .. } => principal
                     .and_then(|value| self.live(value))
                     .is_some_and(|live| live.status == CanisterRuntimeStatus::Stopped),
-                EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
-                    self.protocol_ready.contains(name)
+                EnsureAction::FleetProtocol { .. } => {
+                    return Err(std::io::Error::other(
+                        "minimal-Wasm estate has no managed protocol",
+                    ));
                 }
                 EnsureAction::Create { .. }
                 | EnsureAction::Fund { .. }
@@ -5984,7 +5975,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::Fund { principal, .. }
                 | EnsureAction::FundEstate { principal, .. }
                 | EnsureAction::Install { principal, .. }
-                | EnsureAction::Protocol { principal, .. }
                 | EnsureAction::SetControllers { principal, .. }
                 | EnsureAction::Start { principal, .. }
                 | EnsureAction::Stop { principal, .. }
@@ -6120,23 +6110,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     }
                     Ok(empty_outcome())
                 }
-                EnsureAction::FleetProtocol {
-                    name,
-                    principal: target,
-                    ..
-                }
-                | EnsureAction::Protocol {
-                    name,
-                    principal: target,
-                    ..
-                } => {
-                    self.protocol_ready.insert(name.clone());
-                    Ok(EffectOutcome {
-                        created_principal: None,
-                        post_cycles: Some(self.pic.cycle_balance(principal(target))),
-                        receipt: Some("pocketic-protocol".to_string()),
-                    })
-                }
+                EnsureAction::FleetProtocol { .. } => Err(std::io::Error::other(
+                    "minimal-Wasm estate has no managed protocol",
+                )),
                 EnsureAction::SetControllers {
                     controllers,
                     principal: target,
@@ -6208,9 +6184,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
         subnet: SUBNET.to_string(),
         wasm: Some(wasm.display().to_string()),
     }];
-    let mut root_desired = desired_canister("root", None, false, &wasm, None);
-    root_desired.kind = DesiredCanisterKind::Root;
-    root_desired.parent = Some("coordinator".to_string());
+    let mut root_desired = desired_canister("worker", None, false, &wasm, None);
+    root_desired.kind = DesiredCanisterKind::Auxiliary;
+    root_desired.parent = None;
     root_desired.initial_cycles = "1000000000000".to_string();
     root_desired.minimum_cycles = "500000000000".to_string();
     canisters.push(root_desired);
@@ -6245,14 +6221,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
         maximum_update_burn_cycles: "100000000000".to_string(),
         operator: CONTROLLER.to_string(),
         protocol: None,
-        protocol_steps: [
-            ("prepare-coordinator", "coordinator"),
-            ("prepare-root", "root"),
-            ("activate-service", "service"),
-        ]
-        .into_iter()
-        .map(|(name, canister)| protocol_step_for(&root, name, canister))
-        .collect(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         treasury: "treasury".to_string(),
     };
@@ -6264,7 +6232,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
         mutations: BTreeMap::new(),
         operator_cycles: 10_000_000_000_000,
         pic,
-        protocol_ready: BTreeSet::new(),
         reinstall_required: BTreeSet::new(),
     };
     let source = "d".repeat(64);
@@ -6316,7 +6283,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
         mutations,
         operator_cycles,
         pic,
-        protocol_ready,
         reinstall_required,
         ..
     } = platform;
@@ -6328,7 +6294,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
         mutations,
         operator_cycles,
         pic,
-        protocol_ready,
         reinstall_required,
     };
     let applied = workflow::apply(
@@ -6635,13 +6600,7 @@ pub(super) fn protocol_tranche_fixture(burns: Vec<u128>) -> Fixture {
         .canisters
         .retain(|canister| canister.name == "treasury");
     fixture.desired.canisters[0].wasm = None;
-    fixture.desired.protocol = Some(DesiredFleetProtocol {
-        app_config: "canic.toml".to_string(),
-        component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
-    });
+    fixture.desired.protocol = Some(protocol_configuration());
     let current_hash = sha256_hex(b"current-wasm");
     fixture.platform = MockPlatform::new(
         fixture.desired.clone(),
@@ -6702,7 +6661,6 @@ fn fixture() -> Fixture {
         maximum_update_burn_cycles: "1".to_string(),
         operator: CONTROLLER.to_string(),
         protocol: None,
-        protocol_steps: Vec::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         treasury: "treasury".to_string(),
     };
@@ -6874,15 +6832,11 @@ fn drain(candid: &Path) -> DrainAuthority {
     }
 }
 
-fn protocol_step(root: &Path) -> DesiredProtocolStep {
-    protocol_step_for(root, "fleet-catalog-terminal", "app")
-}
-
 fn fleet_protocol_action(name: &str, action: CurrentFleetProtocolAction) -> EnsureAction {
     EnsureAction::FleetProtocol {
         action: Box::new(action),
-        candid: "coordinator.did".to_string(),
-        candid_sha256: "19".repeat(32),
+        wire_schema: "coordinator.wire.json".to_string(),
+        wire_schema_sha256: "19".repeat(32),
         maximum_execution_burn_cycles: 1,
         name: name.to_string(),
         principal: TREASURY.to_string(),
@@ -6972,8 +6926,8 @@ pub(super) fn typed_protocol_action(operation_id: &str) -> EnsureAction {
             },
             plan_hash: [10; 32],
         }),
-        candid: "coordinator.did".to_string(),
-        candid_sha256: "11".repeat(32),
+        wire_schema: "coordinator.wire.json".to_string(),
+        wire_schema_sha256: "11".repeat(32),
         maximum_execution_burn_cycles: 1,
         name: "fleet-component-provisioning".to_string(),
         principal: TREASURY.to_string(),
@@ -7012,32 +6966,6 @@ fn empty_active_registry() -> FleetRegistry {
         component_specs: Vec::new(),
         fleet_subnet_roots: Vec::new(),
         services: Vec::new(),
-    }
-}
-
-fn protocol_step_for(root: &Path, name: &str, canister: &str) -> DesiredProtocolStep {
-    let candid = root.join("protocol.did");
-    let command_args = root.join("protocol-command.args");
-    let status_args = root.join("protocol-status.args");
-    let expected_status = root.join("protocol-expected.args");
-    fs::write(
-        &candid,
-        b"service : { apply : (text) -> (); status : (text) -> (bool) query; };",
-    )
-    .expect("write protocol Candid");
-    fs::write(&command_args, b"({{operation_id}})").expect("write protocol command");
-    fs::write(&status_args, b"({{operation_id}})").expect("write protocol status");
-    fs::write(&expected_status, b"(true)").expect("write expected protocol status");
-    DesiredProtocolStep {
-        canister: canister.to_string(),
-        candid: candid.display().to_string(),
-        command_args: command_args.display().to_string(),
-        command_method: "apply".to_string(),
-        expected_status: expected_status.display().to_string(),
-        maximum_execution_burn_cycles: "1".to_string(),
-        name: name.to_string(),
-        status_args: status_args.display().to_string(),
-        status_method: "status".to_string(),
     }
 }
 
@@ -7113,12 +7041,12 @@ fn reinstall_history_accepts_only_the_exact_intended_root_replacement() {
     let witness = ReinstallHistoryWitness {
         prior_module_sha256: before.module_sha256.clone(),
         authority: before.clone(),
-        candid: "source.did".into(),
-        candid_sha256: "33".repeat(32),
+        wire_schema: "source.wire.json".into(),
+        wire_schema_sha256: "33".repeat(32),
         replacement: Some(Box::new(ReinstallRootWitnessRecord {
             authority: after.clone(),
-            candid: "target.did".into(),
-            candid_sha256: "44".repeat(32),
+            wire_schema: "target.wire.json".into(),
+            wire_schema_sha256: "44".repeat(32),
         })),
     };
     let select = |current: &RootManagementBinding, principal: &str, state: &EffectState| {
@@ -7127,20 +7055,20 @@ fn reinstall_history_accepts_only_the_exact_intended_root_replacement() {
     assert_eq!(
         select(&before, TREASURY, &EffectState::Intent)
             .unwrap()
-            .candid,
-        "source.did"
+            .wire_schema,
+        "source.wire.json"
     );
     assert_eq!(
         select(&after, TREASURY, &EffectState::Issued)
             .unwrap()
-            .candid,
-        "target.did"
+            .wire_schema,
+        "target.wire.json"
     );
     assert_eq!(
         select(&after, TREASURY, &EffectState::Intent)
             .unwrap()
-            .candid,
-        "target.did"
+            .wire_schema,
+        "target.wire.json"
     );
     assert!(select(&after, TREASURY, &EffectState::Applied).is_none());
     assert!(select(&after, OLD_APP, &EffectState::Issued).is_none());
@@ -7239,13 +7167,15 @@ fn store_chunk_fixture() -> Fixture {
     fixture.platform.publication_journal = Some(paths.journal);
     for action in &mut fixture.platform.reviewed_protocol_actions {
         let EnsureAction::FleetProtocol {
-            principal, candid, ..
+            principal,
+            wire_schema,
+            ..
         } = action
         else {
             unreachable!()
         };
         *principal = Principal::from_slice(&[72]).to_text();
-        *candid = "store.did".into();
+        *wire_schema = "store.wire.json".into();
     }
     fixture
 }
@@ -7264,13 +7194,15 @@ fn pool_batch_fixture() -> Fixture {
                 },
             );
             let EnsureAction::FleetProtocol {
-                principal, candid, ..
+                principal,
+                wire_schema,
+                ..
             } = &mut action
             else {
                 unreachable!()
             };
             *principal = Principal::from_slice(&[71]).to_text();
-            *candid = "root.did".into();
+            *wire_schema = "root.wire.json".into();
             action
         })
         .collect();
@@ -7290,8 +7222,8 @@ fn pool_batches_stop_at_authority_and_duplicate_asset_boundaries() {
         let duplicate = changed[0].clone();
         let EnsureAction::FleetProtocol {
             principal,
-            candid,
-            candid_sha256,
+            wire_schema,
+            wire_schema_sha256,
             action,
             ..
         } = &mut changed[1]
@@ -7300,8 +7232,8 @@ fn pool_batches_stop_at_authority_and_duplicate_asset_boundaries() {
         };
         match axis {
             0 => *principal = RETIRED.into(),
-            1 => *candid = "other.did".into(),
-            2 => *candid_sha256 = "ff".repeat(32),
+            1 => *wire_schema = "other.wire.json".into(),
+            2 => *wire_schema_sha256 = "ff".repeat(32),
             3 => changed[1] = duplicate,
             4 => {
                 **action = CurrentFleetProtocolAction::MaintainPoolReadiness {
@@ -7489,8 +7421,8 @@ fn store_chunks_require_applied_preparation_and_exact_batch_authority() {
         let mut changed = actions.clone();
         let EnsureAction::FleetProtocol {
             action,
-            candid,
-            candid_sha256,
+            wire_schema,
+            wire_schema_sha256,
             principal,
             ..
         } = &mut changed[2]
@@ -7502,8 +7434,8 @@ fn store_chunks_require_applied_preparation_and_exact_batch_authority() {
         };
         match axis {
             0 => *principal = RETIRED.to_string(),
-            1 => *candid = "other.did".into(),
-            2 => *candid_sha256 = "ff".repeat(32),
+            1 => *wire_schema = "other.wire.json".into(),
+            2 => *wire_schema_sha256 = "ff".repeat(32),
             3 => request.version = TemplateVersion::owned("different".into()),
             4 => request.template_id = TemplateId::owned("different".into()),
             5 => request.chunk_index = 1,
@@ -7550,4 +7482,14 @@ fn store_chunks_stall_bound_reports_the_failed_chunk_after_draining() {
         );
     }
     fs::remove_dir_all(fixture.root).unwrap();
+}
+
+fn protocol_configuration() -> DesiredFleetProtocol {
+    DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_wire_schema: "coordinator.wire.json".to_string(),
+        root_wire_schema: "root.wire.json".to_string(),
+        store_wire_schema: "store.wire.json".to_string(),
+    }
 }

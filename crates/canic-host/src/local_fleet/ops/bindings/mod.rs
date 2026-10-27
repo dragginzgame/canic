@@ -1,16 +1,14 @@
-//! Materialize exact sealed Candid into the maintained selected-environment binding layout.
+//! Verify retained native schemas before allocating a local Fleet.
 
 use crate::{fleet_ensure::model::DesiredFleet, local_fleet::LocalFleetError, release_set};
-use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
-use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use std::path::Path;
 
 fn failure(error: impl std::fmt::Display) -> LocalFleetError {
     LocalFleetError::Preparation(error.to_string())
 }
 
-/// Reuse the complete selected release manifests; a missing or altered sidecar never gets rebuilt.
-pub fn stage(workspace: &Path, desired: &DesiredFleet) -> Result<(), LocalFleetError> {
+/// Admit the selected release's schemas without copying a parallel ICP binding tree.
+pub fn verify(workspace: &Path, desired: &DesiredFleet) -> Result<(), LocalFleetError> {
     let bootstrap = desired
         .bootstrap
         .as_ref()
@@ -39,54 +37,24 @@ pub fn stage(workspace: &Path, desired: &DesiredFleet) -> Result<(), LocalFleetE
     {
         return Err(LocalFleetError::Identity);
     }
-    for entry in &infrastructure.manifest.entries {
-        publish(
-            workspace,
-            &desired.environment,
-            entry.protocol_role.as_str(),
-            &entry.wasm_relative_path,
-            entry.candid_sha256,
-        )?;
+    for (role, expected) in infrastructure
+        .manifest
+        .entries
+        .iter()
+        .map(|entry| (entry.protocol_role.as_str(), entry.wire_schema_sha256))
+        .chain(
+            application
+                .union
+                .entries
+                .iter()
+                .map(|entry| (entry.role.as_str(), entry.wire_schema_sha256)),
+        )
+    {
+        let schema =
+            release_set::load_built_wire_schema(workspace, release, role).map_err(failure)?;
+        if schema.schema_sha256 != expected {
+            return Err(LocalFleetError::Identity);
+        }
     }
-    for entry in &application.union.entries {
-        publish(
-            workspace,
-            &desired.environment,
-            entry.role.as_str(),
-            &entry.wasm_relative_path,
-            entry.candid_sha256,
-        )?;
-    }
-    Ok(())
-}
-
-fn publish(
-    workspace: &Path,
-    environment: &str,
-    role: &str,
-    wasm: &str,
-    digest: [u8; 32],
-) -> Result<(), LocalFleetError> {
-    crate::component_operation::policy::validate_label(role)
-        .map_err(|_| LocalFleetError::Identity)?;
-    release_set::validate_release_artifact_relative_path(wasm).map_err(failure)?;
-    let bytes = ic_host_fs::read::read_file_no_follow(
-        &workspace.join(wasm).with_extension("did"),
-        crate::frontend::ops::MAX_FRONTEND_FILE_BYTES,
-    )
-    .map_err(std::io::Error::from)?;
-    if sha256_hex(&bytes) != hex_bytes(digest) {
-        return Err(LocalFleetError::Identity);
-    }
-    let destination = crate::icp::local_canister_candid_path(workspace, environment, role);
-    durable::write_bytes(
-        &destination,
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o666,
-        },
-        &bytes,
-    )
-    .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }

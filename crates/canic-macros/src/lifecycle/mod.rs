@@ -47,8 +47,8 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenS
             "lifecycle entrypoints must be synchronous and return no value",
         ));
     }
-    let attribute = kind.candid_attribute(&syn::LitStr::new("init", function.sig.ident.span()));
     let adapter = RawAdapter {
+        wire: None,
         signature: &function.sig,
         kind,
         method: function.sig.ident.to_string(),
@@ -58,5 +58,5 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenS
         wrapper_async: false,
     }
     .expand()?;
-    Ok(quote! { #attribute #function #adapter })
+    Ok(quote! { #function #adapter })
 }

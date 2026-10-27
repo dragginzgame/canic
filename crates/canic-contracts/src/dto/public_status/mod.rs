@@ -4,47 +4,56 @@
 //! Does not own: collection, publication policy, or authority.
 //! Boundary: every field is intended for anonymous callers.
 
-use crate::dto::{
-    page::{Page, PageRequest},
-    prelude::*,
-};
+use crate::dto::page::{Page, PageRequest};
+use serde::{Deserialize, Serialize};
 
 pub use crate::values::public_metrics::{
     PublicMetricFamily, PublicMetricKind, TimerMetricRegistration,
 };
 
 /// Public query responsiveness; no runtime diagnostics or Fleet readiness assessment.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum PublicHealthStatus {
-    #[serde(rename = "responding")]
     Responding,
 }
 
 /// Local identity and responsiveness without diagnostic checks or Fleet readiness.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicHealth {
-    pub canister_id: Principal,
+    pub canister_id: ic_platform::Principal,
     pub role: Option<String>,
     pub health: PublicHealthStatus,
     pub observed_at_ns: u64,
 }
 
 /// Select a published aggregate family and one bounded page.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicMetricsRequest {
     pub family: PublicMetricFamily,
     pub page: PageRequest,
 }
 
 /// An explicitly named aggregate value with an optional canister dimension.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicMetric {
     pub name: String,
-    pub canister_id: Option<Principal>,
+    pub canister_id: Option<ic_platform::Principal>,
     pub value: u128,
     pub unit: String,
     pub observed_at_ns: u64,
@@ -52,8 +61,11 @@ pub struct PublicMetric {
 }
 
 /// Availability is data, independent of caller identity.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub enum PublicSnapshotState {
     Disabled,
     Unavailable,
@@ -62,8 +74,11 @@ pub enum PublicSnapshotState {
 }
 
 /// One cached aggregate snapshot. Reading it never refreshes it.
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicMetricsSnapshot {
     pub family: PublicMetricFamily,
     pub state: PublicSnapshotState,
@@ -74,18 +89,24 @@ pub struct PublicMetricsSnapshot {
 }
 
 /// Select one exact cached series; points are ordered by five-minute slot.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicHistoryRequest {
     pub family: PublicMetricFamily,
     pub name: String,
-    pub canister_id: Option<Principal>,
+    pub canister_id: Option<ic_platform::Principal>,
     pub page: PageRequest,
 }
 
 /// One actual observation, never an interpolated or replayed sample.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicHistoryPoint {
     pub delta: Option<PublicCounterDelta>,
     pub slot_start_ns: u64,
@@ -95,8 +116,11 @@ pub struct PublicHistoryPoint {
 }
 
 /// Heap-only chart coverage. Missing slots are gaps, including across suspension.
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicHistorySnapshot {
     pub state: PublicSnapshotState,
     pub unit: Option<String>,
@@ -114,9 +138,15 @@ pub struct PublicHistorySnapshot {
 }
 
 /// Comparable cumulative-counter movement across adjacent slots in the same window.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[candid_path("ic_platform::candid::contract")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
 pub struct PublicCounterDelta {
     pub amount: u128,
     pub elapsed_ns: u64,
 }
+
+#[cfg(all(test, feature = "wire-schema", not(target_arch = "wasm32")))]
+mod tests;

@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Shared by ordinary execution and compiled inventory reconciliation.
 printf '%s\n' \
+    'pic::blob_service::application::counter_limits_admit_unit_and_full_width_response' \
     'pic::governed_suite::' \
     'pic::workers::tests::' \
     'pic::fleet_registry::baseline::tests::release_artifacts::' \
