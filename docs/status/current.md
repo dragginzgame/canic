@@ -15,14 +15,22 @@ failure, use the exact `make release-resume VERSION=0.112.0` recovery path.
 
 ## Current source and next action
 
-Committed base `cb6869cc3` contains the extraction regression repairs and requested
-Auth/Timers adoption. The remaining local repair aligns the test canister's
-canonical, Root-sharding and Root-capability profiles with its delegated-token
-and role-attestation features. Commit this repair and retry the authorized release.
-The third release attempt stopped at its ordinary-test barrier, before PocketIC,
-with only the package/profile mismatch. Strict workspace and Blob-consumer Clippy,
-invariants, locked dependency admission, formatting, compile and feature matrices
-passed. Full output: /tmp/canic-release-0112-attempt3.log.
+Committed base `627af697e` contains the extraction repairs, requested Auth/Timers
+adoption and aligned test-canister auth profiles. The fourth release attempt
+passed all pre-test gates but stopped before PocketIC on two intermittent Host
+activation-source handoff conflicts. Full output:
+/tmp/canic-release-0112-attempt4.log. Retained failure scratch: .tmp/test-runtime.xgNjD9.
+Both failures occurred at adoption/tests.rs stage(), with
+ActivationResetAdoptionConflict. They are not diagnosed as repaired.
+
+The four owning cases pass under ordinary and all-feature package selections.
+The exact release binary passes 30 repetitions of those cases and its entire
+Host library (1262 passed, 20 ignored); the rebuilt Host library also passes.
+The local test change separately asserts plan identity and exact copied source
+evidence before staging, improving the next failure's diagnostics. Scoped strict
+Host Clippy passes. Logs: /tmp/canic-release-repair-activation*.log.
+Commit the diagnostic assertions and retry the authorized release; investigate
+any recurrence rather than relaxing identity checks or adding automatic retries.
 
 The corrected package-contract regression passes through the governed scratch
 wrapper. The installed Root baseline/restoration case passes, preserving the same

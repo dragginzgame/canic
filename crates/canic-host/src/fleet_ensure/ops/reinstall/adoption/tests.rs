@@ -78,6 +78,19 @@ pub(in crate::fleet_ensure::ops) fn assert_review_handoff(
 }
 
 fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
+    validate_plan(&plan).expect("current reset plan identity");
+    assert_eq!(
+        super::super::source::read(paths, &plan.environment, &plan.fleet)
+            .expect("copied source evidence"),
+        plan.reinstall
+            .as_ref()
+            .unwrap()
+            .activation_reset
+            .as_ref()
+            .unwrap()
+            .source,
+        "handoff retains the exact source evidence"
+    );
     let before = [
         fs::read(&paths.plan).unwrap(),
         fs::read(&paths.journal).unwrap(),
