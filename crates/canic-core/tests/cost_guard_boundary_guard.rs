@@ -1,5 +1,7 @@
 // Category C - System-level artifact test (no embedded config).
 
+mod source_scan;
+
 use std::{
     collections::BTreeMap,
     fs,
@@ -222,26 +224,7 @@ fn source_root() -> PathBuf {
 }
 
 fn scan_rust_files(root: &Path, visitor: &mut impl FnMut(&Path, &str)) {
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            scan_rust_files(&path, visitor);
-            continue;
-        }
-
-        if path.extension().is_none_or(|ext| ext != "rs") {
-            continue;
-        }
-
-        let Ok(contents) = fs::read_to_string(&path) else {
-            continue;
-        };
-        visitor(&path, &contents);
-    }
+    source_scan::visit(root, &|_| false, visitor);
 }
 
 fn display(path: &Path) -> String {
