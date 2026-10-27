@@ -22,7 +22,7 @@ use thiserror::Error as ThisError;
 
 use super::{
     model::IcpCli,
-    run::{run_json, run_secret_output},
+    run::{capture_probe, run_json, run_secret_output},
 };
 
 const MANAGEMENT_CANISTER_STATUS: &str = "canister_status";
@@ -297,7 +297,7 @@ impl IcpCli {
         }
         let mut command = self.request_command();
         command.args(["network", "status", "--environment", environment, "--json"]);
-        run_json(&mut command, self).map_err(Into::into)
+        run_json(&mut command, self, capture_probe).map_err(Into::into)
     }
 
     fn exported_active_identity(&self) -> Result<Arc<dyn Identity>, IcpManagementCallError> {

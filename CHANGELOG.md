@@ -100,6 +100,10 @@ owners, and strengthens release-bound observations and interruption recovery.
 
 ### 🩹 Fixed
 
+- Reject invalid UTF-8 in ICP machine responses, bound version/JSON observation
+  probes, and escape untrusted ICP diagnostic fields for terminal display.
+  Mutating dispatch and original diagnostic/source records retain their owners.
+
 - Bind absence and funding decisions to the exact queried canister and configured
   parent; refuse ambiguous or missing authority
   ([#261 — Bind canister absence to the queried Principal](https://github.com/dragginzgame/canic/issues/261),

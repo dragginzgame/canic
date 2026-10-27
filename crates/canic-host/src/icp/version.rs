@@ -1,12 +1,10 @@
 use std::{io, path::Path, process::Command};
 
-use crate::output_with_executable_busy_retry;
-
 use super::{
     command::command_display,
     error::IcpCommandError,
     model::{IcpCli, IcpCliVersion},
-    run::command_stderr,
+    run::{capture_probe, command_stderr},
 };
 
 impl IcpCli {
@@ -67,7 +65,7 @@ fn icp_version_output(executable: &str, cwd: Option<&Path>) -> Result<String, Ic
     }
     command.arg("--version");
     let display = command_display(&command);
-    let output = output_with_executable_busy_retry(&mut command).map_err(|err| {
+    let output = capture_probe(&mut command).map_err(|err| {
         if err.kind() == io::ErrorKind::NotFound {
             IcpCommandError::MissingCli {
                 executable: executable.to_string(),
@@ -77,7 +75,9 @@ fn icp_version_output(executable: &str, cwd: Option<&Path>) -> Result<String, Ic
         }
     })?;
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        String::from_utf8(output.stdout)
+            .map(|stdout| stdout.trim().to_owned())
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error).into())
     } else {
         Err(IcpCommandError::Failed {
             command: display,

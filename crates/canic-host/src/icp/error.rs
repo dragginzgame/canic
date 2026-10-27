@@ -1,3 +1,4 @@
+use ic_host_text::escape::terminal_text;
 use std::{error::Error, fmt};
 
 use super::{
@@ -52,8 +53,9 @@ impl fmt::Display for IcpCommandError {
     // Render ICP CLI command failures with the command line and captured diagnostics.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(err) => write!(formatter, "{err}"),
+            Self::Io(err) => write!(formatter, "{}", terminal_text(&err.to_string())),
             Self::MissingCli { executable } => {
+                let executable = terminal_text(executable);
                 write!(
                     formatter,
                     "icp-cli executable not found: {executable}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
@@ -61,6 +63,8 @@ impl fmt::Display for IcpCommandError {
                 )
             }
             Self::IncompatibleCliVersion { executable, found } => {
+                let executable = terminal_text(executable);
+                let found = terminal_text(found);
                 write!(
                     formatter,
                     "unsupported icp-cli version for {executable}\nfound: {found}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
@@ -68,6 +72,8 @@ impl fmt::Display for IcpCommandError {
                 )
             }
             Self::Failed { command, stderr } => {
+                let command = terminal_text(command);
+                let stderr = terminal_text(stderr);
                 write!(formatter, "icp command failed: {command}\n{stderr}")
             }
             Self::Json {
@@ -75,6 +81,8 @@ impl fmt::Display for IcpCommandError {
                 output,
                 source,
             } => {
+                let command = terminal_text(command);
+                let output = terminal_text(output);
                 write!(
                     formatter,
                     "could not parse icp json output for {command}: {source}\n{output}"
@@ -107,5 +115,51 @@ impl From<std::io::Error> for IcpCommandError {
     // Convert process-spawn failures into the shared ICP CLI command error type.
     fn from(err: std::io::Error) -> Self {
         Self::Io(err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_rendering_escapes_external_fields_and_retains_original_diagnostics() {
+        let raw = "failure\x1b[2J\r\tmessage";
+        let error = IcpCommandError::Failed {
+            command: "icp\x1b[2J status".into(),
+            stderr: raw.into(),
+        };
+        let rendered = error.to_string();
+        assert!(
+            !rendered
+                .chars()
+                .any(|character| character.is_control() && character != '\n')
+        );
+        assert!(rendered.contains("message"));
+        assert_eq!(error.external_output(), Some(raw));
+    }
+
+    #[test]
+    fn version_and_json_errors_escape_untrusted_fields() {
+        let errors = [
+            IcpCommandError::IncompatibleCliVersion {
+                executable: "icp\x1b".into(),
+                found: "version\r\x1b".into(),
+            },
+            IcpCommandError::Json {
+                command: "icp\x1b".into(),
+                output: "output\r\x1b".into(),
+                source: serde_json::from_str::<serde_json::Value>("invalid").unwrap_err(),
+            },
+            IcpCommandError::Io(std::io::Error::other("failure\r\x1b")),
+        ];
+        for error in errors {
+            assert!(
+                !error
+                    .to_string()
+                    .chars()
+                    .any(|character| character.is_control() && character != '\n')
+            );
+        }
     }
 }

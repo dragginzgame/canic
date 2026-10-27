@@ -9088,7 +9088,7 @@ esac
             module_hash: Some(vec![0x22; 32]),
             status: CanisterStatusType::Running,
             ready_for_migration: false,
-            settings: Default::default(),
+            settings: ic_platform::management_canister_types::DefiniteCanisterSettings::default(),
             memory_size: 1_u64.into(),
             memory_metrics: ic_platform::management_canister_types::MemoryMetrics {
                 wasm_memory_size: 0_u64.into(),
