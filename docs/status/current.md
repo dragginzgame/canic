@@ -1,5 +1,22 @@
 # Current handoff — 2026-10-27
 
+## Latest release-gate diagnosis
+
+The validation adapter expected the old order and omitted dependency admission
+and fixture qualification. Its focused shell regression now passes after fixing
+the expected sequence. Dependency-risk classification regressions and scoped
+ShellCheck also pass. The audit gate now prints advisory/package/patch details
+instead of exiting silently on cargo-audit status 1.
+
+The maintainer accepted RUSTSEC-2026-0387 for the exact crypto-bigint 0.5.5
+checksum recorded in the dependency-risk inventory. It now remains visible as
+a warning and does not block release. Exact-match acceptance and changed-identity
+rejection tests pass; replay of the captured audit passes. The captured
+audit lists >=0.7.6 as patched; elliptic-curve 0.13.8 requires 0.5, through the
+ECDSA/k256/p256/ic-agent graph. No dependency was changed; other vulnerabilities remain blocking.
+Evidence: /tmp/tmp.AT1Up3yD87/audit.json, /tmp/canic-current-risk-diagnostic.log
+and /tmp/canic-crypto-bigint-parents.log. No full release validation was rerun.
+
 ## Accepted scope and candidate
 
 Continue the accepted 0.112 Blob/Wire hard cut using the

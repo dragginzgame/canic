@@ -99,7 +99,7 @@ streams and attempt records, and prints the retained path. Successful owned
 scratch is removed; explicit `--scratch-only` cleanup can remove retained evidence. Expected rejected requests inside passing cases do not trigger
 trace output. Document-layout preferences
 and drift in transitive informational advisory inventories are warnings. Missing
-required authority documents, known vulnerabilities, yanked dependencies and
+required authority documents, unaccepted known vulnerabilities, yanked dependencies and
 unmaintained direct dependencies remain blocking.
 
 Shell validation, release and reporting tools share `scripts/ci/require-jq.sh`.
@@ -748,3 +748,15 @@ sufficient.
 - [Read the testing rules](../../TESTING.md)
 - [Browse all documentation](../README.md)
 - [Back to the main README](../../README.md)
+
+### Accepted crypto-bigint advisory — 2026-10-27
+
+The maintainer explicitly accepts RUSTSEC-2026-0387 for crypto-bigint 0.5.5
+with checksum `0dc92fb57ca44df6db8059111ab3af99a63d5d0f8375d9972e319a379c6bab76`.
+The IC elliptic-curve dependency graph requires the 0.5 series; the maintainer
+selected continued use rather than a local crypto fork or forced API migration.
+This is acceptance of the reported timing-side-channel risk, not a finding that
+the code is unaffected or repaired. The exact `approved-risk` record in
+`scripts/ci/dependency-risk-inventory.tsv` keeps this advisory visible as a warning.
+A changed advisory, package, version or checksum requires a new acceptance.
+Other vulnerabilities, yanked releases and audit execution errors remain blocking.

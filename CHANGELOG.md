@@ -83,6 +83,13 @@ owners, and strengthens release-bound observations and interruption recovery.
 
 ### 🔧 Changed
 
+- Keep the maintainer-accepted crypto-bigint 0.5.5 advisory visible without blocking
+  release; acceptance matches the exact advisory, version and checksum.
+
+- Report dependency audit failures with advisory, package and patched-version
+  details; align validation-order regression coverage with dependency admission
+  and fixture qualification.
+
 - Fix generated metrics endpoints for canisters with no enabled metrics families
   by making the rejection result type explicit.
 

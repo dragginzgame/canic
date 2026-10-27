@@ -60,7 +60,7 @@ status=0
 ORDER_CLIPPY_STATUS=23 make -j4 --no-print-directory -C "$FIXTURE" validate \
     >"$FIXTURE/order.log" 2>&1 || status=$?
 [[ "$status" != 0 ]]
-printf 'tools-check\nclippy\n' >"$FIXTURE/expected"
+printf 'tools-check\ndependency-adoption-admission\nclippy\n' >"$FIXTURE/expected"
 cmp "$FIXTURE/expected" "$ORDER_EVENTS"
 : >"$ORDER_EVENTS"
 status=0
@@ -71,7 +71,7 @@ printf 'ensure-clean\nclippy\n' >"$FIXTURE/expected"
 cmp "$FIXTURE/expected" "$ORDER_EVENTS"
 : >"$ORDER_EVENTS"
 make -j4 --no-print-directory -C "$FIXTURE" validate >"$FIXTURE/order.log" 2>&1
-printf '%s\n' tools-check clippy fmt-check check-invariants dependency-risk-gate \
+printf '%s\n' tools-check dependency-adoption-admission clippy dependency-adoption-fixtures fmt-check check-invariants dependency-risk-gate \
     shellcheck check control-plane-feature-gate test >"$FIXTURE/expected"
 cmp "$FIXTURE/expected" "$ORDER_EVENTS"
 echo 'Canic validation policy and actual Make adapter pass'

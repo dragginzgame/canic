@@ -130,11 +130,37 @@ if [ "$classification_only" -eq 0 ]; then
 fi
 
 vulnerability="$tmp_dir/vulnerability.json"
-"$JQ_BIN" '.vulnerabilities.found = true | .vulnerabilities.count = 1 | .vulnerabilities.list = [{}]' \
+"$JQ_BIN" '.vulnerabilities.found = true | .vulnerabilities.count = 1 | .vulnerabilities.list = [{
+    advisory: {id: "RUSTSEC-2099-0003", title: "fixture vulnerability"},
+    package: {name: "canic-risk-transitive-fixture", version: "1.0.0"},
+    versions: {patched: [">=1.0.1"]}
+}]' \
     "$base" >"$vulnerability"
-if bash "$GATE" --audit-json "$vulnerability" >/dev/null 2>&1; then
+if bash "$GATE" --audit-json "$vulnerability" >"$tmp_dir/vulnerability.log" 2>&1; then
     fail "known vulnerability fixture was accepted"
 fi
+rg -F 'RUSTSEC-2099-0003: canic-risk-transitive-fixture 1.0.0' "$tmp_dir/vulnerability.log" >/dev/null ||
+    fail "vulnerability diagnostic omitted its advisory or package identity"
+rg -F 'patched: >=1.0.1' "$tmp_dir/vulnerability.log" >/dev/null ||
+    fail "vulnerability diagnostic omitted its patched version"
+
+# A maintainer acceptance applies only to the exact advisory and package bytes.
+"$JQ_BIN" --arg checksum "$checksum" '.vulnerabilities.list[0].package.checksum = $checksum' \
+    "$vulnerability" >"$tmp_dir/accepted.json"
+cp "$fixture/scripts/ci/dependency-risk-inventory.tsv" "$tmp_dir/inventory-before"
+printf 'RUSTSEC-2099-0003\tvulnerability\tcanic-risk-transitive-fixture\t1.0.0\t%s\tserde\tapproved-risk\n' \
+    "$checksum" >>"$fixture/scripts/ci/dependency-risk-inventory.tsv"
+bash "$GATE" --audit-json "$tmp_dir/accepted.json" >"$tmp_dir/accepted.log" 2>&1 ||
+    fail "exact vulnerability acceptance was rejected"
+rg -F 'accepted vulnerability RUSTSEC-2099-0003' "$tmp_dir/accepted.log" >/dev/null ||
+    fail "accepted vulnerability was hidden"
+for mutation in '.advisory.id' '.package.name' '.package.version' '.package.checksum'; do
+    "$JQ_BIN" ".vulnerabilities.list[0]$mutation = \"changed\"" "$tmp_dir/accepted.json" >"$tmp_dir/changed.json"
+    if bash "$GATE" --audit-json "$tmp_dir/changed.json" >/dev/null 2>&1; then
+        fail "vulnerability acceptance admitted changed $mutation"
+    fi
+done
+cp "$tmp_dir/inventory-before" "$fixture/scripts/ci/dependency-risk-inventory.tsv"
 
 new_warning="$tmp_dir/new-warning.json"
 "$JQ_BIN" '.warnings.unmaintained += [(.warnings.unmaintained[0]

@@ -40,6 +40,7 @@ trap finish EXIT
 audit_json="$tmp_dir/audit.json"
 prepared_db="$tmp_dir/advisory-source"
 audit_db="$prepared_db/db"
+audit_status=0
 
 case "$#" in
 0)
@@ -62,7 +63,7 @@ case "$#" in
     (
         cd "$ROOT"
         cargo audit "${audit_args[@]}"
-    ) >"$audit_json"
+    ) >"$audit_json" || audit_status=$?
     ;;
 2)
     [ "$1" = "--audit-json" ] || fail "usage: $0 [--audit-json <path>]"
@@ -75,11 +76,32 @@ esac
 "$JQ_BIN" -e 'type == "object"' "$audit_json" >/dev/null || fail "cargo-audit JSON is invalid"
 vulnerability_count="$("$JQ_BIN" -r '.vulnerabilities.count // (.vulnerabilities.list | length) // 0' "$audit_json")"
 [[ "$vulnerability_count" =~ ^[0-9]+$ ]] || fail "cargo-audit vulnerability count is invalid"
-[ "$vulnerability_count" -eq 0 ] || fail "$vulnerability_count known vulnerabilities found"
+if [ "$vulnerability_count" -ne 0 ]; then
+    "$JQ_BIN" -r '.vulnerabilities.list[] |
+        "\(.advisory.id // "unknown advisory"): \(.package.name // "unknown package") \(.package.version // "unknown version") — \(.advisory.title // "known vulnerability"); patched: \((.versions.patched // []) | join(", "))"' \
+        "$audit_json" >&2
+    [ "$("$JQ_BIN" '.vulnerabilities.list | length' "$audit_json")" -eq "$vulnerability_count" ] ||
+        fail "cargo-audit vulnerability count does not match its records"
+    "$JQ_BIN" -r '.vulnerabilities.list[] |
+        [.advisory.id, .package.name, .package.version, (.package.checksum // "-")] | @tsv' \
+        "$audit_json" >"$tmp_dir/vulnerabilities.tsv"
+    while IFS=$'\t' read -r advisory_id package version checksum; do
+        awk -F '\t' -v advisory="$advisory_id" -v package="$package" \
+            -v version="$version" -v checksum="$checksum" '
+            $1 == advisory && $2 == "vulnerability" && $3 == package &&
+                $4 == version && $5 == checksum && $7 == "approved-risk" { approved = 1 }
+            END { exit !approved }
+        ' "$INVENTORY" || fail "$advisory_id: $package $version has no exact maintainer risk acceptance"
+        warn "accepted vulnerability $advisory_id: $package $version ($checksum)"
+    done <"$tmp_dir/vulnerabilities.tsv"
+fi
+if [ "$audit_status" -ne 0 ] && ! { [ "$audit_status" -eq 1 ] && [ "$vulnerability_count" -gt 0 ]; }; then
+    fail "cargo-audit exited with status $audit_status"
+fi
 
 expected="$tmp_dir/expected.tsv"
 actual="$tmp_dir/actual.tsv"
-awk -F '\t' 'NF && $1 !~ /^#/ { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' "$INVENTORY" |
+awk -F '\t' 'NF && $1 !~ /^#/ && $2 != "vulnerability" { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' "$INVENTORY" |
     LC_ALL=C sort >"$expected"
 # Yanked warnings have no RustSec advisory ID. Keep a nonempty field so Bash's
 # whitespace IFS handling cannot shift the warning kind, package and version.
@@ -132,6 +154,7 @@ while IFS=$'\t' read -r advisory_id kind package version _checksum introducers _
     case "$advisory_id" in
     '' | \#*) continue ;;
     esac
+    if [ "$kind" = "vulnerability" ] && [ "$_direct_use" = "approved-risk" ]; then continue; fi
     [ "$kind" = "unmaintained" ] || fail "$advisory_id is not classified as unmaintained"
     package_id="$("$JQ_BIN" -r --arg package "$package" --arg version "$version" '
         [.packages[] | select(.name == $package and .version == $version) | .id]
@@ -163,4 +186,4 @@ while IFS=$'\t' read -r advisory_id kind package version _checksum introducers _
 done <"$INVENTORY"
 
 warning_count="$(wc -l <"$actual")"
-echo "dependency risk gate passed: zero vulnerabilities; $warning_count informational warning(s) reviewed"
+echo "dependency risk gate passed: $vulnerability_count accepted vulnerabilities; $warning_count informational warning(s) reviewed"
