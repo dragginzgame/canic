@@ -2060,9 +2060,9 @@ dependencies = [
 
 [[package]]
 name = "ic-backup"
-version = "0.45.0"
+version = "0.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73c0550064ed1f4e982a6551d5f2376c8b5b2ea29f50287aa838673adf90f3f4"
+checksum = "1e645782f81502a76b81b1ef66d0dd2ffb3a59ee63f0c9e718ec07d005c2513b"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",

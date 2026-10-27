@@ -5,10 +5,17 @@
 Continue the accepted 0.112 Blob/Wire hard cut using the
 [closeout plan](../audits/working/0.112-push-readiness/plan.md) and its
 [graph-specific evidence](../audits/working/0.112-push-readiness/owned-candid-cut.json).
-Current inspected base: main at `02123c5da`, with local seven-target test repairs.
+Current inspected base: main at `c4f90ec5f`, with committed seven-target test repairs.
 Own package versions remain 0.111.0; the open changelog target is 0.112.0.
-The maintainer is running release validation and reports failures for scoped repair.
-Do not run full gates, commit, push, bump versions or release without instruction.
+The maintainer explicitly authorized staging, committing as `0.112.0`, running
+`make release-minor`, and repairing/retrying failures until release completes.
+The first attempt passed Clippy, invariant gates, ordinary workspace tests and
+native feature checks, then stopped preparing the Fleet PocketIC artifact.
+During validation the root lock changed from Backup 0.45.0 to 0.45.1; the latter
+was not cached. Offline metadata reproduced the child failure (exit 101,
+124 stderr bytes). Preserve that selection; locked fetching now supplies it and
+offline metadata passes. No version preparation or release tag occurred.
+The prior passes describe the earlier graph; the retry must qualify the new lock.
 
 Required external Candid is accepted. Owned endpoints, initialization and
 hash contracts use Wire; redundant external DTO migration remains intended.

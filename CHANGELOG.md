@@ -24,7 +24,7 @@ owners, and strengthens release-bound observations and interruption recovery.
 
 - **Supplier refresh:** adopt Platform 0.7.0, Blob Storage/Contracts 0.51.0,
   Auth/protocol types 0.18.0, Tooling/Host/Testkit 0.69.0, Query 0.75.0 and
-  Backup 0.45.0 with matching public type identities. Select Memory/Storage
+  Backup 0.45.1 with matching public type identities. Select Memory/Storage
   0.51.10 and Timers 0.31.10 across the applicable consumer graphs. Blob-owned
   records use its bounded Wire storage contract; preserve existing installation
   obligations. Refresh the canonical Shared Tooling snapshot to 0.26.23.
