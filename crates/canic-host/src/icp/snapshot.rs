@@ -5,7 +5,7 @@ use serde::Deserialize;
 use super::{
     error::IcpCommandError,
     model::{IcpCli, IcpSnapshot},
-    run::{run_json, run_status},
+    run::{capture_probe, run_json, run_status},
 };
 
 impl IcpCli {
@@ -15,7 +15,9 @@ impl IcpCli {
         command.args(["snapshot", "create", canister]);
         command.arg("--json");
         self.add_target_args(&mut command);
-        run_json(&mut command, self)
+        // Snapshot creation is a mutation; preserve its existing dispatch and
+        // uncertain-effect custody rather than adding a read-probe timeout.
+        run_json(&mut command, self, crate::output_with_executable_busy_retry)
     }
 
     /// List the authoritative snapshots currently retained for one canister.
@@ -24,7 +26,8 @@ impl IcpCli {
         command.args(["snapshot", "list", canister]);
         command.arg("--json");
         self.add_target_args(&mut command);
-        run_json::<IcpSnapshotInventory>(&mut command, self).map(|inventory| inventory.snapshots)
+        run_json::<IcpSnapshotInventory>(&mut command, self, capture_probe)
+            .map(|inventory| inventory.snapshots)
     }
 
     /// Download one canister snapshot into an artifact directory.

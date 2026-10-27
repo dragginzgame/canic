@@ -4,7 +4,7 @@ use super::{
     command::{add_debug_arg, add_local_network_target},
     error::IcpCommandError,
     model::IcpCli,
-    run::{run_json, run_output_with_stderr, run_status_inherit, run_success},
+    run::{capture_probe, run_json, run_output_with_stderr, run_status_inherit, run_success},
 };
 
 impl IcpCli {
@@ -39,7 +39,7 @@ impl IcpCli {
         let mut command = self.local_replica_command_in("status", cwd);
         add_debug_arg(&mut command, debug);
         command.arg("--json");
-        run_json(&mut command, self)
+        run_json(&mut command, self, capture_probe)
     }
 
     /// Return whether one ICP project root owns a running local ICP replica.

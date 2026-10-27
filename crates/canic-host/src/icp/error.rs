@@ -1,3 +1,4 @@
+use ic_host_text::escape::terminal_text;
 use thiserror::Error;
 
 use super::{
@@ -11,21 +12,24 @@ use super::{
 
 #[derive(Debug, Error)]
 pub enum IcpCommandError {
-    #[error("{0}")]
+    #[error("{}", terminal_text(&.0.to_string()))]
     Io(#[source] std::io::Error),
     #[error(
         "icp-cli executable not found: {executable}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
-        icp_cli_install_hint()
+        icp_cli_install_hint(),
+        executable = terminal_text(.executable)
     )]
     MissingCli { executable: String },
     #[error(
         "unsupported icp-cli version for {executable}\nfound: {found}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
-        icp_cli_install_hint()
+        icp_cli_install_hint(),
+        executable = terminal_text(.executable),
+        found = terminal_text(.found)
     )]
     IncompatibleCliVersion { executable: String, found: String },
-    #[error("icp command failed: {command}\n{stderr}")]
+    #[error("icp command failed: {command}\n{stderr}", command = terminal_text(.command), stderr = terminal_text(.stderr))]
     Failed { command: String, stderr: String },
-    #[error("could not parse icp json output for {command}: {source}\n{output}")]
+    #[error("could not parse icp json output for {command}: {source}\n{output}", command = terminal_text(.command), output = terminal_text(.output))]
     Json {
         command: String,
         output: String,
@@ -149,5 +153,51 @@ mod error_contract_tests {
         assert!(error.source().is_none());
         assert_eq!(error.external_output(), Some("IC0207"));
         assert_eq!(error.diagnostic(), Some(IcpDiagnostic::CanisterOutOfCycles));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_rendering_escapes_external_fields_and_retains_original_diagnostics() {
+        let raw = "failure\x1b[2J\r\tmessage";
+        let error = IcpCommandError::Failed {
+            command: "icp\x1b[2J status".into(),
+            stderr: raw.into(),
+        };
+        let rendered = error.to_string();
+        assert!(
+            !rendered
+                .chars()
+                .any(|character| character.is_control() && character != '\n')
+        );
+        assert!(rendered.contains("message"));
+        assert_eq!(error.external_output(), Some(raw));
+    }
+
+    #[test]
+    fn version_and_json_errors_escape_untrusted_fields() {
+        let errors = [
+            IcpCommandError::IncompatibleCliVersion {
+                executable: "icp\x1b".into(),
+                found: "version\r\x1b".into(),
+            },
+            IcpCommandError::Json {
+                command: "icp\x1b".into(),
+                output: "output\r\x1b".into(),
+                source: serde_json::from_str::<serde_json::Value>("invalid").unwrap_err(),
+            },
+            IcpCommandError::Io(std::io::Error::other("failure\r\x1b")),
+        ];
+        for error in errors {
+            assert!(
+                !error
+                    .to_string()
+                    .chars()
+                    .any(|character| character.is_control() && character != '\n')
+            );
+        }
     }
 }

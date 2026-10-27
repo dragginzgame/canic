@@ -4,7 +4,7 @@ use super::{
     command::{add_candid_arg, add_output_arg, command_display},
     error::IcpCommandError,
     model::{IcpCanisterStatusReport, IcpCli},
-    run::{run_json, run_output, run_output_with_stderr, run_status},
+    run::{capture_probe, run_json, run_output, run_output_with_stderr, run_status},
 };
 
 #[derive(Clone, Copy)]
@@ -179,7 +179,7 @@ impl IcpCli {
     ) -> Result<String, IcpCommandError> {
         self.record_remote_call();
         self.measure_request(kind, Some(canister), Some(method), || {
-            run_output(command, self)
+            run_output(command, self, crate::output_with_executable_busy_retry)
         })
     }
 
@@ -220,7 +220,7 @@ impl IcpCli {
             super::IcpRequestKind::Metadata,
             Some(canister),
             Some(metadata_name),
-            || run_output(&mut command, self),
+            || run_output(&mut command, self, crate::output_with_executable_busy_retry),
         )
     }
 
@@ -249,7 +249,7 @@ impl IcpCli {
         self.add_target_args(&mut command);
         self.record_remote_call();
         self.measure_request(super::IcpRequestKind::Status, Some(canister), None, || {
-            run_json(&mut command, self)
+            run_json(&mut command, self, capture_probe)
         })
     }
 

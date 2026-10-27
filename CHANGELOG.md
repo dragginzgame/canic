@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 📝 Summary
 
+- Architecture guards refuse missing, empty or unreadable required source sets
+  instead of reporting an incomplete scan as clean.
+
 Canic 0.112 moves owned application protocols and generated clients to native
 Wire, consolidates shared runtime and host mechanisms under their upstream
 owners, and strengthens release-bound observations and interruption recovery.
@@ -130,6 +133,10 @@ owners, and strengthens release-bound observations and interruption recovery.
   keep auth states and failure reasons typed until rendering.
 
 ### 🩹 Fixed
+
+- Reject invalid UTF-8 in ICP machine responses, bound version/JSON observation
+  probes, and escape untrusted ICP diagnostic fields for terminal display.
+  Mutating dispatch and original diagnostic/source records retain their owners.
 
 - Bind absence and funding decisions to the exact queried canister and configured
   parent; refuse ambiguous or missing authority
