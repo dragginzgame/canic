@@ -5905,5 +5905,36 @@
     "evidenceDirectory": "/tmp/canic-deps-latest/",
     "publicationPerformed": false,
     "note": "Root and both independent consumer locks select one Platform 0.7.0 identity. Earlier supplier publication blockers are superseded; no complete release qualification is claimed."
+  },
+  "embeddedPeerRefreshAfterAdoption20261027": {
+    "kind": "focused-fixture-qualification",
+    "commands": [
+      "cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+      "cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root"
+    ],
+    "results": [
+      "passed",
+      "passed"
+    ],
+    "logs": [
+      "/tmp/canic-peer-refresh-current.log",
+      "/tmp/canic-peer-verify-current.log"
+    ],
+    "allThreeCargoLocksUnchanged": true,
+    "provenance": {
+      "schema_version": 1,
+      "package": "sharding_root_stub",
+      "target": "wasm32-unknown-unknown",
+      "profile": "fast",
+      "fixture_version": "0.0.0",
+      "source_input_digest": "acfbc44c7d3ae04e772da6917181fbaec766ac2cd37269cb7a505c0bc1bda5ba",
+      "build_fingerprint": "0ec3630120be60789946527d6d7a6ea938c74df0aa84bacb12bdcff5a59fedc7",
+      "lock_sha256": "7338746b99f2d5a55d78dceb05b0a8f77e729388646daf2e6da2f78724482d92",
+      "producer_lock_sha256": "c74c9806f3d5573402abd66c76f5c0fdaf66e7bd8a2d7c556cd8088c126095a7",
+      "artifact_sha256": "3a583a6b3de25a66e2369d6e31cc5ff4689af337a4bf8d85e899b2b75db23e5d",
+      "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\nrelease: 1.99.1\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Linux Mint 22.3.0 (zena) [64-bit]\n",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n"
+    },
+    "fullValidationRun": false
   }
 }

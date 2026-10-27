@@ -20,8 +20,9 @@ simplifications and their acceptance recorded in the plan.
 
 The maintainer requested all latest IC releases and then explicitly instructed:
 "dont bother testing just adopt and ill try and release". The subsequent explicit request to run Cargo Clippy and fix all findings
-authorizes the workspace lint gate; no test execution or fixture regeneration
-was requested. The latest
+authorized the workspace lint gate. The subsequent reported allocation-peer
+freshness failure was repaired through the owning refresh and verification commands.
+The latest
 published dependencies are adopted in the root and both independent Blob
 consumer catalogs and locks, preserving existing features and unrelated work:
 
@@ -42,9 +43,12 @@ The final Auth/Blob/Platform graph passes `cargo clippy --locked --workspace
 runner. Log: `/tmp/canic-clippy-complete.log`. Fixes include grouped method IDs,
 import/visibility and lint-expectation cleanup, and an explicit metrics rejection
 result type for canisters with no compiled metrics families. No tests were run. Earlier passing checks qualify only their
-recorded graphs. The checked-in allocation peer still has its earlier graph's
-provenance and has not been regenerated for this final adoption. Maintainer release
-validation owns any required regeneration and current-graph qualification. Open
+recorded graphs. The allocation peer and its provenance have now been regenerated
+for this selection. Both `refresh_embedded_root` and `verify_embedded_root` passed
+via `cargo run --locked --offline -p canic-testing-internal --example <name>`.
+All three Cargo locks stayed unchanged. Logs: `/tmp/canic-peer-refresh-current.log`
+and `/tmp/canic-peer-verify-current.log`. This repairs the reported fixture gate;
+no full validation or installed tests were rerun. Open
 0.112 changelog notes reflect final selections; own package versions stay 0.111.0.
 No staging, commit, push, release, deployment or paid operation was performed.
 Remaining external DTO migration and the earlier issue-batch acceptance gaps are

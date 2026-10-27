@@ -15,7 +15,10 @@ compatibility adapters; each lock selects one Platform 0.7.0 identity.
 The maintainer explicitly requested adoption without further tests and will try
 the release. No tests, builds or allocation-peer regeneration were run after that
 instruction. Final-graph compilation/installed qualification and fixture freshness
-are therefore not claimed. The checked-in peer retains its earlier provenance.
+are therefore not claimed. The subsequent reported fixture-gate failure was repaired with the owning
+`refresh_embedded_root` command; `verify_embedded_root` now passes. All three
+Cargo locks remained unchanged. Logs: `/tmp/canic-peer-refresh-current.log` and
+`/tmp/canic-peer-verify-current.log`. This is focused fixture qualification.
 Changelog selection notes are updated, but this does not approve the entire 0.112
 batch or complete the separate external DTO migration. Structured selection:
 latestSupplierAdoption20261027; registry records and logs: /tmp/canic-deps-latest/.
