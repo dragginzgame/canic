@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.113.0]
 
+### ⚠️ Breaking
+
+- Standalone IcyDB lifecycle exports now require the generated explicit memory
+  bootstrap before startup; adopt the matching IcyDB generator. Managed hosts
+  continue binding their committed runtime without constructing another one.
+  [#590 — Extract IcyDB endpoint composition into a Candid-free Canic adapter](https://github.com/dragginzgame/canic/issues/590).
+
 ### 🩹 Fixed
 
 - Correct composition-fixture visibility and include the shared tool catalog in release lint.

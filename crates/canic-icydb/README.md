@@ -46,6 +46,15 @@ Lifecycle argument envelopes use `canic_icydb::wire::encode_init_arguments` and
 `encode_post_upgrade_arguments` with the same native request limits. Retain exact
 frames for retries; decoding does not establish byte identity or authorization.
 
+## Standalone lifecycle
+
+Standalone `start!` explicitly calls the generated `bootstrap_standalone_memory`
+with `icydb_memory_pool` before database startup on init and post-upgrade. Use the
+matching IcyDB generator exposing that function; database access now verifies an
+existing runtime instead of creating one implicitly. Custom lifecycle arguments
+are decoded before bootstrap, and application callbacks still run after startup.
+Managed participation binds the committed host runtime instead.
+
 ## Managed Canic composition
 
 Depend on `canic-icydb` and the matching Canic family. Select managed mounting

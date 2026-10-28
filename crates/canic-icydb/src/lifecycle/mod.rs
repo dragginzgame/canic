@@ -4,8 +4,9 @@
 ///
 /// The final host must define `icydb_memory_pool() ->
 /// Result<icydb::db::MemoryAllocationPool, icydb::db::MemoryAllocationPoolError>`.
-/// Cold bootstrap uses this explicit pool's namespace grants and physical
-/// exclusions. An already committed host is adopted without invoking the provider.
+/// Standalone lifecycle bootstrap uses this pool's namespace grants and physical
+/// exclusions before database startup. Managed participation binds the host runtime
+/// explicitly and never invokes the standalone pool provider.
 /// Permanent component keys never choose IDs or grant their own namespace.
 /// The generated public `icydb_memory_requests()` factory returns all database
 /// requests without opening stores. A composed host combines those requests with
@@ -235,11 +236,15 @@ macro_rules! __icydb_start_lifecycle {
     () => {
         #[$crate::__private::native_entry(init, name = "", sdk = crate::__icydb_host_sdk)]
         fn __icydb_startup_init() {
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(format!("IcyDB standalone memory bootstrap failed: {error}")));
             crate::__icydb_host::__icydb_startup_init();
         }
 
         #[$crate::__private::native_entry(post_upgrade, name = "", sdk = crate::__icydb_host_sdk)]
         fn __icydb_startup_post_upgrade() {
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(format!("IcyDB standalone memory bootstrap failed: {error}")));
             crate::__icydb_host::__icydb_startup_post_upgrade();
         }
     };
@@ -254,6 +259,8 @@ macro_rules! __icydb_start_lifecycle {
                 Ok(arguments) => arguments,
                 Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB init arguments"),
             };
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(format!("IcyDB standalone memory bootstrap failed: {error}")));
             crate::__icydb_host::__icydb_startup_init();
             let (): () = crate::__icydb_facade::db::with_request_execution(|| ($init)($($init_arg),*));
         }
@@ -264,6 +271,8 @@ macro_rules! __icydb_start_lifecycle {
                 Ok(arguments) => arguments,
                 Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB post-upgrade arguments"),
             };
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(format!("IcyDB standalone memory bootstrap failed: {error}")));
             crate::__icydb_host::__icydb_startup_post_upgrade();
             let (): () = crate::__icydb_facade::db::with_request_execution(
                 || ($post_upgrade)($($upgrade_arg),*)
