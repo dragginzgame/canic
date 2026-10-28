@@ -1,8 +1,8 @@
 //! Exercise the adapter's host-memory binding with a framework-owned participant.
 //! Actual database semantics and generated actor acceptance remain downstream.
 
-pub(crate) mod __icydb_facade {
-    pub(crate) mod db {
+pub mod __icydb_facade {
+    pub mod db {
         use ic_memory::{DefaultMemoryImpl, MemoryRuntime};
         use std::{cell::RefCell, rc::Rc};
 
@@ -10,7 +10,7 @@ pub(crate) mod __icydb_facade {
             static BOUND: RefCell<Option<Rc<MemoryRuntime<DefaultMemoryImpl>>>> = const { RefCell::new(None) };
         }
 
-        pub(crate) fn bind_memory_runtime(
+        pub fn bind_memory_runtime(
             runtime: Rc<MemoryRuntime<DefaultMemoryImpl>>,
         ) -> Result<(), &'static str> {
             let host = canic::memory::runtime::shared_runtime().map_err(|_| "host not ready")?;
@@ -20,7 +20,7 @@ pub(crate) mod __icydb_facade {
             Ok(())
         }
 
-        pub(crate) fn assert_bound() {
+        pub fn assert_bound() {
             BOUND.with_borrow(|slot| {
                 assert!(Rc::ptr_eq(
                     slot.as_ref().expect("synchronous participant binding"),
@@ -31,7 +31,7 @@ pub(crate) mod __icydb_facade {
     }
 }
 
-pub(crate) mod __icydb_host {
+pub mod __icydb_host {
     pub fn __icydb_startup_init() {
         super::__icydb_facade::db::assert_bound();
         crate::lifecycle_participant_init();

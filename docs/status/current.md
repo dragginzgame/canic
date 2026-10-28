@@ -62,9 +62,11 @@ The dedicated Blob attempt refused `Build(ChangedInputs)` during concurrent
 relocation (386s proof within 467s runner); embedded and exact Root snapshot
 cases did not run. This is artifact-preparation failure, not snapshot evidence.
 
-The relocated tree's peer owner tests pass; read-only verification detected stale
-Wasm, requiring the existing generator before release qualification. Retain both
-failure and correction logs in the current release directory. Full release results
+The relocated tree's four peer owner tests and read-only verification pass after
+the existing generator refreshed Wasm/provenance. The first release attempt stopped
+before version mutation on five redundant fixture visibility declarations; corrected
+`runtime_probe` all-target/all-feature strict Clippy passes. Retain both failure
+and correction logs in the current release directory. Full release results
 must be read from that attempt, not inferred from these earlier focused passes.
 
 Earlier Auth/Wire/Timers, IC Call, CLI and CI-fixture evidence remains in

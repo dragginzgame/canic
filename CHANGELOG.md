@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 🩹 Fixed
 
+- Correct composition-fixture visibility for strict release lint.
 - Prepare the exact release metadata editor in ordinary CI and create manifest
   FIFO fixtures portably on Linux and macOS. Refresh the embedded allocation peer
   with its source-bound provenance for the current dependency graph.
