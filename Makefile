@@ -418,7 +418,7 @@ dependency-risk-gate:
 
 shellcheck:
 	"$(SHELLCHECK_BIN)" --exclude=SC2001,SC2016 \
-		scripts/ci/*.sh scripts/dev/*.sh .githooks/pre-commit tool-versions.env
+		scripts/ci/*.sh scripts/dev/*.sh .githooks/pre-commit tool-versions.env ci/tool-versions.env
 
 control-plane-feature-gate:
 	bash scripts/ci/check-control-plane-feature-matrix.sh

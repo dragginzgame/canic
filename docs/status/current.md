@@ -68,6 +68,10 @@ before version mutation on five redundant fixture visibility declarations; corre
 `runtime_probe` all-target/all-feature strict Clippy passes. Retain both failure
 and correction logs in the current release directory. Full release results
 must be read from that attempt, not inferred from these earlier focused passes.
+The second attempt passed Clippy, formatting and invariants, then stopped on a
+ShellCheck input omission. The existing lint target now includes the shared tool
+catalog consumed by preparation; its focused rerun passes. Neither attempt bumped
+the version or pushed refs.
 
 Earlier Auth/Wire/Timers, IC Call, CLI and CI-fixture evidence remains in
 `target/auth-wire-timers-20261028/`, `target/ic-call-adoption/`,
