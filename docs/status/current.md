@@ -136,3 +136,8 @@ The parent qualification repairs are retained in PR #701; its fresh hosted
 rerun remains separate from local component evidence. The normal Canic checkout
 remains untouched. Root endpoint mounting, registration and installed acceptance
 remain in the owning issue.
+
+The enrollment source also refreshed and verified its own embedded allocation
+peer after rebasing onto the parent qualification repairs. Its Core/Contracts
+Rust sources and lock selection are unchanged from the passing focused component
+evidence; the generated peer/evidence bind the final capability catalog.
