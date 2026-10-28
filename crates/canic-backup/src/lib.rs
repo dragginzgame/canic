@@ -5,6 +5,7 @@
 //! and backup manifests remain separate boundary types.
 
 pub mod artifacts;
+pub mod checkpoint;
 pub mod discovery;
 pub mod execution;
 pub mod journal;

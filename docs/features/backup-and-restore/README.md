@@ -62,8 +62,12 @@ before beginning a unit checkpoint. The framework does not supply a business
 freeze automatically.
 
 These commands do not issue snapshot effects or authorize backup publication.
-Production Root/two-participant interruption qualification, paid-effect settlement
-and Backup stage/attempt integration remain required before live capture.
+The host checkpoint adapter now binds BEGIN/ADVANCE to IC Backup's original
+workflow, stage and finite attempt records. Its installed Root/two-participant
+fixture covers a lost ingress reply, original observation recovery and cold replay,
+then separate fixture-authorized same-ID snapshot/load and release. Production
+Root-paid capture/restore, current live provider admission, full application
+acceptance and whole-operation terminal settlement remain required before live capture.
 
 Artifact SHA-256 verification accepts uppercase and lowercase hex as the same
 digest. Malformed hashes and different artifact bytes still reject.

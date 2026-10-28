@@ -14,10 +14,12 @@ categories = { workspace = true }
 publish = true
 
 [dependencies]
+canic-contracts.workspace = true
 ic-backup = { workspace = true }
 ic-host-artifacts = { workspace = true }
 ic-host-fs = { workspace = true }
 ic-platform = { workspace = true, features = ["principal"] }
+ic-wire.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -479,11 +479,13 @@ dependencies = [
 name = "canic-backup"
 version = "0.112.0"
 dependencies = [
+ "canic-contracts",
  "ic-backup",
  "ic-host-artifacts",
  "ic-host-fs",
  "ic-host-process",
  "ic-platform",
+ "ic-wire",
  "rustix",
  "serde",
  "serde_json",
@@ -641,12 +643,14 @@ name = "canic-testing-internal"
 version = "0.112.0"
 dependencies = [
  "canic",
+ "canic-backup",
  "canic-blob-service",
  "canic-cli",
  "canic-contracts",
  "canic-control-plane",
  "canic-core",
  "canic-host",
+ "ic-backup",
  "ic-blob-storage-contracts",
  "ic-build",
  "ic-host-artifacts",
@@ -2060,9 +2064,9 @@ dependencies = [
 
 [[package]]
 name = "ic-backup"
-version = "0.45.1"
+version = "0.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e645782f81502a76b81b1ef66d0dd2ffb3a59ee63f0c9e718ec07d005c2513b"
+checksum = "66bf0a9a5d9c2cc3b18b5f3a14b3f76cb3b6a1ba5382282e3bf590edd67ef88c"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -2165,9 +2169,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.69.0"
+version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0be52dbee3196757c330a4b673447eb42c07823210bc6d3308917696e2bf5da7"
+checksum = "e15b931487491b0abd583caf1d94a92dd17f68ac17f797164603d42b51e18c3c"
 dependencies = [
  "flate2",
  "leb128",
@@ -2179,9 +2183,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-fs"
-version = "0.69.0"
+version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74745003fa19e7036ecaf1523f9aa6348e7bc74c91d3e906299b688d7d3d6979"
+checksum = "084e0f9409072c7ee39d10ce019da1fb554822311013f7fb32df25898dfac43b"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
@@ -2192,9 +2196,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.69.0"
+version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe52382d0c27f6e2ae313c771d736080ade7493fc6abebd720a65361403ccff"
+checksum = "ed8fae234a66c291c01a392cd1eb65de5795d5e1a20575768717c298156d3c26"
 dependencies = [
  "command-fds",
  "ic-host-artifacts",

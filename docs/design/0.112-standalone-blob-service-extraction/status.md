@@ -10,28 +10,29 @@ live Backup completion are deferred; their unavailable paths and activation gate
 stay closed. Historical Auth/Backup acceptance obligations below are future work,
 not blockers for this selected release. Existing pending changes are preserved.
 
-## Backup convergence implementation boundary — 2026-10-24
+## Backup convergence implementation boundary — 2026-10-28
 
-Current-source inspection confirms published Backup 0.40.0 coordinator/attempt
-APIs are available. Canic's active restore runner still owns scheduling and
-mutable apply journals. Its ICP configuration does not supply the upstream exact
-network/caller/release/request authority. Root checkpoint storage, authenticated
-bounded Wire dispatch and the shared catalogue mutation guard are now connected. Installed Root/two-participant
-qualification and paid snapshot composition remain pending.
-See the [implementation contract](0.112-design.md#backup-execution-convergence--2026-10-24).
+`canic-backup::checkpoint` now composes published Backup 0.48's original
+workflow/stage/attempt owners for complete Root checkpoint preparation. The active
+restore runner retains its existing scheduling/apply journals; they are not
+translated into fresh Backup spending. Root-paid snapshot composition remains
+separate. See the [implementation contract](0.112-design.md#backup-execution-convergence--2026-10-24),
+[#513](https://github.com/dragginzgame/canic/issues/513) and
+[#550](https://github.com/dragginzgame/canic/issues/550).
 
 | Batch | Outcome and owner | Required qualification | Current state |
 | --- | --- | --- | --- |
-| B5 | Production Root checkpoint ownership: existing model, control-plane storage, authenticated commands, complete participant discovery and topology exclusion | Native exact-unit/replay tests plus actual Root/two-participant interruption and release | Storage/commands/guard connected; installed Root qualification pending |
-| B1 | Backup original host workflow composed with Root-paid effects; one owner per effect class | Exact identity, finite attempts, changed/missing original refusal, unknown-result recovery and cold replay | Custody foundations integrated; stage/attempt engine adoption pending |
-| B5 | Complete capture and same-release restore with application acceptance and terminal release | Complete artifact bytes, stopped restore, outstanding external obligations, accepted start and effect-free terminal replay | Participant fixture evidence only; production path pending |
+| B5 | Production Root checkpoint storage, authenticated commands, complete participant discovery and topology exclusion | Exact unit/replay plus actual Root/two-participant interruption and release | Storage/commands/guard connected; existing installed dispatch case passes |
+| B1 | Original host workflow composed with separate Root-paid effects | Exact finite attempts, changed original refusal, unknown-result recovery and cold replay | Host preparation adapter and original observation recovery pass; production paid snapshot/restore composition pending |
+| B5 | Complete capture and same-release restore with application acceptance and terminal release | Complete artifact bytes, stopped restore, external obligations, accepted start and terminal replay | Connected fixture-owned same-ID snapshot/load passes; production dispatcher, full acceptance and terminal composition pending |
 
-The dormant capture mutation cleanup is complete (248 Backup and 52 CLI backup
-library tests, strict affected Clippy). It does not qualify these pending outcomes.
-The previous Auth 0.6 failure below is historical evidence, not the current Backup
-implementation blocker. Live creation remains unavailable; the complete 0.112
-batch remains not push-ready. Current checkpoint evidence is retained under `/tmp/canic-root-checkpoint/`;
-no production snapshot effects or deployments were run.
+The bounded host preparation contribution has focused native, strict lint and
+installed evidence in the [current handoff](../../status/current.md). It does not
+complete the production Backup outcome. The installed fixture owns its explicit
+qualification network and exclusive simulator authority; direct management calls
+supply no live admission or Root-paid settlement proof. Live creation retains its
+typed refusal. Original journals, raw evidence and failed fixture directories are
+retained; no deployment or production snapshot effects ran.
 
 ## Capture executor retirement — 2026-10-18
 

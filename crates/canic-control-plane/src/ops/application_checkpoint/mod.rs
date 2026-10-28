@@ -23,12 +23,8 @@ use canic_contracts::{
 use canic_core::control_plane_support::{
     error::InternalError,
     model::application_checkpoint::{RootCheckpointPhase, RootCheckpointRecord},
-    ops::{
-        application_checkpoint::{authority_digest, command},
-        ic::call::CallOps,
-    },
+    ops::{application_checkpoint::command, ic::call::CallOps},
 };
-use sha2::{Digest, Sha256};
 
 /// Stable checkpoint transactions; no method grants snapshot spending authority.
 pub struct RootCheckpointOps;
@@ -43,18 +39,15 @@ impl RootCheckpointOps {
             return Err(InternalError::conflict());
         }
         members.sort_by_key(|member| member.receiver.canister());
-        let mut digest = Sha256::new();
-        digest.update(b"canic.application-checkpoint.unit.v1\0");
-        for member in &members {
-            digest.update(authority_digest(member)?);
-        }
+        let unit_digest =
+            protocol::unit_digest(&members).map_err(|_| InternalError::invariant())?;
         let original = RootCheckpointStore::read();
         let next = RootCheckpointRecord::begin(
             original.as_ref(),
             root,
             request.expected_sequence,
             request.operation_id,
-            digest.finalize().into(),
+            unit_digest,
             members,
         )
         .map_err(|_| InternalError::conflict())?;
