@@ -86,3 +86,37 @@ same-operation recovery. Snapshot-owned Shared Tooling files remain unchanged.
 installation, application build, Fleet deployment and live verification are
 separate. No live deployment is verified. Publication provenance hardening,
 broader consolidation and deployment orchestration remain deferred.
+
+## Isolated persistent receiver contribution — 2026-10-28
+
+The maintainer selected persistent receiver integration first under
+[Canic #491](https://github.com/dragginzgame/canic/issues/491). This isolated topic
+branch is based on released `5c236ab130c0d63892ef281b45bdc3fa353e012f`; the normal
+Canic checkout and its pending work are preserved. Auth/protocol types are locked
+to published 0.19.4. No package version or release operation is selected.
+
+The internal receiver component retains the complete restored logout ledger,
+separate budgets and clock fencing. All 40 focused session-storage tests, normal
+native/Wasm receiver graphs and package/test Clippy pass. These are native storage
+and compile proofs; no installed upgrade, protected Root enrollment or production
+endpoint is qualified. The production facade remains closed. See the
+[component contract](../features/authentication/README.md#persistent-receiver-component).
+The owning issue retains enrollment, endpoint/lifecycle and installed acceptance.
+
+## Parent PR CI qualification repairs
+
+PR #701's first hosted run passed preflight, security, MSRV and main checks but
+exposed three qualification gaps. The Auth lock change made the embedded peer
+stale. The base also contains a macOS CLI fixture using an unavailable rustix
+symbol and an ordinary CI job which never prepares the release metadata editor
+that its release fixtures admit offline. The setup failure was a missing prepared
+store, not permission to weaken ownership checks.
+
+The CLI fixture now uses native POSIX mkfifo with mode 0600. The ordinary job
+explicitly prepares and checks the existing pinned editor. The existing refresh
+example regenerated the peer and structured evidence; its normal verifier and
+corruption/source-change regression pass. The Linux FIFO case, all 17 release-flow
+cases, CLI package/test Clippy, workflow lint and formatting pass. Native macOS
+and a complete hosted rerun remain pending; no full local suite was run.
+Evidence: the Auth workspace's `target/canic-integration-20261028/parent-ci-*.log`.
+Owning acceptance remains with Canic #491/#515/#551/#563.

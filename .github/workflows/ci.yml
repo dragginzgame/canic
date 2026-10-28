@@ -349,6 +349,7 @@ jobs:
         run: |
           source tool-versions.env
           make install-host-tools
+          make install-release-metadata-editor
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
@@ -362,6 +363,7 @@ jobs:
         shell: bash
         run: |
           cargo set-version --version
+          make release-metadata-editor-check
           rg --version
           rg --pcre2-version
           rustup target list --toolchain "$CANIC_INTERNAL_TOOLCHAIN" --installed | rg -x wasm32-unknown-unknown

@@ -20,11 +20,13 @@ use ic_auth::session::{
 
 /// Target-bound durable backend; no asynchronous work may enter its transaction.
 pub struct ApplicationSessionStore {
-    pub fleet: canic_contracts::ids::FleetKey,
+    pub(crate) fleet: canic_contracts::ids::FleetKey,
 }
 
 impl ApplicationSessionStore {
-    pub fn new(
+    #[cfg(test)]
+    #[must_use]
+    pub const fn new(
         authority: &crate::model::auth::application_authorization::LocalApplicationAuthoritySnapshot,
     ) -> Self {
         Self {

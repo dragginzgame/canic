@@ -209,12 +209,15 @@ fn manifest_validation_rejects_nonregular_inputs_and_preserves_explicit_aliases(
         Err(ManifestCommandError::Io(_))
     );
     options.manifest = root.join("fifo");
-    rustix::fs::mkfifoat(
-        rustix::fs::CWD,
-        &options.manifest,
-        rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
-    )
-    .unwrap();
+    assert!(
+        std::process::Command::new("/usr/bin/mkfifo")
+            .env_clear()
+            .args(["-m", "600"])
+            .arg(&options.manifest)
+            .status()
+            .unwrap()
+            .success()
+    );
     std::assert_matches!(
         validate_manifest(&options),
         Err(ManifestCommandError::Io(_))

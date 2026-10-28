@@ -2,6 +2,7 @@
 //! Native storage proofs; installed lifecycle qualification remains separate.
 
 mod fixture;
+mod persistent;
 
 use super::*;
 use crate::{

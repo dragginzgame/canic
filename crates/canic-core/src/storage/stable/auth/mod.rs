@@ -26,7 +26,7 @@ pub use records::{
     RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootProofRecord,
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub use records::LocalApplicationLoginTotalsRecord;
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
@@ -149,6 +149,11 @@ impl LocalApplicationAuthorizationState {
         })
     }
 
+    /// Read the clock from the protected header without cloning the ledger.
+    pub(crate) fn application_observed_at_ns() -> u64 {
+        LOCAL_APPLICATION_AUTHORIZATION_STATE.with_borrow(|cell| cell.get().observed_at_ns)
+    }
+
     // Retain trusted time independently of a later returned transaction failure.
     // A backward clock never mutates the protected header.
     pub(crate) fn observe_application_time(now_ns: u64) -> bool {
@@ -167,7 +172,6 @@ impl LocalApplicationAuthorizationState {
 
     // Resolve one canonical application session record by its derived index.
     #[must_use]
-    #[cfg(test)]
     pub(crate) fn application_session_record(
         index: usize,
     ) -> Option<LocalApplicationSessionRecord> {
@@ -224,7 +228,6 @@ impl LocalApplicationAuthorizationState {
 
     /// Commit one fully validated pair in the current synchronous IC message.
     /// No fallible work or asynchronous boundary may separate these writes.
-    #[cfg(test)]
     pub(crate) fn commit_shared_session_pair(
         caller: Principal,
         session_index: usize,
@@ -250,7 +253,6 @@ impl LocalApplicationAuthorizationState {
     }
 
     /// Read one retained canonical login without loading the ledger census.
-    #[cfg(test)]
     pub(crate) fn application_login_record(
         caller: Principal,
     ) -> Option<LocalApplicationLoginRecord> {
@@ -258,12 +260,10 @@ impl LocalApplicationAuthorizationState {
     }
 
     /// Read protected occupancy from the same synchronous commit as login rows.
-    #[cfg(test)]
     pub(crate) fn application_login_totals() -> LocalApplicationLoginTotalsRecord {
         LOCAL_APPLICATION_AUTHORIZATION_STATE.with_borrow(|cell| cell.get().login_totals)
     }
 
-    #[cfg(test)]
     fn commit_application_login(
         caller: Principal,
         login: LocalApplicationLoginRecord,
@@ -280,7 +280,6 @@ impl LocalApplicationAuthorizationState {
     }
 
     /// Commit a logout tombstone and swap-remove only its session. Replay survives.
-    #[cfg(test)]
     pub(crate) fn commit_shared_logout(
         caller: Principal,
         session_index: Option<usize>,
@@ -300,7 +299,6 @@ impl LocalApplicationAuthorizationState {
 
     // Return the current target-local application authority generation.
     #[must_use]
-    #[cfg(test)]
     pub(crate) fn application_authority_generation() -> u64 {
         LOCAL_APPLICATION_AUTHORIZATION_STATE
             .with_borrow(|cell| cell.get().application_authority_generation)

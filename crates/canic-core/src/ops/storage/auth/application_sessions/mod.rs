@@ -39,10 +39,13 @@ thread_local! {
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod login_restore;
-#[cfg(test)]
+mod receiver;
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod shared;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 use login_restore::validate_login_records;
+pub use receiver::{PersistentReceiverPolicy, PersistentReceiverState};
+pub use shared::ApplicationSessionStore;
 
 #[derive(Clone, Debug, Default)]
 struct ApplicationSessionIndexes {
@@ -82,7 +85,6 @@ pub struct ApplicationSessionRestoreStats {
 /// Current physical occupancy projected from the reconstructed storage indexes.
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg(test)]
 pub struct ApplicationSessionOccupancy {
     pub active_global: usize,
     pub replay_global: usize,
@@ -96,7 +98,6 @@ pub enum ApplicationSessionStateError {
     ClockRollback,
 
     #[error("application-session derived indexes are unavailable")]
-    #[cfg(test)]
     IndexesUnavailable,
 
     #[error("application-session state exceeds the active global bound")]
@@ -161,7 +162,6 @@ impl LocalApplicationAuthorizationStateOps {
 
     /// Return the current target-local application authority generation.
     #[must_use]
-    #[cfg(test)]
     pub fn application_authority_generation() -> u64 {
         LocalApplicationAuthorizationState::application_authority_generation()
     }
@@ -204,7 +204,6 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Return current physical occupancy used by target-local admission policy.
-    #[cfg(test)]
     pub fn application_session_occupancy(
         caller: Principal,
     ) -> Result<ApplicationSessionOccupancy, ApplicationSessionStateError> {
@@ -312,7 +311,6 @@ fn install_indexes(indexes: ApplicationSessionIndexes) {
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|current| *current = Some(indexes));
 }
 
-#[cfg(test)]
 fn with_indexes<T>(
     read: impl FnOnce(&ApplicationSessionIndexes) -> T,
 ) -> Result<T, ApplicationSessionStateError> {
@@ -460,7 +458,6 @@ fn session_from_record(
         .map_err(|_| ApplicationSessionStateError::InvalidSessionRecord)
 }
 
-#[cfg(test)]
 fn session_to_record(
     session: &Session,
 ) -> Result<LocalApplicationSessionRecord, ApplicationSessionStateError> {
@@ -666,6 +663,7 @@ impl Drop for ApplicationSessionTestStateGuard {
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub fn invalidate_indexes() {
+    receiver::invalidate_runtime();
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|indexes| *indexes = None);
 }
 
