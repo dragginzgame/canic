@@ -1,88 +1,106 @@
 # Current handoff — 2026-10-28
 
-## Accepted work and authority
+## Selected release
 
-The maintainer explicitly requests releasing Canic 0.112.0 and publishing its
-package family. This includes the canonical source release and its required
-qualification, version preparation, commit/tag and atomic main/tag push, followed
-by `make publish`. It does not select an application or authorize a live Fleet
-operation. PocketIC performance work is deferred until after publication.
+The maintainer explicitly requested release and package publication of Canic
+0.113.0, including necessary repairs/retries. This selects that minor boundary;
+it does not claim acceptance of the unfinished historical closeout audit.
+The previous release is recorded at `5c236ab130c0d63892ef281b45bdc3fa353e012f`.
+Its evidence remains in `target/session-release-0112/result.json` and adjacent
+attempt logs. Current release evidence is retained under `target/session-release-0113/`.
+The pre-release handoff is preserved there as `status-before-release.md`.
 
-The reviewed repair batch and focused qualification corrections are committed.
-Local `main` was fast-forwarded from `f768a5519edb35512912dd73fce45936155edc6e`
-to `ec817f2e20f5002a88def1a522f7ffe3ac046ee9`; the latter remains available on
-`repair/release-qualification`. Versions still read 0.111.0; 0.112.0 notes are open.
-The accepted Blob/Wire hard cut remains governed by the
-[closeout plan](../audits/working/0.112-push-readiness/plan.md) and
-[migration contract](../design/0.112-standalone-blob-service-extraction/wire-hard-cut.md).
+Review and commit the coherent source batch, then use `make release-minor` and
+`make publish`. Release preflight owns preparation and complete qualification;
+do not pre-run another broad gate. Stop on source drift, failed gates or uncertain
+remote effects. Inspect saved phases and refs before exact-attempt
+`make release-resume VERSION=0.113.0`; never remove a lock from restricted PID
+absence or manually bump again. Preserve artifacts and logs throughout.
 
-## Current release attempt
+`make release-minor` releases source; `make publish` publishes packages.
+CLI installation, App build, Fleet deployment and live verification are separate.
+No live Fleet deployment was requested or verified.
 
-The first authorized `make release-minor` stopped before version mutation after
-4m43.920s. The release-integrity gate's synthetic build-environment fixture
-inherited the enclosing release's `RELEASE_SOURCE`, then compared that real SHA
-with its substituted Git identity. No 0.112 release plan was saved, tag created,
-push performed or package published. The release lock was released normally.
-Logs: `target/session-release-0112/attempt.TWDfr4/release.log` and `release.exit`.
+## Coherent batch
 
-The build-environment, validation-lane and preflight fixtures now clear inherited
-`RELEASE_SOURCE` before selecting synthetic identities. Production source fences
-and explicit mismatch regressions remain unchanged. Both directly affected lane
-fixtures pass under the actual source SHA; the full release-integrity gate passes
-with the outer release variables. Scoped ShellCheck passes with repository
-options and the referenced tool catalog. Evidence:
-`target/session-release-0112/attempt.TWDfr4/fixture-recovery-final.log`.
-The narrow correction and changelog updates require a local commit, then a fresh
-canonical minor release. Do not use resume: this failed gate saved no attempt.
+Auth 0.19.5, Backup 0.48.2, Blob/contracts and Memory/Storage 0.53.0,
+Timers 0.31.16, Wire/derive 0.7.20, IC Call 0.7.3 and Tooling 0.69.7 are selected.
+Query minimum is 0.75.5; the root lock selects 0.75.6 and Platform 0.7.3.
+Both private consumer locks align. The metadata editor is exactly 0.69.7.
+Shared Tooling 0.27.3 was adopted through its exporter from reviewed revision
+`7ee5c83744aa822ecd070703dbf0a7d95076d5f6`; its catalog owns sccache 0.19.0.
+Make selects managed tool/output/runtime defaults without manual exports;
+qualification enforces offline Cargo and a clean source tree.
 
-## Qualification and implementation evidence
+The Blob adapter lives at `crates/canic-blob-service`; its two independent
+consumer fixtures remain under `integrations/blob-service`. Adapters use `mount!`.
+The new publishable IcyDB adapter supplies transport/lifecycle composition and
+shares the exact committed host Memory runtime without an IcyDB engine dependency.
+The Auth scaffold remains unpublished and refuses mounting at compile time.
+Endpoint attributes use `query`/`update` and `raw_query`/`raw_update`, with explicit
+owned Wire contracts; required external Candid adapters remain separate.
+External management/history, NNS, ledger/archive, CMC, asset-read and ICRC-21
+contracts use Platform identities. Removed public DTO/attribute names have no aliases.
 
-Complete non-publishing `make release-verify` passed on clean `ec817f2e2` in
-90m48.263s. Detailed evidence is retained in
-`target/session-qualification/final-report.md`, `attempt-6.log`,
-`attempt-6-selection.txt` and `attempt-6.exit`. Earlier failed attempts and their
-focused recoveries remain alongside them. The previous detailed handoff is
-preserved in Git at `ec817f2e2:docs/status/current.md`.
+Memory fixture backings delegate physical identity; retained handles prevent
+reopening until final release. Controller checks, bounded spending, cycle
+conservation and same-operation recovery remain required. Host environment
+normalization preserves artifact reuse, not test-result caching. Serial test
+compilation and inventory share one Cargo listing. Ordinary CI explicitly prepares
+the metadata editor; FIFO fixtures use the portable command. Cycle-table rendering
+shares columns while preserving output. See the complete 0.113 changelog.
 
-That complete pass includes the exact restored-Root inventory/allocation case
-(2m36s), maximum application initialization (1m16s), Coordinator replay (1.85s),
-mixed-topology recovery (11m46s) and source-bound activation reset (4m52s).
-Internal PocketIC took 65m10s and public runtime PocketIC 9m14s, inside the total.
-These passes do not explain historical activation-conflict causation.
+## Evidence and limits before the release gate
 
-Implemented owners: shared preparation/qualification groups, governed build
-selection, selected generated-source admission, exact package/source boundaries,
-and existing release recovery. Generated source lives in configuration-keyed
-`target/canic-packages`; Cargo output defaults to `target/cargo`. Physical output
-and source overlaps, including symlink aliases, reject. Root lookup canonicalizes
-configuration aliases. Snapshot rejection tests retain typed transport rejection
-and unchanged-state assertions. Initialization admits the existing maximum input
-within bounded codec accounting without increasing application bytes or authority.
+`target/tooling-backup-refresh-20261028/` records Host reuse/invalidation,
+251 Backup tests, real persistent PocketIC lifecycle, pinned tool admission and
+release transaction fixtures. `target/blob053-readiness-20261028/` records
+36 Core memory, 36 Control Plane storage, six adapter library and three lifecycle
+participant tests, scoped strict lint, 86 ICP-refill, 67 operator-mint, two
+reinstall-adoption and package-boundary passes. These precede the adapter move.
+The dedicated Blob attempt refused `Build(ChangedInputs)` during concurrent
+relocation (386s proof within 467s runner); embedded and exact Root snapshot
+cases did not run. This is artifact-preparation failure, not snapshot evidence.
 
-The supported non-publishing sequence is `make prepare-validation SCOPE=release`,
-review/commit, then `make release-verify`. No manual exports are required.
-Make selects Rust/Cargo 1.99.1, pinned sccache 0.19.0, the existing wrapper,
-version-isolated runtime and incremental=0; supported explicit overrides remain
-validated. Qualification forces offline Cargo. Release preflight prepares all
-three locked graphs and exact tools. No source-only receipt bypass exists.
-Shared Tooling latest-stable maintenance: [#319](https://github.com/dragginzgame/shared-tooling/issues/319).
+The relocated tree's four peer owner tests and read-only verification pass after
+the existing generator refreshed Wasm/provenance. The first release attempt stopped
+before version mutation on five redundant fixture visibility declarations; corrected
+`runtime_probe` all-target/all-feature strict Clippy passes. Retain both failure
+and correction logs in the current release directory. Full release results
+must be read from that attempt, not inferred from these earlier focused passes.
+The second attempt passed Clippy, formatting and invariants, then stopped on a
+ShellCheck input omission. The existing lint target now includes the shared tool
+catalog consumed by preparation and selects Bash for that data-only catalog.
+Its focused rerun passes. Neither attempt bumped
+the version or pushed refs.
+The third attempt passed preceding gates, then refused two stale native guard
+assumptions after the endpoint rename/adapter move. The corrected endpoint guard
+passes 12 tests, the trap guard passes six, and both pass scoped strict Clippy.
+Internal native, Host local-Fleet and documentation lanes passed in that attempt;
+the ordinary-test barrier skipped PocketIC. Its test stage took 455s; no version
+mutation occurred. Complete qualification still requires a fresh corrected run.
 
-## Boundaries and next action
+Earlier Auth/Wire/Timers, IC Call, CLI and CI-fixture evidence remains in
+`target/auth-wire-timers-20261028/`, `target/ic-call-adoption/`,
+`target/issue-693/` and `target/ci-blockers-20261028/`. Historical warm checkpoint
+62.75s → 18.56s (runner 92s → 33s) is not a measured release speedup.
+Recent ICRC-21 native protocol tests, enabled runtime-probe compilation and strict
+Contracts/Core/facade lint passed; no installed case established that slice alone.
 
-Commit the focused fixture correction and run `make release-minor`; only after
-success run `make publish`. Observe exact remote refs and registry versions.
-Stop on failed gates or uncertain external outcomes and retain all artifacts.
-Once version preparation creates a saved plan, use exact-version
-`make release-resume VERSION=0.112.0` after inspecting its state and remote refs.
-Never remove an occupied lock based only on restricted PID visibility.
+## Unresolved evidence and follow-up
 
-Fresh hosted setup and native macOS remain unverified. Historical October 27
-`ActivationResetAdoptionConflict` remains unexplained; logs are
-`/tmp/canic-release-0112-attempt{4,5}.log`. Current passes do not disprove it.
-Preserve controllers, bounded spending, cycle conservation, release fences and
-same-operation recovery. Snapshot-owned Shared Tooling files remain unchanged.
+Fresh hosted/macOS qualification remains unresolved. Published 0.112.0 CI run
+40659441082 failed ordinary tests, PocketIC and both macOS Host/CLI compilation
+jobs; locally corrected causes are not a fresh hosted pass. The October 27
+`ActivationResetAdoptionConflict` remains unexplained; isolated adoption passes
+cannot disprove it. Actual managed IcyDB database/application acceptance remains
+with downstream applications (Canic #590 / IcyDB #373).
 
-`make release-minor` releases source; `make publish` publishes packages. CLI
-installation, application build, Fleet deployment and live verification are
-separate. No live deployment is verified. Publication provenance hardening,
-broader consolidation and deployment orchestration remain deferred.
+Generic external codecs await Platform #78/#79. Canic-owned retirement-drain
+request/reply Candid derives remain under Canic #613; complete codec extraction
+is not claimed. Live provider linkage remains Blob #34 / Canic #494;
+independent-credit reconciliation remains excluded under EX-05 in the closeout
+plan. Preserve these distinctions from completed timer/Blob engine ownership.
+Publication provenance hardening and deployment orchestration remain deferred.
+Shared Tooling latest-stable maintenance remains #319. No release, hosted, or
+live-system success may be inferred solely from this descriptive handoff.

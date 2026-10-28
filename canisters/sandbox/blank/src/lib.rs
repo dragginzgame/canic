@@ -28,13 +28,13 @@ async fn canic_upgrade() {}
 canic::start_local!();
 
 /// Return a small liveness response for quick manual calls.
-#[canic_query(public, wire(id = protocol::PING, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(public, wire(id = protocol::PING, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn sandbox_blank_ping() -> Result<String, Error> {
     Ok("sandbox_blank:ok".to_string())
 }
 
 /// Echo one string under an explicit sandbox payload limit.
-#[canic_update(public, wire(id = protocol::ECHO, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(public, wire(id = protocol::ECHO, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn sandbox_blank_echo(payload: String) -> Result<String, Error> {
     Ok(payload)
 }

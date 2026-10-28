@@ -18,10 +18,6 @@ use canic::{
             FleetAdmissionPreparedProjectionStatus, FleetAdmissionProjectionPhase,
             FleetAdmissionProjectionStatusResponse,
         },
-        icrc21::{
-            ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
-            ConsentMessageSpec, DisplayMessageType,
-        },
         page::Page,
         rpc::{CyclesFundingPreflightResponse, CyclesResponse, Response as RootRpcResponse},
     },
@@ -33,6 +29,10 @@ use canic::{
     },
 };
 use canic_contracts::protocol::authority::{decode, encode};
+use ic_platform::icrc_ledger_types::icrc21::{
+    ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec,
+    DisplayMessageType, Icrc21Error,
+};
 use ic_platform::{candid_parser::CandidSource, principal::ExternalPrincipal as Principal};
 use std::{
     fmt::Debug,
@@ -296,6 +296,12 @@ fn composed_framework_fleet_admission_facade_is_typed_and_synchronous() {
 
 #[test]
 fn icrc21_dispatcher_uses_the_registered_typed_handler() {
+    assert!(matches!(
+        Icrc21Dispatcher::consent_message(consent_message_request(
+            "unregistered_protocol_surface_method"
+        )),
+        Err(Icrc21Error::UnsupportedCanisterCall(_))
+    ));
     let method = "protocol_surface_transfer";
     Icrc21Dispatcher::register(method, |request| {
         Ok(ConsentInfo {

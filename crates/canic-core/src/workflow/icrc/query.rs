@@ -5,11 +5,10 @@
 //! Boundary: workflow query facade over the standards projection and dispatcher services.
 
 use crate::{
-    dispatch::icrc21::Icrc21Dispatcher,
-    domain::icrc::icrc10::supported_standards,
-    dto::icrc21::{ConsentInfo, ConsentMessageRequest, Icrc21Error},
+    dispatch::icrc21::Icrc21Dispatcher, domain::icrc::icrc10::supported_standards,
     ops::config::ConfigOps,
 };
+use ic_platform::icrc_ledger_types::icrc21::{ConsentInfo, ConsentMessageRequest, Icrc21Error};
 
 ///
 /// Icrc10Query

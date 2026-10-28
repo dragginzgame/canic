@@ -187,7 +187,7 @@ canic::start!();
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
-#[canic_query(requires(caller::is_controller()), wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
+#[query(requires(caller::is_controller()), wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 async fn packaged_probe() -> Result<u64, canic::Error> { Ok(7) }
 canic::finish!();
 EOF

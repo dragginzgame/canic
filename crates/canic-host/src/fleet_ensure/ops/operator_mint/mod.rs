@@ -8,13 +8,14 @@ pub mod receipts;
 #[cfg(test)]
 mod tests;
 pub mod transport;
-mod wire;
 
 use crate::fleet_ensure::model::operator_mint::{
     OperatorMintAuthority, OperatorMintIntentRecord, OperatorMintNotificationOutcomeRecord,
     OperatorMintTransferOutcomeRecord,
 };
-use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
+use ic_platform::{
+    candid::contract::Nat, cmc_types, icp_ledger_types, principal::ExternalPrincipal as Principal,
+};
 use sha2_host::{Digest, Sha224, Sha256};
 use thiserror::Error;
 
@@ -75,17 +76,17 @@ pub fn transfer_argument(
 ) -> Result<Vec<u8>, OperatorMintWireError> {
     validate_intent(intent)?;
     let subaccount = principal_subaccount(intent.authority.operator);
-    let args = wire::TransferArgs {
+    let args = icp_ledger_types::TransferArgs {
         memo: MINT_MEMO,
-        amount: wire::Tokens {
+        amount: icp_ledger_types::Tokens {
             e8s: intent.amount_e8s,
         },
-        fee: wire::Tokens {
+        fee: icp_ledger_types::Tokens {
             e8s: intent.transfer_fee_e8s,
         },
         from_subaccount: None,
-        to: account_identifier(intent.authority.cmc, &subaccount),
-        created_at_time: Some(wire::Timestamp {
+        to: account_identifier(intent.authority.cmc, &subaccount).to_vec(),
+        created_at_time: Some(icp_ledger_types::TimeStamp {
             timestamp_nanos: intent.created_at_time_ns,
         }),
     };
@@ -100,7 +101,7 @@ pub fn notification_argument(
 ) -> Result<Vec<u8>, OperatorMintWireError> {
     validate_intent(intent)?;
     Ok(ic_platform::candid::contract::encode_one(
-        wire::NotifyMintArgs {
+        cmc_types::NotifyMintCyclesArg {
             block_index: icp_block_index,
             deposit_memo: Some(intent.deposit_memo.to_vec()),
             to_subaccount: None,
@@ -112,28 +113,29 @@ pub fn notification_argument(
 pub fn decode_transfer_reply(
     bytes: &[u8],
 ) -> Result<OperatorMintTransferOutcomeRecord, OperatorMintWireError> {
-    let result: Result<u64, wire::TransferError> = ic_platform::candid::decoder::decode_one(bytes)?;
+    let result: Result<u64, icp_ledger_types::TransferError> =
+        ic_platform::candid::decoder::decode_one(bytes)?;
     Ok(match result {
         Ok(block_index) => OperatorMintTransferOutcomeRecord::Accepted { block_index },
-        Err(wire::TransferError::TxDuplicate { duplicate_of }) => {
+        Err(icp_ledger_types::TransferError::TxDuplicate { duplicate_of }) => {
             OperatorMintTransferOutcomeRecord::Duplicate {
                 block_index: duplicate_of,
             }
         }
-        Err(wire::TransferError::BadFee { expected_fee }) => {
+        Err(icp_ledger_types::TransferError::BadFee { expected_fee }) => {
             OperatorMintTransferOutcomeRecord::BadFee {
                 expected_fee_e8s: expected_fee.e8s,
             }
         }
-        Err(wire::TransferError::InsufficientFunds { balance }) => {
+        Err(icp_ledger_types::TransferError::InsufficientFunds { balance }) => {
             OperatorMintTransferOutcomeRecord::InsufficientFunds {
                 balance_e8s: balance.e8s,
             }
         }
-        Err(wire::TransferError::TxCreatedInFuture) => {
+        Err(icp_ledger_types::TransferError::TxCreatedInFuture) => {
             OperatorMintTransferOutcomeRecord::CreatedInFuture
         }
-        Err(wire::TransferError::TxTooOld {
+        Err(icp_ledger_types::TransferError::TxTooOld {
             allowed_window_nanos,
         }) => OperatorMintTransferOutcomeRecord::TooOld {
             allowed_window_ns: allowed_window_nanos,
@@ -145,7 +147,7 @@ pub fn decode_transfer_reply(
 pub fn decode_notification_reply(
     bytes: &[u8],
 ) -> Result<OperatorMintNotificationOutcomeRecord, OperatorMintWireError> {
-    let result: Result<wire::NotifyMintOk, wire::NotifyMintError> =
+    let result: Result<cmc_types::NotifyMintCyclesSuccess, cmc_types::NotifyError> =
         ic_platform::candid::decoder::decode_one(bytes)?;
     Ok(match result {
         Ok(minted) => OperatorMintNotificationOutcomeRecord::Minted {
@@ -153,21 +155,23 @@ pub fn decode_notification_reply(
             gross_minted_cycles: bounded_nat(minted.minted)?,
             historical_balance_cycles: bounded_nat(minted.balance)?,
         },
-        Err(wire::NotifyMintError::Processing) => OperatorMintNotificationOutcomeRecord::Processing,
-        Err(wire::NotifyMintError::Refunded {
+        Err(cmc_types::NotifyError::Processing) => {
+            OperatorMintNotificationOutcomeRecord::Processing
+        }
+        Err(cmc_types::NotifyError::Refunded {
             block_index,
             reason,
         }) => OperatorMintNotificationOutcomeRecord::Refunded {
             refund_block_index: block_index,
             reason,
         },
-        Err(wire::NotifyMintError::TransactionTooOld(oldest_block_index)) => {
+        Err(cmc_types::NotifyError::TransactionTooOld(oldest_block_index)) => {
             OperatorMintNotificationOutcomeRecord::TransactionTooOld { oldest_block_index }
         }
-        Err(wire::NotifyMintError::InvalidTransaction(reason)) => {
+        Err(cmc_types::NotifyError::InvalidTransaction(reason)) => {
             OperatorMintNotificationOutcomeRecord::InvalidTransaction { reason }
         }
-        Err(wire::NotifyMintError::Other {
+        Err(cmc_types::NotifyError::Other {
             error_code,
             error_message,
         }) => OperatorMintNotificationOutcomeRecord::Other {

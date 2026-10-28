@@ -229,22 +229,37 @@ pub(crate) fn entrypoint(
     sdk: TokenStream,
     execute: TokenStream,
 ) -> TokenStream {
+    let executor = if matches!(kind, EntryKind::Query | EntryKind::CompositeQuery) {
+        quote!(#sdk::executor::in_tracking_query_executor_context)
+    } else {
+        quote!(#sdk::executor::in_tracking_executor_context)
+    };
+    export_entrypoint(kind, method, name, executor, execute)
+}
+
+/// Emit the exact export around the selected Platform executor context.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by component and framework adapters"
+)]
+pub(crate) fn export_entrypoint(
+    kind: &EntryKind,
+    method: &str,
+    name: &syn::Ident,
+    executor: TokenStream,
+    execute: TokenStream,
+) -> TokenStream {
     let export = if matches!(kind, EntryKind::Init | EntryKind::PostUpgrade) {
         kind.export().to_string()
     } else {
         format!("{} {}", kind.export(), method)
     };
     let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
-    let executor = if matches!(kind, EntryKind::Query | EntryKind::CompositeQuery) {
-        format_ident!("in_tracking_query_executor_context")
-    } else {
-        format_ident!("in_tracking_executor_context")
-    };
     quote! {
         #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
         #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
         fn #name() {
-            #sdk::executor::#executor(|| { #execute });
+            #executor(|| { #execute });
         }
     }
 }

@@ -380,9 +380,9 @@ For each release:
    heading and writes the structured validation receipt for that
    exact source commit, without editing the current handoff. The bump transaction repeats the cheap draft preflight before
    version mutation so direct or changed invocation paths retain the same
-   boundary. A successful complete gate retains an exact-source local receipt;
-   rerunning the release command after a later release-only failure reuses that
-   receipt rather than repeating the full gate.
+   boundary. A fresh release always runs qualification. After a later release-only
+   failure, inspect the saved phase and use the governed exact-attempt recovery
+   path; a source-only local receipt cannot skip qualification.
 6. The maintainer reviews, stages, commits, tags, and pushes through the
    governed release targets. The candidate guard rejects a still-open target
    changelog or any production change made after the recorded validation.

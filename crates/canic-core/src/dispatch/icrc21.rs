@@ -2,10 +2,9 @@
 // ICRC 21 REGISTRY
 //
 
-use crate::{
-    dto::icrc21::{ConsentInfo, ConsentMessageRequest, ErrorInfo, Icrc21Error},
-    log,
-    log::Topic,
+use crate::{log, log::Topic};
+use ic_platform::icrc_ledger_types::icrc21::{
+    ConsentInfo, ConsentMessageRequest, ErrorInfo, Icrc21Error,
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 

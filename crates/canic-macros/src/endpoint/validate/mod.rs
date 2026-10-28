@@ -60,7 +60,7 @@ pub(super) fn validate(
     if parsed.query_mode.is_composite() && matches!(kind, EndpointKind::Update) {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "composite is supported only on canic_query endpoints",
+            "composite is supported only on query endpoints",
         ));
     }
 

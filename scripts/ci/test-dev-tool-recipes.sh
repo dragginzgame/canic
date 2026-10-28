@@ -235,6 +235,8 @@ case "$*" in
     '--no-print-directory candid-extractor-check')
         exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" candid-extractor-check ;;
     install-host-tools|'install-ic-tools install-testkit-server'|testkit-server-check) exit 0 ;;
+    install-release-metadata-editor|release-metadata-editor-check)
+        exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" "$@" ;;
     *) exit 97 ;;
 esac
 MAKE
@@ -265,5 +267,17 @@ for step in 'Install and qualify pinned native build tools' 'Install PocketIC te
         if grep -Fx "$fixture/admitted bin" "$GITHUB_PATH"; then exit 1; fi
     fi
 done
+# Execute the ordinary job's actual setup body with installer effects substituted.
+# Its release fixtures require the separately selected metadata editor on a fresh host.
+yq -o json '.' "$ROOT/.github/workflows/ci.yml" | jq -er '
+    .jobs["tests-ordinary"].steps[]
+    | select(.name == "Install ordinary test helper tools") | .run
+' > ordinary-setup
+: > "$EVENTS"
+PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail ordinary-setup > workflow-output
+grep -Fxq "$fixture/bin/bash"$'\tscripts/dev/release-metadata-editor.sh' "$EVENTS"
+status=0
+FAIL_RELEASE_EDITOR=37 PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail ordinary-setup > workflow-output 2>&1 || status=$?
+[[ "$status" != 0 ]] || { echo 'ordinary setup accepted failed metadata editor preparation' >&2; exit 1; }
 echo 'Development recipes, explicit extractor admission and native workflow PATH publication passed (installer effects substituted)'
 fixture_complete=true

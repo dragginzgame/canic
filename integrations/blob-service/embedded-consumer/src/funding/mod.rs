@@ -72,7 +72,7 @@ fn dispatch(input: FundingIntent, known: bool) -> FundingDispatchEvidence {
     }
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding() {
     let input = intent();
     if ic_platform::cdk::api::msg_caller() != Principal::from_slice(&[7; 29]) {
@@ -170,7 +170,7 @@ fn renewal(intent: FundingIntent) -> FundingBudgetRenewal {
 }
 
 /// Test-only concurrent ingress while the first provider response remains held.
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_pending() {
     assert_eq!(
         ic_platform::cdk::api::msg_caller(),

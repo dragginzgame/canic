@@ -8,7 +8,7 @@ use ic_blob_storage::{
     policy::billing::admission::journal::FundingPreparationBlocker,
 };
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_budget() {
     for operation in [5, 6] {
         let input = payment(operation);
@@ -57,7 +57,7 @@ fn exhausted() {
     assert_eq!(report.blockers(), &[FundingPreparationBlocker::JournalFull]);
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_budget_replay() {
     ceiling(6);
     exhausted();

@@ -172,7 +172,9 @@ reason, linked evidence and focused owner qualification; there is no blanket
 workspace exemption. Negative role-contract manifests are templates named
 `Cargo.toml.fixture`; the owning test materializes them into isolated workspaces.
 
-The ordinary CI job also installs the internal Rust toolchain's
+The ordinary CI job explicitly installs and admits the pinned release metadata
+editor before release-flow fixtures; another CI job's prepared tools are not
+available on its runner. It also installs the internal Rust toolchain's
 `wasm32-unknown-unknown` target and checksum-bound `ic-wasm`. Host build-cache
 tests fingerprint that sysroot and compile small declaration fixtures; artifact
 preflight tests resolve the actual Fast-profile toolchain. These prerequisites
@@ -294,7 +296,10 @@ Ordinary tests
 retain libtest's default parallelism. PocketIC suites remain ordered, with two
 isolated internal workers after the source-bound recovery barrier. Each worker
 executes its own cases serially. Complete and PocketIC-only runs compile every selected serial
-suite before starting any server. Preparation and execution use the same
+suite before starting any server. Each preparation runs Cargo with libtest
+`--list` once: that command compiles the graph and validates a nonempty selected
+inventory, without an additional `--no-run` compilation pass. Listing/compile
+failures retain complete logs and stop server startup. Preparation and execution use the same
 package, feature and target selectors; a compilation failure stops before any
 PocketIC case. The ordinary-test barrier still leads complete runs, and narrow
 targeted, ordinary and fast lanes do not inherit the full serial preparation.
@@ -461,15 +466,17 @@ failures appear in normal output with the affected target; retained/skipped
 maintenance remains verbose-only. Exact artifact verification is independent
 of this mutable compiler cache policy.
 The PocketIC lane selects an installed native ICP CLI matching the repository
-pin before starting its server. `CANIC_TEST_ICP_BIN` explicitly selects that
-executable; otherwise an already-native `icp` on PATH is retained. If a launcher
-shadows it, the runner selects the native installation under
-`ICP_CLI_INSTALL_DIR` or `${CARGO_HOME:-$HOME/.cargo}/bin`. A missing, non-native
-or mismatched selected tool fails before Cargo. `make install-dev` installs the
-pinned native CLI. Selection creates only a private scratch symlink and changes
-PATH for the test invocation; other tools and ordinary/plan-only lanes retain
-their existing resolution. Production transport and command version checks
-remain intact.
+pin before starting its server. By default, `make ic-tools-check` admits the
+managed catalog and the runner prepends its stable `.tools/ic/bin` directory.
+An ambient PATH launcher cannot replace that selection. Stable default tool
+paths preserve build fingerprints across separate test invocations.
+`CANIC_TEST_ICP_BIN` explicitly selects a native executable; an override uses
+an invocation-private single-tool symlink so its neighboring tools cannot
+replace the compiler. Override scratch paths remain build inputs and may prevent
+cross-invocation artifact reuse. Missing, non-native or mismatched selections
+fail before the PocketIC proof. `make install-dev` installs the pinned CLI.
+Ordinary and plan-only lanes retain their existing tool resolution. Production
+transport and command version checks remain intact.
 
 Tests must keep plans, journals, identities and PocketIC state invocation-local;
 only immutable build products whose source, configuration, toolchain and output

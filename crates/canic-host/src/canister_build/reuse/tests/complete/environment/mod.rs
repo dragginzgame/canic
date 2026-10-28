@@ -133,9 +133,23 @@ fn invoke_environment(
         "TMPDIR",
         "VALIDATION_LOG_DIR",
         "GITHUB_STEP_SUMMARY",
+        "CODEX_TOOL_CALL_ID",
+        "RELEASE_SOURCE",
+        "RELEASE_PREVIOUS",
+        "RELEASE_VERSION",
+        "RELEASE_DATE",
+        "RELEASE_KIND",
+        "RELEASE_REMOTE",
+        "RELEASE_BRANCH",
+        "RELEASE_COMMIT",
+        "RELEASE_DELIVERY",
+        "RELEASE_PREPARATION_SOURCE",
+        "RELEASE_PREPARED_COMMIT",
     ] {
         command.env(key, &nonce);
     }
+    command.env("CODEX_HOME", root.join("codex"));
+    command.env("PATH", fixture_launcher_path(root, &nonce));
     if let Some((session, thread)) = session {
         command
             .env("CODEX_SESSION_ID", session)
@@ -160,15 +174,31 @@ fn invoke_environment(
     .unwrap()
 }
 
+fn fixture_launcher_path(root: &Path, nonce: &str) -> std::ffi::OsString {
+    let helper = root
+        .join("codex/tmp/arg0-linux")
+        .join(format!("codex-arg0fixture-{nonce}"));
+    fs::create_dir_all(&helper).unwrap();
+    fs::write(helper.join("apply_patch"), b"fixture").unwrap();
+    let original = env::var_os("PATH").unwrap();
+    env::join_paths(std::iter::once(helper).chain(env::split_paths(&original))).unwrap()
+}
+
 fn write_environment_probe(context: &WorkspaceBuildContext) {
     fs::write(
         context.workspace_root.join("build.rs"),
         r#"
 fn main() {
+    assert!(!std::env::var("PATH").unwrap().contains("codex-arg0fixture-"));
     assert!(std::env::var_os("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
     assert!(std::env::var_os("CODEX_SESSION_ID").is_none());
     assert!(std::env::var_os("CODEX_THREAD_ID").is_none());
     for key in ["CANIC_TEST_SCRATCH", "IC_TESTKIT_POCKET_IC_URL", "CANIC_GOVERNED_CASE_FILE", "TMPDIR"] {
+        assert!(std::env::var_os(key).is_none());
+    }
+    for key in ["RELEASE_SOURCE", "RELEASE_PREVIOUS", "RELEASE_VERSION", "RELEASE_DATE",
+        "RELEASE_KIND", "RELEASE_REMOTE", "RELEASE_BRANCH", "RELEASE_COMMIT",
+        "RELEASE_DELIVERY", "RELEASE_PREPARATION_SOURCE", "RELEASE_PREPARED_COMMIT", "CODEX_TOOL_CALL_ID"] {
         assert!(std::env::var_os(key).is_none());
     }
     assert_eq!(std::env::var("SHLVL").as_deref(), Ok("0"));

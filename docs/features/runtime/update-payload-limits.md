@@ -2,7 +2,8 @@
 
 Owned Canic and application endpoints use native Wire with an explicit method ID
 and separate request/reply budgets. Declare `ic-wire` in the owning workspace
-catalog and inherit it in the endpoint package.
+catalog and inherit it in the endpoint package. `canic::query` and `canic::update`
+require a Wire contract; neither has an implicit Candid mode.
 
 ```rust
 const REQUEST: ic_wire::Limits = ic_wire::Limits {
@@ -12,7 +13,7 @@ const RESPONSE: ic_wire::Limits = ic_wire::Limits {
     bytes: 1024, allocation: 4096, nodes: 256, depth: 16,
 };
 
-#[canic::canic_update(requires(caller::is_controller()),
+#[canic::update(requires(caller::is_controller()),
     wire(id = 0x4150_5000_0000_0001, request = REQUEST, response = RESPONSE))]
 fn submit_batch(payload: Vec<u8>) -> Result<(), canic::Error> {
     // Validate application semantics and commit the intended operation here.
@@ -99,7 +100,7 @@ const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
     max_header_len: 4096,
 };
 
-#[canic::canic_update(
+#[canic::candid_update(
     requires(caller::is_controller()),
     on_access_denied = "reject",
     decode = REQUEST_LIMITS
@@ -109,7 +110,7 @@ fn accept(bytes: Vec<u8>) -> u64 {
     bytes.len() as u64
 }
 
-#[canic::canic_query(public, decode = REQUEST_LIMITS)]
+#[canic::candid_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
 fn size(bytes: Vec<u8>) -> u64 {
     bytes.len() as u64
 }

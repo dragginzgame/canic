@@ -4,7 +4,7 @@ Application blob storage belongs to [ic-blob-storage](https://github.com/draggin
 It owns content, tenant authority, provider access, references and accounting.
 Canic owns Fleet lifecycle and deployment of ordinary application Components.
 
-The Canic-owned adapter lives at `integrations/blob-service` in the main Canic
+The Canic-owned adapter lives at `crates/canic-blob-service` in the main Canic
 workspace, sharing its dependency catalog, lockfile and release version. The upstream library has
 no Canic dependency. See the [extraction design](../../design/0.112-standalone-blob-service-extraction/0.112-design.md)
 and [current handoff](../../status/current.md) for implementation evidence.

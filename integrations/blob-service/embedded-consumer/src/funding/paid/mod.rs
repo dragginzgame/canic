@@ -20,7 +20,7 @@ fn payment(operation: u128) -> FundingIntent {
     }
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_paid() {
     for operation in [3, 4] {
         let input = payment(operation);
@@ -57,7 +57,7 @@ async fn test_funding_paid() {
     ic_platform::cdk::api::msg_reply([]);
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_paid_replay() {
     for operation in [3, 4] {
         let input = payment(operation);

@@ -51,7 +51,7 @@ for host in Linux:x86_64 Linux:aarch64 Darwin:x86_64 Darwin:arm64; do
 done
 export PIN_OS=Linux PIN_ARCH=x86_64 PIN_DEST="$CANIC_SCCACHE_INSTALL_DIR"
 PATH="$fixture/bin:$PATH" "$BASH" "$fixture/scripts/ci/install-pinned-ci-tool.sh" sccache > "$fixture/output"
-printf '%s\0' sccache --version "$CANIC_SCCACHE_VERSION" --sha256 "$CANIC_SCCACHE_SHA256_LINUX_X64" \
+printf '%s\0' sccache --version "$SHARED_TOOLING_SCCACHE_VERSION" --sha256 "$SHARED_TOOLING_SCCACHE_SHA256_LINUX_AMD64" \
     --install-dir "$PIN_DEST" > "$fixture/expected"
 cmp "$fixture/expected" "$PIN_EVENTS"
 [[ "$(cat "$GITHUB_PATH")" == "$PIN_DEST" ]]

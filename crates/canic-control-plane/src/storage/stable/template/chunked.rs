@@ -620,6 +620,12 @@ mod tests {
         bytes_read: Rc<Cell<usize>>,
     }
 
+    impl ic_memory::MemoryBacking for ObservedPayloadMemory {
+        fn backing_identity(&self) -> ic_memory::BackingIdentity {
+            ic_memory::MemoryBacking::backing_identity(&self.memory)
+        }
+    }
+
     impl Memory for ObservedPayloadMemory {
         fn size(&self) -> u64 {
             self.memory.size()

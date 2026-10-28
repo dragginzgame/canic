@@ -11,7 +11,11 @@ a Canic feature into another Cargo package does not meet that requirement.
 Technical independence is necessary but insufficient: a credible non-Canic use
 case must justify maintaining a separate product.
 
-The Canic-owned blob composition lives in `integrations/blob-service`, as a
+Canic-owned adapter crates live under `crates/<package-name>/`, including
+`canic-blob-service` and `canic-icydb`. Independent consuming fixtures live under
+`integrations/`.
+
+The Canic-owned blob composition lives in `crates/canic-blob-service`, as a
 main-workspace member sharing the catalog, lockfile and release version. Its two
 application consumers retain isolated qualification workspaces. The upstream
 service remains independently usable and has no Canic dependency. Thin runtime hooks belong in
@@ -36,6 +40,25 @@ orchestration retains its separate ownership and authority contracts below.
 When backup runner adoption is qualified, delete `crates/canic-backup` and its
 duplicate mechanisms. Do not retain it as a forwarding crate. Public upstream
 APIs must suffice; Canic must not copy an upstream engine into an adapter.
+
+## Endpoint composition API
+
+Every Canic adapter uses `mount!` for endpoint composition at the consuming
+canister's crate root. Mounting alone does not initialize a service, allocate
+memory or install lifecycle hooks. The host composes memory and synchronous
+lifecycle participants explicitly; convenience canister constructors assemble
+those same parts under one lifecycle owner.
+
+| Adapter | Endpoint mounting | Lifecycle composition |
+| --- | --- | --- |
+| Blob | `canic_blob_service::mount!()` | Explicit participant hooks; `canister!()` bundles a dedicated service. |
+| IcyDB | `canic_icydb::mount! { managed; … }` | `start!(…; participant, …)` supplies both host hooks; standalone mounting omits `managed;`. |
+| Auth | `canic_auth::mount!()` deliberately refuses compilation | Unimplemented; see the [adapter scaffold](../../crates/canic-auth/README.md). |
+
+Service-specific declarations remain with their owners. This shared naming and
+composition contract does not require identical service configuration or a
+runtime plugin registry. Auth is a private workspace scaffold, excluded from the
+publication family until its production integration is qualified.
 
 ## Backup Adapter Contract
 

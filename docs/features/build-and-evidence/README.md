@@ -74,9 +74,20 @@ prepares these inputs before taking its snapshot.
 
 Build commands and cache fingerprints share Host's captured build environment.
 Owned execution plumbing (temporary directories, Make flags and test-runner
-controls) is withheld from both. Unknown variables, compiler options and Cargo
+controls) is withheld from both. Shared release delivery context (the `RELEASE_*`
+source, destination, version/date and phase selections passed by the release
+runner) is also withheld: changing delivery context alone cannot invalidate Wasm
+artifacts. Artifact identity remains bound through `CANIC_RELEASE_BUILD_ID`, the
+selected package versions, source, configuration and compiler inputs. This is
+artifact reuse, not qualification-result reuse; release checks and PocketIC cases
+still execute. Per-call Codex IDs and verified editor/sandbox-only PATH entries
+under its temporary helper root are removed from both children and fingerprints.
+Normal tool directories, unknown entries and symlinked directories remain bound;
+this does not discard compiler selection through PATH. Unknown variables, compiler options and Cargo
 offline policy remain effective inputs; normalization cannot hide an input that
-a child build receives.
+a child build receives. The default PocketIC runner uses the stable verified
+managed ICP directory in PATH; explicit native binary overrides retain private
+single-tool aliases and can therefore prevent reuse across invocations.
 
 Application and Root builds select the Wasm named in Cargo's compiler-artifact
 messages for the exact package manifest. Custom library names are supported.

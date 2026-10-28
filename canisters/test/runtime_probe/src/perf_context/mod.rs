@@ -121,7 +121,7 @@ fn perf_context_completed() -> Vec<u8> {
     COMPLETED.with_borrow(Clone::clone)
 }
 
-#[canic::canic_update(public, wire(id = crate::timer_wire::PERF_PROBE, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[canic::update(public, wire(id = crate::timer_wire::PERF_PROBE, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn perf_context_probe(which: u8) -> Result<PerfProbeObservation, canic::Error> {
     assert!(which < 2);
     work(if which == 0 { 100 } else { 10_000 });

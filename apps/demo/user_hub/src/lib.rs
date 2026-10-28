@@ -13,7 +13,7 @@ async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
-#[canic_query(public, wire(id = protocol::OVERVIEW, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(public, wire(id = protocol::OVERVIEW, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn demo_user_hub_overview(partition_key: Option<String>) -> Result<String, Error> {
     let mut lines = vec![
         "demo=user_hub".to_string(),
@@ -40,7 +40,7 @@ async fn demo_user_hub_overview(partition_key: Option<String>) -> Result<String,
     Ok(lines.join("\n"))
 }
 
-#[canic_query(public, wire(id = protocol::PLAN, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(public, wire(id = protocol::PLAN, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn demo_user_hub_plan(partition_key: String) -> Result<String, Error> {
     let current = ShardingApi::lookup_partition_key(POOL_NAME, &partition_key);
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, &partition_key)?;
@@ -50,7 +50,7 @@ async fn demo_user_hub_plan(partition_key: String) -> Result<String, Error> {
     ))
 }
 
-#[canic_update(requires(env::build_local_only()), wire(id = protocol::ASSIGN, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(env::build_local_only()), wire(id = protocol::ASSIGN, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn demo_user_hub_assign(partition_key: String) -> Result<String, Error> {
     let before = ShardingApi::lookup_partition_key(POOL_NAME, &partition_key);
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, &partition_key)?;

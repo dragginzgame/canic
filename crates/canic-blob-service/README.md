@@ -49,6 +49,13 @@ compose the synchronous lifecycle participant and metrics sampler into the
 application's sole Canic lifecycle. See the
 [composition guide](https://github.com/dragginzgame/canic/blob/main/docs/features/blob-storage/README.md).
 
+The adapter selects Blob 0.52.1. Its current installation/configuration/status
+Wire frames omit the retired journaled-read fields. Memory requests come from
+Blob’s installation owner (fifteen grants); do not copy predecessor grant lists.
+Cross-release adoption is retirement and reinstall, preserving provider objects,
+uncertain effects, balances and billing obligations rather than importing old
+service state. Same-release interruption recovery and restoration remain required.
+
 Construct `dto::configuration::ServiceInstallationInput` for the actual allocated
 service Principal and encode it with `ic_blob_storage_contracts::wire::encode_request("blob_install", input)`.
 The dedicated nested payload is a method-bound Wire frame; an embedded application owns its outer
@@ -91,8 +98,9 @@ runtime; neither adapter performs transport or authorization.
 
 The `canic-testing-internal` example `wire_composition` qualifies a combined
 catalog using actual Canic and Blob types, Rust frame vectors, strict generated
-TypeScript and Node checks. It is native test tooling, not the unfinished managed
-schema/release/frontend pipeline. Normal canister graphs exclude generation.
+TypeScript and Node checks. It is native codec/client qualification tooling.
+The managed build separately produces and release-binds the schema from the
+finalized artifact. Normal canister graphs exclude generation.
 
 Enable this adapter's `wire-schema` feature only in a native schema producer.
 `mount!` then registers Blob's published request/reply projections through Canic's
@@ -100,7 +108,8 @@ shared provider registry, alongside typed application methods. Snapshot admissio
 checks the combined registry against declarations read from finalized Wasm;
 duplicate names/IDs, invalid schema references and changed budgets refuse.
 The feature is rejected for Wasm and is absent from normal deployed graphs.
-This registration does not yet write a managed sidecar or bind its release hash.
+The managed artifact build invokes the registered producer, retains the sidecar
+and binds its hash into the release; registration alone does not perform those steps.
 
 The dedicated consumer's native `mounted_supplier_schema_matches_final_wasm`
 test accepts `CANIC_BLOB_SCHEMA_WASM` pointing at the managed final artifact. It
@@ -117,5 +126,6 @@ admission. The explicit Host `build_workspace_wire_schema` entrypoint can now co
 configured role's example with its runtime profile/features and a native-only
 `wire-schema` addition, then acquire the output with a Cargo source snapshot.
 It selects the actual executable from Cargo records and owns the build lock
-through acquisition. Normal artifact-build invocation and release hash binding
-remain unfinished; this example is a private framework qualification consumer.
+through acquisition. The normal artifact-build path invokes this producer and
+checks the retained schema hash before admitting reuse. Both dedicated and embedded
+private framework consumers exercise the production CLI and release-bound artifacts.

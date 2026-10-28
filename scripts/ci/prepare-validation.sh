@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$ROOT"
 # shellcheck source=tool-versions.env
 source "$ROOT/tool-versions.env"
+# shellcheck source=ci/tool-versions.env
+source "$ROOT/ci/tool-versions.env"
 case "${1:-}" in
     release|preflight|security|checks|environment|check-environment) [[ $# == 1 ]] || exit 2 ;;
     *) echo 'usage: prepare-validation.sh <release|preflight|security|checks|environment|check-environment>' >&2; exit 2 ;;
@@ -33,7 +35,7 @@ if [[ "$1" == environment || "$1" == check-environment ]]; then
                     # Existing installer owns the exact selection and its path.
                     make --no-print-directory install-host-tools
                     selected="$(RUSTC_WRAPPER='' bash scripts/dev/install-rust-tools.sh --consumer "$ROOT" \
-                        --package sccache --version "$CANIC_SCCACHE_VERSION" --bin sccache --profile release)"
+                        --package sccache --version "$SHARED_TOOLING_SCCACHE_VERSION" --bin sccache --profile release)"
                     export CANIC_SCCACHE_BIN="$selected"
                 fi
             fi
@@ -53,8 +55,8 @@ if [[ "$1" == environment || "$1" == check-environment ]]; then
         exit 1
     }
     actual="$("$selected" --version)"
-    [[ "$actual" == "sccache $CANIC_SCCACHE_VERSION" ]] || {
-        printf 'Selected sccache reports %s; policy requires %s. Prepare the managed binary or correct the explicit override.\n' "$actual" "$CANIC_SCCACHE_VERSION" >&2
+    [[ "$actual" == "sccache $SHARED_TOOLING_SCCACHE_VERSION" ]] || {
+        printf 'Selected sccache reports %s; policy requires %s. Prepare the managed binary or correct the explicit override.\n' "$actual" "$SHARED_TOOLING_SCCACHE_VERSION" >&2
         exit 1
     }
     if [[ "$RUSTC_WRAPPER" == "$ROOT/scripts/ci/run-canic-sccache.sh" ]]; then
@@ -69,7 +71,7 @@ if [[ "${RUSTC_WRAPPER:-}" == "$ROOT/scripts/ci/run-canic-sccache.sh" && -z "${C
     # Direct tool-install Cargo children need the freshly prepared Rust selection,
     # too; a child Make's exports cannot update this preparation process.
     CANIC_SCCACHE_BIN="$(bash scripts/dev/install-rust-tools.sh --consumer "$ROOT" \
-        --package sccache --version "$CANIC_SCCACHE_VERSION" --bin sccache --profile release --check)"
+        --package sccache --version "$SHARED_TOOLING_SCCACHE_VERSION" --bin sccache --profile release --check)"
     export CANIC_SCCACHE_BIN
 fi
 # Preserve explicit offline policy. All consumers use the same locked graph roster.

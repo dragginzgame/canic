@@ -9,14 +9,6 @@ mod lifecycle;
 mod signing;
 mod snapshots;
 mod status_settings;
-mod types;
-
-pub use types::{
-    InfraCanisterSettings, InfraCanisterStatusResult, InfraDefiniteCanisterSettings,
-    InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult,
-    InfraEnvironmentVariable, InfraLogVisibility, InfraSignWithEcdsaArgs, InfraSignWithEcdsaResult,
-    InfraUpdateSettingsArgs,
-};
 
 use thiserror::Error as ThisError;
 

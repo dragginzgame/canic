@@ -14,6 +14,11 @@ host-only `wire-schema` feature derives metadata from their actual Serde shapes;
 it does not reconstruct schemas from Candid. Required external protocols,
 installation arguments and cryptographic inputs retain their owning encodings.
 
+External IC contracts come directly from `ic-platform`. ICRC-21 consent handlers
+use `ic_platform::icrc_ledger_types::icrc21::{ConsentMessageRequest, ConsentInfo,
+Icrc21Error}`; Canic owns registration and dispatch, while Platform supplies the
+request/reply types and their required Candid encoding.
+
 Production callers and framework fixtures reuse identical bounded shapes.
 The shared `dto::role::OperationAcceptedResponse` carries asynchronous acceptance
 from Root, managed and Store commands. Purpose-specific projections retain their

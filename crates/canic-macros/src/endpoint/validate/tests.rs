@@ -181,7 +181,7 @@ fn composite_query_marker_is_query_only() {
     let err = validate(EndpointKind::Update, parsed, &sig).unwrap_err();
     assert!(
         err.to_string()
-            .contains("composite is supported only on canic_query")
+            .contains("composite is supported only on query")
     );
 }
 

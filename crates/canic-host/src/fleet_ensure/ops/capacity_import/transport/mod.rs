@@ -28,7 +28,7 @@ use crate::{
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
 use ic_platform::{
     agent::{Agent, EnvelopeContent, RequestStatusResponse},
-    candid::contract::CandidType,
+    management_canister_types::{CanisterSettings, UpdateSettingsArgs},
     principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
@@ -42,20 +42,6 @@ pub use root::PreparedRootCommand;
 pub(super) const MAXIMUM_ENVELOPE_BYTES: usize = 4_096;
 const MAXIMUM_RESPONSE_BYTES: usize = 256 * 1024;
 const CALL_TIMEOUT: Duration = Duration::from_secs(45);
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct UpdateControllers {
-    canister_id: Principal,
-    settings: ControllerSettings,
-    sender_canister_version: Option<u64>,
-}
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct ControllerSettings {
-    controllers: Option<Vec<Principal>>,
-}
 
 /// Certified completion bound to the exact approved source and retained request.
 /// Only a verified IC response can construct this value; it is not deserializable.
@@ -285,10 +271,11 @@ fn argument(
     {
         return Err(CapacityImportJournalError::RequestInvalid);
     }
-    ic_platform::candid::contract::encode_one(UpdateControllers {
+    ic_platform::candid::contract::encode_one(UpdateSettingsArgs {
         canister_id,
-        settings: ControllerSettings {
+        settings: CanisterSettings {
             controllers: Some(plan.transitional_controllers.clone()),
+            ..CanisterSettings::default()
         },
         sender_canister_version: None,
     })

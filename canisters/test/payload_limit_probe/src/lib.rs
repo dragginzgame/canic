@@ -3,7 +3,7 @@ mod codec;
 
 use canic::access::{AccessCheck, AccessContext, AccessError};
 use canic::endpoint::ArgumentLimits;
-use canic::{Error, prelude::*};
+use canic::{Error, candid_query, candid_update, prelude::*};
 use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use std::cell::Cell;
 
@@ -92,19 +92,19 @@ fn commit() -> PlainReply {
     }
 }
 
-#[canic_update(requires(custom(Gate(allow)), custom(Gate(true))), on_access_denied = "reject", decode = LIMITS)]
+#[candid_update(requires(custom(Gate(allow)), custom(Gate(true))), on_access_denied = "reject", decode = LIMITS)]
 fn plain_commit(allow: bool) -> PlainReply {
     assert!(allow);
     commit()
 }
 
-#[canic_update(requires(custom(Gate(allow)), custom(Gate(true))), on_access_denied = "reject", decode = LIMITS)]
+#[candid_update(requires(custom(Gate(allow)), custom(Gate(true))), on_access_denied = "reject", decode = LIMITS)]
 fn result_commit(allow: bool) -> Result<PlainReply, String> {
     assert!(allow);
     Ok(commit())
 }
 
-#[canic_query(public, on_access_denied = "reject", decode = LIMITS)]
+#[candid_query(public, on_access_denied = "reject", decode = LIMITS)]
 fn dispatch_counts() -> PlainReply {
     PlainReply {
         committed: HANDLER_CALLS.get(),
@@ -113,7 +113,7 @@ fn dispatch_counts() -> PlainReply {
 }
 
 // This probe reports one observed security counter without exporting the internal metrics view.
-#[canic_query(public, on_access_denied = "reject", wire(id = 7010, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[query(public, on_access_denied = "reject", wire(id = 7010, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn access_counts(method: String) -> u64 {
     canic::api::metrics::MetricsQuery::security(canic::dto::page::PageRequest {
         limit: 100,
@@ -132,43 +132,43 @@ fn access_counts(method: String) -> u64 {
     .sum()
 }
 
-#[canic_query(public, on_access_denied = "reject", decode = LIMITS)]
+#[candid_query(public, on_access_denied = "reject", decode = LIMITS)]
 fn bounded_query(value: String) -> PlainReply {
     drop(value);
     commit()
 }
 
-#[canic_update(public, on_access_denied = "reject", decode = LIMITS)]
+#[candid_update(public, on_access_denied = "reject", decode = LIMITS)]
 fn bounded_update(value: String) -> PlainReply {
     drop(value);
     commit()
 }
 
-#[canic_update(public, on_access_denied = "reject", decode = WORK_LIMITS)]
+#[candid_update(public, on_access_denied = "reject", decode = WORK_LIMITS)]
 fn bounded_work(value: Vec<()>) -> PlainReply {
     drop(value);
     commit()
 }
 
-#[canic_update(public, on_access_denied = "reject", decode = LIMITS)]
+#[candid_update(public, on_access_denied = "reject", decode = LIMITS)]
 fn bounded_skip() -> PlainReply {
     commit()
 }
 
-#[canic_update(public, on_access_denied = "reject", decode = TYPE_LIMITS)]
+#[candid_update(public, on_access_denied = "reject", decode = TYPE_LIMITS)]
 fn bounded_types(value: Vec<u8>) -> PlainReply {
     drop(value);
     commit()
 }
 
-#[canic_update(public, on_access_denied = "reject", decode = HEADER_LIMITS)]
+#[candid_update(public, on_access_denied = "reject", decode = HEADER_LIMITS)]
 fn bounded_header(value: u64) -> PlainReply {
     let _ = value;
     commit()
 }
 
 /// Relay arbitrary bytes so update refusal is exercised without inspect_message.
-#[canic_update(on_access_denied = "reject", public, payload(max_bytes = 16 * 1024))]
+#[candid_update(on_access_denied = "reject", public, payload(max_bytes = 16 * 1024))]
 async fn relay_bounded(target: Principal, method: String, bytes: Vec<u8>) -> Result<bool, String> {
     Call::unbounded_wait(target, &method)
         .with_raw_args(bytes)
@@ -188,7 +188,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 /// Relay a generated payload through a real inter-canister update.
-#[canic_update(on_access_denied = "reject", public)]
+#[candid_update(on_access_denied = "reject", public)]
 async fn relay_explicit_echo(target: Principal, len: usize) -> Result<usize, String> {
     Call::unbounded_wait(target, "explicit_echo")
         .with_arg("x".repeat(len))
@@ -199,19 +199,19 @@ async fn relay_explicit_echo(target: Principal, len: usize) -> Result<usize, Str
 }
 
 /// Echo payload length under the default update ingress limit.
-#[canic_update(on_access_denied = "reject", public)]
+#[candid_update(on_access_denied = "reject", public)]
 fn default_echo(payload: String) -> Result<usize, String> {
     Ok(payload.len())
 }
 
 /// Echo payload length under an explicit larger update ingress limit.
-#[canic_update(on_access_denied = "reject", public, payload(max_bytes = 32 * 1024))]
+#[candid_update(on_access_denied = "reject", public, payload(max_bytes = 32 * 1024))]
 fn explicit_echo(payload: String) -> Result<usize, String> {
     Ok(payload.len())
 }
 
 /// Echo payload length under an explicit limit and exported method name.
-#[canic_update(on_access_denied = "reject", public, name = "wire_named_echo", payload(max_bytes = 24 * 1024))]
+#[candid_update(on_access_denied = "reject", public, name = "wire_named_echo", payload(max_bytes = 24 * 1024))]
 fn named_echo(payload: String) -> Result<usize, String> {
     Ok(payload.len())
 }
@@ -234,13 +234,13 @@ const WIRE_LIMITS: ic_wire::Limits = ic_wire::Limits {
 };
 
 /// Exercise the native identity without a Candid implementation or codec.
-#[canic_query(public, on_access_denied = "reject", wire(id = crate::NATIVE_PRINCIPAL_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[query(public, on_access_denied = "reject", wire(id = crate::NATIVE_PRINCIPAL_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn native_principal(principal: ic_platform::Principal) -> ic_platform::Principal {
     principal
 }
 
 /// A synchronous mutation must roll back if its Wire reply exceeds the allowance.
-#[canic_update(requires(custom(Gate(length > 0))), on_access_denied = "reject", wire(id = crate::NATIVE_COMMIT_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[update(requires(custom(Gate(length > 0))), on_access_denied = "reject", wire(id = crate::NATIVE_COMMIT_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn native_commit(length: u32) -> Vec<u8> {
     let _ = commit();
     vec![0; length as usize]
@@ -259,7 +259,7 @@ canic::__canic_register_wire_schema!(
     WIRE_LIMITS
 );
 
-#[canic::canic_raw_update(public, wire(id = crate::NATIVE_RAW_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[canic::raw_update(public, wire(id = crate::NATIVE_RAW_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn native_raw() {
     ic_platform::cdk::api::debug_print("raw Wire owner entered");
     let length: u32 = ic_wire::native::decode_request(
@@ -281,7 +281,7 @@ fn native_raw() {
 const NATIVE_COMPOSITE_METHOD_ID: u64 = 7004;
 
 /// Qualify async Wire reply encoding after a real composite-query callback.
-#[canic_query(public, composite, on_access_denied = "reject", wire(id = crate::NATIVE_COMPOSITE_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[query(public, composite, on_access_denied = "reject", wire(id = crate::NATIVE_COMPOSITE_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 async fn native_composite(target: ic_platform::Principal) -> ic_platform::Principal {
     let own = ic_platform::cdk::api::canister_self();
     let request =
@@ -301,7 +301,7 @@ async fn native_composite(target: ic_platform::Principal) -> ic_platform::Princi
 const NATIVE_RESULT_METHOD_ID: u64 = 7005;
 
 /// Preserve typed access denials without dispatching the application handler.
-#[canic_update(requires(custom(Gate(allow)), custom(Gate(true))), wire(id = crate::NATIVE_RESULT_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[update(requires(custom(Gate(allow)), custom(Gate(true))), wire(id = crate::NATIVE_RESULT_METHOD_ID, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn native_result(allow: bool) -> Result<u64, Error> {
     assert!(allow);
     Ok(commit().committed)

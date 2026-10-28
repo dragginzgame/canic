@@ -18,6 +18,9 @@ const RESPONSE_LIMITS: Limits = Limits {
     depth: 32,
 };
 
+/// Managed component adapter's bounded runtime-binding probe.
+pub const ADAPTER_BINDING: WireCallSpec = spec("adapter_runtime_binding", 0x5254_5052_0000_0016);
+
 /// Native call contract for `begin_timer_probe_intent`.
 pub const BEGIN_INTENT: WireCallSpec = WireCallSpec {
     request_limits: Limits {

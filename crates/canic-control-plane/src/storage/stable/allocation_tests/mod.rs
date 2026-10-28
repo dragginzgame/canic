@@ -29,6 +29,12 @@ struct ObservedMemory {
     writes: Rc<Cell<u64>>,
 }
 
+impl ic_memory::MemoryBacking for ObservedMemory {
+    fn backing_identity(&self) -> ic_memory::BackingIdentity {
+        ic_memory::MemoryBacking::backing_identity(&self.memory)
+    }
+}
+
 impl Memory for ObservedMemory {
     fn size(&self) -> u64 {
         self.memory.size()
@@ -60,7 +66,7 @@ impl Storable for OverflowChunk {
     }
 }
 
-fn runtime<M: Memory>(memory: M) -> ic_memory::MemoryRuntime<M> {
+fn runtime<M: ic_memory::MemoryBacking>(memory: M) -> ic_memory::MemoryRuntime<M> {
     ic_memory::testing::fixture_runtime(
         memory,
         "test",

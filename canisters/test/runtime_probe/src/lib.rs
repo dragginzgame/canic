@@ -1,5 +1,6 @@
 #![expect(clippy::unused_async)]
 
+mod composition;
 mod history_cost;
 mod perf_context;
 mod process_fixture;
@@ -14,6 +15,10 @@ use std::{
     cell::{Cell, RefCell},
     time::Duration,
 };
+
+use composition::{__icydb_facade, __icydb_host};
+
+canic_icydb::__icydb_start_participant_lifecycle!(canic::memory::runtime::shared_runtime);
 
 thread_local! {
     static REJECT_APPLICATION_SAMPLE: Cell<bool> = const { Cell::new(false) };
@@ -30,8 +35,8 @@ thread_local! {
 }
 
 canic::start_local!(lifecycle_participant(
-    init = lifecycle_participant_init,
-    post_upgrade = lifecycle_participant_post_upgrade,
+    init = __icydb_lifecycle_participant::init,
+    post_upgrade = __icydb_lifecycle_participant::post_upgrade,
 ),);
 
 /// Run no-op setup for the runtime probe.
@@ -173,19 +178,19 @@ async fn canic_upgrade() {
     assert_application_runtime_reconstructed();
 }
 
-#[canic_update(public, wire(id = crate::timer_wire::TEST, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(public, wire(id = crate::timer_wire::TEST, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn test() -> Result<(), Error> {
     Ok(())
 }
 
 /// Observe committed memory ownership after standalone cold restoration.
-#[canic_query(requires(caller::is_controller()), wire(id = crate::timer_wire::MEMORY, request = crate::timer_wire::REQUEST_LIMITS, response = canic::protocol::protected_memory_allocations::RESPONSE_LIMITS))]
+#[query(requires(caller::is_controller()), wire(id = crate::timer_wire::MEMORY, request = crate::timer_wire::REQUEST_LIMITS, response = canic::protocol::protected_memory_allocations::RESPONSE_LIMITS))]
 fn memory_allocations_probe() -> Result<canic::dto::memory::MemoryAllocationsResponse, Error> {
     canic::__internal::core::api::memory::MemoryQuery::allocations()
 }
 
 /// Reserve one test resource so PocketIC can exercise expiry scheduling and recovery.
-#[canic_update(public, wire(id = crate::timer_wire::BEGIN_INTENT, request = crate::timer_wire::INTENT_REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(public, wire(id = crate::timer_wire::BEGIN_INTENT, request = crate::timer_wire::INTENT_REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn begin_timer_probe_intent(request: timer_wire::IntentRequest) -> Result<u64, Error> {
     let timer_wire::IntentRequest {
         resource_seed,
@@ -203,7 +208,7 @@ async fn begin_timer_probe_intent(request: timer_wire::IntentRequest) -> Result<
 }
 
 /// Exercise distinct scheduler and work measurement envelopes in the existing timer fixture.
-#[canic_update(public, wire(id = crate::timer_wire::SCHEDULE_WATCHDOG, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(public, wire(id = crate::timer_wire::SCHEDULE_WATCHDOG, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn schedule_cost_probe_watchdog() -> Result<(), Error> {
     COST_WATCHDOG.with_borrow_mut(|current| {
         let registration = current.get_or_insert_with(|| {
@@ -231,7 +236,7 @@ async fn schedule_cost_probe_watchdog() -> Result<(), Error> {
 }
 
 /// Exercise cancellation and replacement without adding a second timer owner.
-#[canic_update(public, wire(id = crate::timer_wire::CANCEL_WATCHDOG, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(public, wire(id = crate::timer_wire::CANCEL_WATCHDOG, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn cancel_cost_probe_watchdog(unregister: bool) -> Result<(), Error> {
     COST_WATCHDOG.with_borrow_mut(|current| {
         if unregister {
@@ -252,14 +257,14 @@ async fn cancel_cost_probe_watchdog(unregister: bool) -> Result<(), Error> {
 }
 
 /// Select a real IC callback trap to verify that no completed sample is fabricated.
-#[canic_update(public, wire(id = crate::timer_wire::SET_WATCHDOG_TRAP, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(public, wire(id = crate::timer_wire::SET_WATCHDOG_TRAP, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn set_cost_probe_trap(enabled: bool) -> Result<(), Error> {
     TRAP_COST_WATCHDOG.set(enabled);
     Ok(())
 }
 
 /// Fill the shared timer registry until its typed capacity boundary rejects demand.
-#[canic_update(public, wire(id = crate::timer_wire::FILL_REGISTRY, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(public, wire(id = crate::timer_wire::FILL_REGISTRY, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn fill_timer_registry() -> Result<(u64, bool), Error> {
     let mut registered = 0u64;
     let mut claims = Vec::new();
@@ -294,7 +299,7 @@ async fn fill_timer_registry() -> Result<(u64, bool), Error> {
 }
 
 /// Attempt one invalid identity so tests can prove registration is leak-free.
-#[canic_update(public, wire(id = crate::timer_wire::REJECT_INVALID_IDENTITY, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(public, wire(id = crate::timer_wire::REJECT_INVALID_IDENTITY, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn reject_invalid_timer_identity() -> Result<bool, Error> {
     Ok(ic_timers::TimerIdentity::try_new(
         "runtime-probe",
@@ -304,7 +309,7 @@ async fn reject_invalid_timer_identity() -> Result<bool, Error> {
     .is_err())
 }
 
-#[canic_query(public, wire(id = crate::timer_wire::COUNTS, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[query(public, wire(id = crate::timer_wire::COUNTS, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 fn timer_probe_counts() -> Result<(u64, u64, u64), Error> {
     Ok((
         TIMER_ONCE_EXECUTIONS.get(),
@@ -331,7 +336,7 @@ fn application_timer_identity(name: &str) -> ic_timers::TimerIdentity {
 }
 
 /// Publish bounded synthetic aggregates through the trusted local API.
-#[canic_update(requires(caller::is_controller()), wire(id = crate::timer_wire::SAMPLE_METRICS, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(requires(caller::is_controller()), wire(id = crate::timer_wire::SAMPLE_METRICS, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn sample_public_metrics() -> Result<(), canic::Error> {
     canic::api::public_status::PublicStatusApi::sample_metrics()?;
     canic::api::public_status::PublicStatusApi::record_application_metrics(vec![
@@ -361,7 +366,7 @@ struct PublicSamplingProbe {
 }
 
 /// Exercise production sampling after a bounded amount of synthetic instrumentation.
-#[canic_update(requires(caller::is_controller()), wire(id = crate::timer_wire::QUALIFY_SAMPLING, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(requires(caller::is_controller()), wire(id = crate::timer_wire::QUALIFY_SAMPLING, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn qualify_public_metrics_sampling(
     request: timer_wire::SamplingRequest,
 ) -> Result<PublicSamplingProbe, canic::Error> {
@@ -407,7 +412,7 @@ async fn qualify_public_metrics_sampling(
 }
 
 /// Select a bounded local measurement participant for the sampling fixture.
-#[canic_update(requires(caller::is_controller()), wire(id = crate::timer_wire::CONFIGURE_SAMPLER, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(requires(caller::is_controller()), wire(id = crate::timer_wire::CONFIGURE_SAMPLER, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn configure_public_sampler(reject: bool) -> Result<(), Error> {
     REJECT_APPLICATION_SAMPLE.set(reject);
     canic::api::public_status::PublicStatusApi::set_application_sampler(Some(
@@ -436,20 +441,20 @@ fn sample_application_counters() -> Result<Vec<canic::dto::public_status::Public
 }
 
 /// Exercise the existing volatile suspension fence without creating a timer owner.
-#[canic_update(requires(caller::is_controller()), wire(id = crate::timer_wire::SUSPEND_SAMPLER, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(requires(caller::is_controller()), wire(id = crate::timer_wire::SUSPEND_SAMPLER, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn suspend_public_sampler_fixture() -> Result<(), Error> {
     canic::__internal::core::api::timer::TimerApi::restore_snapshot_suspension(true);
     Ok(())
 }
 
 /// Controlled input for matched history-layout cost measurements.
-#[canic_update(requires(caller::is_controller()), wire(id = crate::timer_wire::HISTORY_SAMPLING_COST, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[update(requires(caller::is_controller()), wire(id = crate::timer_wire::HISTORY_SAMPLING_COST, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn qualify_history_sampling_cost(rows: u16) -> Result<u64, Error> {
     history_cost::sample(rows)
 }
 
 /// Read costs are measured in their own query message, without sampling first.
-#[canic_query(requires(caller::is_controller()), wire(id = crate::timer_wire::HISTORY_QUERY_COST, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[query(requires(caller::is_controller()), wire(id = crate::timer_wire::HISTORY_QUERY_COST, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn qualify_history_query_cost(limit: u64) -> Result<history_cost::HistoryCost, Error> {
     Ok(history_cost::history(limit))
 }

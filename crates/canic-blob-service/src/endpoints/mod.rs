@@ -53,7 +53,7 @@ macro_rules! __canic_blob_endpoint {
                     use super::*;
                     #[cfg_attr(not(target_arch = "wasm32"), ic_platform::candid::contract::candid_method(query, rename = $d wire))]
                     fn $d name($d($d arg: $d ty),*) -> $d reply $d body
-                    #[canic::canic_raw_query(public, name = $d wire, payload(max_bytes = ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES))]
+                    #[canic::raw_query(public, name = $d wire, payload(max_bytes = ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES))]
                     fn dispatch() {
                         gc_arguments!($d category; $d($d arg: $d ty),*);
                         let response = $d name($d($d arg),*);
@@ -66,7 +66,7 @@ macro_rules! __canic_blob_endpoint {
                     use super::*;
                     #[cfg_attr(not(target_arch = "wasm32"), ic_platform::candid::contract::candid_method(update, rename = $d wire))]
                     async fn $d name($d arg: $d ty) $d body
-                    #[canic::canic_raw_update(public, name = $d wire, payload(max_bytes = ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES))]
+                    #[canic::raw_update(public, name = $d wire, payload(max_bytes = ic_blob_storage_contracts::provider::gc::MAX_REQUEST_BYTES))]
                     async fn dispatch() {
                         gc_arguments!(roots; $d arg: $d ty);
                         $d name($d arg).await;
@@ -75,7 +75,7 @@ macro_rules! __canic_blob_endpoint {
                 }
             };
             (query, $d category:ident, fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
-                #[canic::canic_raw_query(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
+                #[canic::raw_query(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
                 fn $d name() {
                     arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (|| $d body)();
@@ -83,7 +83,7 @@ macro_rules! __canic_blob_endpoint {
                 }
             };
             (update, $d category:ident, async fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
-                #[canic::canic_raw_update(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
+                #[canic::raw_update(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
                 async fn $d name() {
                     arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (async move $d body).await;
@@ -91,7 +91,7 @@ macro_rules! __canic_blob_endpoint {
                 }
             };
             (certificate, request, $d wire_name:literal, $d($d item:tt)*) => {
-                #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS, name = $d wire_name)]
+                #[canic::candid_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS, name = $d wire_name)]
                 $d($d item)*
             };
         }

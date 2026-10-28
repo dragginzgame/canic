@@ -2,6 +2,32 @@ use super::*;
 use std::collections::BTreeMap;
 
 #[test]
+fn launcher_path_normalization_preserves_tool_search_inputs() {
+    let root = crate::test_support::temp_dir("build-launcher-path");
+    let home = root.join("codex");
+    let helper = home.join("tmp/arg0-linux/codex-arg0fixture");
+    fs::create_dir_all(&helper).unwrap();
+    for name in [".lock", "apply_patch", "applypatch", "codex-linux-sandbox"] {
+        fs::write(helper.join(name), b"fixture").unwrap();
+    }
+    let tools = root.join("tools");
+    let missing = home.join("tmp/arg0/codex-arg0expired");
+    let unknown = root.join("unknown-missing-tools");
+    let selected = env::join_paths([&helper, &tools, &missing, &unknown]).unwrap();
+    assert_eq!(
+        build_path(&selected, Some(&home)),
+        env::join_paths([&tools, &unknown]).unwrap()
+    );
+    assert_eq!(build_path(&selected, None), selected);
+    fs::write(helper.join("rustc"), b"compiler").unwrap();
+    assert_eq!(
+        build_path(&selected, Some(&home)),
+        env::join_paths([&helper, &tools, &unknown]).unwrap()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn command_and_fingerprint_share_the_captured_environment() {
     let expected: BTreeMap<_, _> = inputs().into_iter().collect();
     let command = command("unused");

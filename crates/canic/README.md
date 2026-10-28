@@ -121,7 +121,7 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
 };
 
-#[canic::canic_query(public,
+#[canic::query(public,
     wire(id = 0x4150_5000_0000_0001, request = LIMITS, response = LIMITS))]
 fn ping() -> Result<String, canic::Error> {
     Ok("ok".to_string())
@@ -155,6 +155,10 @@ and decode the response with the same method ID and declared response limits.
 IC Wire owns framing and admission; the caller owns authentication, semantic
 validation and retry policy. Preserve original request bytes across an uncertain
 paid effect instead of constructing a fresh operation.
+
+Prepared request custody, execution and cost observation delegate to `ic-call`
+through Platform's existing runtime. Canic retains protocol helpers and metrics;
+neither layer retries calls or turns a timeout into proof of no remote effect.
 
 `Call::bounded_wait` and `Call::unbounded_wait` both support raw arguments and
 `with_cycles`; `execute` retains the response for bounded decoding. External IC

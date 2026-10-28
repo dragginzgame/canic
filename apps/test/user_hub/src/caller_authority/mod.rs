@@ -16,32 +16,32 @@ thread_local! {
     static WAITING: Cell<bool> = const { Cell::new(false) };
 }
 
-#[canic_update(public, wire(id = protocol::CALLER_PROBE, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(public, wire(id = protocol::CALLER_PROBE, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn test_caller_probe() -> Result<ic_platform::Principal, Error> {
     caller_authority::admit("test_notify")
         .map(|ticket| ticket.caller().into())
         .map_err(Into::into)
 }
 
-#[canic_update(requires(caller::is_controller()), wire(id = protocol::CALLER_TARGET, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(caller::is_controller()), wire(id = protocol::CALLER_TARGET, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn test_caller_target(target: ic_platform::Principal) -> Result<ic_platform::Principal, Error> {
     caller_authority::select_target(target.into(), "test_metrics_target")
         .map(|ticket| ticket.target().into())
         .map_err(Into::into)
 }
 
-#[canic_update(requires(caller::is_controller()), wire(id = protocol::CALLER_HOLD, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(caller::is_controller()), wire(id = protocol::CALLER_HOLD, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn test_caller_hold(held: bool) -> Result<(), Error> {
     HELD.set(held);
     Ok(())
 }
 
-#[canic_query(requires(caller::is_controller()), wire(id = protocol::CALLER_EFFECT_STATUS, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(requires(caller::is_controller()), wire(id = protocol::CALLER_EFFECT_STATUS, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn test_caller_effect_status() -> Result<(bool, u64), Error> {
     Ok((WAITING.get(), effects()))
 }
 
-#[canic_update(public, wire(id = protocol::CALLER_EFFECT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(public, wire(id = protocol::CALLER_EFFECT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn test_caller_effect() -> Result<u64, Error> {
     let ticket = caller_authority::admit("test_notify")?;
     WAITING.set(true);

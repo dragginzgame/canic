@@ -3,9 +3,28 @@
 mod adapter;
 mod endpoint;
 mod lifecycle;
+mod native;
 
 use crate::endpoint::{EndpointKind, expand_entry};
 use proc_macro::TokenStream;
+
+/// Internal entrypoint for standalone component adapters sharing Platform's executor.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn __canic_native_entry(attr: TokenStream, item: TokenStream) -> TokenStream {
+    native::expand(attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+/// Internal bounded method adapter for components in a Canic-managed lifecycle.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn __canic_managed_component_entry(attr: TokenStream, item: TokenStream) -> TokenStream {
+    native::expand_managed(attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
 
 /// Internal lifecycle adapter selected by Canic's public start macros.
 #[doc(hidden)]
@@ -16,50 +35,56 @@ pub fn __canic_lifecycle(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Define a Canic query endpoint.
+/// Define a Canic query using IC Wire request and response codecs.
 ///
-/// `decode = LIMITS` selects `canic::endpoint::ArgumentLimits`; `payload(...)`
-/// selects only a byte bound. `on_access_denied = "reject"` keeps a plain reply.
-///
+/// Requires explicit access and `wire(id = ID, request = LIMITS, response = LIMITS)`.
 /// See `canic::endpoint` for supported attributes.
 #[proc_macro_attribute]
-pub fn canic_query(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn query(attr: TokenStream, item: TokenStream) -> TokenStream {
     expand_entry(EndpointKind::Query, attr, item)
 }
 
-/// Define a Canic update endpoint.
+/// Define a Canic update using IC Wire request and response codecs.
 ///
-/// `payload(max_bytes = N)` selects the encoded Candid argument limit and adds
-/// a pre-decode guard for both ingress and inter-canister updates. Alternatively,
-/// `decode = LIMITS` selects all `canic::endpoint::ArgumentLimits` dimensions.
-/// `on_access_denied = "reject"` preserves plain successful Candid replies.
-/// Without an explicit byte limit,
-/// managed application ingress inherits the 16 KiB inspector default. The bound
-/// includes encoding overhead; Candid types do not advertise it to clients.
-/// An exported `name = "wire_method"` also selects the payload registration name.
-///
-/// See `canic::endpoint` for supported attributes.
+/// Requires explicit access and `wire(id = ID, request = LIMITS, response = LIMITS)`.
+/// Reply encoding failure after mutation traps. See `canic::endpoint`.
 #[proc_macro_attribute]
-pub fn canic_update(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn update(attr: TokenStream, item: TokenStream) -> TokenStream {
     expand_entry(EndpointKind::Update, attr, item)
+}
+
+/// Adapt a required external Candid query protocol with Canic guards.
+///
+/// Use `decode = LIMITS` for bounded Candid decoding. Owned RPC uses `query`.
+#[proc_macro_attribute]
+pub fn candid_query(attr: TokenStream, item: TokenStream) -> TokenStream {
+    endpoint::expand_candid_entry(EndpointKind::Query, attr, item)
+}
+
+/// Adapt a required external Candid update protocol with Canic guards.
+///
+/// Use `decode = LIMITS` for bounded Candid decoding. Owned RPC uses `update`.
+#[proc_macro_attribute]
+pub fn candid_update(attr: TokenStream, item: TokenStream) -> TokenStream {
+    endpoint::expand_candid_entry(EndpointKind::Update, attr, item)
 }
 
 /// Export a synchronous raw query with Canic startup, access and dispatch guards.
 ///
-/// Requires explicit access and `payload(max_bytes = N)`; the fn() body owns
+/// Requires explicit access and `payload(max_bytes = N)` or `wire(...)`; the fn() body owns
 /// bounded decoding and its reply. No Candid declaration or encoding is emitted.
 #[proc_macro_attribute]
-pub fn canic_raw_query(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn raw_query(attr: TokenStream, item: TokenStream) -> TokenStream {
     endpoint::expand_raw_entry(EndpointKind::Query, attr, item)
 }
 
 /// Export a raw update with Canic startup, access and dispatch guards.
 ///
-/// Requires explicit access and `payload(max_bytes = N)`; the fn() body owns
+/// Requires explicit access and `payload(max_bytes = N)` or `wire(...)`; the fn() body owns
 /// bounded decoding and its reply. Reply failure after mutation must trap.
 /// An async unit handler uses the shared executor and async measurement owner;
 /// admission completes before it is spawned. Effects across awaits retain IC semantics.
 #[proc_macro_attribute]
-pub fn canic_raw_update(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn raw_update(attr: TokenStream, item: TokenStream) -> TokenStream {
     endpoint::expand_raw_entry(EndpointKind::Update, attr, item)
 }

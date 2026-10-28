@@ -11,7 +11,7 @@ use syn::{
     visit::{self, Visit},
 };
 
-const PRODUCTION_SOURCE_ROOTS: [&str; 3] = ["apps", "canisters", "crates"];
+const PRODUCTION_SOURCE_ROOTS: [&str; 4] = ["apps", "canisters", "crates", "integrations"];
 const NATIVE_REGISTRATION_CAPABILITIES: [&str; 6] = [
     "ensure_owned_once",
     "register_after_completion",
@@ -755,6 +755,7 @@ fn native_registration_owners() -> BTreeSet<String> {
         "crates/canic-core/src/workflow/runtime/intent.rs",
         "crates/canic-core/src/workflow/runtime/log.rs",
         "crates/canic-core/src/workflow/runtime/timer/mod.rs",
+        "crates/canic-icydb/src/watchdog/mod.rs",
     ]
     .into_iter()
     .map(str::to_string)
@@ -768,6 +769,7 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
         "canisters/test/runtime_probe/Cargo.toml",
         "crates/canic-control-plane/Cargo.toml",
         "crates/canic-core/Cargo.toml",
+        "crates/canic-icydb/Cargo.toml",
         "crates/canic-tests/Cargo.toml",
     ]
     .into_iter()
@@ -832,6 +834,14 @@ fn collect_named_files(
     for entry in entries {
         let path = entry.path();
         if path.is_dir() {
+            // Independent consumer workspaces retain build artifacts beneath integrations.
+            // Inventory maintained source, not generated fragments or vendored tools.
+            if matches!(
+                entry.file_name().to_str(),
+                Some("target" | "node_modules" | ".git")
+            ) {
+                continue;
+            }
             collect_named_files(&path, root, name_or_extension, visit);
             continue;
         }

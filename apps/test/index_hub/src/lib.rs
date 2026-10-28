@@ -14,7 +14,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 /// Resolve one indexed key, creating its exact managed child when absent.
-#[canic_update(requires(env::build_local_only()), wire(id = protocol::RESOLVE_ITEM, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(env::build_local_only()), wire(id = protocol::RESOLVE_ITEM, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn resolve_item(key: String) -> Result<protocol::IndexStatus, Error> {
     PlacementIndexApi::resolve_or_create(POOL_NAME, key)
         .await
@@ -22,7 +22,7 @@ async fn resolve_item(key: String) -> Result<protocol::IndexStatus, Error> {
 }
 
 /// Retain one child operation while its bounded application hook remains pending.
-#[canic_update(requires(env::build_local_only(), caller::is_controller()), wire(id = protocol::CREATE_STARTUP_CHILD, request = protocol::OPERATION_REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(env::build_local_only(), caller::is_controller()), wire(id = protocol::CREATE_STARTUP_CHILD, request = protocol::OPERATION_REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn test_create_startup_child(
     request: protocol::StartupRequest,
 ) -> Result<ic_platform::Principal, Error> {

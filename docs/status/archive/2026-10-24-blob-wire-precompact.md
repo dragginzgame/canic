@@ -6371,10 +6371,10 @@ gate, PocketIC, commit, own package-version change or release ran.
 - [Historical handoff](2026-10-24-blob-wire-precompact.md): superseded evidence only.
 ## Blob ownership and integration
 - `ic-blob-storage` owns the service/storage/funding engines; its contracts crate
-  owns schemas/methods/budgets. Canic's [adapter](../../../integrations/blob-service/src/lib.rs) composes endpoints,
+  owns schemas/methods/budgets. Canic's [adapter](../../../crates/canic-blob-service/src/lib.rs) composes endpoints,
   memory grants, synchronous lifecycle, metrics and authenticated funding access.
   Keep those boundary adapters and dedicated/embedded consumer proofs.
-- The native [schema adapter](../../../integrations/blob-service/src/schema/mod.rs)
+- The native [schema adapter](../../../crates/canic-blob-service/src/schema/mod.rs)
   consumes actual supplier schemas and `SERVICE_METHODS`; no second Blob engine or DID reconstruction.
 - Framework composition coverage and live provider acceptance are distinct.
   Keep [#622](https://github.com/dragginzgame/canic/issues/622) evidence with the

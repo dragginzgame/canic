@@ -11,7 +11,18 @@ fixture="${fixture%/.}"
 # shellcheck source=scripts/ci/fixture-lifecycle.sh
 source "$ROOT/scripts/ci/fixture-lifecycle.sh"
 fixture_complete=false
-trap 'fixture_finish "$?" "$fixture" "CI inspection fixtures retained"' EXIT
+finish() {
+    local status=$?
+    fixture_completion_status "$status" "$fixture_complete" || status=$?
+    if [[ "$status" != 0 ]]; then
+        printf '\nCI inspection assertion failed (exit %s). Last observation:\n' "$status" >&2
+        fixture_replay_logs "$fixture/output"
+        printf '\nSubstitute command trace:\n' >&2
+        fixture_replay_logs "$fixture/calls"
+    fi
+    fixture_finish "$status" "$fixture" "CI inspection fixtures retained"
+}
+trap finish EXIT
 mkdir "$fixture/bin"
 export GH_CI_TEST_LOG="$fixture/calls"
 export GH_CI_TEST_SHA=0123456789012345678901234567890123456789
@@ -93,17 +104,20 @@ refuse() {
     local expected="$1" status=0
     shift
     run "$@" || status=$?
-    [[ "$status" == "$expected" ]] || { cat "$fixture/output"; exit 1; }
+    [[ "$status" == "$expected" ]] || {
+        printf 'Expected exit %s, got %s\n' "$expected" "$status" >&2
+        exit 1
+    }
 }
 
 run
-grep -F 'gh <run> <list> <--workflow> <CI> <--branch> <main> <--limit> <1>' "$GH_CI_TEST_LOG"
-grep -Fx 'gh <run> <view> <42> <--verbose>' "$GH_CI_TEST_LOG"
+grep -F 'gh <run> <list> <--workflow> <CI> <--branch> <main> <--limit> <1>' "$GH_CI_TEST_LOG" > /dev/null
+grep -Fx 'gh <run> <view> <42> <--verbose>' "$GH_CI_TEST_LOG" > /dev/null
 
 # A failed branch observation (even with partial output), or detached HEAD,
 # must not silently broaden an implicit selection to unrelated branch runs.
 GH_CI_TEST_BRANCH=partial GH_CI_TEST_BRANCH_STATUS=9 GH_CI_TEST_BRANCH_ERROR='branch observation failed' refuse 9
-grep -F 'branch observation failed' "$fixture/output"
+grep -F 'branch observation failed' "$fixture/output" > /dev/null
 if grep -F 'gh ' "$GH_CI_TEST_LOG"; then exit 1; fi
 for args in default list all; do
     case "$args" in
@@ -111,7 +125,7 @@ for args in default list all; do
         list) GH_CI_TEST_BRANCH='' refuse 1 --list ;;
         all) GH_CI_TEST_BRANCH='' refuse 1 --all-workflows ;;
     esac
-    grep -F 'select --branch, --commit or --run' "$fixture/output"
+    grep -F 'select --branch, --commit or --run' "$fixture/output" > /dev/null
     if grep -F 'gh ' "$GH_CI_TEST_LOG"; then exit 1; fi
 done
 # Explicit identities work without observing a branch, including --run when
@@ -119,27 +133,27 @@ done
 GH_CI_TEST_BRANCH_STATUS=9 run --run 17 --logs
 if grep -F 'git ' "$GH_CI_TEST_LOG"; then exit 1; fi
 GH_CI_TEST_BRANCH_STATUS=9 run --branch release --list
-grep -F '<--branch> <release>' "$GH_CI_TEST_LOG"
+grep -F '<--branch> <release>' "$GH_CI_TEST_LOG" > /dev/null
 if grep -F 'git ' "$GH_CI_TEST_LOG"; then exit 1; fi
 
 GH_CI_TEST_BRANCH_STATUS=9 run --commit HEAD --all-workflows --limit 100
-grep -Fx 'git <rev-parse> <--verify> <--end-of-options> <HEAD^{commit}>' "$GH_CI_TEST_LOG"
-grep -Fx "gh <run> <list> <--commit> <$GH_CI_TEST_SHA> <--limit> <100>" "$GH_CI_TEST_LOG"
-grep -Fx "Selected commit: $GH_CI_TEST_SHA" "$fixture/output"
-grep -Fx 'queued workflow evidence' "$fixture/output"
+grep -Fx 'git <rev-parse> <--verify> <--end-of-options> <HEAD^{commit}>' "$GH_CI_TEST_LOG" > /dev/null
+grep -Fx "gh <run> <list> <--commit> <$GH_CI_TEST_SHA> <--limit> <100>" "$GH_CI_TEST_LOG" > /dev/null
+grep -Fx "Selected commit: $GH_CI_TEST_SHA" "$fixture/output" > /dev/null
+grep -Fx 'queued workflow evidence' "$fixture/output" > /dev/null
 if grep -F 'gh <run> <view>' "$GH_CI_TEST_LOG"; then exit 1; fi
 if grep -F '<--branch>' "$GH_CI_TEST_LOG"; then exit 1; fi
 
 run --commit HEAD --branch release --workflow 'Rust checks' --failed --logs
-grep -F "<--workflow> <Rust checks> <--branch> <release> <--commit> <$GH_CI_TEST_SHA> <--status> <failure>" "$GH_CI_TEST_LOG"
-grep -Fx 'gh <run> <view> <42> <--log-failed> <--repo> <github.example/owner/selected> <--attempt> <2>' "$GH_CI_TEST_LOG"
-grep -F 'Historical failure search' "$fixture/output"
+grep -F "<--workflow> <Rust checks> <--branch> <release> <--commit> <$GH_CI_TEST_SHA> <--status> <failure>" "$GH_CI_TEST_LOG" > /dev/null
+grep -Fx 'gh <run> <view> <42> <--log-failed> <--repo> <github.example/owner/selected> <--attempt> <2>' "$GH_CI_TEST_LOG" > /dev/null
+grep -F 'Historical failure search' "$fixture/output" > /dev/null
 
 run --all-workflows --branch main
-grep -Fx 'gh <run> <list> <--branch> <main> <--limit> <10>' "$GH_CI_TEST_LOG"
+grep -Fx 'gh <run> <list> <--branch> <main> <--limit> <10>' "$GH_CI_TEST_LOG" > /dev/null
 run --run 17 --logs
-grep -Fx 'gh <run> <view> <17> <--log-failed> <--repo> <github.example/owner/selected> <--attempt> <2>' "$GH_CI_TEST_LOG"
-grep -F 'failed step details' "$fixture/output"
+grep -Fx 'gh <run> <view> <17> <--log-failed> <--repo> <github.example/owner/selected> <--attempt> <2>' "$GH_CI_TEST_LOG" > /dev/null
+grep -F 'failed step details' "$fixture/output" > /dev/null
 if grep -F 'gh <run> <list>' "$GH_CI_TEST_LOG"; then exit 1; fi
 if grep -F '/jobs?' "$GH_CI_TEST_LOG"; then exit 1; fi
 
@@ -174,11 +188,11 @@ done
 refuse 2 --list --logs
 [[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
 run --run 17
-grep -Fx 'gh <run> <view> <17> <--verbose>' "$GH_CI_TEST_LOG"
+grep -Fx 'gh <run> <view> <17> <--verbose>' "$GH_CI_TEST_LOG" > /dev/null
 if grep -E 'git |gh <run> <list>' "$GH_CI_TEST_LOG"; then exit 1; fi
 for id in 0 abc --help $'17\n18'; do
     GH_CI_TEST_ID="$id" refuse 1 --branch main
-    grep -F 'invalid run identity' "$fixture/output"
+    grep -F 'invalid run identity' "$fixture/output" > /dev/null
     if grep -F 'gh <run> <view>' "$GH_CI_TEST_LOG"; then exit 1; fi
 done
 
@@ -200,10 +214,10 @@ if grep -F '<--log-failed>' "$GH_CI_TEST_LOG"; then exit 1; fi
 # run has no failed-step logs; a failed, unfinished or unknown run needs an
 # explicit unavailable-evidence result rather than silent inspection success.
 GH_CI_TEST_LOG_TEXT='' refuse 1 --run 42 --logs
-grep -F 'failed-step logs unavailable' "$fixture/output"
+grep -F 'failed-step logs unavailable' "$fixture/output" > /dev/null
 for conclusion in success neutral skipped; do
     GH_CI_TEST_LOG_TEXT=$' \n\t' GH_CI_TEST_STATE=$'completed\t'"$conclusion" run --run 42 --logs
-    grep -F 'No failed-step logs' "$fixture/output"
+    grep -F 'No failed-step logs' "$fixture/output" > /dev/null
     if grep -F '/jobs?' "$GH_CI_TEST_LOG"; then exit 1; fi
 done
 for state in $'in_progress\t' $'queued\t' $'completed\tcancelled' malformed; do
@@ -213,7 +227,7 @@ done
 GH_CI_TEST_LOG_TEXT='' GH_CI_TEST_STATE_STATUS=8 refuse 8 --run 42 --logs
 GH_CI_TEST_LOG_TEXT='partial failure log' GH_CI_TEST_LOG_ERROR='fetch interrupted' \
     GH_CI_TEST_LOG_STATUS=9 refuse 9 --run 42 --logs
-grep -F 'partial failure log' "$fixture/output"
+grep -F 'partial failure log' "$fixture/output" > /dev/null
 retained="$(sed -n 's/^CI log observation retained: //p' "$fixture/output")"
 [[ -d "$retained" && "$(cat "$retained/failed.log")" == 'partial failure log' &&
    "$(cat "$retained/errors.log")" == 'fetch interrupted' ]] || exit 1
@@ -233,25 +247,25 @@ cat > "$GH_CI_TEST_JOBS" <<'JSON'
 {"jobs":[{"id":302,"run_id":42,"run_attempt":2,"conclusion":"timed_out"},{"id":398,"run_id":42,"run_attempt":2,"conclusion":"skipped"}]}
 JSON
 GH_REPO=other/checkout GH_CI_TEST_LOG_TEXT='' run --run 42 --logs
-grep -Fx 'gh <run> <view> <42> <--verbose> <--repo> <github.example/owner/selected> <--attempt> <2>' "$GH_CI_TEST_LOG"
-grep -F '/attempts/2/jobs?per_page=100> <--paginate>' "$GH_CI_TEST_LOG"
+grep -Fx 'gh <run> <view> <42> <--verbose> <--repo> <github.example/owner/selected> <--attempt> <2>' "$GH_CI_TEST_LOG" > /dev/null
+grep -F '/attempts/2/jobs?per_page=100> <--paginate>' "$GH_CI_TEST_LOG" > /dev/null
 [[ "$(grep -c '/logs>' "$GH_CI_TEST_LOG")" == 2 ]] || exit 1
-grep -F 'first failed job evidence' "$fixture/output"
-grep -F 'second failed job evidence' "$fixture/output"
-grep -F 'run 42 attempt 2 job 302' "$fixture/output"
+grep -F 'first failed job evidence' "$fixture/output" > /dev/null
+grep -F 'second failed job evidence' "$fixture/output" > /dev/null
+grep -F 'run 42 attempt 2 job 302' "$fixture/output" > /dev/null
 retained="$(sed -n 's/^CI log observation retained: //p' "$fixture/output")"
 [[ -f "$retained/failed.log" && ! -s "$retained/failed.log" && -s "$retained/job-301.log" && -s "$retained/job-302.log" ]] || exit 1
 
 # Stop on API errors even when earlier pages/jobs produced usable evidence.
 GH_CI_TEST_LOG_TEXT='' GH_CI_TEST_JOBS_STATUS=8 GH_CI_TEST_JOBS_ERROR='second page unavailable' refuse 8 --run 42 --logs
-grep -F 'second page unavailable' "$fixture/output"
+grep -F 'second page unavailable' "$fixture/output" > /dev/null
 if grep -F '/logs>' "$GH_CI_TEST_LOG"; then exit 1; fi
 GH_CI_TEST_LOG_TEXT='' GH_CI_TEST_JOB_TEXT='partial second job' GH_CI_TEST_JOB_ERROR='job fetch failed' GH_CI_TEST_JOB_STATUS=9 refuse 9 --run 42 --logs
 retained="$(sed -n 's/^CI log observation retained: //p' "$fixture/output")"
 [[ -s "$retained/job-301.log" && "$(cat "$retained/job-302.log")" == 'partial second job' &&
    "$(cat "$retained/job-302.log.errors")" == 'job fetch failed' ]] || exit 1
 GH_CI_TEST_LOG_TEXT='' GH_CI_TEST_JOB_TEXT=$' \n\t' refuse 1 --run 42 --logs
-grep -F 'failed-job logs unavailable for job 302' "$fixture/output"
+grep -F 'failed-job logs unavailable for job 302' "$fixture/output" > /dev/null
 
 for identity in '99,2,302' '42,1,302' '42,2,"../302"'; do
     printf '{"jobs":[{"run_id":%s,"run_attempt":%s,"id":%s,"conclusion":"failure"}]}\n' \

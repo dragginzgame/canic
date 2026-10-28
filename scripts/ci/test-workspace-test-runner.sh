@@ -64,13 +64,12 @@ for argument in "$@"; do
     [[ "$argument" != -- ]] || break
     case "$argument" in
         --no-fail-fast) fail_fast=0 ;;
-        --no-run) phase=compile ;;
         governed_pocketic_) stage=host ;;
         governed-pocketic-tests) stage=internal ;;
     esac
     [[ "$previous" != --test ]] || target="$argument"
     previous="$argument"
-    [[ "$argument" == --no-run || "$argument" == --no-fail-fast ]] || graph_args+=("$argument")
+    [[ "$argument" == --no-fail-fast ]] || graph_args+=("$argument")
 done
 case " $* " in
     *' pic::governed_suite::governed_pocketic_inventory_preserves_recovery_prefix_and_journey_suffix '*) stage=native-inventory ;;
@@ -83,14 +82,15 @@ if [[ -n "$target" && " $* " == *' -p canic-tests '* ]]; then
     stage="$(awk -F '\t' -v target="$target" '$2 == target { print $5 }' scripts/ci/workspace-test-inventory.tsv)"
 
 fi
-if [[ "$phase" == compile || "$stage" == ordinary || "$stage" == native-* || "$stage" == documentation ]]; then
+if [[ "$phase" == list || "$stage" == ordinary || "$stage" == native-* || "$stage" == documentation ]]; then
     [[ ! -e "$CANIC_TEST_SCRATCH/server.pid" ]]
 elif [[ "$phase" == execute ]]; then
     [[ -e "$CANIC_TEST_SCRATCH/server.pid" ]]
 fi
 printf '%s\n' "${graph_args[@]}" > "$CANIC_TEST_SCRATCH/$phase-$stage.args"
 printf '%s\t%s\t%s\n' "$phase" "$stage" "$fail_fast" >> "$RUNNER_TEST_TRACE"
-if [[ "$phase" == list ]]; then
+
+if [[ "$phase" == list && "$RUNNER_TEST_FAIL_STAGE" != "list/$stage" ]]; then
     [[ "$stage" != "${RUNNER_TEST_EMPTY_STAGE:-}" ]] || exit 0
     if [[ "$stage" == internal || "$stage" == host ]]; then
         [[ " $* " == *' --ignored '* ]]
@@ -135,6 +135,7 @@ if [[ "$fails" -eq 1 ]]; then
     echo "assertion failed: $stage fixture invariant" >&2
 fi
 [[ "$fails" -eq 0 ]] || exit 101
+
 if [[ "$phase" == execute ]]; then
     # Full workspace Host selection also contains unrelated empty harnesses.
     echo 'test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s'
@@ -175,10 +176,10 @@ for mode in full pocketic; do
     if [[ "$mode" == full ]]; then
         stages+=(execute/ordinary list/native-internal execute/native-internal list/native-host execute/native-host execute/documentation)
     fi
-    for stage in "${serial_stages[@]}"; do stages+=("compile/$stage" "list/$stage"); done
+    for stage in "${serial_stages[@]}"; do stages+=("list/$stage"); done
     for stage in "${serial_stages[@]}"; do stages+=("execute/$stage"); done
     for failure in "${stages[@]}" none; do
-        [[ "$failure" != list/* && "$failure" != preflight/* ]] || continue
+        [[ "$failure" != preflight/* && "$failure" != list/native-* ]] || continue
         scratch="$fixture/$mode/${failure//\//-}"
         mkdir -p "$scratch"
         status=0
@@ -196,7 +197,7 @@ for mode in full pocketic; do
             fail_fast=1
             [[ "$selected" != execute/* ]] || fail_fast=0
             printf '%s\t%s\t%s\n' "${selected%/*}" "${selected#*/}" "$fail_fast"
-            if [[ "$selected" == "$failure" && "$failure" == compile/* ]]; then break; fi
+            if [[ "$selected" == "$failure" && "$failure" == list/* ]]; then break; fi
             if [[ "$selected" == execute/documentation &&
                 ("$failure" == execute/ordinary || "$failure" == execute/native-* || "$failure" == execute/documentation) ]]; then break; fi
         done > "$scratch/expected.tsv"
@@ -221,7 +222,7 @@ for mode in full pocketic; do
             rg -q '^\[CANIC-REQUEST\] failure-context-0$' "$logs"
         fi
         rm -rf "$logs"
-        if [[ "$failure" == execute/ordinary || "$failure" == execute/native-* || "$failure" == execute/documentation || "$failure" == compile/* ]]; then
+        if [[ "$failure" == execute/ordinary || "$failure" == execute/native-* || "$failure" == execute/documentation || "$failure" == list/* ]]; then
             [[ ! -e "$scratch/server.pid" ]]
         else
             read -r server_pid < "$scratch/server.pid"
@@ -232,7 +233,7 @@ for mode in full pocketic; do
         fi
         if [[ "$failure" == none ]]; then
             for stage in "${serial_stages[@]}"; do
-                diff -u "$scratch/compile-$stage.args" "$scratch/execute-$stage.args"
+                diff -u "$scratch/list-$stage.args" "$scratch/execute-$stage.args"
             done
         fi
     done

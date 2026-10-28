@@ -16,7 +16,7 @@ case "$tool" in
         [[ "$(uname -s):$(uname -m)" == Linux:x86_64 ]] || {
             echo 'CI sccache installer requires Linux x86_64' >&2; exit 1;
         }
-        prefix=CANIC_SCCACHE; directory="${CANIC_SCCACHE_INSTALL_DIR:-$HOME/.local/bin}" ;;
+        prefix=SHARED_TOOLING_SCCACHE; directory="${CANIC_SCCACHE_INSTALL_DIR:-$HOME/.local/bin}" ;;
     *) echo 'unknown Canic CI tool' >&2; exit 2 ;;
 esac
 case "$(uname -s):$(uname -m)" in
@@ -31,7 +31,7 @@ if [[ "$tool" == shellcheck ]]; then
         LINUX_AMD64) suffix=LINUX_X86_64 ;; LINUX_ARM64) suffix=LINUX_AARCH64 ;;
         DARWIN_AMD64) suffix=DARWIN_X86_64 ;; DARWIN_ARM64) suffix=DARWIN_AARCH64 ;;
     esac
-elif [[ "$tool" == sccache ]]; then suffix=LINUX_X64; fi
+fi
 version_key="${prefix}_VERSION"
 digest_key="${prefix}_SHA256_${suffix}"
 if [[ "$tool" != sccache ]]; then
