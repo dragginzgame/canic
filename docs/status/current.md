@@ -70,7 +70,8 @@ and correction logs in the current release directory. Full release results
 must be read from that attempt, not inferred from these earlier focused passes.
 The second attempt passed Clippy, formatting and invariants, then stopped on a
 ShellCheck input omission. The existing lint target now includes the shared tool
-catalog consumed by preparation; its focused rerun passes. Neither attempt bumped
+catalog consumed by preparation and selects Bash for that data-only catalog.
+Its focused rerun passes. Neither attempt bumped
 the version or pushed refs.
 
 Earlier Auth/Wire/Timers, IC Call, CLI and CI-fixture evidence remains in
