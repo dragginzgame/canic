@@ -73,6 +73,12 @@ ShellCheck input omission. The existing lint target now includes the shared tool
 catalog consumed by preparation and selects Bash for that data-only catalog.
 Its focused rerun passes. Neither attempt bumped
 the version or pushed refs.
+The third attempt passed preceding gates, then refused two stale native guard
+assumptions after the endpoint rename/adapter move. The corrected endpoint guard
+passes 12 tests, the trap guard passes six, and both pass scoped strict Clippy.
+Internal native, Host local-Fleet and documentation lanes passed in that attempt;
+the ordinary-test barrier skipped PocketIC. Its test stage took 455s; no version
+mutation occurred. Complete qualification still requires a fresh corrected run.
 
 Earlier Auth/Wire/Timers, IC Call, CLI and CI-fixture evidence remains in
 `target/auth-wire-timers-20261028/`, `target/ic-call-adoption/`,

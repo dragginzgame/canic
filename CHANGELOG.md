@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### 🩹 Fixed
 
 - Correct composition-fixture visibility and include the shared tool catalog in release lint.
+- Update endpoint and trap ownership guards for the Wire attribute names and adapter layout.
 - Prepare the exact release metadata editor in ordinary CI and create manifest
   FIFO fixtures portably on Linux and macOS. Refresh the embedded allocation peer
   with its source-bound provenance for the current dependency graph.
