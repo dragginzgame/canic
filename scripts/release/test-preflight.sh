@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Private Make invocations must not inherit the caller's release arguments or injected files.
 unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
+unset RELEASE_SOURCE
 
 # Exercise the actual Make/adapter boundary with private Cargo-cache and Git substitutes.
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"

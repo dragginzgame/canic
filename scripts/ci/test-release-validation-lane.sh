@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Source-binding scenarios below select fixture identities explicitly.
+unset RELEASE_SOURCE
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-validation-lane.XXXXXX")"
 # Keep expected rejection diagnostics out of passing validation output. Replay
 # the complete fixture log only when an assertion or setup command fails.

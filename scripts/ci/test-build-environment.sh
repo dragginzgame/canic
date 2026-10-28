@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-build-environment.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf -- "$fixture"; else echo "Environment fixture retained: $fixture" >&2; fi' EXIT
 unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
+# This fixture owns its synthetic source; the enclosing release owns a different HEAD.
+unset RELEASE_SOURCE
 unset CARGO_TARGET_DIR CANIC_CARGO_TARGET_DIR RUSTC_WRAPPER CANIC_SCCACHE_BIN SCCACHE_BIN
 unset SCCACHE_RUNTIME_DIR CARGO_INCREMENTAL
 ENV_REAL_MAKE="$(command -v make)"

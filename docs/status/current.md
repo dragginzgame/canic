@@ -1,275 +1,88 @@
-# Current handoff — 2026-10-27
+# Current handoff — 2026-10-28
 
-## Scope and authority
+## Accepted work and authority
 
-The maintainer now explicitly requests completing preparation, committing the
-reviewed repair batch and running non-publishing qualification in this session,
-with diagnosis and in-scope fixes on failure. This supersedes the earlier
-no-commit/no-qualification boundary. Push, release, publication and deployment
-remain unauthorized. Qualification must retain the clean-tree fence and must not
-race source edits. Evidence for this attempt belongs to `target/session-qualification/`.
+The maintainer explicitly requests releasing Canic 0.112.0 and publishing its
+package family. This includes the canonical source release and its required
+qualification, version preparation, commit/tag and atomic main/tag push, followed
+by `make publish`. It does not select an application or authorize a live Fleet
+operation. PocketIC performance work is deferred until after publication.
 
-Canonical `make prepare-validation SCOPE=release` passed in 96.666s. The pinned
-cargo-edit 0.13.12 replaced ambient 0.13.13; its release-profile build took 48.06s.
-No lockfiles or package versions changed. Commit review found and corrected the
-macOS workflow's missing `prepare-build-environment` call before native tool
-builds. Its existing setup fixture now checks ordering and preparation failure
-propagation; this remains simulated evidence, not a fresh hosted macOS pass.
+The reviewed repair batch and focused qualification corrections are committed.
+Local `main` was fast-forwarded from `f768a5519edb35512912dd73fce45936155edc6e`
+to `ec817f2e20f5002a88def1a522f7ffe3ac046ee9`; the latter remains available on
+`repair/release-qualification`. Versions still read 0.111.0; 0.112.0 notes are open.
+The accepted Blob/Wire hard cut remains governed by the
+[closeout plan](../audits/working/0.112-push-readiness/plan.md) and
+[migration contract](../design/0.112-standalone-blob-service-extraction/wire-hard-cut.md).
 
-The earlier final review of the preserved repair/composition batch completed. At
-that point the maintainer allowed concrete fixes and one non-publishing attempt.
-No staging, commits, version changes, tags, pushes, publication or deployment were
-performed during that earlier review. Preserve the dirty tree and all retained evidence.
-The repair batch starts from `f768a5519edb35512912dd73fce45936155edc6e`; versions remain 0.111.0,
-with 0.112.0 notes open. The accepted Blob/Wire hard-cut scope remains in the
-[closeout plan](../audits/working/0.112-push-readiness/plan.md).
+## Current release attempt
 
-## Implemented batch and final review
+The first authorized `make release-minor` stopped before version mutation after
+4m43.920s. The release-integrity gate's synthetic build-environment fixture
+inherited the enclosing release's `RELEASE_SOURCE`, then compared that real SHA
+with its substituted Git identity. No 0.112 release plan was saved, tag created,
+push performed or package published. The release lock was released normally.
+Logs: `target/session-release-0112/attempt.TWDfr4/release.log` and `release.exit`.
 
-- Host shares build-environment normalization with internal artifact production.
-  Unknown/compiler/offline inputs remain bound; credentials and owned execution
-  plumbing are withheld from both child commands and input fingerprints.
-- Configuration-keyed generated source remains in `target/canic-packages/`.
-  Repository Cargo/Make output is `target/cargo/`; Host's unset-output default is
-  `target/canic-wasm/`. Application fingerprints exclude unrelated generated source;
-  selected source/locks remain actual inputs. Explicit output overrides remain
-  effective. Both the namespace and selected package directory are checked for
-  physical overlap, including nested symlink aliases, before materialization.
-  `clean-wasm` owns generated-source cleanup; compiler cleanup uses Cargo selection.
-- Both packaged-downstream proofs now discover archives through Cargo metadata's
-  `target_directory`, including relative/absolute overrides and paths with spaces.
-  Developer paths, package guards and active instructions agree. CI rust-cache has
-  target caching disabled; its separate sccache, test-artifact and diagnostic paths
-  remain intentional. No old output cache was migrated or removed.
-- One preparation owner supplies release/preflight/security/checks prerequisites,
-  including all three locked graphs, Wasm std, exact editor and consumer tools.
-  Security and Wasm crypto checks no longer fetch dependencies. Direct checks need
-  explicit preparation. The standalone test runner retains its own locked fetch.
-- Make qualification groups share local/CI membership; intentional coverage and
-  scheduling differences are explicit in policy. No required product checks were
-  removed. Generic Shared Tooling producer fixtures stay upstream; snapshot,
-  consumer wiring, identity, package-boundary and failure-barrier checks remain.
-- Fresh qualification has no SHA-only receipt shortcut. Exact-attempt recovery
-  stays with the release runner. Alternate staging reads the adapter's roster,
-  including both private consumer locks. CI retains bounded diagnostics/timings.
-- Snapshot prepare/resume is admitted under Snapshot, while Release still rejects.
-  The installed test checks `CanisterError` plus `CanisterCalledTrap` directly for
-  allocation refusal and verifies unchanged inventory. It does not unwrap an
-  expected transport refusal or relax production fences. Its stale lint expectation
-  was removed; the final rejection assertions have a focused helper.
+The build-environment, validation-lane and preflight fixtures now clear inherited
+`RELEASE_SOURCE` before selecting synthetic identities. Production source fences
+and explicit mismatch regressions remain unchanged. Both directly affected lane
+fixtures pass under the actual source SHA; the full release-integrity gate passes
+with the outer release variables. Scoped ShellCheck passes with repository
+options and the referenced tool catalog. Evidence:
+`target/session-release-0112/attempt.TWDfr4/fixture-recovery-final.log`.
+The narrow correction and changelog updates require a local commit, then a fresh
+canonical minor release. Do not use resume: this failed gate saved no attempt.
 
-## Evidence and qualification result
+## Qualification and implementation evidence
 
-`target/final-review/` contains source manifests, tool
-paths/versions/hashes, logs, and the prior detailed handoff. The exact admission
-source hash is `7e10c534529c6742edcd4d389cf4847b0cc1c5d3470d3ce84baa39f5243e2b67`
-(`admission-source.json` in that directory); `final-source.json`
-records subsequent documentation-only handoff changes. These are diagnostic records,
-not release receipts or permission to reuse test results for changed code.
+Complete non-publishing `make release-verify` passed on clean `ec817f2e2` in
+90m48.263s. Detailed evidence is retained in
+`target/session-qualification/final-report.md`, `attempt-6.log`,
+`attempt-6-selection.txt` and `attempt-6.exit`. Earlier failed attempts and their
+focused recoveries remain alongside them. The previous detailed handoff is
+preserved in Git at `ec817f2e2:docs/status/current.md`.
 
-| Targeted check on reviewed code | Result |
-| --- | --- |
-| Offline Host `cargo test --locked -p canic-host --lib generated_` via scratch wrapper | 19 passed, 6.84s tests; includes actual Make input admission, selected-source invalidation, config isolation and nested alias refusal |
-| Package output-path fixture, real Cargo on tiny local packages | Passed for both proofs: default, relative and absolute outputs; no publication |
-| Wasm crypto fixture + real offline locked-graph check | Passed; missing-cache failure propagates; 12 canonical roles admitted |
-| Make composition fixture and scoped shell lint | Passed |
-| Host library Clippy + internal-testing Clippy with governed PocketIC tests | Passed; 7.14s and 1.89s respectively |
-| Shared Tooling integrity | 139 owned files unchanged, snapshot 0.26.23 |
-| Exact snapshot-restore PocketIC case, final reviewed code | **1 passed**, 35.56s test; runner 109s = 60s native preflight + 37s PocketIC stage + 12s other overhead |
+That complete pass includes the exact restored-Root inventory/allocation case
+(2m36s), maximum application initialization (1m16s), Coordinator replay (1.85s),
+mixed-topology recovery (11m46s) and source-bound activation reset (4m52s).
+Internal PocketIC took 65m10s and public runtime PocketIC 9m14s, inside the total.
+These passes do not explain historical activation-conflict causation.
 
-Exact case command:
-`CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::restored_root_preserves_its_inventory_but_cannot_allocate`.
-The final log is `pocketic-reviewed.log` in the evidence directory. Installed checks
-cover prepare/live resume/restore, exact inventory, controller rejection, timer
-fencing, restored resume refusal and allocation refusal. Earlier artifact-overlap
-and helper failures remain historical evidence; they are not current failures.
+Implemented owners: shared preparation/qualification groups, governed build
+selection, selected generated-source admission, exact package/source boundaries,
+and existing release recovery. Generated source lives in configuration-keyed
+`target/canic-packages`; Cargo output defaults to `target/cargo`. Physical output
+and source overlaps, including symlink aliases, reject. Root lookup canonicalizes
+configuration aliases. Snapshot rejection tests retain typed transport rejection
+and unchanged-state assertions. Initialization admits the existing maximum input
+within bounded codec accounting without increasing application bytes or authority.
 
-The single complete attempt was `CARGO_NET_OFFLINE=true make release-verify`.
-Inspection confirmed it calls the canonical owner with `complete` and no bump
-argument. It **stopped at `ensure-clean`**, exit 2, in 0.06s. No qualification stage
-or tool-admission stage ran. No clean-tree bypass or second complete run occurred.
-The dirty tree is the specific admission blocker. Full qualification has not passed.
+The supported non-publishing sequence is `make prepare-validation SCOPE=release`,
+review/commit, then `make release-verify`. No manual exports are required.
+Make selects Rust/Cargo 1.99.1, pinned sccache 0.19.0, the existing wrapper,
+version-isolated runtime and incremental=0; supported explicit overrides remain
+validated. Qualification forces offline Cargo. Release preflight prepares all
+three locked graphs and exact tools. No source-only receipt bypass exists.
+Shared Tooling latest-stable maintenance: [#319](https://github.com/dragginzgame/shared-tooling/issues/319).
 
-The earlier runtime tests used Rust/Cargo 1.99.1, `target/cargo`, offline Cargo and
-ambient sccache 0.18.0. The intermediate preparation review installed 0.17.0;
-that was historical evidence, not the final selection. The maintainer subsequently
-approved latest stable 0.19.0. Its upstream archive digest and Linux wrapper/server
-compatibility passed focused checks. Make now selects the managed executable,
-version-isolated runtime, wrapper and incremental defaults itself. The existing
-preparation owner installs/admit these selections; qualification checks the actual
-selected binary, rejecting mismatched explicit overrides. The ambient binary and
-global servers remain untouched. Shared Tooling latest-stable maintenance policy
-is tracked in [#319](https://github.com/dragginzgame/shared-tooling/issues/319).
-Native macOS remains untested; simulated cold-host selection covers the existing
-Rust installer's prerequisite ordering and separate invocation environment.
-Metadata editor 0.68.1 and locked Testkit selection checks previously passed.
+## Boundaries and next action
 
-Preparation evidence in `target/preparation-review/` records 507 external identities
-in the three fetched locks and zero extra identities in 12 existing generated
-graphs. With only those archives and existing registry index metadata, all three
-workspace graphs (all features), all 12 generated graphs, both nested role-metadata
-regressions and real generated-input admission passed offline. No ambient extracted
-source, credentials or Cargo configuration were copied. This is current-graph
-evidence, not fresh hosted setup or a promise about future fixture dependencies.
+Commit the focused fixture correction and run `make release-minor`; only after
+success run `make publish`. Observe exact remote refs and registry versions.
+Stop on failed gates or uncertain external outcomes and retain all artifacts.
+Once version preparation creates a saved plan, use exact-version
+`make release-resume VERSION=0.112.0` after inspecting its state and remote refs.
+Never remove an occupied lock based only on restricted PID visibility.
 
-The supported non-publishing sequence is
-`make prepare-validation SCOPE=release`, maintainer review
-and commit, then `make release-verify`. The Make verification target forces Cargo
-offline itself; the underlying lane script and direct `make validate` do not.
-Preparation honors an explicit offline setting and cannot fill missing caches
-with it enabled. Cargo offline does not prohibit advisory-database network access.
-No full preparation or qualification was run in that earlier follow-up.
+Fresh hosted setup and native macOS remain unverified. Historical October 27
+`ActivationResetAdoptionConflict` remains unexplained; logs are
+`/tmp/canic-release-0112-attempt{4,5}.log`. Current passes do not disprove it.
+Preserve controllers, bounded spending, cycle conservation, release fences and
+same-operation recovery. Snapshot-owned Shared Tooling files remain unchanged.
 
-## Remaining boundaries and next action
-
-The correction batch is ready for commit review, **not yet release-qualified**.
-The newly authorized session will commit the reviewed batch before selecting
-`make release-verify` again; prerequisite preparation has passed and no manual
-environment exports are needed. Do not substitute direct
-`make validate` to evade the source fence. Only non-publishing qualification and justified in-scope recovery are authorized.
-Fresh hosted-runner setup remains unverified. Historical October 27
-`ActivationResetAdoptionConflict` failures in attempt four remain unexplained;
-selected passes do not disprove them. Preserve authority checks and diagnose recurrence.
-The prior snapshot-resume E25 failure in attempt five now has native and installed
-passing evidence. Historical logs remain `/tmp/canic-release-0112-attempt{4,5}.log`.
-
-Host-wide checks found no competing Canic build. The release lock is absent; only
-historical 0.110/0.111 recovery records were previously observed. Nothing was removed.
-`make release-minor` releases source; `make publish` publishes packages. CLI install,
-application build, Fleet deployment and live verification are separate. No live
-deployment is verified. Publication provenance hardening, broader script consolidation
-and deployment orchestration remain deferred. Preserve controllers, bounded spending,
-cycle conservation, release fences and same-operation interruption recovery.
-
-## Environment ownership follow-up evidence
-
-| Command/check | Tested state and result | Remaining uncertainty |
-| --- | --- | --- |
-| `make prepare-build-environment`; `make check-build-environment` | Current 0.19.0 pin, real Linux checksum installer and runtime admission passed | Not full prerequisite preparation |
-| `bash scripts/ci/test-build-environment.sh` | Current Make/preparation/lane owners: separate calls, defaults, explicit overrides, wrong-version and symlink refusal passed with substitute tools/gates | Simulated macOS, no hosted proof |
-| `bash scripts/ci/test-pinned-ci-tools.sh`; `bash scripts/ci/test-sccache-wrapper.sh` | Pin/argv/failure propagation and compiler fallback contract passed | No full workload performance claim |
-| Release lane, preflight and qualification-group focused shell fixtures | Preserved source fences, ordering, offline selection and shared gate membership passed | Full qualification remains unrun after the earlier dirty-tree refusal |
-| Development/release Make recipe fixtures; focused ShellCheck; CI actionlint | Current adapters and changed automation passed | Substituted installers/gates, not hosted execution |
-| Make-selected sccache 0.19.0, two real tiny Rust library builds | One compilation, one cache miss, one cache hit; byte-identical artifacts, no compiler/cache write failures; isolated server stopped | Linux compiler-cache compatibility only, not workspace qualification or a measured workspace speedup |
-
-Upstream 0.19.0 isolated server/start/stats/stop, Rust 1.99.1 version query,
-actual initial-connection failure and wrapper fallback evidence is retained in
-`/tmp/canic-sccache-019-review/`. These passes do not resolve fresh hosted setup
-or the historical activation conflict. No full qualification, release, publication
-or deployment ran during that earlier follow-up.
-
-The continuation's real compilation evidence is retained in
-`target/environment-review/` (selected environment, cache statistics, probe and
-server shutdown log). It exercised Make's default binary/wrapper/incremental
-selection with explicit temporary cache/runtime isolation, without touching shared
-Cargo outputs. No additional integration defect was found in this focused review.
-
-## Authorized qualification attempt and recovery
-
-The repair batch was committed as `ad66b647366b6e11f50ce537d74e64ecbd226256`
-on local branch `repair/release-qualification`. Its clean-tree
-`make release-verify` attempt stopped at Clippy after 108.756s: the generated-input
-regression exceeded the 100-line function limit (144 lines). No later qualification
-stage ran. Tool and dependency admission passed; Clippy's stage time was 61s.
-
-Extracting fixture setup, Make output discovery and generated-directory cleanup
-preserves all assertions. The final focused Host all-target/all-feature Clippy
-passes (33.70s); the exact generated-input regression passes (1 test, 6.62s after
-112s native compilation). Logs are in `target/session-qualification/`. The first
-helper extraction still exceeded the limit and failed narrowly before the final
-cleanup extraction; no complete retry occurred between those focused checks.
-The corrected source must be committed and qualified afresh. No push or release
-has occurred. Fresh hosted setup and the historical activation conflict remain
-unresolved.
-
-The second complete attempt, at `8e745713c`, stopped after 269.636s at the
-release-tools fixture: it inherited Make's versioned runtime while expecting its
-own temporary runtime. Formatting, shell lint, security and the other invariant
-gates passed. Both copied-wrapper fixtures now clear inherited runtime selection;
-the wrapper's cleanup assertion also refuses a missing directory instead of
-accepting empty output from a failed find. Both exact fixtures with inherited
-runtime selection, scoped ShellCheck, and the entire affected
-`CARGO_NET_OFFLINE=true make release-integrity-contract-gate` passed. That gate's
-publication checks use substitutes and had no registry effects. Evidence remains
-in `target/session-qualification/`; no complete retry was used to diagnose this fix.
-
-The third complete attempt at `d8a53b6a0` passed every pre-test stage and stopped
-after 665.245s on one ordinary Host fixture. It supplied Make's CARGO_TARGET_DIR
-as a command override as well as a spec-owned output; strict input admission
-correctly rejected the duplicate ownership. The fixture now filters that command
-override while retaining the spec output and every contamination/invalidation
-assertion. Its exact Make-environment regression passes (0.09s after 49.33s build),
-and Host all-target/all-feature Clippy passes (17.83s). Production admission is
-unchanged. Other ordinary/internal/local-Fleet/doc groups completed, but the failed
-ordinary barrier correctly prevented all serial PocketIC execution in that attempt.
-
-The fourth attempt at `c5e3cdf9875e74e5788630efcde1f8d5a31abea8` passed all
-pre-test gates and ordinary tests (Host: 1264 passed, 20 ignored), then exposed
-one shared generated Root lookup defect in four installed journeys: generated
-reinstall, completed estate reset, issued-creation funding pause, and two-Workload
-lost-response refill. Workspace discovery canonicalized the source alias while
-configuration hashing retained its lexical alias, selecting a nonexistent package.
-The attempt was deliberately stopped after 59m51s to correct this repeated defect;
-remaining cases are unrun, not passes. Its exit is 2; logs and the exact stopped
-process roster remain in `target/session-qualification/attempt-4*`. No source was
-changed until its workers stopped. The exact snapshot restore case passed in that
-attempt (2m38s), as did source-bound activation reset (6m36s); the historical
-ActivationResetAdoptionConflict cause remains unresolved.
-
-Root package lookup now resolves the configuration before deriving the same
-workspace-relative identity. Output overlap and package authority admission are
-unchanged. Focused evidence on this correction:
-
-| Command | Tested state / result | Remaining uncertainty |
-| --- | --- | --- |
-| Make-environment Host `canonical_root::tests::generated_root_lookup_preserves_configuration_identity_through_source_aliases` | 1 passed; alias identity, configuration isolation, existing selected manifest and missing config refusal; 47.91s compilation | Isolated native fixture |
-| Offline Host all-target/all-feature Clippy | Passed, 19.69s | Not workspace qualification |
-| `CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet` | 1 passed, 365.29s test; runner 433s including 54s native preflight | Other affected journeys await fresh complete qualification |
-
-The scoped correction and operational notes are ready for the authorized local
-commit and fresh `make release-verify`. Fresh hosted setup and native macOS remain
-unverified. This local preparation/qualification work does not publish or deploy.
-
-The fifth complete qualification at `f2f88e1c89c38629aaff0a299f9e32c373dea1b0`
-finished in 71m51.587s, exit 2. All four generated-source lookup failures passed,
-as did the exact snapshot restore (4m09s), source-bound activation reset (3m04s),
-and mixed-topology recovery (12m55s). Two later internal cases failed: maximum
-application initialization exhausted Wire installation admission (E81), and the
-Coordinator snapshot fixture unwrapped the expected pre-dispatch E25 transport
-rejection. All other executed groups passed, including Host and public runtime
-PocketIC suites. Nested test-runner wall time was 4046s; its internal PocketIC
-stage was 3226s, Host proofs 38s, runtime proofs 456s and payload-limit proofs 10s.
-These are nested breakdowns, not additional time to add to the complete run.
-
-The initialization native reproduction failed with `ic_wire::Error::Limit`.
-The maximum supported 16,384 application bytes plus real managed authority encode
-to 18,397 bytes. Four serialization-node charges per byte alone exhausted the old
-65,536-node allowance; visitor allocation also exceeded 1 MiB and 2 MiB. The
-installation owner now admits 131,072 nodes and 4 MiB visitor allocation, retaining
-the 64 KiB byte cap, depth 64, exact wire representation and the application byte
-limit. This repairs the existing maximum payload contract; it does not enlarge
-application input or paid-effect authority. Native allocation accounting is not a
-measurement of actual heap use. The first installed retry passed installation and
-commitment, then exposed the probe query's insufficient response allowance. The
-fixture and its expected caller contract now admit that same maximum response,
-with a native round-trip regression. Production fences and lifecycle logic are
-unchanged. Coordinator snapshot qualification directly checks CanisterError plus
-CanisterCalledTrap and an unchanged full registry after rejected activation.
-
-| Targeted check on final correction | Result | Remaining uncertainty |
-| --- | --- | --- |
-| Contracts managed initialization native round-trip | Passed with maximum application bytes and actual authority; original allowance reproduced Limit | Full run pending |
-| Lifecycle probe maximum response round-trip | Passed; actual framed native codec, exact result equality | Installed path separately checked below |
-| Contracts all-target/all-feature Clippy | Passed, 19.07s | Only affected package |
-| Internal-testing governed-feature Clippy | Passed, 49.23s initially; final caller correction 3.13s | Only affected package |
-| Lifecycle probe all-target/all-feature Clippy | Passed, 0.67s after correcting an unnecessary test unwrap | Only affected fixture |
-| Exact production initialization PocketIC case | 1 passed; 50s stage, 75s runner including 13s preflight | Fresh complete qualification still required |
-| Exact Coordinator joining-root replay PocketIC case | 1 passed; 11s stage, 24s runner including 1s preflight | Fresh complete qualification still required |
-
-Commands and full logs are retained in `target/session-qualification/`; the exact
-PocketIC selectors are `pic::fleet_registry::baseline::tests::application_initialization::production_initialization_recovers_exact_target_bytes`
-and `pic::fleet_coordinator::tests::coordinator_commits_joining_roots_and_replays_original_receipts`,
-each invoked through `CARGO_NET_OFFLINE=true make test-pocketic-case CASE=...`.
-The corrections are ready for the authorized local commit and fresh canonical
-`make release-verify`. Fresh hosted setup and historical activation-conflict
-causation remain unresolved. No version bump, push, publication or deployment occurred.
+`make release-minor` releases source; `make publish` publishes packages. CLI
+installation, application build, Fleet deployment and live verification are
+separate. No live deployment is verified. Publication provenance hardening,
+broader consolidation and deployment orchestration remain deferred.
