@@ -120,3 +120,13 @@ pub mod application_checkpoint_root {
         RootCheckpointPhase, RootCheckpointRecord,
     };
 }
+
+/// Internal persistent receiver component. Host workflow owns trusted enrollment,
+/// runtime caller/time acquisition and endpoint admission. No endpoint is installed.
+#[cfg(feature = "auth-local-application-authorization")]
+pub mod application_receiver {
+    pub use crate::ops::storage::auth::application_sessions::{
+        ApplicationSessionCleanupResult, ApplicationSessionStore, PersistentReceiverPolicy,
+        PersistentReceiverState,
+    };
+}

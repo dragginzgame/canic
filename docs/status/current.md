@@ -86,3 +86,19 @@ same-operation recovery. Snapshot-owned Shared Tooling files remain unchanged.
 installation, application build, Fleet deployment and live verification are
 separate. No live deployment is verified. Publication provenance hardening,
 broader consolidation and deployment orchestration remain deferred.
+
+## Isolated persistent receiver contribution — 2026-10-28
+
+The maintainer selected persistent receiver integration first under
+[Canic #491](https://github.com/dragginzgame/canic/issues/491). This isolated topic
+branch is based on released `5c236ab130c0d63892ef281b45bdc3fa353e012f`; the normal
+Canic checkout and its pending work are preserved. Auth/protocol types are locked
+to published 0.19.4. No package version or release operation is selected.
+
+The internal receiver component retains the complete restored logout ledger,
+separate budgets and clock fencing. All 40 focused session-storage tests, normal
+native/Wasm receiver graphs and package/test Clippy pass. These are native storage
+and compile proofs; no installed upgrade, protected Root enrollment or production
+endpoint is qualified. The production facade remains closed. See the
+[component contract](../features/authentication/README.md#persistent-receiver-component).
+The owning issue retains enrollment, endpoint/lifecycle and installed acceptance.

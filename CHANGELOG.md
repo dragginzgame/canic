@@ -6,6 +6,17 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.112.1]
+
+### 🔧 Changed
+
+- Add an internal persistent Auth receiver component that restores the complete
+  logout ledger and retains independent work budgets and a protected clock.
+  Fence stale runtime owners after restore or external maintenance; keep the
+  production authorization facade closed pending authenticated enrollment.
+
+See [detailed notes](docs/changelog/0.112.md#01121).
+
 ## [0.112.0] - 2026-10-28
 
 ### 📝 Summary

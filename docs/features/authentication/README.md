@@ -26,8 +26,9 @@ application token never becomes controller or Fleet authority.
 
 Portable application authentication uses Fleet Root-managed enrollment and
 IC Auth's session engine. Its endpoint integration is unfinished; application
-session admission is unavailable. Bounded storage and restoration fixtures are
-implementation evidence, not a live login service. Track completion in
+session admission is unavailable. The internal persistent receiver component and
+its native storage proofs are implementation evidence, not a live login service.
+Track completion in
 [#491](https://github.com/dragginzgame/canic/issues/491).
 
 Application account identity is the pair (issuer, subject). The
@@ -40,6 +41,32 @@ or merge accounts that share a subject.
 Custom guards implement synchronous `canic::access::AccessCheck`. Admission uses
 local state and supplied proofs; issuance and renewal may perform asynchronous
 calls outside admission.
+
+## Persistent receiver component
+
+With `auth-local-application-authorization`, the internal
+`shared_support::application_receiver` surface provides one host-retained
+`PersistentReceiverState`. Restore it synchronously after the stable generation,
+then retain that owner across callers and proof mechanisms. Protected host policy
+supplies Fleet identity, deployment-qualified clock skew and separate proof and
+unknown-logout budget rates. No production skew/rate selection or configuration
+stanza is supplied here.
+
+The owner reconstructs the entire physical logout ledger, including expired
+reservations and denials, from canonical records, occupancy and the checkpoint's
+clock. Its serialized `run` boundary retains clock advancement and work charges
+on returned errors. Admission and authorization contexts still require freshly
+validated, receiver-bound enrollment; records cannot install trust. Logout uses
+the authenticated runtime caller and restored state even after enrollment expires.
+Use owner-mediated `cleanup_sessions` and `prune_logins` for bounded maintenance.
+External maintenance, another restoration, clock rollback or failed pruning
+fences the old owner; restore before using it again.
+
+This is an internal host component, not a production endpoint or supported
+application-level authorization escape hatch. The current public facade remains
+closed. Root enrollment distribution, lifecycle/endpoint wiring and real installed
+upgrade acceptance remain with [#491](https://github.com/dragginzgame/canic/issues/491).
+Persistent receiver records do not imply persistent issuer keys or TEE custody.
 
 ## Boundary
 
