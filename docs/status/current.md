@@ -1,5 +1,14 @@
 # Current handoff — 2026-10-28
 
+## Isolated provider metrics contribution
+
+The [provider metrics handoff](provider-metrics-storage.md) records #707's
+heap-default/per-provider stable implementation and focused evidence, prepared
+from released default main 0.112.0 without touching the owner's pending checkout.
+Its 0.113.0 notes are a contribution to the selected batch, not a package bump or
+release instruction. The older release-attempt account below predates publication
+of this contribution's 0.112.0 base; retain it as historical evidence.
+
 ## Accepted work and authority
 
 The maintainer explicitly requests releasing Canic 0.112.0 and publishing its

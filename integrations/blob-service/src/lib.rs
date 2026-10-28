@@ -14,6 +14,7 @@ mod ops;
 mod schema;
 #[doc(hidden)]
 pub mod transport;
+mod workflow;
 
 pub mod funding;
 pub mod lifecycle;
@@ -32,6 +33,9 @@ pub use ic_blob_storage_contracts::dto;
 /// Dependencies used by the canister composition macro.
 #[doc(hidden)]
 pub mod __private {
+    pub mod operation_metrics {
+        pub use crate::workflow::{admission, reference};
+    }
     pub use crate::ops::{Workflow, memory};
     #[cfg(all(feature = "wire-schema", not(target_arch = "wasm32")))]
     pub use crate::schema::methods as wire_methods;

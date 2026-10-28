@@ -191,7 +191,7 @@ impl ComponentSpecConfig {
             auth: self.auth.clone(),
             standards: self.standards.clone(),
             diagnostics: self.diagnostics,
-            metrics: self.metrics,
+            metrics: self.metrics.clone(),
         }
     }
 }
@@ -312,7 +312,7 @@ impl ComponentChildConfig {
             auth: self.auth.clone(),
             standards: self.standards.clone(),
             diagnostics: self.diagnostics,
-            metrics: self.metrics,
+            metrics: self.metrics.clone(),
         }
     }
 }
@@ -593,11 +593,27 @@ impl Default for CyclesFundingPolicyConfig {
 /// Owned by config schema and consumed by metrics setup.
 ///
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MetricsCanisterConfig {
     #[serde(default)]
     pub profile: Option<MetricsProfile>,
+    /// Default retention for this canister's declared historical metric providers.
+    #[serde(default)]
+    pub storage: super::MetricStorage,
+    /// Installation-selected component overrides; unrelated roles have their own policy.
+    #[serde(default)]
+    pub providers: std::collections::BTreeMap<String, super::MetricProviderStorage>,
+}
+
+impl MetricsCanisterConfig {
+    #[must_use]
+    pub fn storage_policy(&self) -> super::MetricStorageConfig {
+        super::MetricStorageConfig {
+            storage: self.storage,
+            providers: self.providers.clone(),
+        }
+    }
 }
 
 ///

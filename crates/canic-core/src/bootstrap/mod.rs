@@ -44,6 +44,7 @@ pub mod compiled {
         implicit_root_canister_config, implicit_wasm_store_canister_config, validate_app_name,
         validate_canister_role_name,
     };
+    pub use crate::config::schema::{MetricProviderStorage, MetricStorage, MetricStorageConfig};
     pub use crate::{
         config::ComponentChildFundingPolicy, config::ComponentChildSpec,
         config::ComponentDeploymentConfiguration,

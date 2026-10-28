@@ -217,6 +217,7 @@ fn render_component_limits(limits: &ComponentLimits) -> TokenStream {
 }
 
 fn render_runtime_canister_config(config: &RuntimeCanisterConfig) -> TokenStream {
+    let metrics = render_metric_storage_config(&config.metrics);
     let kind = render_canister_kind(config.kind);
     let topup = render_option(config.topup.as_ref(), render_topup);
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
@@ -227,6 +228,7 @@ fn render_runtime_canister_config(config: &RuntimeCanisterConfig) -> TokenStream
     let standards = render_standards_canister_config(&config.standards);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::RuntimeCanisterConfig {
+            metrics: #metrics,
             kind: #kind,
             topup: #topup,
             cycles_funding: #cycles_funding,
@@ -1153,7 +1155,7 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
     let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
-    let metrics = render_metrics_canister_config(config.metrics);
+    let metrics = render_metrics_canister_config(&config.metrics);
     let provisions = render_btree_map(
         config.provisions.iter(),
         render_component_spec_id,
@@ -1236,7 +1238,7 @@ fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
     let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
-    let metrics = render_metrics_canister_config(config.metrics);
+    let metrics = render_metrics_canister_config(&config.metrics);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentChildConfig {
@@ -1308,16 +1310,20 @@ fn render_diagnostics_canister_config(config: DiagnosticsCanisterConfig) -> Toke
 }
 
 // Render per-canister metrics profile configuration.
-fn render_metrics_canister_config(config: MetricsCanisterConfig) -> TokenStream {
+fn render_metrics_canister_config(config: &MetricsCanisterConfig) -> TokenStream {
     let profile = render_option(config.profile.as_ref(), |profile| {
         render_metrics_profile(*profile)
     });
+    let policy = render_metric_storage_config(&config.storage_policy());
 
-    quote! {
+    quote! {{
+        let policy = #policy;
         ::canic::__internal::core::bootstrap::compiled::MetricsCanisterConfig {
             profile: #profile,
+            storage: policy.storage,
+            providers: policy.providers,
         }
-    }
+    }}
 }
 
 // Render a metrics profile enum.
@@ -1577,6 +1583,30 @@ fn render_index_pool(pool: &IndexPool) -> TokenStream {
 }
 
 // -----------------------------------------------------------------------------
+fn render_metric_storage_config(
+    config: &crate::config::schema::MetricStorageConfig,
+) -> TokenStream {
+    fn mode(value: crate::config::schema::MetricStorage) -> TokenStream {
+        use crate::config::schema::MetricStorage;
+        match value {
+            MetricStorage::Heap => {
+                quote! { ::canic::__internal::core::bootstrap::compiled::MetricStorage::Heap }
+            }
+            MetricStorage::Stable => {
+                quote! { ::canic::__internal::core::bootstrap::compiled::MetricStorage::Stable }
+            }
+        }
+    }
+    let storage = mode(config.storage);
+    let providers = config.providers.iter().map(|(name, provider)| {
+        let selected = mode(provider.storage);
+        quote! { (#name.to_string(), ::canic::__internal::core::bootstrap::compiled::MetricProviderStorage { storage: #selected }) }
+    });
+    quote! { ::canic::__internal::core::bootstrap::compiled::MetricStorageConfig {
+        storage: #storage, providers: ::std::collections::BTreeMap::from([#(#providers),*]),
+    } }
+}
+
 // Tests
 // -----------------------------------------------------------------------------
 

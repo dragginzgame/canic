@@ -13,6 +13,7 @@ pub mod init_payload;
 pub mod install_source;
 pub mod log;
 pub mod memory;
+pub mod metric_providers;
 pub mod metrics;
 pub mod public_metrics;
 pub mod ready;
