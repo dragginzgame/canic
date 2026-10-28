@@ -102,3 +102,21 @@ and compile proofs; no installed upgrade, protected Root enrollment or productio
 endpoint is qualified. The production facade remains closed. See the
 [component contract](../features/authentication/README.md#persistent-receiver-component).
 The owning issue retains enrollment, endpoint/lifecycle and installed acceptance.
+
+## Parent PR CI qualification repairs
+
+PR #701's first hosted run passed preflight, security, MSRV and main checks but
+exposed three qualification gaps. The Auth lock change made the embedded peer
+stale. The base also contains a macOS CLI fixture using an unavailable rustix
+symbol and an ordinary CI job which never prepares the release metadata editor
+that its release fixtures admit offline. The setup failure was a missing prepared
+store, not permission to weaken ownership checks.
+
+The CLI fixture now uses native POSIX mkfifo with mode 0600. The ordinary job
+explicitly prepares and checks the existing pinned editor. The existing refresh
+example regenerated the peer and structured evidence; its normal verifier and
+corruption/source-change regression pass. The Linux FIFO case, all 17 release-flow
+cases, CLI package/test Clippy, workflow lint and formatting pass. Native macOS
+and a complete hosted rerun remain pending; no full local suite was run.
+Evidence: the Auth workspace's `target/canic-integration-20261028/parent-ci-*.log`.
+Owning acceptance remains with Canic #491/#515/#551/#563.
