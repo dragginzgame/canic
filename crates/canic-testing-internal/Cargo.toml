@@ -40,8 +40,10 @@ serde_json = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]
+canic-backup.workspace = true
 canic-blob-service = { workspace = true }
 canic-cli = { workspace = true }
+ic-backup.workspace = true
 ic-blob-storage-contracts = { workspace = true, features = ["wire-schema"] }
 ic-query = { workspace = true }
 proc-macro2 = { workspace = true }

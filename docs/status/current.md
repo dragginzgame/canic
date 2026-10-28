@@ -1,88 +1,73 @@
 # Current handoff — 2026-10-28
 
-## Accepted work and authority
+## Scope and source
 
-The maintainer explicitly requests releasing Canic 0.112.0 and publishing its
-package family. This includes the canonical source release and its required
-qualification, version preparation, commit/tag and atomic main/tag push, followed
-by `make publish`. It does not select an application or authorize a live Fleet
-operation. PocketIC performance work is deferred until after publication.
+This contribution binds one complete Root checkpoint preparation unit to published
+IC Backup 0.48's original workflow, stage and attempt records. It progresses
+[#513](https://github.com/dragginzgame/canic/issues/513),
+[#550](https://github.com/dragginzgame/canic/issues/550) and
+[Backup #29](https://github.com/dragginzgame/ic-backup/issues/29).
 
-The reviewed repair batch and focused qualification corrections are committed.
-Local `main` was fast-forwarded from `f768a5519edb35512912dd73fce45936155edc6e`
-to `ec817f2e20f5002a88def1a522f7ffe3ac046ee9`; the latter remains available on
-`repair/release-qualification`. Versions still read 0.111.0; 0.112.0 notes are open.
-The accepted Blob/Wire hard cut remains governed by the
-[closeout plan](../audits/working/0.112-push-readiness/plan.md) and
-[migration contract](../design/0.112-standalone-blob-service-extraction/wire-hard-cut.md).
+The isolated checkout is `/tmp/canic-backup-adoption.lzm8Ut`, topic branch
+`feat/original-backup-checkpoint`, based on released Canic 0.112.0,
+`5c236ab130c0d63892ef281b45bdc3fa353e012f`. The normal sibling checkout and its
+unrelated work are untouched. Standing cross-repository authority covers this
+scoped commit, topic push and PR; review, merge, own version changes, release and
+publication remain separate. Own versions stay 0.112.0; compatible notes are open
+under [0.112.1](../../CHANGELOG.md#01121).
 
-## Current release attempt
+The preceding released-source [handoff](https://github.com/dragginzgame/canic/blob/5c236ab130c0d63892ef281b45bdc3fa353e012f/docs/status/current.md)
+retains earlier release evidence. Its pending-release wording is historical.
 
-The first authorized `make release-minor` stopped before version mutation after
-4m43.920s. The release-integrity gate's synthetic build-environment fixture
-inherited the enclosing release's `RELEASE_SOURCE`, then compared that real SHA
-with its substituted Git identity. No 0.112 release plan was saved, tag created,
-push performed or package published. The release lock was released normally.
-Logs: `target/session-release-0112/attempt.TWDfr4/release.log` and `release.exit`.
+## Implemented boundary
 
-The build-environment, validation-lane and preflight fixtures now clear inherited
-`RELEASE_SOURCE` before selecting synthetic identities. Production source fences
-and explicit mismatch regressions remain unchanged. Both directly affected lane
-fixtures pass under the actual source SHA; the full release-integrity gate passes
-with the outer release variables. Scoped ShellCheck passes with repository
-options and the referenced tool catalog. Evidence:
-`target/session-release-0112/attempt.TWDfr4/fixture-recovery-final.log`.
-The narrow correction and changelog updates require a local commit, then a fresh
-canonical minor release. Do not use resume: this failed gate saved no attempt.
+`checkpoint` retains strict bounded complete unit intent, exact Wire BEGIN/ADVANCE
+requests and fixed original allowances. It implements Backup's stage driver and
+uses its new/retained coordinators without another journal or ready-operation
+loop. Admission, original command custody and reply qualification are required
+provider methods. Missing, changed, pending or returned-but-unqualified originals
+never grant replacement spending. Returned reply bytes survive settlement errors.
+Existing v1 checkpoint identity bytes now have one runtime-free contract owner.
 
-## Qualification and implementation evidence
+Installed Root/two-participant qualification discards an actual advance reply,
+refuses unsettled continuation, reserves one original observation, retains exact
+STATUS evidence and resumes only the absent stage. Complete host replay makes no
+provider calls. Separate fixture-owned management authority captures and loads
+the same participant IDs with preserved funding policy, verifies frozen views,
+then qualifies Root release and its effect-free replay. The fixture has an
+explicit qualification network identity and exclusive backend custody; it does
+not qualify live trust-anchor enrollment or a default production provider.
 
-Complete non-publishing `make release-verify` passed on clean `ec817f2e2` in
-90m48.263s. Detailed evidence is retained in
-`target/session-qualification/final-report.md`, `attempt-6.log`,
-`attempt-6-selection.txt` and `attempt-6.exit`. Earlier failed attempts and their
-focused recoveries remain alongside them. The previous detailed handoff is
-preserved in Git at `ec817f2e2:docs/status/current.md`.
+## Evidence and remaining work
 
-That complete pass includes the exact restored-Root inventory/allocation case
-(2m36s), maximum application initialization (1m16s), Coordinator replay (1.85s),
-mixed-topology recovery (11m46s) and source-bound activation reset (4m52s).
-Internal PocketIC took 65m10s and public runtime PocketIC 9m14s, inside the total.
-These passes do not explain historical activation-conflict causation.
+Five owning native cases pass, including wrong original replies with retained
+bytes, changed unit/context refusal and lost ingress spending preservation.
+Strict affected Backup/internal-test Clippy passes. Both governed exact installed
+cases pass: `pic::application_checkpoint::root::original::qualify_original_host_workflow`
+and `pic::application_checkpoint::root::qualify_root_dispatch`; their registered
+inventory preflight also passes. Dependency inheritance and external IC boundaries
+pass. Another 22 focused contract/model/authority cases pass. Strict owner-library
+Clippy passes for Contracts, Core and Control Plane. Final format, documentation
+semantics and 141 local-link checks pass; the semantics check retains its three
+existing advisory layout warnings. The bounded contribution is ready for PR review.
 
-Implemented owners: shared preparation/qualification groups, governed build
-selection, selected generated-source admission, exact package/source boundaries,
-and existing release recovery. Generated source lives in configuration-keyed
-`target/canic-packages`; Cargo output defaults to `target/cargo`. Physical output
-and source overlaps, including symlink aliases, reject. Root lookup canonicalizes
-configuration aliases. Snapshot rejection tests retain typed transport rejection
-and unchanged-state assertions. Initialization admits the existing maximum input
-within bounded codec accounting without increasing application bytes or authority.
+Logs: `/tmp/canic-checkpoint-native-final.log`,
+`/tmp/canic-checkpoint-clippy-final3.log`,
+`/tmp/canic-checkpoint-installed-3.log` and
+`/tmp/canic-checkpoint-root-dispatch.log`,
+`/tmp/canic-checkpoint-contract-tests.log` and
+`/tmp/canic-checkpoint-owner-clippy.log`. Original host evidence survives under
+`target/original-root-checkpoint--711663-2/`; the earlier failed release-helper
+assertion retains `target/original-root-checkpoint--517972-2/`. Keep both original
+journal sets and all raw request/reply files. The first two installed failures,
+including the corrected no-NNS fixture setup, remain in their separate logs and
+failed scratch directories. No full local suite or new native host matrix ran.
 
-The supported non-publishing sequence is `make prepare-validation SCOPE=release`,
-review/commit, then `make release-verify`. No manual exports are required.
-Make selects Rust/Cargo 1.99.1, pinned sccache 0.19.0, the existing wrapper,
-version-isolated runtime and incremental=0; supported explicit overrides remain
-validated. Qualification forces offline Cargo. Release preflight prepares all
-three locked graphs and exact tools. No source-only receipt bypass exists.
-Shared Tooling latest-stable maintenance: [#319](https://github.com/dragginzgame/shared-tooling/issues/319).
-
-## Boundaries and next action
-
-Commit the focused fixture correction and run `make release-minor`; only after
-success run `make publish`. Observe exact remote refs and registry versions.
-Stop on failed gates or uncertain external outcomes and retain all artifacts.
-Once version preparation creates a saved plan, use exact-version
-`make release-resume VERSION=0.112.0` after inspecting its state and remote refs.
-Never remove an occupied lock based only on restricted PID visibility.
-
-Fresh hosted setup and native macOS remain unverified. Historical October 27
-`ActivationResetAdoptionConflict` remains unexplained; logs are
-`/tmp/canic-release-0112-attempt{4,5}.log`. Current passes do not disprove it.
-Preserve controllers, bounded spending, cycle conservation, release fences and
-same-operation recovery. Snapshot-owned Shared Tooling files remain unchanged.
-
-`make release-minor` releases source; `make publish` publishes packages. CLI
-installation, application build, Fleet deployment and live verification are
-separate. No live deployment is verified. Publication provenance hardening,
-broader consolidation and deployment orchestration remain deferred.
+The bounded preparation slice is implemented. Full #513/#550/#29 remain open:
+production Root-paid snapshot intent/reconciliation, complete artifact transfer,
+restore/start, external obligations, post-load application acceptance and existing
+terminal/source-reference provider composition are still required. Continue at
+those existing owners; do not treat host Applied receipts or fixture management
+calls as paid-effect authority. Live CLI creation retains `LiveCreateUnavailable`.
+No merge, version bump, release, publication, live operation or artifact cleanup
+was performed by this contribution.

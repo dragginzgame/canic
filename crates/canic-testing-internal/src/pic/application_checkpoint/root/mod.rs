@@ -1,6 +1,8 @@
 //! Installed Root dispatch over two application-owned checkpoint participants.
 //! Exercises original unit custody and interruption; it grants no snapshot authority.
 
+mod original;
+
 use super::{
     Phase, Principal, caller_authority_status, checkpoint_protocol as protocol, increment, view,
 };
@@ -14,6 +16,8 @@ use canic::{
 use ic_platform::pocket_ic::PocketIc;
 use ic_testkit::pic::CanisterInstallExt;
 use serde::Serialize;
+
+pub(in crate::pic) use original::qualify_original_host_workflow;
 
 #[test]
 pub(in crate::pic) fn qualify_root_dispatch() {
@@ -261,8 +265,9 @@ fn qualify_release(
             .collect::<Vec<_>>(),
         before
     );
-    assert_eq!(increment(pic, members[0]), Ok(1));
-    assert_eq!(increment(pic, members[1]), Ok(2));
+    for (member, previous) in members.iter().zip(before) {
+        assert_eq!(increment(pic, *member), Ok(previous.counter + 1));
+    }
 }
 
 fn status(pic: &PocketIc, root: Principal) -> Option<RootCheckpointStatus> {

@@ -61,6 +61,24 @@ remain tracked by [#550](https://github.com/dragginzgame/canic/issues/550) and
 [#394](https://github.com/dragginzgame/canic/issues/394). See the
 [availability boundary](../../docs/features/backup-and-restore/README.md#current-availability).
 
+`checkpoint::FrozenCheckpoint` binds one complete Root preparation unit to IC
+Backup 0.48's original workflow and finite stage/attempt authority. Publish its
+create-only intent under the original `BackupLayoutGuard`, then pass a
+`CheckpointDriver` to Backup's new/retained workflow coordinators. Retain that
+intent, every original journal and exact authenticated request/reply bytes across
+interruption. Pending stages require qualified reconciliation under their original
+observation allowance before retained continuation; rebuilding intent grants no
+fresh attempt.
+
+The required `CheckpointProvider` qualifies actual network/caller/release, Root
+installation, current complete membership and controller/command custody. It
+submits exactly one retained ingress and independently qualifies the original
+reply. Additional observations need their own prior original accounting. This
+adapter accounts only for host BEGIN/ADVANCE ingress. It does not grant or settle
+Root-paid snapshot calls, restore/start effects or terminal release. There is no
+default live provider. The installed fixture's exclusive simulator custody and
+direct snapshot/load authority are qualification inputs, not production authority.
+
 `DeploymentBackupManifest::validate()` enforces the hard manifest contract.
 Restore-readiness checks stay focused on executable v1 restore requirements:
 artifact integrity, safe verification, uploaded snapshot receipts, and journaled
