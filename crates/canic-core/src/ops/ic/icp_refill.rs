@@ -10,8 +10,7 @@ use crate::{
         IcInfraError,
         icp_refill::{
             IcpRefillCanisterOverrides, IcpRefillCanisters, IcpRefillInfra,
-            IcpXdrConversionRateResponse, NotifyTopUpArg, NotifyTopUpError, TransferArg,
-            TransferError,
+            IcpXdrConversionRateResponse, NotifyError, NotifyTopUpArg, TransferArg, TransferError,
         },
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
@@ -98,7 +97,7 @@ impl IcpRefillOps {
         _permit: &CostGuardPermit,
         cmc_id: Principal,
         args: NotifyTopUpArg,
-    ) -> Result<Result<Nat, NotifyTopUpError>, InternalError> {
+    ) -> Result<Result<Nat, NotifyError>, InternalError> {
         map_infra(IcpRefillInfra::notify_top_up(cmc_id, args).await)
     }
 

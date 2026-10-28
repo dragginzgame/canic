@@ -14,10 +14,10 @@ use crate::{
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_fs::read::read_file_no_follow;
 use ic_platform::{
-    candid::contract::{CandidType, Nat},
+    candid::contract::CandidType,
+    certified_assets_types::{GetArgs, GetChunkArgs, GetChunkResult, GetResult},
     principal::ExternalPrincipal as Principal,
 };
-use serde::Deserialize;
 use std::time::{Duration, Instant};
 
 ///
@@ -178,39 +178,11 @@ impl IcpFrontendAssetReader {
     }
 }
 
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct GetAsset {
-    key: String,
-    accept_encodings: Vec<String>,
-}
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct AssetReply {
-    content: Vec<u8>,
-    total_length: Nat,
-    content_encoding: String,
-    sha256: Option<Vec<u8>>,
-}
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct GetChunk {
-    key: String,
-    content_encoding: String,
-    index: Nat,
-    sha256: Option<Vec<u8>>,
-}
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct ChunkReply {
-    content: Vec<u8>,
-}
-
 impl FrontendAssetReader for IcpFrontendAssetReader {
     fn first(&mut self, key: &str) -> Result<FrontendAssetChunkView, FrontendError> {
-        let reply: AssetReply = self.query(
+        let reply: GetResult = self.query(
             "get",
-            &GetAsset {
+            &GetArgs {
                 key: key.into(),
                 accept_encodings: vec!["identity".into()],
             },
@@ -227,9 +199,9 @@ impl FrontendAssetReader for IcpFrontendAssetReader {
         })
     }
     fn next(&mut self, key: &str, digest: &[u8], index: u64) -> Result<Vec<u8>, FrontendError> {
-        let reply: ChunkReply = self.query(
+        let reply: GetChunkResult = self.query(
             "get_chunk",
-            &GetChunk {
+            &GetChunkArgs {
                 key: key.into(),
                 content_encoding: "identity".into(),
                 index: index.into(),

@@ -17,10 +17,11 @@ use canic_contracts::{
     protocol::inspection_history as wire,
 };
 use ic_platform::{
-    candid::contract::CandidType, management_canister_types::CodeDeploymentMode,
+    management_canister_types::{
+        CanisterInfoResult, ChangeDetails, ChangeOrigin, CodeDeploymentMode, CodeDeploymentRecord,
+    },
     principal::ExternalPrincipal as Principal,
 };
-use serde::Deserialize;
 use std::path::Path;
 
 /// Recovery decision backed by replicated history, including non-deployment version changes.
@@ -30,39 +31,6 @@ pub(super) enum HistoryEffect {
     Applied,
     NotApplied,
     Conflict,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct History {
-    module_hash: Option<Vec<u8>>,
-    controllers: Vec<Principal>,
-    recent_changes: Vec<Change>,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct Change {
-    canister_version: u64,
-    origin: Option<Origin>,
-    details: Option<Details>,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum Origin {
-    #[serde(rename = "from_user")]
-    FromUser { user_id: Principal },
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum Details {
-    #[serde(rename = "code_deployment")]
-    CodeDeployment {
-        mode: CodeDeploymentMode,
-        module_hash: Vec<u8>,
-    },
 }
 
 pub(super) fn observe(
@@ -105,8 +73,9 @@ pub(super) fn observe(
         if response.canister_id != ic_platform::Principal::from(principal) {
             return Err(CurrentProtocolError::ResponseMismatch);
         }
-        let history: History = ic_platform::candid::decoder::decode_one(&response.history_candid)
-            .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
+        let history: CanisterInfoResult =
+            ic_platform::candid::decoder::decode_one(&response.history_candid)
+                .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
         Ok(classify_history(&history, operator, before, live))
     })
 }
@@ -136,7 +105,7 @@ pub(super) fn reconcile(
 }
 
 fn classify_history(
-    history: &History,
+    history: &CanisterInfoResult,
     operator: Principal,
     before: u64,
     live: &LiveCanister,
@@ -176,7 +145,7 @@ fn classify_history(
 }
 
 fn matches_history(
-    history: &History,
+    history: &CanisterInfoResult,
     operator: Principal,
     expected_hash: &str,
     before: u64,
@@ -185,15 +154,14 @@ fn matches_history(
     let Some(change) = history.recent_changes.last() else {
         return false;
     };
-    let Some(Details::CodeDeployment {
+    let Some(ChangeDetails::CodeDeployment(CodeDeploymentRecord {
         mode: CodeDeploymentMode::Reinstall,
         module_hash,
-    }) = &change.details
+    })) = &change.details
     else {
         return false;
     };
-    let actor_matches =
-        matches!(&change.origin, Some(Origin::FromUser { user_id }) if *user_id == operator);
+    let actor_matches = matches!(&change.origin, ChangeOrigin::FromUser(ic_platform::management_canister_types::FromUserRecord { user_id }) if *user_id == operator);
     let version_matches = live.canister_version.is_some_and(|current| {
         change.canister_version > before && change.canister_version <= current
     });
@@ -214,15 +182,18 @@ fn matches_history(
 mod tests {
     use super::*;
     use crate::fleet_ensure::model::CanisterRuntimeStatus;
+    use ic_platform::management_canister_types::{Change, FromUserRecord};
 
     #[test]
     fn management_history_wire_labels_decode_into_the_exact_reinstall_proof() {
         let hash_blob = r"\11".repeat(32);
         let wire = format!(
             r#"(record {{
+            total_num_changes = 1 : nat64;
             module_hash = opt blob "{hash_blob}";
             controllers = vec {{ principal "2vxsx-fae" }};
             recent_changes = vec {{ record {{
+                timestamp_nanos = 1 : nat64;
                 canister_version = 11 : nat64;
                 origin = variant {{ from_user = record {{ user_id = principal "2vxsx-fae" }} }};
                 details = opt variant {{ code_deployment = record {{
@@ -248,9 +219,9 @@ mod tests {
                 };
             };
             service : { history : () -> (record {
-                module_hash : opt blob; controllers : vec principal;
+                total_num_changes : nat64; module_hash : opt blob; controllers : vec principal;
                 recent_changes : vec record {
-                    canister_version : nat64; origin : Origin; details : opt Details;
+                    timestamp_nanos : nat64; canister_version : nat64; origin : Origin; details : opt Details;
                 };
             }) query }
         ",
@@ -268,24 +239,28 @@ mod tests {
                 .unwrap()
         };
         let bytes = encode(&wire);
-        let history: History = ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+        let history: CanisterInfoResult = ic_platform::candid::decoder::decode_one(&bytes).unwrap();
         assert!(matches!(
             history.recent_changes[0].origin,
-            Some(Origin::FromUser { .. })
+            ChangeOrigin::FromUser(_)
         ));
         assert!(matches!(
             history.recent_changes[0].details,
-            Some(Details::CodeDeployment {
+            Some(ChangeDetails::CodeDeployment(CodeDeploymentRecord {
                 mode: CodeDeploymentMode::Reinstall,
                 ..
-            })
+            }))
         ));
         assert_eq!(history.module_hash, Some(vec![0x11; 32]));
         let foreign = wire
             .replace("from_user", "from_canister")
             .replace("user_id", "canister_id");
-        let foreign: History = ic_platform::candid::decoder::decode_one(&encode(&foreign)).unwrap();
-        assert!(foreign.recent_changes[0].origin.is_none());
+        let foreign: CanisterInfoResult =
+            ic_platform::candid::decoder::decode_one(&encode(&foreign)).unwrap();
+        assert!(matches!(
+            foreign.recent_changes[0].origin,
+            ChangeOrigin::FromCanister(_)
+        ));
     }
 
     #[test]
@@ -350,12 +325,14 @@ mod tests {
             root_owned_lifecycle: None,
             status: CanisterRuntimeStatus::Running,
         };
-        let mut history = History {
+        let mut history = CanisterInfoResult {
+            total_num_changes: 1,
             module_hash: Some(vec![0x11; 32]),
             controllers: vec![operator],
             recent_changes: vec![Change {
+                timestamp_nanos: 1,
                 canister_version: 11,
-                origin: Some(Origin::FromUser { user_id: operator }),
+                origin: ChangeOrigin::FromUser(FromUserRecord { user_id: operator }),
                 details: None,
             }],
         };
@@ -366,10 +343,11 @@ mod tests {
             10,
             &live
         ));
-        history.recent_changes[0].details = Some(Details::CodeDeployment {
-            mode: CodeDeploymentMode::Reinstall,
-            module_hash: vec![0x11; 32],
-        });
+        history.recent_changes[0].details =
+            Some(ChangeDetails::CodeDeployment(CodeDeploymentRecord {
+                mode: CodeDeploymentMode::Reinstall,
+                module_hash: vec![0x11; 32],
+            }));
         assert!(matches_history(
             &history,
             operator,
@@ -417,10 +395,11 @@ mod tests {
             classify_history(&history, Principal::management_canister(), 10, &live),
             HistoryEffect::Conflict
         );
-        history.recent_changes[0].details = Some(Details::CodeDeployment {
-            mode: CodeDeploymentMode::Upgrade,
-            module_hash: vec![0x11; 32],
-        });
+        history.recent_changes[0].details =
+            Some(ChangeDetails::CodeDeployment(CodeDeploymentRecord {
+                mode: CodeDeploymentMode::Upgrade,
+                module_hash: vec![0x11; 32],
+            }));
         assert!(!matches_history(
             &history,
             operator,

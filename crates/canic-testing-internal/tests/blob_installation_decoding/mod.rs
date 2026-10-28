@@ -4,7 +4,7 @@
 use canic_blob_service::__private::ic_blob_storage_contracts::wire;
 use canic_blob_service::dto::configuration::{
     ServiceBillingInput, ServiceConfigurationInput, ServiceFundingInput, ServiceInstallationInput,
-    ServiceReadInput, ServiceResourceInput,
+    ServiceResourceInput,
 };
 use canic_contracts::protocol::initialization::encode;
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -67,13 +67,6 @@ fn installation() -> ServiceInstallationInput {
                 renewal_ceiling: 10_000,
                 reserve: 100,
                 max_attempts: 4,
-            },
-            reads: ServiceReadInput {
-                sessions: 2,
-                tenant_sessions: 1,
-                reply_bytes: 2048,
-                bytes: 4096,
-                tenant_bytes: 2048,
             },
         },
         project: "decoder-test".into(),

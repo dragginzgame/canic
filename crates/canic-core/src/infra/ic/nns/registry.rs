@@ -10,35 +10,8 @@ use crate::{
     log,
     log::Topic,
 };
-use ic_platform::candid::contract::CandidType;
-use serde::Deserialize;
+use ic_platform::nns_registry_types::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse};
 use thiserror::Error as ThisError;
-
-///
-/// GetSubnetForCanisterRequest
-///
-/// NNS registry request for canister subnet lookup.
-/// Owned by NNS registry infra and sent to the registry canister.
-///
-
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct GetSubnetForCanisterRequest {
-    pub principal: Principal,
-}
-
-///
-/// GetSubnetForCanisterPayload
-///
-/// Successful NNS registry subnet lookup payload.
-/// Owned by NNS registry infra and decoded from registry responses.
-///
-
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct GetSubnetForCanisterPayload {
-    pub subnet_id: Option<Principal>,
-}
 
 ///
 /// NnsRegistryInfraError
@@ -68,7 +41,9 @@ impl NnsRegistryInfra {
     pub fn subnet_lookup_call_cost(pid: Principal) -> Result<u128, IcInfraError> {
         Ok(
             Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-                .with_arg(GetSubnetForCanisterRequest { principal: pid })?
+                .with_arg(GetSubnetForCanisterRequest {
+                    principal: Some(pid),
+                })?
                 .cost(),
         )
     }
@@ -81,13 +56,15 @@ impl NnsRegistryInfra {
     pub async fn get_subnet_for_canister(
         pid: Principal,
     ) -> Result<Option<Principal>, IcInfraError> {
-        let request = GetSubnetForCanisterRequest { principal: pid };
+        let request = GetSubnetForCanisterRequest {
+            principal: Some(pid),
+        };
 
         let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
             .with_arg(request)?
             .execute()
             .await?
-            .candid::<Result<GetSubnetForCanisterPayload, String>>()?;
+            .candid::<GetSubnetForCanisterResponse>()?;
 
         match result {
             Ok(payload) => Ok(payload.subnet_id),

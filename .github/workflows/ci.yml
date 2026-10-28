@@ -352,6 +352,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
+          make install-release-metadata-editor
       - name: Install ordinary test Wasm prerequisites
         shell: bash
         run: |
@@ -361,6 +362,7 @@ jobs:
       - name: Check ordinary test helper tools
         shell: bash
         run: |
+          make release-metadata-editor-check
           cargo set-version --version
           rg --version
           rg --pcre2-version

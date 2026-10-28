@@ -4,17 +4,14 @@
 //! Does not own: deployment workflow, placement policy, or artifact validation.
 //! Boundary: extends `MgmtInfra` with lifecycle management effects.
 
-use super::{
-    MgmtInfra,
-    types::{
-        InfraCanisterIdRecordExtended, InfraCanisterInstallMode, InfraInstallChunkedCodeArgs,
-        InfraUploadChunkArgs,
-    },
-};
+use super::MgmtInfra;
 use crate::infra::ic::{IcInfraError, call::Call};
 use ic_platform::cdk::api;
 use ic_platform::{
-    management_canister_types::{CanisterIdRecord, ChunkHash},
+    management_canister_types::{
+        CanisterIdRecord, CanisterInstallMode, ChunkHash, InstallChunkedCodeArgs,
+        UninstallCodeArgs, UploadChunkArgs,
+    },
     principal::ExternalPrincipal as Principal,
 };
 
@@ -24,7 +21,7 @@ impl MgmtInfra {
         canister_pid: Principal,
         chunk: Vec<u8>,
     ) -> Result<Vec<u8>, IcInfraError> {
-        let args = InfraUploadChunkArgs {
+        let args = UploadChunkArgs {
             canister_id: canister_pid,
             chunk,
         };
@@ -74,8 +71,8 @@ impl MgmtInfra {
         wasm_module_hash: Vec<u8>,
         arg: Vec<u8>,
     ) -> Result<(), IcInfraError> {
-        let install_args = InfraInstallChunkedCodeArgs {
-            mode: InfraCanisterInstallMode::Install,
+        let install_args = InstallChunkedCodeArgs {
+            mode: CanisterInstallMode::Install,
             target_canister,
             store_canister: Some(store_canister),
             chunk_hashes_list: chunk_hashes_list
@@ -99,7 +96,7 @@ impl MgmtInfra {
     pub fn uninstall_code_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
         Ok(
             Call::unbounded_wait(Principal::management_canister(), "uninstall_code")
-                .with_arg(InfraCanisterIdRecordExtended {
+                .with_arg(UninstallCodeArgs {
                     canister_id: canister_pid,
                     sender_canister_version: Some(api::canister_version()),
                 })?
@@ -109,7 +106,7 @@ impl MgmtInfra {
 
     /// Uninstall code from a canister.
     pub async fn uninstall_code(canister_pid: Principal) -> Result<(), IcInfraError> {
-        let args = InfraCanisterIdRecordExtended {
+        let args = UninstallCodeArgs {
             canister_id: canister_pid,
             sender_canister_version: Some(api::canister_version()),
         };

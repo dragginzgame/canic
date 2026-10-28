@@ -6,6 +6,57 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.113.0]
+
+### 🩹 Fixed
+
+- Prepare the exact release metadata editor in ordinary CI and create manifest
+  FIFO fixtures portably on Linux and macOS. Refresh the embedded allocation peer
+  with its source-bound provenance for the current dependency graph.
+
+### 🔧 Changed
+
+- Remove Canic’s ten ICRC-21 consent DTO mirrors and use published Platform
+  identities directly in the dispatcher, generated endpoint and consumer tests.
+  Remove `canic::dto::icrc21`; consumers import
+  `ic_platform::icrc_ledger_types::icrc21`. Required external Candid encoding
+  and consent dispatch behavior remain unchanged.
+
+- Standardize adapter endpoint composition on `mount!`; rename IcyDB’s
+  `endpoints!` without a compatibility alias. Add an unpublished `canic-auth`
+  scaffold with compile-time mounting refusal and explicit integration obligations.
+  The IcyDB public macro rename requires the selected minor release boundary.
+
+- Move the Blob adapter to `crates/canic-blob-service`, alongside `canic-icydb`.
+  Keep independent consumer fixtures under `integrations/blob-service` and update
+  their package paths; standardize adapter placement in AGENTS.md.
+
+- Share normal and verbose cycle-table formatting while preserving their existing output.
+
+- Adopt IC Call 0.7.3 for prepared inter-canister requests and cost queries,
+  retaining Canic's protocol helpers, metrics and caller-owned recovery policy.
+
+- Add the `canic-icydb` adapter to the publication family, with Wire endpoints,
+  paired lifecycle hooks and shared committed memory for managed composition.
+
+- Adopt Auth 0.19.5, Backup 0.48.2, Blob 0.53.0, Timers 0.31.16, Wire 0.7.20, Query 0.75.5,
+  IC Tooling 0.69.7 and Shared Tooling 0.27.3 across the owning catalogs and
+  lockfiles, with Memory/Storage 0.53.0. Follow Blob’s reinstall-only hard cut and remove retired read fields.
+
+- **Breaking:** rename endpoint attributes to `query`/`update` and
+  `raw_query`/`raw_update`. Typed owned endpoints require explicit IC Wire
+  contracts; external Candid protocols use `candid_query`/`candid_update`.
+  This API hard cut is grouped into the 0.113.0 minor release.
+
+- Use IC Platform's external management/history, NNS, ledger/archive, CMC
+  and asset-read contracts instead of parallel payload types in Canic.
+- Extend timer ownership checks to integration consumers and document the
+  completed timer and Blob engine extraction boundaries.
+- Preserve verified Wasm artifact reuse across release-delivery context and launcher-helper changes
+  without skipping qualification or weakening build-input admission. Compile and
+  admit each serial test selection in one Cargo pass before PocketIC starts.
+  [Detailed notes](docs/changelog/0.113.md).
+
 ## [0.112.0] - 2026-10-28
 
 ### 📝 Summary

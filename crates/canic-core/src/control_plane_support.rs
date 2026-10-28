@@ -162,11 +162,7 @@ pub mod ops {
 
         pub mod cycles_ledger {
             pub use crate::{
-                infra::ic::cycles_ledger::{
-                    CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess,
-                    TransferError,
-                },
-                ops::ic::cycles_ledger::CyclesLedgerOps,
+                infra::ic::cycles_ledger::TransferError, ops::ic::cycles_ledger::CyclesLedgerOps,
             };
         }
 

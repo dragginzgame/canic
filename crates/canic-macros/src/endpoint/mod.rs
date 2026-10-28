@@ -1,7 +1,7 @@
 //! Canic proc macros.
 //!
-//! Thin, opinionated wrappers around IC CDK endpoint attributes
-//! (`#[query]`, `#[update]`), routed through hidden Canic macro plumbing.
+//! Wire endpoints and explicit external-protocol adapters, routed through
+//! hidden Canic macro plumbing.
 //!
 //! The macro pipeline is strictly staged and deterministic:
 //!
@@ -20,7 +20,7 @@ mod validate;
 pub(crate) use parse::WireArgs;
 
 use proc_macro::TokenStream;
-use syn::{ItemFn, Signature, parse_macro_input};
+use syn::{ItemFn, Signature};
 
 ///
 /// EndpointKind
@@ -82,32 +82,46 @@ pub(super) fn expand_entry(
     attr: TokenStream,
     item: TokenStream,
 ) -> TokenStream {
-    let func = parse_macro_input!(item as ItemFn);
-    let sig = func.sig.clone();
+    typed_entry(kind, true, attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
 
-    // ---------------------------------------------------------------------
-    // Parse phase (syntax only)
-    // ---------------------------------------------------------------------
+/// Explicit adapter for required external Candid protocols.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "the parent proc-macro entrypoints consume this private-module function"
+)]
+pub(super) fn expand_candid_entry(
+    kind: EndpointKind,
+    attr: TokenStream,
+    item: TokenStream,
+) -> TokenStream {
+    typed_entry(kind, false, attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
 
-    let parsed = match parse::parse_args(attr.into()) {
-        Ok(v) => v,
-        Err(e) => return e.to_compile_error().into(),
-    };
-
-    // ---------------------------------------------------------------------
-    // Validate phase (structural invariants only)
-    // ---------------------------------------------------------------------
-
-    let validated = match validate::validate(kind, parsed, &sig) {
-        Ok(v) => v,
-        Err(e) => return e.to_compile_error().into(),
-    };
-
-    // ---------------------------------------------------------------------
-    // Expansion phase (code generation)
-    // ---------------------------------------------------------------------
-
-    expand::expand(kind, validated, func).into()
+fn typed_entry(
+    kind: EndpointKind,
+    wire: bool,
+    attr: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let func: ItemFn = syn::parse2(item)?;
+    let parsed = parse::parse_args(attr)?;
+    if wire != parsed.wire.is_some() {
+        return Err(syn::Error::new_spanned(
+            &func.sig,
+            if wire {
+                "query/update require wire(id = ID, request = LIMITS, response = LIMITS)"
+            } else {
+                "candid_query/candid_update are external Candid adapters and cannot declare wire(...)"
+            },
+        ));
+    }
+    let validated = validate::validate(kind, parsed, &func.sig)?;
+    Ok(expand::expand(kind, validated, func))
 }
 
 /// Protocol-neutral entrypoint; the consumer owns bounded IO/replies.
@@ -125,7 +139,11 @@ pub(super) fn expand_raw_entry(
         .into()
 }
 
-fn raw_entry(
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by the component entrypoint adapter"
+)]
+pub(super) fn raw_entry(
     kind: EndpointKind,
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
@@ -340,5 +358,57 @@ mod raw_wire_tests {
             )
             .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod typed_tests {
+    use super::*;
+    use quote::quote;
+
+    #[test]
+    fn owned_endpoints_require_wire_and_emit_bounded_supplier_codecs() {
+        for kind in [EndpointKind::Query, EndpointKind::Update] {
+            let handler = quote!(
+                fn echo(value: u64) -> u64 {
+                    value
+                }
+            );
+            let contract = quote!(
+                public,
+                on_access_denied = "reject",
+                wire(id = owner::ID, request = REQUEST, response = RESPONSE)
+            );
+            let expanded = typed_entry(kind, true, contract.clone(), handler.clone()).unwrap();
+            syn::parse2::<syn::File>(expanded.clone()).unwrap();
+            let text = expanded.to_string();
+            for required in [
+                "ic_wire :: native :: decode_request",
+                "ic_wire :: native :: encode_response",
+                "owner :: ID",
+                "REQUEST",
+                "RESPONSE",
+                "__canic_register_wire_schema",
+            ] {
+                assert!(text.contains(required), "missing {required}");
+            }
+            assert!(!text.contains("candid"));
+            for missing in [
+                quote!(public, on_access_denied = "reject"),
+                quote!(public, on_access_denied = "reject", decode = LIMITS),
+            ] {
+                assert!(typed_entry(kind, true, missing, handler.clone()).is_err());
+            }
+            assert!(typed_entry(kind, false, contract, handler.clone()).is_err());
+            let external = typed_entry(
+                kind,
+                false,
+                quote!(public, on_access_denied = "reject", decode = LIMITS),
+                handler,
+            )
+            .unwrap();
+            syn::parse2::<syn::File>(external.clone()).unwrap();
+            assert!(external.to_string().contains("candid"));
+        }
     }
 }

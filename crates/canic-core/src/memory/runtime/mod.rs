@@ -5,7 +5,7 @@
 //! Boundary: macros and lifecycle call this before stable-memory-backed statics are used.
 
 use ic_memory::{DefaultMemoryImpl, MemoryRuntime, RuntimeDiagnosticError};
-use std::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 
 #[cfg(any(test, debug_assertions))]
 use std::sync::Mutex;
@@ -14,7 +14,24 @@ use std::sync::Mutex;
 static TEST_BOOTSTRAP_HOOK: Mutex<Option<fn()>> = Mutex::new(None);
 
 thread_local! {
-    pub(super) static RUNTIME: RefCell<Option<MemoryRuntime<DefaultMemoryImpl>>> = const { RefCell::new(None) };
+    pub(super) static RUNTIME: RefCell<Option<Rc<MemoryRuntime<DefaultMemoryImpl>>>> = const { RefCell::new(None) };
+}
+
+/// Share the exact committed host runtime with a synchronous component participant.
+///
+/// Refuses before bootstrap; never constructs, bootstraps or replaces a runtime.
+/// Components verify their declarations against this instance and open its grants.
+pub fn shared_runtime() -> Result<Rc<MemoryRuntime<DefaultMemoryImpl>>, RuntimeDiagnosticError> {
+    RUNTIME.with(|cell| {
+        let owner = cell
+            .try_borrow()
+            .map_err(|_| RuntimeDiagnosticError::ReentrantAccess)?;
+        let runtime = owner
+            .as_ref()
+            .filter(|runtime| runtime.is_bootstrapped())
+            .ok_or(RuntimeDiagnosticError::NotBootstrapped)?;
+        Ok(Rc::clone(runtime))
+    })
 }
 
 /// Inspect the Canic-owned runtime without constructing memory on a read path.
@@ -39,7 +56,9 @@ pub fn is_memory_bootstrap_ready() -> Result<bool, RuntimeDiagnosticError> {
         let runtime = cell
             .try_borrow()
             .map_err(|_| RuntimeDiagnosticError::ReentrantAccess)?;
-        Ok(runtime.as_ref().is_some_and(MemoryRuntime::is_bootstrapped))
+        Ok(runtime
+            .as_ref()
+            .is_some_and(|runtime| runtime.is_bootstrapped()))
     })
 }
 
@@ -113,5 +132,56 @@ fn run_test_bootstrap_hook() {
         .expect("test bootstrap hook poisoned");
     if let Some(hook) = hook {
         hook();
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn framework() -> crate::memory::MemoryBootstrap {
+        crate::memory::MemoryBootstrap {
+            requests: crate::memory::requests().unwrap(),
+            pool: crate::memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap(),
+            admission: None,
+        }
+    }
+
+    #[test]
+    fn sharing_requires_committed_memory_and_preserves_exact_bootstrap_authority() {
+        assert!(matches!(
+            shared_runtime(),
+            Err(RuntimeDiagnosticError::NotBootstrapped)
+        ));
+        crate::memory::bootstrap(framework()).unwrap();
+        let shared = shared_runtime().unwrap();
+        assert!(Rc::ptr_eq(&shared, &shared_runtime().unwrap()));
+        crate::memory::bootstrap(framework()).unwrap();
+        assert!(Rc::ptr_eq(&shared, &shared_runtime().unwrap()));
+
+        let mut changed = framework();
+        changed.requests.pop().unwrap();
+        assert!(matches!(
+            crate::memory::bootstrap(changed),
+            Err(crate::memory::MemoryBootstrapError::Bootstrap(
+                ic_memory::RuntimeBootstrapError::DeclarationSnapshotMismatch
+            ))
+        ));
+        assert!(Rc::ptr_eq(&shared, &shared_runtime().unwrap()));
+    }
+
+    #[test]
+    fn sharing_refuses_reentrant_runtime_access() {
+        RUNTIME.with(|cell| {
+            let _borrow = cell.borrow_mut();
+            assert!(matches!(
+                shared_runtime(),
+                Err(RuntimeDiagnosticError::ReentrantAccess)
+            ));
+        });
     }
 }

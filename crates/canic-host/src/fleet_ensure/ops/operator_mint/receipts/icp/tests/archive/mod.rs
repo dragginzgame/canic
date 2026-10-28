@@ -4,31 +4,35 @@ use super::{Fixture, limits};
 use crate::fleet_ensure::ops::operator_mint::receipts::{
     CertificateVerificationError,
     icp::{
-        ArchiveReadError, IcpArchiveAuthorization, IcpReadError as Error, IcpReadOutcome,
-        IcpTransferRead, prepare_archive_read, verify_read,
-        wire::{ArchivedRange, EncodedBlocksReply, ReadArgs},
+        IcpArchiveAuthorization, IcpReadError as Error, IcpReadOutcome, IcpTransferRead,
+        QueryArchiveError, prepare_archive_read, verify_read,
     },
     test_support::{cbor, der_key, sign, signing_key},
 };
 use ic_platform::{
     agent::signed_update_inspect,
     certification::{Certificate, Delegation, fork, labeled, leaf},
-    icrc_ledger_types::QueryArchiveFn,
+    icp_ledger_types::{
+        ArchivedEncodedBlocksRange, GetBlocksArgs, QueryEncodedBlocksFn, QueryEncodedBlocksResponse,
+    },
     principal::ExternalPrincipal as Principal,
 };
 use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};
 
-fn callback() -> ArchivedRange {
-    ArchivedRange {
-        callback: QueryArchiveFn::new(Principal::from_slice(&[6, 1]), "get_encoded_blocks"),
+fn callback() -> ArchivedEncodedBlocksRange {
+    ArchivedEncodedBlocksRange {
+        callback: QueryEncodedBlocksFn::new(
+            Principal::from_slice(&[6, 1]),
+            "get_encoded_blocks".into(),
+        ),
         start: 77,
         length: 1,
     }
 }
 
-fn redirect(fixture: &Fixture) -> EncodedBlocksReply {
-    EncodedBlocksReply {
+fn redirect(fixture: &Fixture) -> QueryEncodedBlocksResponse {
+    QueryEncodedBlocksResponse {
         // The Ledger explicitly leaves this field unspecified without local blocks.
         first_block_index: 90,
         blocks: vec![],
@@ -53,7 +57,7 @@ fn authorization(fixture: &Fixture) -> IcpArchiveAuthorization {
 fn evidence(
     fixture: &Fixture,
     read: &IcpTransferRead,
-    reply: Result<Vec<ByteBuf>, ArchiveReadError>,
+    reply: Result<Vec<ByteBuf>, QueryArchiveError>,
 ) -> Vec<u8> {
     fixture.certificate(
         read.request_id(),
@@ -66,13 +70,13 @@ fn evidence(
 fn certified_redirect_and_archive_reply_authenticate_the_original_transfer() {
     let fixture = Fixture::new();
     let archive = authorization(&fixture);
-    assert_eq!(archive.canister(), callback().callback.canister_id);
+    assert_eq!(archive.canister(), callback().callback.0.principal);
     let read = prepare_archive_read(&fixture.agent, &archive).unwrap();
     signed_update_inspect(
         fixture.intent.authority.operator,
         archive.canister(),
         "get_encoded_blocks",
-        &ic_platform::candid::contract::encode_one(ReadArgs {
+        &ic_platform::candid::contract::encode_one(GetBlocksArgs {
             start: 77,
             length: 1,
         })
@@ -106,12 +110,12 @@ fn redirect_must_name_exactly_one_supported_archive_block() {
             0 => archive.start += 1,
             1 => archive.length = 0,
             2 => archive.length = u64::MAX,
-            3 => archive.callback.method = "transfer".into(),
-            4 => archive.callback.canister_id = Principal::anonymous(),
-            5 => archive.callback.canister_id = Principal::management_canister(),
-            6 => archive.callback.canister_id = fixture.intent.authority.icp_ledger,
+            3 => archive.callback.0.method = "transfer".into(),
+            4 => archive.callback.0.principal = Principal::anonymous(),
+            5 => archive.callback.0.principal = Principal::management_canister(),
+            6 => archive.callback.0.principal = fixture.intent.authority.icp_ledger,
             7 => reply.archived_blocks.push(callback()),
-            _ => reply.blocks.push(fixture.block.clone().into()),
+            _ => reply.blocks.push(fixture.block.clone()),
         }
         assert!(matches!(
             verify_read(
@@ -206,14 +210,14 @@ fn archive_errors_and_missing_or_extra_blocks_cannot_prove_payment() {
     let cert = evidence(
         &fixture,
         &read,
-        Err(ArchiveReadError::BadFirstBlockIndex {
+        Err(QueryArchiveError::BadFirstBlockIndex {
             requested_index: 77,
             first_valid_index: 80,
         }),
     );
     assert!(matches!(
         verify_read(&fixture.agent, &read, &cert, limits()),
-        Err(Error::Archive(ArchiveReadError::BadFirstBlockIndex {
+        Err(Error::Archive(QueryArchiveError::BadFirstBlockIndex {
             requested_index: 77,
             first_valid_index: 80
         }))
@@ -221,14 +225,14 @@ fn archive_errors_and_missing_or_extra_blocks_cannot_prove_payment() {
     let cert = evidence(
         &fixture,
         &read,
-        Err(ArchiveReadError::Other {
+        Err(QueryArchiveError::Other {
             error_code: 42,
             error_message: "unavailable".into(),
         }),
     );
     assert!(matches!(
         verify_read(&fixture.agent, &read, &cert, limits()),
-        Err(Error::Archive(ArchiveReadError::Other {
+        Err(Error::Archive(QueryArchiveError::Other {
             error_code: 42,
             ..
         }))

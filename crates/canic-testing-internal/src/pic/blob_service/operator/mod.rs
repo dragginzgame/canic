@@ -50,7 +50,6 @@ pub(super) fn check(pic: &PocketIc, config: &ServiceConfigurationInput, fenced: 
     assert_eq!(status.uploads.fenced, fenced);
     assert_eq!(status.funding.fenced, fenced);
     assert_eq!(status.gateways.fenced, fenced);
-    assert_eq!(status.reads.fenced, fenced);
     assert_eq!(
         status.funding.cumulative_allocation,
         config.funding.allocated

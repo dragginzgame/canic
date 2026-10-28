@@ -250,7 +250,7 @@ async fn canic_upgrade() {}
 
 canic::start!();
 
-#[canic::canic_query(public, wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
+#[canic::query(public, wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 fn packaged_probe(subject: Principal) -> Result<Principal, Error> {
     Ok(subject)
 }

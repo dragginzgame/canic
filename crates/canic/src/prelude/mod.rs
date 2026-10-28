@@ -11,4 +11,4 @@ pub use crate::api::{
     ops::{log, perf},
 };
 
-pub use canic_macros::{canic_query, canic_update};
+pub use canic_macros::{query, update};

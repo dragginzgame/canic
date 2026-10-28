@@ -2,13 +2,14 @@
 
 use super::{
     OperatorMintWireError, account_identifier, decode_notification_reply, decode_transfer_reply,
-    notification_argument, prepare_intent, transfer_argument, wire,
+    notification_argument, prepare_intent, transfer_argument,
 };
 use crate::fleet_ensure::model::operator_mint::{
     OperatorMintAuthority, OperatorMintIntentRecord,
     OperatorMintNotificationOutcomeRecord as Notify, OperatorMintTransferOutcomeRecord as Transfer,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{cmc_types, icp_ledger_types};
 
 // ICP Ledger transfer and CMC notification contracts reviewed for RF2; the
 // literal contracts are independent of the Rust derives under test.
@@ -61,10 +62,12 @@ fn assert_wire_type<T: ic_platform::candid::contract::CandidType>(name: &str) {
 
 #[test]
 fn operator_mint_wire_types_match_reviewed_upstream_contracts() {
-    assert_wire_type::<wire::TransferArgs>("Transfer");
-    assert_wire_type::<Result<u64, wire::TransferError>>("TransferReply");
-    assert_wire_type::<wire::NotifyMintArgs>("Notification");
-    assert_wire_type::<Result<wire::NotifyMintOk, wire::NotifyMintError>>("NotificationReply");
+    assert_wire_type::<icp_ledger_types::TransferArgs>("Transfer");
+    assert_wire_type::<Result<u64, icp_ledger_types::TransferError>>("TransferReply");
+    assert_wire_type::<cmc_types::NotifyMintCyclesArg>("Notification");
+    assert_wire_type::<Result<cmc_types::NotifyMintCyclesSuccess, cmc_types::NotifyError>>(
+        "NotificationReply",
+    );
 }
 
 fn authority() -> OperatorMintAuthority {
@@ -98,7 +101,7 @@ fn account_bytes(hex: &str) -> [u8; 32] {
 #[test]
 fn operator_mint_transfer_matches_upstream_account_vector_and_exact_intent() {
     let intent = intent();
-    let args: wire::TransferArgs =
+    let args: icp_ledger_types::TransferArgs =
         ic_platform::candid::decoder::decode_one(&transfer_argument(&intent).unwrap()).unwrap();
     // ic-ledger-types 0.16.0's principal_to_subaccount vector, independently published.
     assert_eq!(
@@ -113,7 +116,7 @@ fn operator_mint_transfer_matches_upstream_account_vector_and_exact_intent() {
         args.created_at_time.unwrap().timestamp_nanos,
         intent.created_at_time_ns
     );
-    let args: wire::NotifyMintArgs =
+    let args: cmc_types::NotifyMintCyclesArg =
         ic_platform::candid::decoder::decode_one(&notification_argument(&intent, 42).unwrap())
             .unwrap();
     assert_eq!(args.block_index, 42);

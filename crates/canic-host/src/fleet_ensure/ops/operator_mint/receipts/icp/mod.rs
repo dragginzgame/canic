@@ -5,17 +5,12 @@
 
 #[cfg(test)]
 mod tests;
-mod wire;
 
 use crate::fleet_ensure::{
     model::operator_mint::OperatorMintIntentRecord,
     ops::operator_mint::{
         MINT_MEMO, OperatorMintWireError, account_identifier, principal_subaccount,
-        receipts::{
-            CertificateVerificationError,
-            icp::wire::{EncodedBlocksReply, ReadArgs},
-            network_identity_sha256,
-        },
+        receipts::{CertificateVerificationError, network_identity_sha256},
         validate_intent,
     },
 };
@@ -23,13 +18,13 @@ use ic_host_tools::icp_ledger::{IcpBlockError, IcpTransferFields, decode_transfe
 use ic_platform::{
     agent::{Agent, AgentError, RequestId, SignedUpdate},
     certification::LookupResult,
+    icp_ledger_types::{GetBlocksArgs, QueryEncodedBlocksResponse},
     principal::ExternalPrincipal as Principal,
 };
-use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 
-pub use wire::ArchiveReadError;
+pub use ic_platform::icp_ledger_types::QueryArchiveError;
 
 /// Receipt-reader budgets; transport capture must obey the same byte boundary.
 #[derive(Clone, Copy, Debug)]
@@ -65,8 +60,8 @@ pub enum IcpReadError {
     InvalidReply,
     #[error("ICP archive callback differs from the exact supported block read")]
     InvalidArchive,
-    #[error(transparent)]
-    Archive(#[from] ArchiveReadError),
+    #[error("ICP archive rejected the receipt read: {0:?}")]
+    Archive(QueryArchiveError),
     #[error("ICP receipt does not contain exactly the requested block")]
     BlockMismatch,
     #[error("ICP block has an unsupported or noncanonical protobuf schema")]
@@ -206,7 +201,7 @@ fn sign_read(
     source: ReadSource,
 ) -> Result<IcpTransferRead, IcpReadError> {
     verify_reader(agent, intent)?;
-    let argument = ic_platform::candid::contract::encode_one(ReadArgs {
+    let argument = ic_platform::candid::contract::encode_one(GetBlocksArgs {
         start: block_index,
         length: 1,
     })
@@ -274,10 +269,10 @@ pub fn verify_read(
     match read.source {
         ReadSource::Ledger => verify_ledger_reply(read, reply, &config, limits.reply_bytes),
         ReadSource::Archive => {
-            let blocks: Result<Vec<ByteBuf>, ArchiveReadError> =
+            let blocks: ic_platform::icp_ledger_types::QueryEncodedBlocksResult =
                 ic_platform::candid::decoder::decode_one_with_config(reply, &config)
                     .map_err(|_| IcpReadError::InvalidReply)?;
-            let blocks = blocks?;
+            let blocks = blocks.map_err(IcpReadError::Archive)?;
             if blocks.len() != 1 {
                 return Err(IcpReadError::BlockMismatch);
             }
@@ -292,7 +287,7 @@ fn verify_ledger_reply(
     config: &ic_platform::candid::decoder::DecoderConfig,
     maximum_bytes: usize,
 ) -> Result<IcpReadOutcome, IcpReadError> {
-    let reply: EncodedBlocksReply =
+    let reply: QueryEncodedBlocksResponse =
         ic_platform::candid::decoder::decode_one_with_config(bytes, config)
             .map_err(|_| IcpReadError::InvalidReply)?;
     if reply.chain_length <= read.block_index {
@@ -303,11 +298,11 @@ fn verify_ledger_reply(
             return Err(IcpReadError::InvalidArchive);
         };
         let exact_range = archive.start == read.block_index && archive.length == 1;
-        let canister = archive.callback.canister_id;
+        let canister = archive.callback.0.principal;
         let valid_canister = canister != Principal::anonymous()
             && canister != Principal::management_canister()
             && canister != read.intent.authority.icp_ledger;
-        let exact_callback = valid_canister && archive.callback.method == "get_encoded_blocks";
+        let exact_callback = valid_canister && archive.callback.0.method == "get_encoded_blocks";
         if !reply.blocks.is_empty() || !exact_range || !exact_callback {
             return Err(IcpReadError::InvalidArchive);
         }

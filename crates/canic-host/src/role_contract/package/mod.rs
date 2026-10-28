@@ -1467,9 +1467,6 @@ fn shortest_protected_path(
     let mut visited = BTreeSet::new();
 
     while let Some((edge, path)) = queue.pop_front() {
-        if !visited.insert(edge.package_id.clone()) {
-            continue;
-        }
         // A composition library may use the exact public facade selected by the
         // role. Its internals remain behind that boundary; alternate edges to
         // protected packages are still traversed and rejected. Resolved feature
@@ -1478,6 +1475,13 @@ fn shortest_protected_path(
             continue;
         }
         let package = graph.packages.get(&edge.package_id)?;
+        // Allowed paths must not mask another incoming protected edge.
+        if is_selected_adapter_macro(graph, &path, selected_facade) {
+            continue;
+        }
+        if !visited.insert(edge.package_id.clone()) {
+            continue;
+        }
         if let Some(protected) = protected_canic_package(&package.name) {
             return Some(DependencyPathEvidence {
                 edges: path,
@@ -1504,6 +1508,40 @@ fn shortest_protected_path(
     }
 
     None
+}
+
+// The published adapter shares the facade's exact procedural macro package.
+// This exception grants no alternate runtime path or independent macro version.
+fn is_selected_adapter_macro(
+    graph: &CargoGraphEvidence,
+    path: &[CargoGraphEdge],
+    selected_facade: &str,
+) -> bool {
+    let Some([parent, target]) = path.last_chunk::<2>() else {
+        return false;
+    };
+    let Some(adapter) = graph.packages.get(&parent.package_id) else {
+        return false;
+    };
+    let Some(macros) = graph.packages.get(&target.package_id) else {
+        return false;
+    };
+    let Some(facade) = graph.packages.get(selected_facade) else {
+        return false;
+    };
+    if adapter.name != "canic-icydb" || macros.name != "canic-macros" {
+        return false;
+    }
+    let same_release = adapter.version == facade.version && adapter.source == facade.source;
+    let same_local_family = adapter.source.is_some()
+        || adapter.manifest_path.parent().and_then(Path::parent)
+            == facade.manifest_path.parent().and_then(Path::parent);
+    let selected_macros = graph.edges.get(selected_facade).is_some_and(|edges| {
+        edges
+            .iter()
+            .any(|edge| edge.package_id == target.package_id)
+    });
+    same_release && same_local_family && macros.is_proc_macro && selected_macros
 }
 
 fn graph_edge_sort_key(

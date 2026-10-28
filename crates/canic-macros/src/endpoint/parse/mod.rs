@@ -20,7 +20,7 @@ const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must use requires(...), pu
 //
 // Allowed access DSL:
 //
-//   #[canic_update(requires(...))]
+//   #[update(requires(...))]
 //
 // `requires(...)` is the only gated access-control surface.
 // Intentionally open endpoints must opt into `public`.

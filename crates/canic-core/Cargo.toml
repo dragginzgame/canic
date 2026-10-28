@@ -46,9 +46,10 @@ canic-contracts.workspace = true
 ctor = { workspace = true }
 ic-auth = { workspace = true }
 ic-auth-protocol-types = { workspace = true }
+ic-call = { workspace = true }
 ic-memory = { workspace = true }
 ic-metrics.workspace = true
-ic-platform = { workspace = true, features = ["cdk", "candid", "management-canister-types", "icrc-ledger-types"] }
+ic-platform = { workspace = true, features = ["cdk", "cmc-types", "nns-registry-types", "cycles-ledger-types", "candid", "management-canister-types", "icrc-ledger-types"] }
 ic-storage.workspace = true
 ic-timers = { workspace = true }
 ic-wire.workspace = true

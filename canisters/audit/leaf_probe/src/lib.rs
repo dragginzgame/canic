@@ -38,30 +38,30 @@ const FRONTEND_PROBE_LIMITS: ic_wire::Limits = ic_wire::Limits {
 };
 
 /// Prove browser-owned authenticated ingress through the current Fleet admission policy.
-#[canic_query(requires(caller::is_fleet_admitted()),
+#[query(requires(caller::is_fleet_admitted()),
     wire(id = crate::FRONTEND_PROBE_ID, request = crate::FRONTEND_PROBE_LIMITS, response = crate::FRONTEND_PROBE_LIMITS))]
 async fn audit_frontend_admission_probe() -> Result<ic_platform::Principal, Error> {
     Ok(ic_platform::cdk::api::msg_caller())
 }
 
 /// Prove authenticated update transport under the same Fleet admission policy.
-#[canic_update(requires(caller::is_fleet_admitted()),
+#[update(requires(caller::is_fleet_admitted()),
     wire(id = crate::FRONTEND_UPDATE_PROBE_ID, request = crate::FRONTEND_PROBE_LIMITS, response = crate::FRONTEND_PROBE_LIMITS))]
 async fn audit_frontend_update_probe() -> Result<ic_platform::Principal, Error> {
     Ok(ic_platform::cdk::api::msg_caller())
 }
 
-#[canic_query(requires(env::build_local_only()), wire(id = protocol::TIME, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(requires(env::build_local_only()), wire(id = protocol::TIME, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_time_probe() -> Result<QueryPerfSample<u64>, Error> {
     Ok(MetricsQuery::sample_query(time()))
 }
 
-#[canic_query(requires(env::build_local_only()), wire(id = protocol::ENV, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(requires(env::build_local_only()), wire(id = protocol::ENV, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_env_probe() -> Result<QueryPerfSample<protocol::Environment>, Error> {
     Ok(MetricsQuery::sample_query(EnvQuery::snapshot().into()))
 }
 
-#[canic_query(requires(env::build_local_only()), wire(id = protocol::LOG, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(requires(env::build_local_only()), wire(id = protocol::LOG, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_log_probe(
     request: protocol::LogRequest,
 ) -> Result<QueryPerfSample<Page<LogEntry>>, Error> {
@@ -157,7 +157,7 @@ generic_cohort_page!(generic_cohort_page_3, GenericCohortSlot3);
 generic_cohort_page!(generic_cohort_page_4, GenericCohortSlot4);
 generic_cohort_page!(generic_cohort_page_5, GenericCohortSlot5);
 
-#[canic_query(public, wire(id = protocol::COHORT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(public, wire(id = protocol::COHORT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn audit_page_generic_cohort(
     request: protocol::CohortRequest,
 ) -> Result<GenericPageCohortResponse, Error> {
@@ -176,7 +176,7 @@ fn cohort_response(request: protocol::CohortRequest) -> GenericPageCohortRespons
 }
 
 /// Spend fixture cycles before reviewing a later release's recovery funding.
-#[canic_update(requires(env::build_local_only(), caller::is_controller()), wire(id = protocol::BALANCE, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(env::build_local_only(), caller::is_controller()), wire(id = protocol::BALANCE, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn audit_recovery_balance(retain: u128) -> Result<u128, Error> {
     let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
     Ok(ic_platform::cdk::api::cycles_burn(excess))

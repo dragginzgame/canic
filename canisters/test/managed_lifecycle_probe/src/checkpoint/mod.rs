@@ -80,7 +80,7 @@ fn selected(transition: Transition) -> Record {
     }
 }
 
-#[canic_update(requires(custom(ApplicationCheckpointRootPredicate::new(request.binding.clone().into()))), wire(id = protocol::TRANSITION, request = protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
+#[update(requires(custom(ApplicationCheckpointRootPredicate::new(request.binding.clone().into()))), wire(id = protocol::TRANSITION, request = protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
 fn checkpoint_transition(request: protocol::TransitionRequest) -> Result<Phase, Error> {
     let binding = request.binding.into();
     let phase = request.phase;
@@ -114,7 +114,7 @@ fn checkpoint_transition(request: protocol::TransitionRequest) -> Result<Phase, 
     Ok(phase)
 }
 
-#[canic_update(requires(custom(ApplicationCheckpointRootPredicate::new(request.binding.clone().into()))), wire(id = protocol::RESTORE, request = protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
+#[update(requires(custom(ApplicationCheckpointRootPredicate::new(request.binding.clone().into()))), wire(id = protocol::RESTORE, request = protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
 fn checkpoint_restore(request: protocol::RestoreRequest) -> Result<Phase, Error> {
     let captured = request.captured.into();
     let binding = request.binding.into();
@@ -127,7 +127,7 @@ fn checkpoint_restore(request: protocol::RestoreRequest) -> Result<Phase, Error>
     Ok(phase)
 }
 
-#[canic_update(public, wire(id = protocol::INCREMENT, request = crate::protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
+#[update(public, wire(id = protocol::INCREMENT, request = crate::protocol::REQUEST_LIMITS, response = crate::protocol::RESPONSE_LIMITS))]
 fn checkpoint_increment() -> Result<u64, Error> {
     let mut state = read();
     if state
@@ -142,7 +142,7 @@ fn checkpoint_increment() -> Result<u64, Error> {
     Ok(state.counter)
 }
 
-#[canic_query(public, wire(id = protocol::VIEW, request = crate::protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(public, wire(id = protocol::VIEW, request = crate::protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn checkpoint_view() -> Result<crate::checkpoint::CheckpointView, Error> {
     let state = read();
     Ok(CheckpointView {
@@ -157,7 +157,7 @@ fn checkpoint_view() -> Result<crate::checkpoint::CheckpointView, Error> {
 }
 
 /// Application-owned synchronous business freeze and idempotent release hook.
-#[canic_update(
+#[update(
     requires(custom(canic::api::application_checkpoint::ApplicationCheckpointCommandPredicate::new(request.clone()))),
     wire(id = canic::protocol::application_checkpoint::PARTICIPANT,
          request = canic::protocol::application_checkpoint::LIMITS,

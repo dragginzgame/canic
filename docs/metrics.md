@@ -55,7 +55,7 @@ same query call:
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
 };
-#[canic_query(requires(env::build_local_only()),
+#[query(requires(env::build_local_only()),
     wire(id = 0x4155_4454_0000_0010, request = LIMITS, response = LIMITS))]
 async fn audit_time_probe() -> Result<QueryPerfSample<u64>, Error> {
     Ok(MetricsQuery::sample_query(ic_platform::cdk::api::time()))

@@ -21,20 +21,14 @@ use canic_core::{
         model::replay::ReplayCostGuardSettlement,
         ops::{
             cost_guard::CostGuardPermit,
-            ic::{
-                IcOps,
-                build_network::BuildNetworkOps,
-                cycles_ledger::{
-                    CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess,
-                    CyclesLedgerOps,
-                },
-            },
+            ic::{IcOps, build_network::BuildNetworkOps, cycles_ledger::CyclesLedgerOps},
         },
         workflow::{
             cost_guard::CostGuardWorkflow, runtime::fleet_activation::FleetActivationWorkflow,
         },
     },
 };
+use ic_platform::cycles_ledger_types::{CreateCanisterError, CreateCanisterSuccess};
 use sha2::{Digest, Sha256};
 
 const CREATION_OPERATION_DOMAIN: &[u8] = b"canic.root.canister_pool.cycles_ledger_creation.v1";
@@ -186,7 +180,7 @@ fn handle_ledger_result(
     creation: CanisterPoolCreationView,
     was_uncertain: bool,
     permit: &CostGuardPermit,
-    result: Result<CyclesLedgerCreateCanisterSuccess, CyclesLedgerCreateCanisterError>,
+    result: Result<CreateCanisterSuccess, CreateCanisterError>,
 ) -> Result<PoolAdminResponse, InternalError> {
     let settlement = permit.replay_settlement();
     match result {
@@ -196,7 +190,7 @@ fn handle_ledger_result(
             CyclesLedgerOps::checked_block_index(success.block_id)?,
             success.canister_id,
         ),
-        Err(CyclesLedgerCreateCanisterError::Duplicate {
+        Err(CreateCanisterError::Duplicate {
             duplicate_of,
             canister_id: Some(canister_id),
         }) => record_created(
@@ -205,7 +199,7 @@ fn handle_ledger_result(
             CyclesLedgerOps::checked_block_index(duplicate_of)?,
             canister_id,
         ),
-        Err(CyclesLedgerCreateCanisterError::Duplicate {
+        Err(CreateCanisterError::Duplicate {
             canister_id: None, ..
         }) => {
             CostGuardWorkflow::complete(permit, IcOps::now_secs())?;
@@ -215,7 +209,7 @@ fn handle_ledger_result(
                 uncertain_result: true,
             })
         }
-        Err(CyclesLedgerCreateCanisterError::TooOld) => {
+        Err(CreateCanisterError::TooOld) => {
             CostGuardWorkflow::recover(permit, IcOps::now_secs())?;
             CanisterPoolOps::finish_creation_attempt(
                 creation.operation_id,
@@ -234,7 +228,7 @@ fn handle_ledger_result(
                 uncertain_result: true,
             })
         }
-        Err(CyclesLedgerCreateCanisterError::InsufficientFunds { balance }) => {
+        Err(CreateCanisterError::InsufficientFunds { balance }) => {
             CostGuardWorkflow::recover(permit, IcOps::now_secs())?;
             let available = CyclesLedgerOps::checked_cycles(balance)?.to_u128();
             let observed_at_ns = IcOps::now_nanos();
@@ -249,8 +243,8 @@ fn handle_ledger_result(
             funding_wait_response(&creation, available, retry_at_ns)
         }
         Err(
-            CyclesLedgerCreateCanisterError::CreatedInFuture { .. }
-            | CyclesLedgerCreateCanisterError::TemporarilyUnavailable,
+            CreateCanisterError::CreatedInFuture { .. }
+            | CreateCanisterError::TemporarilyUnavailable,
         ) => {
             CostGuardWorkflow::recover(permit, IcOps::now_secs())?;
             CanisterPoolOps::finish_creation_attempt(creation.operation_id, settlement, false)?;
@@ -259,13 +253,13 @@ fn handle_ledger_result(
                 uncertain_result: false,
             })
         }
-        Err(CyclesLedgerCreateCanisterError::FailedToCreate { .. }) => block_known_failure(
+        Err(CreateCanisterError::FailedToCreate { .. }) => block_known_failure(
             creation.operation_id,
             settlement,
             permit,
             CanisterPoolCreationFailure::LedgerCreationFailed,
         ),
-        Err(CyclesLedgerCreateCanisterError::GenericError { .. }) => block_known_failure(
+        Err(CreateCanisterError::GenericError { .. }) => block_known_failure(
             creation.operation_id,
             settlement,
             permit,

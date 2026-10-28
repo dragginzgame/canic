@@ -27,12 +27,7 @@ use crate::{
     },
     icp::{
         IcpBalanceError, IcpCandidCallError, IcpCanisterStatusReport, IcpCli, IcpCommandError,
-        IcpDiagnostic, IcpManagementCallError, LocalReplicaTarget,
-        cycles_ledger::{
-            CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
-            CreateCanisterSuccess, SubnetSelection,
-        },
-        run_status,
+        IcpDiagnostic, IcpManagementCallError, LocalReplicaTarget, run_status,
     },
     icp_config::resolve_icp_build_network_from_root,
     subnet_catalog::load_cached_mainnet_subnet_catalog,
@@ -49,6 +44,10 @@ use canic_contracts::{ids::BuildNetwork, protocol as canic_protocol};
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_platform::{
     candid::contract::{CandidType, Nat},
+    cycles_ledger_types::{
+        CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
+        CreateCanisterSuccess, SubnetSelection, WithdrawArgs, WithdrawError,
+    },
     principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
@@ -65,18 +64,7 @@ use ic_platform::management_canister_types::{
     CanisterIdRecord, CanisterStatusResult, CanisterStatusType,
 };
 
-use ic_platform::icrc_ledger_types::{Account, TransferError};
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct CyclesLedgerTransferArgs {
-    amount: Nat,
-    created_at_time: Option<u64>,
-    fee: Option<Nat>,
-    from_subaccount: Option<[u8; 32]>,
-    memo: Option<Vec<u8>>,
-    to: Account,
-}
+use ic_platform::icrc_ledger_types::{Account, TransferArg, TransferError};
 
 #[derive(Clone)]
 struct ManagementCanisterObservationSettings {
@@ -495,58 +483,6 @@ struct CreateCanisterAuthority<'a> {
     ledger: &'a str,
     requested_initial_cycles: u128,
     subnet: &'a str,
-}
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct WithdrawArgs {
-    amount: Nat,
-    created_at_time: Option<u64>,
-    from_subaccount: Option<[u8; 32]>,
-    to: Principal,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum WithdrawError {
-    BadFee {
-        expected_fee: Nat,
-    },
-    CreatedInFuture {
-        ledger_time: u64,
-    },
-    Duplicate {
-        duplicate_of: Nat,
-    },
-    FailedToWithdraw {
-        fee_block: Option<Nat>,
-        rejection_code: RejectionCode,
-        rejection_reason: String,
-    },
-    GenericError {
-        error_code: Nat,
-        message: String,
-    },
-    InsufficientFunds {
-        balance: Nat,
-    },
-    InvalidReceiver {
-        receiver: Principal,
-    },
-    TemporarilyUnavailable,
-    TooOld,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum RejectionCode {
-    CanisterError,
-    CanisterReject,
-    DestinationInvalid,
-    NoError,
-    SysFatal,
-    SysTransient,
-    Unknown,
 }
 
 /// Typed failure at the current IC effect boundary.
@@ -2665,6 +2601,10 @@ impl IcpEnsurePlatform {
                     freezing_threshold: None,
                     memory_allocation: None,
                     reserved_cycles_limit: None,
+                    wasm_memory_limit: None,
+                    wasm_memory_threshold: None,
+                    log_visibility: None,
+                    environment_variables: None,
                 }),
                 subnet_selection: Some(SubnetSelection::Subnet {
                     subnet: parse_principal("subnet", authority.subnet)?,
@@ -2719,7 +2659,7 @@ impl IcpEnsurePlatform {
         principal: &str,
         reviewed_fee_cycles: u128,
     ) -> Result<EffectOutcome, IcpEnsurePlatformError> {
-        let request = CyclesLedgerTransferArgs {
+        let request = TransferArg {
             amount: Nat::from(amount),
             created_at_time: Some(created_at_time),
             fee: Some(Nat::from(reviewed_fee_cycles)),

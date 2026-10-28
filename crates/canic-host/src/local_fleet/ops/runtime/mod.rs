@@ -1,16 +1,17 @@
 //! Single-step PocketIC platform effects with exact process ownership.
 
-use crate::{
-    icp::cycles_ledger::{
+use crate::local_fleet::{
+    LocalFleetError,
+    model::{LocalAllocationIntentRecord, LocalFleetConfig},
+};
+use ic_platform::{
+    candid::contract::Nat,
+    cycles_ledger_types::{
         CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
         CreateCanisterSuccess, SubnetSelection,
     },
-    local_fleet::{
-        LocalFleetError,
-        model::{LocalAllocationIntentRecord, LocalFleetConfig},
-    },
+    principal::ExternalPrincipal as Principal,
 };
-use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 use std::{path::Path, time::Duration};
 use {
     ic_platform::pocket_ic::common::rest::{
@@ -125,6 +126,10 @@ pub fn create(
                 memory_allocation: Some(config.canister_memory_bytes.into()),
                 freezing_threshold: None,
                 reserved_cycles_limit: None,
+                wasm_memory_limit: None,
+                wasm_memory_threshold: None,
+                log_visibility: None,
+                environment_variables: None,
             }),
             subnet_selection: Some(SubnetSelection::Subnet {
                 subnet: allocation.subnet_id,

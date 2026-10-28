@@ -27,22 +27,9 @@ use ic_platform::{
     icrc_ledger_types::{GetBlocksRequest, ICRC3DataCertificate},
     principal::ExternalPrincipal as Principal,
 };
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::time::Duration;
 use thiserror::Error;
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct Rate {
-    timestamp_seconds: u64,
-    xdr_permyriad_per_icp: u64,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct RateReply {
-    data: Rate,
-}
 
 // These are bounded observation budgets, not a payment validity window.
 const RESPONSE_BYTES: usize = 4 * 1024 * 1024;
@@ -115,12 +102,6 @@ pub struct OperatorMintTransport {
     agent: Agent,
 }
 
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct BlocksReply {
-    blocks: Vec<LedgerBlock>,
-}
-
 impl OperatorMintTransport {
     /// Read only the selected operator's default Cycles Ledger account.
     pub fn operator_balance(&self, ledger: Principal) -> Result<u128, OperatorMintTransportError> {
@@ -168,7 +149,7 @@ impl OperatorMintTransport {
         cmc: Principal,
         cycles_ledger: Principal,
     ) -> Result<OperatorMintRateQuote, OperatorMintTransportError> {
-        let rate: RateReply = self
+        let rate: ic_platform::cmc_types::IcpXdrConversionRateResponse = self
             .query(
                 cmc,
                 "get_icp_xdr_conversion_rate",
@@ -378,7 +359,7 @@ impl OperatorMintTransport {
             .and_then(|n| n.checked_add(1))
             .filter(|count| *count <= DEPOSIT_LIMITS.blocks as u128)
             .ok_or(OperatorMintTransportError::BudgetExceeded)?;
-        let reply: BlocksReply = self
+        let reply: ic_platform::icrc_ledger_types::GetBlocksResult = self
             .query(
                 ledger,
                 "icrc3_get_blocks",
@@ -388,7 +369,14 @@ impl OperatorMintTransport {
                 }])?,
             )
             .await?;
-        let mut blocks = reply.blocks;
+        let mut blocks = reply
+            .blocks
+            .into_iter()
+            .map(|block| LedgerBlock {
+                id: block.id,
+                block: block.block.into(),
+            })
+            .collect::<Vec<_>>();
         blocks.sort_by(|a, b| b.id.cmp(&a.id));
         Ok(receipts::verify_cycles_deposit(
             &self.agent,

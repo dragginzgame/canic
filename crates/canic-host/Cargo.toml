@@ -37,7 +37,7 @@ ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
 ic-host-tools = { workspace = true, features = ["candid", "ic-interface", "icp-ledger", "ledger-evidence"] }
-ic-platform = { workspace = true, features = ["agent", "candid", "certification", "candid-parser", "icrc-ledger-types", "management-canister-types"] }
+ic-platform = { workspace = true, features = ["agent", "certified-assets-types", "cmc-types", "cycles-ledger-types", "icp-ledger-types", "candid", "certification", "candid-parser", "icrc-ledger-types", "management-canister-types"] }
 ic-query = { workspace = true, features = ["ledger-evidence-host"] }
 ic-testkit = { workspace = true, optional = true }
 ic-wire = { workspace = true, features = ["typescript"] }

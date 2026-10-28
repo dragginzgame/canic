@@ -99,15 +99,22 @@ pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
             .try_borrow_mut()
             .map_err(|_| ic_memory::RuntimeDiagnosticError::ReentrantAccess)?;
         if owner.is_none() {
-            *owner = Some(ic_memory::MemoryRuntime::new_with_config(
+            *owner = Some(std::rc::Rc::new(ic_memory::MemoryRuntime::new_with_config(
                 ic_memory::DefaultMemoryImpl::default(),
                 config,
-            )?);
+            )?));
         }
         let runtime = owner
             .as_mut()
             .ok_or(ic_memory::RuntimeDiagnosticError::NotBootstrapped)?;
-        runtime.bootstrap(&declarations, &input.pool, &policy)?;
+        if runtime.is_bootstrapped() {
+            runtime.verify_bootstrap(&declarations, &input.pool, &policy)?;
+        } else {
+            // Only committed runtimes escape through shared_runtime().
+            std::rc::Rc::get_mut(runtime)
+                .ok_or(ic_memory::RuntimeDiagnosticError::ReentrantAccess)?
+                .bootstrap(&declarations, &input.pool, &policy)?;
+        }
         Ok(())
     })?;
     Ok(())

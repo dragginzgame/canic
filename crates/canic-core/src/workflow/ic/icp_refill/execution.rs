@@ -12,7 +12,7 @@ use crate::{
         policy::pure::icp_refill::IcpRefillPolicyViolation,
     },
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
-    infra::ic::icp_refill::{NotifyTopUpArg, NotifyTopUpError, TransferError},
+    infra::ic::icp_refill::{NotifyError, NotifyTopUpArg, TransferError},
     ops::{
         cost_guard::CostGuardPermit,
         ic::{IcOps, icp_refill::IcpRefillOps},
@@ -413,25 +413,25 @@ pub(super) fn apply_transfer_error(
 pub(super) fn apply_notify_error(
     record_id: u64,
     notify_attempts: u32,
-    err: NotifyTopUpError,
+    err: NotifyError,
 ) -> Result<IcpRefillOperation, InternalError> {
     match err {
-        NotifyTopUpError::Refunded {
+        NotifyError::Refunded {
             block_index,
             reason,
         } => IcpRefillStoreOps::mark_refunded(record_id, block_index, reason, IcOps::now_nanos()),
-        NotifyTopUpError::InvalidTransaction(reason) => {
+        NotifyError::InvalidTransaction(reason) => {
             IcpRefillStoreOps::mark_invalid_transaction(record_id, reason, IcOps::now_nanos())
         }
-        NotifyTopUpError::Processing => mark_notify_processing(record_id, notify_attempts),
-        NotifyTopUpError::TransactionTooOld(min_block_index) => {
+        NotifyError::Processing => mark_notify_processing(record_id, notify_attempts),
+        NotifyError::TransactionTooOld(min_block_index) => {
             IcpRefillStoreOps::mark_transaction_too_old(
                 record_id,
                 Some(min_block_index),
                 IcOps::now_nanos(),
             )
         }
-        NotifyTopUpError::Other {
+        NotifyError::Other {
             error_code,
             error_message,
         } => mark_retryable_notify_failure(

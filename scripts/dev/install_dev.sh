@@ -5,12 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=/dev/null
 source "$ROOT_DIR/tool-versions.env"
+# shellcheck source=/dev/null
+source "$ROOT_DIR/ci/tool-versions.env"
 CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.112.0}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.99.1}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
     "cargo-edit@$CANIC_CARGO_EDIT_VERSION"
-    "sccache@$CANIC_SCCACHE_VERSION"
+    "sccache@$SHARED_TOOLING_SCCACHE_VERSION"
 )
 
 blue() {

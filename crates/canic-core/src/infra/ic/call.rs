@@ -1,10 +1,11 @@
 //! Module: infra::ic::call
 //!
-//! Responsibility: wrap low-level IC calls with Candid argument/result helpers.
+//! Responsibility: adapt prepared IC Call requests with external Candid helpers.
 //! Does not own: retry policy, workflow decisions, or endpoint error mapping.
 //! Boundary: infra adapters use this before returning raw decoded results to ops.
 
 use crate::{cdk::types::Principal, infra::ic::IcInfraError};
+use ic_call::{Call as PreparedCall, WaitPolicy};
 use ic_platform::candid::contract::{
     ArgumentDecoder, ArgumentEncoder, CandidType, DecoderConfig, decode_args_with_config,
     encode_args, encode_one,
@@ -26,12 +27,18 @@ pub struct Call;
 impl Call {
     #[must_use]
     pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
-        CallBuilder::new(WaitMode::Bounded, canister_id.into(), method)
+        CallBuilder::new(
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+            canister_id.into(),
+            method,
+        )
     }
 
     #[must_use]
     pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
-        CallBuilder::new(WaitMode::Unbounded, canister_id.into(), method)
+        CallBuilder::new(WaitPolicy::Unbounded, canister_id.into(), method)
     }
 }
 
@@ -43,42 +50,25 @@ impl Call {
 ///
 
 pub struct CallBuilder<'a> {
-    wait: WaitMode,
-    canister_id: Principal,
-    method: String,
-    cycles: u128,
-    args: Cow<'a, [u8]>, // always present; defaults to ()
+    inner: PreparedCall<'static, 'a>,
 }
 
 impl CallBuilder<'_> {
-    fn new(wait: WaitMode, canister_id: Principal, method: &str) -> Self {
+    fn new(wait: WaitPolicy, canister_id: Principal, method: &str) -> Self {
         Self {
-            wait,
-            canister_id,
-            method: method.to_string(),
-            cycles: 0,
-            args: Cow::Borrowed(EMPTY_ARGS),
+            inner: PreparedCall::new(canister_id.into(), method.to_owned(), wait)
+                .with_raw_args(EMPTY_ARGS),
         }
     }
 
-    /// Use pre-encoded Candid arguments (no validation performed).
+    /// Use caller-selected protocol bytes without validation or encoding.
     #[must_use]
     pub fn with_raw_args<'b>(self, args: impl Into<Cow<'b, [u8]>>) -> CallBuilder<'b> {
-        let Self {
-            wait,
-            canister_id,
-            method,
-            cycles,
-            ..
-        } = self;
-
-        CallBuilder {
-            wait,
-            canister_id,
-            method,
-            cycles,
-            args: args.into(),
-        }
+        let inner = match args.into() {
+            Cow::Borrowed(bytes) => self.inner.with_raw_args(bytes),
+            Cow::Owned(bytes) => self.inner.take_raw_args(bytes),
+        };
+        CallBuilder { inner }
     }
 
     /// Encode a single argument into Candid bytes (fallible).
@@ -87,7 +77,9 @@ impl CallBuilder<'_> {
         A: CandidType,
     {
         let mut builder = self;
-        builder.args = encode_one(arg).map_err(IcInfraError::from)?.into();
+        builder.inner = builder
+            .inner
+            .take_raw_args(encode_one(arg).map_err(IcInfraError::from)?);
         Ok(builder)
     }
 
@@ -97,41 +89,30 @@ impl CallBuilder<'_> {
         A: ArgumentEncoder,
     {
         let mut builder = self;
-        builder.args = encode_args(args).map_err(IcInfraError::from)?.into();
+        builder.inner = builder
+            .inner
+            .take_raw_args(encode_args(args).map_err(IcInfraError::from)?);
         Ok(builder)
     }
 
     /// Attach cycles to the call request.
     #[must_use]
-    pub const fn with_cycles(mut self, cycles: u128) -> Self {
-        self.cycles = cycles;
-        self
+    pub fn with_cycles(self, cycles: u128) -> Self {
+        let Self { inner } = self;
+        Self {
+            inner: inner.with_cycles(cycles),
+        }
     }
 
     /// Return the exact current-Subnet cost of scheduling this call.
     #[must_use]
     pub fn cost(&self) -> u128 {
-        self.cycles.saturating_add(ic_platform::cdk::api::cost_call(
-            self.method.len() as u64,
-            self.args.len() as u64,
-        ))
+        self.inner.get_cost()
     }
 
     /// Execute the configured IC call and return the raw response wrapper.
     pub async fn execute(self) -> Result<CallResult, IcInfraError> {
-        let mut call = match self.wait {
-            WaitMode::Bounded => {
-                ic_platform::cdk::call::Call::bounded_wait(self.canister_id.into(), &self.method)
-            }
-            WaitMode::Unbounded => {
-                ic_platform::cdk::call::Call::unbounded_wait(self.canister_id.into(), &self.method)
-            }
-        };
-
-        call = call.with_cycles(self.cycles);
-        call = call.with_raw_args(self.args.as_ref());
-
-        let response = call.await.map_err(IcInfraError::from)?;
+        let response = self.inner.execute().await.map_err(IcInfraError::from)?;
 
         Ok(CallResult {
             inner: response.into_bytes(),
@@ -175,12 +156,6 @@ impl CallResult {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-enum WaitMode {
-    Bounded,
-    Unbounded,
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -188,6 +163,47 @@ enum WaitMode {
 #[cfg(test)]
 mod tests {
     use super::{Call, CallResult, EMPTY_ARGS, IcInfraError, Principal, encode_args};
+    use ic_call::WaitPolicy;
+
+    #[test]
+    fn prepared_call_owns_method_and_preserves_external_defaults() {
+        let method = String::from("dynamic_method");
+        let builder = Call::bounded_wait(Principal::anonymous(), &method);
+        drop(method);
+        assert_eq!(builder.inner.method(), "dynamic_method");
+        assert_eq!(builder.inner.target(), Principal::anonymous().into());
+        assert_eq!(builder.inner.raw_args(), EMPTY_ARGS);
+        assert_eq!(builder.inner.attached_cycles(), 0);
+        assert_eq!(
+            builder.inner.wait_policy(),
+            WaitPolicy::Bounded {
+                timeout_seconds: 300
+            }
+        );
+        // Construction and an unpolled execution future must remain effect-free.
+        drop(builder.execute());
+    }
+
+    #[test]
+    fn raw_argument_custody_preserves_wait_and_attachment() {
+        let bytes = vec![7, 8, 9];
+        let borrowed = Call::unbounded_wait(Principal::anonymous(), "wire")
+            .with_cycles(42)
+            .with_raw_args(bytes.as_slice());
+        assert_eq!(borrowed.inner.raw_args().as_ptr(), bytes.as_ptr());
+        let owned = borrowed.with_raw_args(bytes.clone());
+        drop(bytes);
+        assert_eq!(owned.inner.raw_args(), &[7, 8, 9]);
+        assert_eq!(owned.inner.wait_policy(), WaitPolicy::Unbounded);
+        assert_eq!(owned.inner.attached_cycles(), 42);
+        let replaced = owned.with_cycles(19).with_args((42_u64, "value")).unwrap();
+        assert_eq!(
+            replaced.inner.raw_args(),
+            encode_args((42_u64, "value")).unwrap()
+        );
+        assert_eq!(replaced.inner.attached_cycles(), 19);
+        assert_eq!(replaced.inner.wait_policy(), WaitPolicy::Unbounded);
+    }
 
     #[test]
     fn empty_args_match_candid_encoding() {
@@ -199,7 +215,7 @@ mod tests {
     fn with_raw_args_overrides_default() {
         let raw = vec![1_u8, 2, 3, 4];
         let builder = Call::bounded_wait(Principal::anonymous(), "noop").with_raw_args(raw.clone());
-        assert_eq!(builder.args.as_ref(), raw.as_slice());
+        assert_eq!(builder.inner.raw_args(), raw.as_slice());
     }
     #[test]
     fn response_decoding_preserves_single_tuple_and_skipped_arguments() {

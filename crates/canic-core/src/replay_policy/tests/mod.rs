@@ -126,8 +126,16 @@ fn emitted_endpoint_names(kind: EndpointKind) -> BTreeSet<String> {
 
 fn endpoint_names_from_source(source: &str, kind: EndpointKind) -> Vec<&str> {
     let attributes = match kind {
-        EndpointKind::Query => ["#[$crate::canic_query", "#[$crate::canic_raw_query"],
-        EndpointKind::Update => ["#[$crate::canic_update", "#[$crate::canic_raw_update"],
+        EndpointKind::Query => [
+            "#[$crate::query",
+            "#[$crate::raw_query",
+            "#[$crate::candid_query",
+        ],
+        EndpointKind::Update => [
+            "#[$crate::update",
+            "#[$crate::raw_update",
+            "#[$crate::candid_update",
+        ],
     };
     let lines = source.lines().collect::<Vec<_>>();
     let mut names = Vec::new();

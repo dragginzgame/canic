@@ -60,6 +60,15 @@ never delegates broad validation, Git publication or deployment.
 - Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
+- Canic-owned adapter packages live under `crates/<package-name>/`, including
+  `canic-blob-service` and `canic-icydb`, and share the root workspace catalog,
+  lockfile and release version. Independent consumer fixtures live separately
+  under `integrations/`; reusable engines remain with their upstream owners.
+- Adapter endpoint composition uses `mount!` at the consuming canister root.
+  Mounting contributes endpoints only; lifecycle and memory composition are
+  explicit and retain one host owner. Optional dedicated-canister helpers compose
+  the same parts. Unfinished adapters remain unpublished and refuse mounting at
+  compile time until their production integration is qualified.
 
 ### Maintainer-approved workspace layout exceptions — 2026-10-07
 
@@ -74,10 +83,9 @@ as explicitly approved by the maintainer for this adoption
   validation/probe artifacts, separate from application-owned `apps/` packages.
   Root formatting and metadata inventory cover them; their owning targeted
   native and PocketIC cases qualify their selected managed graphs.
-- `integrations/blob-service/` retains its package location and, following the
-  maintainer's 2026-10-10 dependency-centralization request, belongs to the main
-  workspace. It inherits the root catalog, package version and Cargo.lock and
-  joins the coherent publication family after `canic`.
+- The 2026-10-28 maintainer decision moves the Blob adapter to
+  `crates/canic-blob-service/`, superseding its package-location exception. It
+  remains in the coherent publication family after `canic`.
 - `integrations/blob-service/consumer/` and
   `integrations/blob-service/embedded-consumer/` retain their independent
   root-package workspaces and existing package locations. Each private consumer

@@ -20,10 +20,10 @@ cp "$ROOT/scripts/ci/"{prepare-validation,run-release-validation-lane,run-canic-
 cat > "$fixture/scripts/ci/install-pinned-ci-tool.sh" <<'INSTALL'
 #!/usr/bin/env bash
 set -euo pipefail
-source tool-versions.env
+source ci/tool-versions.env
 [[ "$1" == sccache ]]
 mkdir -p "$CANIC_SCCACHE_INSTALL_DIR"
-printf '#!/usr/bin/env bash\necho "sccache %s"\n' "$CANIC_SCCACHE_VERSION" > "$CANIC_SCCACHE_INSTALL_DIR/sccache"
+printf '#!/usr/bin/env bash\necho "sccache %s"\n' "$SHARED_TOOLING_SCCACHE_VERSION" > "$CANIC_SCCACHE_INSTALL_DIR/sccache"
 chmod +x "$CANIC_SCCACHE_INSTALL_DIR/sccache"
 INSTALL
 cat > "$fixture/bin/make" <<'MAKE'
@@ -55,7 +55,7 @@ cd "$fixture"
 "$ENV_REAL_MAKE" --no-print-directory release-verify
 cmp "$ENV_EVIDENCE-prepare-locked-dependencies" "$ENV_EVIDENCE-validate"
 printf '%s\n' "$fixture/target/cargo" "$fixture/.tools/canic-sccache/bin/sccache" \
-    "$fixture/scripts/ci/run-canic-sccache.sh" "$fixture/.tmp/sccache-$(sed -n 's/export CANIC_SCCACHE_VERSION=//p' tool-versions.env)-runtime" 0 > expected
+    "$fixture/scripts/ci/run-canic-sccache.sh" "$fixture/.tmp/sccache-$(sed -n 's/export SHARED_TOOLING_SCCACHE_VERSION=//p' ci/tool-versions.env)-runtime" 0 > expected
 cmp expected "$ENV_EVIDENCE-validate"
 # Explicit supported values survive two independent processes.
 mkdir -p 'custom tools'
@@ -89,13 +89,13 @@ rm -f .host-prepared
 cat > scripts/dev/install-rust-tools.sh <<'RUST'
 #!/usr/bin/env bash
 set -euo pipefail
-source tool-versions.env
+source ci/tool-versions.env
 [[ -f .host-prepared ]]
 binary="$PWD/.tools/rust/fixture/bin/sccache"
 if [[ "$*" != *--check* ]]; then
     [[ "${RUSTC_WRAPPER:-}" == '' ]]
     mkdir -p "${binary%/*}"
-    printf '#!/usr/bin/env bash\necho "sccache %s"\n' "$CANIC_SCCACHE_VERSION" > "$binary"
+    printf '#!/usr/bin/env bash\necho "sccache %s"\n' "$SHARED_TOOLING_SCCACHE_VERSION" > "$binary"
     chmod +x "$binary"
 fi
 [[ -x "$binary" ]]

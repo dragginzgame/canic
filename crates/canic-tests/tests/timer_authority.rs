@@ -612,6 +612,7 @@ fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
     assert_application_timer_rows(&fixture.pic, canister_id);
 
     wait_for_fixture_ready(&fixture.pic, canister_id, "install");
+    assert_component_binding(&fixture.pic, canister_id, fixture.root);
 
     fixture
         .pic
@@ -631,6 +632,37 @@ fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
     assert_application_timer_rows(&fixture.pic, canister_id);
 
     wait_for_fixture_ready(&fixture.pic, canister_id, "post_upgrade");
+    assert_component_binding(&fixture.pic, canister_id, fixture.root);
+}
+
+fn assert_component_binding(pic: &PocketIc, canister_id: Principal, stranger: Principal) {
+    let spec = timer_probe::ADAPTER_BINDING;
+    let request =
+        ic_wire::native::encode_request(spec.method_id, &(), spec.request_limits).unwrap();
+    assert!(
+        pic.query_call(canister_id, stranger, spec.method, request.clone())
+            .is_err()
+    );
+    assert!(
+        pic.query_call(canister_id, Principal::anonymous(), spec.method, vec![0])
+            .is_err()
+    );
+    assert!(
+        pic.query_call(
+            canister_id,
+            Principal::anonymous(),
+            spec.method,
+            vec![0; spec.request_limits.bytes + 1]
+        )
+        .is_err()
+    );
+    let response = pic
+        .query_call(canister_id, Principal::anonymous(), spec.method, request)
+        .unwrap();
+    assert!(
+        ic_wire::native::decode_response::<bool>(spec.method_id, &response, spec.response_limits)
+            .unwrap()
+    );
 }
 
 #[test]

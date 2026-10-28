@@ -91,12 +91,12 @@ fn sample() -> Result<Vec<canic::dto::public_status::PublicMetric>, canic::Error
     Ok(rows)
 }
 
-#[canic::canic_query(public, on_access_denied = "reject", wire(id = protocol::COUNT_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
+#[canic::query(public, on_access_denied = "reject", wire(id = protocol::COUNT_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 fn application_count() -> u64 {
     app::count()
 }
 
-#[canic::canic_update(public, on_access_denied = "reject", wire(id = protocol::INCREMENT_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
+#[canic::update(public, on_access_denied = "reject", wire(id = protocol::INCREMENT_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 fn application_increment() -> u64 {
     app::increment()
 }

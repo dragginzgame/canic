@@ -1,3 +1,5 @@
+//! Render cycle reports with shared columns and optional history detail.
+
 use crate::{
     cycles::{
         CyclesCommandError,
@@ -33,40 +35,37 @@ fn render_cycles_report(report: &CyclesReport, verbose: bool) -> String {
         ),
         String::new(),
         if verbose {
-            render_verbose_cycles_table(report)
+            render_cycles_table(report, verbose_cycle_report_row)
         } else {
-            render_default_cycles_table(report)
+            render_cycles_table(report, default_cycle_report_row)
         },
     ]
     .join("\n")
 }
 
-fn render_default_cycles_table(report: &CyclesReport) -> String {
-    let rows = report
-        .canisters
-        .iter()
-        .map(default_cycle_report_row)
-        .collect::<Vec<_>>();
+const CYCLE_COLUMNS: [(&str, Alignment); 10] = [
+    ("ROLE", Alignment::Left),
+    ("CANISTER_ID", Alignment::Left),
+    ("STATUS", Alignment::Left),
+    ("CURRENT", Alignment::Right),
+    ("BURN/H", Alignment::Right),
+    ("TOPUP/H", Alignment::Right),
+    ("NET/H", Alignment::Right),
+    ("HISTORY", Alignment::Left),
+    ("TOPUPS", Alignment::Left),
+    ("NET", Alignment::Right),
+];
+
+// Both fixed row shapes select their corresponding prefix of the same columns.
+fn render_cycles_table<const N: usize>(
+    report: &CyclesReport,
+    row: fn(&CyclesCanisterReport) -> [String; N],
+) -> String {
+    let rows = report.canisters.iter().map(row).collect::<Vec<_>>();
     table::render(
-        &[
-            "ROLE",
-            "CANISTER_ID",
-            "STATUS",
-            "CURRENT",
-            "BURN/H",
-            "TOPUP/H",
-            "NET/H",
-        ],
+        &std::array::from_fn(|index| CYCLE_COLUMNS[index].0),
         &rows,
-        &[
-            Alignment::Left,
-            Alignment::Left,
-            Alignment::Left,
-            Alignment::Right,
-            Alignment::Right,
-            Alignment::Right,
-            Alignment::Right,
-        ],
+        &std::array::from_fn(|index| CYCLE_COLUMNS[index].1),
         Options {
             column_gap: 3,
             header_separator: true,
@@ -89,57 +88,16 @@ fn default_cycle_report_row(row: &CyclesCanisterReport) -> [String; 7] {
     ]
 }
 
-fn render_verbose_cycles_table(report: &CyclesReport) -> String {
-    let rows = report
-        .canisters
-        .iter()
-        .map(verbose_cycle_report_row)
-        .collect::<Vec<_>>();
-    table::render(
-        &[
-            "ROLE",
-            "CANISTER_ID",
-            "STATUS",
-            "CURRENT",
-            "BURN/H",
-            "TOPUP/H",
-            "NET/H",
-            "HISTORY",
-            "TOPUPS",
-            "NET",
-        ],
-        &rows,
-        &[
-            Alignment::Left,
-            Alignment::Left,
-            Alignment::Left,
-            Alignment::Right,
-            Alignment::Right,
-            Alignment::Right,
-            Alignment::Right,
-            Alignment::Left,
-            Alignment::Left,
-            Alignment::Right,
-        ],
-        Options {
-            column_gap: 3,
-            header_separator: true,
-        },
-    )
-}
-
 fn verbose_cycle_report_row(row: &CyclesCanisterReport) -> [String; 10] {
+    let [role, canister_id, status, current, burn, topup, net] = default_cycle_report_row(row);
     [
-        role_label(row),
-        row.canister_id.clone(),
-        row.status.label().to_string(),
-        row.latest_cycles.map_or_else(|| "-".to_string(), cycles_tc),
-        row.burn_cycles_per_hour
-            .map_or_else(|| "-".to_string(), format_unsigned_rate),
-        row.topup_cycles_per_hour
-            .map_or_else(|| "-".to_string(), format_unsigned_rate),
-        row.rate_cycles_per_hour
-            .map_or_else(|| "-".to_string(), format_signed_rate),
+        role,
+        canister_id,
+        status,
+        current,
+        burn,
+        topup,
+        net,
         format_history(row),
         row.topups
             .as_ref()

@@ -69,13 +69,13 @@ export CARGO_TARGET_DIR
 ifeq ($(shell uname -s):$(shell uname -m),Linux:x86_64)
 CANIC_MANAGED_SCCACHE_BIN := $(CURDIR)/.tools/canic-sccache/bin/sccache
 else
-CANIC_MANAGED_SCCACHE_BIN := $(shell bash scripts/dev/install-rust-tools.sh --consumer "$(CURDIR)" --package sccache --version "$(CANIC_SCCACHE_VERSION)" --bin sccache --profile release --check 2>/dev/null)
+CANIC_MANAGED_SCCACHE_BIN := $(shell bash scripts/dev/install-rust-tools.sh --consumer "$(CURDIR)" --package sccache --version "$(SHARED_TOOLING_SCCACHE_VERSION)" --bin sccache --profile release --check 2>/dev/null)
 endif
 SCCACHE_BIN ?= $(CANIC_MANAGED_SCCACHE_BIN)
 CANIC_SCCACHE_WRAPPER := $(CURDIR)/scripts/ci/run-canic-sccache.sh
 CANIC_SCCACHE_BIN ?= $(SCCACHE_BIN)
 RUSTC_WRAPPER ?= $(CANIC_SCCACHE_WRAPPER)
-SCCACHE_RUNTIME_DIR ?= $(CURDIR)/.tmp/sccache-$(CANIC_SCCACHE_VERSION)-runtime
+SCCACHE_RUNTIME_DIR ?= $(CURDIR)/.tmp/sccache-$(SHARED_TOOLING_SCCACHE_VERSION)-runtime
 export SCCACHE_RUNTIME_DIR
 ifneq ($(filter sccache run-canic-sccache.sh,$(notdir $(RUSTC_WRAPPER))),)
 CARGO_INCREMENTAL ?= 0
@@ -206,7 +206,7 @@ update-dev:
 		"cargo-machete@$(CANIC_CARGO_MACHETE_VERSION)" \
 		"cargo-llvm-lines@$(CANIC_CARGO_LLVM_LINES_VERSION)" \
 		"cargo-tarpaulin@$(CANIC_CARGO_TARPAULIN_VERSION)" \
-		"sccache@$(CANIC_SCCACHE_VERSION)" \
+		"sccache@$(SHARED_TOOLING_SCCACHE_VERSION)" \
 		--locked
 	+$(MAKE) --no-print-directory install-rust-tools
 	"$(CURDIR)/.tools/host/bin/rg" --version

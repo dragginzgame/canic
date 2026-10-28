@@ -25,6 +25,7 @@ PUBLISH_ORDER=(
     canic-control-plane
     canic-macros
     canic
+    canic-icydb
     canic-blob-service
     canic-host
     canic-cli

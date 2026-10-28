@@ -1,0 +1,23 @@
+[package]
+name = "canic-icydb"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = true
+description = "Native IcyDB canister transport and lifecycle adapter"
+repository.workspace = true
+readme = "README.md"
+
+[dependencies]
+canic-macros.workspace = true
+ic-platform = { workspace = true, features = ["candid", "runtime"] }
+ic-timers.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[lints]
+workspace = true

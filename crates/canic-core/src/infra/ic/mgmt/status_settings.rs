@@ -4,16 +4,16 @@
 //! Does not own: status policy, deployment orchestration, or public DTO shaping.
 //! Boundary: extends `MgmtInfra` with status and settings effects.
 
-use super::{
-    MgmtInfra,
-    types::{InfraCanisterStatusResult, InfraUpdateSettingsArgs},
-};
+use super::MgmtInfra;
 use crate::infra::ic::{
     IcInfraError,
     call::{Call, CallBuilder, CallResult},
 };
 use ic_platform::{
-    management_canister_types::{CanisterIdRecord, CanisterInfoArgs, CanisterInfoResult},
+    management_canister_types::{
+        CanisterIdRecord, CanisterInfoArgs, CanisterInfoResult, CanisterStatusResult,
+        UpdateSettingsArgs,
+    },
     principal::ExternalPrincipal as Principal,
 };
 
@@ -60,9 +60,9 @@ impl MgmtInfra {
     /// Query the management canister for a canister's status.
     pub async fn canister_status(
         canister_pid: Principal,
-    ) -> Result<InfraCanisterStatusResult, IcInfraError> {
+    ) -> Result<CanisterStatusResult, IcInfraError> {
         let response = canister_status_call(canister_pid)?.execute().await?;
-        let (status,): (InfraCanisterStatusResult,) = response.candid_tuple()?;
+        let (status,): (CanisterStatusResult,) = response.candid_tuple()?;
 
         Ok(status)
     }
@@ -73,7 +73,7 @@ impl MgmtInfra {
     }
 
     /// Quote the same controller-update request before retaining its paid intent.
-    pub fn update_settings_call_cost(args: &InfraUpdateSettingsArgs) -> Result<u128, IcInfraError> {
+    pub fn update_settings_call_cost(args: &UpdateSettingsArgs) -> Result<u128, IcInfraError> {
         Ok(
             Call::unbounded_wait(Principal::management_canister(), "update_settings")
                 .with_arg(args.clone())?
@@ -82,7 +82,7 @@ impl MgmtInfra {
     }
 
     /// Update canister settings through the management canister.
-    pub async fn update_settings(args: &InfraUpdateSettingsArgs) -> Result<(), IcInfraError> {
+    pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), IcInfraError> {
         Call::unbounded_wait(Principal::management_canister(), "update_settings")
             .with_arg(args.clone())?
             .execute()

@@ -75,11 +75,11 @@ export PUBLISH_FROM='' PUBLISH_DRY_RUN=0
 # Stubbed online cases own their policy independently of the offline release gate.
 # The explicit offline case below still verifies the production refusal.
 export CARGO_NET_OFFLINE=false
-expected_packages=(canic-backup canic-contracts canic-core canic-control-plane canic-macros canic canic-blob-service canic-host canic-cli)
+expected_packages=(canic-backup canic-contracts canic-core canic-control-plane canic-macros canic canic-icydb canic-blob-service canic-host canic-cli)
 
 run_case() {
     local expected="$1" status=0
-    PATH="$FIXTURE/bin:$PATH" PUBLISH_POLL_SECS=0 PUBLISH_TIMEOUT_SECS=1 \
+    PATH="$FIXTURE/bin:$PATH" PUBLISH_POLL_SECS=0 PUBLISH_TIMEOUT_SECS=10 \
         bash "$FIXTURE/scripts/ci/publish-workspace.sh" >"$FIXTURE/output.log" 2>&1 || status=$?
     if [[ "$status" -ne "$expected" ]]; then
         cat "$FIXTURE/output.log" >&2

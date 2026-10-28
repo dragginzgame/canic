@@ -31,13 +31,13 @@ async fn canic_install(args: Option<Vec<u8>>) {
 async fn canic_upgrade() {}
 
 /// Observe real asynchronous startup work after application admission opens.
-#[canic_query(requires(caller::is_controller()), wire(id = protocol::STARTUP_CALLS, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(requires(caller::is_controller()), wire(id = protocol::STARTUP_CALLS, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn test_startup_calls() -> Result<u32, Error> {
     Ok(STARTUP_CALLS.get())
 }
 
 /// Prove direct Fleet-admitted ingress for an index-created managed child.
-#[canic_query(requires(caller::is_fleet_admitted()), wire(id = protocol::ADMISSION, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(requires(caller::is_fleet_admitted()), wire(id = protocol::ADMISSION, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn test_fleet_admission_probe() -> Result<ic_platform::Principal, Error> {
     Ok(ic_platform::cdk::api::msg_caller())
 }
