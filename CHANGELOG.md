@@ -6,6 +6,17 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.113.0]
+
+- Add heap-default diagnostic provider metrics with explicit per-provider stable
+  storage through one host-owned map. Blob admission/reference observations share
+  the existing public sampler and distinguish replay from new work.
+- Potentially breaking: managed metrics configuration and compiled authority gain
+  storage selections. Rebuild and clean-reinstall across releases; no migration
+  or runtime storage switching is provided.
+
+Details: [0.113 notes](docs/changelog/0.113.md).
+
 ## [0.112.0] - 2026-10-28
 
 ### 📝 Summary

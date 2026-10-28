@@ -92,6 +92,7 @@ ic-host-text = "0.69.0"
 ic-host-tools = "0.69.0"
 ic-memory = "0.51.10"
 ic-metrics = "0.16.3"
+ic-metrics-stable = "0.51.13"
 ic-platform = { version = "0.7.0", default-features = false }
 ic-query = { version = "0.75.0", default-features = false, features = [
     "subnet-catalog-host",

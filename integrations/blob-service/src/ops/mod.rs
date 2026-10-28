@@ -54,6 +54,7 @@ fn assert_uninitialized() {
     HOST.with_borrow(|host| assert!(host.is_none(), "host initialization is not reset"));
 }
 fn publish(mut installation: ServiceInstallation<Memory>) {
+    metrics::operations::register();
     installation.observe_platform_version(ic_platform::cdk::api::canister_version());
     HOST.with_borrow_mut(|state| *state = Some(installation));
 }

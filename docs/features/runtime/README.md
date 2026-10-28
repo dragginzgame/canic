@@ -37,6 +37,8 @@ from the App configuration.
 
 See [public status and protected observability](public-observability.md) for
 caller access, optional aggregate publication and cached snapshot semantics.
+See [provider metrics storage](provider-metrics.md) for heap defaults and explicit
+per-provider stable recording under the same host lifecycle.
 See [endpoint argument and reply controls](update-payload-limits.md) before setting
 client request budgets: ordinary managed updates inherit a 16 KiB encoded
 argument limit, including bare CDK update endpoints.

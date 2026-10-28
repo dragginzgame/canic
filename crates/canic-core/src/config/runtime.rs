@@ -39,6 +39,7 @@ pub struct RuntimeCanisterAuthority {
 /// Runtime-only fields consumed by the exact compiled role and its admitted children.
 #[derive(Clone, Debug)]
 pub struct RuntimeCanisterConfig {
+    pub metrics: super::schema::MetricStorageConfig,
     pub kind: CanisterKind,
     pub topup: Option<TopupPolicy>,
     pub cycles_funding: CyclesFundingPolicyConfig,
@@ -62,6 +63,7 @@ pub struct RuntimeChildCanisterAuthority {
 impl From<CanisterConfig> for RuntimeCanisterConfig {
     fn from(config: CanisterConfig) -> Self {
         Self {
+            metrics: config.metrics.storage_policy(),
             kind: config.kind,
             topup: config.topup,
             cycles_funding: config.cycles_funding,

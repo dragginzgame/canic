@@ -573,6 +573,7 @@ dependencies = [
  "ic-auth-protocol-types",
  "ic-memory",
  "ic-metrics",
+ "ic-metrics-stable",
  "ic-platform",
  "ic-storage",
  "ic-timers",
@@ -2252,9 +2253,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.51.10"
+version = "0.51.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df69a902952a37e427872ad381a3745539b1dfd4cfe9c21ff2fd4796f71bcc37"
+checksum = "828b9bd968b33b5239538bf4011f34d29479a3cdd62a7336598c89b73e0570a5"
 dependencies = [
  "ic-platform",
  "serde",
@@ -2267,6 +2268,18 @@ name = "ic-metrics"
 version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b29592cae8a0f2d6f1d7d8d4fbd107cfbb3f3ad2e3e18515d7f598665037056"
+
+[[package]]
+name = "ic-metrics-stable"
+version = "0.51.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a690700c2fe18088ced26286b7de9042ca532fe247b2d2289af41b8e9693436c"
+dependencies = [
+ "ic-memory",
+ "ic-metrics",
+ "ic-storage",
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "ic-platform"
@@ -2365,9 +2378,9 @@ dependencies = [
 
 [[package]]
 name = "ic-storage"
-version = "0.51.10"
+version = "0.51.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d17f6a5be22824f33703b0f629210a7366d4a1e2ee6a4ba74dea9025504f33a5"
+checksum = "8c4e38c0e6a827d963d4c49edd95951cd00c0ec6a35f691697766a13054c6e6a"
 dependencies = [
  "ic-memory",
  "ic-platform",

@@ -1045,7 +1045,7 @@ fn encode_component_runtime_policy(encoder: &mut CanonicalEncoder, source: &Comp
     encode_auth(encoder, &source.auth);
     encode_standards(encoder, &source.standards);
     encode_diagnostics(encoder, source.diagnostics);
-    encode_metrics(encoder, source.metrics);
+    encode_metrics(encoder, &source.metrics);
 }
 
 fn encode_component_child(encoder: &mut CanonicalEncoder, child: &ComponentChildConfig) {
@@ -1059,7 +1059,7 @@ fn encode_component_child(encoder: &mut CanonicalEncoder, child: &ComponentChild
     encode_auth(encoder, &child.auth);
     encode_standards(encoder, &child.standards);
     encode_diagnostics(encoder, child.diagnostics);
-    encode_metrics(encoder, child.metrics);
+    encode_metrics(encoder, &child.metrics);
 }
 
 fn encode_source_spawn_grants(encoder: &mut CanonicalEncoder, source: &ComponentSpecConfig) {
@@ -1189,13 +1189,23 @@ fn encode_diagnostics(encoder: &mut CanonicalEncoder, diagnostics: DiagnosticsCa
     encoder.boolean(diagnostics.memory_ledger);
 }
 
-fn encode_metrics(encoder: &mut CanonicalEncoder, metrics: MetricsCanisterConfig) {
+fn encode_metrics(encoder: &mut CanonicalEncoder, metrics: &MetricsCanisterConfig) {
     match metrics.profile {
         None => encoder.u8(0),
         Some(profile) => {
             encoder.u8(1);
             encoder.u8(metrics_profile_tag(profile));
         }
+    }
+    encoder.u8(u8::from(
+        metrics.storage == super::schema::MetricStorage::Stable,
+    ));
+    encoder.u64(metrics.providers.len() as u64);
+    for (provider, policy) in &metrics.providers {
+        encoder.string(provider);
+        encoder.u8(u8::from(
+            policy.storage == super::schema::MetricStorage::Stable,
+        ));
     }
 }
 

@@ -112,6 +112,13 @@ pub mod public_status {
 
 pub mod metrics {
     pub use crate::__internal::core::api::metrics::MetricsQuery;
+    /// Explicit provider declarations and host-selected heap/stable recording.
+    pub mod providers {
+        pub use crate::__internal::core::api::metrics::{
+            MetricDefinition, MetricKind, MetricObservation, MetricProviderApi, MetricStorage,
+            ProviderMetricValue, ProviderMetricsError,
+        };
+    }
 }
 
 /// Low-level operational helpers

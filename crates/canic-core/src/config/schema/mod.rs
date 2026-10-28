@@ -13,6 +13,7 @@ mod component_group_deployment;
 mod component_spec;
 mod fleet_service;
 mod log;
+mod metric_storage;
 mod role;
 
 use crate::InternalError;
@@ -30,6 +31,7 @@ pub use component_group_deployment::*;
 pub use component_spec::*;
 pub use fleet_service::*;
 pub use log::*;
+pub use metric_storage::{MetricProviderStorage, MetricStorage, MetricStorageConfig};
 pub use role::*;
 
 ///
