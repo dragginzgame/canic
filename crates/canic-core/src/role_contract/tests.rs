@@ -193,6 +193,7 @@ fn canonical_allocations_match_the_active_memory_map() {
                 "canic.core.auth.local_application_authorization.sessions.v1".to_string(),
                 "canic.core.auth.local_application_authorization.replays.v1".to_string(),
                 "canic.core.auth.local_application_authorization.logins.v1".to_string(),
+                "canic.core.auth.portable.receiver_enrollment.v1".to_string(),
             ],
         ),
         (
@@ -268,7 +269,10 @@ fn canonical_allocations_match_the_active_memory_map() {
         ),
         (
             StateAllocationKey::CoreRootDelegationState,
-            vec!["canic.core.auth.root_delegation.state.v1".to_string()],
+            vec![
+                "canic.core.auth.root_delegation.state.v1".to_string(),
+                "canic.core.auth.portable.root_enrollment.v1".to_string(),
+            ],
         ),
         (
             StateAllocationKey::FleetCoordinatorFunding,

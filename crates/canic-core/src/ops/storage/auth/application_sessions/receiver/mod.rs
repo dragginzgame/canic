@@ -73,6 +73,7 @@ impl PersistentReceiverState {
     /// A refusal closes derived access. Neither restoration nor budget reset renews
     /// a login; both independent budgets start empty at the current trusted time.
     pub fn restore(policy: PersistentReceiverPolicy, now_ns: u64) -> Result<Self, SessionError> {
+        crate::ops::auth::enrollment::invalidate_receiver_boot();
         invalidate_indexes();
         // Capture the old high-water mark before startup observes current time.
         // The Auth restore validator checks records against their own checkpoint.

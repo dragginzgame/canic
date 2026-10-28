@@ -12,6 +12,12 @@ mod chain_key_config;
 mod crypto;
 mod delegated;
 mod delegation;
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "auth-root-delegation-state"
+))]
+pub mod enrollment;
 mod error;
 mod issuer_canister_sig;
 mod public_key;

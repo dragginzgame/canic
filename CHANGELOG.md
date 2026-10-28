@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Prepare the exact release metadata editor in fresh ordinary-test jobs and use
   the native POSIX FIFO utility for CLI manifest fixtures on Linux/macOS.
 
+- Add bounded portable enrollment snapshots, persistent monotonic checkpoints,
+  terminal key retirement and an opaque direct-Root pull result. Keep cached
+  reads write-free and close readiness on restore or authority changes. The
+  Root RPC bundle and issuer registration remain unmounted.
+
 See [detailed notes](docs/changelog/0.112.md#01121).
 
 ## [0.112.0] - 2026-10-28

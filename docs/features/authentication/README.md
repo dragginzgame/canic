@@ -68,6 +68,40 @@ closed. Root enrollment distribution, lifecycle/endpoint wiring and real install
 upgrade acceptance remain with [#491](https://github.com/dragginzgame/canic/issues/491).
 Persistent receiver records do not imply persistent issuer keys or TEE custody.
 
+## Enrollment exchange component
+
+The internal `shared_support::portable_enrollment` component implements the bounded
+snapshot producer and receiver checkpoint installer. The method name/ID in
+`protocol::portable_enrollment` is reserved; the current Root bundle does not export
+that method. No issuer-registration or application-admission endpoint is activated.
+
+Root supplies the complete approved registry and terminal retirement set for the
+receiver's Fleet. Each snapshot binds the exact authority, IC caller as receiver,
+boot challenge, current revision/generation and finite freshness. Key registration,
+key-possession verification and deployment/custody approval must precede the internal
+Root commit adapter; a nonzero approval digest alone does not establish those facts.
+
+After stable restoration, the host supplies a fresh CSPRNG boot challenge to
+`ReceiverPortableEnrollment::boot`. Retained checkpoints provide high-water marks,
+never readiness. Prepare a pull synchronously, fetch its ticket outside any receiver
+borrow, then finish the opaque reply synchronously. The fetch targets the installed
+Root and rechecks protected identity after the IC call. Relayed documents cannot
+construct the opaque reply. Cached reads remain available while refresh waits and
+perform no stable writes or network calls. Consumers still enforce each entry's
+key/approval validity and the Auth session engine's complete checks.
+
+Installation rejects wrong authority/receiver/Fleet/challenge, stale revisions,
+equivocation, unversioned authority changes, forgotten retirements and counter
+overflow. It commits the enrollment checkpoint and local session invalidation in
+one IC message. Restore/recovery or a protected binding change fences old gates;
+ordinary bounded cleanup does not. Refresh cannot erase login denials or extend
+stored session deadlines. The bounded retirement set is never evicted to admit a
+revoked key: exhaustion refuses and requires a separately governed trust bootstrap.
+
+Native logic, codec and feature-graph checks do not establish installed IC
+response authentication, Root outage behavior, refresh scheduling, upgrade/backup
+acceptance or issuer custody. Those production boundaries remain in #491.
+
 ## Boundary
 
 Delegated subject identity is for application endpoints. Framework-owned
