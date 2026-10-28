@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.111.0"
+version = "0.112.0"
 dependencies = [
  "canic-contracts",
  "canic-core",
@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "canic-blob-service"
-version = "0.111.0"
+version = "0.112.0"
 dependencies = [
  "canic",
  "ic-blob-storage",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "canic-contracts"
-version = "0.111.0"
+version = "0.112.0"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.111.0"
+version = "0.112.0"
 dependencies = [
  "async-trait",
  "canic-contracts",
@@ -298,7 +298,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.111.0"
+version = "0.112.0"
 dependencies = [
  "proc-macro2",
  "quote",
