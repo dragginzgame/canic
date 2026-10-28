@@ -76,6 +76,7 @@ struct EnrollmentDomain {
 #[cfg(any(test, feature = "auth-root-delegation-state"))]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 struct RegistryContents {
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     domain: Option<EnrollmentDomain>,
     revision: u64,
     generation: u64,
