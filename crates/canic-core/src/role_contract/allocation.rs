@@ -117,6 +117,10 @@ pub mod memory {
     }
 
     pub mod auth {
+        pub const PORTABLE_ROOT_ENROLLMENT_KEY: &str =
+            "canic.core.auth.portable.root_enrollment.v1";
+        pub const PORTABLE_RECEIVER_ENROLLMENT_KEY: &str =
+            "canic.core.auth.portable.receiver_enrollment.v1";
         pub const LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY: &str =
             "canic.core.auth.local_application_authorization.state.v1";
         pub const LOCAL_APPLICATION_SESSIONS_KEY: &str =
@@ -236,8 +240,12 @@ const CORE_LOCAL_APPLICATION_AUTHORIZATION_STATE_KEYS: &[&str] = &[
     memory::auth::LOCAL_APPLICATION_SESSIONS_KEY,
     memory::auth::LOCAL_APPLICATION_REPLAYS_KEY,
     memory::auth::LOCAL_APPLICATION_LOGINS_KEY,
+    memory::auth::PORTABLE_RECEIVER_ENROLLMENT_KEY,
 ];
-const CORE_ROOT_DELEGATION_STATE_KEYS: &[&str] = &[ROOT_DELEGATION_STATE_KEY];
+const CORE_ROOT_DELEGATION_STATE_KEYS: &[&str] = &[
+    ROOT_DELEGATION_STATE_KEY,
+    memory::auth::PORTABLE_ROOT_ENROLLMENT_KEY,
+];
 const CORE_REPLAY_RECEIPTS_KEYS: &[&str] = &[REPLAY_RECEIPTS_KEY];
 const CORE_CYCLES_KEYS: &[&str] = &[
     CYCLES_TRACKER_KEY,

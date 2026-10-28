@@ -21,6 +21,10 @@ keys! {
     AUTH_LOCAL_APPLICATION_AUTHORIZATION_STATE_V1 = "canic.core.auth.local_application_authorization.state.v1";
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     AUTH_ROOT_DELEGATION_STATE_V1 = "canic.core.auth.root_delegation.state.v1";
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
+    AUTH_PORTABLE_ROOT_ENROLLMENT_V1 = "canic.core.auth.portable.root_enrollment.v1";
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    AUTH_PORTABLE_RECEIVER_ENROLLMENT_V1 = "canic.core.auth.portable.receiver_enrollment.v1";
     AUTHORITY_RESTORE_FENCE_V1 = "canic.core.authority_restore.fence.v1";
     CALLER_AUTHORITY_HEADER_V1 = "canic.core.caller_authority.header.v1";
     CALLER_AUTHORITY_ROWS_V1 = "canic.core.caller_authority.rows.v1";

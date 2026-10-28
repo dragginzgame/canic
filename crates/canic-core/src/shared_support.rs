@@ -130,3 +130,18 @@ pub mod application_receiver {
         PersistentReceiverState,
     };
 }
+
+/// Internal enrollment exchange; no issuer registration or endpoint is installed.
+#[cfg(any(
+    feature = "auth-local-application-authorization",
+    feature = "auth-root-delegation-state"
+))]
+pub mod portable_enrollment {
+    pub use crate::ops::auth::enrollment::PortableEnrollmentError;
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
+    pub use crate::ops::auth::enrollment::RootPortableEnrollmentOps;
+    #[cfg(feature = "auth-local-application-authorization")]
+    pub use crate::ops::auth::enrollment::{
+        AuthenticatedPortableEnrollment, PortableEnrollmentPull, ReceiverPortableEnrollment,
+    };
+}

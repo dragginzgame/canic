@@ -120,3 +120,24 @@ cases, CLI package/test Clippy, workflow lint and formatting pass. Native macOS
 and a complete hosted rerun remain pending; no full local suite was run.
 Evidence: the Auth workspace's `target/canic-integration-20261028/parent-ci-*.log`.
 Owning acceptance remains with Canic #491/#515/#551/#563.
+
+## Enrollment follow-up on the persistent receiver branch
+
+The next isolated contribution adds the bounded snapshot codec, Root producer,
+opaque direct-Root pull ticket and persistent monotonic receiver installer. It
+reserves a Wire identity but mounts no Root or issuer-registration endpoint.
+Source logic is qualified by 15 selected enrollment cases (nine new), two codec/
+schema cases, 40 storage cases, 11 descriptor cases, 27 role-catalog cases, base/
+receiver/Root-only native/Wasm checks and warnings-denied Core/Contracts Clippy.
+Evidence is in the Auth workspace's `target/canic-integration-20261028/`.
+These do not qualify actual IC response authentication or installed lifecycle.
+
+The parent qualification repairs are retained in PR #701; its fresh hosted
+rerun remains separate from local component evidence. The normal Canic checkout
+remains untouched. Root endpoint mounting, registration and installed acceptance
+remain in the owning issue.
+
+The enrollment source also refreshed and verified its own embedded allocation
+peer after rebasing onto the parent qualification repairs. Its Core/Contracts
+Rust sources and lock selection are unchanged from the passing focused component
+evidence; the generated peer/evidence bind the final capability catalog.

@@ -1,3 +1,9 @@
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "auth-root-delegation-state"
+))]
+pub mod enrollment;
 mod records;
 
 use crate::{
@@ -22,8 +28,9 @@ pub use records::{
     IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
     LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
     LocalApplicationLoginRecord, LocalApplicationReplayRecord, LocalApplicationSessionRecord,
-    RootDelegationStateData, RootDelegationStateRecord, RootIssuerRecord,
-    RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootProofRecord,
+    PortableEnrollmentData, PortableEnrollmentRecord, RootDelegationStateData,
+    RootDelegationStateRecord, RootIssuerRecord, RootIssuerRenewalStateRecord,
+    RootIssuerRenewalTemplateRecord, RootProofRecord,
 };
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
@@ -98,6 +105,7 @@ fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, DefaultMemory
     panic!("Root delegation state requires its compile-time capability");
 }
 
+impl_storable_bounded!(PortableEnrollmentRecord, 131_200, false);
 impl_storable_unbounded!(LocalApplicationAuthorizationStateRecord);
 impl_storable_bounded!(LocalApplicationSessionRecord, 4096, false);
 impl_storable_bounded!(LocalApplicationReplayRecord, 512, false);

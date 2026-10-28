@@ -534,3 +534,24 @@ mod current_resource_contract {
         assert!(maximum_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
     }
 }
+
+/// Bounded canonical portable enrollment checkpoint; readiness is never serialized.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PortableEnrollmentRecord {
+    #[serde(with = "serde_bytes")]
+    pub bytes: Vec<u8>,
+    pub observed_at_ns: u64,
+}
+impl PortableEnrollmentRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "PortableEnrollmentRecord";
+}
+
+/// One canonical enrollment checkpoint snapshot for storage/recovery evidence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PortableEnrollmentData {
+    pub record: PortableEnrollmentRecord,
+}
+impl PortableEnrollmentData {
+    pub const STATE_CONTRACT_NAME: &'static str = "PortableEnrollmentData";
+}

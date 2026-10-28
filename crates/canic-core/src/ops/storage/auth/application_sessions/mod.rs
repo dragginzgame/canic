@@ -157,6 +157,7 @@ impl LocalApplicationAuthorizationStateOps {
     pub fn restore_application_session_state(
         now_ns: u64,
     ) -> Result<ApplicationSessionRestoreStats, ApplicationSessionStateError> {
+        crate::ops::auth::enrollment::invalidate_receiver_boot();
         prepare_maintenance_state(now_ns).map(|(_, report)| report)
     }
 
@@ -199,6 +200,7 @@ impl LocalApplicationAuthorizationStateOps {
             .ok_or(ApplicationSessionStateError::AuthorityGenerationExhausted)?;
         state.authority_binding = Some(authority_binding_to_record(&current));
         commit_validated_state(state)?;
+        crate::ops::auth::enrollment::invalidate_receiver_boot();
         record_application_session_generation_invalidation();
         Ok(())
     }

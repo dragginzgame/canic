@@ -172,3 +172,5 @@ pub mod subtree_read;
 pub mod component_removal_read;
 
 pub mod root_removal_read;
+
+pub mod portable_enrollment;

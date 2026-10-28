@@ -175,3 +175,5 @@ pub mod root_removal_read;
 pub mod authority;
 
 pub mod initialization;
+
+pub mod portable_enrollment;
