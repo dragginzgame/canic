@@ -6,6 +6,15 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.113.0] - Unreleased
+
+### ⚠️ Breaking
+
+- Align Canic and both private Blob consumers with Memory/Storage 0.55.1,
+  Blob 0.56 and Metrics 0.17. Timers 0.32 shares the same arithmetic types.
+  Rebuild embedding hosts together; preserve Blob's obligation-aware retirement
+  policy. [Details](docs/changelog/0.113.md).
+
 ## [0.112.0] - 2026-10-28
 
 ### 📝 Summary

@@ -4,7 +4,8 @@ use super::*;
 use crate::storage::stable::env::{Env, EnvData, EnvRecord};
 use canic_contracts::protocol::protected_memory_allocations::{METHOD_ID, RESPONSE_LIMITS};
 use ic_memory::{
-    AllocationDeclaration, Memory, MemoryManagerSlot, VectorMemory, testing::allocation_record,
+    AllocationDeclaration, BackingIdentity, Memory, MemoryBacking, MemoryManagerSlot, VectorMemory,
+    testing::allocation_record,
 };
 
 #[test]
@@ -293,6 +294,13 @@ fn memory_allocation_record_response_omits_unmeasured_sizes() {
 struct RefusableMemory {
     bytes: VectorMemory,
     refuse: std::rc::Rc<std::cell::Cell<bool>>,
+}
+
+// Fault injection changes growth behavior, not ownership of the shared backing.
+impl MemoryBacking for RefusableMemory {
+    fn backing_identity(&self) -> BackingIdentity {
+        self.bytes.backing_identity()
+    }
 }
 
 impl Memory for RefusableMemory {
