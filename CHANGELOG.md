@@ -6,7 +6,7 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.113.0]
+## [0.113.0] - 2026-10-30
 
 - **Breaking — Wire storage hard cut:** encode owned stable records and checkpoints
   with bounded IC Wire, removing the CBOR/u128 adapter and decoding tree. Use explicit
