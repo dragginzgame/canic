@@ -4,12 +4,15 @@
 //! Does not own: topology policy, subnet storage, or endpoint response mapping.
 //! Boundary: ops topology uses this to discover canister subnet placement.
 
+use crate::infra::ic::external_candid::decode_one;
 use crate::{
     cdk::types::Principal,
-    infra::ic::{IcInfraError, call::Call, known::NNS_REGISTRY_CANISTER},
+    infra::ic::{IcInfraError, known::NNS_REGISTRY_CANISTER},
     log,
     log::Topic,
 };
+use ic_call::{Call, WaitPolicy};
+use ic_platform::candid::contract::encode_one;
 use ic_platform::nns_registry_types::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse};
 use thiserror::Error as ThisError;
 
@@ -39,13 +42,15 @@ pub struct NnsRegistryInfra;
 impl NnsRegistryInfra {
     /// Quote the same subnet lookup before its owner reserves the paid call.
     pub fn subnet_lookup_call_cost(pid: Principal) -> Result<u128, IcInfraError> {
-        Ok(
-            Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-                .with_arg(GetSubnetForCanisterRequest {
-                    principal: Some(pid),
-                })?
-                .cost(),
+        Ok(Call::new(
+            (*NNS_REGISTRY_CANISTER).into(),
+            "get_subnet_for_canister",
+            WaitPolicy::Unbounded,
         )
+        .take_raw_args(encode_one(GetSubnetForCanisterRequest {
+            principal: Some(pid),
+        })?)
+        .get_cost())
     }
 
     /// Query the NNS registry for the subnet of *this* canister.
@@ -60,11 +65,17 @@ impl NnsRegistryInfra {
             principal: Some(pid),
         };
 
-        let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-            .with_arg(request)?
+        let result = decode_one::<GetSubnetForCanisterResponse>(
+            &(Call::new(
+                (*NNS_REGISTRY_CANISTER).into(),
+                "get_subnet_for_canister",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_one(request)?)
             .execute()
-            .await?
-            .candid::<GetSubnetForCanisterResponse>()?;
+            .await?)
+                .into_bytes(),
+        )?;
 
         match result {
             Ok(payload) => Ok(payload.subnet_id),

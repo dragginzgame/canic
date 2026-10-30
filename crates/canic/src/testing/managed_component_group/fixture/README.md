@@ -34,6 +34,11 @@ that produce identical Wasm pass without rewriting tracked files. Tests never
 refresh the fixture automatically. Ordinary release-version changes therefore
 reuse the same source proof instead of invalidating the peer after validation.
 
+When executable bytes differ, qualification retains both Wasm artifacts and their
+recorded/rebuilt source, tool and lock evidence under
+`target/validation-failures/embedded-root-*`. The existing CI failure upload
+includes this comparison, allowing diagnosis against the exact refused build.
+
 The explicit cross-directory/version regression can be run with:
 
 ```text

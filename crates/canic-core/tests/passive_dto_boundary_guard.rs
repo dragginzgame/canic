@@ -74,7 +74,7 @@ const FORBIDDEN_EFFECT_FRAGMENTS: &[&str] = &[
     "TimerOps",
     "IcOps",
     "MgmtOps",
-    "CallOps",
+    "ic_call::",
     "ic_cdk::",
     "ic_platform::cdk::",
 ];

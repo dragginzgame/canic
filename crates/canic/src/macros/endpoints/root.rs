@@ -429,11 +429,11 @@ macro_rules! canic_emit_root_command_endpoint {
     };
 }
 
-/// Emit the Fleet Subnet Root's role-owned status query.
+/// Emit the Fleet Subnet Root's role-owned read-only status endpoints.
 #[macro_export]
 macro_rules! canic_emit_root_status_endpoint {
     () => {
-        #[$crate::query(requires(caller::is_controller()), wire(id = ::canic::protocol::application_checkpoint::STATUS, request = ::canic::protocol::application_checkpoint::LIMITS, response = ::canic::protocol::application_checkpoint::LIMITS))]
+        #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::application_checkpoint::STATUS, request = ::canic::protocol::application_checkpoint::LIMITS, response = ::canic::protocol::application_checkpoint::LIMITS))]
         fn canic_root_checkpoint_status() -> Result<Option<::canic::dto::application_checkpoint::RootCheckpointStatus>, ::canic::Error> {
             $crate::__internal::control_plane::api::application_checkpoint::RootCheckpointApi::status()
         }

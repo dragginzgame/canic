@@ -312,6 +312,17 @@ runtime outputs are still derived afterward; no finalized runtime is copied
 between release identities. Stderr distinguishes each role's declaration hit
 or miss from its complete-release cache decision.
 
+IC Build owns invocation capture, private staging allocation and candidate cleanup.
+Canic retains the captured record through its complete Wasm/declaration/gzip
+qualification and durable publication. Configured roles and generated
+infrastructure use this same finalizer; no cache hit grants release admission.
+Complete-build identity binds the Cargo recipe used by those commands. Every
+contributing workspace catalog and its configuration ancestry is watched, including
+bounded configuration include trees discovered by IC Build. Missing required or
+invalid includes refuse reuse; newly discovered inputs after compilation cannot
+gain retrospective authority. Existing retained records are neither migrated nor
+pruned by this cutover.
+
 Complete App builds hold one artifact-build lock across compilation and
 finalization. Immediately after each Coordinator or Store compilation, the host
 captures that exact Wasm in a private staging directory. Up to two infrastructure

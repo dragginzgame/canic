@@ -13,7 +13,6 @@ use crate::{
     },
     version_text,
 };
-use canic_backup::discovery::DiscoveryError;
 use canic_host::{
     fleet_ensure::CurrentFleetInventoryError, icp::IcpCommandError, icp_config::IcpConfigError,
 };
@@ -48,9 +47,6 @@ pub enum MetricsCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Discovery(#[from] DiscoveryError),
 }
 
 pub fn run_info<I>(args: I) -> Result<(), MetricsCommandError>

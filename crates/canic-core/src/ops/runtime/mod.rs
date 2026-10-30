@@ -13,6 +13,7 @@ pub mod init_payload;
 pub mod install_source;
 pub mod log;
 pub mod memory;
+pub mod metric_providers;
 pub mod metrics;
 pub mod public_metrics;
 pub mod ready;
@@ -37,9 +38,6 @@ pub enum RuntimeOpsError {
     EnvOps(#[from] env::EnvOpsError),
 
     #[error(transparent)]
-    LogStorage(#[from] crate::storage::StorageError),
-
-    #[error(transparent)]
     MemoryRegistryOps(#[from] memory::MemoryRegistryOpsError),
 }
 
@@ -47,7 +45,6 @@ impl From<RuntimeOpsError> for InternalError {
     fn from(err: RuntimeOpsError) -> Self {
         match err {
             RuntimeOpsError::EnvOps(err) => err.into(),
-            RuntimeOpsError::LogStorage(err) => err.into(),
             RuntimeOpsError::MemoryRegistryOps(err) => err.into(),
         }
     }

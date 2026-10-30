@@ -13,11 +13,10 @@ use crate::{
     output_with_executable_busy_retry,
 };
 use canic_contracts::ids::BuildNetwork;
+use ic_build::artifacts::CapturedArtifact;
 use ic_host_artifacts::artifact::encode_gzip;
 use ic_host_fs::{
-    directory::create_unique_directory,
     durable::{PublicationMode, WriteOptions, write_bytes, write_named_with, write_with},
-    owned_directory::OwnedDirectory,
     read::read_file_no_follow,
 };
 use ic_host_tools::{
@@ -27,7 +26,6 @@ use ic_host_tools::{
 use std::{
     collections::BTreeSet,
     fs,
-    num::NonZeroUsize,
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -132,8 +130,19 @@ fn stage_and_publish_artifact_set<T>(
     finalization: &WasmArtifactFinalization<'_>,
     qualify: impl FnOnce(&StagedArtifactSet) -> Result<T, Box<dyn std::error::Error>>,
 ) -> Result<T, Box<dyn std::error::Error>> {
-    let staged = StagedArtifactSet::create(finalization.wasm_path)?;
-    write_wasm_artifact(finalization.source_wasm_path, &staged.wasm_path)?;
+    let parent = finalization.wasm_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "final Wasm artifact has no parent",
+        )
+    })?;
+    // The upstream capture owns all candidate paths until the complete set is published.
+    let captured = CapturedArtifact::capture(finalization.source_wasm_path, parent, usize::MAX)?;
+    let staged = StagedArtifactSet {
+        wasm_path: captured.path().to_owned(),
+        did_path: captured.path().with_extension("did"),
+        wasm_gz_path: captured.path().with_extension("wasm.gz"),
+    };
     write_bytes(
         &staged.did_path,
         WriteOptions {
@@ -189,34 +198,12 @@ fn stage_and_publish_artifact_set<T>(
     Ok(result)
 }
 
+/// Paths for Canic's Wasm, external declaration and compression recipe.
+/// IC Build's capture retains the candidate directory through qualification and publication.
 struct StagedArtifactSet {
-    _staging: OwnedDirectory,
     wasm_path: PathBuf,
     did_path: PathBuf,
     wasm_gz_path: PathBuf,
-}
-
-impl StagedArtifactSet {
-    fn create(final_wasm_path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
-        let parent = final_wasm_path.parent().ok_or_else(|| {
-            format!(
-                "final Wasm artifact has no parent directory: {}",
-                final_wasm_path.display()
-            )
-        })?;
-        let staging = OwnedDirectory::new(create_unique_directory(
-            parent,
-            ".ic-build-artifact-stage",
-            0o777,
-            NonZeroUsize::new(64),
-        )?);
-        Ok(Self {
-            wasm_path: staging.path().join("candidate.wasm"),
-            did_path: staging.path().join("candidate.did"),
-            wasm_gz_path: staging.path().join("candidate.wasm.gz"),
-            _staging: staging,
-        })
-    }
 }
 
 /// Prove that a final runtime matches its sidecar method inventory without carrying Candid.
@@ -373,23 +360,6 @@ fn shrink_wasm_artifact(
         },
     )
     .map_err(Into::into)
-}
-
-// Copy one `.wasm` artifact atomically into the local ICP artifact tree.
-pub fn write_wasm_artifact(
-    source_path: &Path,
-    target_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let bytes = fs::read(source_path)?;
-    write_bytes(
-        target_path,
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o666,
-        },
-        &bytes,
-    )?;
-    Ok(())
 }
 
 const GZIP_COMPRESSION_LEVEL: u32 = 9;

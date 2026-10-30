@@ -5750,10 +5750,14 @@ impl RootComponentRegistryStore {
         })
     }
 
+    fn encoded_entry_bytes(key: &impl Storable, value: &impl Storable) -> u64 {
+        (key.to_bytes().len() + value.to_bytes().len()) as u64
+    }
+
     #[must_use]
     pub(crate) fn allocation_entry_bytes(record: &RootComponentAllocationRecord) -> u64 {
         let key = RootComponentAllocationOperationKey::from(record.operation_id);
-        (key.to_bytes().len() + record.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, record)
     }
 
     #[must_use]
@@ -5765,7 +5769,7 @@ impl RootComponentRegistryStore {
     pub(crate) fn partition_entry_bytes(record: &ComponentRegistryPartitionRecord) -> u64 {
         let key = ComponentRegistryEntryKey::partition(record.binding.component);
         let value = ComponentRegistryEntryRecord::Partition(record.clone());
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, &value)
     }
 
     #[must_use]
@@ -5783,14 +5787,14 @@ impl RootComponentRegistryStore {
             retry_at_ns: u64::MAX,
         });
         let value = ComponentRegistryEntryRecord::ChildAllocation(maximum);
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, &value)
     }
 
     #[must_use]
     pub(crate) fn subtree_removal_entry_bytes(record: &RootComponentSubtreeRemovalRecord) -> u64 {
         let key = ComponentRegistryEntryKey::subtree_removal(record.component, record.operation_id);
         let value = ComponentRegistryEntryRecord::SubtreeRemoval(record.clone());
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, &value)
     }
 
     #[must_use]
@@ -5802,20 +5806,20 @@ impl RootComponentRegistryStore {
             record.operation_id,
             record.traversal_steps,
         );
-        (key.to_bytes().len() + record.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, record)
     }
 
     #[must_use]
     pub(crate) fn component_draining_entry_bytes(record: &RootComponentDrainingRecord) -> u64 {
         let key = RootComponentDrainingKey::from(record.component);
-        (key.to_bytes().len() + record.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, record)
     }
 
     #[must_use]
     pub(crate) fn child_entry_bytes(record: &ComponentRegistryChildRecord) -> u64 {
         let key = ComponentRegistryEntryKey::child(record.component, record.canister_id);
         let value = ComponentRegistryEntryRecord::Child(record.clone());
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, &value)
     }
 
     #[must_use]
@@ -5829,7 +5833,7 @@ impl RootComponentRegistryStore {
             record.canister_id,
         );
         let value = ComponentRegistryEntryRecord::ChildTraversal(record.clone());
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, &value)
     }
 
     #[must_use]
@@ -5842,7 +5846,7 @@ impl RootComponentRegistryStore {
             &record.child_role,
         );
         let value = ComponentRegistryEntryRecord::ParentRoleCount(record.clone());
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, &value)
     }
 
     #[must_use]
@@ -5852,7 +5856,7 @@ impl RootComponentRegistryStore {
     ) -> u64 {
         let key = ComponentRegistryPrincipalKey::from(canister);
         let value = ComponentRegistryPrincipalIndexRecord { component };
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        Self::encoded_entry_bytes(&key, &value)
     }
 
     #[cfg(test)]

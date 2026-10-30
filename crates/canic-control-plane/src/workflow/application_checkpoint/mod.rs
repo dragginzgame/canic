@@ -32,6 +32,7 @@ pub fn begin(request: RootCheckpointBeginRequest) -> Result<RootCheckpointStatus
     {
         if request.root_install_id != status.root_install_id
             || request.expected_sequence.checked_add(1) != Some(status.sequence)
+            || request.unit_digest != status.unit_digest
         {
             return Err(InternalError::conflict().into());
         }

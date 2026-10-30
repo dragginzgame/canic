@@ -98,7 +98,18 @@ pub(super) struct MetricEntry {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub(super) enum MetricValue {
-    Count { count: u64 },
-    CountAndU64 { count: u64, value_u64: u64 },
-    U128 { value: u128 },
+    Count {
+        count: u128,
+        exact: bool,
+    },
+    Measurement {
+        count: u64,
+        total: u128,
+        count_overflowed: bool,
+        total_overflowed: bool,
+    },
+    U128 {
+        value: u128,
+        exact: bool,
+    },
 }

@@ -56,7 +56,7 @@ never delegates broad validation, Git publication or deployment.
 - Canister control plane: `canic-control-plane`. Fleet artifact entrypoints and
   their generated Cargo packages are owned by `canic-host`; canonical Candid
   ships with `canic`.
-- Host/operator: `canic-cli`, `canic-host`, `canic-backup`.
+- Host/operator: `canic-cli`, `canic-host`. IC Backup owns the generic backup engine.
 - Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
@@ -109,11 +109,21 @@ retain their specified Candid encoding. The 2026-10-26 completion decision in th
 `CandidType` derives/implementations: owned initialization payloads and hash inputs
 move with their producers and validators. Required external types come from their
 upstream owner, including `ic-platform` for IC contracts. Generic external-Candid
-adapter bounds may remain. Storage representation follows its separately accepted
-serde_cbor hard cut; lifecycle safety is unchanged. No next-minor work or release
+adapter bounds may remain. Storage representation follows the maintainer's
+2026-10-29 Wire hard cut for owned stable records and checkpoints; dedicated Fleet
+activation and release-build CBOR commitments retain their exact encodings.
+Lifecycle safety is unchanged. No next-minor work or release
 execution is implied.
 
 ## Pre-1.0 Hard Cuts
+
+The maintainer authorized the optional ICRC adapter in the pending 0.113 batch.
+`canic::icrc::mount!` is explicitly selected by application code, independent of
+configuration, role capabilities and automatic startup. It owns the external
+ICRC-10 `SupportedStandard { name, url }` record; that narrow required-external
+Candid declaration is permitted. ICRC-21 keeps Platform's upstream identities.
+This does not authorize Candid on owned application models or a second lifecycle,
+handler registry, executor, ledger client or consent-policy owner.
 
 - Prefer deleting obsolete contracts and correcting current-state defects over
   preserving accidental behavior. A refusal must protect a concrete property

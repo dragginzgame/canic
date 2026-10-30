@@ -5,7 +5,11 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-candidate.XXXXXX")"
 finish() {
     local status=$?
-    [[ "$status" == 0 ]] || cat "$fixture/output.log" >&2
+    if [[ "$status" != 0 ]]; then
+        for log in "$fixture/cargo.log" "$fixture/output.log"; do
+            [[ ! -f "$log" ]] || cat "$log" >&2
+        done
+    fi
     rm -rf "$fixture"
     exit "$status"
 }
@@ -102,7 +106,10 @@ cp Cargo.lock "$fixture/accepted-lock"
 run_case() {
     local expected="$1" status=0
     bash scripts/ci/check-release-candidate.sh >>"$fixture/output.log" 2>&1 || status=$?
-    [[ "$status" == "$expected" ]]
+    [[ "$status" == "$expected" ]] || {
+        echo "release candidate fixture expected exit $expected; received $status" >&2
+        return 1
+    }
 }
 run_case 0
 cp integrations/blob-service/consumer/Cargo.lock "$fixture/accepted-consumer-lock"

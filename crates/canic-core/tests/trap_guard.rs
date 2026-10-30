@@ -37,7 +37,7 @@ fn trap_usage_is_confined_to_approved_platform_boundaries() {
 
     assert!(
         violations.is_empty(),
-        "ic_platform::cdk::api::trap usage outside approved lifecycle, adapter and IC ops boundaries: {violations:?}"
+        "CDK trap usage outside approved lifecycle, adapter and IC ops boundaries: {violations:?}"
     );
 }
 
@@ -58,11 +58,85 @@ fn scan_dir(
                 || adapter_boundaries.iter().any(|boundary| path == boundary)
         },
         &mut |path, contents| {
-            if contents.contains("cdk::api::trap") {
+            let tokens = contents
+                .parse()
+                .unwrap_or_else(|error| panic!("parse Rust tokens in {}: {error}", path.display()));
+            if contains_cdk_trap(tokens) {
                 violations.push(path.to_owned());
             }
         },
     );
+}
+
+fn contains_cdk_trap(tokens: proc_macro2::TokenStream) -> bool {
+    use proc_macro2::TokenTree;
+
+    let tokens: Vec<_> = tokens.into_iter().collect();
+    for (index, token) in tokens.iter().enumerate() {
+        if let TokenTree::Group(group) = token
+            && contains_cdk_trap(group.stream())
+        {
+            return true;
+        }
+        let TokenTree::Ident(name) = token else {
+            continue;
+        };
+        if name != "cdk" && name != "ic_cdk" {
+            continue;
+        }
+        let mut tail = &tokens[index + 1..];
+        if !take_path_separator(&mut tail) {
+            continue;
+        }
+        if matches!(tail.first(), Some(TokenTree::Ident(name)) if name == "api") {
+            tail = &tail[1..];
+            if !take_path_separator(&mut tail) {
+                continue;
+            }
+        }
+        if matches!(tail.first(), Some(TokenTree::Ident(name)) if name == "trap") {
+            return true;
+        }
+    }
+    false
+}
+
+fn take_path_separator(tokens: &mut &[proc_macro2::TokenTree]) -> bool {
+    use proc_macro2::TokenTree;
+
+    if matches!(*tokens, [TokenTree::Punct(first), TokenTree::Punct(second), ..]
+        if first.as_char() == ':' && second.as_char() == ':')
+    {
+        *tokens = &tokens[2..];
+        true
+    } else {
+        false
+    }
+}
+
+#[test]
+fn detects_cdk_trap_paths_in_code_and_macro_bodies() {
+    for source in [
+        "fn f() { cdk::trap(\"failure\"); }",
+        "fn f() { ic_cdk :: trap(\"failure\"); }",
+        "fn f() { cdk::api::trap(\"failure\"); }",
+        "fn f() { ic_cdk::api::trap(\"failure\"); }",
+        "macro_rules! endpoint { () => { $crate::__internal::cdk :: trap(\"failure\") }; }",
+        "install!(trap = ic_platform::cdk::api::trap);",
+    ] {
+        assert!(contains_cdk_trap(source.parse().unwrap()), "{source}");
+    }
+}
+
+#[test]
+fn ignores_comments_strings_and_unrelated_identifiers() {
+    for source in [
+        "// ic_cdk::trap(\"failure\")\nfn f() {}",
+        "const TEXT: &str = \"cdk::api::trap\";",
+        "fn f() { other_cdk::trap(); cdk::trap_count(); other::trap(); }",
+    ] {
+        assert!(!contains_cdk_trap(source.parse().unwrap()), "{source}");
+    }
 }
 
 fn workspace_root() -> PathBuf {

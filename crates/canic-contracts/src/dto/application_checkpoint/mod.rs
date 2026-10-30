@@ -51,6 +51,8 @@ pub struct RootCheckpointBeginRequest {
     pub root_install_id: [u8; 32],
     pub operation_id: [u8; 32],
     pub expected_sequence: u64,
+    /// Complete canonical unit expected by the original host plan.
+    pub unit_digest: [u8; 32],
 }
 
 /// Exact original checkpoint selection for advance and release.

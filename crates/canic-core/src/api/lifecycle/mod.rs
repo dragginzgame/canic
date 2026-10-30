@@ -225,7 +225,7 @@ pub mod metrics {
 
             std::assert_matches!(
                 &entry.value,
-                MetricValue::Count(actual) if *actual == count
+                MetricValue::Count { count: actual, .. } if *actual == u128::from(count)
             );
         }
     }

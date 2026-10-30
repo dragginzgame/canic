@@ -286,9 +286,9 @@ fn canonical_spec_and_topology_hashes_match_frozen_golden_values() {
             topology.digest().expect("topology digest").to_string(),
         ],
         [
-            "0d2990f75d0649c4016aa8636769442d6b8fdf5c91dfe3adb2b13567ee865517".to_string(),
-            "b9d39ea6b85c85499a070e9f5ec65ddd18680d393b38927519e7076cb7b67b84".to_string(),
-            "f51d4bcff7b7833c940699cd222a6cc8dc0f1f388af9a9caf7fa2d96bf818fe1".to_string(),
+            "1e551a9c5b14cc84979296ef1b439a0b088cde0ffc31b1f61f34d1444cadddf1".to_string(),
+            "324af3600f56680675e640359d0f91abcfe5b5ec243558d8228aedfadbc453ef".to_string(),
+            "dda92e6ed2a91769252031748769964fcf311d25208141a31b46f2713b3efbd4".to_string(),
         ],
     );
 }

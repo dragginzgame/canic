@@ -60,12 +60,13 @@ use canic_core::{
             },
             component_runtime::ComponentRuntimeOps,
             config::ConfigOps,
-            ic::{IcOps, call::CallOps},
+            ic::{IcOps, call::execute as execute_call},
         },
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
     log::Topic,
 };
+use ic_call::{Call, WaitPolicy};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::time::Duration;
 
@@ -377,11 +378,16 @@ async fn query_coordinator_provisioning(
         wire::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::unbounded_wait(coordinator, wire::coordinator_provisioning::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            coordinator.into(),
+            wire::coordinator_provisioning::METHOD,
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let result: Result<component_read::CoordinatorProvisioning, Error> =
         ic_wire::native::decode_response(
             wire::coordinator_provisioning::METHOD_ID,

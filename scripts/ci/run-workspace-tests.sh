@@ -511,6 +511,11 @@ run_ordinary_tests() {
     echo "==> combined inventory: $selected targets across ${#selected_packages[@]} packages"
     run_test parallel "workspace ordinary tests" "${cargo_args[@]}"
 
+    # Optional adapter tests require their feature; default workspace discovery
+    # deliberately does not enable or mount this external protocol surface.
+    run_test native-selected "optional ICRC adapter native tests" \
+        -p canic --features icrc --test icrc_adapter --test icrc_discovery
+
     # The stateful catalogue is deliberately absent from ordinary discovery.
     # Select only its native support modules and cache proofs with the feature on.
     local native_selectors=()

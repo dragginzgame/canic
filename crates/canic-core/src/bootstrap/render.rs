@@ -24,8 +24,7 @@ use crate::config::{
         FleetServiceTargetConfig, FleetServicesConfig, IndexConfig, IndexPool,
         LocalApplicationAuthorizationConfig, LogConfig, MetricsCanisterConfig, MetricsProfile,
         RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, TopupPolicy,
+        ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig, TopupPolicy,
     },
 };
 use canic_contracts::ids::{
@@ -64,7 +63,6 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
         quote! { ::canic::__internal::contracts::dto::public_status::PublicMetricFamily::#variant }
     });
     let fleet_admission = authority.fleet_admission;
-    let global_icrc21 = authority.global_icrc21;
     let component_topology = render_component_topology(&authority.component_topology);
     let canisters = render_vec(
         authority.canisters.iter(),
@@ -92,7 +90,6 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
             auth: #auth,
             public_metrics: ::std::collections::BTreeSet::from([#(#public_metrics),*]),
             fleet_admission: #fleet_admission,
-            global_icrc21: #global_icrc21,
             component_topology: #component_topology,
             canisters: #canisters,
             children: #children,
@@ -217,6 +214,7 @@ fn render_component_limits(limits: &ComponentLimits) -> TokenStream {
 }
 
 fn render_runtime_canister_config(config: &RuntimeCanisterConfig) -> TokenStream {
+    let metrics = render_metric_storage_config(&config.metrics);
     let kind = render_canister_kind(config.kind);
     let topup = render_option(config.topup.as_ref(), render_topup);
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
@@ -224,9 +222,9 @@ fn render_runtime_canister_config(config: &RuntimeCanisterConfig) -> TokenStream
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
     let index = render_option(config.index.as_ref(), render_index_config);
     let auth = render_canister_auth_config(&config.auth);
-    let standards = render_standards_canister_config(&config.standards);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::RuntimeCanisterConfig {
+            metrics: #metrics,
             kind: #kind,
             topup: #topup,
             cycles_funding: #cycles_funding,
@@ -234,7 +232,6 @@ fn render_runtime_canister_config(config: &RuntimeCanisterConfig) -> TokenStream
             sharding: #sharding,
             index: #index,
             auth: #auth,
-            standards: #standards,
         }
     }
 }
@@ -398,7 +395,6 @@ fn render_byte_array<const N: usize>(bytes: &[u8; N]) -> TokenStream {
 
 // Render the top-level configuration model into a portable Rust expression.
 fn render_config_model(config: &ConfigModel) -> TokenStream {
-    let standards = render_option(config.standards.as_ref(), render_standards);
     let log = render_log_config(&config.log);
     let auth = render_auth_config(&config.auth);
     let public_metrics = config.public_metrics.iter().map(|family| {
@@ -431,7 +427,6 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
             public_metrics: ::std::collections::BTreeSet::from([#(#public_metrics),*]),
-            standards: #standards,
             log: #log,
             auth: #auth,
             app: #app,
@@ -941,17 +936,6 @@ where
     })
 }
 
-// Render the top-level standards feature flags.
-fn render_standards(standards: &Standards) -> TokenStream {
-    let icrc21 = standards.icrc21;
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::Standards {
-            icrc21: #icrc21,
-        }
-    }
-}
-
 // Render the log retention configuration.
 fn render_log_config(config: &LogConfig) -> TokenStream {
     let max_entries = render_u64_literal(config.max_entries);
@@ -1151,9 +1135,8 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
     let index = render_option(config.index.as_ref(), render_index_config);
     let auth = render_canister_auth_config(&config.auth);
-    let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
-    let metrics = render_metrics_canister_config(config.metrics);
+    let metrics = render_metrics_canister_config(&config.metrics);
     let provisions = render_btree_map(
         config.provisions.iter(),
         render_component_spec_id,
@@ -1186,7 +1169,6 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
             sharding: #sharding,
             index: #index,
             auth: #auth,
-            standards: #standards,
             diagnostics: #diagnostics,
             metrics: #metrics,
             provisions: #provisions,
@@ -1234,9 +1216,8 @@ fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
     let index = render_option(config.index.as_ref(), render_index_config);
     let auth = render_canister_auth_config(&config.auth);
-    let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
-    let metrics = render_metrics_canister_config(config.metrics);
+    let metrics = render_metrics_canister_config(&config.metrics);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentChildConfig {
@@ -1248,7 +1229,6 @@ fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
             sharding: #sharding,
             index: #index,
             auth: #auth,
-            standards: #standards,
             diagnostics: #diagnostics,
             metrics: #metrics,
         }
@@ -1308,16 +1288,20 @@ fn render_diagnostics_canister_config(config: DiagnosticsCanisterConfig) -> Toke
 }
 
 // Render per-canister metrics profile configuration.
-fn render_metrics_canister_config(config: MetricsCanisterConfig) -> TokenStream {
+fn render_metrics_canister_config(config: &MetricsCanisterConfig) -> TokenStream {
     let profile = render_option(config.profile.as_ref(), |profile| {
         render_metrics_profile(*profile)
     });
+    let policy = render_metric_storage_config(&config.storage_policy());
 
-    quote! {
+    quote! {{
+        let policy = #policy;
         ::canic::__internal::core::bootstrap::compiled::MetricsCanisterConfig {
             profile: #profile,
+            storage: policy.storage,
+            providers: policy.providers,
         }
-    }
+    }}
 }
 
 // Render a metrics profile enum.
@@ -1451,17 +1435,6 @@ fn render_local_application_authorization_config(
     }
 }
 
-// Render the per-canister standards config.
-fn render_standards_canister_config(config: &StandardsCanisterConfig) -> TokenStream {
-    let icrc21 = config.icrc21;
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::StandardsCanisterConfig {
-            icrc21: #icrc21,
-        }
-    }
-}
-
 // Render the scaling config subtree.
 fn render_scaling_config(config: &ScalingConfig) -> TokenStream {
     let pools = render_btree_map(
@@ -1577,6 +1550,30 @@ fn render_index_pool(pool: &IndexPool) -> TokenStream {
 }
 
 // -----------------------------------------------------------------------------
+fn render_metric_storage_config(
+    config: &crate::config::schema::MetricStorageConfig,
+) -> TokenStream {
+    fn mode(value: crate::config::schema::MetricStorage) -> TokenStream {
+        use crate::config::schema::MetricStorage;
+        match value {
+            MetricStorage::Heap => {
+                quote! { ::canic::__internal::core::bootstrap::compiled::MetricStorage::Heap }
+            }
+            MetricStorage::Stable => {
+                quote! { ::canic::__internal::core::bootstrap::compiled::MetricStorage::Stable }
+            }
+        }
+    }
+    let storage = mode(config.storage);
+    let providers = config.providers.iter().map(|(name, provider)| {
+        let selected = mode(provider.storage);
+        quote! { (#name.to_string(), ::canic::__internal::core::bootstrap::compiled::MetricProviderStorage { storage: #selected }) }
+    });
+    quote! { ::canic::__internal::core::bootstrap::compiled::MetricStorageConfig {
+        storage: #storage, providers: ::std::collections::BTreeMap::from([#(#providers),*]),
+    } }
+}
+
 // Tests
 // -----------------------------------------------------------------------------
 

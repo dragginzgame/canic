@@ -25,8 +25,6 @@
 //!
 //! All application behavior belongs in `api` or `workflow`, not here.
 
-pub mod icrc21;
-
 use crate::perf;
 use canic_contracts::ids::EndpointCall;
 

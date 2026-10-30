@@ -36,16 +36,10 @@ valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 
-[standards]
-icrc21 = true
-
 [component_specs.users]
 component_role = "user_hub"
 maximum_instances = 1
 topup = {}
-
-[component_specs.users.standards]
-icrc21 = true
 
 [component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -55,9 +49,6 @@ policy.max_shards = 4
 [component_specs.users.children.user_shard]
 kind = "shard"
 topup = {}
-
-[component_specs.users.children.user_shard.standards]
-icrc21 = true
 
 [component_specs.users.children.user_shard.auth]
 delegated_token_issuer = true
@@ -70,9 +61,6 @@ maximum_instances_per_parent = 4
 component_role = "test"
 maximum_instances = 1
 topup = {}
-
-[component_specs.test.standards]
-icrc21 = true
 
 [component_specs.test.auth]
 delegated_token_verifier = true

@@ -150,7 +150,6 @@ const fn role_capability_name(capability: RoleCapability) -> &'static str {
         RoleCapability::DelegatedTokenVerifier => "DelegatedTokenVerifier",
         RoleCapability::FleetAdmissionProjection => "FleetAdmissionProjection",
         RoleCapability::FleetCoordinator => "FleetCoordinator",
-        RoleCapability::Icrc21 => "Icrc21",
         RoleCapability::Index => "Index",
         RoleCapability::ObservabilityDiagnostics => "ObservabilityDiagnostics",
         RoleCapability::ObservabilityHistory => "ObservabilityHistory",

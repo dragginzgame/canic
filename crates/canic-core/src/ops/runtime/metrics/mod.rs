@@ -72,46 +72,6 @@ pub fn core_entries() -> Vec<MetricEntry> {
     entries
 }
 
-/// Project at most `limit` inputs from each operation owner before formatting.
-pub(super) fn bounded_core_entries(limit: usize) -> Result<Vec<MetricEntry>, crate::InternalError> {
-    let mut rows = prefix_entries(
-        "lifecycle",
-        lifecycle_entries_from(LifecycleMetrics::bounded_snapshot(limit)),
-    );
-    rows.extend(prefix_entries(
-        "canister_ops",
-        canister_ops_entries_from(CanisterOpsMetrics::bounded_snapshot(limit)?),
-    ));
-    rows.extend(prefix_entries(
-        "cycles_funding",
-        cycles_funding_entries_from(limit),
-    ));
-    if EnvOps::is_root() {
-        rows.extend(prefix_entries(
-            "cycles_funding",
-            icp_refill::entries_from_snapshot(
-                &crate::ops::storage::icp_refill::IcpRefillRecordOps::bounded_metric_snapshot(
-                    limit,
-                ),
-            ),
-        ));
-    }
-    rows.extend(prefix_entries(
-        "cycles_topup",
-        cycles_topup_entries_from(CyclesTopupMetrics::bounded_snapshot(limit)),
-    ));
-    Ok(rows)
-}
-
-/// Sample performance directly; the upstream timer registry admits at most 64 timers.
-pub(super) fn bounded_performance_entries(
-    limit: usize,
-    timers: &[ic_timers::TimerSnapshot],
-) -> Result<Vec<MetricEntry>, crate::InternalError> {
-    let counters = perf::bounded_entries(limit)?;
-    Ok(prefix_entries("perf", perf_entries_from(counters, timers)))
-}
-
 #[must_use]
 pub fn placement_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("cascade", cascade_entries());
@@ -151,11 +111,11 @@ pub fn runtime_entries() -> Vec<MetricEntry> {
     entries
 }
 
-const fn count_entry(labels: Vec<String>, count: u64) -> MetricEntry {
+const fn count_entry(labels: Vec<String>, count: ic_metrics::MeasurementCounter) -> MetricEntry {
     MetricEntry {
         labels,
         principal: None,
-        value: MetricValue::Count(count),
+        value: count_value(count),
     }
 }
 
@@ -163,7 +123,10 @@ fn timer_inventory_availability(available: bool) -> MetricEntry {
     MetricEntry {
         labels: vec!["inventory".to_string(), "available".to_string()],
         principal: None,
-        value: MetricValue::Count(u64::from(available)),
+        value: MetricValue::Count {
+            count: u128::from(available),
+            exact: true,
+        },
     }
 }
 
@@ -373,7 +336,10 @@ fn canister_ops_entries() -> Vec<MetricEntry> {
 }
 
 fn canister_ops_entries_from(
-    snapshot: Vec<(canister_ops::CanisterOpsMetricKey, u64)>,
+    snapshot: Vec<(
+        canister_ops::CanisterOpsMetricKey,
+        ic_metrics::MeasurementCounter,
+    )>,
 ) -> Vec<MetricEntry> {
     snapshot
         .into_iter()
@@ -416,7 +382,12 @@ fn lifecycle_entries() -> Vec<MetricEntry> {
     lifecycle_entries_from(LifecycleMetrics::snapshot())
 }
 
-fn lifecycle_entries_from(snapshot: Vec<(lifecycle::LifecycleMetricKey, u64)>) -> Vec<MetricEntry> {
+fn lifecycle_entries_from(
+    snapshot: Vec<(
+        lifecycle::LifecycleMetricKey,
+        ic_metrics::MeasurementCounter,
+    )>,
+) -> Vec<MetricEntry> {
     snapshot
         .into_iter()
         .map(|(key, count)| {
@@ -443,14 +414,14 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
         .map(|(key, count)| MetricEntry {
             labels: vec![key.method],
             principal: Some(key.target),
-            value: MetricValue::Count(count),
+            value: count_value(count),
         })
         .collect();
-    if snapshot.overflow != 0 {
+    if snapshot.overflow.total() != 0 || snapshot.overflow.total_overflowed() {
         entries.push(MetricEntry {
             labels: vec!["overflow".to_string()],
             principal: None,
-            value: MetricValue::Count(snapshot.overflow),
+            value: count_value(snapshot.overflow),
         });
     }
     entries
@@ -461,30 +432,46 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
 fn timer_entries(snapshots: &[ic_timers::TimerSnapshot]) -> Vec<MetricEntry> {
     snapshots
         .iter()
-        .filter_map(|snapshot| {
+        .flat_map(|snapshot| {
             let identity = snapshot.identity();
-            let counters = snapshot.observability().counters();
-            let latest_delay_ms = snapshot
-                .latest_armed_delay_ns()
-                .unwrap_or_default()
-                .saturating_div(1_000_000);
-            Some(MetricEntry {
-                labels: vec![
+            timer_rows(
+                vec![
                     snapshot.policy().label().to_string(),
                     identity.owner().to_string(),
                     identity.subsystem().to_string(),
                     identity.name().to_string(),
                 ],
-                principal: None,
-                value: MetricValue::CountAndU64 {
-                    count: crate::ops::runtime::timer_status::counter_total(&[
-                        counters.work_started()
-                    ])?,
-                    value_u64: latest_delay_ms,
-                },
-            })
+                snapshot.observability().counters().work_started(),
+                snapshot.latest_armed_delay_ns(),
+            )
         })
         .collect()
+}
+
+fn timer_rows(
+    mut labels: Vec<String>,
+    work_started: ic_metrics::MeasurementCounter,
+    latest_delay_ns: Option<u64>,
+) -> Vec<MetricEntry> {
+    labels.push("work_started".into());
+    let mut rows = vec![MetricEntry {
+        labels: labels.clone(),
+        principal: None,
+        value: count_value(work_started),
+    }];
+    if let Some(delay) = latest_delay_ns {
+        labels.pop();
+        labels.push("latest_armed_delay_ms".into());
+        rows.push(MetricEntry {
+            labels,
+            principal: None,
+            value: MetricValue::U128 {
+                value: u128::from(delay / 1_000_000),
+                exact: true,
+            },
+        });
+    }
+    rows
 }
 
 /// Project access-denial counters into the unified public metrics row shape.
@@ -510,7 +497,7 @@ fn delegated_auth_entries() -> Vec<MetricEntry> {
         .map(|(authority, count)| MetricEntry {
             labels: vec!["delegated_auth_authority".to_string()],
             principal: Some(authority),
-            value: MetricValue::Count(count),
+            value: count_value(count),
         })
         .collect();
 
@@ -524,7 +511,7 @@ fn delegated_auth_entries() -> Vec<MetricEntry> {
                     key.reason.metric_label().to_string(),
                 ],
                 principal: None,
-                value: MetricValue::Count(count),
+                value: count_value(count),
             }),
     );
 
@@ -574,7 +561,10 @@ fn cycles_funding_entries_from(limit: usize) -> Vec<MetricEntry> {
                 },
             ),
             principal: child_principal,
-            value: MetricValue::U128(cycles),
+            value: MetricValue::U128 {
+                value: cycles.total(),
+                exact: !cycles.total_overflowed(),
+            },
         })
         .collect()
 }
@@ -586,7 +576,10 @@ fn cycles_topup_entries() -> Vec<MetricEntry> {
 }
 
 fn cycles_topup_entries_from(
-    snapshot: Vec<(cycles_topup::CyclesTopupMetricKey, u64)>,
+    snapshot: Vec<(
+        cycles_topup::CyclesTopupMetricKey,
+        ic_metrics::MeasurementCounter,
+    )>,
 ) -> Vec<MetricEntry> {
     snapshot
         .into_iter()
@@ -612,62 +605,63 @@ fn perf_entries_from(
 ) -> Vec<MetricEntry> {
     let mut entries = snapshot
         .into_iter()
-        .filter_map(|entry| {
-            let labels = match entry.key {
-                PerfKey::CheckpointOverflow => {
-                    return Some(MetricEntry {
-                        labels: vec!["checkpoint_overflow".into(), "calls".into()],
-                        principal: None,
-                        value: MetricValue::Count(entry.count),
-                    });
-                }
-                PerfKey::Endpoint { kind, name } => vec![
-                    "endpoint".to_string(),
-                    kind.metric_label().to_string(),
-                    name,
-                ],
-                PerfKey::Checkpoint { scope, label } => {
-                    vec!["checkpoint".to_string(), scope, label]
-                }
-            };
-
-            Some(MetricEntry {
-                labels,
-                principal: None,
-                value: MetricValue::CountAndU64 {
-                    count: entry.count,
-                    value_u64: u64::try_from(entry.total_instructions).ok()?,
-                },
-            })
+        .map(|entry| MetricEntry {
+            labels: perf_labels(entry.key),
+            principal: None,
+            value: measurement_value(entry.aggregate),
         })
         .collect::<Vec<_>>();
     entries.extend(timer_snapshots.iter().flat_map(|snapshot| {
-        let identity = snapshot.identity();
         let performance = snapshot.observability().performance();
         [
             ("scheduler", performance.scheduler_instructions()),
             ("work", performance.work_instructions()),
         ]
         .into_iter()
-        .filter_map(|(phase, summary)| {
-            let total = u64::try_from(summary.aggregate().total()).ok()?;
-            Some(MetricEntry {
-                labels: vec![
-                    "timer".to_string(),
-                    identity.owner().to_string(),
-                    identity.subsystem().to_string(),
-                    identity.name().to_string(),
-                    phase.to_string(),
-                ],
-                principal: None,
-                value: MetricValue::CountAndU64 {
-                    count: summary.aggregate().samples(),
-                    value_u64: total,
-                },
-            })
+        .map(|(phase, summary)| MetricEntry {
+            labels: timer_perf_labels(snapshot.identity(), phase),
+            principal: None,
+            value: measurement_value(summary.aggregate()),
         })
     }));
     entries
+}
+
+const fn count_value(count: ic_metrics::MeasurementCounter) -> MetricValue {
+    MetricValue::Count {
+        count: count.total(),
+        exact: !count.total_overflowed(),
+    }
+}
+
+const fn measurement_value(aggregate: ic_metrics::MeasurementAggregate) -> MetricValue {
+    MetricValue::Measurement {
+        count: aggregate.samples(),
+        total: aggregate.total(),
+        count_overflowed: aggregate.samples_overflowed(),
+        total_overflowed: aggregate.total_overflowed(),
+    }
+}
+
+// Both diagnostic and public views use the same source label contract.
+pub(super) fn perf_labels(key: PerfKey) -> Vec<String> {
+    match key {
+        PerfKey::CheckpointOverflow => vec!["checkpoint_overflow".into()],
+        PerfKey::Endpoint { kind, name } => {
+            vec!["endpoint".into(), kind.metric_label().into(), name]
+        }
+        PerfKey::Checkpoint { scope, label } => vec!["checkpoint".into(), scope, label],
+    }
+}
+
+pub(super) fn timer_perf_labels(identity: &ic_timers::TimerIdentity, phase: &str) -> Vec<String> {
+    vec![
+        "timer".into(),
+        identity.owner().into(),
+        identity.subsystem().into(),
+        identity.name().into(),
+        phase.into(),
+    ]
 }
 
 #[cfg(test)]

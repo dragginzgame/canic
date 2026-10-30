@@ -240,7 +240,9 @@ fn cycles_funding_snapshot_map() -> HashMap<
 > {
     CyclesFundingMetrics::bounded_snapshot(usize::MAX)
         .into_iter()
-        .map(|(metric, child, reason, cycles)| ((metric, child, reason), cycles))
+        .map(|(metric, child, reason, cycles)| {
+            ((metric, child, reason), cycles.exact_total().unwrap())
+        })
         .collect()
 }
 

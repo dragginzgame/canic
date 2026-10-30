@@ -9,7 +9,6 @@ pub mod fleet_activation;
 pub mod fleet_admission_projection;
 pub mod icp_refill;
 pub mod intent;
-pub mod log;
 pub mod placement_index;
 pub mod replay;
 pub mod scaling;

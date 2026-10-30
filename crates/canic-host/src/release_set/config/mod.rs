@@ -355,9 +355,6 @@ pub(in crate::release_set) fn project_role_capabilities(
             RoleCapabilityKey::Index => {
                 labels.insert("index");
             }
-            RoleCapabilityKey::Icrc21 => {
-                labels.insert("icrc21");
-            }
             RoleCapabilityKey::Scaling => {
                 labels.insert("scaling");
             }

@@ -182,6 +182,9 @@ fn perf_context_metrics() -> Vec<PerfProbeMetric> {
     perf::entries()
         .into_iter()
         .filter_map(|entry| {
+            if entry.aggregate.samples_overflowed() || entry.aggregate.total_overflowed() {
+                return None;
+            }
             let name = match entry.key {
                 perf::PerfKey::Endpoint { name, .. } if name.starts_with("perf_context_") => name,
                 perf::PerfKey::Checkpoint { scope, label } if scope == module_path!() => label,
@@ -189,9 +192,12 @@ fn perf_context_metrics() -> Vec<PerfProbeMetric> {
             };
             Some(PerfProbeMetric {
                 name,
-                count: entry.count,
-                instructions: u64::try_from(entry.total_instructions).ok()?,
+                count: entry.aggregate.samples(),
+                instructions: u64::try_from(entry.aggregate.total()).ok()?,
             })
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

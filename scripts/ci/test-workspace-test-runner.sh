@@ -75,6 +75,10 @@ case " $* " in
     *' pic::governed_suite::governed_pocketic_inventory_preserves_recovery_prefix_and_journey_suffix '*) stage=native-inventory ;;
     *' pic::workers::tests:: '*) stage=native-internal ;;
     *' --features local-fleet '*) stage=native-host ;;
+    *' --features icrc '*)
+        stage=native-icrc
+        [[ " $* " == *' --test icrc_adapter --test icrc_discovery '* ]]
+        ;;
     *' --doc '*) stage=documentation ;;
 esac
 [[ " $* " != *' --list '* ]] || phase=list
@@ -174,7 +178,7 @@ serial_stages=(internal host runtime payload-limits)
 for mode in full pocketic; do
     stages=(preflight/embedded-root)
     if [[ "$mode" == full ]]; then
-        stages+=(execute/ordinary list/native-internal execute/native-internal list/native-host execute/native-host execute/documentation)
+        stages+=(execute/ordinary list/native-icrc execute/native-icrc list/native-internal execute/native-internal list/native-host execute/native-host execute/documentation)
     fi
     for stage in "${serial_stages[@]}"; do stages+=("list/$stage"); done
     for stage in "${serial_stages[@]}"; do stages+=("execute/$stage"); done
@@ -258,7 +262,7 @@ done
 
 # A missing selector fails admission even when Cargo exits successfully. Native
 # groups still finish their independent checks; serial selectors stop before a server.
-for stage in native-internal native-host "${serial_stages[@]}"; do
+for stage in native-icrc native-internal native-host "${serial_stages[@]}"; do
     scratch="$fixture/empty-$stage"
     mkdir -p "$scratch"
     status=0
@@ -272,7 +276,7 @@ for stage in native-internal native-host "${serial_stages[@]}"; do
     if awk -F '\t' -v stage="$stage" '$1 == "execute" && $2 == stage { found=1 } END { exit !found }' "$scratch/trace.tsv"; then exit 1; fi
 done
 
-for stage in native-internal internal host; do
+for stage in native-icrc native-internal internal host; do
     scratch="$fixture/zero-executed-$stage"
     mkdir -p "$scratch"
     status=0
@@ -361,6 +365,7 @@ for mode in ordinary fast targeted-pocketic; do
     else
         printf 'execute\tordinary\t0\n' > "$scratch/expected.tsv"
         if [[ "$mode" == ordinary ]]; then
+            printf 'list\tnative-icrc\t1\nexecute\tnative-icrc\t0\n' >> "$scratch/expected.tsv"
             printf 'list\tnative-internal\t1\nexecute\tnative-internal\t0\nlist\tnative-host\t1\nexecute\tnative-host\t0\nexecute\tdocumentation\t0\n' >> "$scratch/expected.tsv"
         fi
         [[ ! -e "$scratch/server.pid" ]]

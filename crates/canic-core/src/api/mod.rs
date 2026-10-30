@@ -8,7 +8,6 @@ pub mod application_checkpoint;
 pub mod application_startup;
 pub mod auth;
 pub mod authority_restore;
-pub mod call;
 pub mod caller_authority;
 pub mod cascade;
 pub mod component_deployment;
@@ -25,6 +24,7 @@ pub mod intent;
 pub mod lifecycle;
 pub mod memory;
 pub mod metadata;
+pub mod metrics;
 pub mod observability;
 pub mod placement;
 pub mod public_status;
@@ -57,12 +57,6 @@ pub mod cycles {
 pub mod env {
     pub use crate::workflow::env::query::EnvQuery;
 }
-pub mod icrc {
-    pub use crate::workflow::icrc::query::{Icrc10Query, Icrc21Query};
-}
 pub mod log {
     pub use crate::workflow::log::query::LogQuery;
-}
-pub mod metrics {
-    pub use crate::workflow::metrics::query::MetricsQuery;
 }

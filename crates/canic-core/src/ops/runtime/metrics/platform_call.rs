@@ -4,6 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 pub use crate::domain::metrics::{
@@ -12,7 +13,7 @@ pub use crate::domain::metrics::{
 };
 
 thread_local! {
-    static PLATFORM_CALL_METRICS: RefCell<HashMap<PlatformCallMetricKey, u64>> =
+    static PLATFORM_CALL_METRICS: RefCell<HashMap<PlatformCallMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -42,7 +43,7 @@ impl PlatformCallMetrics {
     /// Bound source visits before allocating an optional anonymous aggregate.
     pub(crate) fn bounded_snapshot(
         limit: usize,
-    ) -> Result<Vec<(PlatformCallMetricKey, u64)>, crate::InternalError> {
+    ) -> Result<Vec<(PlatformCallMetricKey, MeasurementCounter)>, crate::InternalError> {
         PLATFORM_CALL_METRICS.with_borrow(|counts| {
             if counts.len() > limit {
                 return Err(crate::InternalError::invalid_input());
@@ -69,14 +70,14 @@ impl PlatformCallMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current platform call metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(PlatformCallMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(PlatformCallMetricKey, MeasurementCounter)> {
         PLATFORM_CALL_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -99,8 +100,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<PlatformCallMetricKey, u64> {
-        PlatformCallMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<PlatformCallMetricKey, u128> {
+        PlatformCallMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     #[test]

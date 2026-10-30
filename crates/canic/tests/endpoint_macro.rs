@@ -80,3 +80,43 @@ fn canic_query_accepts_composite_marker() {
 fn canic_update_accepts_protected_service_authority_guard() {
     std::hint::black_box(service_authority_probe);
 }
+
+#[test]
+fn bounded_candid_admits_empty_and_shallow_but_rejects_skipped_deep_values() {
+    use canic::endpoint::ArgumentDecodeError;
+
+    assert_eq!(LIMITS.decode::<()>(&[]), Ok(()));
+    let mut bytes = b"DIDL\x01\x6e\x00\x02\x7e\x00\x01".to_vec();
+    bytes.push(0);
+    assert_eq!(LIMITS.decode::<(bool,)>(&bytes), Ok((true,)));
+    let ample = canic::endpoint::ArgumentLimits {
+        decoding_quota: 1_000_000,
+        skipping_quota: 1_000_000,
+        ..LIMITS
+    };
+    bytes.pop();
+    bytes.extend([1; 15]);
+    bytes.push(0);
+    assert_eq!(ample.decode::<(bool,)>(&bytes), Ok((true,)));
+    bytes.insert(bytes.len() - 1, 1);
+    assert_eq!(
+        ample.decode::<(bool,)>(&bytes),
+        Err(ArgumentDecodeError::InvalidCandid)
+    );
+    assert_eq!(
+        canic::endpoint::ArgumentLimits {
+            max_bytes: 0,
+            ..LIMITS
+        }
+        .decode::<()>(&[]),
+        Ok(())
+    );
+    assert!(matches!(
+        canic::endpoint::ArgumentLimits {
+            max_bytes: 1,
+            ..LIMITS
+        }
+        .decode::<()>(&bytes),
+        Err(ArgumentDecodeError::TooLarge { .. })
+    ));
+}

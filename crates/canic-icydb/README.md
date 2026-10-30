@@ -87,3 +87,51 @@ framework probe tests host ordering, binding and same-release restoration withou
 an IcyDB dependency. Application Wire methods on a managed host use
 `canic::query`, `canic::update` or the bounded raw attributes directly, with their
 owned schema projections; `wire_endpoint!` is the standalone export helper.
+
+## Metrics recording and exposure
+
+The coordinated always-on IcyDB recorder retains bounded heap measurements even
+when an application mounts no metrics endpoint. IC Metrics supplies arithmetic,
+bounded storage and reset bookkeeping; IcyDB supplies database attribution,
+replicated-execution admission, capacity policy and report types. The adapter
+only exposes explicitly selected `icydb_metrics(authorization = controller)` or
+`icydb_metrics(authorization = public)`, and controller-only `icydb_metrics_reset`.
+No endpoint is mounted automatically. Recording does not enable history sampling,
+add a timer or turn diagnostic counters into authoritative journal debt.
+
+The shared [adapter reporting contract and ownership table](../../docs/features/runtime/public-observability.md#adapter-reporting-contract)
+define the configuration/macro boundary. For `mount! { managed; ... }`, the role's existing Canic configuration is the
+reporting ceiling:
+
+```toml
+[roles.my_role.observability]
+metrics = false
+```
+
+This removes both `icydb_metrics` and `icydb_metrics_reset` from the compiled
+managed surface, including their metadata and update-limit registration, even
+when the mount declares them. `metrics` defaults to true; it permits the explicit
+declarations without adding endpoints or changing their authorization. Rebuild
+after configuration changes. `history` is independent: history sampling does
+not re-enable these endpoints, and disabling reporting does not stop upstream
+recording or reset stored observations. Standalone mounts have no Canic role
+policy and retain their explicit endpoint declarations.
+
+The adapter consumes the application's report and handler types without owning
+their storage representation. Heap versus stable retention, reset continuity and
+overflow quality belong to the upstream recorder and its storage adapter. Moving
+measurements to stable storage must not change endpoint authorization or create
+another sampler. The current shared bounded table is heap-only; mounting does
+not promise persistence across upgrades.
+
+Canic's `metrics_public` and `metrics_controller` integration targets compile the
+real mounts against framework-owned reports composed from IC Metrics counters
+and aggregates. They check typed Wire envelopes, native schema validity and
+bounded decode refusal.
+They require no IcyDB engine dependency and join ordinary qualification through
+the existing test inventory. They do not simulate IC caller/controller checks;
+installed authorization and actual database composition remain downstream proof.
+
+This adapter source is prepared for the coordinated IcyDB hard cut that removes
+its optional recording feature. Supplier publication and downstream installed
+application qualification remain separate from this source change.

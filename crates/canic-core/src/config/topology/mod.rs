@@ -15,7 +15,7 @@ use crate::config::{
         ConfigModel, CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, IndexConfig,
         MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, MetricsCanisterConfig,
         MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy, ShardingConfig,
-        StandardsCanisterConfig, TopupPolicy,
+        TopupPolicy,
     },
 };
 use canic_contracts::{
@@ -1043,9 +1043,8 @@ fn encode_component_runtime_policy(encoder: &mut CanonicalEncoder, source: &Comp
     encode_topup(encoder, source.topup.as_ref());
     encode_cycles_funding_policy(encoder, &source.cycles_funding);
     encode_auth(encoder, &source.auth);
-    encode_standards(encoder, &source.standards);
     encode_diagnostics(encoder, source.diagnostics);
-    encode_metrics(encoder, source.metrics);
+    encode_metrics(encoder, &source.metrics);
 }
 
 fn encode_component_child(encoder: &mut CanonicalEncoder, child: &ComponentChildConfig) {
@@ -1057,9 +1056,8 @@ fn encode_component_child(encoder: &mut CanonicalEncoder, child: &ComponentChild
     encode_sharding(encoder, child.sharding.as_ref());
     encode_index(encoder, child.index.as_ref());
     encode_auth(encoder, &child.auth);
-    encode_standards(encoder, &child.standards);
     encode_diagnostics(encoder, child.diagnostics);
-    encode_metrics(encoder, child.metrics);
+    encode_metrics(encoder, &child.metrics);
 }
 
 fn encode_source_spawn_grants(encoder: &mut CanonicalEncoder, source: &ComponentSpecConfig) {
@@ -1181,21 +1179,27 @@ fn encode_auth(encoder: &mut CanonicalEncoder, auth: &CanisterAuthConfig) {
     encoder.boolean(auth.role_attestation_cache);
 }
 
-fn encode_standards(encoder: &mut CanonicalEncoder, standards: &StandardsCanisterConfig) {
-    encoder.boolean(standards.icrc21);
-}
-
 fn encode_diagnostics(encoder: &mut CanonicalEncoder, diagnostics: DiagnosticsCanisterConfig) {
     encoder.boolean(diagnostics.memory_ledger);
 }
 
-fn encode_metrics(encoder: &mut CanonicalEncoder, metrics: MetricsCanisterConfig) {
+fn encode_metrics(encoder: &mut CanonicalEncoder, metrics: &MetricsCanisterConfig) {
     match metrics.profile {
         None => encoder.u8(0),
         Some(profile) => {
             encoder.u8(1);
             encoder.u8(metrics_profile_tag(profile));
         }
+    }
+    encoder.u8(u8::from(
+        metrics.storage == super::schema::MetricStorage::Stable,
+    ));
+    encoder.u64(metrics.providers.len() as u64);
+    for (provider, policy) in &metrics.providers {
+        encoder.string(provider);
+        encoder.u8(u8::from(
+            policy.storage == super::schema::MetricStorage::Stable,
+        ));
     }
 }
 

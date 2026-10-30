@@ -7,6 +7,10 @@
 use crate::protocol;
 use canic::{Error, access::caller_authority, prelude::*};
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{
+    candid::contract::{DecoderConfig, decode_args_with_config, encode_args},
+    cdk::call::Call,
+};
 use std::cell::Cell;
 
 const EFFECT_ROW: u64 = 999;
@@ -46,12 +50,12 @@ async fn test_caller_effect() -> Result<u64, Error> {
     let ticket = caller_authority::admit("test_notify")?;
     WAITING.set(true);
     for _ in 0..256 {
-        Call::unbounded_wait(Principal::management_canister(), "raw_rand")
-            .with_args(())
-            .expect("fixture consensus arguments")
-            .execute_candid::<Vec<u8>>()
+        let response = Call::unbounded_wait(Principal::management_canister().into(), "raw_rand")
+            .take_raw_args(encode_args(()).expect("fixture consensus arguments"))
             .await
             .expect("fixture consensus boundary");
+        let _: (Vec<u8>,) = decode_args_with_config(&response.into_bytes(), &DecoderConfig::new())
+            .expect("fixture randomness reply");
         if !HELD.get() {
             WAITING.set(false);
             caller_authority::revalidate(&ticket)?;

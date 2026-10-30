@@ -11,6 +11,10 @@ mod model;
 mod output_roots;
 pub mod release_binding;
 mod reuse;
+
+// Shared by configured/infrastructure Cargo commands and complete-build identity.
+const CANISTER_CARGO_RECIPE: ic_build::cargo::execution::CargoRecipe =
+    ic_build::cargo::execution::CargoRecipe::Library;
 mod wire_schema;
 
 pub(crate) use reuse::retain_cargo_include_exports;

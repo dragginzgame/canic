@@ -117,6 +117,9 @@ struct CompleteBuildReuseRecord {
 
 #[derive(Debug, Error)]
 pub enum BuildReuseError {
+    #[error("Cargo configuration input observation failed: {0}")]
+    CargoConfiguration(#[from] ic_build::cargo::environment::ConfigurationError),
+
     #[error("complete-build lock acquisition failed: {0}")]
     Lock(io::Error),
 
@@ -450,31 +453,22 @@ fn input_spec(
     exports::append_observed(context, &producers, &mut paths)?;
     let fixture_hashes = append_fixture_inputs(context, &mut paths)?;
     paths.insert(context.config_path.clone());
-    for root in [
-        context.workspace_root.as_path(),
-        metadata.workspace_root.as_std_path(),
-    ] {
+    roots.insert(context.workspace_root.clone());
+    roots.insert(metadata.workspace_root.into_std_path_buf());
+    // External path dependencies and generated roles can inherit a different workspace catalog.
+    for root in &roots {
         for ancestor in root.ancestors() {
             for name in [
                 "Cargo.toml",
                 "Cargo.lock",
                 "rust-toolchain",
                 "rust-toolchain.toml",
-                ".cargo/config",
-                ".cargo/config.toml",
             ] {
                 paths.insert(ancestor.join(name));
             }
         }
     }
-    let cargo_home = env::var_os("CARGO_HOME")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
-    if let Some(root) = cargo_home {
-        for name in ["config", "config.toml"] {
-            paths.insert(root.join(name));
-        }
-    }
+    dependencies::append_cargo_configuration_inputs(&roots, &mut paths)?;
     paths.extend(tools.iter().cloned());
     append_rust_toolchain_inputs(context, &mut paths)?;
 
@@ -614,8 +608,17 @@ fn source_evidence_spec(
 }
 
 fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseError> {
+    input_identity_for_recipe(context, &super::CANISTER_CARGO_RECIPE)
+}
+
+fn input_identity_for_recipe(
+    context: &WorkspaceBuildContext,
+    recipe: &ic_build::cargo::execution::CargoRecipe,
+) -> Result<String, BuildReuseError> {
     let mut digest = Sha256::new();
     hash_field(&mut digest, b"canic.complete-build-inputs.v1");
+    // This private cache key may miss when upstream changes Debug; it never grants release authority.
+    hash_field(&mut digest, format!("{recipe:?}").as_bytes());
     hash_field(
         &mut digest,
         include_bytes!("../../build_environment/mod.rs"),

@@ -3,6 +3,10 @@ mod protocol;
 
 use canic::{Error, prelude::*};
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{
+    candid::contract::{DecoderConfig, decode_args_with_config, encode_args},
+    cdk::call::Call,
+};
 use std::cell::Cell;
 
 thread_local! {
@@ -19,12 +23,12 @@ async fn canic_install(args: Option<Vec<u8>>) {
     });
     assert!(rounds <= 256, "bounded fixture startup work");
     for _ in 0..rounds {
-        Call::bounded_wait(Principal::management_canister(), "raw_rand")
-            .with_args(())
-            .expect("fixture consensus arguments")
-            .execute_candid::<Vec<u8>>()
+        let response = Call::bounded_wait(Principal::management_canister().into(), "raw_rand")
+            .take_raw_args(encode_args(()).expect("fixture consensus arguments"))
             .await
             .expect("fixture startup consensus boundary");
+        let _: (Vec<u8>,) = decode_args_with_config(&response.into_bytes(), &DecoderConfig::new())
+            .expect("fixture randomness reply");
         STARTUP_CALLS.set(STARTUP_CALLS.get() + 1);
     }
 }

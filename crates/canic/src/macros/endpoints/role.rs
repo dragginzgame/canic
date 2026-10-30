@@ -52,8 +52,6 @@ macro_rules! __canic_compiled_role_capabilities {
         #[cfg(canic_capability_fleet_coordinator)]
         capabilities
             .insert($crate::__internal::core::role_contract::RoleCapabilityKey::FleetCoordinator);
-        #[cfg(canic_capability_icrc21)]
-        capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21);
         #[cfg(canic_capability_index)]
         capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Index);
         #[cfg(canic_capability_local_application_authorization)]

@@ -70,6 +70,17 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
         ))
     }
 
+    fn prepare_restore(
+        &self,
+        baseline: &CachedPocketIcBaseline<Self::Metadata>,
+    ) -> Result<(), Self::Error> {
+        crate::pic::canic::stop_snapshot_targets(
+            baseline.pocket_ic(),
+            &root_baseline_snapshot_targets(baseline.metadata()),
+        );
+        Ok(())
+    }
+
     fn reset_non_snapshot_state(
         &self,
         baseline: &CachedPocketIcBaseline<Self::Metadata>,
@@ -94,6 +105,10 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
         &self,
         baseline: &CachedPocketIcBaseline<Self::Metadata>,
     ) -> Result<(), Self::Error> {
+        crate::pic::canic::start_snapshot_targets(
+            baseline.pocket_ic(),
+            &root_baseline_snapshot_targets(baseline.metadata()),
+        );
         wait_for_bootstrap(
             &self.spec,
             baseline.pocket_ic(),
@@ -200,6 +215,10 @@ pub fn restore_root_cached_baseline(
 ) {
     progress(spec, "restoring cached root snapshots");
     let restore_started_at = Instant::now();
+    crate::pic::canic::stop_snapshot_targets(
+        baseline.pocket_ic(),
+        &root_baseline_snapshot_targets(baseline.metadata()),
+    );
     baseline
         .restore(SnapshotRestoreFunding::TopUpTo {
             minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
@@ -213,6 +232,10 @@ pub fn restore_root_cached_baseline(
         &metadata.snapshot_pids,
     )
     .expect("restore Root pool custody");
+    crate::pic::canic::start_snapshot_targets(
+        baseline.pocket_ic(),
+        &root_baseline_snapshot_targets(metadata),
+    );
     progress_elapsed(spec, "restored cached root snapshots", restore_started_at);
 
     progress(spec, "waiting for restored root bootstrap");
@@ -250,12 +273,17 @@ fn capture_cached_root_baseline(
 
     progress(spec, "capturing cached root snapshots");
     let started_at = Instant::now();
+    crate::pic::canic::stop_snapshot_targets(&initialized.pic, &snapshot_targets);
     let baseline = CachedPocketIcBaseline::capture(
         ic_testkit::pic::PocketIcInstance::from_borrowed_server(initialized.pic),
         snapshot_targets,
         initialized.metadata,
     )
     .expect("cached root snapshots must be available");
+    crate::pic::canic::start_snapshot_targets(
+        baseline.pocket_ic(),
+        &root_baseline_snapshot_targets(baseline.metadata()),
+    );
     progress_elapsed(spec, "captured cached root snapshots", started_at);
     baseline
 }

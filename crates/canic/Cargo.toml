@@ -15,6 +15,7 @@ publish = true
 
 [features]
 default = []
+icrc = ["ic-platform/icrc-ledger-types"]
 control-plane = ["dep:canic-control-plane", "canic-control-plane/root-control-plane"]
 fleet-coordinator-canister = ["dep:canic-control-plane", "canic-control-plane/fleet-coordinator-canister"]
 wasm-store-canister = ["dep:canic-control-plane", "canic-control-plane/wasm-store-canister"]
@@ -41,7 +42,7 @@ canic-contracts.workspace = true
 canic-control-plane = { workspace = true, default-features = false, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
-ic-platform = { workspace = true, features = ["cdk", "candid-service", "icrc-ledger-types", "executor", "ic0"] }
+ic-platform = { workspace = true, features = ["cdk", "candid-service", "executor", "ic0"] }
 ic-wire.workspace = true
 serde = { workspace = true }
 
@@ -63,3 +64,13 @@ workspace = true
 name = "wire_schema"
 path = "tests/wire_schema/mod.rs"
 required-features = ["wire-schema"]
+
+[[test]]
+name = "icrc_adapter"
+path = "tests/icrc_adapter/mod.rs"
+required-features = ["icrc"]
+
+[[test]]
+name = "icrc_discovery"
+path = "tests/icrc_discovery/mod.rs"
+required-features = ["icrc"]

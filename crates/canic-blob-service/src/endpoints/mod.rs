@@ -82,6 +82,24 @@ macro_rules! __canic_blob_endpoint {
                     ic_platform::cdk::api::msg_reply(encode!($d category, stringify!($d name), response));
                 }
             };
+            (update, $d category:ident, async fn blob_admit_upload($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
+                endpoint!(@observed $d category, blob_admit_upload, admission, ($d($d arg : $d ty),*), $d reply, $d body);
+            };
+            (update, $d category:ident, async fn blob_apply_reference($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
+                endpoint!(@observed $d category, blob_apply_reference, reference, ($d($d arg : $d ty),*), $d reply, $d body);
+            };
+            (@observed $d category:ident, $d name:ident, $d observe:ident, ($d($d arg:ident : $d ty:ty),*), $d reply:ty, $d body:block) => {
+                #[canic::raw_update(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
+                async fn $d name() {
+                    arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
+                    let bytes = u32::try_from(ic_platform::ic0::msg_arg_data_size()).expect("bounded Blob argument size");
+                    let started = ic_platform::cdk::api::call_context_instruction_counter();
+                    let response: $d reply = (async move $d body).await;
+                    let instructions = ic_platform::cdk::api::call_context_instruction_counter().saturating_sub(started);
+                    $crate::__private::operation_metrics::$d observe(&response, instructions, bytes);
+                    ic_platform::cdk::api::msg_reply(encode!($d category, stringify!($d name), response));
+                }
+            };
             (update, $d category:ident, async fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
                 #[canic::raw_update(public, wire(id = $d name::ID, request = $d name::CONTRACT.request, response = $d name::CONTRACT.response))]
                 async fn $d name() {

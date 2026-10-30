@@ -3,7 +3,6 @@ use crate::{
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
         DiagnosticsCanisterConfig, IndexConfig, IndexPool, MetricsCanisterConfig,
-        StandardsCanisterConfig,
     },
     ops::storage::{
         children::CanisterChildrenOps,
@@ -47,7 +46,6 @@ fn index_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
         sharding: None,
         index: Some(index),
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }

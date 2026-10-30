@@ -91,7 +91,6 @@ populate_isolated_package_root() {
 
     local crate_archive=""
     for crate_archive in \
-        "$PACKAGE_STAGING_ROOT/canic-backup-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-contracts-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-control-plane-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
@@ -121,7 +120,6 @@ resolver = "3"
 
 [patch.crates-io]
 canic = { path = "package-root/canic-$VERSION" }
-canic-backup = { path = "package-root/canic-backup-$VERSION" }
 canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
 canic-contracts = { path = "package-root/canic-contracts-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
@@ -474,7 +472,6 @@ main() {
         all|fleet|root) ;;
         *) echo "usage: $0 [all|fleet|root]" >&2; exit 2 ;;
     esac
-    ensure_packaged_crate canic-backup
     ensure_packaged_crate canic-contracts
     ensure_packaged_crate canic-control-plane
     ensure_packaged_crate canic-core

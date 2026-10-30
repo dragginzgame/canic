@@ -10,7 +10,8 @@ use crate::canister_build::{
     reuse::BuildReuseError,
 };
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
+    ffi::{OsStr, OsString},
     path::{Path, PathBuf},
 };
 
@@ -85,6 +86,42 @@ pub(super) fn append_observed_cargo_inputs(
             };
             paths.extend(inputs);
         }
+    }
+    Ok(())
+}
+
+/// Select conservative configuration roots; IC Build owns bounded include traversal.
+pub(super) fn append_cargo_configuration_inputs(
+    roots: &BTreeSet<PathBuf>,
+    paths: &mut BTreeSet<PathBuf>,
+) -> Result<(), BuildReuseError> {
+    use ic_build::cargo::environment::{
+        configuration_directories, observe_configurations, preferred_configuration,
+    };
+    let environment: BTreeMap<_, _> = crate::build_environment::inputs().into_iter().collect();
+    let mut directories = BTreeSet::new();
+    for root in roots {
+        directories.extend(configuration_directories(
+            root,
+            environment
+                .get(OsStr::new("CARGO_HOME"))
+                .map(OsString::as_os_str),
+            environment.get(OsStr::new("HOME")).map(OsString::as_os_str),
+        )?);
+    }
+    // Both names retain absence/replacement custody even though Cargo prefers config.
+    for directory in &directories {
+        paths.insert(directory.join("config"));
+        paths.insert(directory.join("config.toml"));
+    }
+    let selected: Vec<_> = directories
+        .iter()
+        .filter_map(|directory| preferred_configuration(directory))
+        .collect();
+    for observed in
+        observe_configurations(&selected, crate::canister_build::CARGO_CONFIGURATION_LIMITS)?
+    {
+        paths.insert(observed.path);
     }
     Ok(())
 }

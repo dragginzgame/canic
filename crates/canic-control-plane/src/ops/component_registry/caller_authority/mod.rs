@@ -155,7 +155,7 @@ impl RootCallerOps {
         let mut seen = BTreeSet::new();
         let mut steps = 0_u32;
         let mut digest = Sha256::new();
-        digest.update(b"canic.caller-census.v1\0");
+        digest.update(b"canic.caller-census.wire.v1\0");
         for (ordinal, plan) in plans.into_iter().enumerate() {
             let recipient = u32::try_from(ordinal).map_err(|_| InternalError::unavailable())?;
             if plan.authority.issuer != issuer || !seen.insert(plan.authority.receiver.canister()) {
@@ -169,7 +169,7 @@ impl RootCallerOps {
                 .checked_add(record.step_count)
                 .ok_or_else(InternalError::unavailable)?;
             digest.update(
-                canic_core::cdk::serialize::serialize(&record)
+                canic_contracts::protocol::authority::encode(&record)
                     .map_err(|_| InternalError::invariant())?,
             );
             for (_, row) in &recipient_rows {

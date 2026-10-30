@@ -97,7 +97,7 @@ fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
         created_at_time_ns: record.created_at_time_ns,
         ledger_block_index: record.ledger_block_index,
         notify_attempts: record.notify_attempts,
-        cycles_sent: record.cycles_sent.clone(),
+        cycles_sent: record.cycles_sent.clone().map(Nat),
         status: record.status.into(),
         error_code: record.error_code.map(Into::into),
         error_message: record.error_message.clone(),
@@ -545,7 +545,7 @@ fn refill_replay_commits_terminal_response_for_replay() {
     let mut record = sample_record(IcpRefillStatus::Completed);
     record.operation_id = operation_id;
     record.ledger_block_index = Some(123);
-    record.cycles_sent = Some(Nat::from(456_u64));
+    record.cycles_sent = Some((456_u64).into());
     let operation = operation_from_record(&record);
     let response = IcpRefillStoreOps::to_response(&operation);
     finish_icp_refill_replay(&token, &operation, &response, None)
@@ -637,7 +637,7 @@ fn refill_retry_finishes_cost_settlement_without_ledger_call() {
     stage_receipt_response(
         &token,
         crate::ops::replay::ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-        crate::ops::replay::encode_replay_response(&response).expect("response bytes"),
+        crate::ops::replay::encode_icp_refill_replay_response(&response).expect("response bytes"),
         1_001,
     )
     .expect("stage response");
@@ -684,7 +684,7 @@ fn refill_retry_promotes_staged_response_without_ledger_call() {
     stage_receipt_response(
         &token,
         crate::ops::replay::ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-        crate::ops::replay::encode_replay_response(&response).expect("response bytes"),
+        crate::ops::replay::encode_icp_refill_replay_response(&response).expect("response bytes"),
         1_001,
     )
     .expect("stage response");

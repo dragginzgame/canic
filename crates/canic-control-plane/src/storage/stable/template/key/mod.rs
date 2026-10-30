@@ -2,7 +2,7 @@
 //!
 //! Responsibility: encode shared template identities as bounded stable keys.
 //! Does not own: identity declarations, template validation, or publication.
-//! Boundary: transparent records preserve the canonical current CBOR key bytes.
+//! Boundary: transparent records preserve the current Wire key bytes.
 
 use canic_contracts::ids::{TemplateChunkKey, TemplateReleaseKey};
 use canic_core::impl_storable_bounded;

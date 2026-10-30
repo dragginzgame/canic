@@ -5,17 +5,19 @@
 //! Boundary: extends `MgmtInfra` with cycle-related management calls.
 
 use super::{MgmtInfra, MgmtInfraError};
-use crate::infra::ic::{IcInfraError, call::Call};
+use crate::infra::ic::IcInfraError;
 use canic_contracts::cycles::Cycles;
+use ic_call::{Call, WaitPolicy};
 use ic_platform::{
-    candid::contract::Nat, management_canister_types::CanisterIdRecord,
+    candid::contract::{Nat, encode_one},
+    management_canister_types::CanisterIdRecord,
     principal::ExternalPrincipal as Principal,
 };
 
 impl MgmtInfra {
     /// Return the exact current-Subnet cost of one zero-cycle deposit call.
     pub fn deposit_cycles_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
-        Ok(deposit_cycles_call(canister_pid)?.cost())
+        Ok(deposit_cycles_call(canister_pid)?.get_cost())
     }
 
     /// Deposit cycles into a canister through the management canister.
@@ -35,14 +37,15 @@ impl MgmtInfra {
     }
 }
 
-fn deposit_cycles_call(
-    canister_pid: Principal,
-) -> Result<crate::infra::ic::call::CallBuilder<'static>, IcInfraError> {
-    Call::unbounded_wait(Principal::management_canister(), "deposit_cycles").with_arg(
-        CanisterIdRecord {
-            canister_id: canister_pid,
-        },
+fn deposit_cycles_call(canister_pid: Principal) -> Result<Call<'static, 'static>, IcInfraError> {
+    Ok(Call::new(
+        Principal::management_canister().into(),
+        "deposit_cycles",
+        WaitPolicy::Unbounded,
     )
+    .take_raw_args(encode_one(CanisterIdRecord {
+        canister_id: canister_pid,
+    })?))
 }
 
 fn checked_canister_cycles(canister_pid: Principal, value: Nat) -> Result<Cycles, MgmtInfraError> {

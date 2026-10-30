@@ -6,11 +6,15 @@
 
 use crate::infra::ic::{
     IcInfraError,
-    call::Call,
+    external_candid::decode_one,
     known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
 };
 use canic_contracts::ids::BuildNetwork;
-use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
+use ic_call::{Call, WaitPolicy};
+use ic_platform::{
+    candid::contract::{Nat, encode_args, encode_one},
+    principal::ExternalPrincipal as Principal,
+};
 use thiserror::Error as ThisError;
 
 const CMC_TOPUP_MEMO_BYTES: &[u8] = b"TPUP\0\0\0\0";
@@ -152,18 +156,24 @@ impl IcpRefillInfra {
 
     /// Query `icrc1_fee` on the selected ICP ledger.
     pub async fn icrc1_fee(ledger_id: Principal) -> Result<Nat, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_fee")
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_fee", WaitPolicy::Unbounded)
+                .take_raw_args(encode_args(())?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Query `icrc1_decimals` on the selected ICP ledger.
     pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_decimals")
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_decimals", WaitPolicy::Unbounded)
+                .take_raw_args(encode_args(())?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Query the exact source account balance on the selected ICP ledger.
@@ -171,11 +181,13 @@ impl IcpRefillInfra {
         ledger_id: Principal,
         account: Account,
     ) -> Result<Nat, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_balance_of")
-            .with_arg(account)?
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_balance_of", WaitPolicy::Unbounded)
+                .take_raw_args(encode_one(account)?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Execute `icrc1_transfer` and return the raw ledger result.
@@ -183,11 +195,13 @@ impl IcpRefillInfra {
         ledger_id: Principal,
         args: TransferArg,
     ) -> Result<Result<Nat, TransferError>, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_transfer")
-            .with_arg(args)?
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_transfer", WaitPolicy::Unbounded)
+                .take_raw_args(encode_one(args)?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Notify the cycles minting canister about a top-up transfer.
@@ -195,21 +209,30 @@ impl IcpRefillInfra {
         cmc_id: Principal,
         args: NotifyTopUpArg,
     ) -> Result<Result<Nat, NotifyError>, IcInfraError> {
-        Call::unbounded_wait(cmc_id, "notify_top_up")
-            .with_arg(args)?
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(cmc_id.into(), "notify_top_up", WaitPolicy::Unbounded)
+                .take_raw_args(encode_one(args)?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Query the cycles minting canister for the current ICP/XDR conversion rate.
     pub async fn get_icp_xdr_conversion_rate(
         cmc_id: Principal,
     ) -> Result<IcpXdrConversionRateResponse, IcInfraError> {
-        Call::unbounded_wait(cmc_id, "get_icp_xdr_conversion_rate")
+        decode_one(
+            &(Call::new(
+                cmc_id.into(),
+                "get_icp_xdr_conversion_rate",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_args(())?)
             .execute()
-            .await?
-            .candid()
+            .await?)
+                .into_bytes(),
+        )
     }
 }
 

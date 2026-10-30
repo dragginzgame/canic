@@ -19,7 +19,6 @@ if [[ "${CARGO_NET_OFFLINE:-false}" == true || "${CARGO_NET_OFFLINE:-false}" == 
 fi
 
 PUBLISH_ORDER=(
-    canic-backup
     canic-contracts
     canic-core
     canic-control-plane

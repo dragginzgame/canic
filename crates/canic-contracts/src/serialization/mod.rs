@@ -1,199 +1,59 @@
-//! Module: cdk::serialize
+//! Module: serialization
 //!
-//! Responsibility: serde-CBOR helpers for stable storage encoding.
-//! Does not own: individual stable schema bounds or migration policy.
-//! Boundary: maps serde encode/decode failures into typed Canic errors.
+//! Responsibility: select the current owned stable-value identity and Wire budgets.
+//! Does not own: codecs, individual record bounds or commitment domains.
+//! Boundary: storage uses bounded native Wire; external protocols and fixed evidence are separate.
 
+#[cfg(test)]
+mod tests;
+
+use ic_wire::{Error, Limits, native};
 use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;
 
-mod cbor;
+// The owning memory slot selects the record schema. This marker identifies the
+// storage representation independently of RPC frames and external evidence.
+const STORAGE_HEADER: [u8; 4] = *b"CSW\x01";
 
-///
-/// SerializeError
-///
-/// Typed error returned by Canic stable serialization helpers.
-///
+/// Maximum traversal allowances for one owned stable value, including its marker.
+/// Narrower record, map and checkpoint bounds remain enforced by their owners.
+pub const STORAGE_LIMITS: Limits = Limits {
+    bytes: 64 * 1024 * 1024,
+    allocation: 1024 * 1024 * 1024,
+    nodes: 64 * 1024 * 1024,
+    depth: 128,
+};
 
+/// Typed Wire encoding or admission failure at the owned storage boundary.
 #[derive(Debug, ThisError)]
 pub enum SerializeError {
     #[error("serialize error: {0}")]
-    Serialize(String),
+    Serialize(#[source] Error),
 
     #[error("deserialize error: {0}")]
-    Deserialize(String),
+    Deserialize(#[source] Error),
 }
 
-/// Serialize one current storage value to CBOR, representing u128 as 16 big-endian bytes.
-/// This representation is separate from native Wire and external IC CBOR contracts.
-pub fn serialize<T>(value: &T) -> Result<Vec<u8>, SerializeError>
-where
-    T: Serialize,
-{
-    cbor::encode(value).map_err(|err| SerializeError::Serialize(err.to_string()))
+/// Encode one current stable value, including native full-range u128 fields.
+pub fn serialize<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>, SerializeError> {
+    native::encode(&(STORAGE_HEADER, value), STORAGE_LIMITS).map_err(SerializeError::Serialize)
 }
 
-/// Deserialize exactly one current storage value, including fixed-width u128 fields.
-pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
-where
-    T: DeserializeOwned,
-{
-    cbor::decode(bytes).map_err(|err| SerializeError::Deserialize(err.to_string()))
+/// Admit the storage identity before decoding exactly one complete Wire value.
+pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, SerializeError> {
+    if !bytes.starts_with(&STORAGE_HEADER) {
+        return Err(SerializeError::Deserialize(Error::Identity));
+    }
+    native::decode::<([u8; 4], T)>(bytes, STORAGE_LIMITS)
+        .map(|(_, value)| value)
+        .map_err(SerializeError::Deserialize)
 }
 
-/// Deserialize a required current-contract field whose explicit value may be null.
+/// Require a present current-contract field whose explicit value may be absent.
 pub fn required_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de>,
 {
     Option::<T>::deserialize(deserializer)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{deserialize, serialize};
-    use serde::{Deserialize, Serialize};
-    use std::collections::BTreeMap;
-
-    #[test]
-    fn provisioning_origin_requires_explicit_deadline_presence() {
-        use crate::dto::component_provisioning::{
-            ProvisioningFailureOrigin, ProvisioningFailureStage, ProvisioningRetryCategory,
-        };
-        for retry_at_ns in [Some(u64::MAX), None] {
-            let origin = ProvisioningFailureOrigin {
-                dependency: None,
-                failed_at_ns: 123,
-                retry_at_ns,
-                stage: ProvisioningFailureStage::ComponentMembership,
-                target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
-                operation_id: [9; 32],
-                diagnostic_code: 137,
-                retry_category: ProvisioningRetryCategory::Backoff,
-            };
-            assert_eq!(
-                deserialize::<ProvisioningFailureOrigin>(&serialize(&origin).unwrap()).unwrap(),
-                origin
-            );
-            let serde_cbor::Value::Map(fields) = deserialize(&serialize(&origin).unwrap()).unwrap()
-            else {
-                panic!("origin is a record");
-            };
-            let deadline_key = serde_cbor::Value::Text("retry_at_ns".into());
-            assert_eq!(
-                fields.get(&deadline_key).unwrap(),
-                &retry_at_ns.map_or(serde_cbor::Value::Null, |value| {
-                    serde_cbor::Value::Integer(value.into())
-                }),
-            );
-            for key in [deadline_key, serde_cbor::Value::Text("dependency".into())] {
-                let mut incomplete = fields.clone();
-                incomplete.retain(|field, _| field != &key);
-                let missing = serialize(&serde_cbor::Value::Map(incomplete)).unwrap();
-                assert!(deserialize::<ProvisioningFailureOrigin>(&missing).is_err());
-            }
-        }
-    }
-
-    #[test]
-    fn provisioning_dependency_requires_explicit_rejection_presence() {
-        use crate::values::provisioning_failure::ProvisioningDependencyFailure;
-        for (code, detail) in [(None, None), (Some(5), Some("stopped".into()))] {
-            let dependency = ProvisioningDependencyFailure {
-                target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
-                method: crate::protocol::store_publication::inspect::METHOD.into(),
-                step: "inspect_template".into(),
-                rejection_code: code,
-                rejection_detail: detail,
-            };
-            assert_eq!(
-                deserialize::<ProvisioningDependencyFailure>(&serialize(&dependency).unwrap())
-                    .unwrap(),
-                dependency
-            );
-            for missing_key in ["rejection_code", "rejection_detail"] {
-                let serde_cbor::Value::Map(mut fields) =
-                    deserialize(&serialize(&dependency).unwrap()).unwrap()
-                else {
-                    panic!("record")
-                };
-                fields.retain(|key, _| key != &serde_cbor::Value::Text(missing_key.into()));
-                assert!(
-                    deserialize::<ProvisioningDependencyFailure>(
-                        &serialize(&serde_cbor::Value::Map(fields)).unwrap()
-                    )
-                    .is_err()
-                );
-            }
-        }
-    }
-
-    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-    enum FixtureVariant {
-        Unit,
-        Tuple(u32, String),
-        Struct { enabled: bool },
-    }
-
-    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-    struct StableShapeFixture {
-        flag: bool,
-        count: u64,
-        signed: i64,
-        text: String,
-        #[serde(with = "serde_bytes")]
-        bytes: Vec<u8>,
-        array: [u8; 3],
-        values: Vec<u16>,
-        present: Option<u32>,
-        absent: Option<u32>,
-        variants: Vec<FixtureVariant>,
-        labels: BTreeMap<String, u64>,
-    }
-
-    #[test]
-    fn stable_serde_shape_has_exact_cbor_bytes() {
-        let fixture = StableShapeFixture {
-            flag: true,
-            count: 42,
-            signed: -7,
-            text: "canic".to_string(),
-            bytes: vec![0, 1, 255],
-            array: [2, 3, 4],
-            values: vec![5, 256],
-            present: Some(9),
-            absent: None,
-            variants: vec![
-                FixtureVariant::Unit,
-                FixtureVariant::Tuple(10, "ten".to_string()),
-                FixtureVariant::Struct { enabled: false },
-            ],
-            labels: BTreeMap::from([("a".to_string(), 1), ("b".to_string(), 2)]),
-        };
-        let bytes = serialize(&fixture).expect("serialize stable shape fixture");
-
-        assert_eq!(
-            bytes,
-            hex_fixture(
-                "ab64666c6167f565636f756e74182a667369676e65642664746578746563616e6963656279746573430001ff656172726179830203046676616c75657382051901006770726573656e740966616273656e74f66876617269616e74738364556e6974a1655475706c65820a6374656ea166537472756374a167656e61626c6564f4666c6162656c73a2616101616202"
-            )
-        );
-        assert_eq!(
-            deserialize::<StableShapeFixture>(&bytes).expect("deserialize stable shape fixture"),
-            fixture
-        );
-    }
-
-    fn hex_fixture(hex: &str) -> Vec<u8> {
-        hex.as_bytes()
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|pair| {
-                let pair = std::str::from_utf8(pair).expect("fixture hex is UTF-8");
-                u8::from_str_radix(pair, 16).expect("fixture hex byte is valid")
-            })
-            .collect()
-    }
 }

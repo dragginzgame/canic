@@ -59,7 +59,6 @@ pub enum RoleCapabilityKey {
     DelegatedTokenVerifier,
     FleetAdmissionProjection,
     FleetCoordinator,
-    Icrc21,
     Index,
     LocalApplicationAuthorization,
     ObservabilityDiagnostics,
@@ -89,7 +88,6 @@ impl RoleCapabilityKey {
             Self::DelegatedTokenVerifier => "DelegatedTokenVerifier",
             Self::FleetAdmissionProjection => "FleetAdmissionProjection",
             Self::FleetCoordinator => "FleetCoordinator",
-            Self::Icrc21 => "Icrc21",
             Self::Index => "Index",
             Self::LocalApplicationAuthorization => "LocalApplicationAuthorization",
             Self::ObservabilityDiagnostics => "ObservabilityDiagnostics",
@@ -135,6 +133,7 @@ pub enum StateAllocationKey {
     RootComponentProvisioning,
     CoreRuntimeChildren,
     CoreRuntimeBindings,
+    CoreProviderMetrics,
     CoreFleetState,
     CoreFleetActivation,
     CoreCallerAuthority,
@@ -144,7 +143,6 @@ pub enum StateAllocationKey {
     CoreReplayReceipts,
     CoreCycles,
     CoreCyclesIcpRefillRecords,
-    CoreRuntimeLog,
     CoreIntent,
     CoreApplicationReceipts,
     CorePlacementAcknowledgement,
@@ -255,6 +253,7 @@ pub enum SelectionProvenance {
     BuiltInRole(BuiltInRoleKind),
     Capability(RoleCapabilityKey),
     EffectiveFeature(CanicFeatureKey),
+    ProviderMetricsStorage,
 }
 
 ///

@@ -4,10 +4,11 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static ROOT_CAPABILITY_METRICS: RefCell<HashMap<RootCapabilityMetricStorageKey, u64>> =
+    static ROOT_CAPABILITY_METRICS: RefCell<HashMap<RootCapabilityMetricStorageKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -166,8 +167,8 @@ impl RootCapabilityMetrics {
                 outcome,
                 proof_mode,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
@@ -250,7 +251,7 @@ impl RootCapabilityMetrics {
         RootCapabilityMetricEventType,
         RootCapabilityMetricOutcome,
         RootCapabilityMetricProofMode,
-        u64,
+        MeasurementCounter,
     )> {
         ROOT_CAPABILITY_METRICS
             .with_borrow(std::clone::Clone::clone)
@@ -289,12 +290,15 @@ mod tests {
             RootCapabilityMetricOutcome,
             RootCapabilityMetricProofMode,
         ),
-        u64,
+        u128,
     > {
         RootCapabilityMetrics::snapshot()
             .into_iter()
             .map(|(capability, event_type, outcome, proof_mode, count)| {
-                ((capability, event_type, outcome, proof_mode), count)
+                (
+                    (capability, event_type, outcome, proof_mode),
+                    count.exact_total().unwrap(),
+                )
             })
             .collect()
     }

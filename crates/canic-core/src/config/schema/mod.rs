@@ -13,6 +13,7 @@ mod component_group_deployment;
 mod component_spec;
 mod fleet_service;
 mod log;
+mod metric_storage;
 mod role;
 
 use crate::InternalError;
@@ -30,6 +31,7 @@ pub use component_group_deployment::*;
 pub use component_spec::*;
 pub use fleet_service::*;
 pub use log::*;
+pub use metric_storage::{MetricProviderStorage, MetricStorage, MetricStorageConfig};
 pub use role::*;
 
 ///
@@ -161,9 +163,6 @@ pub struct ConfigModel {
     /// Public aggregate families; an empty selection disables metric publication.
     #[serde(default)]
     pub public_metrics: BTreeSet<crate::domain::public_metrics::PublicMetricFamily>,
-
-    #[serde(default)]
-    pub standards: Option<Standards>,
 
     #[serde(default)]
     pub log: LogConfig,
@@ -334,7 +333,6 @@ impl ConfigModel {
             sharding: None,
             index: None,
             auth: CanisterAuthConfig::default(),
-            standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
             provisions: BTreeMap::new(),
@@ -633,20 +631,6 @@ impl Default for RoleAttestationConfig {
             min_accepted_epoch_by_role: BTreeMap::new(),
         }
     }
-}
-
-///
-/// Standards
-///
-/// Feature flags for supported standards.
-/// Owned by config schema and consumed by standards dispatch.
-///
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Standards {
-    #[serde(default)]
-    pub icrc21: bool,
 }
 
 // -----------------------------------------------------------------------------

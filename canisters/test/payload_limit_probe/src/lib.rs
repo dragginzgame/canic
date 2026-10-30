@@ -4,6 +4,7 @@ mod codec;
 use canic::access::{AccessCheck, AccessContext, AccessError};
 use canic::endpoint::ArgumentLimits;
 use canic::{Error, candid_query, candid_update, prelude::*};
+use ic_platform::cdk::call::Call;
 use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use std::cell::Cell;
 
@@ -114,7 +115,7 @@ fn dispatch_counts() -> PlainReply {
 
 // This probe reports one observed security counter without exporting the internal metrics view.
 #[query(public, on_access_denied = "reject", wire(id = 7010, request = WIRE_LIMITS, response = WIRE_LIMITS))]
-fn access_counts(method: String) -> u64 {
+fn access_counts(method: String) -> u128 {
     canic::api::metrics::MetricsQuery::security(canic::dto::page::PageRequest {
         limit: 100,
         offset: 0,
@@ -126,7 +127,7 @@ fn access_counts(method: String) -> u64 {
             && entry.labels.get(1).is_some_and(|label| label == &method)
     })
     .map(|entry| match entry.value {
-        canic::dto::metrics::MetricValue::Count(count) => count,
+        canic::dto::metrics::MetricValue::Count { count, exact: true } => count,
         _ => panic!("security metrics must count denials"),
     })
     .sum()
@@ -170,9 +171,8 @@ fn bounded_header(value: u64) -> PlainReply {
 /// Relay arbitrary bytes so update refusal is exercised without inspect_message.
 #[candid_update(on_access_denied = "reject", public, payload(max_bytes = 16 * 1024))]
 async fn relay_bounded(target: Principal, method: String, bytes: Vec<u8>) -> Result<bool, String> {
-    Call::unbounded_wait(target, &method)
-        .with_raw_args(bytes)
-        .execute()
+    Call::unbounded_wait(target.into(), &method)
+        .take_raw_args(bytes)
         .await
         .map(|_| true)
         .map_err(|error| error.to_string())
@@ -190,12 +190,19 @@ async fn canic_upgrade() {}
 /// Relay a generated payload through a real inter-canister update.
 #[candid_update(on_access_denied = "reject", public)]
 async fn relay_explicit_echo(target: Principal, len: usize) -> Result<usize, String> {
-    Call::unbounded_wait(target, "explicit_echo")
-        .with_arg("x".repeat(len))
-        .map_err(|error| error.to_string())?
-        .execute_candid::<Result<usize, String>>()
+    let bytes = ic_platform::candid::contract::encode_one("x".repeat(len))
+        .map_err(|error| error.to_string())?;
+    let response = Call::unbounded_wait(target.into(), "explicit_echo")
+        .take_raw_args(bytes)
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+    let (result,): (Result<usize, String>,) =
+        ic_platform::candid::contract::decode_args_with_config(
+            &response.into_bytes(),
+            &ic_platform::candid::contract::DecoderConfig::new(),
+        )
+        .map_err(|error| error.to_string())?;
+    result
 }
 
 /// Echo payload length under the default update ingress limit.

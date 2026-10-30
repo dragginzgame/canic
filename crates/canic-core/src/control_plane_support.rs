@@ -157,7 +157,7 @@ pub mod ops {
         pub use crate::ops::ic::IcOps;
 
         pub mod call {
-            pub use crate::ops::ic::call::CallOps;
+            pub use crate::ops::ic::call::execute;
         }
 
         pub mod cycles_ledger {

@@ -6,11 +6,12 @@
 
 use crate::{
     dto::fleet_registry::FleetLedgerTransferIntent,
-    infra::ic::{IcInfraError, call::Call, known::CYCLES_LEDGER_CANISTER},
+    infra::ic::{IcInfraError, external_candid::decode_one, known::CYCLES_LEDGER_CANISTER},
 };
 use canic_contracts::cycles::Cycles;
+use ic_call::{Call, WaitPolicy};
 use ic_platform::{
-    candid::contract::Nat,
+    candid::contract::{Nat, encode_one},
     cycles_ledger_types::{self as ledger, CreateCanisterError, CreateCanisterSuccess},
     icrc_ledger_types::TransferArg,
     principal::ExternalPrincipal as Principal,
@@ -49,8 +50,13 @@ impl CyclesLedgerInfra {
         amount: Cycles,
         created_at_time: u64,
     ) -> Result<Result<CreateCanisterSuccess, CreateCanisterError>, IcInfraError> {
-        Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "create_canister")
-            .with_arg(ledger::CreateCanisterArgs {
+        decode_one(
+            &(Call::new(
+                (*CYCLES_LEDGER_CANISTER).into(),
+                "create_canister",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_one(ledger::CreateCanisterArgs {
                 from_subaccount: None,
                 created_at_time: Some(created_at_time),
                 amount: Nat::from(amount.to_u128()),
@@ -68,10 +74,11 @@ impl CyclesLedgerInfra {
                     }),
                     subnet_selection: Some(ledger::SubnetSelection::Subnet { subnet }),
                 }),
-            })?
+            })?)
             .execute()
-            .await?
-            .candid()
+            .await?)
+                .into_bytes(),
+        )
     }
 
     /// Execute the exact retirement transfer whose intent the caller has persisted.
@@ -88,8 +95,13 @@ impl CyclesLedgerInfra {
                     fee: intent.fee,
                 })
             })?;
-        Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "icrc1_transfer")
-            .with_arg(TransferArg {
+        decode_one(
+            &(Call::new(
+                (*CYCLES_LEDGER_CANISTER).into(),
+                "icrc1_transfer",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_one(TransferArg {
                 amount: amount.into(),
                 created_at_time: Some(intent.created_at_time),
                 fee: Some(intent.fee.into()),
@@ -99,31 +111,44 @@ impl CyclesLedgerInfra {
                     owner: intent.destination,
                     subaccount: None,
                 },
-            })?
+            })?)
             .execute()
-            .await?
-            .candid()
+            .await?)
+                .into_bytes(),
+        )
     }
 
     /// Observe the exact Root-owned funding account before a paid creation effect.
     pub async fn balance_of(root: Principal) -> Result<Nat, IcInfraError> {
-        Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "icrc1_balance_of")
-            .with_arg(Account {
+        decode_one(
+            &(Call::new(
+                (*CYCLES_LEDGER_CANISTER).into(),
+                "icrc1_balance_of",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_one(Account {
                 owner: root,
                 subaccount: None,
-            })?
+            })?)
             .execute()
-            .await?
-            .candid()
+            .await?)
+                .into_bytes(),
+        )
     }
 
     /// Observe the current Ledger fee charged in addition to a create-canister amount.
     pub async fn fee() -> Result<Nat, IcInfraError> {
-        Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "icrc1_fee")
-            .with_arg(())?
+        decode_one(
+            &(Call::new(
+                (*CYCLES_LEDGER_CANISTER).into(),
+                "icrc1_fee",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_one(())?)
             .execute()
-            .await?
-            .candid()
+            .await?)
+                .into_bytes(),
+        )
     }
 
     /// Convert a ledger block index into the bounded stable representation.

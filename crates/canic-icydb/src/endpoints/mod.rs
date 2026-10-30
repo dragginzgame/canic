@@ -7,6 +7,14 @@
 /// `authorization = guard(path)` argument must follow `introspection`; the guard
 /// has the `icydb::ReadAuthorizationGuard` signature. SQL declarations require `sql`.
 ///
+/// Metrics reads require an explicit `icydb_metrics(authorization = public)` or
+/// `icydb_metrics(authorization = controller)` declaration. `icydb_metrics_reset`
+/// is separately selected and always controller-gated. The consumer supplies
+/// report types and handlers; mounting neither starts recording nor selects a
+/// heap or stable storage backend.
+/// Managed mounts suppress both read and reset when the role's
+/// `observability.metrics` configuration is false, independently of history.
+///
 /// Fixture reset/load declarations require both the consuming canister's
 /// `test-admin-api` feature and IcyDB's `sql` feature. Gate those declarations
 /// with `#[cfg(feature = "test-admin-api")]` when production omits fixtures.
@@ -388,9 +396,7 @@ macro_rules! __icydb_endpoints_internal {
         #[used]
         static __ICYDB_ENDPOINT_DECLARATION_METRICS: () = ();
         $(#[cfg($($cfg)*)])*
-        crate::__icydb_facade::__icydb_with_metrics_endpoint! {
-            "icydb_metrics";
-            #[crate::__icydb_entry(query, name = "icydb_metrics", sdk = crate::__icydb_host_sdk, max_bytes = crate::__icydb_facade::wire::MAX_REQUEST_BYTES)]
+            #[crate::__icydb_entry(query, name = "icydb_metrics", sdk = crate::__icydb_host_sdk, max_bytes = crate::__icydb_facade::wire::MAX_REQUEST_BYTES, observability = metrics)]
         fn __icydb_export_icydb_metrics() {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
@@ -402,7 +408,6 @@ macro_rules! __icydb_endpoints_internal {
 
             });
         }
-        }
         $crate::__icydb_endpoints_internal!($($rest)*);
     };
 
@@ -411,9 +416,7 @@ macro_rules! __icydb_endpoints_internal {
         #[used]
         static __ICYDB_ENDPOINT_DECLARATION_METRICS: () = ();
         $(#[cfg($($cfg)*)])*
-        crate::__icydb_facade::__icydb_with_metrics_endpoint! {
-            "icydb_metrics";
-            #[crate::__icydb_entry(query, name = "icydb_metrics", sdk = crate::__icydb_host_sdk, max_bytes = crate::__icydb_facade::wire::MAX_REQUEST_BYTES)]
+            #[crate::__icydb_entry(query, name = "icydb_metrics", sdk = crate::__icydb_host_sdk, max_bytes = crate::__icydb_facade::wire::MAX_REQUEST_BYTES, observability = metrics)]
         fn __icydb_export_icydb_metrics() {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
@@ -426,7 +429,6 @@ macro_rules! __icydb_endpoints_internal {
 
             });
         }
-        }
         $crate::__icydb_endpoints_internal!($($rest)*);
     };
 
@@ -435,9 +437,7 @@ macro_rules! __icydb_endpoints_internal {
         #[used]
         static __ICYDB_ENDPOINT_DECLARATION_METRICS_RESET: () = ();
         $(#[cfg($($cfg)*)])*
-        crate::__icydb_facade::__icydb_with_metrics_endpoint! {
-            "icydb_metrics_reset";
-            #[crate::__icydb_entry(update, name = "icydb_metrics_reset", sdk = crate::__icydb_host_sdk, max_bytes = crate::__icydb_facade::wire::MAX_REQUEST_BYTES)]
+            #[crate::__icydb_entry(update, name = "icydb_metrics_reset", sdk = crate::__icydb_host_sdk, max_bytes = crate::__icydb_facade::wire::MAX_REQUEST_BYTES, observability = metrics)]
         fn __icydb_export_icydb_metrics_reset() {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
@@ -449,7 +449,6 @@ macro_rules! __icydb_endpoints_internal {
                 crate::__icydb_generated::endpoint_handlers::metrics_reset()
 
             });
-        }
         }
         $crate::__icydb_endpoints_internal!($($rest)*);
     };

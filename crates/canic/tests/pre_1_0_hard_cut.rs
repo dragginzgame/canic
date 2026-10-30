@@ -180,7 +180,6 @@ fn maintained_product_generations_remain_v1() {
     let mut sources = Vec::new();
     for package in [
         "canic",
-        "canic-backup",
         "canic-cli",
         "canic-control-plane",
         "canic-core",

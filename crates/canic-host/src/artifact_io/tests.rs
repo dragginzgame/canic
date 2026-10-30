@@ -740,7 +740,7 @@ fn write_executable(path: &Path, contents: &str) {
 }
 
 #[test]
-fn qualified_set_publishes_matching_wasm_candid_and_gzip_after_admission() {
+fn qualified_set_retains_captured_wasm_and_publishes_only_after_admission() {
     let root = unique_temp_dir("canic-qualified-artifact-set");
     fs::create_dir_all(&root).unwrap();
     let source = root.join("source.wasm");
@@ -766,6 +766,9 @@ fn qualified_set_publishes_matching_wasm_candid_and_gzip_after_admission() {
         wasm_gz_path: &gzip_path,
     };
     stage_and_publish_artifact_set(&finalization, |staged| {
+        // A later Cargo output cannot replace the candidate already under qualification.
+        fs::write(&source, b"later producer output")?;
+        assert_eq!(fs::read(&staged.wasm_path)?, wasm);
         assert_eq!(fs::read(&wasm_path).unwrap(), b"previous wasm");
         assert_eq!(fs::read(&did_path).unwrap(), b"previous candid");
         assert_eq!(fs::read(&gzip_path).unwrap(), b"previous gzip");

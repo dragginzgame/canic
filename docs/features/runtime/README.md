@@ -23,7 +23,8 @@ logic in the application package.
 - stable-memory helpers under `canic::memory` for persistent canister data
 - one shared cross-framework inventory through `ic-timers 0.8.1`, with
   application timer registrations owned directly by their consuming crate
-- type-checked calls between canisters, with measurements for monitoring
+- protected framework calls with measurements; application transport and owned
+  request/reply codecs come directly from IC Call/Platform and IC Wire
 - optional sets of public methods selected with Cargo features
 
 Use the same `canic` version in normal and build dependencies. Each canister
@@ -37,6 +38,8 @@ from the App configuration.
 
 See [public status and protected observability](public-observability.md) for
 caller access, optional aggregate publication and cached snapshot semantics.
+See [provider metrics storage](provider-metrics.md) for heap defaults and explicit
+per-provider stable recording under the same host lifecycle.
 See [endpoint argument and reply controls](update-payload-limits.md) before setting
 client request budgets: ordinary managed updates inherit a 16 KiB encoded
 argument limit, including bare CDK update endpoints.

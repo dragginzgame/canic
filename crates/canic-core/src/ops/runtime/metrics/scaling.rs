@@ -8,10 +8,11 @@ use crate::{
     InternalError, model::placement::scaling::ScalingPlanReason,
     ops::runtime::metrics::error::MetricErrorKind,
 };
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static SCALING_METRICS: RefCell<HashMap<ScalingMetricKey, u64>> =
+    static SCALING_METRICS: RefCell<HashMap<ScalingMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -172,14 +173,14 @@ impl ScalingMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current scaling metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(ScalingMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(ScalingMetricKey, MeasurementCounter)> {
         SCALING_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -202,8 +203,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<ScalingMetricKey, u64> {
-        ScalingMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<ScalingMetricKey, u128> {
+        ScalingMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     // Verify scaling metrics accumulate by operation, outcome, and reason.

@@ -202,7 +202,7 @@ Finish the authorized dependency updates and fetch the
 selected packages. With no other Canic build or validation using `target/`, run:
 
 ```sh
-bash scripts/dev/check-dependency-adoption.sh canic-host canic-backup canic-blob-service
+bash scripts/dev/check-dependency-adoption.sh canic-host canic-blob-service
 ```
 
 Select the affected root packages explicitly, including downstream owners whose

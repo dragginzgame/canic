@@ -8,6 +8,7 @@ mod schema;
 use ic_platform::cdk::call::Call;
 use ic_platform::{
     candid::contract::{CandidType, Nat},
+    nns_registry_types::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponseOk},
     principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
@@ -199,18 +200,6 @@ impl CreationRetryRefusal {
             Self::GenericError => generic_error("retry refused"),
         }
     }
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-struct GetSubnetForCanisterRequest {
-    principal: Principal,
-}
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct GetSubnetForCanisterPayload {
-    subnet_id: Option<Principal>,
 }
 
 struct State {
@@ -620,13 +609,16 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
 #[ic_platform::cdk::query(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn get_subnet_for_canister(
     request: GetSubnetForCanisterRequest,
-) -> Result<GetSubnetForCanisterPayload, String> {
+) -> Result<GetSubnetForCanisterResponseOk, String> {
+    let principal = request
+        .principal
+        .ok_or("fixture lookup requires a principal")?;
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("routing fixture is initialized");
-        Ok(GetSubnetForCanisterPayload {
+        Ok(GetSubnetForCanisterResponseOk {
             subnet_id: state
                 .canister_ids
-                .contains(&request.principal)
+                .contains(&principal)
                 .then_some(state.expected_subnet),
         })
     })

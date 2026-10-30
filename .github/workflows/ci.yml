@@ -144,8 +144,7 @@ jobs:
           bash scripts/ci/run-nonempty-cargo-test.sh --locked -p canic-host --lib fleet_ensure::ops::attempt_recovery::tests::
           cargo test --locked -p canic-cli --lib output::tests::
           cargo test --locked -p canic-cli --lib fleet::tests::generated_desired_output_
-          cargo test --locked -p canic-backup --lib persistence::
-          cargo test --locked -p canic-backup --lib restore::runner::
+          bash scripts/ci/run-nonempty-cargo-test.sh --locked -p canic-host --lib backup::checkpoint::
       - name: Check canister target from macOS
         run: cargo check --locked -p canic-control-plane --target wasm32-unknown-unknown --features root-control-plane
       - name: Build and finalize a representative canister artifact
@@ -349,8 +348,12 @@ jobs:
         run: |
           source tool-versions.env
           make install-host-tools
-          echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
+          make install-rust-tools
+          {
+            echo "$GITHUB_WORKSPACE/.tools/host/bin"
+            echo "$GITHUB_WORKSPACE/.tools/rust/common/bin"
+          } >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
           make install-release-metadata-editor
       - name: Install ordinary test Wasm prerequisites
@@ -362,7 +365,8 @@ jobs:
       - name: Check ordinary test helper tools
         shell: bash
         run: |
-          make release-metadata-editor-check
+          make rust-tools-check release-metadata-editor-check
+          cargo sort --version
           cargo set-version --version
           rg --version
           rg --pcre2-version

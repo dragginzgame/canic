@@ -13,7 +13,7 @@ use super::{
     schema::{
         AuthConfig, CanisterAuthConfig, CanisterKind, CyclesFundingPolicyConfig, FleetInitMode,
         IndexConfig, LocalApplicationAuthorizationConfig, LogConfig, ScalingConfig, ShardingConfig,
-        StandardsCanisterConfig, TopupPolicy,
+        TopupPolicy,
     },
 };
 use crate::{InternalError, dto::component_deployment::ProtectedComponentDeployment};
@@ -39,6 +39,7 @@ pub struct RuntimeCanisterAuthority {
 /// Runtime-only fields consumed by the exact compiled role and its admitted children.
 #[derive(Clone, Debug)]
 pub struct RuntimeCanisterConfig {
+    pub metrics: super::schema::MetricStorageConfig,
     pub kind: CanisterKind,
     pub topup: Option<TopupPolicy>,
     pub cycles_funding: CyclesFundingPolicyConfig,
@@ -46,7 +47,6 @@ pub struct RuntimeCanisterConfig {
     pub sharding: Option<ShardingConfig>,
     pub index: Option<IndexConfig>,
     pub auth: CanisterAuthConfig,
-    pub standards: StandardsCanisterConfig,
 }
 
 /// Minimal authority retained by a Component for one admitted direct-child role.
@@ -62,6 +62,7 @@ pub struct RuntimeChildCanisterAuthority {
 impl From<CanisterConfig> for RuntimeCanisterConfig {
     fn from(config: CanisterConfig) -> Self {
         Self {
+            metrics: config.metrics.storage_policy(),
             kind: config.kind,
             topup: config.topup,
             cycles_funding: config.cycles_funding,
@@ -69,7 +70,6 @@ impl From<CanisterConfig> for RuntimeCanisterConfig {
             sharding: config.sharding,
             index: config.index,
             auth: config.auth,
-            standards: config.standards,
         }
     }
 }
@@ -100,7 +100,6 @@ pub struct RoleRuntimeAuthority {
     pub fleet_admission: bool,
     pub public_metrics:
         std::collections::BTreeSet<crate::domain::public_metrics::PublicMetricFamily>,
-    pub global_icrc21: bool,
     pub component_topology: ComponentTopology,
     pub canisters: Vec<RuntimeCanisterAuthority>,
     pub children: Vec<RuntimeChildCanisterAuthority>,
@@ -213,10 +212,6 @@ impl RoleRuntimeAuthority {
             log: config.log.clone(),
             auth: config.auth.clone(),
             fleet_admission: declaration.fleet_admission,
-            global_icrc21: config
-                .standards
-                .as_ref()
-                .is_some_and(|standards| standards.icrc21),
             component_topology,
             canisters,
             children,
@@ -242,10 +237,6 @@ impl RoleRuntimeAuthority {
             log: config.log.clone(),
             auth: config.auth.clone(),
             fleet_admission: false,
-            global_icrc21: config
-                .standards
-                .as_ref()
-                .is_some_and(|standards| standards.icrc21),
             component_topology: ComponentTopology {
                 component_specs: Vec::new(),
                 provisioning_grants: Vec::new(),

@@ -30,6 +30,8 @@ pub mod diagnostics;
 pub mod dto;
 pub mod endpoint;
 pub mod fleet_admission;
+#[cfg(feature = "icrc")]
+pub mod icrc;
 pub mod ids;
 mod instructions;
 mod macros; // private implementation boundary

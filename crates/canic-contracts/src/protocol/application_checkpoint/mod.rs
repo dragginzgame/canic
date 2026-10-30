@@ -1,5 +1,9 @@
 //! Root checkpoint coordination and application-owned participant hook contracts.
 
+mod identity;
+
+pub use identity::{authority_digest, unit_digest};
+
 /// Root's original whole-unit reservation.
 pub const BEGIN: u64 = 0x4341_4e49_0000_0700;
 /// Read retained Root progress without dispatch.

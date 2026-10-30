@@ -5,7 +5,9 @@
 //! Boundary: extends `MgmtInfra` with lifecycle management effects.
 
 use super::MgmtInfra;
-use crate::infra::ic::{IcInfraError, call::Call};
+use crate::infra::ic::{IcInfraError, external_candid::decode_args};
+use ic_call::{Call, WaitPolicy};
+use ic_platform::candid::contract::encode_one;
 use ic_platform::cdk::api;
 use ic_platform::{
     management_canister_types::{
@@ -26,11 +28,15 @@ impl MgmtInfra {
             chunk,
         };
 
-        let response = Call::unbounded_wait(Principal::management_canister(), "upload_chunk")
-            .with_arg(args)?
-            .execute()
-            .await?;
-        let (hash,): (ChunkHash,) = response.candid_tuple()?;
+        let response = Call::new(
+            Principal::management_canister().into(),
+            "upload_chunk",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
+        let (hash,): (ChunkHash,) = decode_args(&response.into_bytes())?;
 
         Ok(hash.hash)
     }
@@ -40,11 +46,17 @@ impl MgmtInfra {
         let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
-        let response = Call::bounded_wait(Principal::management_canister(), "stored_chunks")
-            .with_arg(args)?
-            .execute()
-            .await?;
-        let (hashes,): (Vec<ChunkHash>,) = response.candid_tuple()?;
+        let response = Call::new(
+            Principal::management_canister().into(),
+            "stored_chunks",
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
+        let (hashes,): (Vec<ChunkHash>,) = decode_args(&response.into_bytes())?;
 
         Ok(hashes.into_iter().map(|hash| hash.hash).collect())
     }
@@ -55,10 +67,14 @@ impl MgmtInfra {
             canister_id: canister_pid,
         };
 
-        Call::unbounded_wait(Principal::management_canister(), "clear_chunk_store")
-            .with_arg(args)?
-            .execute()
-            .await?;
+        Call::new(
+            Principal::management_canister().into(),
+            "clear_chunk_store",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
 
         Ok(())
     }
@@ -84,24 +100,30 @@ impl MgmtInfra {
             sender_canister_version: Some(api::canister_version()),
         };
 
-        Call::unbounded_wait(Principal::management_canister(), "install_chunked_code")
-            .with_arg(install_args)?
-            .execute()
-            .await?;
+        Call::new(
+            Principal::management_canister().into(),
+            "install_chunked_code",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(install_args)?)
+        .execute()
+        .await?;
 
         Ok(())
     }
 
     /// Quote the exact destructive request before recording its paid intent.
     pub fn uninstall_code_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
-        Ok(
-            Call::unbounded_wait(Principal::management_canister(), "uninstall_code")
-                .with_arg(UninstallCodeArgs {
-                    canister_id: canister_pid,
-                    sender_canister_version: Some(api::canister_version()),
-                })?
-                .cost(),
+        Ok(Call::new(
+            Principal::management_canister().into(),
+            "uninstall_code",
+            WaitPolicy::Unbounded,
         )
+        .take_raw_args(encode_one(UninstallCodeArgs {
+            canister_id: canister_pid,
+            sender_canister_version: Some(api::canister_version()),
+        })?)
+        .get_cost())
     }
 
     /// Uninstall code from a canister.
@@ -110,10 +132,14 @@ impl MgmtInfra {
             canister_id: canister_pid,
             sender_canister_version: Some(api::canister_version()),
         };
-        Call::unbounded_wait(Principal::management_canister(), "uninstall_code")
-            .with_arg(args)?
-            .execute()
-            .await?;
+        Call::new(
+            Principal::management_canister().into(),
+            "uninstall_code",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
 
         Ok(())
     }
@@ -123,22 +149,28 @@ impl MgmtInfra {
         let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
-        Call::unbounded_wait(Principal::management_canister(), "start_canister")
-            .with_arg(args)?
-            .execute()
-            .await?;
+        Call::new(
+            Principal::management_canister().into(),
+            "start_canister",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
         Ok(())
     }
 
     /// Quote a stop using the same request as the execution below.
     pub fn stop_canister_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
-        Ok(
-            Call::unbounded_wait(Principal::management_canister(), "stop_canister")
-                .with_arg(CanisterIdRecord {
-                    canister_id: canister_pid,
-                })?
-                .cost(),
+        Ok(Call::new(
+            Principal::management_canister().into(),
+            "stop_canister",
+            WaitPolicy::Unbounded,
         )
+        .take_raw_args(encode_one(CanisterIdRecord {
+            canister_id: canister_pid,
+        })?)
+        .get_cost())
     }
 
     /// Stop a canister.
@@ -146,10 +178,14 @@ impl MgmtInfra {
         let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
-        Call::unbounded_wait(Principal::management_canister(), "stop_canister")
-            .with_arg(args)?
-            .execute()
-            .await?;
+        Call::new(
+            Principal::management_canister().into(),
+            "stop_canister",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
 
         Ok(())
     }
@@ -159,10 +195,14 @@ impl MgmtInfra {
         let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
-        Call::unbounded_wait(Principal::management_canister(), "delete_canister")
-            .with_arg(args)?
-            .execute()
-            .await?;
+        Call::new(
+            Principal::management_canister().into(),
+            "delete_canister",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
 
         Ok(())
     }

@@ -1,5 +1,4 @@
 use canic::{
-    api::protocol::icrc21::Icrc21Dispatcher,
     dto::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, ChainKeyAlgorithm,
@@ -30,8 +29,7 @@ use canic::{
 };
 use canic_contracts::protocol::authority::{decode, encode};
 use ic_platform::icrc_ledger_types::icrc21::{
-    ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec,
-    DisplayMessageType, Icrc21Error,
+    ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec, DisplayMessageType,
 };
 use ic_platform::{candid_parser::CandidSource, principal::ExternalPrincipal as Principal};
 use std::{
@@ -295,31 +293,6 @@ fn composed_framework_fleet_admission_facade_is_typed_and_synchronous() {
 }
 
 #[test]
-fn icrc21_dispatcher_uses_the_registered_typed_handler() {
-    assert!(matches!(
-        Icrc21Dispatcher::consent_message(consent_message_request(
-            "unregistered_protocol_surface_method"
-        )),
-        Err(Icrc21Error::UnsupportedCanisterCall(_))
-    ));
-    let method = "protocol_surface_transfer";
-    Icrc21Dispatcher::register(method, |request| {
-        Ok(ConsentInfo {
-            consent_message: ConsentMessage::GenericDisplayMessage(request.method),
-            metadata: request.user_preferences.metadata,
-        })
-    });
-
-    let Ok(info) = Icrc21Dispatcher::consent_message(consent_message_request(method)) else {
-        panic!("registered handler should return consent information");
-    };
-    assert_eq!(
-        info.consent_message,
-        ConsentMessage::GenericDisplayMessage(method.to_string())
-    );
-}
-
-#[test]
 fn wasm_store_canonical_did_parses() {
     let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
     let did = read_text(&did_path);
@@ -338,8 +311,8 @@ fn wasm_store_canonical_did_parses() {
         .collect::<Vec<_>>();
     assert_eq!(
         methods,
-        vec![canic::protocol::ICRC10_SUPPORTED_STANDARDS,],
-        "canonical Store exposes its current read, control, byte and ICRC-10 methods"
+        Vec::<&str>::new(),
+        "canonical Store has no external Candid endpoints"
     );
 }
 
@@ -771,5 +744,18 @@ mod lean_observability_relay {
             )
             .unwrap();
         assert_eq!(decoded, result);
+    }
+}
+
+ic_platform::candid::contract::export_service!(ic_platform::candid::contract);
+
+#[test]
+fn canonical_default_role_services_match_the_empty_external_service_printer() {
+    let expected = __export_service();
+    for file in ["wasm_store.did", "fleet_coordinator.did"] {
+        let path = workspace_root().join("crates/canic/candid").join(file);
+        let text = read_text(&path);
+        let service = text.split("// canic:payload-contract").next().unwrap();
+        assert_eq!(service.trim_end(), expected, "{}", path.display());
     }
 }

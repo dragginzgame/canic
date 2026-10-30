@@ -235,6 +235,9 @@ case "$*" in
     '--no-print-directory candid-extractor-check')
         exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" candid-extractor-check ;;
     install-host-tools|'install-ic-tools install-testkit-server'|testkit-server-check) exit 0 ;;
+    install-rust-tools)
+        printf '%s\t%s\n' "$0" "$*" >> "$EVENTS"
+        exit "${FAIL_RUST_TOOLS:-0}" ;;
     install-release-metadata-editor|release-metadata-editor-check)
         exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" "$@" ;;
     *) exit 97 ;;
@@ -268,7 +271,7 @@ for step in 'Install and qualify pinned native build tools' 'Install PocketIC te
     fi
 done
 # Execute the ordinary job's actual setup body with installer effects substituted.
-# Its release fixtures require the separately selected metadata editor on a fresh host.
+# Its release fixtures require both Cargo formatting tools and the metadata editor.
 yq -o json '.' "$ROOT/.github/workflows/ci.yml" | jq -er '
     .jobs["tests-ordinary"].steps[]
     | select(.name == "Install ordinary test helper tools") | .run
@@ -276,8 +279,13 @@ yq -o json '.' "$ROOT/.github/workflows/ci.yml" | jq -er '
 : > "$EVENTS"
 PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail ordinary-setup > workflow-output
 grep -Fxq "$fixture/bin/bash"$'\tscripts/dev/release-metadata-editor.sh' "$EVENTS"
+grep -Fxq "$fixture/bin/make"$'\tinstall-rust-tools' "$EVENTS"
+grep -Fxq "$fixture/.tools/rust/common/bin" "$GITHUB_PATH"
 status=0
 FAIL_RELEASE_EDITOR=37 PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail ordinary-setup > workflow-output 2>&1 || status=$?
 [[ "$status" != 0 ]] || { echo 'ordinary setup accepted failed metadata editor preparation' >&2; exit 1; }
+status=0
+FAIL_RUST_TOOLS=38 PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail ordinary-setup > workflow-output 2>&1 || status=$?
+[[ "$status" != 0 ]] || { echo 'ordinary setup accepted failed Rust tool preparation' >&2; exit 1; }
 echo 'Development recipes, explicit extractor admission and native workflow PATH publication passed (installer effects substituted)'
 fixture_complete=true

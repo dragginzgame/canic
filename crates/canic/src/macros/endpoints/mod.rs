@@ -13,7 +13,6 @@ mod fleet_coordinator;
 mod protected_health;
 mod role;
 mod root;
-mod standards;
 mod wasm_store;
 
 mod protected_logs;

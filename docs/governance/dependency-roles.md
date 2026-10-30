@@ -9,7 +9,7 @@ remains explicitly selected at 0.1.6. Existing tool installations are retained.
 
 ## Classification
 
-The production family is `canic`, `canic-backup`, `canic-cli`, `canic-contracts`,
+The production family is `canic`, `canic-cli`, `canic-contracts`,
 `canic-control-plane`, `canic-core`, `canic-host`, `canic-icydb`, `canic-macros` and
 `canic-blob-service`. Demo/test Apps, framework probes and internal test crates are
 validation packages. The two independent Blob consumers are validation workspaces.
@@ -25,10 +25,15 @@ production. In particular, `ic-testkit` is used by Host's supported `local-fleet
 feature; its name does not make it a test-only dependency here. Renamed dependencies
 must be compared using their Cargo package identity, not the catalog key.
 
-`ic-call` is a production dependency of Core's generic call adapter. It owns
+`ic-call` is a production dependency of Core and Control Plane. It owns
 prepared request custody and delegates execution/cost queries to Platform's
 existing runtime. Canic retains codecs, metrics and delivery/spending policy;
-the adapter does not introduce an independent executor or retry owner.
+the stateless instrumentation function adds no executor, builder or retry owner.
+
+`ic-wire` owns codecs and admission for owned stable values as well as RPCs.
+Contracts uses `serde_cbor` only in external protocol qualification tests; Core and
+Host retain it for dedicated commitment/build evidence and required IC protocols.
+No custom Canic CBOR numeric adapter remains in the production storage graph.
 
 ## Formatting and release checks
 

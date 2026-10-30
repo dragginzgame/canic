@@ -166,8 +166,7 @@ fn decoding_cannot_claim_release_without_acknowledgements() {
     let record = begin(None, 0, 1).unwrap();
     let mut invalid = record.clone();
     invalid.phase = Phase::Released;
-    let mut bytes = Vec::new();
-    serde_cbor::to_writer(&mut bytes, &invalid).unwrap();
+    let bytes = canic_contracts::serialization::serialize(&invalid).unwrap();
     let decoded: Result<Record, _> = canic_contracts::serialization::deserialize(&bytes);
     assert!(matches!(
         decoded,

@@ -17,6 +17,7 @@ const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 
 pub mod admission;
 mod artifact_io;
+pub mod backup;
 pub mod binaryen;
 mod bootstrap_candid;
 mod bounded_reads;

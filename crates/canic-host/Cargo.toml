@@ -19,6 +19,9 @@ ignored = ["serde_bytes"]
 [features]
 local-fleet = ["dep:ic-testkit", "ic-platform/pocket-ic"]
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
 [dependencies]
 canic-contracts.workspace = true
 # Host materializes metadata for every infrastructure role.
@@ -31,6 +34,8 @@ canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 crc32fast = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
+ic-backup.workspace = true
+ic-backup-agent.workspace = true
 ic-build.workspace = true
 ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
@@ -53,9 +58,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 toml = { workspace = true }
 url = { workspace = true }
-
-[target.'cfg(unix)'.dependencies]
-rustix = { workspace = true }
 
 [dev-dependencies]
 clap = { workspace = true }

@@ -6,7 +6,6 @@
 /// generally import from specific paths instead of pulling in the entire prelude.
 ///
 pub use crate::api::{
-    call::Call,
     canister::CanisterRole,
     ops::{log, perf},
 };

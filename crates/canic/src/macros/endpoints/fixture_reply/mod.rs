@@ -133,10 +133,13 @@ macro_rules! __canic_fixture_reply_support {
             // caller-timeout clock jump cannot trap this test barrier itself.
             // The finite round cap prevents a hung qualification.
             for _ in 0..256 {
-                $crate::prelude::Call::unbounded_wait(
-                    $crate::__internal::ic_platform::principal::ExternalPrincipal::management_canister(), "raw_rand",
-                ).with_args(()).expect("fixture round arguments")
-                    .execute_candid::<Vec<u8>>().await.expect("fixture consensus round");
+                let response = $crate::__internal::ic_platform::cdk::call::Call::unbounded_wait(
+                    $crate::__internal::ic_platform::Principal::management_canister(), "raw_rand",
+                ).take_raw_args($crate::__internal::ic_platform::candid::contract::encode_args(()).expect("fixture round arguments"))
+                    .await.expect("fixture consensus round");
+                let _: (Vec<u8>,) = $crate::__internal::ic_platform::candid::contract::decode_args_with_config(
+                    &response.into_bytes(), &$crate::__internal::ic_platform::candid::contract::DecoderConfig::new(),
+                ).expect("fixture randomness reply");
                 if __CANIC_FIXTURE_REPLY_BARRIER.with_borrow(|barrier| barrier.released) {
                     __CANIC_FIXTURE_REPLY_BARRIER.with_borrow_mut(|barrier| barrier.waiting -= 1);
                     return;

@@ -2252,6 +2252,10 @@ mod tests {
     pub fn governed_runtime_cases() -> Vec<crate::pic::GovernedTestCase> {
         crate::pic::cases::registered![
             (
+                "original host checkpoint accounting and installed restoration",
+                crate::pic::application_checkpoint::qualify_original_host_workflow
+            ),
+            (
                 "Root checkpoint dispatch and interruption",
                 crate::pic::application_checkpoint::qualify_root_dispatch
             ),

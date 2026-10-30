@@ -1,7 +1,7 @@
 //! Build and qualify configured canister artifacts with exact Cargo feature contracts.
 
 use ic_build::cargo::{
-    execution::{CargoInvocation, CargoRecipe},
+    execution::CargoInvocation,
     selection::{CargoFeatureSelection, CargoSelection},
 };
 use sha2_host::Digest as _;
@@ -1042,7 +1042,7 @@ pub(super) fn canister_cargo_build_command(
         },
         packages: Vec::new(),
         manifest_path: Some(manifest_path.to_owned()),
-        recipe: CargoRecipe::Library,
+        recipe: super::CANISTER_CARGO_RECIPE,
         configurations: Vec::new(),
         render_diagnostics: true,
         keep_going: true,

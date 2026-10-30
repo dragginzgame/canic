@@ -449,7 +449,7 @@ mod current_resource_contract {
     use super::*;
 
     fn encoded<T: Serialize>(value: &T) -> Vec<u8> {
-        crate::cdk::serialize::serialize(value).expect("CBOR encoding")
+        crate::cdk::serialize::serialize(value).expect("Wire encoding")
     }
 
     fn principal(id: u64) -> Principal {
@@ -496,7 +496,7 @@ mod current_resource_contract {
     }
 
     #[test]
-    fn current_session_and_replay_cbor_footprint_stays_bounded() {
+    fn current_session_and_replay_wire_footprint_stays_bounded() {
         use crate::model::auth::application_authorization::{
             MAX_APPLICATION_SESSION_RECORD_BYTES, MAX_APPLICATION_SESSION_STABLE_BYTES,
         };

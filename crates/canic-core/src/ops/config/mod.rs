@@ -354,13 +354,6 @@ impl ConfigOps {
         Self::try_get_child(&component_spec, canister_role)
     }
 
-    pub(crate) fn current_icrc21_enabled() -> bool {
-        Self::authority().is_ok_and(|authority| {
-            authority.global_icrc21
-                && Self::current_canister().is_ok_and(|canister| canister.standards.icrc21)
-        })
-    }
-
     pub(crate) fn cycles_funding_limits_for_root_child_role(
         child_role: &CanisterRole,
     ) -> Result<FundingLimits, InternalError> {

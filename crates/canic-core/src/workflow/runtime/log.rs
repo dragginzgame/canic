@@ -7,7 +7,6 @@
 use crate::{
     InternalError,
     config::schema::LogConfig,
-    domain::policy::pure as policy,
     log::{Level, Topic},
     ops::{config::ConfigOps, ic::IcOps, runtime::log::LogOps},
     workflow::runtime::timer::{
@@ -109,13 +108,9 @@ impl LogRetentionWorkflow {
         };
 
         let now_secs = IcOps::now_secs();
-        let cutoff = policy::log::age_cutoff(now_secs, max_age_secs);
-        let batch = LogOps::retain_created_before(cutoff, RETENTION_BATCH_SIZE);
-        if batch.dropped > 0 {
-            IcOps::println(&format!(
-                "log retention: dropped={}, before={}, retained={}",
-                batch.dropped, batch.before, batch.retained
-            ));
+        let batch = LogOps::prune_expired(now_secs, max_age_secs, RETENTION_BATCH_SIZE);
+        if batch.removed > 0 {
+            IcOps::println(&format!("log retention: dropped={}", batch.removed));
         }
 
         let directive = if batch.more_due {
@@ -132,10 +127,10 @@ impl LogRetentionWorkflow {
                 }
             }
         };
-        if batch.dropped == 0 {
+        if batch.removed == 0 {
             OnceRunResult::new(TimerCompletion::no_work(), directive)
         } else {
-            OnceRunResult::new(TimerCompletion::success(batch.dropped), directive)
+            OnceRunResult::new(TimerCompletion::success(batch.removed as u64), directive)
         }
     }
 
@@ -152,10 +147,9 @@ impl LogRetentionWorkflow {
     }
 
     fn next_deadline_ns(max_age_secs: u64) -> Option<u64> {
-        let created_at = LogOps::oldest_created_at()?;
         // An expiry beyond the IC clock's range cannot become due. Keep the
         // entry under count retention without scheduling an earlier deadline.
-        let deadline_secs = policy::log::age_expiry_at(created_at, max_age_secs)?;
+        let deadline_secs = LogOps::next_expiry_secs(max_age_secs)?;
         deadline_secs.checked_mul(NANOS_PER_SECOND)
     }
 }
@@ -210,10 +204,21 @@ mod tests {
                     .expect("unreachable deadline must stop"),
                 OnceDecision::Stop
             );
-            let cutoff = policy::log::age_cutoff(100, max_age_secs);
-            let batch = LogOps::retain_created_before(cutoff, RETENTION_BATCH_SIZE);
-            assert_eq!(batch.dropped, 0);
-            assert_eq!(batch.retained, 1);
+            let batch = LogOps::prune_expired(100, max_age_secs, RETENTION_BATCH_SIZE);
+            assert_eq!(batch.removed, 0);
+            assert_eq!(
+                LogOps::page_filtered(
+                    None,
+                    None,
+                    None,
+                    crate::dto::page::PageRequest {
+                        limit: 1,
+                        offset: 0
+                    },
+                )
+                .total,
+                1
+            );
         }
     }
 
@@ -237,13 +242,13 @@ mod tests {
             append(created_at);
         }
 
-        let cutoff = u64::try_from(RETENTION_BATCH_SIZE).expect("batch size") + 1;
-        let first = LogOps::retain_created_before(cutoff, RETENTION_BATCH_SIZE);
-        assert_eq!(first.dropped, RETENTION_BATCH_SIZE as u64);
+        let now = u64::try_from(RETENTION_BATCH_SIZE).expect("batch size") + 1;
+        let first = LogOps::prune_expired(now, 0, RETENTION_BATCH_SIZE);
+        assert_eq!(first.removed, RETENTION_BATCH_SIZE);
         assert!(first.more_due);
 
-        let second = LogOps::retain_created_before(cutoff, RETENTION_BATCH_SIZE);
-        assert_eq!(second.dropped, 1);
+        let second = LogOps::prune_expired(now, 0, RETENTION_BATCH_SIZE);
+        assert_eq!(second.removed, 1);
         assert!(!second.more_due);
     }
 }

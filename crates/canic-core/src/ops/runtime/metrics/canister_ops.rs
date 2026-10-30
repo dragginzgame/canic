@@ -5,6 +5,7 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use canic_contracts::ids::CanisterRole;
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::BTreeMap};
 
 pub use crate::{
@@ -16,7 +17,7 @@ const UNSCOPED_ROLE_LABEL: &str = "unscoped";
 const UNKNOWN_ROLE_LABEL: &str = "unknown";
 
 thread_local! {
-    static CANISTER_OPS_METRICS: RefCell<BTreeMap<CanisterOpsMetricKey, u64>> =
+    static CANISTER_OPS_METRICS: RefCell<BTreeMap<CanisterOpsMetricKey, MeasurementCounter>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -46,7 +47,7 @@ impl CanisterOpsMetrics {
     /// Read a deterministic bounded prefix for optional public sampling.
     pub(crate) fn bounded_snapshot(
         limit: usize,
-    ) -> Result<Vec<(CanisterOpsMetricKey, u64)>, crate::InternalError> {
+    ) -> Result<Vec<(CanisterOpsMetricKey, MeasurementCounter)>, crate::InternalError> {
         CANISTER_OPS_METRICS.with_borrow(|counts| {
             if counts.keys().take(limit).any(|key| {
                 key.role.len() > crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES
@@ -103,14 +104,14 @@ impl CanisterOpsMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current canister operation metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(CanisterOpsMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(CanisterOpsMetricKey, MeasurementCounter)> {
         CANISTER_OPS_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -133,8 +134,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> BTreeMap<CanisterOpsMetricKey, u64> {
-        CanisterOpsMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> BTreeMap<CanisterOpsMetricKey, u128> {
+        CanisterOpsMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     // Verify canister operation counters accumulate by operation, role, outcome, and reason.

@@ -362,7 +362,7 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
         .find(|entry| labels_match(entry, &success_labels))
         .expect("issuer root-guard endpoint perf metric");
     assert!(row.principal.is_none());
-    assert!(matches!(row.value, MetricValue::CountAndU64 { .. }));
+    assert!(matches!(row.value, MetricValue::Measurement { .. }));
 }
 
 fn metric_count_for_labels(
@@ -376,8 +376,18 @@ fn metric_count_for_labels(
         .into_iter()
         .find_map(|entry| {
             labels_match(&entry, labels).then_some(match entry.value {
-                MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,
-                MetricValue::U128(_) => 0,
+                MetricValue::Count { count, exact: true } => {
+                    u64::try_from(count).expect("bounded exact count")
+                }
+                MetricValue::Measurement {
+                    count,
+                    count_overflowed: false,
+                    ..
+                } => count,
+                MetricValue::Count { .. } | MetricValue::Measurement { .. } => {
+                    panic!("role attestation requires an exact sample count")
+                }
+                MetricValue::U128 { .. } => 0,
             })
         })
         .unwrap_or(0)

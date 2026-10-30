@@ -295,10 +295,9 @@ mod tests {
             canonical_network_id,
             fleet_id,
         };
-        let mut current_bytes = Vec::new();
-        serde_cbor::to_writer(&mut current_bytes, &fleet).expect("serialize Fleet key");
+        let current_bytes = crate::serialization::serialize(&fleet).expect("serialize Fleet key");
         let current: FleetKeyWire =
-            serde_cbor::from_reader(current_bytes.as_slice()).expect("decode current Fleet key");
+            crate::serialization::deserialize(&current_bytes).expect("decode current Fleet key");
 
         assert_eq!(
             current,

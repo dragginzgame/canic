@@ -1,7 +1,6 @@
 mod admission;
 mod apps;
 mod auth;
-mod backup;
 mod build;
 mod cli;
 mod component;
@@ -23,7 +22,6 @@ mod network;
 mod observatory;
 mod output;
 mod replica;
-mod restore;
 mod scaffold;
 mod state;
 mod status;
@@ -69,9 +67,6 @@ pub enum CliError {
 
     #[error("cycles: {0}")]
     Cycles(#[source] Box<cycles::CyclesCommandError>),
-
-    #[error("backup: {0}")]
-    Backup(#[source] Box<backup::BackupCommandError>),
 
     #[error("auth: {0}")]
     Auth(#[source] Box<auth::AuthCommandError>),
@@ -123,9 +118,6 @@ pub enum CliError {
 
     #[error("replica: {0}")]
     Replica(#[from] replica::ReplicaCommandError),
-
-    #[error("restore: {0}")]
-    Restore(#[from] restore::RestoreCommandError),
 }
 
 impl From<apps::AppCommandError> for CliError {
@@ -143,12 +135,6 @@ impl From<admission::AdmissionCommandError> for CliError {
 impl From<auth::AuthCommandError> for CliError {
     fn from(error: auth::AuthCommandError) -> Self {
         Self::Auth(Box::new(error))
-    }
-}
-
-impl From<backup::BackupCommandError> for CliError {
-    fn from(error: backup::BackupCommandError) -> Self {
-        Self::Backup(Box::new(error))
     }
 }
 
@@ -249,7 +235,6 @@ where
         "admission" => admission::run(tail).map_err(CliError::from),
         "app" => apps::run(tail).map_err(CliError::from),
         "auth" => auth::run(tail).map_err(CliError::from),
-        "backup" => backup::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "component" => component::run(tail).map_err(|error| CliError::Component(Box::new(error))),
         "cycles" => cycles::run(tail).map_err(CliError::from),
@@ -263,7 +248,6 @@ where
         "network" => network::run(tail).map_err(CliError::from),
         "observatory" => observatory::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
-        "restore" => restore::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "state" => state::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),

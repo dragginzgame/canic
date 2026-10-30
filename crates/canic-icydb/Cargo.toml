@@ -17,6 +17,7 @@ ic-wire.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+ic-metrics.workspace = true
 serde = { workspace = true, features = ["derive"] }
 
 [lints]

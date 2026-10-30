@@ -209,11 +209,23 @@ pub fn decode_icp_refill_replay_response(
         ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
         "ICP refill",
     )?;
-    deserialize(response_bytes).map_err(|err| {
-        ReplayDecodeError::DecodeFailed(format!(
-            "failed to decode ICP refill replay response: {err}"
-        ))
-    })
+    let response = deserialize::<canic_contracts::dto::funding_read::RefillResult>(response_bytes)
+        .map_err(|err| {
+            ReplayDecodeError::DecodeFailed(format!(
+                "failed to decode ICP refill replay response: {err}"
+            ))
+        })?;
+    IcpRefillResponse::try_from(response)
+        .map_err(|err| ReplayDecodeError::DecodeFailed(err.to_string()))
+}
+
+/// Store the shared Wire projection of external numeric refill evidence.
+pub fn encode_icp_refill_replay_response(
+    response: &IcpRefillResponse,
+) -> Result<Vec<u8>, ReplayCommitError> {
+    let response = canic_contracts::dto::funding_read::RefillResult::try_from(response.clone())
+        .map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))?;
+    encode_replay_response(&response)
 }
 
 /// Encode one typed response payload stored in shared replay receipts.

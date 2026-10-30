@@ -1,6 +1,6 @@
 //! Module: view::public_metrics
 //!
-//! Responsibility: carry one read-only history projection from its storage owner.
+//! Responsibility: carry read-only history and performance projections from their owners.
 //! Boundary: no collection, mutation, endpoint DTOs or query authorisation.
 
 use crate::model::public_metrics::PublicHistorySample;

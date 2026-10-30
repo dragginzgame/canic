@@ -5,12 +5,13 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::cdk::types::Principal;
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static DELEGATED_AUTH_AUTHORITIES: RefCell<HashMap<Principal, u64>> =
+    static DELEGATED_AUTH_AUTHORITIES: RefCell<HashMap<Principal, MeasurementCounter>> =
         RefCell::new(HashMap::new());
-    static DELEGATED_AUTH_EVENTS: RefCell<HashMap<DelegatedAuthMetricKey, u64>> =
+    static DELEGATED_AUTH_EVENTS: RefCell<HashMap<DelegatedAuthMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -116,8 +117,8 @@ impl DelegatedAuthMetrics {
     /// Record one successful delegated-authority verification.
     pub fn record_authority(authority: Principal) {
         DELEGATED_AUTH_AUTHORITIES.with_borrow_mut(|counts| {
-            let entry = counts.entry(authority).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(authority).or_default();
+            entry.add(1);
         });
     }
 
@@ -190,14 +191,14 @@ impl DelegatedAuthMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current delegated-auth authority table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(Principal, u64)> {
+    pub fn snapshot() -> Vec<(Principal, MeasurementCounter)> {
         DELEGATED_AUTH_AUTHORITIES
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -206,7 +207,7 @@ impl DelegatedAuthMetrics {
 
     /// Snapshot the current delegated-auth event table as stable rows.
     #[must_use]
-    pub fn event_snapshot() -> Vec<(DelegatedAuthMetricKey, u64)> {
+    pub fn event_snapshot() -> Vec<(DelegatedAuthMetricKey, MeasurementCounter)> {
         DELEGATED_AUTH_EVENTS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -233,21 +234,27 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn snapshot_map() -> HashMap<Principal, u64> {
-        DelegatedAuthMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<Principal, u128> {
+        DelegatedAuthMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     // Convert event snapshots into a map for concise count assertions.
-    fn event_snapshot_map() -> HashMap<DelegatedAuthMetricKey, u64> {
-        DelegatedAuthMetrics::event_snapshot().into_iter().collect()
+    fn event_snapshot_map() -> HashMap<DelegatedAuthMetricKey, u128> {
+        DelegatedAuthMetrics::event_snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     fn assert_event_count(
-        map: &HashMap<DelegatedAuthMetricKey, u64>,
+        map: &HashMap<DelegatedAuthMetricKey, u128>,
         operation: DelegatedAuthMetricOperation,
         outcome: DelegatedAuthMetricOutcome,
         reason: DelegatedAuthMetricReason,
-        count: u64,
+        count: u128,
     ) {
         assert_eq!(
             map.get(&DelegatedAuthMetricKey {

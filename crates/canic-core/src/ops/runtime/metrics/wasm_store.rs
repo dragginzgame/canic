@@ -4,6 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 pub use crate::domain::metrics::{
@@ -11,7 +12,7 @@ pub use crate::domain::metrics::{
 };
 
 thread_local! {
-    static WASM_STORE_METRICS: RefCell<HashMap<WasmStoreMetricKey, u64>> =
+    static WASM_STORE_METRICS: RefCell<HashMap<WasmStoreMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -41,7 +42,7 @@ impl WasmStoreMetrics {
     /// Bound source visits before allocating an optional anonymous aggregate.
     pub(crate) fn bounded_snapshot(
         limit: usize,
-    ) -> Result<Vec<(WasmStoreMetricKey, u64)>, crate::InternalError> {
+    ) -> Result<Vec<(WasmStoreMetricKey, MeasurementCounter)>, crate::InternalError> {
         WASM_STORE_METRICS.with_borrow(|counts| {
             if counts.len() > limit {
                 return Err(crate::InternalError::invalid_input());
@@ -68,14 +69,14 @@ impl WasmStoreMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current wasm-store metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(WasmStoreMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(WasmStoreMetricKey, MeasurementCounter)> {
         WASM_STORE_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -98,8 +99,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<WasmStoreMetricKey, u64> {
-        WasmStoreMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<WasmStoreMetricKey, u128> {
+        WasmStoreMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     // Verify wasm-store metrics accumulate by operation, source, outcome, and reason.

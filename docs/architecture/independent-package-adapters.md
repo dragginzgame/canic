@@ -37,9 +37,19 @@ orchestration retains its separate ownership and authority contracts below.
 | Blob service | Storage, upload protocols, accounting, certification and service tests | Fleet endpoint guards, lifecycle participant, memory grants and application-metric sampler |
 | Backup | Artifacts, checksums, manifests, journal transitions, bounded capture/restore runners, retention and command custody | Fleet discovery, exact release/controller authority, application consistency and operator integration |
 
-When backup runner adoption is qualified, delete `crates/canic-backup` and its
-duplicate mechanisms. Do not retain it as a forwarding crate. Public upstream
-APIs must suffice; Canic must not copy an upstream engine into an adapter.
+The maintainer approved an immediate hard cut on 2026-10-29. The duplicate
+Backup crate and the old backup/restore CLI are removed, including workspace,
+publication and packaging edges. Live backup and restore commands are unavailable;
+this removal supersedes the earlier requirement to retain the old restore runner.
+No engine was copied into Host and no forwarding package remains.
+
+IC Backup 0.50.2 owns workflow plans, original stage/attempt journals, bounded
+advancement, inspection, immutable manifests and guarded reference release.
+Canic retains Fleet identity, release/controller authority, application hooks and
+the thin Host checkpoint adapter. Future CLI operations must consume upstream
+owners with qualified production admission, custody and post-load acceptance.
+Canic #513 tracks this integration; #394/#550 track live/application acceptance.
+Existing source evidence and retained operation data are not rewritten or deleted.
 
 ## Endpoint composition API
 

@@ -14,7 +14,6 @@ pub mod env;
 pub mod fixture_provisioning;
 pub mod fleet_admission_projection;
 pub mod ic;
-pub mod icrc;
 pub mod log;
 pub mod memory;
 pub mod metrics;

@@ -113,27 +113,30 @@ pub(super) fn require_snapshot_root(
     current: &FleetCoordinatorRegistryRecord,
     caller: Principal,
 ) -> Result<&FleetSubnetRootEntry, InternalError> {
-    current
-        .registry
-        .fleet_subnet_roots
-        .iter()
-        .find(|entry| {
-            entry.fleet_subnet_root == caller && entry.status != FleetSubnetRootStatus::Removed
-        })
-        .ok_or_else(InternalError::forbidden)
+    require_root_with_status(current, caller, |status| {
+        status != FleetSubnetRootStatus::Removed
+    })
 }
 
 pub(super) fn require_joining_root(
     current: &FleetCoordinatorRegistryRecord,
     caller: Principal,
 ) -> Result<&FleetSubnetRootEntry, InternalError> {
+    require_root_with_status(current, caller, |status| {
+        status == FleetSubnetRootStatus::Joining
+    })
+}
+
+fn require_root_with_status(
+    current: &FleetCoordinatorRegistryRecord,
+    caller: Principal,
+    accepts: impl Fn(FleetSubnetRootStatus) -> bool,
+) -> Result<&FleetSubnetRootEntry, InternalError> {
     current
         .registry
         .fleet_subnet_roots
         .iter()
-        .find(|entry| {
-            entry.fleet_subnet_root == caller && entry.status == FleetSubnetRootStatus::Joining
-        })
+        .find(|entry| entry.fleet_subnet_root == caller && accepts(entry.status))
         .ok_or_else(InternalError::forbidden)
 }
 

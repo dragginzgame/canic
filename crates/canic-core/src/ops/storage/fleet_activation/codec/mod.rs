@@ -179,7 +179,7 @@ fn encode_concrete<T: Serialize>(
     tag: u8,
     record: &T,
 ) -> Result<FleetActivationRecord, FleetActivationOpsError> {
-    let mut bytes = vec![b'C', b'A', 1, tag];
+    let mut bytes = vec![b'C', b'A', b'W', 1, tag];
     bytes.extend(
         serialize(record).map_err(|error| FleetActivationOpsError::Encode(error.to_string()))?,
     );
@@ -198,13 +198,13 @@ fn decode_concrete<T: DeserializeOwned>(
     bytes: &[u8],
 ) -> Result<T, FleetActivationOpsError> {
     if bytes.len() > MAX_FLEET_ACTIVATION_RECORD_BYTES as usize
-        || !bytes.starts_with(&[b'C', b'A', 1, tag])
+        || !bytes.starts_with(&[b'C', b'A', b'W', 1, tag])
     {
         return Err(invalid(
             "activation encoding does not match the selected role",
         ));
     }
-    crate::cdk::serialize::deserialize(&bytes[4..])
+    crate::cdk::serialize::deserialize(&bytes[5..])
         .map_err(|_| invalid("invalid activation encoding"))
 }
 
@@ -387,7 +387,7 @@ mod tests {
         assert_eq!(decode_ordinary(&record.bytes).unwrap(), view);
         for tag in [0, 2, 3, 255] {
             let mut wrong = record.bytes.clone();
-            wrong[3] = tag;
+            wrong[4] = tag;
             assert!(matches!(
                 decode_ordinary(&wrong),
                 Err(FleetActivationOpsError::InvalidRecord { .. })
@@ -399,16 +399,9 @@ mod tests {
             decode_ordinary(&trailing),
             Err(FleetActivationOpsError::InvalidRecord { .. })
         ));
-        let mut value: serde_cbor::Value =
-            crate::cdk::serialize::deserialize(&record.bytes[4..]).unwrap();
-        let serde_cbor::Value::Map(ref mut fields) = value else {
-            panic!("record must be a map")
-        };
-        fields.remove(&serde_cbor::Value::Text("component_runtime".into()));
-        let mut omitted = vec![b'C', b'A', 1, 1];
-        omitted.extend(serialize(&value).unwrap());
+        let omitted = &record.bytes[..record.bytes.len() - 1];
         assert!(matches!(
-            decode_ordinary(&omitted),
+            decode_ordinary(omitted),
             Err(FleetActivationOpsError::InvalidRecord { .. })
         ));
     }

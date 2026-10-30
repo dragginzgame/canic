@@ -5,10 +5,9 @@
 //! Boundary: extends `MgmtInfra` with status and settings effects.
 
 use super::MgmtInfra;
-use crate::infra::ic::{
-    IcInfraError,
-    call::{Call, CallBuilder, CallResult},
-};
+use crate::infra::ic::{IcInfraError, external_candid::decode_args};
+use ic_call::{Call, WaitPolicy};
+use ic_platform::candid::contract::encode_one;
 use ic_platform::{
     management_canister_types::{
         CanisterIdRecord, CanisterInfoArgs, CanisterInfoResult, CanisterStatusResult,
@@ -20,25 +19,38 @@ use ic_platform::{
 impl MgmtInfra {
     /// Quote the same single-entry replicated history read used for effect recovery.
     pub fn canister_history_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
-        Ok(
-            Call::bounded_wait(Principal::management_canister(), "canister_info")
-                .with_arg(CanisterInfoArgs {
-                    canister_id: canister_pid,
-                    num_requested_changes: Some(1),
-                })?
-                .cost(),
+        Ok(Call::new(
+            Principal::management_canister().into(),
+            "canister_info",
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
         )
+        .take_raw_args(encode_one(CanisterInfoArgs {
+            canister_id: canister_pid,
+            num_requested_changes: Some(1),
+        })?)
+        .get_cost())
     }
 
     /// Observe the latest history entry through a replicated management call.
-    pub async fn canister_history(canister_pid: Principal) -> Result<CallResult, IcInfraError> {
-        Call::bounded_wait(Principal::management_canister(), "canister_info")
-            .with_arg(CanisterInfoArgs {
-                canister_id: canister_pid,
-                num_requested_changes: Some(1),
-            })?
-            .execute()
-            .await
+    pub async fn canister_history(
+        canister_pid: Principal,
+    ) -> Result<ic_call::Response, IcInfraError> {
+        Call::new(
+            Principal::management_canister().into(),
+            "canister_info",
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(encode_one(CanisterInfoArgs {
+            canister_id: canister_pid,
+            num_requested_changes: Some(1),
+        })?)
+        .execute()
+        .await
+        .map_err(IcInfraError::from)
     }
 
     /// Read one canister's monotonic management-history change count.
@@ -49,11 +61,17 @@ impl MgmtInfra {
             canister_id: canister_pid,
             num_requested_changes: None,
         };
-        let response = Call::bounded_wait(Principal::management_canister(), "canister_info")
-            .with_arg(args)?
-            .execute()
-            .await?;
-        let (info,): (CanisterInfoResult,) = response.candid_tuple()?;
+        let response = Call::new(
+            Principal::management_canister().into(),
+            "canister_info",
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(encode_one(args)?)
+        .execute()
+        .await?;
+        let (info,): (CanisterInfoResult,) = decode_args(&response.into_bytes())?;
         Ok(info.total_num_changes)
     }
 
@@ -62,40 +80,51 @@ impl MgmtInfra {
         canister_pid: Principal,
     ) -> Result<CanisterStatusResult, IcInfraError> {
         let response = canister_status_call(canister_pid)?.execute().await?;
-        let (status,): (CanisterStatusResult,) = response.candid_tuple()?;
+        let (status,): (CanisterStatusResult,) = decode_args(&response.into_bytes())?;
 
         Ok(status)
     }
 
     /// Quote the same encoded status call without scheduling an outbound effect.
     pub fn canister_status_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
-        Ok(canister_status_call(canister_pid)?.cost())
+        Ok(canister_status_call(canister_pid)?.get_cost())
     }
 
     /// Quote the same controller-update request before retaining its paid intent.
     pub fn update_settings_call_cost(args: &UpdateSettingsArgs) -> Result<u128, IcInfraError> {
-        Ok(
-            Call::unbounded_wait(Principal::management_canister(), "update_settings")
-                .with_arg(args.clone())?
-                .cost(),
+        Ok(Call::new(
+            Principal::management_canister().into(),
+            "update_settings",
+            WaitPolicy::Unbounded,
         )
+        .take_raw_args(encode_one(args.clone())?)
+        .get_cost())
     }
 
     /// Update canister settings through the management canister.
     pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), IcInfraError> {
-        Call::unbounded_wait(Principal::management_canister(), "update_settings")
-            .with_arg(args.clone())?
-            .execute()
-            .await?;
+        Call::new(
+            Principal::management_canister().into(),
+            "update_settings",
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(encode_one(args.clone())?)
+        .execute()
+        .await?;
 
         Ok(())
     }
 }
 
-fn canister_status_call(canister_pid: Principal) -> Result<CallBuilder<'static>, IcInfraError> {
-    Call::bounded_wait(Principal::management_canister(), "canister_status").with_arg(
-        CanisterIdRecord {
-            canister_id: canister_pid,
+fn canister_status_call(canister_pid: Principal) -> Result<Call<'static, 'static>, IcInfraError> {
+    Ok(Call::new(
+        Principal::management_canister().into(),
+        "canister_status",
+        WaitPolicy::Bounded {
+            timeout_seconds: 300,
         },
     )
+    .take_raw_args(encode_one(CanisterIdRecord {
+        canister_id: canister_pid,
+    })?))
 }

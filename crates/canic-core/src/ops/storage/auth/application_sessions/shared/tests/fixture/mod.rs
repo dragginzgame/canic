@@ -5,12 +5,12 @@ use ic_auth::{
     admission_budget::SessionAdmissionBudget,
     portable::{
         MemoryLoginRevocations, PortableAuthority, PortableClaimsContext, PortableClaimsError,
-        browser_principal, claims_hash, encode_claims,
+        ValidatedGrants, browser_principal, claims_hash, encode_claims,
     },
     portable_credential::PortableVerificationContext,
     session::{
-        MemorySessionStore, SessionAdmissionContext, SessionContext, SessionEstablished,
-        SessionPolicy,
+        MemorySessionStore, RequiredScopes, SessionAdmissionContext, SessionContext,
+        SessionEstablished, SessionPolicy,
     },
     session_request::{SessionRequest, SessionTtlLimit, SessionTtlPolicy},
 };
@@ -57,16 +57,7 @@ pub(super) fn pair_for_account(
     device: u16,
     account_subject: Principal,
 ) -> (Session, Replay, LoginRevocationChange) {
-    let mut memory = MemorySessionStore::new(
-        0,
-        SessionLimits {
-            max_sessions: 4,
-            max_replays: 8,
-            max_replays_per_caller: 4,
-            max_encoded_bytes: 16_384,
-        },
-    )
-    .unwrap();
+    let mut memory = MemorySessionStore::new(0, SessionLimits::new(4, 8, 4, 16_384).unwrap());
     let mut logins = ledger();
     let mut budget = SessionAdmissionBudget::new(32, 1, 0).unwrap();
     let established = establish(
@@ -78,9 +69,11 @@ pub(super) fn pair_for_account(
         account_subject,
     )
     .unwrap();
-    let SessionEstablished::Created(session) = established else {
+    let SessionEstablished::Created(receipt) = established else {
         panic!("fresh session")
     };
+    let session = memory.session_records().next().unwrap().clone();
+    assert_eq!(session.caller(), receipt.caller());
     let replay =
         Replay::decode(&memory.replay_records().next().unwrap().encode().unwrap()).unwrap();
     let login = logins.records().next().unwrap();
@@ -177,10 +170,11 @@ pub(super) fn establish_issued(
         .to_bytes();
     let audience = audience();
     let role: AuthRole = "app_service".parse().unwrap();
-    let grants = vec![DelegatedRoleGrant {
+    let grants = ValidatedGrants::new(vec![DelegatedRoleGrant {
         target: role.clone(),
         scopes: vec!["read".into()],
-    }];
+    }])
+    .unwrap();
     let claims = PortableClaimsContext {
         authority: PortableAuthority {
             audience: &audience,
@@ -236,10 +230,12 @@ pub(super) fn authorize(
     let signer = SigningKey::from_bytes(&[42; 32]);
     let audience = audience();
     let role: AuthRole = "app_service".parse().unwrap();
-    let grants = vec![DelegatedRoleGrant {
+    let grants = ValidatedGrants::new(vec![DelegatedRoleGrant {
         target: role.clone(),
         scopes: vec!["read".into()],
-    }];
+    }])
+    .unwrap();
+    let required_scopes = RequiredScopes::new(required_scopes.to_vec())?;
     let mut context = SessionContext {
         authority: PortableAuthority {
             audience: &audience,
@@ -255,7 +251,7 @@ pub(super) fn authorize(
             min_login_started_at_ns: 0,
         },
         role: &role,
-        required_scopes,
+        required_scopes: &required_scopes,
         max_ttl: SessionTtlLimit::new(30).unwrap(),
     };
     refresh(&mut context.authority);
@@ -268,6 +264,7 @@ pub(super) fn authorize(
             enabled: true,
             subject_admissible: true,
         },
+        Session::clone,
     )
 }
 

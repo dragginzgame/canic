@@ -117,9 +117,6 @@ pub struct ComponentSpecConfig {
     pub auth: CanisterAuthConfig,
 
     #[serde(default)]
-    pub standards: StandardsCanisterConfig,
-
-    #[serde(default)]
     pub diagnostics: DiagnosticsCanisterConfig,
 
     #[serde(default)]
@@ -189,9 +186,8 @@ impl ComponentSpecConfig {
             sharding: self.sharding.clone(),
             index: self.index.clone(),
             auth: self.auth.clone(),
-            standards: self.standards.clone(),
             diagnostics: self.diagnostics,
-            metrics: self.metrics,
+            metrics: self.metrics.clone(),
         }
     }
 }
@@ -289,9 +285,6 @@ pub struct ComponentChildConfig {
     pub auth: CanisterAuthConfig,
 
     #[serde(default)]
-    pub standards: StandardsCanisterConfig,
-
-    #[serde(default)]
     pub diagnostics: DiagnosticsCanisterConfig,
 
     #[serde(default)]
@@ -310,9 +303,8 @@ impl ComponentChildConfig {
             sharding: self.sharding.clone(),
             index: self.index.clone(),
             auth: self.auth.clone(),
-            standards: self.standards.clone(),
             diagnostics: self.diagnostics,
-            metrics: self.metrics,
+            metrics: self.metrics.clone(),
         }
     }
 }
@@ -377,7 +369,6 @@ pub fn implicit_wasm_store_canister_config() -> CanisterConfig {
         sharding: None,
         index: None,
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }
@@ -395,7 +386,6 @@ pub fn implicit_root_canister_config() -> CanisterConfig {
         sharding: None,
         index: None,
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }
@@ -452,20 +442,6 @@ impl<'de> Deserialize<'de> for LocalApplicationAuthorizationConfig {
 }
 
 ///
-/// StandardsCanisterConfig
-///
-/// Canister-local standards feature flags.
-/// Owned by config schema and consumed by standards dispatch.
-///
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct StandardsCanisterConfig {
-    #[serde(default)]
-    pub icrc21: bool,
-}
-
-///
 /// DiagnosticsCanisterConfig
 ///
 /// Canister-local diagnostics feature flags.
@@ -515,9 +491,6 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub auth: CanisterAuthConfig,
-
-    #[serde(default)]
-    pub standards: StandardsCanisterConfig,
 
     #[serde(default)]
     pub diagnostics: DiagnosticsCanisterConfig,
@@ -593,11 +566,27 @@ impl Default for CyclesFundingPolicyConfig {
 /// Owned by config schema and consumed by metrics setup.
 ///
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MetricsCanisterConfig {
     #[serde(default)]
     pub profile: Option<MetricsProfile>,
+    /// Default retention for this canister's declared historical metric providers.
+    #[serde(default)]
+    pub storage: super::MetricStorage,
+    /// Installation-selected component overrides; unrelated roles have their own policy.
+    #[serde(default)]
+    pub providers: std::collections::BTreeMap<String, super::MetricProviderStorage>,
+}
+
+impl MetricsCanisterConfig {
+    #[must_use]
+    pub fn storage_policy(&self) -> super::MetricStorageConfig {
+        super::MetricStorageConfig {
+            storage: self.storage,
+            providers: self.providers.clone(),
+        }
+    }
 }
 
 ///

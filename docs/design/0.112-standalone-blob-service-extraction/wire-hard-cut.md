@@ -30,8 +30,11 @@ Provider fixtures must retain the external protocol they actually model.
 
 Preserve explicit authority bindings, semantic validation, bounded decode and paid
 effects, original submitted bytes, uncertain-effect reconciliation, same-release
-recovery, cycle conservation and Blob obligations. Canic's separately accepted
-serde_cbor persistence replacement remains distinct from the Wire protocol cut.
+recovery, cycle conservation and Blob obligations. The persistence replacement
+remains distinct from the Wire protocol cut. The maintainer's 2026-10-29 decision
+selects bounded native Wire for owned stable values and checkpoints in the pending
+0.113 batch, superseding the earlier serde_cbor representation. See the
+[current storage contract](../../features/runtime/stable-memory-layout.md#owned-stable-value-format).
 No dependency upgrade, sibling edit, publication or installation retirement is
 implied. Measure final Root code against an identified artifact/profile; the
 8,876,601-byte retained Root already has native Wire endpoints and is not a

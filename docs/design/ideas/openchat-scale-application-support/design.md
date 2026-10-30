@@ -304,7 +304,7 @@ Related existing ideas: [demand-driven pool maintenance](../demand-driven-canist
 
 Outcome: an operator can identify what is stuck, why, and which current authority can act on it, including children created after initial Fleet convergence.
 
-Owners: `canic-host`, `canic-cli`, `canic-backup`, and the authoritative control-plane inventory APIs.
+Owners: `canic-host`, `canic-cli`, upstream IC Backup, and the authoritative control-plane inventory APIs. Live Backup operator integration remains unavailable after the approved hard cut.
 
 Deliverables and acceptance:
 

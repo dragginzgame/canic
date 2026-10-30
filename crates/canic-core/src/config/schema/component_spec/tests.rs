@@ -23,7 +23,6 @@ fn component_spec(role: &str) -> ComponentSpecConfig {
         sharding: None,
         index: None,
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
         provisions: BTreeMap::new(),
@@ -42,7 +41,6 @@ fn child(kind: ComponentChildKind) -> ComponentChildConfig {
         sharding: None,
         index: None,
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }

@@ -517,10 +517,9 @@ mod tests {
     use crate::{
         access,
         config::schema::CanisterKind,
-        ops::runtime::metrics::access::AccessMetrics as MetricStore,
+        ops::runtime::{log::LogOps, metrics::access::AccessMetrics as MetricStore},
         storage::stable::{
             env::{Env, EnvData, EnvRecord},
-            log::{Log, LogEntryRecord},
             state::fleet::{FleetMode, FleetState, FleetStateData, FleetStateRecord},
         },
         test::{
@@ -679,22 +678,28 @@ mod tests {
         config.log.max_entries = 2;
         let _config = install_model_for_role(config, role);
         crate::log::set_ready();
-        Log::reset_for_tests();
+        LogOps::reset_for_tests();
         for (created_at, message) in [(1, "bootstrap failure"), (2, "funding recovery")] {
-            Log::append(
+            LogOps::append_runtime_log(
+                "operator",
+                None,
+                crate::log::Level::Error,
+                message,
+                created_at,
                 2,
                 1_024,
-                LogEntryRecord {
-                    crate_name: "operator".into(),
-                    created_at,
-                    level: crate::log::Level::Error,
-                    topic: None,
-                    message: message.into(),
-                },
             )
             .unwrap();
         }
-        let retained = Log::snapshot();
+        let page = crate::dto::page::PageRequest {
+            limit: 10,
+            offset: 0,
+        };
+        let retained = LogOps::page_filtered(None, None, None, page)
+            .entries
+            .into_iter()
+            .map(|entry| entry.message)
+            .collect::<Vec<_>>();
         let _restore = EnvRestore(Env::export());
         Env::import(EnvData {
             record: EnvRecord {
@@ -713,30 +718,35 @@ mod tests {
                 Err(AccessError::ParentRequired)
             ));
         }
-        assert_eq!(Log::snapshot(), retained);
+        assert_eq!(
+            LogOps::page_filtered(None, None, None, page)
+                .entries
+                .into_iter()
+                .map(|entry| entry.message)
+                .collect::<Vec<_>>(),
+            retained
+        );
         let metrics = MetricStore::snapshot().entries;
         assert_eq!(metrics.len(), 1);
         let (key, count) = &metrics[0];
         assert_eq!(key.endpoint, ctx.call.endpoint.name);
         assert_eq!(key.kind, AccessMetricKind::Auth);
         assert_eq!(key.predicate, "caller_is_parent");
-        assert_eq!(*count, 32);
-        Log::append(
+        assert_eq!(count.exact_total(), Ok(32));
+        LogOps::append_runtime_log(
+            "operator",
+            None,
+            crate::log::Level::Info,
+            "ordinary operator log",
+            3,
             2,
             1_024,
-            LogEntryRecord {
-                crate_name: "operator".into(),
-                created_at: 3,
-                level: crate::log::Level::Info,
-                topic: None,
-                message: "ordinary operator log".into(),
-            },
         )
         .unwrap();
-        let logs = Log::snapshot();
-        assert_eq!(logs.len(), 2);
-        assert_eq!(logs[1].message, "ordinary operator log");
-        Log::reset_for_tests();
+        let logs = LogOps::page_filtered(None, None, None, page);
+        assert_eq!(logs.entries.len(), 2);
+        assert_eq!(logs.entries[0].message, "ordinary operator log");
+        LogOps::reset_for_tests();
     }
 
     #[test]
@@ -893,8 +903,11 @@ mod tests {
                 assert_eq!(*calls.lock().unwrap(), expected_calls);
                 let entries = MetricStore::snapshot().entries;
                 assert_eq!(
-                    entries.iter().map(|(_, count)| count).sum::<u64>(),
-                    u64::from(!allowed)
+                    entries
+                        .iter()
+                        .map(|(_, count)| count.exact_total().unwrap())
+                        .sum::<u128>(),
+                    u128::from(!allowed)
                 );
                 observations.push((
                     result.err().map(|error| std::mem::discriminant(&error)),

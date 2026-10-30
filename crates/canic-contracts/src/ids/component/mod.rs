@@ -293,11 +293,10 @@ mod tests {
 
     #[test]
     fn component_spec_ids_validate_serde_and_wire_input() {
-        let mut invalid_bytes = Vec::new();
-        serde_cbor::to_writer(&mut invalid_bytes, &"bad/name")
+        let invalid_bytes = crate::serialization::serialize(&"bad/name")
             .expect("serialize invalid Component Spec ID");
 
-        assert!(serde_cbor::from_reader::<ComponentSpecId, _>(invalid_bytes.as_slice()).is_err());
+        assert!(crate::serialization::deserialize::<ComponentSpecId>(&invalid_bytes).is_err());
 
         let wire_bytes =
             crate::protocol::authority::encode("projects").expect("encode Component Spec ID");
@@ -333,11 +332,10 @@ mod tests {
         assert_eq!(component.to_string(), text);
         assert_eq!(text.parse::<ComponentInstanceId>(), Ok(component));
 
-        let mut serde_bytes = Vec::new();
-        serde_cbor::to_writer(&mut serde_bytes, &component)
-            .expect("serialize Component Instance ID");
+        let stored_bytes =
+            crate::serialization::serialize(&component).expect("serialize Component Instance ID");
         let decoded: ComponentInstanceId =
-            serde_cbor::from_reader(serde_bytes.as_slice()).expect("decode Component Instance ID");
+            crate::serialization::deserialize(&stored_bytes).expect("decode Component Instance ID");
         assert_eq!(decoded, component);
 
         let wire_bytes =

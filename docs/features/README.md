@@ -7,7 +7,7 @@ capabilities it needs:
 - authentication, scaling, and other optional runtime capabilities are
   enabled independently where their contracts permit;
 - standalone-local lifecycle supports local development and testing; and
-- build, diagnostic, backup, and recovery tools stay on the operator's computer
+- build and diagnostic tools stay on the operator's computer
   rather than becoming canister permissions.
 
 Start with the problem you want to solve, then follow only that feature's guide.
@@ -31,7 +31,7 @@ architecture explains the design, and operations pages provide procedures.
 | Fleet orchestration | Safely deploy and manage a group of canisters | [Fleet orchestration](fleet-orchestration/README.md) |
 | Scaling and placement | Add canisters and control where they may run | [Scaling and placement](scaling-and-placement/README.md) |
 | Builds and evidence | Build Wasm and record evidence about how it was produced | [Builds and evidence](build-and-evidence/README.md) |
-| Backup and restore | Verify snapshots and recover a deployment within one release | [Backup and restore](backup-and-restore/README.md) |
+| Backup and restore | Upstream ownership and current unavailability | [Backup and restore](backup-and-restore/README.md) |
 | Blob storage | Compose an independent application service | [Blob storage](blob-storage/README.md) |
 | Operations and diagnostics | Set up, inspect, troubleshoot, and operate Canic | [Operations and diagnostics](operations/README.md) |
 

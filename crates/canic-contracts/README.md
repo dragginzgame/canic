@@ -25,10 +25,16 @@ from Root, managed and Store commands. Purpose-specific projections retain their
 own bounds and method-bound admission checks.
 
 Stable records, their bounds, memory ownership and registration remain with
-Core/Control Plane. The shared `serialization` helper selects Canic's current
-storage representation over `serde_cbor`: unsigned 128-bit values use 16 big-endian
-bytes. Separately fixed-width records and canonical cryptographic arrays keep
-their own formats. This storage policy does not wrap or replace IC Wire.
+Core/Control Plane. The shared `serialization` helper selects bounded native Wire
+with the `CSW` storage marker and format byte 1. Wire handles full-range `u128`
+values directly; there is no custom numeric serializer or intermediate value tree.
+The maximum single value is 64 MiB, with 1 GiB traversal allocation allowance,
+64 Mi visited nodes and depth 128; owners retain narrower record bounds.
+Separately fixed-width records, external IC protocols and dedicated Fleet activation
+and release-build commitments keep their own formats. Checkpoint/caller authority
+hashes use `protocol::authority` Wire bytes and explicit Wire domains, independently
+of the storage envelope. Adoption requires clean reinstall; same-release recovery
+and snapshot restoration use the same current format.
 Runtime configuration compilation, policy,
 authority checks and effects remain outside this package.
 

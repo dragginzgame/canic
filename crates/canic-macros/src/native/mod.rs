@@ -13,6 +13,7 @@ struct Arguments {
     name: LitStr,
     sdk: Path,
     max_bytes: Option<Expr>,
+    requires_metrics_capability: bool,
 }
 
 impl Parse for Arguments {
@@ -55,11 +56,30 @@ impl Parse for Arguments {
             input.parse::<Token![=]>()?;
             Some(input.parse()?)
         };
+        let requires_metrics_capability = if input.is_empty() {
+            false
+        } else {
+            input.parse::<Token![,]>()?;
+            let key: Ident = input.parse()?;
+            if key != "observability" {
+                return Err(syn::Error::new_spanned(key, "expected observability"));
+            }
+            input.parse::<Token![=]>()?;
+            let provider: Ident = input.parse()?;
+            if provider != "metrics" {
+                return Err(syn::Error::new_spanned(
+                    provider,
+                    "expected metrics provider",
+                ));
+            }
+            true
+        };
         Ok(Self {
             kind,
             name,
             sdk,
             max_bytes,
+            requires_metrics_capability,
         })
     }
 }
@@ -103,6 +123,7 @@ pub(super) fn expand_managed(attr: TokenStream, item: TokenStream) -> syn::Resul
         kind,
         name,
         max_bytes,
+        requires_metrics_capability,
         ..
     } = syn::parse2(attr)?;
     let kind = match kind {
@@ -118,16 +139,79 @@ pub(super) fn expand_managed(attr: TokenStream, item: TokenStream) -> syn::Resul
     let max_bytes = max_bytes.ok_or_else(|| {
         syn::Error::new_spanned(&name, "managed component entry requires max_bytes")
     })?;
-    crate::endpoint::raw_entry(
+    let expanded = crate::endpoint::raw_entry(
         kind,
         quote!(public, name = #name, payload(max_bytes = #max_bytes)),
         item,
-    )
+    )?;
+    if requires_metrics_capability {
+        // Keep exports, contract metadata and update-limit registration under
+        // the same consumer-role capability. No handler or storage change.
+        Ok(quote! {
+            #[cfg(canic_capability_observability_metrics)]
+            const _: () = { #expanded };
+        })
+    } else {
+        Ok(expanded)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn managed_metrics_gate_encloses_exports_metadata_and_registration() {
+        for kind in [quote!(query), quote!(update)] {
+            let attr = quote!(#kind, name = "adapter_metrics", sdk = crate::sdk,
+                max_bytes = LIMIT, observability = metrics);
+            let item = quote!(
+                fn endpoint() {
+                    owner::serve();
+                }
+            );
+            let expanded = expand_managed(attr.clone(), item.clone()).unwrap();
+            let file: syn::File = syn::parse2(expanded).unwrap();
+            let [syn::Item::Const(gate)] = file.items.as_slice() else {
+                panic!("the complete expansion must be one gated item");
+            };
+            let condition: syn::Meta = gate.attrs[0].parse_args().unwrap();
+            assert!(
+                matches!(condition, syn::Meta::Path(path) if path.is_ident("canic_capability_observability_metrics"))
+            );
+            assert!(gate.attrs[0].path().is_ident("cfg"));
+            let syn::Expr::Block(body) = gate.expr.as_ref() else {
+                panic!("gate body");
+            };
+            assert!(body.block.stmts.iter().any(|stmt| matches!(stmt, syn::Stmt::Item(syn::Item::Fn(function)) if function.sig.ident == "__canic_raw_endpoint")));
+            if kind.to_string() == "update" {
+                assert!(
+                    body.block
+                        .stmts
+                        .iter()
+                        .any(|stmt| matches!(stmt, syn::Stmt::Item(syn::Item::Const(_))))
+                );
+            }
+            // Standalone adapters use the same annotation without a Canic role policy.
+            let standalone: syn::ItemFn = syn::parse2(expand(attr, item).unwrap()).unwrap();
+            assert!(
+                standalone
+                    .attrs
+                    .iter()
+                    .all(|attr| !attr.path().is_ident("cfg"))
+            );
+        }
+        assert!(
+            syn::parse2::<Arguments>(quote!(
+                query,
+                name = "q",
+                sdk = crate::sdk,
+                max_bytes = LIMIT,
+                observability = unknown
+            ))
+            .is_err()
+        );
+    }
 
     #[test]
     fn managed_components_use_framework_admission_and_require_request_bounds() {

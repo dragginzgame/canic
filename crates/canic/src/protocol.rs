@@ -26,9 +26,6 @@ pub use canic_contracts::protocol::CANIC_WASM_STORE_CHUNK;
 ))]
 pub use canic_contracts::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK;
 
-pub use canic_contracts::protocol::ICRC10_SUPPORTED_STANDARDS;
-pub use canic_contracts::protocol::ICRC21_CANISTER_CALL_CONSENT_MESSAGE;
-
 pub use crate::__internal::contracts::protocol::CANIC_ADMISSION_STATUS;
 
 /// Typed public responsiveness identity and codec bounds.

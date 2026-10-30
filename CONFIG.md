@@ -35,7 +35,7 @@ operator intent; it may differ between local, staging, and production networks.
 At a high level, the file describes:
 
 - the App's name and each canister role implemented by a Rust package;
-- global choices for authentication, logs, standards, and public monitoring;
+- global choices for authentication, logs, and public monitoring;
 - Component Specs, which are reusable blueprints for deployable canisters;
 - which child canisters a Component may create and the limits on that growth;
 - optional pools for dividing data or adding equivalent workers;
@@ -67,7 +67,7 @@ package, capabilities, lifecycle and endpoints from the selected App configurati
 | --- | --- |
 | App identity and startup mode | [`[app]`](#app) |
 | Package roles and optional observation providers | [`[roles.<role>]`](#rolesrole) |
-| Global auth, logs, standards and public metrics | [Global keys](#global-keys) and [public metric publication](#public-metric-publication) |
+| Global auth, logs and public metrics | [Global keys](#global-keys) and [public metric publication](#public-metric-publication) |
 | One Component blueprint and its descendant capability graph | [Component Specs](#component-specs) |
 | Reusable multi-Component composition | [Component Groups](#component-groups) |
 | Independent count, spread and reduction-only limits | [Component Group deployments](#component-group-deployments) |
@@ -161,7 +161,10 @@ install different policies into different Fleets without rebuilding Wasm.
 
 ### `[log]`
 
-Configure log retention for every canister.
+Configure the upstream `ic-logging` heap recorder for every canister. Retained
+history starts empty after an upgrade or reinstall; it is not a stable audit
+journal. Source and topic labels are each bounded to 256 UTF-8 bytes.
+`max_entries = 0` disables retained logging.
 
 - `max_entries: u64` – ring buffer cap on stored log entries (default `10000`).
 - `max_entries` must be `<= 100000` (larger values are rejected at config validation).
@@ -220,11 +223,8 @@ Root canister-signature role-attestation settings.
 - `max_ttl_secs: u64` – maximum role-attestation lifetime in seconds (default `900`, must be positive and at most `u64::MAX / 1_000_000_000`).
 - `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations. Keys must use canonical role names and identify a declared application role or the built-in `root`, `fleet_coordinator` or `wasm_store` role. Application verification arguments may raise this floor but cannot lower it.
 
-### `[standards]`
-
-Feature toggles tied to public standards.
-
-- `icrc21: bool` – enable the ICRC-21 consent endpoint (default `false`).
+ICRC endpoints are selected by the application
+[adapter mount](docs/features/runtime/icrc-adapter.md), independently of configuration.
 
 ---
 
@@ -247,7 +247,7 @@ maximum_instances = 10
 - `maximum_instances` – required positive Fleet-wide ceiling for concrete
   instances of this Spec.
 - Component policy fields (`initial_cycles`, `topup`, `cycles_funding`,
-  `scaling`, `sharding`, `index`, `auth`, `standards`, `diagnostics`, and
+  `scaling`, `sharding`, `index`, `auth`, `diagnostics`, and
   `metrics`) configure that Component.
 - `limits` compiles finite aggregate descendant, Registry, and cycles-funding
   quotas into every concrete Component binding.
@@ -333,8 +333,6 @@ round, truncate, or saturate them.
   and `maximum_session_ttl_secs`. Scope ordering is normalized; TTLs and scope
   bounds are validated before build. This is the local scope ceiling; protected
   Root enrollment must independently constrain issuer grants.
-- `standards.icrc21 = true` – enable the canister-local ICRC-21 endpoint. This
-  is separate from the global `[standards]` setting.
 - `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
 - `metrics.profile = "leaf" | "hub" | "storage" | "root" | "full"` – override
   the role-derived metrics profile.
@@ -342,7 +340,7 @@ round, truncate, or saturate them.
 Portable Auth enrollment and endpoint integration are unfinished. These settings
 do not enable application credential issuance or session admission.
 
-The same cycles, placement, auth, standards, diagnostics, and metrics fields
+The same cycles, placement, auth, diagnostics, and metrics fields
 also apply directly to the Component Spec table. Placement pools refer to
 roles in that Spec's flat potential-descendant catalog and require a matching
 spawn grant from the role that owns the pool. The concrete runtime parent is
@@ -693,8 +691,6 @@ build_network = "local"
 # max_revocation_latency_ns = 60000000000
 # allow_test_key = true
 
-[standards]
-icrc21 = true
 
 [component_specs.app]
 component_role = "app"
@@ -763,7 +759,7 @@ placement.minimum_distinct_roots = 1
 # CANIC_CONFIG_EXAMPLE_END
 ```
 
-This example defines three flat Component Specs, enables ICRC-21, grants
+This example defines three flat Component Specs, grants
 `user_hub` permission to create shards, grants `scale_hub` permission to create
 replicas, and deploys one `users` active-pool service member through a reusable
 Group. Each occupied Fleet/Subnet root gets one implicit
@@ -810,6 +806,24 @@ Enabling a family publishes only its bounded cached aggregate snapshot through
 `canic_public_metrics`; protected metric and observation methods remain controller-only.
 See [public observability](docs/features/runtime/public-observability.md) for
 sampling, staleness, units and application publication APIs.
+
+Provider counters use heap storage by default. Select stable storage for a
+registered provider in its existing canister metrics table:
+
+```toml
+[component_specs.backend.metrics]
+storage = "heap"
+
+[component_specs.backend.metrics.providers.blob]
+storage = "stable"
+```
+
+One governed map holds the canister's stable providers. Provider names and metric
+rosters are registered synchronously by their adapters; unknown provider overrides
+refuse activation. Storage selection is immutable compiled configuration and is
+independent of endpoint exposure and `public_metrics`. It does not persist logs.
+See [provider metrics](docs/features/runtime/provider-metrics.md) for registration,
+checkpoint cost, query behavior and same-release restoration.
 
 ## Continue From Here
 

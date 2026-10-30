@@ -5,9 +5,10 @@ use crate::{
         error::Error,
         observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
     },
-    ops::ic::call::CallOps,
+    ops::ic::call::execute as execute_call,
 };
 use canic_contracts::protocol::observability_relay as protocol;
+use ic_call::{Call, WaitPolicy};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -108,11 +109,10 @@ async fn read<T: Serialize + Sync, R: DeserializeOwned>(
 ) -> Result<R, InternalError> {
     let bytes = ic_wire::native::encode_request(id, request, request_limits)
         .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::unbounded_wait(target, method)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply =
+        execute_call(Call::new(target.into(), method, WaitPolicy::Unbounded).take_raw_args(bytes))
+            .await?
+            .into_bytes();
     let value: Result<R, Error> = ic_wire::native::decode_response(id, &reply, response_limits)
         .map_err(|_| InternalError::invariant())?;
     value.map_err(InternalError::observed_public)

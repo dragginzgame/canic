@@ -80,10 +80,10 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
 
         #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
-            $crate::__canic_bootstrap_memory!($($memory)?);
+            let authority = __canic_compiled_role_runtime_authority();
+            $crate::__canic_bootstrap_memory!(&authority; $($memory)?);
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(canic_capability_fleet_admission_projection)]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_with_fleet_admission_before_bootstrap(
@@ -103,14 +103,15 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             );
 
             $(($lifecycle_init)();)?
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(true).expect("metric provider installation");
         }
 
         #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
-            $crate::__canic_bootstrap_memory!($($memory)?);
+            let authority = __canic_compiled_role_runtime_authority();
+            $crate::__canic_bootstrap_memory!(&authority; $($memory)?);
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(all(canic_capability_automatic_topup, canic_capability_fleet_admission_projection))]
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_before_bootstrap(
@@ -138,6 +139,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             );
 
             $(($lifecycle_post_upgrade)();)?
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(false).expect("metric provider restoration");
 
             if active {
                 $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
@@ -207,27 +209,29 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
 
         #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs) {
-            $crate::__canic_bootstrap_memory!();
+            let authority = __canic_compiled_role_runtime_authority();
+            $crate::__canic_bootstrap_memory!(&authority; );
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let authority = __canic_compiled_role_runtime_authority();
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_wasm_store_before_bootstrap(
                 args,
                 __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(true).expect("metric provider installation");
         }
 
         #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
-            $crate::__canic_bootstrap_memory!();
+            let authority = __canic_compiled_role_runtime_authority();
+            $crate::__canic_bootstrap_memory!(&authority; );
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let authority = __canic_compiled_role_runtime_authority();
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_wasm_store_before_bootstrap(
                 __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(false).expect("metric provider restoration");
 
             if active {
                 $crate::__canic_after_optional_start_init_hook!(
@@ -300,10 +304,10 @@ macro_rules! __canic_start_local_lifecycle_core {
 
         #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(args: Option<Vec<u8>>) {
-            $crate::__canic_bootstrap_memory!($($memory)?);
+            let authority = __canic_compiled_role_runtime_authority();
+            $crate::__canic_bootstrap_memory!(&authority; $($memory)?);
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let authority = __canic_compiled_role_runtime_authority();
             let role = $canister_role;
             let component_spec = authority
                 .component_spec_for_role(&role)
@@ -324,6 +328,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             );
 
             $(($lifecycle_init)();)?
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(true).expect("metric provider installation");
 
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:init_block",
@@ -344,10 +349,10 @@ macro_rules! __canic_start_local_lifecycle_core {
 
         #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
-            $crate::__canic_bootstrap_memory!($($memory)?);
+            let authority = __canic_compiled_role_runtime_authority();
+            $crate::__canic_bootstrap_memory!(&authority; $($memory)?);
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(canic_capability_automatic_topup)]
             let _active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
@@ -361,6 +366,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             );
 
             $(($lifecycle_post_upgrade)();)?
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(false).expect("metric provider restoration");
 
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:post_upgrade_block",
@@ -404,10 +410,10 @@ macro_rules! start_fleet_root {
 
         #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs) {
-            $crate::__canic_bootstrap_memory!();
+            let (runtime_authority, config, config_source) = __canic_compiled_config();
+            $crate::__canic_bootstrap_memory!(&runtime_authority;);
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let (runtime_authority, config, config_source) = __canic_compiled_config();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 args,
@@ -416,15 +422,16 @@ macro_rules! start_fleet_root {
                 config,
                 config_source,
             );
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(true).expect("metric provider installation");
 
         }
 
         #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
-            $crate::__canic_bootstrap_memory!();
+            let (runtime_authority, config, config_source) = __canic_compiled_config();
+            $crate::__canic_bootstrap_memory!(&runtime_authority;);
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let (runtime_authority, config, config_source) = __canic_compiled_config();
 
             let active = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 __CANIC_RELEASE_BUILD_ID.read().as_deref(),
@@ -432,6 +439,7 @@ macro_rules! start_fleet_root {
                 config,
                 config_source,
             );
+            $crate::__internal::core::api::metrics::MetricProviderApi::activate(false).expect("metric provider restoration");
 
             if active {
                 $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
@@ -439,7 +447,6 @@ macro_rules! start_fleet_root {
         }
         $crate::__canic_start_ingress_payload_inspect!(root);
         $crate::canic_bundle_root_only_endpoints!();
-        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -627,7 +634,6 @@ macro_rules! start {
         #[cfg(not(canic_is_root))]
         $crate::__canic_emit_managed_status_endpoint!();
 
-        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -675,7 +681,6 @@ macro_rules! start_local {
         );
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_emit_local_status_endpoint!();
-        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -710,7 +715,6 @@ macro_rules! start_wasm_store {
         $crate::__canic_start_wasm_store_lifecycle_core!($(argument_limits = $argument_limits)? $(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!(wasm_store);
         $crate::canic_bundle_wasm_store_runtime_endpoints!();
-        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -742,7 +746,6 @@ macro_rules! start_fleet_coordinator {
 
         $crate::__canic_start_ingress_payload_inspect!(fleet_coordinator);
         $crate::canic_emit_fleet_coordinator_endpoints!();
-        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -750,10 +753,15 @@ macro_rules! start_fleet_coordinator {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_bootstrap_memory {
-    () => {
-        $crate::memory::bootstrap($crate::memory::framework()).expect("framework memory bootstrap");
+    ($authority:expr;) => {
+        $crate::__canic_bootstrap_memory!($authority; $crate::memory::framework());
     };
-    ($input:expr) => {
-        $crate::memory::bootstrap($input).expect("composed host memory bootstrap");
+    ($authority:expr; $input:expr) => {
+        let mut composition = $input;
+        composition.requests.extend(
+            $crate::__internal::core::api::metrics::MetricProviderApi::memory_requests($authority)
+                .expect("metric allocation declarations"),
+        );
+        $crate::memory::bootstrap(composition).expect("composed host memory bootstrap");
     };
 }

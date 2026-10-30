@@ -23,11 +23,12 @@ use crate::{
             AuthOps, ChainKeyRootDelegationBatchInstallPlan,
             PrepareChainKeyRootDelegationBatchInput,
         },
-        ic::{IcOps, call::CallOps},
+        ic::{IcOps, call::execute as execute_call},
         runtime::env::EnvOps,
     },
     workflow::runtime::auth::{RuntimeAuthWorkflow, root_delegation_batch},
 };
+use ic_call::{Call, WaitPolicy};
 use std::future::Future;
 
 impl RuntimeAuthWorkflow {
@@ -170,12 +171,12 @@ async fn install_delegation_proof_on_issuer(
     let request: native::InstallActiveDelegationProofRequest = request.into();
     let bytes = ic_wire::native::encode_request(wire::INSTALL_ID, &request, wire::REQUEST_LIMITS)
         .map_err(|_| IssuerProofInstallError::RequestEncoding)?;
-    let bytes = CallOps::unbounded_wait(issuer_pid, wire::INSTALL)
-        .with_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(IssuerProofInstallError::Transport)?
-        .into_bytes();
+    let bytes = execute_call(
+        Call::new(issuer_pid.into(), wire::INSTALL, WaitPolicy::Unbounded).take_raw_args(bytes),
+    )
+    .await
+    .map_err(IssuerProofInstallError::Transport)?
+    .into_bytes();
     issuer_install_outcome(&bytes)
 }
 

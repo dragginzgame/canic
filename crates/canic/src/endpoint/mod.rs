@@ -124,7 +124,6 @@ pub mod schema;
 mod registration;
 
 use ic_platform::candid::contract::ArgumentDecoder;
-use ic_platform::candid::decoder::DecoderConfig;
 use std::fmt;
 
 ///
@@ -199,21 +198,24 @@ impl ArgumentLimits {
         bytes: &'a [u8],
     ) -> Result<T, ArgumentDecodeError> {
         self.check_size(bytes.len())?;
-        let mut config = DecoderConfig::new();
-        config
-            .set_decoding_quota(self.decoding_quota)
-            .set_skipping_quota(self.skipping_quota)
-            .set_max_type_len(self.max_type_len)
-            .set_max_header_len(self.max_header_len)
-            .set_full_error_message(false);
         // IC lifecycle calls may omit the empty Candid envelope, as in the CDK.
         let bytes = if bytes.is_empty() {
             b"DIDL\x00\x00"
         } else {
             bytes
         };
-        ic_platform::candid::decoder::decode_args_with_config(bytes, &config)
-            .map_err(|_| ArgumentDecodeError::InvalidCandid)
+        ic_platform::candid::decode_args(
+            bytes,
+            ic_platform::candid::DecodeLimits {
+                // Size admission above applies to original bytes, before empty-envelope normalization.
+                reply_bytes: self.max_bytes.max(bytes.len()),
+                decoding_quota: self.decoding_quota,
+                skipping_quota: self.skipping_quota,
+                type_entries: self.max_type_len,
+                header_bytes: self.max_header_len,
+            },
+        )
+        .map_err(|_| ArgumentDecodeError::InvalidCandid)
     }
 
     /// Read platform arguments only after checking their scalar byte length.

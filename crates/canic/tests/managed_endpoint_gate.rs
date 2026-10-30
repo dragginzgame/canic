@@ -223,7 +223,7 @@ fn active_runtime_replay_offers_only_internal_bootstrap_recovery() {
 }
 
 #[test]
-fn standalone_local_emits_only_local_status_and_standards() {
+fn standalone_local_emits_only_local_status() {
     let workspace = workspace_root();
     let start_path = workspace.join("crates/canic/src/macros/start.rs");
     let start = fs::read_to_string(&start_path)
@@ -239,10 +239,9 @@ fn standalone_local_emits_only_local_status_and_standards() {
         .expect("standalone-local start macro");
     assert!(
         local_start.contains("__canic_emit_local_status_endpoint!()")
-            && local_start.contains("canic_emit_icrc_standards_endpoints!()")
             && !local_start.contains("__canic_emit_managed_command_endpoint!()")
             && !local_start.contains("__canic_emit_managed_status_endpoint!()"),
-        "standalone-local startup must expose only local status and standards"
+        "standalone-local startup must expose only local status"
     );
 
     let store_bundle = bundles

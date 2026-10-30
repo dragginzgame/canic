@@ -10,9 +10,6 @@
 pub mod canister;
 pub mod stable;
 
-use crate::InternalError;
-use thiserror::Error as ThisError;
-
 ///
 /// Prelude
 ///
@@ -24,37 +21,4 @@ pub mod prelude {
         cycles::Cycles, ids::CanisterRole, ids::ComponentSpecId, ids::ManagedCanisterBinding,
     };
     pub use serde::{Deserialize, Serialize};
-}
-
-///
-/// StorageError
-///
-
-#[derive(Debug, ThisError)]
-pub enum StorageError {
-    #[error("runtime log count invariant is inconsistent")]
-    LogCountInvariant,
-
-    #[error("runtime log sequence {0} already exists")]
-    LogSequenceConflict(u64),
-
-    #[error("runtime log sequence exhausted")]
-    LogSequenceExhausted,
-
-    #[error("runtime log timestamp regressed from {previous} to {current}")]
-    LogTimestampRegressed { previous: u64, current: u64 },
-}
-
-impl From<StorageError> for InternalError {
-    fn from(err: StorageError) -> Self {
-        use crate::diagnostics::codes;
-
-        let code = match err {
-            StorageError::LogCountInvariant => codes::STATE_INVALID,
-            StorageError::LogSequenceConflict(_) => codes::POSITION_CONFLICT,
-            StorageError::LogSequenceExhausted => codes::VERSION_CAPACITY,
-            StorageError::LogTimestampRegressed { .. } => codes::TIME_ORDERING,
-        };
-        Self::public(code)
-    }
 }

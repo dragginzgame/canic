@@ -21,7 +21,6 @@ pub mod fleet_admission_root;
 pub mod fleet_funding;
 pub mod icp_refill;
 pub mod intent;
-pub mod log;
 pub mod placement;
 pub mod pool_import;
 

@@ -16,10 +16,11 @@ use crate::{
     ops::{
         fixture_content,
         fixture_importer::{self, FixtureImporter, ImportLease},
-        ic::call::CallOps,
+        ic::call::execute as execute_call,
         runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
     },
 };
+use ic_call::{Call, WaitPolicy};
 
 pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImportError> {
     fixture_importer::register(importer)?;
@@ -100,12 +101,16 @@ pub(super) async fn advance_owned(
             crate::diagnostics::codes::CODEC_FAILED,
         ))
     })?;
-    let reply = CallOps::bounded_wait(
-        assignment.store,
-        crate::protocol::CANIC_WASM_STORE_FIXTURE_CHUNK,
+    let reply = execute_call(
+        Call::new(
+            assignment.store.into(),
+            crate::protocol::CANIC_WASM_STORE_FIXTURE_CHUNK,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(payload),
     )
-    .with_raw_args(payload)
-    .execute()
     .await
     .map_err(|error| FixtureImportError::Transport(error.into()))?
     .into_bytes();

@@ -22,7 +22,7 @@ Canonical Store and Coordinator retain their fixed infrastructure surfaces.
 | `diagnostics` | Detailed `Runtime` and `MemoryAllocations` projections |
 | `history` | Public chart history, cycle history and supported top-up history |
 | `logs` | Paged log reads |
-| `metrics` | Public metric snapshots and protected metric pages |
+| `metrics` | Public metric snapshots, protected metric pages and managed adapters' explicitly mounted metric read/reset endpoints |
 
 Health, readiness, discovery, binding, current cycle balance and child funding
 accounting remain available. The authenticated Root relay remains usable for
@@ -37,8 +37,67 @@ When both metrics and history are disabled, generated lifecycle code does not
 select automatic public sampling. Public family publication settings still
 apply when sampling is selected. Explicit application calls to sampling or
 query APIs retain the code they use. These settings do not remove internal
-accounting, metric recording, stable logs, bounded log retention or recovery
+accounting, metric recording, heap logs, bounded log retention or recovery
 state. Existing custom application endpoints are unaffected.
+
+### Runtime logging ownership
+
+Published [IC Logging](https://crates.io/crates/ic-logging/0.17.1) owns the heap
+recorder, UTF-8-safe message bounds, count eviction, age retention and filtered
+cursor scans. Canic supplies its existing log configuration, source/topic labels,
+Wire DTO conversion, controller authorization and the sole retention timer.
+Source and topic labels each have a 256-byte ceiling. The existing message/count
+configuration limits remain authoritative; zero retained entries disables logging.
+
+Log history is heap-only and starts a new window on upgrade or reinstall. Canic
+has no stable log allocation or log snapshot schema. Diagnostic history is not
+spending, recovery or completion authority. Canic's public log contract still uses
+offset/limit and exact totals: the adapter scans upstream pages to count all
+retained matches while copying only the selected reply rows, capped at 1,000.
+Disabling the generated log read does not disable internal recording.
+
+Component counters and measurements can select heap or stable storage through
+the [provider metrics API](provider-metrics.md). Their projections use the same
+application sampler and cached `canic_public_metrics` query. Stable selection
+does not publish a provider, grant log access or change the controller-only
+`canic_logs` and `canic_metrics` methods.
+
+### Adapter reporting contract
+
+Managed adapters use the same `observability.metrics` capability as the framework.
+Configuration selects whether reporting may be exposed; Rust `mount!` selects the
+adapter and its explicit endpoint declarations. A false metrics setting suppresses
+both metric reads and reset, including exports, contract metadata and ingress-limit
+registration. A true setting never mounts an undeclared endpoint or widens access.
+IcyDB supports explicit controller/public reads and always controller-only reset.
+Canic-hosted applications must use its `managed;` mount form. Standalone mounts
+retain their explicit source policy because they have no Canic role configuration.
+
+Recording, capacity limits, heap/stable retention and reset continuity remain
+upstream-owned. Adapters do not add a recorder or sampling timer. Blob contributes
+its bounded projection to the application's one sampler; history remains selected
+separately and may continue sampling when direct metrics reads are disabled.
+Auth's unpublished scaffold and host-side Backup do not gain synthetic endpoints.
+Future managed adapter metric read/reset declarations must use the shared managed
+entrypoint's `observability = metrics` classification; that owner gates the entire
+expansion using the existing capability. Keep public safety and authorization in
+the endpoint code, not in a configurable permission override.
+
+The ownership boundary is:
+
+| Owner | Responsibility |
+| --- | --- |
+| TOML schema | Reporting selection and its default; no endpoint declarations or access grants |
+| Core role policy | Resolve configuration into typed capabilities |
+| Build integration | Emit Rust capability flags from the resolved contract |
+| Adapter `mount!` | Declare endpoints and their explicit authorization |
+| Shared entrypoint macro | Gate the complete generated endpoint using its capability classification |
+| Upstream recorder/storage | Recording, capacity, retention and reset semantics |
+| Canic lifecycle/sampler | Sampling and history scheduling; adapters add no second timer |
+
+`observability = metrics` classifies an endpoint; it is not a second configuration
+switch. Managed endpoints require both an explicit declaration and the resolved
+capability. Enabling the capability alone creates no adapter endpoint.
 
 Canic separates reads by caller authority. Publication never changes who may
 read protected diagnostics, and Fleet admission or application-player admission
@@ -130,10 +189,10 @@ diagnostics, authority restoration or Fleet readiness. Present it as
 Fleet convergence evidence for readiness decisions. Regenerate bindings for the
 current typed public-health contract; protected diagnostic health retains its own contract.
 
-The Coordinator, Root, Wasm Store and managed roles expose the public
-`icrc10_supported_standards` query through the shared standards endpoint bundle.
-It advertises ICRC-10; ICRC-21 is included only when that profile enables its
-consent endpoint. Standards discovery does not grant protected inspection access.
+ICRC discovery and consent endpoints are opt-in through the
+[ICRC adapter](icrc-adapter.md), not role startup or configuration.
+Default roles expose neither endpoint. Standards discovery does not grant
+protected inspection access.
 
 Canonical Store and Coordinator Candid must be generated with the host's
 `build_artifact --refresh-canonical-did` flow after changing shared public DTOs or
@@ -318,8 +377,15 @@ and become stale normally; successful families still refresh. Optional sampling
 errors do not change cycle-tracking or funding decisions.
 
 Collection bounds apply before formatting and sorting. Operations read at most
-257 entries from each of four counter owners and each of the three ICP-refill
-aggregate indexes. Each target entry yields at most two refill rows. Performance
+257 entries from lifecycle, canister-operation and top-up owners. Global funding
+uses four fixed enum groups with at most the fixed denial-reason set; ordered
+range lookup skips all child-principal groups before applying its row limit.
+Root reads bounded prefixes of the three ICP-refill indexes, but publishes only
+normalized status/error counts. Per-child funding and per-target refill amounts
+remain in protected Core diagnostics. Refill status grouping removes automatic
+sequences and folds error phases before bounded selection, preserving one emitted
+identity. Public operation units and counter/gauge interpretation come from
+these typed projections; display names do not recover either fact. Performance
 reads at most 129 recorded counters plus the upstream timer inventory, capped by
 ic-timers at 64 registrations with bounded identities. Each registration yields
 separate scheduler and work entries; the performance path builds no protected
@@ -486,7 +552,11 @@ The existing `operations` selection also includes anonymous
 `process.placement_index` and `process.wasm_store` aggregates. Platform, intent,
 placement and Store rows sum recorded event counts by outcome across the owning
 metric table. Inter-canister `started` reads the existing fixed system counter;
-it never enumerates target/method identities. Unobserved outcome combinations
+it counts polled framework call attempts, including Platform admission refusals,
+without enumerating target/method identities. Constructing an unused request
+records no event. Direct application calls retain application-owned instrumentation.
+Generic platform-call rows describe transport; protocol clients own codec failures.
+Unobserved outcome combinations
 have no row. These are instrumentation events, not proof of Fleet readiness or
 an inventory of all outstanding work. Store and placement activity appears only
 on roles that execute those owners. No security records, callers, credentials,
@@ -496,8 +566,11 @@ new projections.
 Each of the four enum-keyed owners admits at most 256 source rows for a sample.
 An oversized owner rejects the operations sample before allocation or scanning;
 previous cached data ages and other selected families continue. Aggregation uses
-fixed outcome labels and saturating counts. Counts use the existing heap counter
-window (`window_id = 0`); heap coverage and canister version delimit resets.
+fixed outcome labels and IC Metrics wide counters. Both source and grouped
+actual-overflow flags reach public history; an exact numeric cap remains exact.
+Diagnostic funding totals use the same arithmetic with cycle units. Counts use
+the existing heap counter window (`window_id = 0`); heap coverage and canister
+version delimit resets.
 The common 256-row snapshot and global history budgets still apply.
 
 `operations` also includes `timer.state.{disabled,idle,active,retrying,failed}`
@@ -514,6 +587,12 @@ Timer performance uses `perf.timer.<owner>.<subsystem>.<name>.scheduler` and
 `.work`, in instructions, with a `.calls` row for each phase's completed
 measurement samples. This is a hard cut of the previous work-only metric name.
 The protected performance projection uses the same explicit phase labels.
+The public sampler reads typed source measurements directly: instruction totals
+retain `u128`, and count/total saturation flags report actual overflow. Reaching
+an exact numeric cap alone does not mark an observation saturated. Registration
+is carried from the timer snapshot, never recovered from the formatted name.
+The protected diagnostic view also retains wide totals and source overflow flags
+in its explicit measurement payload; neither view narrows those totals to `u64`.
 `timer.events.scheduler_started` and `timer.events.work_started` independently
 count starts across the current registry; starts need not equal completed
 measurement samples. Scheduler and work measurements cover the timer owner's
@@ -526,7 +605,10 @@ count from the same inventory observation. Cancellation preserves that identity;
 unregister/re-register changes it. Public history retains raw samples without
 deriving timer rates. Aggregate timer event and state rows remain gauges.
 The host's offline comparison admits timer deltas only for an unchanged
-registration, advancing exact source times and unsaturated fields. A full registry can
+registration, advancing exact source times and unsaturated fields. Instruction
+totals retain the full `u128` range; sample counts remain `u64`. Host comparison
+uses the carried actual-overflow flag rather than treating an exact cap as loss.
+A full registry can
 exceed the existing public row budget; truncation remains explicit and missing
 rows are not zero.
 No extra sampler or polling schedule is introduced. The private

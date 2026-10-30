@@ -153,7 +153,7 @@ mod tests {
             }),
         };
 
-        let stable_bytes = crate::cdk::serialize::serialize(&record).expect("projection CBOR");
+        let stable_bytes = crate::cdk::serialize::serialize(&record).expect("projection Wire");
         assert!(
             stable_bytes.len() <= MAX_FLEET_ADMISSION_PROJECTION_RECORD_BYTES as usize,
             "maximum projection record uses {} bytes",
