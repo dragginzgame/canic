@@ -84,23 +84,23 @@ ic-backup = { version = "0.50.2", default-features = false }
 ic-backup-agent = "0.50.2"
 ic-blob-storage = "0.58.0"
 ic-blob-storage-contracts = "0.58.0"
-ic-build = { version = "0.70.2" }
+ic-build = { version = "0.70.3" }
 ic-call = { version = "0.8.2", default-features = false }
-ic-host-artifacts = { version = "0.70.2", default-features = false }
-ic-host-fs = { version = "0.70.2", default-features = false }
-ic-host-process = { version = "0.70.2", default-features = false }
-ic-host-text = "0.70.2"
-ic-host-tools = "0.70.2"
+ic-host-artifacts = { version = "0.70.3", default-features = false }
+ic-host-fs = { version = "0.70.3", default-features = false }
+ic-host-process = { version = "0.70.3", default-features = false }
+ic-host-text = "0.70.3"
+ic-host-tools = "0.70.3"
 ic-logging = "0.17.2"
 ic-memory = "0.56.0"
-ic-metrics = "0.17.4"
+ic-metrics = "0.17.5"
 ic-metrics-stable = "0.56.0"
 ic-platform = { version = "0.8.2", default-features = false }
 ic-query = { version = "0.76.2", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-storage = "0.56.0"
-ic-testkit = { version = "0.70.2" }
+ic-testkit = { version = "0.70.3" }
 ic-timers = "0.32.1"
 ic-wire = { version = "0.7.23", default-features = false }
 num-bigint = { version = "0.4", default-features = false }

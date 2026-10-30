@@ -83,8 +83,8 @@ and completed local qualification, rather than treating this scope as evidence.
 ## Current dependency selection
 
 The root and both private consumer catalogs select published Blob/contracts
-**0.58.0**, Tooling/Testkit **0.70.2**, Platform/Call **0.8.2**,
-Memory/Storage/Metrics Stable **0.56.0**, Auth **0.23.0**, Metrics **0.17.4**,
+**0.58.0**, Tooling/Testkit **0.70.3**, Platform/Call **0.8.2**,
+Memory/Storage/Metrics Stable **0.56.0**, Auth **0.23.0**, Metrics **0.17.5**,
 Logging **0.17.2**, Timers **0.32.1** and Wire **0.7.23**. Each consumer graph
 has one Memory/Timers runtime. The [current handoff](../../status/current.md)
 names the exact local qualification and its remaining acceptance boundaries.

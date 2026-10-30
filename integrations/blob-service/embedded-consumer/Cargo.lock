@@ -726,9 +726,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.70.2"
+version = "0.70.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a992209abbeb579593257c346042699388ef16633209cb2f0dfc064dc8e07fd1"
+checksum = "80e2c353d3e3491c43ecce713d67920242152cc752469be1de9e0b513bef9775"
 dependencies = [
  "leb128",
  "sha2 0.10.9",
@@ -766,9 +766,9 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.17.4"
+version = "0.17.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bed85a1ce7bc80365b34b246c82a5f7711a05c6deb30be0c8132898d7ef1dccd"
+checksum = "bbd5385f74812d8fb6ab21ca7293e5804d491fcb7ceb294b046b87f568aef763"
 dependencies = [
  "ic-wire",
  "serde",

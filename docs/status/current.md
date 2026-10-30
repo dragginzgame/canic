@@ -18,23 +18,30 @@ artifacts; reconcile uncertain delivery before any retry.
 ## Current dependency cohort and qualification
 
 The root and both private Blob consumer catalogs/locks select Blob/contracts
-0.58.0, Memory/Storage/Metrics Stable 0.56.0, Build/Host/Testkit 0.70.2,
+0.58.0, Memory/Storage/Metrics Stable 0.56.0, Build/Host/Testkit 0.70.3,
 Auth/protocol 0.23.0, Backup/Agent 0.50.2, Query 0.76.2, Platform/Call 0.8.2,
-Logging 0.17.2, Metrics 0.17.4, Timers 0.32.1 and Wire/derive 0.7.23.
+Logging 0.17.2, Metrics 0.17.5, Timers 0.32.1 and Wire/derive 0.7.23.
 All 23 direct root IC selections match the latest stable published checksums at
 lookup. Each root/consumer lock has one Memory, Storage, Metrics Stable, Platform
 and Timers identity. Blob 0.58 resolves the former 0.55/0.56 runtime conflict;
 the pending Persistence adoption is now complete. The Rust 1.91 floor and existing
 workspace boundaries remain. Local qualification uses the governed Rust 1.99.1.
 
-The exact Testkit server and release-metadata editor are prepared at 0.70.2.
+The exact Testkit server and release-metadata editor are prepared at 0.70.3.
 The embedded allocation peer and its source/tool/lock evidence are refreshed.
 Shared Tooling remains reviewed 0.27.6 at
 `5a72359b5be19d5221334cf2c9b3204621d3f3f6`.
 Node/npm/TypeScript remain 24.21.0/12.2.0/6.0.3; Platform SDK 0.1.1 uses Core 6.1.1
 and is still the latest published browser selection.
 
-Current evidence: `target/dependency-refresh-20261030/README.md`; isolated source
+The first 0.113 release attempt passed workspace Clippy and both consumer Clippy
+checks, then correctly refused a stale embedded allocation peer after the newer
+Tooling/Metrics lock selection. No version/tag/publication effect occurred. The
+catalogs now align on Tooling 0.70.3/Metrics 0.17.5; the peer is refreshed and
+verified. Commit the fix and retry the requested release.
+Exact logs are at `target/release-0113-20261030/attempt-1.log`.
+
+Earlier focused evidence: `target/dependency-refresh-20261030/README.md`; isolated source
 and targets: `.tmp/dependency-refresh-20261030`. All 724 selected native cases pass
 (Core 485, Contracts 7, Control Plane 66, Host 157, facade 9); five opt-in Host
 cases retain their declared ignore conditions. Warning-denied all-target/all-feature

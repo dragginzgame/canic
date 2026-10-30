@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   Compare the complete generated service against the pinned external contract.
 
 - Update the published IC cohort across the root and both Blob consumers: Blob
-  0.58.0, Persistence 0.56.0, Tooling 0.70.2, Auth 0.23.0, Backup 0.50.2,
+  0.58.0, Persistence 0.56.0, Tooling 0.70.3, Auth 0.23.0, Backup 0.50.2,
   Query 0.76.2 and Platform/Call 0.8.2. Align locks and exact build/test tools,
   preserving one Memory/Timers runtime in each deployed graph.
 
@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Adopt Persistence 0.56's bounded Wire allocation ledger and Metrics Stable rows.
   Deploy by clean reinstall; retain current-release restoration and recovery.
 
-- Select Timers 0.32.1, Metrics 0.17.4, Logging 0.17.2 and Wire 0.7.23.
+- Select Timers 0.32.1, Metrics 0.17.5, Logging 0.17.2 and Wire 0.7.23.
   Retain reviewed Shared Tooling 0.27.6 and the complete snapshot lifecycle.
 
 - Separate IcyDB metrics endpoint mounting from recording capability: keep explicit
