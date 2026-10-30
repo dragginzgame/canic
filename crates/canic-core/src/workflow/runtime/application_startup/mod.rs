@@ -38,6 +38,34 @@ pub fn require_started() -> Result<(), InternalError> {
         .map_err(Into::into)
 }
 
+/// Share the role-specific startup decision with readiness observations and workers.
+pub fn is_started_or_exempt() -> bool {
+    use crate::ops::runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps};
+
+    EnvOps::is_root()
+        || EnvOps::is_fleet_coordinator_runtime()
+        || EnvOps::canister_role().is_ok_and(|role| role.is_wasm_store())
+        || FleetActivationRuntimeOps::is_standalone_local()
+        || require_started().is_ok()
+}
+
+/// Read current host admission before a new deferred application effect.
+/// Restoration alone grants no activation, startup or snapshot authority.
+pub fn is_application_work_admitted() -> bool {
+    use crate::ops::runtime::{fleet_activation::FleetActivationRuntimeOps, ready::ReadyOps};
+
+    if !ReadyOps::is_ready() || require_active().is_err() {
+        return false;
+    }
+    if FleetActivationRuntimeOps::is_standalone_local() {
+        return true;
+    }
+    if super::fleet_activation::FleetActivationWorkflow::require_active().is_err() {
+        return false;
+    }
+    is_started_or_exempt()
+}
+
 /// Recheck release authority between asynchronous application initialization hooks.
 pub fn require_initialization_effect() -> Result<(), InternalError> {
     FleetActivationOps::application_startup_work()

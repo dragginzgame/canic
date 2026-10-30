@@ -98,12 +98,8 @@ impl RuntimeIntrospectionApi {
     /// Return guarded readiness status for the local Canic role.
     #[must_use]
     pub fn readiness(observed_at_ns: u64) -> CanicReadinessStatus {
-        let application_ready = EnvOps::is_root()
-            || EnvOps::is_fleet_coordinator_runtime()
-            || EnvOps::canister_role().is_ok_and(|role| role.is_wasm_store())
-            || crate::ops::runtime::fleet_activation::FleetActivationRuntimeOps::is_standalone_local(
-            )
-            || crate::workflow::runtime::application_startup::require_started().is_ok();
+        let application_ready =
+            crate::workflow::runtime::application_startup::is_started_or_exempt();
         let ready = ReadyOps::is_ready() && application_ready;
         let role = EnvOps::canister_role()
             .ok()
