@@ -547,16 +547,9 @@ impl CargoEvidenceFailure {
         manifest_path: &Path,
         source: &(dyn std::error::Error + 'static),
     ) -> Self {
-        let cause = if let Some(error) = source.downcast_ref::<std::io::Error>() {
-            format!("Cargo command I/O failure: {:?}", error.kind())
-        } else if let Some(error) = source.downcast_ref::<serde_json::Error>() {
-            format!(
-                "invalid Cargo metadata JSON: {:?} at line {}, column {}",
-                error.classify(),
-                error.line(),
-                error.column()
-            )
-        } else if let Some(error) = source.downcast_ref::<ic_host_process::tool::ToolError>() {
+        let tool_error = std::iter::successors(Some(source), |error| error.source())
+            .find_map(|error| error.downcast_ref::<ic_host_process::tool::ToolError>());
+        let cause = if let Some(error) = tool_error {
             let operation = match phase {
                 CargoEvidencePhase::PackageSelectedTree => "cargo tree",
                 _ => "cargo metadata",
@@ -567,6 +560,15 @@ impl CargoEvidenceFailure {
             bounded_cargo_cause(
                 manifest_path,
                 &format!("{operation} failed: {error}\n{diagnostics}"),
+            )
+        } else if let Some(error) = source.downcast_ref::<std::io::Error>() {
+            format!("Cargo command I/O failure: {:?}", error.kind())
+        } else if let Some(error) = source.downcast_ref::<serde_json::Error>() {
+            format!(
+                "invalid Cargo metadata JSON: {:?} at line {}, column {}",
+                error.classify(),
+                error.line(),
+                error.column()
             )
         } else {
             bounded_cargo_cause(manifest_path, &source.to_string())

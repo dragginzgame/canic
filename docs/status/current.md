@@ -34,12 +34,18 @@ Shared Tooling remains reviewed 0.27.6 at
 Node/npm/TypeScript remain 24.21.0/12.2.0/6.0.3; Platform SDK 0.1.1 uses Core 6.1.1
 and is still the latest published browser selection.
 
-The first 0.113 release attempt passed workspace Clippy and both consumer Clippy
-checks, then correctly refused a stale embedded allocation peer after the newer
-Tooling/Metrics lock selection. No version/tag/publication effect occurred. The
-catalogs now align on Tooling 0.70.3/Metrics 0.17.5; the peer is refreshed and
-verified. Commit the fix and retry the requested release.
-Exact logs are at `target/release-0113-20261030/attempt-1.log`.
+Release attempts and repairs are retained at `target/release-0113-20261030/`.
+Attempt 1 passed workspace/consumer Clippy, then refused a stale embedded peer
+after the Tooling/Metrics lock change. Catalogs align on Tooling 0.70.3 and Metrics
+0.17.5, and the peer is refreshed/verified. Attempt 2 passed formatting, policy,
+security, compilation and the complete feature matrix. Its ordinary tier found
+seven Core and two Host stale golden cases for accepted config/Wire hard cuts,
+plus one wrapped-Cargo diagnostic defect; PocketIC correctly remained skipped.
+Current-contract vectors are refreshed and role diagnostics recover the nested
+typed capture error before bounded redacted rendering. All 77 focused Core/Host
+regressions, strict owner lint and refreshed peer verification pass. Commit these
+repairs and retry the explicitly requested release/publication sequence. No
+version/tag/publication effect has occurred yet.
 
 Earlier focused evidence: `target/dependency-refresh-20261030/README.md`; isolated source
 and targets: `.tmp/dependency-refresh-20261030`. All 724 selected native cases pass

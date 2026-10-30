@@ -274,7 +274,7 @@ spawn_grants = [
 fn canonical_configuration_digest_matches_schema_one_golden_vector() {
     assert_eq!(
         digest(BASELINE).expect("golden digest").to_string(),
-        "bf76a84ed3e374f9039eafd18bf12c4a66714fd0e5e9360241743cb186b54612"
+        "8781cef160afbc76ed5583b9d50167d9ce774fe15c4364dbbed83999e44b58cb"
     );
 }
 

@@ -434,7 +434,7 @@ fn canonical_plan_binds_exact_roots_placements_members_and_limits() {
 
     assert_eq!(
         crate::ids::ComponentDeploymentConfigurationDigest::from_bytes(hash).to_string(),
-        "814fda7e166ce4f8417eb4afd913b0de5941b5c53294401fe19d7c54406616f7"
+        "378883d2add74512f648fa1b9346a6ad13386a4d175d21258953f97862c356bd"
     );
 
     assert_eq!(
@@ -541,8 +541,8 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
     assert_eq!(
         hash,
         [
-            61, 49, 147, 69, 254, 225, 102, 145, 109, 156, 9, 147, 27, 248, 86, 82, 178, 69, 120,
-            135, 227, 235, 154, 227, 66, 218, 248, 45, 68, 82, 25, 14,
+            121, 251, 143, 61, 238, 252, 49, 43, 84, 249, 154, 88, 119, 82, 34, 41, 252, 235, 115,
+            19, 126, 164, 117, 50, 247, 185, 21, 186, 50, 195, 214, 22
         ]
     );
 
@@ -553,7 +553,7 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         plan_hash: [14; 32],
         batch: batch.clone(),
     };
-    assert_root_batch_candid_contracts(
+    assert_root_batch_wire_contracts(
         &request,
         validation.placement_count,
         validation.component_count,
@@ -582,7 +582,7 @@ fn initial_root_without_a_placement_has_one_exact_empty_batch() {
     assert!(validation.component_roles.is_empty());
 }
 
-fn assert_root_batch_candid_contracts(
+fn assert_root_batch_wire_contracts(
     request: &RootComponentProvisioningAcceptanceRequest,
     placement_count: u32,
     component_count: u32,

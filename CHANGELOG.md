@@ -78,7 +78,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Include the independently built Store in Root fixture artifact batches so fresh
   setups and dependency changes cannot consume a stale Store from a prior build.
-- Retain bounded Cargo metadata diagnostics and their typed execution cause.
+- Retain bounded Cargo metadata diagnostics and their typed execution cause through
+  nested error wrappers.
 - Align NNS and signed-management fixtures with Platform request types.
 - Correct composition-fixture visibility and include the shared tool catalog in release lint.
 - Update endpoint and trap ownership guards for the Wire attribute names and adapter layout.
