@@ -42,13 +42,13 @@ impl EntryKind {
     pub(crate) fn candid_attribute(&self, method: &syn::LitStr) -> TokenStream {
         match self {
             Self::Query => {
-                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(query, rename = #method)])
+                quote!(#[cfg_attr(any(not(target_arch = "wasm32"), canic_export_candid), ::canic::__internal::ic_platform::candid::contract::candid_method(query, rename = #method))])
             }
             Self::CompositeQuery => {
-                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(composite_query, rename = #method)])
+                quote!(#[cfg_attr(any(not(target_arch = "wasm32"), canic_export_candid), ::canic::__internal::ic_platform::candid::contract::candid_method(composite_query, rename = #method))])
             }
             Self::Update => {
-                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(update, rename = #method)])
+                quote!(#[cfg_attr(any(not(target_arch = "wasm32"), canic_export_candid), ::canic::__internal::ic_platform::candid::contract::candid_method(update, rename = #method))])
             }
             Self::Init | Self::PostUpgrade => quote!(),
         }

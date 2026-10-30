@@ -6,6 +6,12 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.113.1] - Unreleased
+
+- Enable Candid service registration and printing only in the dedicated Wasm
+  declaration pass; native tools retain service generation. Runtime builds no
+  longer select the printer through Canic. See [detailed notes](docs/changelog/0.113.md).
+
 ## [0.113.0] - 2026-10-30
 
 - **Breaking — Wire storage hard cut:** encode owned stable records and checkpoints

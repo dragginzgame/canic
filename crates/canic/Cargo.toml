@@ -15,6 +15,8 @@ publish = true
 
 [features]
 default = []
+# Selected by the host declaration pass, never required by deployed runtime code.
+candid-export = ["ic-platform/candid-service"]
 icrc = ["ic-platform/icrc-ledger-types"]
 control-plane = ["dep:canic-control-plane", "canic-control-plane/root-control-plane"]
 fleet-coordinator-canister = ["dep:canic-control-plane", "canic-control-plane/fleet-coordinator-canister"]
@@ -42,13 +44,14 @@ canic-contracts.workspace = true
 canic-control-plane = { workspace = true, default-features = false, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
-ic-platform = { workspace = true, features = ["cdk", "candid-service", "executor", "ic0"] }
+ic-platform = { workspace = true, features = ["cdk", "candid", "executor", "ic0"] }
 ic-wire.workspace = true
 serde = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap = { workspace = true, optional = true }
 ic-host-artifacts = { workspace = true, features = ["wasm"], optional = true }
+ic-platform = { workspace = true, features = ["candid-service"] }
 ic-testkit = { workspace = true, features = ["wire"], optional = true }
 serde_json = { workspace = true, optional = true }
 toml = { workspace = true }
