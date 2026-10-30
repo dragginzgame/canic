@@ -43,9 +43,15 @@ seven Core and two Host stale golden cases for accepted config/Wire hard cuts,
 plus one wrapped-Cargo diagnostic defect; PocketIC correctly remained skipped.
 Current-contract vectors are refreshed and role diagnostics recover the nested
 typed capture error before bounded redacted rendering. All 77 focused Core/Host
-regressions, strict owner lint and refreshed peer verification pass. Commit these
-repairs and retry the explicitly requested release/publication sequence. No
-version/tag/publication effect has occurred yet.
+regressions, strict owner lint and refreshed peer verification pass. Attempt 3
+passed all ordinary tests and reached installed qualification. Its initial-child
+recovery case stalled after a pool-maintenance lease takeover was misclassified
+as a permanent invariant failure. Remaining validation was cancelled after that
+confirmed failure. A deterministic five-minute pause reproduces the defect; the
+retryable stale-completion fix passes the installed same-claim recovery case,
+all 16 focused pool/lease native cases, strict owner lint and refreshed peer
+verification. Commit the repair and retry the explicitly requested
+release/publication sequence. No version/tag/publication effect has occurred yet.
 
 Earlier focused evidence: `target/dependency-refresh-20261030/README.md`; isolated source
 and targets: `.tmp/dependency-refresh-20261030`. All 724 selected native cases pass

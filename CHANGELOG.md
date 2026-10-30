@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 🩹 Fixed
 
+- Retry child allocation after pool-maintenance lease takeover instead of retaining
+  a permanent failure; preserve the reserved claim through delayed funding recovery.
 - Include the independently built Store in Root fixture artifact batches so fresh
   setups and dependency changes cannot consume a stale Store from a prior build.
 - Retain bounded Cargo metadata diagnostics and their typed execution cause through
