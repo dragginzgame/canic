@@ -54,13 +54,14 @@ fn incompatible_path_selected_ic_wasm_is_rejected_with_its_exact_path() {
     fs::create_dir_all(&root).expect("create test root");
     let executable = root.join(IC_WASM_TOOL);
     write_executable(&executable, "#!/bin/sh\nprintf 'ic-wasm 0.9.11\\n'\n");
+    let expected_path = executable.canonicalize().expect("physical executable path");
 
     let error = admit_ic_wasm_executable(&executable).expect_err("wrong version must reject");
 
     assert!(matches!(
         error,
         IcWasmToolError::VersionMismatch { path, actual, expected }
-            if path == executable
+            if path == expected_path
                 && actual == "ic-wasm 0.9.11"
                 && expected == IC_WASM_VERSION_IDENTITY
     ));
@@ -80,9 +81,41 @@ fn admitted_executable_records_absolute_path_and_exact_version() {
 
     let admitted = admit_ic_wasm_executable(&executable).expect("admit exact tool");
 
-    assert_eq!(admitted.path(), executable);
+    assert_eq!(admitted.path(), executable.canonicalize().unwrap());
     assert_eq!(admitted.version_identity(), IC_WASM_VERSION_IDENTITY);
     fs::remove_dir_all(root).expect("remove test root");
+}
+
+#[cfg(unix)]
+#[test]
+fn aliased_parent_reports_physical_identity_for_acceptance_and_refusal() {
+    let root = temp_root("aliased-parent");
+    let physical = root.join("physical");
+    let accepted = physical.join("accepted/ic-wasm");
+    let refused = physical.join("refused/ic-wasm");
+    fs::create_dir_all(accepted.parent().unwrap()).unwrap();
+    fs::create_dir_all(refused.parent().unwrap()).unwrap();
+    write_executable(
+        &accepted,
+        &crate::test_support::tool_script("#!/bin/sh\nprintf '@IC_WASM_IDENTITY@\\n'\n"),
+    );
+    write_executable(&refused, "#!/bin/sh\nprintf 'ic-wasm 0.9.11\\n'\n");
+    let alias = root.join("alias");
+    std::os::unix::fs::symlink(&physical, &alias).unwrap();
+
+    let admitted = admit_ic_wasm_executable(&alias.join("accepted/ic-wasm")).unwrap();
+    assert_eq!(admitted.path(), accepted.canonicalize().unwrap());
+    assert_eq!(admitted.version_identity(), IC_WASM_VERSION_IDENTITY);
+    let expected_path = refused.canonicalize().unwrap();
+    let error = admit_ic_wasm_executable(&alias.join("refused/ic-wasm")).unwrap_err();
+    assert!(matches!(
+        error,
+        IcWasmToolError::VersionMismatch { path, actual, expected }
+            if path == expected_path
+                && actual == "ic-wasm 0.9.11"
+                && expected == IC_WASM_VERSION_IDENTITY
+    ));
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[cfg(unix)]
@@ -147,7 +180,7 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     .expect("publish and admit closed staged executable");
     let admitted = admit_ic_wasm_executable(&destination).expect("admit published executable");
 
-    assert_eq!(admitted.path(), destination);
+    assert_eq!(admitted.path(), destination.canonicalize().unwrap());
     assert_eq!(admitted.version_identity(), IC_WASM_VERSION_IDENTITY);
     fs::remove_dir_all(root).expect("remove test root");
 }

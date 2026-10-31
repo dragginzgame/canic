@@ -18,7 +18,7 @@ fn framework_execution_uses_upstream_request_and_response_types() {
     let FnArg::Typed(request) = execute.sig.inputs.first().unwrap() else {
         panic!("execution accepts a prepared request");
     };
-    assert_path(&request.ty, &["ic_call", "Call"]);
+    assert_path(&request.ty, &["ic_platform", "call", "Call"]);
     let ReturnType::Type(_, output) = &execute.sig.output else {
         panic!("execution returns the upstream response or a typed failure");
     };
@@ -33,7 +33,7 @@ fn framework_execution_uses_upstream_request_and_response_types() {
     let syn::GenericArgument::Type(response) = arguments.args.first().unwrap() else {
         panic!("response type");
     };
-    assert_path(response, &["ic_call", "Response"]);
+    assert_path(response, &["ic_platform", "call", "Response"]);
 }
 
 #[test]

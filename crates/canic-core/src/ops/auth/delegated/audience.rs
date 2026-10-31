@@ -51,8 +51,6 @@ pub enum AudienceError {
     },
     #[error("delegated auth role grants must be strictly sorted and unique")]
     NonCanonicalGrants,
-    #[error("delegated auth grant scope rejected: {scope}")]
-    GrantScopeRejected { scope: String },
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
 }
@@ -87,7 +85,6 @@ pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), Audienc
 }
 
 fn map_grant_validation_error(error: GrantValidationError) -> AudienceError {
-    use ic_auth::canonical::CanonicalAuthError as Canonical;
     match error {
         GrantValidationError::Empty => AudienceError::GrantsEmpty,
         GrantValidationError::TooMany { found, max } => AudienceError::TooManyGrants { found, max },
@@ -101,12 +98,9 @@ fn map_grant_validation_error(error: GrantValidationError) -> AudienceError {
                 max,
             }
         }
-        GrantValidationError::Canonical(Canonical::NonCanonicalRoles) => {
-            AudienceError::NonCanonicalGrants
-        }
-        GrantValidationError::Canonical(Canonical::InvalidScope { scope }) => {
-            AudienceError::GrantScopeRejected { scope }
-        }
+        GrantValidationError::Canonical(
+            ic_auth::canonical::CanonicalAuthError::NonCanonicalRoles,
+        ) => AudienceError::NonCanonicalGrants,
         GrantValidationError::Canonical(cause) => AudienceError::Canonical(cause.into()),
     }
 }
@@ -252,13 +246,15 @@ mod tests {
             ),
             (
                 vec!["Read"],
-                AudienceError::GrantScopeRejected {
-                    scope: "Read".into(),
-                },
+                AudienceError::Canonical(CanonicalAuthError::Scope(
+                    ic_auth_protocol_types::ScopeLabelError::InvalidSegmentStart { offset: 0 },
+                )),
             ),
             (
                 vec![""],
-                AudienceError::Canonical(CanonicalAuthError::EmptyScope),
+                AudienceError::Canonical(CanonicalAuthError::Scope(
+                    ic_auth_protocol_types::ScopeLabelError::Empty,
+                )),
             ),
             (
                 vec!["read", "read"],
@@ -287,9 +283,9 @@ mod tests {
             ),
             (
                 grant("app", &["Read"]),
-                AudienceError::GrantScopeRejected {
-                    scope: "Read".into(),
-                },
+                AudienceError::Canonical(CanonicalAuthError::Scope(
+                    ic_auth_protocol_types::ScopeLabelError::InvalidSegmentStart { offset: 0 },
+                )),
             ),
             (
                 grant("app", &["read", "read"]),

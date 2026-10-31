@@ -2,7 +2,7 @@
 
 use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_query::{
-    nns::NnsSourceRequest,
+    report::CollectionSourceRequest,
     subnet_catalog::{
         CatalogError, ClassificationSource, GeographicScope, RawSubnetCatalog, RoutingRange,
         SubnetCatalogHostError, SubnetCatalogRegistryRecordEvidence,
@@ -38,7 +38,10 @@ impl Source {
 }
 
 impl SubnetCatalogSource for Source {
-    fn fetch_catalog<'a>(&'a self, request: &'a NnsSourceRequest) -> SubnetCatalogSourceFuture<'a> {
+    fn fetch_catalog<'a>(
+        &'a self,
+        request: &'a CollectionSourceRequest,
+    ) -> SubnetCatalogSourceFuture<'a> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         Box::pin(std::future::ready(catalog(self, request)))
     }
@@ -46,7 +49,7 @@ impl SubnetCatalogSource for Source {
 
 fn catalog(
     source: &Source,
-    request: &NnsSourceRequest,
+    request: &CollectionSourceRequest,
 ) -> Result<RawSubnetCatalog, SubnetCatalogHostError> {
     let different = request.endpoint == crate::subnet_catalog::MAINNET_CATALOG_ENDPOINTS[1];
     if different && matches!(source.reply, Reply::Unavailable) {

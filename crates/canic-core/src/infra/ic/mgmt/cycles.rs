@@ -7,8 +7,8 @@
 use super::{MgmtInfra, MgmtInfraError};
 use crate::infra::ic::IcInfraError;
 use canic_contracts::cycles::Cycles;
-use ic_call::{Call, WaitPolicy};
 use ic_platform::{
+    call::{Call, WaitPolicy},
     candid::contract::{Nat, encode_one},
     management_canister_types::CanisterIdRecord,
     principal::ExternalPrincipal as Principal,

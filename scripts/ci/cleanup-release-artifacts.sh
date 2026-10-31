@@ -23,7 +23,7 @@ clean_cargo_artifacts() {
 
     for ((attempt = 1; attempt <= MAX_CARGO_CLEAN_ATTEMPTS; attempt++)); do
         echo "==> clearing Cargo build artifacts (attempt $attempt/$MAX_CARGO_CLEAN_ATTEMPTS)"
-        if cargo clean; then
+        if cargo clean --target-dir "$ROOT/target"; then
             return 0
         fi
 

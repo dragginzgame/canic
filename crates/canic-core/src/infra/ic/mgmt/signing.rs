@@ -6,13 +6,15 @@
 
 use super::{MgmtInfra, MgmtInfraError};
 use crate::infra::ic::{IcInfraError, external_candid::decode_one};
-use ic_call::{Call, WaitPolicy};
-use ic_platform::candid::contract::encode_one;
 use ic_platform::cdk::api;
 use ic_platform::management_canister_types::{
     EcdsaPublicKeyArgs, EcdsaPublicKeyResult, SignWithEcdsaArgs, SignWithEcdsaResult,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    candid::contract::encode_one,
+};
 
 impl MgmtInfra {
     /// Fetch the caller-derived ECDSA public key for one root signing policy.

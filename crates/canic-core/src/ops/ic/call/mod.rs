@@ -19,14 +19,16 @@ use crate::{
         },
     },
 };
-use ic_call::WaitPolicy;
+use ic_platform::call::WaitPolicy;
 
 /// Execute one framework request, counting an attempt only when this future is polled.
 ///
 /// Attempts include Platform submission refusals; they do not prove a remote effect.
 /// The caller supplies exact protocol bytes, wait policy and cycle attachment. No
 /// additional await follows the matching callback, preserving refund observation.
-pub async fn execute(request: ic_call::Call<'_, '_>) -> Result<ic_call::Response, InternalError> {
+pub async fn execute(
+    request: ic_platform::call::Call<'_, '_>,
+) -> Result<ic_platform::call::Response, InternalError> {
     let mode = match request.wait_policy() {
         WaitPolicy::Bounded { .. } => PlatformCallMetricMode::BoundedWait,
         WaitPolicy::Unbounded => PlatformCallMetricMode::UnboundedWait,
@@ -63,7 +65,7 @@ fn record(mode: PlatformCallMetricMode, outcome: PlatformCallMetricOutcome) {
 mod tests {
     use super::*;
     use crate::ops::runtime::metrics::system::SystemMetrics;
-    use ic_call::Call;
+    use ic_platform::call::Call;
 
     #[test]
     fn unpolled_execution_has_no_call_metrics_or_platform_effect() {

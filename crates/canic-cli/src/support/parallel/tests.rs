@@ -19,7 +19,7 @@ fn report_collection_bounds_queries_and_preserves_input_order() {
             active.fetch_sub(1, Ordering::SeqCst);
             item * 2
         },
-        |_| panic!("query must complete"),
+        |_, _| panic!("query must complete"),
     );
     assert_eq!(
         reports,
@@ -38,13 +38,63 @@ fn report_collection_preserves_query_failures_and_isolates_panics() {
             1 => panic!("worker failure"),
             _ => Err(*item),
         },
-        |_| Err(usize::MAX),
+        |_, failure| {
+            std::assert_matches!(failure, ReportWorkerFailure::Panicked);
+            Err(usize::MAX)
+        },
     );
     assert_eq!(reports, [Ok(0), Err(usize::MAX), Err(2)]);
     let empty = collect_ordered_reports::<usize, usize>(
         &[],
         |_| panic!("empty query"),
-        |_| panic!("empty fallback"),
+        |_, _| panic!("empty fallback"),
     );
     assert!(empty.is_empty());
+}
+
+#[test]
+fn worker_start_failure_preserves_other_reports_and_target_order() {
+    #[derive(Debug, Eq, PartialEq)]
+    enum ReportError {
+        Panicked,
+        Query,
+        Start(io::ErrorKind),
+    }
+
+    let reports = thread::scope(|scope| {
+        let workers = [
+            (0, thread::Builder::new().spawn_scoped(scope, || Ok(10))),
+            (1, Err(io::Error::from(io::ErrorKind::WouldBlock))),
+            (
+                2,
+                thread::Builder::new().spawn_scoped(scope, || Err(ReportError::Query)),
+            ),
+            (
+                3,
+                thread::Builder::new().spawn_scoped(scope, || panic!("worker failure")),
+            ),
+            (4, thread::Builder::new().spawn_scoped(scope, || Ok(14))),
+        ];
+        workers
+            .into_iter()
+            .map(|(item, worker)| {
+                let report = finish_report(&item, worker, &|_, failure| match failure {
+                    ReportWorkerFailure::Panicked => Err(ReportError::Panicked),
+                    ReportWorkerFailure::Start(error) => Err(ReportError::Start(error.kind())),
+                });
+                (item, report)
+            })
+            .collect::<Vec<_>>()
+    });
+
+    assert_eq!(
+        reports,
+        [
+            (0, Ok(10)),
+            (1, Err(ReportError::Start(io::ErrorKind::WouldBlock))),
+            (2, Err(ReportError::Query)),
+            (3, Err(ReportError::Panicked)),
+            (4, Ok(14)),
+        ]
+    );
 }

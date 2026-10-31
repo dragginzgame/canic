@@ -94,13 +94,16 @@ Commands:
   funding   Inspect protected current Coordinator and Root funding headroom
   mint      Convert ICP to cycles
   topup     Top up a current Fleet Coordinator or Root
-  transfer  Transfer cycles to a principal or Canic Fleet target
+  transfer  Transfer cycles between Cycles Ledger accounts
   help      Print this message or the help of the given subcommand(s)
+
+Transfers credit ledger accounts; topup funds a canister's native cycles balance.
+The transfer example credits the selected identity's ledger account.
 
 Examples:
   canic cycles balance
   canic cycles topup demo coordinator 4T
-  canic cycles transfer 4T demo/app";
+  canic cycles transfer 4T \"$(icp identity principal)\"";
 
 ///
 /// BalanceOptions
@@ -536,7 +539,8 @@ fn mint_command() -> ClapCommand {
 fn transfer_command() -> ClapCommand {
     ClapCommand::new(WalletCommandKind::Transfer.label())
         .bin_name("canic cycles transfer")
-        .about("Transfer cycles to a principal or Canic Fleet target")
+        .about("Transfer cycles between Cycles Ledger accounts")
+        .after_help("Credits the recipient's Cycles Ledger account. Use canic cycles topup to fund a current Fleet Coordinator or Root's native cycles balance.")
         .disable_help_flag(true)
         .arg(
             value_arg(AMOUNT_ARG)
@@ -548,7 +552,7 @@ fn transfer_command() -> ClapCommand {
             value_arg(RECEIVER_ARG)
                 .value_name("receiver-or-fleet-target")
                 .required(true)
-                .help("Raw principal, or Canic selector like <fleet>/<role-or-canister>"),
+                .help("Ledger account owner principal, or Canic selector <fleet>/<role-or-canister>"),
         )
         .arg(
             value_arg(TO_SUBACCOUNT_ARG)
@@ -570,7 +574,7 @@ fn transfer_command() -> ClapCommand {
 fn topup_command() -> ClapCommand {
     ClapCommand::new(WalletCommandKind::Topup.label())
         .bin_name("canic cycles topup")
-        .about("Top up one current Fleet Coordinator or explicit Root")
+        .about("Fund a current Fleet Coordinator or explicit Root's native cycles balance")
         .disable_help_flag(true)
         .arg(value_arg(FLEET_ARG).value_name(FLEET_ARG).required(true))
         .arg(

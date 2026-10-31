@@ -9,7 +9,9 @@ FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-package-output.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf -- "$FIXTURE"; else printf "Package fixture retained: %s\n" "$FIXTURE" >&2; fi' EXIT
 mkdir -p "$FIXTURE/scripts/ci" "$FIXTURE/.cargo"
 cp "$ROOT/scripts/ci/require-jq.sh" "$FIXTURE/scripts/ci/"
-cp "$ROOT/.cargo/config.toml" "$FIXTURE/.cargo/"
+if [[ -f "$ROOT/.cargo/config.toml" ]]; then
+    cp "$ROOT/.cargo/config.toml" "$FIXTURE/.cargo/"
+fi
 cp "$ROOT/rust-toolchain.toml" "$FIXTURE/"
 cat > "$FIXTURE/Cargo.toml" <<'TOML'
 [workspace]
@@ -36,7 +38,7 @@ SH
         (
             unset CARGO_TARGET_DIR
             case "$selection" in
-                default) EXPECTED_OUTPUT="$FIXTURE/target/cargo" ;;
+                default) EXPECTED_OUTPUT="$FIXTURE/target" ;;
                 relative) export CARGO_TARGET_DIR='custom target'; EXPECTED_OUTPUT="$FIXTURE/custom target" ;;
                 absolute) export CARGO_TARGET_DIR="$FIXTURE/external target"; EXPECTED_OUTPUT="$CARGO_TARGET_DIR" ;;
             esac

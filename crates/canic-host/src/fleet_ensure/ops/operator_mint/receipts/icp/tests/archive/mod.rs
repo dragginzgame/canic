@@ -17,7 +17,7 @@ use ic_platform::{
     },
     principal::ExternalPrincipal as Principal,
 };
-use serde_bytes::ByteBuf;
+use ic_wire::ByteBuf;
 use sha2_host::{Digest, Sha256};
 
 fn callback() -> ArchivedEncodedBlocksRange {

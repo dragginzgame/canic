@@ -43,7 +43,6 @@ use std::{
 use thiserror::Error as ThisError;
 
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
-const CYCLES_WORKER_PANIC: &str = "cycles query worker panicked";
 ///
 /// CycleQueryTarget
 ///
@@ -138,13 +137,13 @@ fn collect_cycle_row_reports(
     requested_since_secs: u64,
     query: impl Fn(&RegistryRow<'_>) -> CyclesCanisterReport + Sync,
 ) -> Vec<CyclesCanisterReport> {
-    collect_ordered_reports(rows, query, |row| {
+    collect_ordered_reports(rows, query, |row, failure| {
         cycles_error_report(
             row.entry,
             row.tree_prefix.clone(),
             requested_since_secs,
             None,
-            CYCLES_WORKER_PANIC.to_string(),
+            format!("cycles {failure}"),
         )
     })
 }
@@ -677,7 +676,10 @@ mod tests {
         assert_eq!(reports.len(), 1);
         assert_eq!(reports[0].canister_id, entry.pid);
         assert_eq!(reports[0].status, CyclesCanisterStatus::Error);
-        assert_eq!(reports[0].error.as_deref(), Some(CYCLES_WORKER_PANIC));
+        assert_eq!(
+            reports[0].error.as_deref(),
+            Some("cycles query worker panicked")
+        );
     }
 
     #[test]

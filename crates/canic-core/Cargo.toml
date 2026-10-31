@@ -53,7 +53,6 @@ canic-contracts.workspace = true
 ctor = { workspace = true }
 ic-auth = { workspace = true }
 ic-auth-protocol-types = { workspace = true }
-ic-call = { workspace = true }
 ic-logging.workspace = true
 ic-memory = { workspace = true }
 ic-metrics.workspace = true

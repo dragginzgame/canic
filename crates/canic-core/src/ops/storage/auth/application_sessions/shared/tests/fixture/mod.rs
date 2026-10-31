@@ -193,6 +193,7 @@ pub(super) fn establish_issued(
         max_login_ttl_ns: 86_400_000_000_000,
         max_proof_ttl_ns: 60_000_000_000,
     };
+    let prepared_key = ic_auth::portable_signature::PreparedIssuerKey::new(public_key).unwrap();
     ic_auth::session::establish_session(
         store,
         logins,
@@ -201,11 +202,11 @@ pub(super) fn establish_issued(
             claims: issued.bytes.clone(),
             proof: issued.proof.clone(),
         },
-        &SessionRequest::new(vec!["read".into()], None).unwrap(),
+        SessionRequest::new(vec!["read".into()], None).unwrap(),
         &SessionAdmissionContext {
             verification: PortableVerificationContext::Ed25519 {
                 claims: &claims,
-                public_key: &public_key,
+                public_key: &prepared_key,
             },
             role: &role,
             ttl: SessionTtlPolicy::new(5, 30).unwrap(),

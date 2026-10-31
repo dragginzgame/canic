@@ -39,6 +39,25 @@ for package in consumer ic-platform; do
     if [[ "$package" == consumer ]]; then [[ "$status" != 0 ]] || exit 1
     else [[ "$status" == 0 ]] || exit 1; fi
 done
+# Stable canonical identity owns the registry Principal conversions. This narrow
+# exception cannot grant Candid or another external IC dependency to that owner.
+for package in consumer ic-platform ic-platform-types; do
+    for dependency in ic_principal candid; do
+        perl -MJSON::PP -e 'print encode_json({version=>1,workspace_root=>$ARGV[0],workspace_members=>["member"],packages=>[{id=>"member",name=>$ARGV[1],dependencies=>[{name=>$ARGV[2],rename=>"hidden",kind=>"dev",target=>"cfg(windows)"}]}]})' "$FIXTURE" "$package" "$dependency" > "$FIXTURE/metadata.json"
+        printf '[{"dependency":"%s","allowed_packages":["consumer","ic-platform","ic-platform-types"]}]\n' "$dependency" > "$FIXTURE/ci/cargo-dependency-boundaries.json"
+        status=0
+        bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE" --external-ic > "$FIXTURE/owner-$package-$dependency.log" 2>&1 || status=$?
+        if [[ "$package" == ic-platform || ( "$package" == ic-platform-types && "$dependency" == ic_principal ) ]]; then
+            [[ "$status" == 0 ]] || exit 1
+        else [[ "$status" != 0 ]] || exit 1; fi
+    done
+done
+# A local policy may still tighten the admitted stable-owner case.
+perl -MJSON::PP -e 'print encode_json({version=>1,workspace_root=>$ARGV[0],workspace_members=>["member"],packages=>[{id=>"member",name=>"ic-platform-types",dependencies=>[{name=>"ic_principal"}]}]})' "$FIXTURE" > "$FIXTURE/metadata.json"
+printf '[{"dependency":"ic_principal","allowed_packages":[]}]\n' > "$FIXTURE/ci/cargo-dependency-boundaries.json"
+if bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE" --external-ic > "$FIXTURE/stable-tightened.log" 2>&1; then exit 1; fi
+# Restore the facade case used by the original common-owner checks below.
+perl -MJSON::PP -e 'print encode_json({version=>1,workspace_root=>$ARGV[0],workspace_members=>["member"],packages=>[{id=>"member",name=>"ic-platform",dependencies=>[{name=>"candid"}]}]})' "$FIXTURE" > "$FIXTURE/metadata.json"
 rm "$FIXTURE/ci/cargo-dependency-boundaries.json"
 bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE" --external-ic
 printf '[{"dependency":"candid","allowed_packages":[]}]\n' > "$FIXTURE/ci/cargo-dependency-boundaries.json"

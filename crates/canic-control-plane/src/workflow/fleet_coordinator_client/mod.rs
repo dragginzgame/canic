@@ -19,8 +19,10 @@ use canic_contracts::{
 use canic_core::control_plane_support::{
     error::InternalError, ops::ic::call::execute as execute_call,
 };
-use ic_call::{Call, WaitPolicy};
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    principal::ExternalPrincipal as Principal,
+};
 
 pub(super) async fn registry(coordinator: Principal) -> Result<FleetRegistry, InternalError> {
     let wire = protocol::registry_discovery::snapshot::METHOD_ID;

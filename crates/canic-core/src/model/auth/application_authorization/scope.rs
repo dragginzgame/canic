@@ -8,6 +8,7 @@ use crate::model::auth::application_authorization::{
     MAX_APPLICATION_SESSION_SCOPE_BYTES, MAX_APPLICATION_SESSION_SCOPES,
     MAX_VERIFIED_APPLICATION_SCOPES,
 };
+use ic_auth_protocol_types::{ScopeLabel, ScopeLabelError};
 use std::{
     fmt::{self, Display},
     str::FromStr,
@@ -207,8 +208,7 @@ fn canonicalize(
 }
 
 fn validate_application_scope(value: &str) -> Result<(), ApplicationScopeError> {
-    use ic_auth::canonical::{ScopeLabelError, validate_scope_label_detailed};
-    validate_scope_label_detailed(value).map_err(|error| match error {
+    ScopeLabel::validate(value).map_err(|error| match error {
         ScopeLabelError::Empty => ApplicationScopeError::Empty,
         ScopeLabelError::TooLong { bytes, max } => ApplicationScopeError::TooLong { bytes, max },
         ScopeLabelError::EmptySegment => ApplicationScopeError::EmptySegment,
@@ -220,7 +220,7 @@ fn validate_application_scope(value: &str) -> Result<(), ApplicationScopeError> 
 }
 
 const fn is_valid_application_scope(value: &str) -> bool {
-    ic_auth::canonical::validate_scope_label_detailed(value).is_ok()
+    ScopeLabel::validate(value).is_ok()
 }
 
 // -----------------------------------------------------------------------------

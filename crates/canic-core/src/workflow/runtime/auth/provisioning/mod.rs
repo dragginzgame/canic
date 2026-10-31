@@ -28,7 +28,7 @@ use crate::{
     },
     workflow::runtime::auth::{RuntimeAuthWorkflow, root_delegation_batch},
 };
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 use std::future::Future;
 
 impl RuntimeAuthWorkflow {

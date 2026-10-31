@@ -23,19 +23,7 @@ const LOG_PAGE_MAX_LIMIT: usize = 1_000;
 const LOG_SCAN_BATCH: NonZeroUsize = NonZeroUsize::new(256).unwrap();
 
 thread_local! {
-    static LOG: RefCell<Option<RuntimeLog>> = const { RefCell::new(None) };
-}
-
-///
-/// RuntimeLog
-///
-/// Selected immutable host limits alongside the upstream recorder they configure.
-/// Replacing the host selection starts a new diagnostic window.
-///
-
-struct RuntimeLog {
-    limits: ic_logging::Limits,
-    log: ic_logging::Log,
+    static LOG: RefCell<Option<ic_logging::Log>> = const { RefCell::new(None) };
 }
 
 ///
@@ -89,11 +77,7 @@ impl LogOps {
                     removed: 0,
                     more_due: false,
                 },
-                |selected| {
-                    selected
-                        .log
-                        .prune_expired(now_secs, max_age_secs, max_remove)
-                },
+                |selected| selected.prune_expired(now_secs, max_age_secs, max_remove),
             )
         })
     }
@@ -101,7 +85,7 @@ impl LogOps {
     /// Project the upstream expiry deadline without reconstructing age arithmetic.
     #[must_use]
     pub fn next_expiry_secs(max_age_secs: u64) -> Option<u64> {
-        LOG.with_borrow(|selected| selected.as_ref()?.log.next_expiry_secs(max_age_secs))
+        LOG.with_borrow(|selected| selected.as_ref()?.next_expiry_secs(max_age_secs))
     }
 
     /// Convert upstream cursor scans into Canic's offset/total query envelope.
@@ -115,11 +99,11 @@ impl LogOps {
     ) -> Page<LogEntry> {
         let filter = ic_logging::Filter {
             source: crate_name,
-            topic,
+            topic: topic.map_or(ic_logging::TopicMatch::Any, ic_logging::TopicMatch::Exact),
             min_level: min_level.map(upstream_level),
         };
         LOG.with_borrow(|selected| match selected {
-            Some(selected) => project_page(&selected.log, filter, page),
+            Some(selected) => project_page(selected, filter, page),
             None => Page {
                 entries: Vec::new(),
                 total: 0,
@@ -153,7 +137,7 @@ impl LogOps {
 }
 
 fn append(
-    selected: &mut Option<RuntimeLog>,
+    selected: &mut Option<ic_logging::Log>,
     input: ic_logging::EntryInput<'_>,
     max_entries: u64,
     max_entry_bytes: u32,
@@ -167,18 +151,17 @@ fn append(
         max_entries,
         max_message_bytes: max_entry_bytes as usize,
         max_label_bytes: LOG_LABEL_MAX_BYTES,
+        // Preserve the admitted count and per-field limits within the address space.
+        max_text_bytes: capacity
+            .saturating_mul((max_entry_bytes as usize).saturating_add(2 * LOG_LABEL_MAX_BYTES)),
     };
-    if selected
-        .as_ref()
-        .is_some_and(|runtime| runtime.limits != limits)
-    {
+    if selected.as_ref().is_some_and(|log| log.limits() != limits) {
         *selected = None;
     }
-    let runtime = selected.get_or_insert_with(|| RuntimeLog {
-        limits,
-        log: ic_logging::Log::new(limits),
-    });
-    runtime.log.append(input).map(Some).map_err(append_error)
+    let log = selected.get_or_insert_with(|| ic_logging::Log::new(limits));
+    log.append(input)
+        .map(|receipt| Some(receipt.sequence))
+        .map_err(append_error)
 }
 
 fn project_page(
@@ -247,7 +230,8 @@ const fn canic_level(level: ic_logging::Level) -> Level {
 
 const fn append_error(error: ic_logging::AppendError) -> InternalError {
     let code = match error {
-        ic_logging::AppendError::LabelTooLong { .. } => codes::CAPACITY_LIMIT,
+        ic_logging::AppendError::LabelTooLong { .. }
+        | ic_logging::AppendError::TextBudgetExceeded { .. } => codes::CAPACITY_LIMIT,
         ic_logging::AppendError::TimestampRegressed { .. } => codes::TIME_ORDERING,
         ic_logging::AppendError::SequenceExhausted => codes::VERSION_CAPACITY,
     };

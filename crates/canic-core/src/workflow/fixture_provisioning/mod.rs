@@ -20,7 +20,7 @@ use crate::{
         runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
     },
 };
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 
 pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImportError> {
     fixture_importer::register(importer)?;

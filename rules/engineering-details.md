@@ -20,9 +20,10 @@ product, release and recovery obligations remain binding when applicable.
   fleet reports here; their existence does not require every consumer to vendor
   them or add sibling scans/dashboard tests to its CI. Consumers still adopt
   shared tooling needed for their own development and validation.
-- Keep repository-fleet inventory and governance out of IC Metrics' product
-  scope. IC Metrics owns reusable measurement arithmetic; a repository count is
-  a Shared Tooling report, not a new IC Metrics API, dependency or application.
+- Keep repository-fleet inventory and governance out of IC Observability's product
+  scope. Its `ic-metrics` and `ic-logging` crates own reusable measurement and log
+  engines; a repository count is a Shared Tooling report, not a new Observability
+  API, dependency or application.
   Product libraries do not become fleet-management owners because a report
   contains counts or is called a metric.
 - Local overlays may strengthen the baseline or define product-specific choices
@@ -62,24 +63,28 @@ product, release and recovery obligations remain binding when applicable.
   target/action authorization.
   Direct sibling-checkout edits require an express exception naming that checkout
   and change; shared ownership or a PR contribution never supplies that exception.
-- Staging, commits and release execution are user-owned by default. During
+- Ordinary implementation does not include staging, commits or release execution. During
   ordinary implementation, leave the real checkout's index, package/application
   release versions and Git refs alone. Do not run `git add .`, `git add -A`,
-  `git commit`, version-bump helpers, `git tag`, pushes, `make release-*` or
+  `git commit`, package version-bump helpers, `git tag`, pushes, `make release-*` or
   mutating release adapters to finish a coding task. This includes release
   recovery and indirect calls from scripts or Make targets. "Keep going",
   "prepare the release", "work on 0.4" and "ready to push?" authorize no such
-  effects. Prepare source, numbered changelog notes and validation, then hand
-  them to the user. Explicit delegation and the standing isolated PR exception
-  follow the contribution rules below;
-  a maintainer-only local release boundary must not be bypassed by inference.
+  effects unless the session already delegates delivery. Prepare source, numbered
+  changelog notes, the matching canonical pending `VERSION` under the
+  [next-version rules](changelogs.md#automatic-next-version-selection), and
+  validation within the established scope. A release/ship/deploy
+  request delegates its corresponding workflow and routine group/version/order
+  choices under [delegated delivery](contributions.md#delegated-delivery).
+  Continue that workflow without per-step permission; preserve explicit target
+  restrictions and the standing isolated PR boundary.
 - Follow the [contribution rules](contributions.md): ordinary contributions
   from people and agents use branches and pull requests. Agents may create
   scoped commits when asked to commit or deliver a PR. A PR request includes the
   branch, commits, branch push and PR creation/update needed to deliver it;
   do not require the maintainer to commit first or approve each substep again.
   The standing cross-repository PR workflow supplies the same scoped authority
-  without a separate PR request. Neither route authorizes release versions or tags.
+  without a separate PR request. Neither route authorizes package release versions or tags.
 - A PR request does not authorize merging, pushing directly to `main`, `master`
   or another integration/release branch, or rewriting shared history. Those
   effects require explicit authorization. Preserve branch protections and
@@ -89,8 +94,10 @@ product, release and recovery obligations remain binding when applicable.
 - Agents may execute package/manifest version changes, tags, pushes, publication,
   deployment and paid effects when explicitly authorized for their target and effect.
   Authorization includes the necessary documented substeps of the requested
-  operation. Inspect helpers before invoking them; a contribution PR is not a
-  release request. Continuation and readiness alone do not authorize a release.
+  outcome, including Git integration and package publication when shipping the
+  scoped crates. Inspect helpers before invoking them; a contribution PR is not a
+  release request. Continuation retains existing delivery authority; readiness
+  questions alone do not create it.
 - An explicit instruction is sufficient for its named action. Carry established
   authorization forward; do not require magic phrases or repeated confirmation.
   Complete authorized preparation so any required approval concerns a concrete
@@ -179,18 +186,59 @@ product, release and recovery obligations remain binding when applicable.
 
 ## CLI applications
 
-- **Use Clap for Rust CLI applications**, including developer tools and maintained
-  utility binaries. Use its derive or builder API rather than handwritten
-  `std::env::args` loops, custom flag/subcommand dispatch or a parallel parser.
-- Let Clap own argument/value parsing, typed values, defaults, required arguments,
-  allowed values, argument groups/conflicts/dependencies, help, version, usage and
-  parse-error diagnostics. Before adding custom CLI logic, check whether Clap
-  already provides the behavior and use that capability.
-- Prefer Clap's extension points when application-specific parsing is needed.
-  Keep custom validation limited to domain constraints Clap cannot express;
-  document that gap and keep domain semantics with their existing owner. Do not
-  reimplement generic CLI mechanics behind wrappers or duplicate manual checks
-  that Clap already enforces.
+- **Use Clap for as much Rust CLI behavior as its supported APIs can own.** This
+  includes developer tools, generators, benchmark runners and maintained example
+  or utility binaries. Use its derive or builder API; adding Clap only for flag
+  recognition does not justify a second parser or validation layer.
+- Declare typed values, paths, nonzero/ranged numbers, enumerated choices,
+  defaults and environment sources in Clap. Use its argument actions, arity,
+  groups, conflicts and requirements for supported argument relationships, and
+  its help, version, usage, styling and parse-error handling. Check the selected
+  version's capabilities before writing equivalent custom logic.
+- Compose owned subcommands into the Clap command tree and pass parsed values to
+  handlers. Reserve raw argument forwarding for actual external command
+  boundaries. Do not maintain argv scanners, hidden flag injection, repeated
+  parsing or separate help/option catalogs to connect our own commands when
+  Clap's composition and propagation can carry the same contract.
+- Integrate application-specific syntax through Clap's value parsers and typed
+  extension points, reusing the existing domain parser. Keep custom validation
+  for constraints Clap cannot express, runtime/configuration-dependent policy
+  and independent trust or effect boundaries; document the reason locally.
+  Merely using custom validation today is not evidence of a capability gap.
+- When adopting a Clap capability, remove the superseded CLI mechanics and
+  their duplicate declarations. Preserve intended syntax, defaults/precedence,
+  native path bytes, output/exit behavior and sensitive-value redaction. Keep
+  domain admission at its owner; do not weaken it or add a generic CLI framework
+  merely to replace a local parser.
+
+## Metrics and logging
+
+- **Use `ic-metrics` for metrics and `ic-logging` for logging in all our Rust
+  crates**, including libraries, canisters, native tools, tests and examples.
+  [IC Observability](https://github.com/dragginzgame/ic-observability) owns both
+  canonical crates. Select the capabilities a crate uses; this does not require
+  otherwise unused dependencies or instrumentation in every crate.
+- Outside those canonical owners, do not introduce or maintain custom measurement
+  arithmetic, accumulators, histograms, recording engines, log stores, retention or paging engines, or
+  competing metrics/logging frameworks for facilities we own. Reuse the canonical
+  crates rather than copying their implementations or hiding duplicates behind
+  wrappers. Existing bespoke implementations are migration work, not precedent
+  for new ones.
+- If a required capability is missing or unsuitable, search for an existing
+  issue or open one in
+  [IC Observability](https://github.com/dragginzgame/ic-observability/issues).
+  Describe the concrete consumer requirement and extend the canonical crate
+  there before adopting the improvement. Do not solve the gap with a private
+  fork, local copy or parallel fallback engine. Adopt a compatible, available
+  dependency through the normal dependency workflow; an issue alone does not
+  establish that the capability exists.
+- Consumers retain measurement attribution, units, labels, platform sampling,
+  clocks, budgets, authorization, lifecycle, endpoints and export formats.
+  Thin adapters may translate these application contracts or integrate governed
+  persistence; they must delegate shared arithmetic, recording, retention and
+  paging. IC Persistence continues to own `ic-metrics-stable` and its governed
+  Memory/Storage integration. Preserve supported consumer behavior and stored
+  formats when replacing an existing engine, then delete the replaced copy.
 
 ## IC application encoding
 
@@ -412,15 +460,17 @@ contracts; ordinary development does not require rereading these mechanics.
   only after source/recovery admission. Recovery admits the saved source's
   selection without installing or resolving partially prepared live metadata.
   Low-level helpers may require explicit paths supplied by their calling adapter.
-- These one-shot commands are user-operated by default. An agent needs explicit
-  delegation to run the selected release for the selected repository and
-  destination. That request authorizes the
-  documented gate, version preparation and selected delivery effects. Direct
-  delivery includes the release commit, tag and atomic branch/tag push; PR
-  delivery includes the release branch/PR and, after separately authorized merge,
-  fresh merged-source validation and its exact tag push. The runner never merges
-  or approves the PR. A request for a fix, commit or PR does not authorize a release;
-  separate preparation and inspection retain their own authorized scope.
+- Agents may run these commands under a release/ship/deploy request for the scoped
+  repository and established destination, choosing affected groups and semantic
+  increments under [delegated delivery](contributions.md#delegated-delivery).
+  That request includes the documented gate, version preparation and selected
+  delivery effects. Direct delivery includes the release commit, tag and atomic
+  branch/tag push; PR delivery includes the release branch/PR and, after an
+  authorized merge, fresh merged-source validation and its exact tag push.
+  The runner never merges or approves the PR. A full delivery request may cover
+  the agent's merge and subsequent publication; invoking only a release command
+  does not expand its effects. Fix, commit, PR, preparation and inspection requests
+  retain their narrower scope.
 - Use standard semantic-version increments: patch increments the patch; minor
   increments the minor and resets the patch; major increments the major and
   resets both lower components. Apply the pre-1.0 compatibility rule above.
@@ -453,6 +503,25 @@ contracts; ordinary development does not require rereading these mechanics.
   on success, failure and retry. Never append cargo clean or equivalent cleanup.
   Cleanup requires explicit scope and authority. Tools may clean temporary files
   they own; they must not erase consumer artifacts or the only retained evidence.
+- Explicit workspace cleanup is the disk-reclamation boundary. With no operator
+  overrides or package/profile/target selection, `cargo clean` must remove the
+  owning workspace's entire `target/`, including nested compiler outputs, generated
+  build inputs, Wasm caches and retained evidence. Do not redirect the repository's
+  default Cargo target to a child such as `target/cargo`, to a shared sibling
+  directory, or outside the workspace. Prefer Cargo's built-in default over a
+  `build.target-dir` setting that changes inherited nested-workspace behavior.
+- Build commands may select isolated outputs beneath `target/` where required,
+  but a repository's general `make clean` must still clean the whole workspace
+  `target/`; inherited build settings must not silently narrow it. Use Cargo's
+  existing target selection, not a wrapper or replacement for `cargo clean`.
+  Clearly named selective cleanup commands may keep their documented scope.
+  Operator-selected Cargo environment variables and CLI filters retain their
+  normal meanings; do not override the user's Cargo installation or global config.
+- Retention prohibits automatic cleanup, not user-requested cleanup. Do not run
+  cleanup concurrently with builds. Evidence that must survive an explicit clean
+  belongs outside `target/`; document any separate tool stores or caches rather
+  than implying Cargo cleans them. Qualify cleanup changes with disposable
+  fixtures, never by deleting a working checkout's artifacts as a test.
 
 ## IC stable-memory governance
 
@@ -571,10 +640,17 @@ contracts; ordinary development does not require rereading these mechanics.
   The rule explicitly approves IcyDB's existing `crates/`, `canisters/`, `schema/`
   and `testing/` layout; adoption does not require relocating those packages.
   Repositories without Rust packages do not need a Cargo workspace.
-- Cargo workspace members inherit package versions from the root. Preserve
-  established groupings and coordinated versions under the
-  [workspace versioning guidance](rust-workspaces.md#coordinated-versions-and-workspace-boundaries);
-  prefer release batching and verified consumer adoption over another split.
+- Keep related crates in one development workspace; release groups own their
+  coordinated versions under the
+  [workspace versioning guidance](rust-workspaces.md#coordinated-versions-and-workspace-boundaries).
+  Independent groups all use literal package versions; omit the root
+  `workspace.package.version`. Require explicit group selection for release,
+  resume and publication. Document the group map in root `Cargo.toml` comments and use
+  [group changelogs and retained history](changelogs.md#release-group-changelogs-and-shared-history).
+  Do not move packages or synchronize unrelated releases merely for versioning.
+  Apply the [core and integration graph boundary](rust-workspaces.md#core-and-integration-graph-boundary)
+  when adapter or qualification dependencies block an otherwise valid core upgrade;
+  independent release versions do not isolate Cargo resolution or override that boundary.
   Apply the
   [Cargo dependency rules](cargo-dependencies.md): every direct dependency
   is declared in root `[workspace.dependencies]`, and every child manifest uses

@@ -1,146 +1,378 @@
-# Current handoff — 2026-10-30
+# Current handoff — 2026-10-31
 
-## Scope and authority
+## Current work and authority
 
-The maintainer selected the combined 0.113 repairs/adoption batch and requested
-all newly published IC dependencies, continuing the pending Persistence adoption.
-The maintainer explicitly requested `make release-minor && make publish` for
-0.113.0, with in-scope error correction and retries. This supersedes the earlier
-source/package publication hold. The selected Make flow owns full qualification,
-versioning, commits, atomic branch/tag delivery and crates.io publication. Fleet
-deployment is not selected. The preceding minor's closeout is not claimed.
-Before the governed bump, package versions remain 0.112.0 and the open 0.113 notes
-contain the accepted batch. The pre-release source baseline is
-`b9ed7f298bdaf8c9cceac142edf7e56b15d33208`; last published source is
-`5c236ab130c0d63892ef281b45bdc3fa353e012f`. Preserve release/recovery state and
-artifacts; reconcile uncertain delivery before any retry.
+Canic 0.113.0 remains the published local HEAD at
+247ba9d3599658c478373cb0dfc74439a859dd8a; all nine family crates are published.
+Release attempt 4 completed. Its former target/ evidence is absent from the
+main checkout at this task's start; current adoption evidence is retained outside
+target/ as described below.
 
-## Current dependency cohort and qualification
+The maintainer explicitly selected pushing 0.114 and correcting in-scope failures
+until its governed source release succeeds. This names the exact next minor and
+authorizes its source commits, complete release validation, version transaction,
+tag and branch push. It does not record acceptance of the separate 0.113 human
+closeout audit or select package publication or application deployment.
 
-The root and both private Blob consumer catalogs/locks select Blob/contracts
-0.58.0, Memory/Storage/Metrics Stable 0.56.0, Build/Host/Testkit 0.70.3,
-Auth/protocol 0.23.0, Backup/Agent 0.50.2, Query 0.76.2, Platform/Call 0.8.2,
-Logging 0.17.2, Metrics 0.17.5, Timers 0.32.1 and Wire/derive 0.7.23.
-All 23 direct root IC selections match the latest stable published checksums at
-lookup. Each root/consumer lock has one Memory, Storage, Metrics Stable, Platform
-and Timers identity. Blob 0.58 resolves the former 0.55/0.56 runtime conflict;
-the pending Persistence adoption is now complete. The Rust 1.91 floor and existing
-workspace boundaries remain. Local qualification uses the governed Rust 1.99.1.
+The complete published sibling dependency group is aligned and qualified locally,
+including Timers 0.35.0. The previous Platform/Wire/Metrics blocker is resolved.
+Own package versions remain 0.113.0 before release execution. The pending 0.114
+notes describe the complete implemented batch. The reviewed source roster,
+pre-release bytes and command evidence are retained outside target/ under
+.tmp/release-0114-20261031/. Release progress and exact retry state belong to
+the governed Git release journal, not this descriptive handoff.
 
-The exact Testkit server and release-metadata editor are prepared at 0.70.3.
-The embedded allocation peer and its source/tool/lock evidence are refreshed.
-Shared Tooling remains reviewed 0.27.6 at
-`5a72359b5be19d5221334cf2c9b3204621d3f3f6`.
-Node/npm/TypeScript remain 24.21.0/12.2.0/6.0.3; Platform SDK 0.1.1 uses Core 6.1.1
-and is still the latest published browser selection.
+The subsequent request authorized scoped repairs, commits and normal branch
+pushes for PRs #717, #716 and #609, plus a local Platform update attempt. Those
+PR changes use isolated checkouts; they are not integrated into this dirty main
+checkout. No PR merge, main push, own version bump or release was performed.
 
-Release attempts and repairs are retained at `target/release-0113-20261030/`.
-Attempt 1 passed workspace/consumer Clippy, then refused a stale embedded peer
-after the Tooling/Metrics lock change. Catalogs align on Tooling 0.70.3 and Metrics
-0.17.5, and the peer is refreshed/verified. Attempt 2 passed formatting, policy,
-security, compilation and the complete feature matrix. Its ordinary tier found
-seven Core and two Host stale golden cases for accepted config/Wire hard cuts,
-plus one wrapped-Cargo diagnostic defect; PocketIC correctly remained skipped.
-Current-contract vectors are refreshed and role diagnostics recover the nested
-typed capture error before bounded redacted rendering. All 77 focused Core/Host
-regressions, strict owner lint and refreshed peer verification pass. Attempt 3
-passed all ordinary tests and reached installed qualification. Its initial-child
-recovery case stalled after a pool-maintenance lease takeover was misclassified
-as a permanent invariant failure. Remaining validation was cancelled after that
-confirmed failure. A deterministic five-minute pause reproduces the defect; the
-retryable stale-completion fix passes the installed same-claim recovery case,
-all 16 focused pool/lease native cases, strict owner lint and refreshed peer
-verification. Commit the repair and retry the explicitly requested
-release/publication sequence. No version/tag/publication effect has occurred yet.
+## Current upstream adoption
 
-Earlier focused evidence: `target/dependency-refresh-20261030/README.md`; isolated source
-and targets: `.tmp/dependency-refresh-20261030`. All 724 selected native cases pass
-(Core 485, Contracts 7, Control Plane 66, Host 157, facade 9); five opt-in Host
-cases retain their declared ignore conditions. Warning-denied all-target/all-feature
-lint passes for Core, Host, Control Plane and Blob. All 15 selected installed PocketIC cases pass: two identical-Wasm Memory upgrades,
-dedicated/embedded Blob (five embedded funding scenarios), eleven timer/metrics
-cases and the original Host checkpoint workflow. These are local framework proofs,
-not live-provider or browser-UI acceptance. The final Backup 0.50.2/Query 0.76.2
-host patches repeat Host native/lint and checkpoint proof; unchanged runtime source
-and native/Wasm dependency closures retain the other 14 installed cases. Exact
-records and reused scopes are in `runtime-reuse.json`.
-Nineteen scoped files were integrated under the existing main build locks; original
-bytes/hashes are retained, including the concurrent newer Backup/Query lock records,
-and the Git index is unchanged. All non-Markdown qualified
-source, catalogs, locks and fixtures match the isolated copy.
-The earlier `target/dependency-refresh-20261029/` retains its 657 native/17 installed
-receipt on Blob 0.57/Persistence 0.55.2/Tooling 0.70.0. The preliminary 0.56 Core
-receipts in `target/persistence-metrics-adoption-20261029/` and
-`target/persistence-adoption-20261029-primary/` retain their original scopes.
+Timers 0.35.0 is published and the previously held dependency group is adopted
+in the isolated source at .tmp/runtime-adoption-20261031/consumer/. Retained
+commands, observations and checks live in its sibling evidence/ directory.
+The prior qualified source/evidence directories remain unchanged. The official
+index capture is evidence/registry-latest.json; all direct sibling selections
+match its latest non-yanked stable versions.
 
-Auth 0.23 consumes admitted session/replay pairs, uses protected upstream
-`SessionLimits`/`RequiredScopes` constructors and returns compact admission
-receipts. Full records remain in the host store; current-authority authorization,
-immutable leases, generation/replay/revocation fences and custody assertions remain.
-Memory 0.56 owns the bounded native Wire ledger (`ICML` / `ICMWIRE1`). Metrics
-Stable retains `ICMW` rows; Canic-owned values retain `CSW\x01`. No predecessor
-reader, migration, automatic ledger reset or unknown-row replacement is provided.
-Deploy by clean reinstall; same-release restoration and uncertain-effect recovery
-remain required.
+| Family | Selected |
+| --- | --- |
+| Auth / protocol | 0.28.0 |
+| Backup / Agent | 0.53.1 |
+| Blob / contracts | 0.61.0 |
+| Build / Host Artifacts / Fs / Process / Text / metadata editor | 0.73.2 |
+| Host Tools / Testkit | 0.75.1 |
+| Logging | 0.23.3 |
+| Memory / Storage | 0.60.3 |
+| Metrics Stable | 0.61.1 |
+| Metrics | 0.24.1 |
+| Platform / macros / runtime guard | 0.15.3 |
+| Platform types | 0.15.1 |
+| Query | 0.79.0 |
+| Timers | 0.35.0 |
+| Wire / derive | 0.13.2 |
 
-## Maintained boundaries
+The root and both independent Blob consumer catalogs/locks move together.
+Core, Blob, dedicated consumer and embedded consumer selected Wasm graphs each
+contain exactly one Memory, Storage, Metrics, Wire, Platform, runtime guard and
+Timers identity. There are no dependency overrides, compatibility aliases,
+identity conversions or weakened runtime guards. The former Blob/Timers
+publication blockers are resolved.
 
-The selected #700 Call hard cut removes generic builders, response wrappers and
-workflow/infra forwarding. Framework requests use IC Call directly through stateless
-metrics/error instrumentation; counters count polled attempts. Separate evidence
-remains at `target/call-cut-20261029/`.
-Wire owns owned RPC codecs, stable records and checkpoints. The CBOR/u128 adapter
-and decoding tree are removed. ICP-refill amounts preserve upstream BigUint overflow
-evidence; replay replies use the lossless Wire projection. Checkpoint/caller/completed-
-leaf commitments use independent `.wire.v1` domains. Dedicated Fleet activation
-commitments and Host release-build CBOR evidence retain their exact encodings.
-`target/storage-wire-20261029/qualification.json` retains the earlier storage-cut
-receipt and frozen runtime lock; do not relabel it as the current cohort's proof.
+Query 0.79 replaces the removed NNS-only source request with its upstream
+report::CollectionSourceRequest. The Host acquisition adapter and three fixture
+modules use that contract directly, preserving their fields, deadlines,
+agreement and cache semantics. No Canic-owned request shim is introduced.
 
-IC Build owns capture/staging/input evidence/traversal/caching; Canic owns recipes,
-source/tool custody, transforms and admission. Private staging helpers are removed.
-Earlier #529/#530 evidence is at `target/ic-build-completion-20261029/`.
+Shared Tooling remains the already adopted committed revision
+619d194875369e0f72b45477b66adb430acbf6b7, VERSION 0.27.23, with 148 payloads.
+Its pending VERSION automation does not replace Canic's Cargo version owner.
+Own package versions remain 0.113.0 and the existing open 0.114 notes cover the
+complete batch's earlier breaking contracts and new dependency identities.
 
-#708 is integrated locally from `86c23f97a6a01c8f3c39dac2be7ff573d3bb813d`.
-Fixed provider rosters default to heap; immutable stable overrides share one
-upstream Metrics Stable map. Canic owns lifecycle/sampling, attribution,
-authorization and bounded selection/history. IC Logging owns bounded heap
-recording/filtering/pruning; logs reset on upgrade/reinstall. Stable log checkpoints
-remain absent. `canic_logs`/`canic_metrics` require controllers; selected cached Blob
-observations use `canic_public_metrics`. Storage grants no publication authority.
+Successful focused checks cover 406 Core cases for auth, RPC, stable state,
+logging, metrics and memory; 80 Host/catalog/Backup cases; and 28 control-plane
+cases. All 514 pass. Strict Core/Host library/test Clippy and scoped Host/internal
+fixture formatting pass. The initial Query import failure was corrected through
+the new upstream contract; failed/interrupted setup attempts remain separate
+from successful qualification.
 
-Blob stays at `crates/canic-blob-service`; its two independent consumer fixtures stay
-under `integrations/blob-service`. Adapters mount explicitly with one host lifecycle
-and Memory runtime. IcyDB has no engine dependency; actual consumer composition stays
-downstream (#373/#590). Auth's unpublished scaffold still refuses mounting; issuer/
-receiver/browser/Root enrollment remains incomplete (#491). The optional Rust-mounted
-ICRC adapter retains its required external Candid contracts.
+The canonical Testkit installer admits the locked 0.75.1 CLI and PocketIC 16.1.0.
+The embedded allocation peer and structured provenance are regenerated and
+independently verified for the new dependency graph. Both selected managed Blob
+composition journeys pass with complete locked App builds, generated boundary
+contracts, installation, metrics, permissions and same-release recovery. The
+embedded journey also checks retained application state and its five funding
+recovery outcomes. No broad workspace or PocketIC suite ran.
 
-## Backup and remaining acceptance
+The requested dependency adoption is complete, and the maintainer has selected
+the 0.114 source release above. The open changelog describes the selected current
+contracts; the governed release command owns the complete validation and exact
+version transaction. Prior PR branch work remains outside this checkout.
+Old target/ evidence
+referenced by historical handoffs was absent at the earlier task's start;
+current evidence is retained outside target/.
 
-The approved hard cut removes `canic-backup` and the backup/restore CLI; live
-operations remain unavailable. IC Backup/Agent owns the generic engine. Canic retains
-Fleet authority, runtime fences and a thin Host checkpoint adapter with mandatory
-admission/custody and whole-unit/context commitments. Production transport, durable
-ingress/reply custody, Root-paid capture, complete manifests/transfer, stopped restore
-and terminal reference release remain unfinished (#513/#394/#550). Do not recreate
-a generic operator runner here (IC Backup #75). The authorized 0.112.1 retirement
-notice is published; historical evidence and `target/backup-hard-cut/retired-source.tar.gz`
-remain retained.
+## Preceding control-plane issue repairs
 
-Earlier `target/adoption-qualification-20261029/` records 327 native, 38 installed
-cases and four ICRC profiles on its older frozen graph, not the current cohort.
-Native Auth allocation qualification does not complete Wasm/all-family heap acceptance
-#535. Fresh hosted/macOS, delivered-source/registry-only acceptance and publication
-provenance remain separate. Provider linkage #494 / Blob #34 and Platform codec
-#78/#79 / Canic #613 retain their external obligations. EX-05 excludes independent
-provider credit reconciliation. Jobs/Relay extraction remains unimplemented.
+The maintainer requested further independent repairs. The selected scope is the
+behavior-preserving receipt/member validation cleanup in #690 and #691; the
+broader single-Clap-tree work in #300 remains a separate outcome. Evidence is
+retained in target/control-plane-issue-repairs-20261031/; qualified source is
+.tmp/control-plane-issue-repairs-20261031/. Scoped files are integrated into this
+working tree, with replaced bytes retained in pre-integration/.
 
-The explicitly selected 0.113 release/publication flow is now active. Its full gate
-and release/publication admission own delivery and registry provenance. Remaining
-production integrations above retain their separate acceptance boundaries. Do not
-start the next minor or claim human closeout from a passing gate. Status remains
-descriptive; the release flow owns receipts/versioning. Shared upkeep #319 remains.
-Prior handoffs are retained in the refresh/adoption evidence roots; release evidence
-stays at `target/session-release-0112/` / `target/session-release-0113/` and
-`target/release-0113-20261030/`.
+- #690: one receipt helper owns authority validation, in-flight omission and
+  verified Store adoption projection. Operation-scoped reads still return no
+  receipt before authority validation for another operation; strict reads still
+  report the typed conflict. Missing state, exact fields and read-only replay
+  remain covered through the actual ops/storage boundary.
+- #691: one validator owns member authority and expected Reserved/Verified
+  progress. The two cursor advances select their exact required state; committed
+  members retain separate Registry partition validation. Refusal leaves cursor
+  and retained records unchanged; existing restart and terminal replay cases pass.
+
+All 28 selected control-plane library cases pass, including four new focused
+receipt/member refusal cases. Strict control-plane library/test Clippy and
+scoped formatting pass. The embedded allocation peer and provenance are refreshed
+for these sources and independently verified. No broad suite, PocketIC/installed
+journey, Git publication, own version change or release ran.
+
+#690, #691 and #551 have updated local evidence and remain open for delivery and
+applicable required CI. Main is still 247ba9d3599658c478373cb0dfc74439a859dd8a;
+its latest required CI run 41063887855 is failed. No new closure is justified.
+
+All catalogs/locks retain their frozen bytes. input-graphs.json records the same
+root lock 8a02e082bb62e6aae393302ea9caf43bcf8195ca592336a57197ce24c55f4ee0
+and two Platform identities. Fixture verification does not qualify that dependency
+graph. The complete open batch still needs dependency reconciliation before push
+readiness; its changelog includes these cleanups, own versions remain 0.113.0 and
+publication retains its separate gates.
+
+## Preceding CLI issue repairs
+
+The follow-up request selected two further bounded CLI repairs, independent of
+the blocked upstream Platform cohort. Evidence is retained in
+target/cli-issue-repairs-20261031/; qualified source is
+.tmp/cli-issue-repairs-20261031/. The scoped changes are integrated into this
+working tree with original replaced bytes retained in pre-integration/.
+
+- #277: use fallible scoped thread startup and typed startup/panic failures in
+  the existing ordered collector. Cycles, Metrics and live list project failures
+  onto the selected target while retaining successful rows and the eight-worker
+  ceiling. Deterministic refusal coverage uses an injected std::io::Error result;
+  it does not claim actual host exhaustion or a new Root relay measurement.
+- #367: cycle/token transfer help explicitly describes ledger credits, with
+  selected-identity transfer examples. Native Coordinator/Root funding stays on
+  cycles topup. Existing arbitrary-recipient parsing and dispatch remain covered.
+
+All 31 selected CLI library regressions and both recursive help cases pass;
+strict CLI library/binary/test Clippy, scoped formatting and review of all five
+affected help pages pass. The initial binary-only test selection ran zero cases;
+cli-regressions.log records the corrected library selection and actual 31 passes.
+No broad suite, PocketIC, Git publication, own version change or release ran.
+
+Both issues remain open for delivery and applicable required CI. Delivered main
+is still 247ba9d3599658c478373cb0dfc74439a859dd8a, whose latest required CI
+run 41063887855 is failed. Native macOS/installed Root relay qualification is not
+claimed by these Linux host tests. No additional issue closure is justified.
+
+All manifests and locks retain their frozen bytes. input-graphs.json records
+the root lock 8a02e082bb62e6aae393302ea9caf43bcf8195ca592336a57197ce24c55f4ee0
+and its two Platform identities. The entire open batch still needs dependency
+reconciliation before push readiness. Changelog notes include these repairs;
+own versions remain 0.113.0 and publication retains its separate gates.
+
+## Preceding issue-repair pass
+
+The maintainer requested issue review, bounded repairs and eligible closures.
+The inventory contains 326 open issues and 25 open PRs. Default main remains
+0.113.0 at 247ba9d3599658c478373cb0dfc74439a859dd8a; its required CI run
+41063887855 is failed. Routine qualification issues remain open for delivery
+and applicable required checks; a local pass does not close those gates.
+
+Evidence: target/issue-repairs-20261031/. Source: .tmp/issue-repairs-20261031/.
+The scoped repair changes are copied into the current working tree after frozen
+source/index checks, with original replaced bytes retained in pre-integration/.
+
+- #450: the changelog guard accepts the latest pending or dated release while
+  retaining detailed-note pairing and unambiguous draft selection. Tool fixtures
+  compare canonical executable identities, with an aliased-parent regression.
+- #712: remove the duplicate RuntimeLog/limits wrapper and use the upstream Log
+  directly. Count/message limit changes still reset the diagnostic window;
+  zero-capacity disabling, filtering, paging and typed refusals remain. #715 owns
+  the complete Logging adoption and its delivery/qualification acceptance;
+  #100's read-work budgets and #101's timer work remain separate.
+- #714: use ic_wire::ByteBuf at both Host import sites, retaining identical types
+  and external CBOR/Candid behavior. Delivery acceptance remains open.
+
+#712 is closed as superseded into #715, not as delivered qualification.
+#450, #551, #714 and #715 have updated evidence and remain open for their
+delivery/qualification obligations.
+
+All 26 focused package executions pass: seven logger, 16 Host tool/handoff/archive
+and three changelog cases. All Host cases run under an aliased TMPDIR. The exact
+published 0.113.0 changelog and detailed notes also pass the corrected guard's
+three std-only fixture executions. Strict Core/Host library/test and Canic
+changelog-target Clippy, scoped formatting, peer refresh and verification pass.
+Native macOS execution and new hosted qualification remain outstanding. No broad
+suite, PocketIC case, Git publication, version change or release ran in this pass.
+
+The root lock had drifted before this pass: its frozen SHA-256 is
+8a02e082bb62e6aae393302ea9caf43bcf8195ca592336a57197ce24c55f4ee0,
+selecting Backup/Agent 0.52.2 and Persistence 0.58.1 and introducing Platform 0.12
+alongside 0.11.1. The preceding qualified root lock was
+0ca2b06fc215737b218554cbce293bac8541e9f0f6c142a1b5f667ade06b5184.
+These repairs preserve all manifests and locks exactly; input-graphs.json records
+their actual identities. The prior single-Platform adoption proof below applies
+to its archived selection, not this drifted root graph. The entire working batch
+therefore still needs dependency reconciliation before push readiness; notes are
+current, own versions remain 0.113.0 and publication retains its separate gates.
+
+## PR repairs and remaining blockers
+
+Evidence: target/pr-platform-work-20261031/. The PR source cohort remains the
+published main cohort, separate from the newer qualified local adoption below.
+
+| PR | Pushed head | Result |
+| --- | --- | --- |
+| #717 Candid declaration printer | c022353c48d6d4b7977698c9b16bcb054e110165 | Classify the exporter as non-role tooling; select it in internal and audit declaration builders. 178 native executions, strict scoped native/Wasm Clippy, refreshed peer verification, installed dedicated Blob composition and all 11 installed ingress/frame/quota/reply-rollback cases pass. Hosted CI remains asynchronous. |
+| #716 deferred-work admission | 3efc42221f59713d19c5ae4485b332cf9cf37d97 | Merge current main into the PR with history retained, reconcile pending 0.113 notes, share startup decisions and refresh peer/provenance. 42 readiness/activation/startup/timer cases, changelog governance, strict scoped native/Wasm Clippy and peer verification pass. Hosted CI remains asynchronous. |
+| #609 runtime SHA-256 0.11.1 | 08f8e65e2d8f2ea981edc0107b1c6d3f91758742 | Refresh both Blob consumer locks and peer/provenance. 237 native cases, strict affected-owner/consumer Clippy and Contracts/Wasm on Rust 1.91 pass. Fresh CI and the exact local crypto-closure gate reject duplicate crypto identities in all 12 canonical Wasm profiles. Converted to draft; not ready to merge. |
+
+#609 needs a coordinated upstream crypto cohort: maintained protocol/signature
+dependencies still select SHA-256/digest 0.10. Platform 0.13 also retains its
+SHA-256 0.10 declaration, so that update alone cannot qualify this runtime bump.
+The guard is unchanged. The installed #717 run exposed and then qualified the
+internal-builder exporter fix; its initial source failure, strict-lint correction
+and sandbox loopback refusal remain recorded alongside the successful retries.
+PR bodies contain the final scope and evidence. Isolated sources are
+.tmp/pr-work-20261031/, .tmp/pr716-work-20261031/ and
+.tmp/pr609-work-20261031/; all three worktrees are clean after their pushes.
+
+## Preceding qualified upstream adoption
+
+Evidence: target/observability-platform-adoption-20261031/. Qualified source:
+.tmp/observability-platform-adoption-20261031/. The final registry observation
+at 09:59 UTC on 2026-10-31 found no matching supplier releases beyond this selection.
+
+| Family | Qualified selection | Latest requested line |
+| --- | --- | --- |
+| Logging | 0.22.0 | Adopted |
+| Metrics | 0.21.1 | 0.22.0 blocked by integration types and native Wire metadata |
+| Platform | 0.11.1 | 0.13.0 blocked by the runtime guard and required supplier identities |
+| Wire/derive | 0.10.0 | 0.11.0 targets Platform 0.12; the requested Platform is 0.13 |
+| Shared Tooling | 0.27.12 at 69a8b92a1a892b17d355ec853ca63faa9599a928 | Adopted through the canonical exporter |
+
+The combined candidate fails Cargo resolution: canic-tests selects Testkit
+0.72.1 and its Platform 0.11.1 runtime guard, conflicting with the requested
+Platform 0.13.0 guard. Required Auth, Blob, Query and Timers edges also select
+Platform 0.11; Persistence 0.58.1 and Wire 0.11 target Platform 0.12. Metrics
+Stable, Blob contracts, Query and Timers still require Metrics 0.21 types.
+Metrics 0.22's explicit native-wire feature targets Wire 0.11; Canic's maintained
+native contracts use Wire 0.10. These include actual runtime and metadata type
+boundaries, so isolating Testkit alone cannot qualify the requested combination.
+No aliases, overrides, compatibility bridge or weakened guards are introduced.
+
+The frozen root lock already contained unqualified Backup/Agent 0.52.2 and
+Persistence 0.58.1 selections. Existing admission rejected their additional
+Platform 0.12 identity. Exact Cargo lock selection restores the qualified
+Backup/Agent 0.52.1 and Persistence 0.58.0 cohort. Logging 0.22 and Metrics 0.21.1
+are selected consistently in the root and both independent Blob consumer locks.
+Original lock bytes, rejected graphs and the precise introducing paths remain
+in the evidence directory.
+
+All 73 selected native executions pass: bounded log recording/query/refusals,
+metric providers/storage, facade projections and changelog governance. Strict
+Core/facade and both Blob consumer Clippy pass. The embedded allocation peer is
+refreshed and verified. All three locked graphs pass dependency admission, pin
+and boundary checks; official Logging/Metrics checksums and single identities
+are recorded in qualified-graphs.json. The installed dedicated Blob composition
+passes its four-artifact build, controller log/metric queries and typed refusals
+for other callers. Shared integrity verifies 146 canonical files and 330 local
+references across 51 governance documents. Canic retains its publication owner;
+new shared publication options remain opt-in.
+
+Those qualified scoped files were copied under the main build locks after
+verifying the frozen source roster. Original replaced bytes are retained in
+pre-integration/; the real index and unrelated dirty work were preserved. That
+compatible selection was ready for maintainer-directed review/commit/push before
+the later root-lock drift recorded above. The full requested newest cohort
+remains blocked, and publication still awaits the accepted 0.113 closeout and
+governed version bump. No full workspace gate is claimed.
+
+## Adopted upstream dependencies
+
+| Family | Selected version |
+| --- | --- |
+| Auth/protocol | 0.26.0 |
+| Backup/Agent | 0.52.1 |
+| Blob/contracts | 0.60.0 |
+| Build/Host/Testkit and exact metadata editor | 0.72.1 |
+| Logging | 0.22.0 |
+| Metrics | 0.21.1 |
+| Memory/Storage/Metrics Stable | 0.58.0 |
+| Platform | 0.11.1 |
+| Query | 0.78.0 |
+| Timers | 0.33.1 |
+| Wire/derive | 0.10.0 |
+
+In the archived qualified selection, root and both independent Blob consumer
+catalogs and locks are aligned. Those three graphs contain one Platform, runtime
+guard, Wire, Metrics, Memory, Storage and Timers identity. The later root-lock
+drift and newest requested cohort remain unqualified as described above.
+
+Prepared calls now use ic_platform::call. Remove the standalone ic-call catalog
+and member dependencies; ownership, DTO and policy guards follow the new path.
+Wire's platform-types feature replaces Platform's removed wire-schema feature
+for native Principal/Account schemas. Required external IC protocols retain
+their upstream Candid boundary. Current Blob assessment identities and Auth's
+typed scope/error contracts remain adopted; callers regenerate from current
+schemas. There are no dependency overrides, compatibility wrappers or extra
+runtime owners.
+
+The Rust floor remains 1.91; qualification uses Rust 1.99.1. The reviewed Shared
+Tooling snapshot is 0.27.12 at
+69a8b92a1a892b17d355ec853ca63faa9599a928. Earlier baseline adoption and
+adapter/order evidence remain under .tmp/runtime-adoption-20261030/.
+
+## Qualification and readiness
+
+Evidence: target/coordinated-upstream-adoption-20261030/. Isolated source and
+independent targets: .tmp/coordinated-upstream-adoption-20261030/. Attempt 19
+retains the primary registry observations, verified source checksums and all
+three resolved graphs. Earlier attempts retain their actual failed selections.
+
+The following retained evidence qualifies that preceding dependency selection;
+the latest Logging/Metrics/Shared Tooling follow-up is qualified separately above.
+For that exact preceding cohort, strict all-target/all-feature Clippy passes for
+the affected owner packages and
+both Blob consumers. All 825 selected native executions pass, covering auth,
+storage, calls, metrics/logging, contracts, checkpoint custody/recovery, artifact
+builds, endpoint macros, external ICRC contracts and schema declarations.
+The initial native invocation hit sandbox DNS in one generated Cargo fixture;
+its exact Host retry passed. The facade runner's missing wire-schema feature
+was corrected before its successful execution. native-summary-19.json records
+the combined results; failed invocation logs are retained with their scope.
+
+All 30 selected framework PocketIC cases pass: memory restoration through two
+identical-Wasm upgrades; dedicated and embedded Blob composition, including the
+five embedded funding variants; 11 timer/logging/metrics cases; 11 ingress/frame,
+quota and reply-rollback cases; original Host checkpoint recovery; and four
+funding-recovery cases. Four additional installed ICRC profiles pass: default,
+feature-enabled but unmounted, discovery-only and consent. Exact tools, final
+selected Clippy and formatting checks pass. The embedded allocation peer and
+its source/tool/lock evidence are refreshed and verified.
+
+Scoped files are integrated under the main build locks after checking the frozen
+source roster. Original replaced bytes are retained under pre-integration-19/;
+the Git index and unrelated dirty work are preserved. That compatible dependency
+selection was qualified with a matching changelog draft; later root-lock drift
+must be reconciled before the current complete batch is ready for commit/push.
+Publication surfaces await the accepted 0.113 closeout
+and governed version bump; own versions remain unchanged. No full workspace gate
+is claimed.
+Older evidence under target/upstream-platform-refresh-20261030/ and
+target/upstream-refresh-0113-20261030/ retains its original dependency selection.
+
+## Maintained boundaries and later work
+
+Pre-1.0 release transitions remain clean reinstall. Same-release interruption
+recovery, cycle conservation, uncertain-effect custody and effect-free replay
+remain required. Wire owns owned RPC/storage codecs; dedicated Fleet activation
+and release-build CBOR commitments retain their exact encodings.
+
+The optional Wire endpoint adoption draft remains separate under
+.tmp/wire-endpoint-adoption-20261030/. Preserve startup/access checks, decoded
+proof guards, dispatch metrics, native schema registration, exact method IDs
+and budgets, and compiled declarations when resuming that work.
+
+Blob adapters mount explicitly with one lifecycle and Memory owner. ICRC mounts
+are explicitly selected by consuming source. Auth's unpublished mounting
+scaffold and production Backup transport remain unfinished. Backup's CLI stays
+retired; Canic retains thin custody-bound Host integration over the upstream
+engine. Live backup/restore remain unavailable until production qualification.
+Logs use upstream bounded heap recording and reset on upgrade; stable metric
+overrides use Metrics Stable. Controller guards and explicit public metric
+selection remain. Jobs/Relay extraction remains unimplemented.

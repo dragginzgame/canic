@@ -25,7 +25,7 @@ use crate::{
     },
 };
 use canic_contracts::protocol::cycles_capability as wire;
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
 

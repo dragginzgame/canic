@@ -165,7 +165,7 @@ use component_installation::{
 use component_installation::{
     validate_installed_component_status, validate_prepared_install_status,
 };
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 use lifecycle_drivers::{
     advance_component_draining_boundary, advance_subtree_removal_phase,
     component_allocation_reconciliation_complete, component_draining_advance_removal_response,

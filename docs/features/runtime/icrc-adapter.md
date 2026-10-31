@@ -46,7 +46,7 @@ registration hook, cfg switch or adapter-owned lifecycle.
 Discovery is a public external Candid query; ICRC-21 consent is a public external
 Candid update, as required by the external contract. The artifact supplies
 all argument limits; the example values above are not defaults. Mounting them
-uses Platform 0.8.2's bounded Candid decoder, including its ceiling of 16
+uses Platform 0.8.3's bounded Candid decoder, including its ceiling of 16
 constructed wire levels before upstream decoding. Canic preserves caller-selected
 byte/work/header limits and empty lifecycle envelope normalization. This admission
 also checks skipped values; raw unbounded Candid adapters retain their distinct

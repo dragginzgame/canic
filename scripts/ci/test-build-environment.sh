@@ -32,7 +32,7 @@ set -euo pipefail
 case "$*" in
     '--no-print-directory prepare-build-environment'|'--no-print-directory check-build-environment') exec "$ENV_REAL_MAKE" "$@" ;;
     '--no-print-directory prepare-locked-dependencies'|'--no-print-directory validate')
-        printf '%s\n' "$CARGO_TARGET_DIR" "$CANIC_SCCACHE_BIN" "$RUSTC_WRAPPER" "$SCCACHE_RUNTIME_DIR" "$CARGO_INCREMENTAL" > "$ENV_EVIDENCE-$2"
+        printf '%s\n' "${CARGO_TARGET_DIR-}" "$CANIC_SCCACHE_BIN" "$RUSTC_WRAPPER" "$SCCACHE_RUNTIME_DIR" "$CARGO_INCREMENTAL" > "$ENV_EVIDENCE-$2"
         if [[ "$2" == validate ]]; then [[ "$CARGO_NET_OFFLINE" == true ]]; fi ;;
     '--no-print-directory install-host-tools') touch .host-prepared ;;
     '--no-print-directory ensure-clean'|'--no-print-directory tools-check'|'--no-print-directory install-rust-tools') ;;
@@ -54,7 +54,7 @@ cd "$fixture"
 "$ENV_REAL_MAKE" --no-print-directory prepare-validation SCOPE=checks
 "$ENV_REAL_MAKE" --no-print-directory release-verify
 cmp "$ENV_EVIDENCE-prepare-locked-dependencies" "$ENV_EVIDENCE-validate"
-printf '%s\n' "$fixture/target/cargo" "$fixture/.tools/canic-sccache/bin/sccache" \
+printf '%s\n' '' "$fixture/.tools/canic-sccache/bin/sccache" \
     "$fixture/scripts/ci/run-canic-sccache.sh" "$fixture/.tmp/sccache-$(sed -n 's/export SHARED_TOOLING_SCCACHE_VERSION=//p' ci/tool-versions.env)-runtime" 0 > expected
 cmp expected "$ENV_EVIDENCE-validate"
 # Explicit supported values survive two independent processes.
@@ -76,6 +76,7 @@ grep -F 'policy requires' refusal >/dev/null
 cp .tools/canic-sccache/bin/sccache "$CANIC_SCCACHE_BIN"
 RUSTC_WRAPPER="$CANIC_SCCACHE_BIN" "$ENV_REAL_MAKE" --no-print-directory check-build-environment
 RUSTC_WRAPPER='' "$ENV_REAL_MAKE" --no-print-directory check-build-environment
+if CARGO_TARGET_DIR='' "$ENV_REAL_MAKE" --no-print-directory check-build-environment > refusal 2>&1; then exit 1; fi
 if CARGO_INCREMENTAL=invalid "$ENV_REAL_MAKE" --no-print-directory check-build-environment > refusal 2>&1; then exit 1; fi
 ln -s "$fixture/runtime override" "$fixture/runtime-link"
 if SCCACHE_RUNTIME_DIR="$fixture/runtime-link" "$ENV_REAL_MAKE" --no-print-directory check-build-environment > refusal 2>&1; then exit 1; fi

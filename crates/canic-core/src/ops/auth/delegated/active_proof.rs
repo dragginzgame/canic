@@ -357,7 +357,7 @@ mod tests {
             install_active_delegation_proof(input(proof(), &verifier)),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
                 DelegationProofError::StaleAuthority {
-                    field: "proof_epoch"
+                    field: ic_auth::delegation::DelegationField::ProofEpoch
                 }
             ))
         );
@@ -372,7 +372,7 @@ mod tests {
             install_active_delegation_proof(input(proof(), &verifier)),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
                 DelegationProofError::BindingMismatch {
-                    field: "root_public_key"
+                    field: ic_auth::delegation::DelegationField::RootPublicKey
                 }
             ))
         );

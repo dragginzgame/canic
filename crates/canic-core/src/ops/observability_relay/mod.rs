@@ -8,8 +8,10 @@ use crate::{
     ops::ic::call::execute as execute_call,
 };
 use canic_contracts::protocol::observability_relay as protocol;
-use ic_call::{Call, WaitPolicy};
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    principal::ExternalPrincipal as Principal,
+};
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Perform one replicated read with the existing unbounded-wait call semantics.

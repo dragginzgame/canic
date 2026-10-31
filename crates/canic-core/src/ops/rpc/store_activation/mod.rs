@@ -10,7 +10,7 @@ use crate::{
     ops::ic::call::execute as execute_call,
 };
 use canic_contracts::protocol::store_activation as wire;
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 
 /// Prepare the existing credential generation through an unbounded IC call.
 pub async fn prepare(

@@ -13,9 +13,12 @@ case "${1:-}" in
     *) echo 'usage: prepare-validation.sh <release|preflight|security|checks|environment|check-environment>' >&2; exit 2 ;;
 esac
 
-# Make owns defaults on every invocation; setup subprocess exports are not state.
+# Make owns cache defaults; Cargo owns its normal workspace output selection.
 if [[ "$1" == environment || "$1" == check-environment ]]; then
-    [[ -n "${CARGO_TARGET_DIR:-}" ]] || { echo 'CARGO_TARGET_DIR must select a compiler output directory' >&2; exit 1; }
+    if [[ "${CARGO_TARGET_DIR+x}" == x && -z "${CARGO_TARGET_DIR:-}" ]]; then
+        echo 'CARGO_TARGET_DIR must select a compiler output directory' >&2
+        exit 1
+    fi
     case "${CARGO_INCREMENTAL:-0}" in
         0|1) ;;
         *) echo 'CARGO_INCREMENTAL must be 0 or 1' >&2; exit 1 ;;

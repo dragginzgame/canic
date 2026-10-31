@@ -1874,6 +1874,38 @@ fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
 }
 
 #[test]
+fn member_progress_refusals_preserve_exact_authority_and_cursor_state() {
+    let fixture = fixture();
+    let (_, reserved, view) = reserve_single_member(&fixture);
+    let member = RootComponentProvisioningOps::next_member_claim(&view).unwrap();
+    let claimed = claimed_allocation(
+        reserved.clone(),
+        principal(31),
+        fixture.request.batch.root.fleet_subnet_root,
+    );
+    let verified = installed_allocation(claimed.clone(), &fixture.request.batch.root);
+    let before = RootComponentProvisioningStore::export();
+
+    for (expected, valid, wrong_phase) in [
+        (ExpectedMemberProgress::Reserved, &reserved, &verified),
+        (ExpectedMemberProgress::Verified, &verified, &reserved),
+    ] {
+        validate_member_progress(&view, &member, valid, expected).unwrap();
+        let mut wrong_authority = valid.clone();
+        wrong_authority.spec_hash = [99; 32];
+        for allocation in [&wrong_authority, wrong_phase, &claimed] {
+            assert_eq!(
+                validate_member_progress(&view, &member, allocation, expected)
+                    .unwrap_err()
+                    .code(),
+                InternalError::conflict().code()
+            );
+        }
+    }
+    assert_eq!(RootComponentProvisioningStore::export(), before);
+}
+
+#[test]
 fn member_origin_is_valid_only_under_exact_accepted_authority() {
     let fixture = fixture();
     RootComponentProvisioningOps::accept(

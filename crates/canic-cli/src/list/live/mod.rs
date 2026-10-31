@@ -193,7 +193,7 @@ fn local_ready_statuses(
 fn collect_visible_entry_values<T, F>(
     registry: &[RegistryEntry],
     canister: Option<&str>,
-    worker_panic_value: T,
+    worker_failure_value: T,
     query: F,
 ) -> Result<BTreeMap<String, T>, ListCommandError>
 where
@@ -204,7 +204,7 @@ where
     let values = collect_ordered_reports(
         &entries,
         |entry| query((**entry).clone()),
-        |_| worker_panic_value.clone(),
+        |_, _| worker_failure_value.clone(),
     );
     Ok(entries
         .into_iter()

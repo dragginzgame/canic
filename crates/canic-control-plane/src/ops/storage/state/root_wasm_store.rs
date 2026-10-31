@@ -127,14 +127,11 @@ impl RootWasmStoreStateOps {
         operation_id: [u8; 32],
         authority: FleetSubnetWasmStoreAuthority,
     ) -> Result<Option<FleetSubnetWasmStoreAdoptionResponse>, InternalError> {
-        let Some(record) = RootWasmStoreState::sibling_wasm_store_adoption() else {
-            return Ok(None);
-        };
-        validate_adoption_authority(&record, operation_id, &authority)?;
-        if record.phase == SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight {
-            return Ok(None);
-        }
-        adoption_response(record, authority).map(Some)
+        adoption_receipt(
+            RootWasmStoreState::sibling_wasm_store_adoption(),
+            operation_id,
+            authority,
+        )
     }
 
     /// Resolve the adoption domain only when it owns the supplied operation identity.
@@ -142,17 +139,12 @@ impl RootWasmStoreStateOps {
         operation_id: [u8; 32],
         authority: FleetSubnetWasmStoreAuthority,
     ) -> Result<Option<FleetSubnetWasmStoreAdoptionResponse>, InternalError> {
-        let Some(record) = RootWasmStoreState::sibling_wasm_store_adoption() else {
-            return Ok(None);
-        };
-        if record.operation_id != operation_id {
-            return Ok(None);
-        }
-        validate_adoption_authority(&record, operation_id, &authority)?;
-        if record.phase == SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight {
-            return Ok(None);
-        }
-        adoption_response(record, authority).map(Some)
+        adoption_receipt(
+            RootWasmStoreState::sibling_wasm_store_adoption()
+                .filter(|record| record.operation_id == operation_id),
+            operation_id,
+            authority,
+        )
     }
 
     pub fn commit_root_store_bootstrap(
@@ -324,6 +316,21 @@ struct SiblingWasmStoreAdoptionAuthority {
     controllers: Vec<Principal>,
 }
 
+fn adoption_receipt(
+    record: Option<SiblingWasmStoreAdoptionRecord>,
+    operation_id: [u8; 32],
+    authority: FleetSubnetWasmStoreAuthority,
+) -> Result<Option<FleetSubnetWasmStoreAdoptionResponse>, InternalError> {
+    let Some(record) = record else {
+        return Ok(None);
+    };
+    validate_adoption_authority(&record, operation_id, &authority)?;
+    if record.phase == SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight {
+        return Ok(None);
+    }
+    adoption_response(record, authority).map(Some)
+}
+
 fn adoption_response(
     record: SiblingWasmStoreAdoptionRecord,
     authority: FleetSubnetWasmStoreAuthority,
@@ -368,4 +375,158 @@ fn validate_adoption_authority(
         return Err(InternalError::conflict());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_contracts::ids::{ReleaseBuildId, ReleaseBuildNonce, SubnetId};
+
+    fn authority() -> FleetSubnetWasmStoreAuthority {
+        FleetSubnetWasmStoreAuthority {
+            authority: crate::test_support::root_funding_request_fixture(1)
+                .expected_registry
+                .authority,
+            placement_subnet: SubnetId::from_principal(Principal::from_slice(&[9; 29])),
+            fleet_subnet_root: Principal::from_slice(&[10; 29]),
+            wasm_store: Principal::from_slice(&[11; 29]),
+            installation_controller: Principal::from_slice(&[12; 29]),
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [13; 32],
+            )),
+            wasm_module_hash: [14; 32],
+        }
+    }
+
+    fn begin_adoption() -> SiblingWasmStoreAdoptionPlan {
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
+        let authority = authority();
+        let mut controllers = authority.authority.binding.recovery_controllers.clone();
+        controllers.extend([
+            authority.installation_controller,
+            authority.fleet_subnet_root,
+        ]);
+        controllers.sort();
+        let plan = SiblingWasmStoreAdoptionPlan {
+            operation_id: [1; 32],
+            authority,
+            controllers,
+        };
+        RootWasmStoreStateOps::begin_sibling_wasm_store_adoption(&plan).unwrap();
+        plan
+    }
+
+    fn assert_receipt_refusals(plan: &SiblingWasmStoreAdoptionPlan) {
+        let before = RootWasmStoreState::export();
+        let mut foreign = plan.authority.clone();
+        foreign.wasm_module_hash = [99; 32];
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt_by_operation(
+                [2; 32],
+                foreign.clone(),
+            )
+            .unwrap(),
+            None
+        );
+        for (operation_id, authority) in [
+            ([2; 32], plan.authority.clone()),
+            (plan.operation_id, foreign.clone()),
+        ] {
+            assert_eq!(
+                RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(
+                    operation_id,
+                    authority,
+                )
+                .unwrap_err()
+                .code(),
+                InternalError::conflict().code()
+            );
+        }
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt_by_operation(
+                plan.operation_id,
+                foreign,
+            )
+            .unwrap_err()
+            .code(),
+            InternalError::conflict().code()
+        );
+        assert_eq!(RootWasmStoreState::export(), before);
+    }
+
+    #[test]
+    fn absent_adoption_has_no_receipt() {
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt([1; 32], authority())
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt_by_operation(
+                [1; 32],
+                authority(),
+            )
+            .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn in_flight_adoption_keeps_scope_and_authority_refusal() {
+        let plan = begin_adoption();
+        let before = RootWasmStoreState::export();
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(
+                plan.operation_id,
+                plan.authority.clone(),
+            )
+            .unwrap(),
+            None
+        );
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt_by_operation(
+                plan.operation_id,
+                plan.authority.clone(),
+            )
+            .unwrap(),
+            None
+        );
+        assert_receipt_refusals(&plan);
+        assert_eq!(RootWasmStoreState::export(), before);
+    }
+
+    #[test]
+    fn verified_adoption_keeps_exact_receipt_and_read_only_replay() {
+        let plan = begin_adoption();
+        let receipt = RootWasmStoreStateOps::commit_sibling_wasm_store_adoption(
+            plan.operation_id,
+            plan.authority.clone(),
+            42,
+        )
+        .unwrap();
+        assert_eq!(receipt.operation_id, plan.operation_id);
+        assert_eq!(receipt.authority, plan.authority);
+        assert_eq!(receipt.controllers, plan.controllers);
+        assert_eq!(receipt.adopted_at_ns, 42);
+        let before = RootWasmStoreState::export();
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(
+                plan.operation_id,
+                plan.authority.clone(),
+            )
+            .unwrap(),
+            Some(receipt.clone())
+        );
+        assert_eq!(
+            RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt_by_operation(
+                plan.operation_id,
+                plan.authority.clone(),
+            )
+            .unwrap(),
+            Some(receipt)
+        );
+        assert_receipt_refusals(&plan);
+        assert_eq!(RootWasmStoreState::export(), before);
+    }
 }

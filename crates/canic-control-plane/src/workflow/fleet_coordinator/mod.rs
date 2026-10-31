@@ -76,8 +76,10 @@ use canic_core::{
     log,
     log::Topic,
 };
-use ic_call::{Call, WaitPolicy};
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    principal::ExternalPrincipal as Principal,
+};
 use std::time::Duration;
 
 ///
