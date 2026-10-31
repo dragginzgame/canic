@@ -197,8 +197,11 @@ fn audit_schema_recipe(
     use canic_host::canister_build::NativeSchemaBuildRecipe;
     use ic_build::cargo::execution::{CargoInvocation, CargoRecipe};
     let manifest = package.join("Cargo.toml");
-    let mut selection = CanicWasmBuildProfile::Fast.cargo_selection();
-    selection.features.features = features.iter().cloned().collect();
+    let selection = crate::pic::artifacts::fixture_cargo_selection(
+        CanicWasmBuildProfile::Fast,
+        runtime,
+        features,
+    );
     let mut environment =
         crate::workspace::wasm_build_environment().collect::<std::collections::BTreeMap<_, _>>();
     for (key, value) in [
