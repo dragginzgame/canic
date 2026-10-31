@@ -212,10 +212,21 @@ fn validate_installation(
 pub(super) mod tests {
     use super::*;
     use crate::{
-        config::caller_authority::CompiledCallerPolicy,
+        api::ready::ReadyApi, config::caller_authority::CompiledCallerPolicy,
         storage::stable::caller_authority::CallerReceiverStore,
     };
     use canic_contracts::ids::{CallerInstallation, CallerReceiverAuthority, CallerRootAuthority};
+
+    fn assert_application_admission(admitted: bool) {
+        assert!(ReadyApi::is_ready());
+        assert_eq!(ReadyApi::is_application_work_admitted(), admitted);
+        let expected = if admitted {
+            Ok(())
+        } else {
+            Err(CallerAdmissionError::Fenced)
+        };
+        assert_eq!(FleetActivationOps::require_application_started(), expected);
+    }
 
     pub(in crate::ops::storage::fleet_activation) fn assert_startup_release() {
         CallerReceiverStore::reset();
@@ -240,14 +251,12 @@ pub(super) mod tests {
             policy_digest: policy.digest,
         };
         CallerAuthorityOps::initialize(authority.clone()).unwrap();
+        ReadyApi::mark_ready();
         assert_eq!(
             FleetActivationOps::application_startup_work().unwrap(),
             None
         );
-        assert_eq!(
-            FleetActivationOps::require_application_started(),
-            Err(CallerAdmissionError::Fenced)
-        );
+        assert_application_admission(false);
         let release = CallerAuthorityOps::publication(
             authority.clone(),
             [71; 32],
@@ -274,10 +283,7 @@ pub(super) mod tests {
             .unwrap();
         assert_eq!(work.arguments, Some(vec![45, 46]));
         assert_eq!(work.release, release);
-        assert_eq!(
-            FleetActivationOps::require_application_started(),
-            Err(CallerAdmissionError::Fenced)
-        );
+        assert_application_admission(false);
         let mut changed = release.clone();
         changed.authority.issuer.install_id = [99; 32];
         assert_eq!(
@@ -285,7 +291,7 @@ pub(super) mod tests {
             Err(FleetActivationOpsError::EvidenceMismatch)
         );
         FleetActivationOps::complete_application_startup(&release).unwrap();
-        FleetActivationOps::require_application_started().unwrap();
+        assert_application_admission(true);
         super::super::codec::forget_projection();
         FleetActivationOps::restore_application_startup().unwrap();
         assert_eq!(
@@ -300,10 +306,7 @@ pub(super) mod tests {
         )
         .unwrap();
         crate::workflow::caller_authority::prepare(retire.clone(), &policy).unwrap();
-        assert_eq!(
-            FleetActivationOps::require_application_started(),
-            Err(CallerAdmissionError::Fenced)
-        );
+        assert_application_admission(false);
         CallerAuthorityOps::commit(&retire).unwrap();
         CallerAuthorityOps::complete(&retire).unwrap();
         FleetActivationOps::release_application_startup(release).unwrap();
@@ -313,10 +316,7 @@ pub(super) mod tests {
             FleetActivationOps::application_startup_work().unwrap(),
             None
         );
-        assert_eq!(
-            FleetActivationOps::require_application_started(),
-            Err(CallerAdmissionError::Fenced)
-        );
+        assert_application_admission(false);
         CallerReceiverStore::reset();
     }
 }

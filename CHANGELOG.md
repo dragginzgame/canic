@@ -6,6 +6,13 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.113.1] - Unreleased
+
+- Expose current application-work admission for deferred adapters, combining
+  restored readiness with activation, application startup and the snapshot fence.
+  Recheck before new effects; existing call settlement remains independent.
+  See [the detailed notes](docs/changelog/0.113.md).
+
 ## [0.113.0] - 2026-10-30
 
 - **Breaking — Wire storage hard cut:** encode owned stable records and checkpoints

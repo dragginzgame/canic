@@ -53,6 +53,7 @@ its handle in application state so that the application can observe or cancel
 the registration:
 
 ```rust
+use canic::api::runtime::ReadyApi;
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion,
     TimerIdentity, TimerSchedule, TimerStart, register_once,
@@ -70,6 +71,9 @@ fn declare_refresh_timer() -> Result<(), Box<dyn std::error::Error>> {
             initial: TimerSchedule::After(Duration::from_secs(30)),
         },
         |_context| async {
+            if !ReadyApi::is_application_work_admitted() {
+                return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
+            }
             refresh_cache().await;
             OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop)
         },
@@ -162,6 +166,28 @@ Provider inventory is not an application recovery record.
 authority.
 When authoritative application state requires a wake-up, reconcile or ensure
 it directly instead of using a check-then-schedule decision.
+
+## Admit Deferred Application Effects
+
+Use `canic::api::runtime::ReadyApi::is_application_work_admitted()` before starting
+new deferred application work. It combines the restored readiness barrier,
+current snapshot fence, managed activation and application startup. Root,
+coordinator, Store and explicitly standalone-local runtimes retain their existing
+startup exemptions; standalone-local also retains its activation exemption.
+The older `is_ready()` reports only restoration readiness.
+
+The check is read-only and owns no extra activity flag. Use it in worker readiness
+and recheck before effects, including after awaits. A false result suppresses new
+effects; the original callback must still settle an existing physical call. Caller
+authentication, retained delivery context and peer/incarnation freshness remain
+separate application obligations. This check does not initialize workers, enroll
+their timer claims in Root snapshot custody or arrange a later activation wake.
+The host must explicitly reconstruct or notify workers when admission changes.
+
+Restore application stores synchronously even while this check returns false.
+It is for work after application startup, not the initialization hooks that must
+complete that startup. Relay's managed adapter/pilot remains tracked in
+[#631](https://github.com/dragginzgame/canic/issues/631).
 
 ## Reconstruct From Durable Demand
 

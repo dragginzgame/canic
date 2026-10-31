@@ -8,8 +8,10 @@ use crate::{
     InternalError,
     access::AccessError,
     dto::caller_authority::CallerAuthorityPublication,
+    model::caller_authority::CallerAdmissionError,
     ops::{
         caller_authority::CallerAuthorityOps,
+        runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps, ready::ReadyOps},
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
@@ -38,6 +40,32 @@ pub fn require_started() -> Result<(), InternalError> {
         .map_err(Into::into)
 }
 
+/// Share the role-specific startup decision with readiness observations and workers.
+pub fn is_started_or_exempt() -> bool {
+    let infrastructure_role = EnvOps::is_root()
+        || EnvOps::is_fleet_coordinator_runtime()
+        || EnvOps::canister_role().is_ok_and(|role| role.is_wasm_store());
+    if infrastructure_role {
+        return true;
+    }
+    FleetActivationRuntimeOps::is_standalone_local() || require_started().is_ok()
+}
+
+/// Read current host admission before a new deferred application effect.
+/// Restoration alone grants no activation, startup or snapshot authority.
+pub fn is_application_work_admitted() -> bool {
+    if !ReadyOps::is_ready() || require_active().is_err() {
+        return false;
+    }
+    if FleetActivationRuntimeOps::is_standalone_local() {
+        return true;
+    }
+    if super::fleet_activation::FleetActivationWorkflow::require_active().is_err() {
+        return false;
+    }
+    is_started_or_exempt()
+}
+
 /// Recheck release authority between asynchronous application initialization hooks.
 pub fn require_initialization_effect() -> Result<(), InternalError> {
     FleetActivationOps::application_startup_work()
@@ -48,10 +76,6 @@ pub fn require_initialization_effect() -> Result<(), InternalError> {
 
 /// This mandatory boundary is independent of the application's Boolean access expression.
 pub fn require_endpoint_started(call: crate::ids::EndpointCall) -> Result<(), AccessError> {
-    use crate::{
-        model::caller_authority::CallerAdmissionError,
-        ops::runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
-    };
     if EnvOps::is_root()
         || EnvOps::is_fleet_coordinator_runtime()
         || FleetActivationRuntimeOps::is_standalone_local()
