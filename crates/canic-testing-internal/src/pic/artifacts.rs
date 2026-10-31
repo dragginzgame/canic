@@ -415,6 +415,23 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     )
 }
 
+/// Retain fixture role features and enable the exporter only for declaration builds.
+pub(super) fn fixture_cargo_selection(
+    profile: CanicWasmBuildProfile,
+    environment: &[(&str, &str)],
+    features: &[String],
+) -> ic_build::cargo::selection::CargoSelection {
+    let mut selection = profile.cargo_selection();
+    selection.features.features = features.iter().cloned().collect();
+    if environment.contains(&(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1")) {
+        selection
+            .features
+            .features
+            .insert("canic/candid-export".to_owned());
+    }
+    selection
+}
+
 /// Build an audit participant with its explicitly derived role features.
 pub(super) fn build_internal_test_wasm_canisters_with_features(
     workspace_root: &Path,
@@ -437,8 +454,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
             )
         });
 
-    let mut selection = profile.cargo_selection();
-    selection.features.features = features.iter().cloned().collect();
+    let selection = fixture_cargo_selection(profile, extra_env, features);
 
     let mut build_env = vec![
         ("CARGO_INCREMENTAL", "0"),

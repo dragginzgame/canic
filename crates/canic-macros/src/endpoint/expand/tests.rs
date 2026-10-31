@@ -38,6 +38,10 @@ fn bounded_guards_consume_decoded_proofs_and_keep_the_fleet_guard() {
         );
         let expansion = expand(EndpointKind::Query, args, function).to_string();
         let compact = expansion.split_whitespace().collect::<String>();
+        assert_eq!(
+            compact.contains("cfg_attr(any(not(target_arch=\"wasm32\"),canic_export_candid)"),
+            !wire
+        );
         assert!(compact.contains("attested_local_subnet_argument(&token)"));
         assert!(compact.contains("fleet::is_queryable()"));
         assert!(compact.contains("in_tracking_query_executor_context"));

@@ -23,7 +23,7 @@ pub struct AppCanisterArtifactBuildOutput {
 /// Caller-selected Cargo and Candid policy for one focused canister build.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CanisterArtifactBuildOptions {
-    /// Cargo features applied identically to the declaration and runtime passes.
+    /// Application features shared by both passes; declaration also enables Canic's exporter.
     pub cargo_features: BTreeSet<String>,
     /// Whether Cargo's package default features remain enabled.
     pub default_features: bool,

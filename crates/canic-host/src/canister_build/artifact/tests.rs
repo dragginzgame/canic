@@ -203,6 +203,7 @@ fn configured_batch_command_selects_every_group_package_once() {
     for package in ["canister-root", "canister-hub"] {
         assert!(args.windows(2).any(|pair| pair == ["-p", package]));
     }
+    assert!(args.contains(&"--features=canic/candid-export".into()));
     assert!(args.contains(&"--lib".into()));
     assert!(args.contains(&"--locked".into()));
     assert!(args.contains(&"--keep-going".into()));
@@ -241,7 +242,7 @@ fn profile_candid_pass_is_explicit_for_nonlocal_binding_derivation() {
 }
 
 #[test]
-fn declaration_and_runtime_passes_share_exact_cargo_features() {
+fn declaration_adds_only_export_feature_to_selected_application_features() {
     let context = build_context();
     let options = CanisterArtifactBuildOptions {
         cargo_features: ["qualification", "standalone-local"]
@@ -276,8 +277,12 @@ fn declaration_and_runtime_passes_share_exact_cargo_features() {
 
     for args in [&declaration_args, &runtime_args] {
         assert!(args.contains(&"--no-default-features".to_string()));
-        assert!(args.contains(&"--features=qualification,standalone-local".to_string()));
     }
+    assert!(
+        declaration_args
+            .contains(&"--features=canic/candid-export,qualification,standalone-local".to_string())
+    );
+    assert!(runtime_args.contains(&"--features=qualification,standalone-local".to_string()));
     assert_eq!(
         declaration
             .get_envs()

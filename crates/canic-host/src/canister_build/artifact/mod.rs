@@ -945,7 +945,13 @@ fn apply_cargo_feature_selection(
 ) {
     command.selection.features = CargoFeatureSelection {
         default_features: options.default_features,
-        features: options.cargo_features.clone(),
+        features: command
+            .selection
+            .features
+            .features
+            .union(&options.cargo_features)
+            .cloned()
+            .collect(),
         all_features: false,
     };
 }
@@ -1038,6 +1044,14 @@ pub(super) fn canister_cargo_build_command(
                 CanisterBuildProfile::Release => Some("release".into()),
             },
             locked: true,
+            features: CargoFeatureSelection {
+                features: if declaration {
+                    std::collections::BTreeSet::from(["canic/candid-export".to_string()])
+                } else {
+                    std::collections::BTreeSet::new()
+                },
+                ..Default::default()
+            },
             ..Default::default()
         },
         packages: Vec::new(),
