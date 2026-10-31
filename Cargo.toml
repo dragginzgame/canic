@@ -117,9 +117,9 @@ serde_cbor = "0.11"
 serde_json = "1.0"
 serde_path_to_error = "0.1.20"
 serde_yaml_ng = "0.10"
-# Keep the runtime SHA-256 dependency on the IC stack’s 0.10 line.
+# Runtime hashing uses digest 0.11; Platform owns its cryptographic dependencies.
 sha2 = "0.11.1"
-# Host HMAC uses digest 0.11 independently of canister cryptography.
+# Keep Host HMAC's digest integration explicit through its own workspace alias.
 sha2-host = { package = "sha2", version = "0.11.0" }
 signal-hook = { version = "0.3.18", default-features = false }
 syn = "3.0"
