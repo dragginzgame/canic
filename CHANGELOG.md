@@ -6,6 +6,12 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.113.1] - Unreleased
+
+- Adopt SHA-256 0.11.1 for runtime hashing and align both independent Blob
+  consumer locks, preserving protocol commitments and upstream crypto ownership.
+  See [the detailed notes](docs/changelog/0.113.md).
+
 ## [0.113.0] - 2026-10-30
 
 - **Breaking — Wire storage hard cut:** encode owned stable records and checkpoints
