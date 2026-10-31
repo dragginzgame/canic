@@ -106,3 +106,26 @@ RUST
 cmp "$ENV_EVIDENCE-prepare-locked-dependencies" "$ENV_EVIDENCE-validate"
 grep -Fx "$fixture/.tools/rust/fixture/bin/sccache" "$ENV_EVIDENCE-validate" >/dev/null
 echo 'Separate preparation/qualification defaults, overrides, pin and runtime admission passed (substitute tools/gates)'
+
+# Real Cargo cleanup must remove the aggregate, including old compiler outputs
+# and evidence, while leaving source and invocation-owned scratch alone.
+mkdir -p .cargo src .tmp/clean-sentinel
+cp "$ROOT/.cargo/config.toml" .cargo/
+cp "$ROOT/rust-toolchain.toml" .
+cp "$ROOT/scripts/ci/cleanup-release-artifacts.sh" scripts/ci/
+printf '[package]\nname = "clean-fixture"\nversion = "0.1.0"\nedition = "2024"\n' > Cargo.toml
+touch src/lib.rs .tmp/clean-sentinel/retained
+unset CARGO_TARGET_DIR CANIC_CARGO_TARGET_DIR
+export RUSTC_WRAPPER=''
+for command in cargo clean release-clean; do
+    mkdir -p target/{cargo/debug,debug,canic-packages,evidence}
+    touch target/cargo/debug/artifact target/debug/old-artifact target/canic-packages/source target/evidence/log
+    if [[ "$command" == cargo ]]; then
+        cargo clean
+    else
+        # A build output override must not narrow explicit repository cleanup.
+        "$ENV_REAL_MAKE" --no-print-directory "$command" CARGO_TARGET_DIR="$fixture/target/cargo"
+    fi
+    [[ ! -e target && -f src/lib.rs && -f .tmp/clean-sentinel/retained ]]
+done
+echo 'Plain Cargo and Make cleanup remove the complete target tree (real Cargo, disposable fixture)'

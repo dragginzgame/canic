@@ -206,16 +206,22 @@ Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` (0 or 1), `RUSTC_WRAPPER`
 authoritative. Explicit cache binaries must report the governed version; setup
 does not overwrite them. A custom wrapper must be executable and owns its own
 runtime behavior; the Canic wrapper admits runtime overrides through the shared
-launcher. A prepared subprocess never serves as persistent environment setup. Repository Cargo and Make default compiler output to
-`target/cargo/`; Host defaults to `target/canic-wasm/` when no output override is
+launcher. A prepared subprocess never serves as persistent environment setup.
+Plain repository Cargo defaults to `target/`; Make build subprocesses select
+`target/cargo/`. Host defaults to `target/canic-wasm/` when no output override is
 provided. `target/canic-packages/` holds configuration-keyed generated source,
 not compiler output. Root package lookup resolves configuration aliases before
 deriving its workspace-relative identity; selecting an alias does not create a
 second package or change configuration isolation. Overrides that enclose or enter
 that source tree are refused before generation, including physical overlap through symlinks. Select a sibling
-output directory or a separate external directory instead. `make clean-wasm`
-owns generated-source cleanup; `cargo clean` removes only its selected compiler
-output. These storage-maintenance commands must not race active builds.
+output directory or a separate external directory instead. An unqualified
+`cargo clean` removes the complete repository `target/`, including generated
+source, Wasm caches and retained evidence. Explicit Cargo target/package/profile
+options retain their normal scope. `make clean` and `make release-clean` always
+select the repository `target/`, independently of build output overrides;
+`make clean-wasm` remains the selective Wasm cleanup command. Preserve needed
+evidence outside `target/` before cleanup. These storage-maintenance commands
+must not race active builds and are never appended to normal builds or releases.
 Canic artifact builds keep incremental compilation
 disabled for deterministic Wasm output. Installed `canic build` leaves compiler
 wrapper selection to Cargo and the operator's explicit configuration.

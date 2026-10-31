@@ -1,2 +1,3 @@
 [build]
-target-dir = "target/cargo"
+# Plain Cargo cleanup owns the complete disposable repository target tree.
+target-dir = "target"

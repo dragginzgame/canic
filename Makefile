@@ -65,6 +65,8 @@ CANIC_BLOB_WORKSPACES := integrations/blob-service/consumer \
 CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target/cargo
 CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
 export CARGO_TARGET_DIR
+# Build subprocesses keep generated source separate; explicit cleanup owns it all.
+clean release-clean: override CARGO_TARGET_DIR := $(CURDIR)/target
 # Linux uses the checksum-pinned archive; other hosts use the existing Rust owner.
 ifeq ($(shell uname -s):$(shell uname -m),Linux:x86_64)
 CANIC_MANAGED_SCCACHE_BIN := $(CURDIR)/.tools/canic-sccache/bin/sccache
@@ -140,7 +142,7 @@ help:
 	@echo "  release-candidate Verify post-bump package-version and lock consistency"
 	@echo "  release-commit   Commit and tag the staged release"
 	@echo "  release-push     Atomically push the verified release commit and tag"
-	@echo "  release-clean    Explicitly clean Cargo artifacts after release and package publication"
+	@echo "  release-clean    Explicitly remove target/ after release and package publication"
 	@echo "  release-cadence  Report the current minor's advisory release-batch count"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
@@ -163,7 +165,7 @@ help:
 	@echo "  validate         Run staged complete-feedback formatting, policy, compile, and test gates"
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
-	@echo "  clean            Clean Cargo artifacts; each test invocation cleans its own scratch"
+	@echo "  clean            Remove all of target/, including caches and retained evidence"
 	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
 	@echo "  shellcheck        Lint repository shell automation with pinned ShellCheck"
 	@echo "  dependency-risk-gate  Reject vulnerability or transitive advisory drift"
