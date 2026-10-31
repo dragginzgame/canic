@@ -51,19 +51,29 @@ independent of App configuration. Cargo graphs are validated before artifact
 finalization. Canonical Coordinator/Store Candid ships in `canic/candid`; Root
 Candid follows its configured capabilities.
 
-`target/` is a disposable aggregate, not a compiler output root. Repository Cargo
-and Make use `target/cargo/`; Host's unset-output default remains
-`target/canic-wasm/`. Generated source stays in the sibling `canic-packages/`
+`target/` is the disposable aggregate. Plain repository Cargo uses `target/`, so
+an unqualified `cargo clean` removes the entire tree, including compiler output,
+generated packages, Wasm caches and retained evidence. `make clean` and
+`make release-clean` also select the entire repository `target/`, even when a
+build output override is set. Preserve any evidence needed elsewhere before
+explicit cleanup; normal builds and releases never clean it automatically.
+
+Make build subprocesses still use `target/cargo/`; Host's unset-output default
+remains `target/canic-wasm/`. Generated source stays in the sibling `canic-packages/`
 tree, preserving inherited Cargo configuration. Selected generated source is
 admitted and fingerprinted normally; application source scans exclude their
 `target/` tree. Explicit `CARGO_TARGET_DIR` overrides remain effective, but may
 not enclose or enter the generated-source tree (including through symlinks).
 Use `target/cargo/`, `target/custom/`, or a separate external output directory;
-an override to workspace `target/` is rejected before generation. `make clean-wasm`
-owns removal of generated packages; no cache is removed during an active build.
+an override to workspace `target/` is rejected before generation by Host. Cargo's
+own `CARGO_TARGET_DIR`, `--target-dir` and package/profile cleanup options retain
+their normal narrower or redirected meanings. `make clean-wasm` provides selective
+Wasm cleanup; do not run any cleanup during an active build.
 Generated manifests remain unpublished and the ignored `target/` tree is not
-release source or package content. Existing output in `target/debug/` is historical
-cache, not the new default executable location; no automatic migration is performed.
+release source or package content. Direct Cargo binaries use `target/debug/`;
+Make-built binaries use `target/cargo/debug/` by default.
+Independent Blob consumer workspaces use their own workspace-local `target/`;
+run cleanup from the workspace whose artifacts you want to remove.
 
 Generated locks are derived from the selected workspace's current `Cargo.lock`.
 A change to that lock or the generated manifest atomically refreshes the seed;

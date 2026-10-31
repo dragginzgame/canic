@@ -1,2 +1,2 @@
-[build]
-target-dir = "target/cargo"
+# Keep Cargo's built-in target directory: each workspace owns its entire target/.
+# Make build subprocesses select their isolated compiler output explicitly.
