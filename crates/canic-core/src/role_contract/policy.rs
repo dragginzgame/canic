@@ -30,6 +30,20 @@ pub fn resolve_role_contract(input: RoleContractInput<'_>) -> RoleContractResolu
         };
     }
 
+    let stable_provider_metrics = match &input.source {
+        RoleContractSource::Declared { config, role } => {
+            config.component_specs.values().any(|spec| {
+                let component_stable =
+                    spec.component_role == **role && spec.metrics.storage_policy().needs_stable();
+                let child_stable = spec
+                    .children
+                    .get(*role)
+                    .is_some_and(|child| child.metrics.storage_policy().needs_stable());
+                component_stable || child_stable
+            })
+        }
+        RoleContractSource::BuiltIn(_) => false,
+    };
     let (role, built_in, capabilities, requirements) = match input.source {
         RoleContractSource::Declared { config, role } => {
             let capabilities = match derive_role_capabilities(config, role) {
@@ -79,7 +93,14 @@ pub fn resolve_role_contract(input: RoleContractInput<'_>) -> RoleContractResolu
         return RoleContractResolution::Rejected { errors };
     }
 
-    let selections = collect_allocation_selections(&capabilities, &effective_features, built_in);
+    let mut selections =
+        collect_allocation_selections(&capabilities, &effective_features, built_in);
+    if stable_provider_metrics {
+        selections
+            .entry(StateAllocationKey::CoreProviderMetrics)
+            .or_default()
+            .insert(SelectionProvenance::ProviderMetricsStorage);
+    }
     let allocations = match materialize_allocations(selections) {
         Ok(allocations) => allocations,
         Err(error) => {
@@ -179,9 +200,6 @@ pub fn derive_role_capabilities(
         }
         if canister.index.is_some() {
             capabilities.insert(RoleCapabilityKey::Index);
-        }
-        if canister.standards.icrc21 {
-            capabilities.insert(RoleCapabilityKey::Icrc21);
         }
         if canister.auth.role_attestation_cache {
             capabilities.insert(RoleCapabilityKey::RoleAttestationVerifier);

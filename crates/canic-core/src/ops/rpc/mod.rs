@@ -18,13 +18,14 @@ use crate::{
         rpc::{CreateCanisterParent, Request, Response},
     },
     ops::{
-        ic::{IcOps, call::CallOps},
+        ic::{IcOps, call::execute as execute_call},
         prelude::*,
         rpc::request::{RequestConversionOps, RequestOpsError},
         runtime::env::EnvOps,
     },
 };
 use canic_contracts::protocol::cycles_capability as wire;
+use ic_call::{Call, WaitPolicy};
 use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
 
@@ -115,11 +116,12 @@ impl RpcOps {
 
             let call = canic_contracts::ops::root_capability::encode_request(envelope)
                 .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_FAILED))?;
-            let bytes = CallOps::unbounded_wait(target_pid, call.method)
-                .with_raw_args(call.bytes)
-                .execute()
-                .await?
-                .into_bytes();
+            let bytes = execute_call(
+                Call::new(target_pid.into(), call.method, WaitPolicy::Unbounded)
+                    .take_raw_args(call.bytes),
+            )
+            .await?
+            .into_bytes();
             let response =
                 canic_contracts::ops::root_capability::decode_response(call.method_id, &bytes)
                     .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_INVALID))?
@@ -143,11 +145,11 @@ impl RpcOps {
         let bytes =
             ic_wire::native::encode_request(wire::METHOD_ID, &envelope, wire::REQUEST_LIMITS)
                 .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_FAILED))?;
-        let bytes = CallOps::unbounded_wait(target_pid, wire::METHOD)
-            .with_raw_args(bytes)
-            .execute()
-            .await?
-            .into_bytes();
+        let bytes = execute_call(
+            Call::new(target_pid.into(), wire::METHOD, WaitPolicy::Unbounded).take_raw_args(bytes),
+        )
+        .await?
+        .into_bytes();
         let response = decode_nonroot_cycles_reply(&bytes)?;
 
         Ok(Response::Cycles(response.response))

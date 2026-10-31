@@ -147,17 +147,6 @@ pub fn required_path(matches: &ArgMatches, id: &str) -> PathBuf {
     path_option(matches, id).unwrap_or_else(|| panic!("clap requires {id}"))
 }
 
-/// Parse a strictly positive `usize` option value.
-pub fn parse_positive_usize(value: &str) -> Result<usize, String> {
-    let value = value
-        .parse::<usize>()
-        .map_err(|_| "must be a non-negative integer".to_string())?;
-    if value == 0 {
-        return Err("must be greater than zero".to_string());
-    }
-    Ok(value)
-}
-
 /// Parse a strictly positive `u64` option value.
 pub fn parse_positive_u64(value: &str) -> Result<u64, String> {
     value

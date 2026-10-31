@@ -195,8 +195,8 @@ struct PerfFrame {
 #[derive(Clone)]
 pub struct PerfEntry {
     pub key: PerfKey,
-    pub count: u64,
-    pub total_instructions: u128,
+    /// Full source state; reports preserve its width and actual-overflow flags.
+    pub aggregate: ic_metrics::MeasurementAggregate,
 }
 
 /// Record a counter under the provided key.
@@ -486,14 +486,14 @@ pub fn entries() -> Vec<PerfEntry> {
             .iter()
             .map(|(key, slot)| PerfEntry {
                 key: key.clone(),
-                count: slot.samples(),
-                total_instructions: slot.total(),
+                aggregate: *slot,
             })
             .collect()
     })
 }
 
 /// Read admission-loss accounting without narrowing the instruction total.
+#[cfg(test)]
 pub(crate) fn checkpoint_overflow_entry() -> Option<PerfEntry> {
     PERF_TABLE.with_borrow(|table| {
         table
@@ -501,8 +501,7 @@ pub(crate) fn checkpoint_overflow_entry() -> Option<PerfEntry> {
             .get(&PerfKey::CheckpointOverflow)
             .map(|slot| PerfEntry {
                 key: PerfKey::CheckpointOverflow,
-                count: slot.samples(),
-                total_instructions: slot.total(),
+                aggregate: *slot,
             })
     })
 }
@@ -531,8 +530,7 @@ pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::Int
                 }
                 Ok(PerfEntry {
                     key: key.clone(),
-                    count: slot.samples(),
-                    total_instructions: slot.total(),
+                    aggregate: *slot,
                 })
             })
             .collect()
@@ -600,7 +598,12 @@ mod tests {
         let mut task = Context::from_waker(futures::task::noop_waker_ref());
         assert!(future.as_mut().poll(&mut task).is_ready());
         assert!(dropped_in_scope.get());
-        assert_eq!(entry_for(EndpointCallKind::Update, "drop_work").count, 1);
+        assert_eq!(
+            entry_for(EndpointCallKind::Update, "drop_work")
+                .aggregate
+                .samples(),
+            1
+        );
         assert!(ACTIVE_CONTEXT.with_borrow(Option::is_none));
     }
 
@@ -659,14 +662,14 @@ mod tests {
             13,
         );
         let valid = checkpoint_entry_for("s", &label);
-        assert_eq!(valid.count, 1);
-        assert_eq!(valid.total_instructions, 0);
+        assert_eq!(valid.aggregate.samples(), 1);
+        assert_eq!(valid.aggregate.total(), 0);
         let rows = bounded_entries(MAX_CHECKPOINT_KEYS + 1).unwrap();
         assert_eq!(rows.len(), 3);
         let overflow = &rows[0];
         assert!(matches!(overflow.key, PerfKey::CheckpointOverflow));
-        assert_eq!(overflow.count, 3);
-        assert_eq!(overflow.total_instructions, 31);
+        assert_eq!(overflow.aggregate.samples(), 3);
+        assert_eq!(overflow.aggregate.total(), 31);
         for row in rows {
             if let PerfKey::Checkpoint { scope, label } = row.key {
                 assert!(
@@ -704,15 +707,25 @@ mod tests {
             }
             record_checkpoint("bounded", "sample_0000", 25);
             record_endpoint_call(call("unrelated", EndpointCallKind::Query), 3);
-            assert_eq!(checkpoint_entry_for("bounded", "sample_0000").count, 2);
-            assert_eq!(entry_for(EndpointCallKind::Query, "unrelated").count, 1);
+            assert_eq!(
+                checkpoint_entry_for("bounded", "sample_0000")
+                    .aggregate
+                    .samples(),
+                2
+            );
+            assert_eq!(
+                entry_for(EndpointCallKind::Query, "unrelated")
+                    .aggregate
+                    .samples(),
+                1
+            );
             PERF_TABLE.with_borrow(|table| {
                 assert_eq!(table.checkpoint_count, MAX_CHECKPOINT_KEYS);
                 assert_eq!(table.entries.len(), MAX_CHECKPOINT_KEYS + 2);
             });
             entries()
                 .into_iter()
-                .map(|row| (row.key, row.count, row.total_instructions))
+                .map(|row| (row.key, row.aggregate.samples(), row.aggregate.total()))
                 .collect::<Vec<_>>()
         };
         let forward = snapshot(false);
@@ -749,9 +762,9 @@ mod tests {
         record_checkpoint("z", &last, 8);
         let rows = entries();
         assert!(matches!(rows[0].key, PerfKey::CheckpointOverflow));
-        assert_eq!(rows[0].count, 3);
-        assert_eq!(rows[0].total_instructions, 18);
-        assert_eq!(checkpoint_entry_for("a", "first").total_instructions, 3);
+        assert_eq!(rows[0].aggregate.samples(), 3);
+        assert_eq!(rows[0].aggregate.total(), 18);
+        assert_eq!(checkpoint_entry_for("a", "first").aggregate.total(), 3);
         assert!(!rows.iter().any(|row| matches!(&row.key, PerfKey::Checkpoint { scope, label } if scope == "z" && label == &last)));
     }
 
@@ -763,8 +776,8 @@ mod tests {
         record_checkpoint(&scope, "wide", u64::MAX);
         record_checkpoint(&scope, "wide", u64::MAX);
         let overflow = checkpoint_overflow_entry().unwrap();
-        assert_eq!(overflow.count, 2);
-        assert_eq!(overflow.total_instructions, u128::from(u64::MAX) * 2);
+        assert_eq!(overflow.aggregate.samples(), 2);
+        assert_eq!(overflow.aggregate.total(), u128::from(u64::MAX) * 2);
         reset();
         assert!(checkpoint_overflow_entry().is_none());
     }
@@ -826,18 +839,18 @@ mod tests {
                 .collect::<Vec<_>>()
                 == expected
         );
-        assert_eq!(observed[0].count, 2);
-        assert_eq!(observed[0].total_instructions, u128::from(u64::MAX) + 1);
-        assert_eq!(observed[5].count, 2);
-        assert_eq!(observed[5].total_instructions, 3);
-        assert_eq!(observed[6].count, 1);
-        assert_eq!(observed[6].total_instructions, 9);
+        assert_eq!(observed[0].aggregate.samples(), 2);
+        assert_eq!(observed[0].aggregate.total(), u128::from(u64::MAX) + 1);
+        assert_eq!(observed[5].aggregate.samples(), 2);
+        assert_eq!(observed[5].aggregate.total(), 3);
+        assert_eq!(observed[6].aggregate.samples(), 1);
+        assert_eq!(observed[6].aggregate.total(), 9);
         reset();
         record_checkpoint("a", "é", 4);
         let after_reset = entries();
         assert_eq!(after_reset.len(), 1);
-        assert_eq!(after_reset[0].count, 1);
-        assert_eq!(after_reset[0].total_instructions, 4);
+        assert_eq!(after_reset[0].aggregate.samples(), 1);
+        assert_eq!(after_reset[0].aggregate.total(), 4);
     }
 
     #[test]
@@ -846,8 +859,8 @@ mod tests {
         assert!(entries().is_empty());
         record_endpoint_call(call("measured", EndpointCallKind::Update), 0);
         let observed = entry_for(EndpointCallKind::Update, "measured");
-        assert_eq!(observed.count, 1);
-        assert_eq!(observed.total_instructions, 0);
+        assert_eq!(observed.aggregate.samples(), 1);
+        assert_eq!(observed.aggregate.total(), 0);
     }
 
     #[test]
@@ -864,10 +877,10 @@ mod tests {
         let parent = entry_for(EndpointCallKind::Update, "parent");
         let child = entry_for(EndpointCallKind::Query, "child");
 
-        assert_eq!(child.count, 1);
-        assert_eq!(child.total_instructions, 60);
-        assert_eq!(parent.count, 1);
-        assert_eq!(parent.total_instructions, 140);
+        assert_eq!(child.aggregate.samples(), 1);
+        assert_eq!(child.aggregate.total(), 60);
+        assert_eq!(parent.aggregate.samples(), 1);
+        assert_eq!(parent.aggregate.total(), 140);
     }
 
     #[test]
@@ -912,11 +925,11 @@ mod tests {
             b_scope.finish_at(call("b", EndpointCallKind::Update), 300_000);
         }
         assert_eq!(
-            entry_for(EndpointCallKind::Update, "a").total_instructions,
+            entry_for(EndpointCallKind::Update, "a").aggregate.total(),
             1_960_000
         );
         assert_eq!(
-            entry_for(EndpointCallKind::Update, "b").total_instructions,
+            entry_for(EndpointCallKind::Update, "b").aggregate.total(),
             255_000
         );
         assert!(checkpoint_at("unowned", "missing", 3_000_000).is_none());
@@ -950,8 +963,8 @@ mod tests {
         assert!(checkpoint_at("outside", "no_base", 1_100).is_none());
         assert!(a.as_mut().poll(&mut task).is_ready());
         assert!(b.as_mut().poll(&mut task).is_ready());
-        assert_eq!(checkpoint_entry_for("a", "resume").total_instructions, 200);
-        assert_eq!(checkpoint_entry_for("b", "resume").total_instructions, 300);
+        assert_eq!(checkpoint_entry_for("a", "resume").aggregate.total(), 200);
+        assert_eq!(checkpoint_entry_for("b", "resume").aggregate.total(), 300);
         assert!(!entries().iter().any(|entry| matches!(&entry.key,
             PerfKey::Checkpoint { scope, label } if scope == "cancelled" && label == "resume")));
         assert!(ACTIVE_CONTEXT.with_borrow(Option::is_none));
@@ -1024,8 +1037,18 @@ mod tests {
                 .frames
                 .is_empty()
         );
-        assert_eq!(entry_for(EndpointCallKind::Update, "completed").count, 1);
-        assert_eq!(entry_for(EndpointCallKind::Query, "nested").count, 2);
+        assert_eq!(
+            entry_for(EndpointCallKind::Update, "completed")
+                .aggregate
+                .samples(),
+            1
+        );
+        assert_eq!(
+            entry_for(EndpointCallKind::Query, "nested")
+                .aggregate
+                .samples(),
+            2
+        );
         assert!(!entries().iter().any(|entry| matches!(&entry.key,
             PerfKey::Endpoint { name, .. } if name == "cancelled")));
     }
@@ -1081,7 +1104,9 @@ mod tests {
         assert!(ACTIVE_CONTEXT.with_borrow(|active| Rc::ptr_eq(active.as_ref().unwrap(), &parent)));
         parent_scope.finish_at(call("parent", EndpointCallKind::Update), 300);
         assert_eq!(
-            entry_for(EndpointCallKind::Update, "parent").total_instructions,
+            entry_for(EndpointCallKind::Update, "parent")
+                .aggregate
+                .total(),
             200
         );
     }
@@ -1095,15 +1120,21 @@ mod tests {
         record_endpoint_call(call("same_name", EndpointCallKind::Update), 30);
 
         assert_eq!(
-            entry_for(EndpointCallKind::Query, "same_name").total_instructions,
+            entry_for(EndpointCallKind::Query, "same_name")
+                .aggregate
+                .total(),
             10
         );
         assert_eq!(
-            entry_for(EndpointCallKind::QueryComposite, "same_name").total_instructions,
+            entry_for(EndpointCallKind::QueryComposite, "same_name")
+                .aggregate
+                .total(),
             20
         );
         assert_eq!(
-            entry_for(EndpointCallKind::Update, "same_name").total_instructions,
+            entry_for(EndpointCallKind::Update, "same_name")
+                .aggregate
+                .total(),
             30
         );
     }
@@ -1117,7 +1148,7 @@ mod tests {
 
         let checkpoint = checkpoint_entry_for("workflow::bootstrap", "load_cfg");
 
-        assert_eq!(checkpoint.count, 2);
-        assert_eq!(checkpoint.total_instructions, 200);
+        assert_eq!(checkpoint.aggregate.samples(), 2);
+        assert_eq!(checkpoint.aggregate.total(), 200);
     }
 }

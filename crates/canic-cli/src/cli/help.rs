@@ -36,10 +36,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         about: "Inspect delegated-auth operation state",
     },
     CommandSpec {
-        name: "backup",
-        about: "Create, inspect, and verify backups",
-    },
-    CommandSpec {
         name: "build",
         about: "Build Canic App and infrastructure artifacts",
     },
@@ -90,10 +86,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "replica",
         about: "Manage the local ICP replica",
-    },
-    CommandSpec {
-        name: "restore",
-        about: "Plan or run snapshot restores",
     },
     CommandSpec {
         name: "scaffold",

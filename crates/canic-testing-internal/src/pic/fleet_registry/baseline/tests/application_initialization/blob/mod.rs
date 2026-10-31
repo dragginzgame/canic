@@ -7,7 +7,7 @@ use super::*;
 use canic_blob_service::__private::ic_blob_storage_contracts::wire;
 use canic_blob_service::dto::configuration::{
     HostConfigurationView, HostFailure, ServiceBillingInput, ServiceConfigurationInput,
-    ServiceFundingInput, ServiceInstallationInput, ServiceReadInput, ServiceResourceInput,
+    ServiceFundingInput, ServiceInstallationInput, ServiceResourceInput,
 };
 use canic_host::release_set::{
     CanicInfrastructureRole, FleetSubnetRootReleaseSetManifest,
@@ -328,13 +328,6 @@ fn installation(service: Principal) -> ServiceInstallationInput {
                 renewal_ceiling: 10_000,
                 reserve: 100,
                 max_attempts: 4,
-            },
-            reads: ServiceReadInput {
-                sessions: 2,
-                tenant_sessions: 1,
-                reply_bytes: 2048,
-                bytes: 4096,
-                tenant_bytes: 2048,
             },
         },
         project: "canic-production-root-blob".into(),

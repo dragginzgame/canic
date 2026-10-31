@@ -38,7 +38,6 @@ use memory::{
         INTENT_EXPIRY_INDEX_KEY, INTENT_META_KEY, INTENT_PENDING_KEY,
         INTENT_RECEIPT_BACKED_RECORDS_KEY, INTENT_RECORDS_KEY, INTENT_TOTALS_KEY,
     },
-    log::LOG_ENTRIES_KEY,
     placement::{
         PLACEMENT_ACKNOWLEDGEMENT_INDEX_KEY, PLACEMENT_INDEX_REGISTRY_KEY,
         PLACEMENT_SCALING_REGISTRY_KEY,
@@ -51,6 +50,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Canonical stable-memory keys grouped by record owner.
 pub mod memory {
+    pub mod metrics {
+        pub const PROVIDER_METRICS_KEY: &str = "canic.core.metrics.providers.v1";
+    }
+
     pub mod control_plane {
         // Shared template state.
         pub const TEMPLATE_MANIFESTS_KEY: &str = "canic.control_plane.template.manifests.v1";
@@ -139,10 +142,6 @@ pub mod memory {
         pub const CYCLES_TOPUP_EVENTS_KEY: &str = "canic.core.cycles.topup_events.v1";
         pub const CYCLES_FUNDING_LEDGER_KEY: &str = "canic.core.cycles.funding_ledger.v1";
         pub const CYCLES_ICP_REFILL_RECORDS_KEY: &str = "canic.core.cycles.icp_refill_records.v1";
-    }
-
-    pub mod log {
-        pub const LOG_ENTRIES_KEY: &str = "canic.core.log.entries.v1";
     }
 
     pub mod intent {
@@ -245,7 +244,6 @@ const CORE_CYCLES_KEYS: &[&str] = &[
     CYCLES_FUNDING_LEDGER_KEY,
 ];
 const CORE_CYCLES_ICP_REFILL_RECORDS_KEYS: &[&str] = &[CYCLES_ICP_REFILL_RECORDS_KEY];
-const CORE_RUNTIME_LOG_KEYS: &[&str] = &[LOG_ENTRIES_KEY];
 const CORE_INTENT_KEYS: &[&str] = &[
     INTENT_META_KEY,
     INTENT_RECORDS_KEY,
@@ -356,6 +354,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         CORE_RUNTIME_BINDINGS_KEYS,
     ),
     definition(
+        StateAllocationKey::CoreProviderMetrics,
+        AllocationOwner::CanicCore,
+        &[memory::metrics::PROVIDER_METRICS_KEY],
+    ),
+    definition(
         StateAllocationKey::CoreFleetState,
         AllocationOwner::CanicCore,
         CORE_FLEET_STATE_KEYS,
@@ -399,11 +402,6 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreCyclesIcpRefillRecords,
         AllocationOwner::CanicCore,
         CORE_CYCLES_ICP_REFILL_RECORDS_KEYS,
-    ),
-    definition(
-        StateAllocationKey::CoreRuntimeLog,
-        AllocationOwner::CanicCore,
-        CORE_RUNTIME_LOG_KEYS,
     ),
     definition(
         StateAllocationKey::CoreIntent,

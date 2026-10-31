@@ -4,15 +4,7 @@
 //! Does not own: management call execution, endpoint DTOs, or lifecycle policy.
 //! Boundary: type conversion layer for `ops::ic::mgmt`.
 
-use crate::{
-    infra::ic::mgmt::{
-        InfraCanisterSettings, InfraCanisterStatusResult, InfraDefiniteCanisterSettings,
-        InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult,
-        InfraEnvironmentVariable, InfraLogVisibility, InfraSignWithEcdsaArgs,
-        InfraSignWithEcdsaResult, InfraUpdateSettingsArgs,
-    },
-    ops::prelude::*,
-};
+use crate::ops::prelude::*;
 use ic_platform::{candid::contract::Nat, management_canister_types as management};
 
 pub use crate::domain::canister::{CanisterStatusType, LogVisibility};
@@ -207,7 +199,9 @@ pub struct QueryStatsSnapshot {
     pub response_payload_bytes_total: Nat,
 }
 
-pub(super) fn canister_status_from_infra(status: InfraCanisterStatusResult) -> CanisterStatus {
+pub(super) fn canister_status_from_infra(
+    status: management::CanisterStatusResult,
+) -> CanisterStatus {
     CanisterStatus {
         version: status.version,
         status: status_type_from_infra(status.status),
@@ -230,7 +224,7 @@ const fn status_type_from_infra(status: management::CanisterStatusType) -> Canis
     }
 }
 
-fn settings_from_infra(settings: InfraDefiniteCanisterSettings) -> CanisterSettingsSnapshot {
+fn settings_from_infra(settings: management::DefiniteCanisterSettings) -> CanisterSettingsSnapshot {
     CanisterSettingsSnapshot {
         controllers: settings.controllers,
         compute_allocation: settings.compute_allocation,
@@ -249,15 +243,19 @@ fn settings_from_infra(settings: InfraDefiniteCanisterSettings) -> CanisterSetti
     }
 }
 
-fn log_visibility_from_infra(log_visibility: InfraLogVisibility) -> LogVisibility {
+fn log_visibility_from_infra(log_visibility: management::LogVisibility) -> LogVisibility {
     match log_visibility {
-        InfraLogVisibility::Controllers => LogVisibility::Controllers,
-        InfraLogVisibility::Public => LogVisibility::Public,
-        InfraLogVisibility::AllowedViewers(viewers) => LogVisibility::AllowedViewers(viewers),
+        management::LogVisibility::Controllers => LogVisibility::Controllers,
+        management::LogVisibility::Public => LogVisibility::Public,
+        management::LogVisibility::AllowedViewers(viewers) => {
+            LogVisibility::AllowedViewers(viewers)
+        }
     }
 }
 
-fn environment_variable_from_infra(variable: InfraEnvironmentVariable) -> EnvironmentVariable {
+fn environment_variable_from_infra(
+    variable: management::EnvironmentVariable,
+) -> EnvironmentVariable {
     EnvironmentVariable {
         name: variable.name,
         value: variable.value,
@@ -286,13 +284,16 @@ fn query_stats_from_infra(stats: management::QueryStats) -> QueryStatsSnapshot {
     }
 }
 
-fn settings_to_infra(settings: &CanisterSettings) -> InfraCanisterSettings {
-    InfraCanisterSettings {
+fn settings_to_infra(settings: &CanisterSettings) -> management::CanisterSettings {
+    management::CanisterSettings {
         controllers: settings.controllers.clone(),
         compute_allocation: settings.compute_allocation.clone(),
         memory_allocation: settings.memory_allocation.clone(),
         freezing_threshold: settings.freezing_threshold.clone(),
         reserved_cycles_limit: settings.reserved_cycles_limit.clone(),
+        minimum_incoming_canister_call_cycles: None,
+        snapshot_visibility: None,
+        status_visibility: None,
         log_visibility: settings.log_visibility.clone().map(log_visibility_to_infra),
         log_memory_limit: settings.log_memory_limit.clone(),
         wasm_memory_limit: settings.wasm_memory_limit.clone(),
@@ -305,31 +306,37 @@ fn settings_to_infra(settings: &CanisterSettings) -> InfraCanisterSettings {
     }
 }
 
-fn log_visibility_to_infra(setting: LogVisibility) -> InfraLogVisibility {
+fn log_visibility_to_infra(setting: LogVisibility) -> management::LogVisibility {
     match setting {
-        LogVisibility::Controllers => InfraLogVisibility::Controllers,
-        LogVisibility::Public => InfraLogVisibility::Public,
-        LogVisibility::AllowedViewers(viewers) => InfraLogVisibility::AllowedViewers(viewers),
+        LogVisibility::Controllers => management::LogVisibility::Controllers,
+        LogVisibility::Public => management::LogVisibility::Public,
+        LogVisibility::AllowedViewers(viewers) => {
+            management::LogVisibility::AllowedViewers(viewers)
+        }
     }
 }
 
-fn environment_variable_to_infra(variable: EnvironmentVariable) -> InfraEnvironmentVariable {
-    InfraEnvironmentVariable {
+fn environment_variable_to_infra(variable: EnvironmentVariable) -> management::EnvironmentVariable {
+    management::EnvironmentVariable {
         name: variable.name,
         value: variable.value,
     }
 }
 
-pub(super) fn update_settings_to_infra(args: &UpdateSettingsArgs) -> InfraUpdateSettingsArgs {
-    InfraUpdateSettingsArgs {
+pub(super) fn update_settings_to_infra(
+    args: &UpdateSettingsArgs,
+) -> management::UpdateSettingsArgs {
+    management::UpdateSettingsArgs {
         canister_id: args.canister_id,
         settings: settings_to_infra(&args.settings),
         sender_canister_version: Some(ic_platform::cdk::api::canister_version()),
     }
 }
 
-pub(super) fn ecdsa_public_key_args_to_infra(args: &EcdsaPublicKeyArgs) -> InfraEcdsaPublicKeyArgs {
-    InfraEcdsaPublicKeyArgs {
+pub(super) fn ecdsa_public_key_args_to_infra(
+    args: &EcdsaPublicKeyArgs,
+) -> management::EcdsaPublicKeyArgs {
+    management::EcdsaPublicKeyArgs {
         canister_id: args.canister_id,
         derivation_path: args.derivation_path.clone(),
         key_id: ecdsa_key_id_to_infra(&args.key_id),
@@ -337,7 +344,7 @@ pub(super) fn ecdsa_public_key_args_to_infra(args: &EcdsaPublicKeyArgs) -> Infra
 }
 
 pub(super) fn ecdsa_public_key_from_infra(
-    result: InfraEcdsaPublicKeyResult,
+    result: management::EcdsaPublicKeyResult,
 ) -> EcdsaPublicKeyResult {
     EcdsaPublicKeyResult {
         public_key: result.public_key,
@@ -345,23 +352,27 @@ pub(super) fn ecdsa_public_key_from_infra(
     }
 }
 
-pub(super) fn sign_with_ecdsa_args_to_infra(args: &SignWithEcdsaArgs) -> InfraSignWithEcdsaArgs {
-    InfraSignWithEcdsaArgs {
+pub(super) fn sign_with_ecdsa_args_to_infra(
+    args: &SignWithEcdsaArgs,
+) -> management::SignWithEcdsaArgs {
+    management::SignWithEcdsaArgs {
         message_hash: args.message_hash.to_vec(),
         derivation_path: args.derivation_path.clone(),
         key_id: ecdsa_key_id_to_infra(&args.key_id),
     }
 }
 
-pub(super) fn sign_with_ecdsa_from_infra(result: InfraSignWithEcdsaResult) -> SignWithEcdsaResult {
+pub(super) fn sign_with_ecdsa_from_infra(
+    result: management::SignWithEcdsaResult,
+) -> SignWithEcdsaResult {
     SignWithEcdsaResult {
         signature: result.signature,
     }
 }
 
-fn ecdsa_key_id_to_infra(key_id: &EcdsaKeyId) -> InfraEcdsaKeyId {
-    InfraEcdsaKeyId {
-        curve: InfraEcdsaCurve::Secp256k1,
+fn ecdsa_key_id_to_infra(key_id: &EcdsaKeyId) -> management::EcdsaKeyId {
+    management::EcdsaKeyId {
+        curve: management::EcdsaCurve::Secp256k1,
         name: key_id.name.clone(),
     }
 }
@@ -376,7 +387,38 @@ mod tests {
             name: "key_1".to_string(),
         });
 
-        assert_eq!(key_id.curve, InfraEcdsaCurve::Secp256k1);
+        assert_eq!(key_id.curve, management::EcdsaCurve::Secp256k1);
         assert_eq!(key_id.name, "key_1");
+    }
+
+    #[test]
+    fn management_settings_preserve_selected_authority_without_enabling_new_controls() {
+        let controller = Principal::from_slice(&[1; 10]);
+        let settings = CanisterSettings {
+            controllers: Some(vec![controller]),
+            compute_allocation: Some(7_u64.into()),
+            freezing_threshold: Some(600_u64.into()),
+            log_visibility: Some(LogVisibility::AllowedViewers(vec![controller])),
+            environment_variables: Some(vec![EnvironmentVariable {
+                name: "MODE".into(),
+                value: "test".into(),
+            }]),
+            ..CanisterSettings::default()
+        };
+        let external = settings_to_infra(&settings);
+        let bytes = ic_platform::candid::contract::encode_one(&external).unwrap();
+        let decoded: management::CanisterSettings =
+            ic_platform::candid::decoder::decode_one(&bytes).unwrap();
+        assert_eq!(decoded.controllers, Some(vec![controller]));
+        assert_eq!(decoded.compute_allocation, Some(7_u64.into()));
+        assert_eq!(decoded.freezing_threshold, Some(600_u64.into()));
+        assert_eq!(
+            decoded.log_visibility,
+            Some(management::LogVisibility::AllowedViewers(vec![controller]))
+        );
+        assert_eq!(decoded.environment_variables.unwrap()[0].value, "test");
+        assert_eq!(decoded.minimum_incoming_canister_call_cycles, None);
+        assert_eq!(decoded.snapshot_visibility, None);
+        assert_eq!(decoded.status_visibility, None);
     }
 }

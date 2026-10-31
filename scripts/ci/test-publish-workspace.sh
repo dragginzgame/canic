@@ -75,11 +75,11 @@ export PUBLISH_FROM='' PUBLISH_DRY_RUN=0
 # Stubbed online cases own their policy independently of the offline release gate.
 # The explicit offline case below still verifies the production refusal.
 export CARGO_NET_OFFLINE=false
-expected_packages=(canic-backup canic-contracts canic-core canic-control-plane canic-macros canic canic-blob-service canic-host canic-cli)
+expected_packages=(canic-contracts canic-core canic-control-plane canic-macros canic canic-icydb canic-blob-service canic-host canic-cli)
 
 run_case() {
     local expected="$1" status=0
-    PATH="$FIXTURE/bin:$PATH" PUBLISH_POLL_SECS=0 PUBLISH_TIMEOUT_SECS=1 \
+    PATH="$FIXTURE/bin:$PATH" PUBLISH_POLL_SECS=0 PUBLISH_TIMEOUT_SECS=10 \
         bash "$FIXTURE/scripts/ci/publish-workspace.sh" >"$FIXTURE/output.log" 2>&1 || status=$?
     if [[ "$status" -ne "$expected" ]]; then
         cat "$FIXTURE/output.log" >&2
@@ -96,7 +96,7 @@ FAKE_CLIPPY_STATUS=23 run_case 23
 [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == clippy ]]
 : >"$PUBLICATION_TEST_EVENTS"
 FAKE_FAIL_PACKAGE=canic-core run_case 37
-[[ -f "$PUBLICATION_TEST_REGISTRY/canic-backup" ]]
+[[ -f "$PUBLICATION_TEST_REGISTRY/canic-contracts" ]]
 [[ ! -f "$PUBLICATION_TEST_REGISTRY/canic-core" ]]
 if rg '^publish -p canic-control-plane ' "$PUBLICATION_TEST_EVENTS" >/dev/null; then
     echo 'publication continued after a package failure' >&2
@@ -113,12 +113,12 @@ run_case 0
 [[ "$(( $(rg -c '^lookup ' "$PUBLICATION_TEST_EVENTS") - lookup_calls ))" -eq "${#expected_packages[@]}" ]]
 
 # A resumed suffix must still reject a missing predecessor package.
-rm "$PUBLICATION_TEST_REGISTRY/canic-backup"
+rm "$PUBLICATION_TEST_REGISTRY/canic-contracts"
 PUBLISH_FROM=canic-host run_case 1
 [[ "$(rg -c '^publish ' "$PUBLICATION_TEST_EVENTS")" == "$publish_calls" ]]
-touch "$PUBLICATION_TEST_REGISTRY/canic-backup"
+touch "$PUBLICATION_TEST_REGISTRY/canic-contracts"
 PUBLISH_FROM=canic-host run_case 0
-FAKE_LOOKUP_PACKAGE=canic-backup FAKE_LOOKUP_HTTP=503 PUBLISH_FROM=canic-host run_case 2
+FAKE_LOOKUP_PACKAGE=canic-contracts FAKE_LOOKUP_HTTP=503 PUBLISH_FROM=canic-host run_case 2
 [[ "$(rg -c '^publish ' "$PUBLICATION_TEST_EVENTS")" == "$publish_calls" ]]
 
 timings="$(rg --files "$CANIC_PUBLICATION_LOG_DIR" | rg '/timings.tsv$')"
@@ -127,8 +127,8 @@ while IFS= read -r file; do
         $2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/ { exit 1 }' "$file"
 done <<<"$timings"
 rg -l $'^publish-canic-core\t37\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
-rg -l $'^verify-canic-backup\t1\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
-rg -l $'^verify-canic-backup\t0\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
+rg -l $'^verify-canic-contracts\t1\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
+rg -l $'^verify-canic-contracts\t0\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
 if rg -F 'unexpected Cargo command' "$FIXTURE/logs"; then exit 1; fi
 
 for package in "${expected_packages[@]}"; do
@@ -144,13 +144,13 @@ done
 # Unavailable initial observation never grants publication authority.
 for http in 401 429 503 malformed; do
     : >"$PUBLICATION_TEST_EVENTS"
-    FAKE_LOOKUP_PACKAGE=canic-backup FAKE_LOOKUP_HTTP="$http" run_case 2
-    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == $'clippy\nlookup canic-backup' ]]
+    FAKE_LOOKUP_PACKAGE=canic-contracts FAKE_LOOKUP_HTTP="$http" run_case 2
+    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == $'clippy\nlookup canic-contracts' ]]
 done
 for http in 200 404; do
     : >"$PUBLICATION_TEST_EVENTS"
-    FAKE_LOOKUP_PACKAGE=canic-backup FAKE_LOOKUP_HTTP="$http" FAKE_REGISTRY_TRANSPORT=28 run_case 2
-    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == $'clippy\nlookup canic-backup' ]]
+    FAKE_LOOKUP_PACKAGE=canic-contracts FAKE_LOOKUP_HTTP="$http" FAKE_REGISTRY_TRANSPORT=28 run_case 2
+    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == $'clippy\nlookup canic-contracts' ]]
 done
 
 # A lost registry observation after upload stops the next package. One definite
@@ -160,13 +160,13 @@ for initial_absence in 0 1; do
     if [[ "$initial_absence" == 1 ]]; then
         touch "$PUBLICATION_TEST_REGISTRY/first-poll-absent"
     fi
-    FAKE_PROPAGATION_PACKAGE=canic-backup FAKE_PROPAGATION_HTTP=503 run_case 2
+    FAKE_PROPAGATION_PACKAGE=canic-contracts FAKE_PROPAGATION_HTTP=503 run_case 2
     [[ "$(rg -c '^publish ' "$PUBLICATION_TEST_EVENTS")" == 1 ]]
-    rg -q '^publish -p canic-backup --locked$' "$PUBLICATION_TEST_EVENTS"
-    [[ "$(rg -c '^lookup canic-backup$' "$PUBLICATION_TEST_EVENTS")" -eq "$((initial_absence + 2))" ]]
-    rm "$PUBLICATION_TEST_REGISTRY/canic-backup" "$PUBLICATION_TEST_REGISTRY/canic-backup-pending"
+    rg -q '^publish -p canic-contracts --locked$' "$PUBLICATION_TEST_EVENTS"
+    [[ "$(rg -c '^lookup canic-contracts$' "$PUBLICATION_TEST_EVENTS")" -eq "$((initial_absence + 2))" ]]
+    rm "$PUBLICATION_TEST_REGISTRY/canic-contracts" "$PUBLICATION_TEST_REGISTRY/canic-contracts-pending"
 done
-rg -l $'^lookup-canic-backup\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
-rg -l $'^propagation-canic-backup\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
-rg -l $'^verify-canic-backup\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
+rg -l $'^lookup-canic-contracts\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
+rg -l $'^propagation-canic-contracts\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
+rg -l $'^verify-canic-contracts\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
 echo "publication runner fixtures passed (no registry effects)"

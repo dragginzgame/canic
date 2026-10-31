@@ -1,4 +1,4 @@
-use canic::{Error, canic_query, canic_update};
+use canic::{Error, candid_query, candid_update, query, update};
 
 const WIRE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 65_536,
@@ -15,34 +15,34 @@ const LIMITS: canic::endpoint::ArgumentLimits = canic::endpoint::ArgumentLimits 
     max_header_len: 128,
 };
 
-#[canic_update(requires(caller::is_controller()), on_access_denied = "reject", decode = LIMITS)]
+#[candid_update(requires(caller::is_controller()), on_access_denied = "reject", decode = LIMITS)]
 fn guarded_plain(value: u64) -> u64 {
     value
 }
 
-#[canic_query(public, composite, on_access_denied = "reject", decode = LIMITS)]
+#[candid_query(public, composite, on_access_denied = "reject", decode = LIMITS)]
 fn bounded_composite(value: u64) -> u64 {
     value
 }
 
-#[canic_query(requires(auth::attested_local_subnet()), wire(id = 0x5445_5354_0000_0806, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[query(requires(auth::attested_local_subnet()), wire(id = 0x5445_5354_0000_0806, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn bounded_token(token: canic::dto::role_attestation::SignedRoleAttestation) -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_update(requires(auth::attested_local_subnet()), wire(id = 0x5445_5354_0000_0807, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[update(requires(auth::attested_local_subnet()), wire(id = 0x5445_5354_0000_0807, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn bounded_attestation(
     proof: canic::dto::role_attestation::SignedRoleAttestation,
 ) -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_query(public, wire(id = 0x5445_5354_0000_0808, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[query(public, wire(id = 0x5445_5354_0000_0808, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn byte_bounded_query(value: u64) -> Result<u64, Error> {
     Ok(value)
 }
 
-#[canic_update(requires(caller::is_controller()), on_access_denied = "reject")]
+#[candid_update(requires(caller::is_controller()), on_access_denied = "reject")]
 fn plain_without_decoder(value: u64) -> u64 {
     value
 }
@@ -57,12 +57,12 @@ fn bounded_and_plain_endpoint_forms_compile() {
     std::hint::black_box(plain_without_decoder);
 }
 
-#[canic_query(public, composite, wire(id = 0x5445_5354_0000_0809, request = WIRE_LIMITS, response = WIRE_LIMITS))]
+#[query(public, composite, wire(id = 0x5445_5354_0000_0809, request = WIRE_LIMITS, response = WIRE_LIMITS))]
 fn composite_probe() -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_update(requires(
+#[update(requires(
     caller::is_fleet_admitted(),
     deployment::is_service_authority("database"),
 ), wire(id = 0x5445_5354_0000_080a, request = WIRE_LIMITS, response = WIRE_LIMITS))]
@@ -79,4 +79,44 @@ fn canic_query_accepts_composite_marker() {
 #[test]
 fn canic_update_accepts_protected_service_authority_guard() {
     std::hint::black_box(service_authority_probe);
+}
+
+#[test]
+fn bounded_candid_admits_empty_and_shallow_but_rejects_skipped_deep_values() {
+    use canic::endpoint::ArgumentDecodeError;
+
+    assert_eq!(LIMITS.decode::<()>(&[]), Ok(()));
+    let mut bytes = b"DIDL\x01\x6e\x00\x02\x7e\x00\x01".to_vec();
+    bytes.push(0);
+    assert_eq!(LIMITS.decode::<(bool,)>(&bytes), Ok((true,)));
+    let ample = canic::endpoint::ArgumentLimits {
+        decoding_quota: 1_000_000,
+        skipping_quota: 1_000_000,
+        ..LIMITS
+    };
+    bytes.pop();
+    bytes.extend([1; 15]);
+    bytes.push(0);
+    assert_eq!(ample.decode::<(bool,)>(&bytes), Ok((true,)));
+    bytes.insert(bytes.len() - 1, 1);
+    assert_eq!(
+        ample.decode::<(bool,)>(&bytes),
+        Err(ArgumentDecodeError::InvalidCandid)
+    );
+    assert_eq!(
+        canic::endpoint::ArgumentLimits {
+            max_bytes: 0,
+            ..LIMITS
+        }
+        .decode::<()>(&[]),
+        Ok(())
+    );
+    assert!(matches!(
+        canic::endpoint::ArgumentLimits {
+            max_bytes: 1,
+            ..LIMITS
+        }
+        .decode::<()>(&bytes),
+        Err(ArgumentDecodeError::TooLarge { .. })
+    ));
 }

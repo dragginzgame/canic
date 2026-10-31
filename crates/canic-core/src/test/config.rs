@@ -6,7 +6,7 @@ use crate::config::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, ComponentChildConfig, ComponentChildKind,
         ComponentLimitsConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
         CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig,
-        RoleDeclaration, RoleDeclarationKind, RoleObservabilityConfig, StandardsCanisterConfig,
+        RoleDeclaration, RoleDeclarationKind, RoleObservabilityConfig,
     },
 };
 use canic_contracts::{
@@ -101,7 +101,6 @@ impl ConfigTestBuilder {
             entry.sharding = config.sharding;
             entry.index = config.index;
             entry.auth = config.auth;
-            entry.standards = config.standards;
             entry.diagnostics = config.diagnostics;
             entry.metrics = config.metrics;
             return self;
@@ -130,7 +129,6 @@ impl ConfigTestBuilder {
                 sharding: config.sharding,
                 index: config.index,
                 auth: config.auth,
-                standards: config.standards,
                 diagnostics: config.diagnostics,
                 metrics: config.metrics,
             },
@@ -199,7 +197,6 @@ impl ConfigTestBuilder {
             sharding: None,
             index: None,
             auth: CanisterAuthConfig::default(),
-            standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
         }
@@ -218,7 +215,6 @@ impl ConfigTestBuilder {
             sharding: None,
             index: None,
             auth: CanisterAuthConfig::default(),
-            standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
             provisions: BTreeMap::default(),

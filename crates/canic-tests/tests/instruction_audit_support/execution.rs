@@ -424,6 +424,27 @@ fn perf_delta(
     )
 }
 
+// This audit's bounded report intentionally requires exact u64 instruction totals.
+fn exact_perf_slot(value: &MetricValue) -> (u64, u64) {
+    let MetricValue::Measurement {
+        count,
+        total,
+        count_overflowed,
+        total_overflowed,
+    } = value
+    else {
+        panic!("instruction audit requires a measurement")
+    };
+    assert!(
+        !count_overflowed && !total_overflowed,
+        "instruction audit requires exact counters"
+    );
+    (
+        *count,
+        u64::try_from(*total).expect("bounded audit instruction total fits u64"),
+    )
+}
+
 // Project one perf row into `(count, total_instructions)`.
 fn perf_slot(
     entries: &[MetricEntry],
@@ -442,11 +463,7 @@ fn perf_slot(
                 && origin == transport_mode
                 && label == subject_label
             {
-                Some(match entry.value {
-                    MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
-                    MetricValue::Count(count) => (count, 0),
-                    MetricValue::U128(_) => (0, 0),
-                })
+                Some(exact_perf_slot(&entry.value))
             } else {
                 None
             }
@@ -471,11 +488,7 @@ fn checkpoint_deltas(
             }
 
             let before_slot = perf_checkpoint_slot(before, scope, label);
-            let after_slot = match entry.value {
-                MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
-                MetricValue::Count(count) => (count, 0),
-                MetricValue::U128(_) => (0, 0),
-            };
+            let after_slot = exact_perf_slot(&entry.value);
 
             let count = after_slot.0.saturating_sub(before_slot.0);
             let total_local_instructions = after_slot.1.saturating_sub(before_slot.1);
@@ -513,11 +526,7 @@ fn perf_checkpoint_slot(entries: &[MetricEntry], scope: &str, label: &str) -> (u
                 && entry_scope == scope
                 && entry_label == label
             {
-                Some(match entry.value {
-                    MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
-                    MetricValue::Count(count) => (count, 0),
-                    MetricValue::U128(_) => (0, 0),
-                })
+                Some(exact_perf_slot(&entry.value))
             } else {
                 None
             }
@@ -601,9 +610,11 @@ mod tests {
                 "request_cycles_from_parent".to_string(),
             ],
             principal: None,
-            value: MetricValue::CountAndU64 {
+            value: MetricValue::Measurement {
                 count: 1,
-                value_u64: 123,
+                total: 123,
+                count_overflowed: false,
+                total_overflowed: false,
             },
         }];
 

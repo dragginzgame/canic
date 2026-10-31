@@ -19,10 +19,12 @@ without `.md`; people and agents use the same definitions.
 | [code-audit](code-audit.md) | What concrete correctness or complexity problems exist in one selected area? | Rotate one audit per pass |
 | [tooling-duplication](tooling-duplication.md) | Which locally owned tooling could share an existing implementation? | Alternate with code-audit |
 
-The `maintenance` pass runs the eight routine tasks above for the selected
+The interactive `maintenance` pass runs the eight routine tasks above for the selected
 repositories, then alternates the two audit tasks. Bound each audit to one useful area; record
 remaining scope rather than claiming a complete estate audit. Cadences are
-suggestions until a schedule is enabled. Installing a snapshot enables no timer.
+suggestions until a schedule is enabled. The scheduled report-only prompt selects
+local work and lists deferred remote checks once; it does not attempt the eight
+online-capable procedures unchanged. Installing a snapshot enables no timer.
 
 ## Run a task
 
@@ -90,7 +92,9 @@ files in sibling repositories.
 The [local schedule](local-schedule.md) runs the repository-owned
 [maintenance prompt](maintenance-prompt.md). It selects paths, cadence and output
 location; the task files own the work. A scheduled pass has the same check-only
-authority as an interactive pass. Enabling recurring work is explicit.
+source-inspection scope as an interactive pass, but the unattended runner is
+report-only and cannot post issues or obtain fresh remote observations. Human
+review owns that follow-up. Enabling recurring work is explicit.
 
 To add a task, give it one short Markdown file describing its question, inputs,
 procedure, expected evidence, limits and completion criteria. Link existing

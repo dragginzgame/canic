@@ -4,41 +4,17 @@
 //! Does not own: topology policy, subnet storage, or endpoint response mapping.
 //! Boundary: ops topology uses this to discover canister subnet placement.
 
+use crate::infra::ic::external_candid::decode_one;
 use crate::{
     cdk::types::Principal,
-    infra::ic::{IcInfraError, call::Call, known::NNS_REGISTRY_CANISTER},
+    infra::ic::{IcInfraError, known::NNS_REGISTRY_CANISTER},
     log,
     log::Topic,
 };
-use ic_platform::candid::contract::CandidType;
-use serde::Deserialize;
+use ic_call::{Call, WaitPolicy};
+use ic_platform::candid::contract::encode_one;
+use ic_platform::nns_registry_types::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse};
 use thiserror::Error as ThisError;
-
-///
-/// GetSubnetForCanisterRequest
-///
-/// NNS registry request for canister subnet lookup.
-/// Owned by NNS registry infra and sent to the registry canister.
-///
-
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct GetSubnetForCanisterRequest {
-    pub principal: Principal,
-}
-
-///
-/// GetSubnetForCanisterPayload
-///
-/// Successful NNS registry subnet lookup payload.
-/// Owned by NNS registry infra and decoded from registry responses.
-///
-
-#[derive(CandidType, Debug, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct GetSubnetForCanisterPayload {
-    pub subnet_id: Option<Principal>,
-}
 
 ///
 /// NnsRegistryInfraError
@@ -66,11 +42,15 @@ pub struct NnsRegistryInfra;
 impl NnsRegistryInfra {
     /// Quote the same subnet lookup before its owner reserves the paid call.
     pub fn subnet_lookup_call_cost(pid: Principal) -> Result<u128, IcInfraError> {
-        Ok(
-            Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-                .with_arg(GetSubnetForCanisterRequest { principal: pid })?
-                .cost(),
+        Ok(Call::new(
+            (*NNS_REGISTRY_CANISTER).into(),
+            "get_subnet_for_canister",
+            WaitPolicy::Unbounded,
         )
+        .take_raw_args(encode_one(GetSubnetForCanisterRequest {
+            principal: Some(pid),
+        })?)
+        .get_cost())
     }
 
     /// Query the NNS registry for the subnet of *this* canister.
@@ -81,13 +61,21 @@ impl NnsRegistryInfra {
     pub async fn get_subnet_for_canister(
         pid: Principal,
     ) -> Result<Option<Principal>, IcInfraError> {
-        let request = GetSubnetForCanisterRequest { principal: pid };
+        let request = GetSubnetForCanisterRequest {
+            principal: Some(pid),
+        };
 
-        let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-            .with_arg(request)?
+        let result = decode_one::<GetSubnetForCanisterResponse>(
+            &(Call::new(
+                (*NNS_REGISTRY_CANISTER).into(),
+                "get_subnet_for_canister",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_one(request)?)
             .execute()
-            .await?
-            .candid::<Result<GetSubnetForCanisterPayload, String>>()?;
+            .await?)
+                .into_bytes(),
+        )?;
 
         match result {
             Ok(payload) => Ok(payload.subnet_id),

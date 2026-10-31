@@ -56,10 +56,19 @@ never delegates broad validation, Git publication or deployment.
 - Canister control plane: `canic-control-plane`. Fleet artifact entrypoints and
   their generated Cargo packages are owned by `canic-host`; canonical Candid
   ships with `canic`.
-- Host/operator: `canic-cli`, `canic-host`, `canic-backup`.
+- Host/operator: `canic-cli`, `canic-host`. IC Backup owns the generic backup engine.
 - Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
+- Canic-owned adapter packages live under `crates/<package-name>/`, including
+  `canic-blob-service` and `canic-icydb`, and share the root workspace catalog,
+  lockfile and release version. Independent consumer fixtures live separately
+  under `integrations/`; reusable engines remain with their upstream owners.
+- Adapter endpoint composition uses `mount!` at the consuming canister root.
+  Mounting contributes endpoints only; lifecycle and memory composition are
+  explicit and retain one host owner. Optional dedicated-canister helpers compose
+  the same parts. Unfinished adapters remain unpublished and refuse mounting at
+  compile time until their production integration is qualified.
 
 ### Maintainer-approved workspace layout exceptions — 2026-10-07
 
@@ -74,10 +83,9 @@ as explicitly approved by the maintainer for this adoption
   validation/probe artifacts, separate from application-owned `apps/` packages.
   Root formatting and metadata inventory cover them; their owning targeted
   native and PocketIC cases qualify their selected managed graphs.
-- `integrations/blob-service/` retains its package location and, following the
-  maintainer's 2026-10-10 dependency-centralization request, belongs to the main
-  workspace. It inherits the root catalog, package version and Cargo.lock and
-  joins the coherent publication family after `canic`.
+- The 2026-10-28 maintainer decision moves the Blob adapter to
+  `crates/canic-blob-service/`, superseding its package-location exception. It
+  remains in the coherent publication family after `canic`.
 - `integrations/blob-service/consumer/` and
   `integrations/blob-service/embedded-consumer/` retain their independent
   root-package workspaces and existing package locations. Each private consumer
@@ -101,11 +109,21 @@ retain their specified Candid encoding. The 2026-10-26 completion decision in th
 `CandidType` derives/implementations: owned initialization payloads and hash inputs
 move with their producers and validators. Required external types come from their
 upstream owner, including `ic-platform` for IC contracts. Generic external-Candid
-adapter bounds may remain. Storage representation follows its separately accepted
-serde_cbor hard cut; lifecycle safety is unchanged. No next-minor work or release
+adapter bounds may remain. Storage representation follows the maintainer's
+2026-10-29 Wire hard cut for owned stable records and checkpoints; dedicated Fleet
+activation and release-build CBOR commitments retain their exact encodings.
+Lifecycle safety is unchanged. No next-minor work or release
 execution is implied.
 
 ## Pre-1.0 Hard Cuts
+
+The maintainer authorized the optional ICRC adapter in the pending 0.113 batch.
+`canic::icrc::mount!` is explicitly selected by application code, independent of
+configuration, role capabilities and automatic startup. It owns the external
+ICRC-10 `SupportedStandard { name, url }` record; that narrow required-external
+Candid declaration is permitted. ICRC-21 keeps Platform's upstream identities.
+This does not authorize Candid on owned application models or a second lifecycle,
+handler registry, executor, ledger client or consent-policy owner.
 
 - Prefer deleting obsolete contracts and correcting current-state defects over
   preserving accidental behavior. A refusal must protect a concrete property

@@ -161,28 +161,6 @@ placement.minimum_distinct_roots = 2
         assert_eq!(health.role.as_deref(), Some(overview.role.as_str()));
     }
 
-    fn assert_supported_standards(pic: &PocketIc, coordinator: Principal) {
-        let reply = pic
-            .query_call(
-                coordinator,
-                principal(99),
-                "icrc10_supported_standards",
-                ic_platform::candid::contract::encode_args(()).expect("empty standards arguments"),
-            )
-            .expect("standards query is public for non-controllers");
-        let (standards,): (Vec<(String, String)>,) =
-            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
-                .expect("bounded standards reply");
-        assert_eq!(
-            standards,
-            vec![(
-                "ICRC-10".to_string(),
-                "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10".to_string(),
-            )],
-            "Coordinator must advertise its implemented standards only"
-        );
-    }
-
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
@@ -204,7 +182,6 @@ placement.minimum_distinct_roots = 2
             None,
         );
 
-        assert_supported_standards(&pic, coordinator);
         assert_public_health(&pic, coordinator);
 
         let genesis =

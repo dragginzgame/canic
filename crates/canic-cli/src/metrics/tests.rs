@@ -11,6 +11,19 @@ use canic_contracts::dto::{
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
 
+fn roundtrip_metric_page(page: Page<MetricEntryDto>) -> super::model::MetricsPage {
+    use canic_contracts::{dto::metric_page, protocol::protected_metrics as protocol};
+    let response: Result<Page<metric_page::MetricEntry>, canic_contracts::dto::error::Error> =
+        Ok(page.into());
+    let bytes =
+        ic_wire::native::encode_response(protocol::METHOD_ID, &response, protocol::RESPONSE_LIMITS)
+            .unwrap();
+    let decoded: Result<Page<metric_page::MetricEntry>, canic_contracts::dto::error::Error> =
+        ic_wire::native::decode_response(protocol::METHOD_ID, &bytes, protocol::RESPONSE_LIMITS)
+            .unwrap();
+    metric_page(decoded.unwrap().into())
+}
+
 #[test]
 fn parses_metric_kind_selectors() {
     let options =
@@ -112,19 +125,27 @@ fn parses_typed_metrics_page() {
             MetricEntryDto {
                 labels: vec!["lifecycle".into(), "init".into(), "started".into()],
                 principal: None,
-                value: MetricValueDto::Count(2),
+                value: MetricValueDto::Count {
+                    count: 2,
+                    exact: true,
+                },
             },
             MetricEntryDto {
                 labels: vec!["cycles_funding".into(), "minted".into()],
                 principal: Some(Principal::from_text("aaaaa-aa").expect("principal")),
-                value: MetricValueDto::U128(1_000),
+                value: MetricValueDto::U128 {
+                    value: 1_000,
+                    exact: true,
+                },
             },
             MetricEntryDto {
                 labels: vec!["timer".into(), "tick".into()],
                 principal: None,
-                value: MetricValueDto::CountAndU64 {
+                value: MetricValueDto::Measurement {
                     count: 3,
-                    value_u64: 12,
+                    total: u128::from(u64::MAX) + 1,
+                    count_overflowed: false,
+                    total_overflowed: false,
                 },
             },
         ],
@@ -135,14 +156,110 @@ fn parses_typed_metrics_page() {
     let entries = page.entries;
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].labels, ["lifecycle", "init", "started"]);
-    assert_eq!(entries[0].value, MetricValue::Count { count: 2 });
-    assert_eq!(entries[1].principal.as_deref(), Some("aaaaa-aa"));
-    assert_eq!(entries[1].value, MetricValue::U128 { value: 1_000 });
     assert_eq!(
-        entries[2].value,
-        MetricValue::CountAndU64 {
-            count: 3,
-            value_u64: 12
+        entries[0].value,
+        MetricValue::Count {
+            count: 2,
+            exact: true
         }
     );
+    assert_eq!(entries[1].principal.as_deref(), Some("aaaaa-aa"));
+    assert_eq!(
+        entries[1].value,
+        MetricValue::U128 {
+            value: 1_000,
+            exact: true
+        }
+    );
+    assert_eq!(
+        entries[2].value,
+        MetricValue::Measurement {
+            count: 3,
+            total: u128::from(u64::MAX) + 1,
+            count_overflowed: false,
+            total_overflowed: false
+        }
+    );
+}
+
+#[test]
+fn metric_measurement_quality_survives_wire_and_json() {
+    for (count, total, count_overflowed, total_overflowed) in [
+        (0, 0, false, false),
+        (1, 0, false, false),
+        (u64::MAX, u128::from(u64::MAX), false, false),
+        (2, u128::from(u64::MAX) + 1, false, false),
+        (u64::MAX, 0, true, false),
+        (u64::MAX, u128::MAX, true, true),
+    ] {
+        let page = Page {
+            entries: vec![MetricEntryDto {
+                labels: vec!["perf".into(), "instructions".into()],
+                principal: None,
+                value: MetricValueDto::Measurement {
+                    count,
+                    total,
+                    count_overflowed,
+                    total_overflowed,
+                },
+            }],
+            total: 1,
+        };
+        let rows = roundtrip_metric_page(page).entries;
+        let json = serde_json::to_string(&rows).unwrap();
+        assert!(json.contains(&format!("\"total\":{total}")));
+        assert!(json.contains(&format!("\"count_overflowed\":{count_overflowed}")));
+        assert!(json.contains(&format!("\"total_overflowed\":{total_overflowed}")));
+        assert_eq!(
+            rows[0].value,
+            MetricValue::Measurement {
+                count,
+                total,
+                count_overflowed,
+                total_overflowed
+            }
+        );
+    }
+}
+
+#[test]
+fn scalar_quality_survives_wire_and_json_at_full_width() {
+    for (value, exact) in [
+        (0, true),
+        (u128::from(u64::MAX) + 1, true),
+        (u128::MAX, true),
+        (u128::MAX, false),
+    ] {
+        let page = Page {
+            entries: vec![
+                MetricEntryDto {
+                    labels: vec!["events".into()],
+                    principal: None,
+                    value: MetricValueDto::Count {
+                        count: value,
+                        exact,
+                    },
+                },
+                MetricEntryDto {
+                    labels: vec!["cycles".into()],
+                    principal: None,
+                    value: MetricValueDto::U128 { value, exact },
+                },
+            ],
+            total: 2,
+        };
+        let rows = roundtrip_metric_page(page).entries;
+        assert_eq!(
+            rows[0].value,
+            MetricValue::Count {
+                count: value,
+                exact
+            }
+        );
+        assert_eq!(rows[1].value, MetricValue::U128 { value, exact });
+        let json = serde_json::to_string(&rows).unwrap();
+        assert!(json.contains(&format!("\"count\":{value}")));
+        assert!(json.contains(&format!("\"value\":{value}")));
+        assert_eq!(json.matches(&format!("\"exact\":{exact}")).count(), 2);
+    }
 }

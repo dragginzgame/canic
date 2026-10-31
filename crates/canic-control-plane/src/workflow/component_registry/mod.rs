@@ -133,7 +133,7 @@ use canic_core::{
             config::ConfigOps,
             ic::{
                 IcOps,
-                call::CallOps,
+                call::execute as execute_call,
                 mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
             },
         },
@@ -165,6 +165,7 @@ use component_installation::{
 use component_installation::{
     validate_installed_component_status, validate_prepared_install_status,
 };
+use ic_call::{Call, WaitPolicy};
 use lifecycle_drivers::{
     advance_component_draining_boundary, advance_subtree_removal_phase,
     component_allocation_reconciliation_complete, component_draining_advance_removal_response,
@@ -3743,18 +3744,25 @@ async fn query_managed_binding(
         protocol::protected_binding::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
-    let reply = CallOps::bounded_wait(canister, protocol::protected_binding::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(|error| {
-            error.with_dependency_failure(
-                canister,
-                protocol::protected_binding::METHOD,
-                "managed_binding",
-            )
-        })?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            canister.into(),
+            protocol::protected_binding::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await
+    .map_err(|error| {
+        error.with_dependency_failure(
+            canister,
+            protocol::protected_binding::METHOD,
+            "managed_binding",
+        )
+    })?
+    .into_bytes();
     let result: Result<canic_contracts::dto::component_directory::ManagedCanisterBinding, Error> =
         ic_wire::native::decode_response(
             protocol::protected_binding::METHOD_ID,
@@ -4172,13 +4180,20 @@ async fn query_component_runtime_status(
         wire::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let call = CallOps::bounded_wait(canister, wire::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(|error| {
-            error.with_dependency_failure(canister, wire::METHOD, "component_runtime_status")
-        })?;
+    let call = execute_call(
+        Call::new(
+            canister.into(),
+            wire::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await
+    .map_err(|error| {
+        error.with_dependency_failure(canister, wire::METHOD, "component_runtime_status")
+    })?;
     let result: Result<
         canic_contracts::dto::runtime_reporting::ComponentRuntimeOperationStatus,
         Error,
@@ -4208,18 +4223,25 @@ async fn require_component_runtime_ready(
         protocol::protected_readiness::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID))?;
-    let reply = CallOps::bounded_wait(canister, protocol::protected_readiness::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(|error| {
-            error.with_dependency_failure(
-                canister,
-                protocol::protected_readiness::METHOD,
-                "component_readiness",
-            )
-        })?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            canister.into(),
+            protocol::protected_readiness::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await
+    .map_err(|error| {
+        error.with_dependency_failure(
+            canister,
+            protocol::protected_readiness::METHOD,
+            "component_readiness",
+        )
+    })?
+    .into_bytes();
     let result: Result<canic_contracts::dto::runtime_observation::CanicReadinessStatus, Error> =
         ic_wire::native::decode_response(
             protocol::protected_readiness::METHOD_ID,
@@ -4450,13 +4472,18 @@ async fn configure_target_component_runtime(
     let request = canic_contracts::dto::runtime_configuration::ComponentRuntimeDirectoryPreparationRequest::from(request);
     let bytes = ic_wire::native::encode_request(wire::METHOD_ID, &request, wire::REQUEST_LIMITS)
         .map_err(|_| InternalError::invariant())?;
-    let call = CallOps::bounded_wait(canister, wire::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(|error| {
-            error.with_dependency_failure(canister, wire::METHOD, "configure_runtime")
-        })?;
+    let call = execute_call(
+        Call::new(
+            canister.into(),
+            wire::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await
+    .map_err(|error| error.with_dependency_failure(canister, wire::METHOD, "configure_runtime"))?;
     let result: Result<canic_contracts::dto::role::OperationReceipt, Error> =
         ic_wire::native::decode_response(
             wire::METHOD_ID,

@@ -295,6 +295,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
 #[derive(Deserialize)]
 struct PublicSamplingProbe {
     sample_instructions: u64,
+    scalar_record_instructions: u64,
     sample: Result<(), Error>,
     cycle_tracking: Result<(), Error>,
     allocation_unchanged: bool,
@@ -391,13 +392,13 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     };
     let baseline = sample(256, false);
     let baseline = baseline.expect("authorized fixture sampling");
-    baseline.sample.unwrap();
-    baseline.cycle_tracking.unwrap();
+    baseline.sample.as_ref().unwrap();
+    baseline.cycle_tracking.as_ref().unwrap();
     let full = sample(4096, false);
     let full = full.expect("authorized fixture sampling");
-    full.sample.unwrap();
-    full.cycle_tracking.unwrap();
-    assert_explicit_sampling_cost(baseline.sample_instructions, full.sample_instructions);
+    full.sample.as_ref().unwrap();
+    full.cycle_tracking.as_ref().unwrap();
+    assert_explicit_sampling_cost(&baseline, &full);
     assert_periodic_sampling_cost(&fixture.pic, canister);
     let operations = query(PublicMetricFamily::Operations);
     let performance = query(PublicMetricFamily::Performance);
@@ -612,6 +613,7 @@ fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
     assert_application_timer_rows(&fixture.pic, canister_id);
 
     wait_for_fixture_ready(&fixture.pic, canister_id, "install");
+    assert_component_binding(&fixture.pic, canister_id, fixture.root);
 
     fixture
         .pic
@@ -631,6 +633,37 @@ fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
     assert_application_timer_rows(&fixture.pic, canister_id);
 
     wait_for_fixture_ready(&fixture.pic, canister_id, "post_upgrade");
+    assert_component_binding(&fixture.pic, canister_id, fixture.root);
+}
+
+fn assert_component_binding(pic: &PocketIc, canister_id: Principal, stranger: Principal) {
+    let spec = timer_probe::ADAPTER_BINDING;
+    let request =
+        ic_wire::native::encode_request(spec.method_id, &(), spec.request_limits).unwrap();
+    assert!(
+        pic.query_call(canister_id, stranger, spec.method, request.clone())
+            .is_err()
+    );
+    assert!(
+        pic.query_call(canister_id, Principal::anonymous(), spec.method, vec![0])
+            .is_err()
+    );
+    assert!(
+        pic.query_call(
+            canister_id,
+            Principal::anonymous(),
+            spec.method,
+            vec![0; spec.request_limits.bytes + 1]
+        )
+        .is_err()
+    );
+    let response = pic
+        .query_call(canister_id, Principal::anonymous(), spec.method, request)
+        .unwrap();
+    assert!(
+        ic_wire::native::decode_response::<bool>(spec.method_id, &response, spec.response_limits)
+            .unwrap()
+    );
 }
 
 #[test]
@@ -1073,8 +1106,19 @@ fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
         .find_map(|entry| {
             (entry.labels == ["perf", "timer", "canic", subsystem, name, "work"]).then(|| {
                 match entry.value {
-                    MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
-                    MetricValue::Count(_) | MetricValue::U128(_) => {
+                    MetricValue::Measurement {
+                        count,
+                        total,
+                        count_overflowed,
+                        total_overflowed,
+                    } => {
+                        assert!(!count_overflowed && !total_overflowed);
+                        (
+                            count,
+                            u64::try_from(total).expect("bounded timer audit instructions fit u64"),
+                        )
+                    }
+                    MetricValue::Count { .. } | MetricValue::U128 { .. } => {
                         panic!("timer performance metric must carry count and instructions")
                     }
                 }
@@ -1306,13 +1350,21 @@ fn assert_periodic_sampling_cost(pic: &PocketIc, canister: Principal) {
     report_sampling_cost("scheduled maximum", instructions);
 }
 
-fn assert_explicit_sampling_cost(baseline: u64, full: u64) {
-    report_sampling_cost("first sample, 256 checkpoints", baseline);
-    report_sampling_cost("repeat sample, 4096 checkpoints", full);
+fn assert_explicit_sampling_cost(baseline: &PublicSamplingProbe, full: &PublicSamplingProbe) {
+    assert!(baseline.scalar_record_instructions > 0 && full.scalar_record_instructions > 0);
+    println!(
+        "SCALAR_RECORDING_COST first={} warm={} unit=instructions",
+        baseline.scalar_record_instructions, full.scalar_record_instructions,
+    );
+    report_sampling_cost(
+        "first sample, 256 checkpoints",
+        baseline.sample_instructions,
+    );
+    report_sampling_cost("repeat sample, 4096 checkpoints", full.sample_instructions);
     // Sixteen times the source entries must not cause proportional work once
     // the retained prefix is full. Allow twofold variation between these samples.
     assert!(
-        full <= baseline.saturating_mul(2),
+        full.sample_instructions <= baseline.sample_instructions.saturating_mul(2),
         "sampling cost must remain bounded beyond the retained-series ceiling"
     );
 }
@@ -1394,6 +1446,16 @@ fn assert_public_process_projection(
         assert_eq!(row.unit, "count");
         assert_eq!(row.canister_id, None);
         assert!(row.observed_at_ns > 0);
+        if name == "process.wasm_store.completed" {
+            assert_eq!(row.value, 2);
+            assert_eq!(
+                row.kind,
+                canic::dto::public_status::PublicMetricKind::Counter {
+                    window_id: 0,
+                    saturated: false,
+                }
+            );
+        }
     }
     for name in ["memory.wasm_extent", "memory.stable_extent"] {
         let row = performance

@@ -23,6 +23,10 @@ use std::collections::BTreeMap;
 
 impl Validate for ComponentSpecConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
+        self.metrics.storage_policy().validate()?;
+        for child in self.children.values() {
+            child.metrics.storage_policy().validate()?;
+        }
         validate_canister_role(&self.component_role, "Component role")?;
         if self.component_role.is_fleet_coordinator()
             || self.component_role.is_root()

@@ -170,7 +170,6 @@ mod tests {
             RoleCapabilityKey::DelegatedTokenVerifier,
             RoleCapabilityKey::FleetAdmissionProjection,
             RoleCapabilityKey::FleetCoordinator,
-            RoleCapabilityKey::Icrc21,
             RoleCapabilityKey::Index,
             RoleCapabilityKey::LocalApplicationAuthorization,
             RoleCapabilityKey::ObservabilityDiagnostics,

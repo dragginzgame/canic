@@ -121,7 +121,7 @@ fn perf_context_completed() -> Vec<u8> {
     COMPLETED.with_borrow(Clone::clone)
 }
 
-#[canic::canic_update(public, wire(id = crate::timer_wire::PERF_PROBE, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+#[canic::update(public, wire(id = crate::timer_wire::PERF_PROBE, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
 async fn perf_context_probe(which: u8) -> Result<PerfProbeObservation, canic::Error> {
     assert!(which < 2);
     work(if which == 0 { 100 } else { 10_000 });
@@ -182,6 +182,9 @@ fn perf_context_metrics() -> Vec<PerfProbeMetric> {
     perf::entries()
         .into_iter()
         .filter_map(|entry| {
+            if entry.aggregate.samples_overflowed() || entry.aggregate.total_overflowed() {
+                return None;
+            }
             let name = match entry.key {
                 perf::PerfKey::Endpoint { name, .. } if name.starts_with("perf_context_") => name,
                 perf::PerfKey::Checkpoint { scope, label } if scope == module_path!() => label,
@@ -189,9 +192,12 @@ fn perf_context_metrics() -> Vec<PerfProbeMetric> {
             };
             Some(PerfProbeMetric {
                 name,
-                count: entry.count,
-                instructions: u64::try_from(entry.total_instructions).ok()?,
+                count: entry.aggregate.samples(),
+                instructions: u64::try_from(entry.aggregate.total()).ok()?,
             })
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

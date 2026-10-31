@@ -11,7 +11,7 @@ use crate::{
 use std::cell::RefCell;
 
 /// Exact maximum encoded bytes for the complete async-job recovery record.
-pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 810;
+pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 210;
 
 std::thread_local! {
     static ASYNC_JOB_RECOVERY: RefCell<

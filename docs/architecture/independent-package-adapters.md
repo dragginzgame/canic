@@ -11,7 +11,11 @@ a Canic feature into another Cargo package does not meet that requirement.
 Technical independence is necessary but insufficient: a credible non-Canic use
 case must justify maintaining a separate product.
 
-The Canic-owned blob composition lives in `integrations/blob-service`, as a
+Canic-owned adapter crates live under `crates/<package-name>/`, including
+`canic-blob-service` and `canic-icydb`. Independent consuming fixtures live under
+`integrations/`.
+
+The Canic-owned blob composition lives in `crates/canic-blob-service`, as a
 main-workspace member sharing the catalog, lockfile and release version. Its two
 application consumers retain isolated qualification workspaces. The upstream
 service remains independently usable and has no Canic dependency. Thin runtime hooks belong in
@@ -33,9 +37,38 @@ orchestration retains its separate ownership and authority contracts below.
 | Blob service | Storage, upload protocols, accounting, certification and service tests | Fleet endpoint guards, lifecycle participant, memory grants and application-metric sampler |
 | Backup | Artifacts, checksums, manifests, journal transitions, bounded capture/restore runners, retention and command custody | Fleet discovery, exact release/controller authority, application consistency and operator integration |
 
-When backup runner adoption is qualified, delete `crates/canic-backup` and its
-duplicate mechanisms. Do not retain it as a forwarding crate. Public upstream
-APIs must suffice; Canic must not copy an upstream engine into an adapter.
+The maintainer approved an immediate hard cut on 2026-10-29. The duplicate
+Backup crate and the old backup/restore CLI are removed, including workspace,
+publication and packaging edges. Live backup and restore commands are unavailable;
+this removal supersedes the earlier requirement to retain the old restore runner.
+No engine was copied into Host and no forwarding package remains.
+
+IC Backup 0.50.2 owns workflow plans, original stage/attempt journals, bounded
+advancement, inspection, immutable manifests and guarded reference release.
+Canic retains Fleet identity, release/controller authority, application hooks and
+the thin Host checkpoint adapter. Future CLI operations must consume upstream
+owners with qualified production admission, custody and post-load acceptance.
+Canic #513 tracks this integration; #394/#550 track live/application acceptance.
+Existing source evidence and retained operation data are not rewritten or deleted.
+
+## Endpoint composition API
+
+Every Canic adapter uses `mount!` for endpoint composition at the consuming
+canister's crate root. Mounting alone does not initialize a service, allocate
+memory or install lifecycle hooks. The host composes memory and synchronous
+lifecycle participants explicitly; convenience canister constructors assemble
+those same parts under one lifecycle owner.
+
+| Adapter | Endpoint mounting | Lifecycle composition |
+| --- | --- | --- |
+| Blob | `canic_blob_service::mount!()` | Explicit participant hooks; `canister!()` bundles a dedicated service. |
+| IcyDB | `canic_icydb::mount! { managed; … }` | `start!(…; participant, …)` supplies both host hooks; standalone mounting omits `managed;`. |
+| Auth | `canic_auth::mount!()` deliberately refuses compilation | Unimplemented; see the [adapter scaffold](../../crates/canic-auth/README.md). |
+
+Service-specific declarations remain with their owners. This shared naming and
+composition contract does not require identical service configuration or a
+runtime plugin registry. Auth is a private workspace scaffold, excluded from the
+publication family until its production integration is qualified.
 
 ## Backup Adapter Contract
 

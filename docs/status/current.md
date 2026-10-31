@@ -1,88 +1,146 @@
-# Current handoff — 2026-10-28
+# Current handoff — 2026-10-30
 
-## Accepted work and authority
+## Scope and authority
 
-The maintainer explicitly requests releasing Canic 0.112.0 and publishing its
-package family. This includes the canonical source release and its required
-qualification, version preparation, commit/tag and atomic main/tag push, followed
-by `make publish`. It does not select an application or authorize a live Fleet
-operation. PocketIC performance work is deferred until after publication.
+The maintainer selected the combined 0.113 repairs/adoption batch and requested
+all newly published IC dependencies, continuing the pending Persistence adoption.
+The maintainer explicitly requested `make release-minor && make publish` for
+0.113.0, with in-scope error correction and retries. This supersedes the earlier
+source/package publication hold. The selected Make flow owns full qualification,
+versioning, commits, atomic branch/tag delivery and crates.io publication. Fleet
+deployment is not selected. The preceding minor's closeout is not claimed.
+Before the governed bump, package versions remain 0.112.0 and the open 0.113 notes
+contain the accepted batch. The pre-release source baseline is
+`b9ed7f298bdaf8c9cceac142edf7e56b15d33208`; last published source is
+`5c236ab130c0d63892ef281b45bdc3fa353e012f`. Preserve release/recovery state and
+artifacts; reconcile uncertain delivery before any retry.
 
-The reviewed repair batch and focused qualification corrections are committed.
-Local `main` was fast-forwarded from `f768a5519edb35512912dd73fce45936155edc6e`
-to `ec817f2e20f5002a88def1a522f7ffe3ac046ee9`; the latter remains available on
-`repair/release-qualification`. Versions still read 0.111.0; 0.112.0 notes are open.
-The accepted Blob/Wire hard cut remains governed by the
-[closeout plan](../audits/working/0.112-push-readiness/plan.md) and
-[migration contract](../design/0.112-standalone-blob-service-extraction/wire-hard-cut.md).
+## Current dependency cohort and qualification
 
-## Current release attempt
+The root and both private Blob consumer catalogs/locks select Blob/contracts
+0.58.0, Memory/Storage/Metrics Stable 0.56.0, Build/Host/Testkit 0.70.3,
+Auth/protocol 0.23.0, Backup/Agent 0.50.2, Query 0.76.2, Platform/Call 0.8.2,
+Logging 0.17.2, Metrics 0.17.5, Timers 0.32.1 and Wire/derive 0.7.23.
+All 23 direct root IC selections match the latest stable published checksums at
+lookup. Each root/consumer lock has one Memory, Storage, Metrics Stable, Platform
+and Timers identity. Blob 0.58 resolves the former 0.55/0.56 runtime conflict;
+the pending Persistence adoption is now complete. The Rust 1.91 floor and existing
+workspace boundaries remain. Local qualification uses the governed Rust 1.99.1.
 
-The first authorized `make release-minor` stopped before version mutation after
-4m43.920s. The release-integrity gate's synthetic build-environment fixture
-inherited the enclosing release's `RELEASE_SOURCE`, then compared that real SHA
-with its substituted Git identity. No 0.112 release plan was saved, tag created,
-push performed or package published. The release lock was released normally.
-Logs: `target/session-release-0112/attempt.TWDfr4/release.log` and `release.exit`.
+The exact Testkit server and release-metadata editor are prepared at 0.70.3.
+The embedded allocation peer and its source/tool/lock evidence are refreshed.
+Shared Tooling remains reviewed 0.27.6 at
+`5a72359b5be19d5221334cf2c9b3204621d3f3f6`.
+Node/npm/TypeScript remain 24.21.0/12.2.0/6.0.3; Platform SDK 0.1.1 uses Core 6.1.1
+and is still the latest published browser selection.
 
-The build-environment, validation-lane and preflight fixtures now clear inherited
-`RELEASE_SOURCE` before selecting synthetic identities. Production source fences
-and explicit mismatch regressions remain unchanged. Both directly affected lane
-fixtures pass under the actual source SHA; the full release-integrity gate passes
-with the outer release variables. Scoped ShellCheck passes with repository
-options and the referenced tool catalog. Evidence:
-`target/session-release-0112/attempt.TWDfr4/fixture-recovery-final.log`.
-The narrow correction and changelog updates require a local commit, then a fresh
-canonical minor release. Do not use resume: this failed gate saved no attempt.
+Release attempts and repairs are retained at `target/release-0113-20261030/`.
+Attempt 1 passed workspace/consumer Clippy, then refused a stale embedded peer
+after the Tooling/Metrics lock change. Catalogs align on Tooling 0.70.3 and Metrics
+0.17.5, and the peer is refreshed/verified. Attempt 2 passed formatting, policy,
+security, compilation and the complete feature matrix. Its ordinary tier found
+seven Core and two Host stale golden cases for accepted config/Wire hard cuts,
+plus one wrapped-Cargo diagnostic defect; PocketIC correctly remained skipped.
+Current-contract vectors are refreshed and role diagnostics recover the nested
+typed capture error before bounded redacted rendering. All 77 focused Core/Host
+regressions, strict owner lint and refreshed peer verification pass. Attempt 3
+passed all ordinary tests and reached installed qualification. Its initial-child
+recovery case stalled after a pool-maintenance lease takeover was misclassified
+as a permanent invariant failure. Remaining validation was cancelled after that
+confirmed failure. A deterministic five-minute pause reproduces the defect; the
+retryable stale-completion fix passes the installed same-claim recovery case,
+all 16 focused pool/lease native cases, strict owner lint and refreshed peer
+verification. Commit the repair and retry the explicitly requested
+release/publication sequence. No version/tag/publication effect has occurred yet.
 
-## Qualification and implementation evidence
+Earlier focused evidence: `target/dependency-refresh-20261030/README.md`; isolated source
+and targets: `.tmp/dependency-refresh-20261030`. All 724 selected native cases pass
+(Core 485, Contracts 7, Control Plane 66, Host 157, facade 9); five opt-in Host
+cases retain their declared ignore conditions. Warning-denied all-target/all-feature
+lint passes for Core, Host, Control Plane and Blob. All 15 selected installed PocketIC cases pass: two identical-Wasm Memory upgrades,
+dedicated/embedded Blob (five embedded funding scenarios), eleven timer/metrics
+cases and the original Host checkpoint workflow. These are local framework proofs,
+not live-provider or browser-UI acceptance. The final Backup 0.50.2/Query 0.76.2
+host patches repeat Host native/lint and checkpoint proof; unchanged runtime source
+and native/Wasm dependency closures retain the other 14 installed cases. Exact
+records and reused scopes are in `runtime-reuse.json`.
+Nineteen scoped files were integrated under the existing main build locks; original
+bytes/hashes are retained, including the concurrent newer Backup/Query lock records,
+and the Git index is unchanged. All non-Markdown qualified
+source, catalogs, locks and fixtures match the isolated copy.
+The earlier `target/dependency-refresh-20261029/` retains its 657 native/17 installed
+receipt on Blob 0.57/Persistence 0.55.2/Tooling 0.70.0. The preliminary 0.56 Core
+receipts in `target/persistence-metrics-adoption-20261029/` and
+`target/persistence-adoption-20261029-primary/` retain their original scopes.
 
-Complete non-publishing `make release-verify` passed on clean `ec817f2e2` in
-90m48.263s. Detailed evidence is retained in
-`target/session-qualification/final-report.md`, `attempt-6.log`,
-`attempt-6-selection.txt` and `attempt-6.exit`. Earlier failed attempts and their
-focused recoveries remain alongside them. The previous detailed handoff is
-preserved in Git at `ec817f2e2:docs/status/current.md`.
+Auth 0.23 consumes admitted session/replay pairs, uses protected upstream
+`SessionLimits`/`RequiredScopes` constructors and returns compact admission
+receipts. Full records remain in the host store; current-authority authorization,
+immutable leases, generation/replay/revocation fences and custody assertions remain.
+Memory 0.56 owns the bounded native Wire ledger (`ICML` / `ICMWIRE1`). Metrics
+Stable retains `ICMW` rows; Canic-owned values retain `CSW\x01`. No predecessor
+reader, migration, automatic ledger reset or unknown-row replacement is provided.
+Deploy by clean reinstall; same-release restoration and uncertain-effect recovery
+remain required.
 
-That complete pass includes the exact restored-Root inventory/allocation case
-(2m36s), maximum application initialization (1m16s), Coordinator replay (1.85s),
-mixed-topology recovery (11m46s) and source-bound activation reset (4m52s).
-Internal PocketIC took 65m10s and public runtime PocketIC 9m14s, inside the total.
-These passes do not explain historical activation-conflict causation.
+## Maintained boundaries
 
-Implemented owners: shared preparation/qualification groups, governed build
-selection, selected generated-source admission, exact package/source boundaries,
-and existing release recovery. Generated source lives in configuration-keyed
-`target/canic-packages`; Cargo output defaults to `target/cargo`. Physical output
-and source overlaps, including symlink aliases, reject. Root lookup canonicalizes
-configuration aliases. Snapshot rejection tests retain typed transport rejection
-and unchanged-state assertions. Initialization admits the existing maximum input
-within bounded codec accounting without increasing application bytes or authority.
+The selected #700 Call hard cut removes generic builders, response wrappers and
+workflow/infra forwarding. Framework requests use IC Call directly through stateless
+metrics/error instrumentation; counters count polled attempts. Separate evidence
+remains at `target/call-cut-20261029/`.
+Wire owns owned RPC codecs, stable records and checkpoints. The CBOR/u128 adapter
+and decoding tree are removed. ICP-refill amounts preserve upstream BigUint overflow
+evidence; replay replies use the lossless Wire projection. Checkpoint/caller/completed-
+leaf commitments use independent `.wire.v1` domains. Dedicated Fleet activation
+commitments and Host release-build CBOR evidence retain their exact encodings.
+`target/storage-wire-20261029/qualification.json` retains the earlier storage-cut
+receipt and frozen runtime lock; do not relabel it as the current cohort's proof.
 
-The supported non-publishing sequence is `make prepare-validation SCOPE=release`,
-review/commit, then `make release-verify`. No manual exports are required.
-Make selects Rust/Cargo 1.99.1, pinned sccache 0.19.0, the existing wrapper,
-version-isolated runtime and incremental=0; supported explicit overrides remain
-validated. Qualification forces offline Cargo. Release preflight prepares all
-three locked graphs and exact tools. No source-only receipt bypass exists.
-Shared Tooling latest-stable maintenance: [#319](https://github.com/dragginzgame/shared-tooling/issues/319).
+IC Build owns capture/staging/input evidence/traversal/caching; Canic owns recipes,
+source/tool custody, transforms and admission. Private staging helpers are removed.
+Earlier #529/#530 evidence is at `target/ic-build-completion-20261029/`.
 
-## Boundaries and next action
+#708 is integrated locally from `86c23f97a6a01c8f3c39dac2be7ff573d3bb813d`.
+Fixed provider rosters default to heap; immutable stable overrides share one
+upstream Metrics Stable map. Canic owns lifecycle/sampling, attribution,
+authorization and bounded selection/history. IC Logging owns bounded heap
+recording/filtering/pruning; logs reset on upgrade/reinstall. Stable log checkpoints
+remain absent. `canic_logs`/`canic_metrics` require controllers; selected cached Blob
+observations use `canic_public_metrics`. Storage grants no publication authority.
 
-Commit the focused fixture correction and run `make release-minor`; only after
-success run `make publish`. Observe exact remote refs and registry versions.
-Stop on failed gates or uncertain external outcomes and retain all artifacts.
-Once version preparation creates a saved plan, use exact-version
-`make release-resume VERSION=0.112.0` after inspecting its state and remote refs.
-Never remove an occupied lock based only on restricted PID visibility.
+Blob stays at `crates/canic-blob-service`; its two independent consumer fixtures stay
+under `integrations/blob-service`. Adapters mount explicitly with one host lifecycle
+and Memory runtime. IcyDB has no engine dependency; actual consumer composition stays
+downstream (#373/#590). Auth's unpublished scaffold still refuses mounting; issuer/
+receiver/browser/Root enrollment remains incomplete (#491). The optional Rust-mounted
+ICRC adapter retains its required external Candid contracts.
 
-Fresh hosted setup and native macOS remain unverified. Historical October 27
-`ActivationResetAdoptionConflict` remains unexplained; logs are
-`/tmp/canic-release-0112-attempt{4,5}.log`. Current passes do not disprove it.
-Preserve controllers, bounded spending, cycle conservation, release fences and
-same-operation recovery. Snapshot-owned Shared Tooling files remain unchanged.
+## Backup and remaining acceptance
 
-`make release-minor` releases source; `make publish` publishes packages. CLI
-installation, application build, Fleet deployment and live verification are
-separate. No live deployment is verified. Publication provenance hardening,
-broader consolidation and deployment orchestration remain deferred.
+The approved hard cut removes `canic-backup` and the backup/restore CLI; live
+operations remain unavailable. IC Backup/Agent owns the generic engine. Canic retains
+Fleet authority, runtime fences and a thin Host checkpoint adapter with mandatory
+admission/custody and whole-unit/context commitments. Production transport, durable
+ingress/reply custody, Root-paid capture, complete manifests/transfer, stopped restore
+and terminal reference release remain unfinished (#513/#394/#550). Do not recreate
+a generic operator runner here (IC Backup #75). The authorized 0.112.1 retirement
+notice is published; historical evidence and `target/backup-hard-cut/retired-source.tar.gz`
+remain retained.
+
+Earlier `target/adoption-qualification-20261029/` records 327 native, 38 installed
+cases and four ICRC profiles on its older frozen graph, not the current cohort.
+Native Auth allocation qualification does not complete Wasm/all-family heap acceptance
+#535. Fresh hosted/macOS, delivered-source/registry-only acceptance and publication
+provenance remain separate. Provider linkage #494 / Blob #34 and Platform codec
+#78/#79 / Canic #613 retain their external obligations. EX-05 excludes independent
+provider credit reconciliation. Jobs/Relay extraction remains unimplemented.
+
+The explicitly selected 0.113 release/publication flow is now active. Its full gate
+and release/publication admission own delivery and registry provenance. Remaining
+production integrations above retain their separate acceptance boundaries. Do not
+start the next minor or claim human closeout from a passing gate. Status remains
+descriptive; the release flow owns receipts/versioning. Shared upkeep #319 remains.
+Prior handoffs are retained in the refresh/adoption evidence roots; release evidence
+stays at `target/session-release-0112/` / `target/session-release-0113/` and
+`target/release-0113-20261030/`.

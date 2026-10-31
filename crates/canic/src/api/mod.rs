@@ -36,11 +36,6 @@ pub mod intent {
     };
 }
 
-/// Instrumented inter-canister call construction and response decoding.
-pub mod call {
-    pub use crate::__internal::core::api::call::{Call, CallBuilder, CallResult};
-}
-
 /// Environment queries
 pub mod env {
     pub use crate::__internal::core::api::env::EnvQuery;
@@ -96,13 +91,6 @@ pub mod runtime {
     pub use crate::__internal::core::api::ready::ReadyApi;
 }
 
-/// Protocol runtime helpers
-pub mod protocol {
-    pub mod icrc21 {
-        pub use crate::__internal::core::dispatch::icrc21::Icrc21Dispatcher;
-    }
-}
-
 /// Observability and operational helpers
 pub mod public_status {
     pub use crate::__internal::core::api::public_status::{
@@ -112,6 +100,13 @@ pub mod public_status {
 
 pub mod metrics {
     pub use crate::__internal::core::api::metrics::MetricsQuery;
+    /// Explicit provider declarations and host-selected heap/stable recording.
+    pub mod providers {
+        pub use crate::__internal::core::api::metrics::{
+            MetricDefinition, MetricKind, MetricObservation, MetricProviderApi, MetricStorage,
+            ProviderMetricValue, ProviderMetricsError,
+        };
+    }
 }
 
 /// Low-level operational helpers

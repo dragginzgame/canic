@@ -318,7 +318,7 @@ pub struct IntentResourceTotalsRecord {
 
 impl IntentResourceTotalsRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "IntentResourceTotalsRecord";
-    pub const STORABLE_MAX_SIZE: u32 = 96;
+    pub const STORABLE_MAX_SIZE: u32 = 45;
 }
 
 impl_storable_bounded!(

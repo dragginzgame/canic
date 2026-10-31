@@ -5,6 +5,7 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::ops::{prelude::*, runtime::metrics::system::SystemMetrics};
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 const MAX_CALL_IDENTITIES: usize = 1_024;
@@ -13,8 +14,8 @@ const MAX_METHOD_BYTES: usize = 128;
 /// Bounded target/method counters and calls whose identities were not retained.
 #[derive(Default)]
 struct InterCanisterCallTable {
-    entries: HashMap<InterCanisterCallMetricKey, u64>,
-    overflow: u64,
+    entries: HashMap<InterCanisterCallMetricKey, MeasurementCounter>,
+    overflow: MeasurementCounter,
 }
 
 thread_local! {
@@ -33,8 +34,8 @@ thread_local! {
 
 #[derive(Clone)]
 pub struct InterCanisterCallMetricsSnapshot {
-    pub entries: Vec<(InterCanisterCallMetricKey, u64)>,
-    pub overflow: u64,
+    pub entries: Vec<(InterCanisterCallMetricKey, MeasurementCounter)>,
+    pub overflow: MeasurementCounter,
 }
 
 ///
@@ -63,7 +64,7 @@ impl InterCanisterCallMetrics {
     fn increment(target: Principal, method: &str) {
         INTER_CANISTER_CALL_METRICS.with_borrow_mut(|table| {
             if method.len() > MAX_METHOD_BYTES {
-                table.overflow = table.overflow.saturating_add(1);
+                table.overflow.add(1);
                 return;
             }
 
@@ -72,16 +73,16 @@ impl InterCanisterCallMetrics {
                 method: method.to_string(),
             };
             if let Some(count) = table.entries.get_mut(&key) {
-                *count = count.saturating_add(1);
+                count.add(1);
             } else if table.entries.len() < MAX_CALL_IDENTITIES {
-                table.entries.insert(key, 1);
+                table.entries.entry(key).or_default().add(1);
             } else {
-                table.overflow = table.overflow.saturating_add(1);
+                table.overflow.add(1);
             }
         });
     }
 
-    /// Record call construction in system + ICC metrics, including unexecuted builders.
+    /// Record one polled framework call attempt, including Platform admission refusals.
     ///
     /// This is the preferred integration point for call instrumentation,
     /// even if not all call paths currently route through it.
@@ -123,10 +124,11 @@ mod tests {
     use super::*;
     use crate::ops::runtime::metrics::system::SystemMetrics;
 
-    fn snapshot_map() -> HashMap<InterCanisterCallMetricKey, u64> {
+    fn snapshot_map() -> HashMap<InterCanisterCallMetricKey, u128> {
         InterCanisterCallMetrics::snapshot()
             .entries
             .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
             .collect()
     }
 
@@ -189,7 +191,7 @@ mod tests {
             Some(&2)
         );
 
-        assert_eq!(SystemMetrics::count(), 2);
+        assert_eq!(SystemMetrics::count().exact_total(), Ok(2));
     }
 
     #[test]
@@ -205,7 +207,7 @@ mod tests {
         InterCanisterCallMetrics::record_call(target, "method_0");
         let snapshot = InterCanisterCallMetrics::snapshot();
         assert_eq!(snapshot.entries.len(), MAX_CALL_IDENTITIES);
-        assert_eq!(snapshot.overflow, 2);
+        assert_eq!(snapshot.overflow.exact_total(), Ok(2));
         assert_eq!(
             snapshot_map().get(&InterCanisterCallMetricKey {
                 target,
@@ -214,8 +216,13 @@ mod tests {
             Some(&2)
         );
         assert_eq!(
-            snapshot.entries.iter().map(|(_, count)| count).sum::<u64>() + snapshot.overflow,
-            SystemMetrics::count()
+            snapshot
+                .entries
+                .iter()
+                .map(|(_, count)| count.exact_total().unwrap())
+                .sum::<u128>()
+                + snapshot.overflow.exact_total().unwrap(),
+            SystemMetrics::count().exact_total().unwrap()
         );
     }
 
@@ -236,11 +243,11 @@ mod tests {
                 .iter()
                 .all(|(key, _)| key.method.len() <= MAX_METHOD_BYTES)
         );
-        assert_eq!(snapshot.overflow, 2);
+        assert_eq!(snapshot.overflow.exact_total(), Ok(2));
         InterCanisterCallMetrics::reset();
         let cleared = InterCanisterCallMetrics::snapshot();
         assert!(cleared.entries.is_empty());
-        assert_eq!(cleared.overflow, 0);
+        assert_eq!(cleared.overflow.exact_total(), Ok(0));
     }
 
     #[test]
@@ -249,14 +256,17 @@ mod tests {
         let target = Principal::anonymous();
         InterCanisterCallMetrics::increment(target, "retained");
         INTER_CANISTER_CALL_METRICS.with_borrow_mut(|table| {
-            *table.entries.values_mut().next().unwrap() = u64::MAX;
-            table.overflow = u64::MAX;
+            *table.entries.values_mut().next().unwrap() =
+                MeasurementCounter::from_parts(u128::MAX, false).unwrap();
+            table.overflow = MeasurementCounter::from_parts(u128::MAX, false).unwrap();
         });
         InterCanisterCallMetrics::increment(target, "retained");
         InterCanisterCallMetrics::increment(target, &"x".repeat(MAX_METHOD_BYTES + 1));
         let snapshot = InterCanisterCallMetrics::snapshot();
-        assert_eq!(snapshot.entries[0].1, u64::MAX);
-        assert_eq!(snapshot.overflow, u64::MAX);
+        assert_eq!(snapshot.entries[0].1.total(), u128::MAX);
+        assert!(snapshot.entries[0].1.total_overflowed());
+        assert_eq!(snapshot.overflow.total(), u128::MAX);
+        assert!(snapshot.overflow.total_overflowed());
     }
 
     #[test]
@@ -268,23 +278,6 @@ mod tests {
         }
         let snapshot = InterCanisterCallMetrics::snapshot();
         assert_eq!(snapshot.entries.len(), MAX_CALL_IDENTITIES);
-        assert_eq!(snapshot.overflow, 10);
-    }
-
-    #[test]
-    fn unexecuted_public_builders_record_bounded_construction_metrics() {
-        InterCanisterCallMetrics::reset();
-        SystemMetrics::reset();
-        let target = Principal::anonymous();
-        drop(crate::api::call::Call::bounded_wait(target, "method"));
-        drop(crate::api::call::Call::unbounded_wait(
-            target,
-            &"x".repeat(MAX_METHOD_BYTES + 1),
-        ));
-        let snapshot = InterCanisterCallMetrics::snapshot();
-        assert_eq!(snapshot.entries.len(), 1);
-        assert_eq!(snapshot.entries[0].1, 1);
-        assert_eq!(snapshot.overflow, 1);
-        assert_eq!(SystemMetrics::count(), 2);
+        assert_eq!(snapshot.overflow.exact_total(), Ok(10));
     }
 }

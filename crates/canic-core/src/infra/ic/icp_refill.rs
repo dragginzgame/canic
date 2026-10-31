@@ -6,56 +6,24 @@
 
 use crate::infra::ic::{
     IcInfraError,
-    call::Call,
+    external_candid::decode_one,
     known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
 };
 use canic_contracts::ids::BuildNetwork;
+use ic_call::{Call, WaitPolicy};
 use ic_platform::{
-    candid::contract::{CandidType, Nat},
+    candid::contract::{Nat, encode_args, encode_one},
     principal::ExternalPrincipal as Principal,
 };
-use serde::{Deserialize, Serialize};
-use serde_bytes::ByteBuf;
 use thiserror::Error as ThisError;
 
 const CMC_TOPUP_MEMO_BYTES: &[u8] = b"TPUP\0\0\0\0";
 const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
 
-pub use ic_platform::icrc_ledger_types::{Account, TransferError};
-
-///
-/// TransferArg
-///
-/// ICRC-1 `icrc1_transfer` request payload used for ICP refill transfers.
-///
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct TransferArg {
-    pub from_subaccount: Option<[u8; 32]>,
-    pub to: Account,
-    pub fee: Option<Nat>,
-    pub created_at_time: Option<u64>,
-    pub memo: Option<Memo>,
-    pub amount: Nat,
-}
-
-///
-/// Memo
-///
-/// ICRC-1 memo blob.
-///
-
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
-#[serde(transparent)]
-pub struct Memo(pub ByteBuf);
-
-impl From<Vec<u8>> for Memo {
-    fn from(bytes: Vec<u8>) -> Self {
-        Self(ByteBuf::from(bytes))
-    }
-}
+pub use ic_platform::{
+    cmc_types::{IcpXdrConversionRateResponse, NotifyError, NotifyTopUpArg},
+    icrc_ledger_types::{Account, Memo, TransferArg, TransferError},
+};
 
 ///
 /// IcpRefillInfraError
@@ -101,72 +69,6 @@ pub struct IcpRefillCanisterOverrides {
 pub struct IcpRefillCanisters {
     pub ledger_canister_id: Principal,
     pub cmc_canister_id: Principal,
-}
-
-///
-/// NotifyTopUpArg
-///
-/// CMC `notify_top_up` request payload.
-/// Owned by ICP refill infra and sent to the cycles minting canister.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct NotifyTopUpArg {
-    pub block_index: u64,
-    pub canister_id: Principal,
-}
-
-///
-/// NotifyTopUpError
-///
-/// Lossless CMC `notify_top_up` error payload.
-/// Owned by ICP refill infra and returned to ops for recovery classification.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub enum NotifyTopUpError {
-    Refunded {
-        block_index: Option<u64>,
-        reason: String,
-    },
-    InvalidTransaction(String),
-    Other {
-        error_code: u64,
-        error_message: String,
-    },
-    Processing,
-    TransactionTooOld(u64),
-}
-
-///
-/// IcpXdrConversionRate
-///
-/// ICP/XDR conversion rate returned by the cycles minting canister.
-/// Owned by ICP refill infra and consumed by refill policy checks.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct IcpXdrConversionRate {
-    pub xdr_permyriad_per_icp: u64,
-    pub timestamp_seconds: u64,
-}
-
-///
-/// IcpXdrConversionRateResponse
-///
-/// Certified ICP/XDR conversion rate response returned by the CMC.
-/// Owned by ICP refill infra and decoded without policy interpretation.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[candid_path("ic_platform::candid::contract")]
-pub struct IcpXdrConversionRateResponse {
-    pub data: IcpXdrConversionRate,
-    pub hash_tree: Vec<u8>,
-    pub certificate: Vec<u8>,
 }
 
 ///
@@ -254,18 +156,24 @@ impl IcpRefillInfra {
 
     /// Query `icrc1_fee` on the selected ICP ledger.
     pub async fn icrc1_fee(ledger_id: Principal) -> Result<Nat, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_fee")
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_fee", WaitPolicy::Unbounded)
+                .take_raw_args(encode_args(())?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Query `icrc1_decimals` on the selected ICP ledger.
     pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_decimals")
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_decimals", WaitPolicy::Unbounded)
+                .take_raw_args(encode_args(())?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Query the exact source account balance on the selected ICP ledger.
@@ -273,11 +181,13 @@ impl IcpRefillInfra {
         ledger_id: Principal,
         account: Account,
     ) -> Result<Nat, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_balance_of")
-            .with_arg(account)?
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_balance_of", WaitPolicy::Unbounded)
+                .take_raw_args(encode_one(account)?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Execute `icrc1_transfer` and return the raw ledger result.
@@ -285,33 +195,44 @@ impl IcpRefillInfra {
         ledger_id: Principal,
         args: TransferArg,
     ) -> Result<Result<Nat, TransferError>, IcInfraError> {
-        Call::unbounded_wait(ledger_id, "icrc1_transfer")
-            .with_arg(args)?
-            .execute()
-            .await?
-            .candid()
+        decode_one(
+            &(Call::new(ledger_id.into(), "icrc1_transfer", WaitPolicy::Unbounded)
+                .take_raw_args(encode_one(args)?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Notify the cycles minting canister about a top-up transfer.
     pub async fn notify_top_up(
         cmc_id: Principal,
         args: NotifyTopUpArg,
-    ) -> Result<Result<Nat, NotifyTopUpError>, IcInfraError> {
-        Call::unbounded_wait(cmc_id, "notify_top_up")
-            .with_arg(args)?
-            .execute()
-            .await?
-            .candid()
+    ) -> Result<Result<Nat, NotifyError>, IcInfraError> {
+        decode_one(
+            &(Call::new(cmc_id.into(), "notify_top_up", WaitPolicy::Unbounded)
+                .take_raw_args(encode_one(args)?)
+                .execute()
+                .await?)
+                .into_bytes(),
+        )
     }
 
     /// Query the cycles minting canister for the current ICP/XDR conversion rate.
     pub async fn get_icp_xdr_conversion_rate(
         cmc_id: Principal,
     ) -> Result<IcpXdrConversionRateResponse, IcInfraError> {
-        Call::unbounded_wait(cmc_id, "get_icp_xdr_conversion_rate")
+        decode_one(
+            &(Call::new(
+                cmc_id.into(),
+                "get_icp_xdr_conversion_rate",
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(encode_args(())?)
             .execute()
-            .await?
-            .candid()
+            .await?)
+                .into_bytes(),
+        )
     }
 }
 

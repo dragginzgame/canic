@@ -6,29 +6,38 @@ explicit projects directory supplied with this prompt. Inventory the eligible
 repositories and read their local instructions. Record the catalog/source
 identities, dirty inputs and observation time.
 
-This is inspection and owning-repository issue coordination. Keep repository
+This unattended pass is report-only inspection. Keep repository
 source, manifests, locks, pins and Git state unchanged, including Shared Tooling.
 Use source scans, prepared read-only checks and matching CI evidence. Do not run
 write-producing sibling checks, install tools, fetch crate dependencies, change
 compiler versions, run broad gates, commit, push, deploy or clean artifacts.
-Current GitHub, Rust release and advisory-feed reads are part of these checks.
+The runner disables command networking and connected apps. Use available local
+evidence; mark current remote observations BLOCKED rather than treating cached
+results as fresh. Do not request broader permissions or recover credentials.
 Write new evidence only under the supplied run directory. Retain failed evidence.
 
-Run the eight routine tasks, including Cargo tool and advisory README freshness, then one
-bounded audit. README findings never block releases or trigger prose rewrites.
+Run the local portions of cargo-machete, msrv, snapshot-drift and readme-freshness,
+then one bounded audit. Use source inspection when prepared tools or matching
+local evidence are unavailable; mark the unexecuted check explicitly. Review
+only local snapshot integrity and local README claims. Do not attempt online
+latest-version, CI-health or current-advisory checks. List those deferred remote
+observations once for the whole pass, rather than attempting and reporting the
+same blocked network operations for every repository. README findings never
+block releases or trigger prose rewrites.
 Alternate code-audit and tooling-duplication using the last completed report
 when available; start with
 tooling-duplication when there is no history. Choose the least recently reviewed
-relevant scope from retained reports; do not maintain another work queue.
+relevant scope from the copied prior-report.md when supplied. Other state-root
+logs are outside this run's permissions; do not try to read them or maintain
+another work queue.
 Work sequentially, avoid active builds, and report unavailable evidence rather
 than waiting indefinitely or treating a missing check as success.
 
-Search issues and PRs before filing. Verify the GitHub owner before writing:
-create or update owning issues in `dragginzgame/*` for actionable new evidence.
-Issue actions in other GitHub repositories require explicit authorization for
-the destination and action; otherwise include the prepared proposal in the run
-report without posting. Respect other sessions' ownership and avoid unchanged
-duplicate comments. Keep proposed source repairs with their owners.
+Prepare concise proposed findings in the report without posting issues, comments
+or PRs. An interactive maintainer-reviewed pass searches current issues and PRs
+before deciding what to publish. Respect other sessions' ownership and keep
+proposed source repairs with their owners. The task catalog's interactive issue
+authority does not apply to this unattended report-only invocation.
 
 Return a concise report with per-task/repository results and evidence, the most
 useful findings and issue links, blockers, audit scope, and remaining unreviewed

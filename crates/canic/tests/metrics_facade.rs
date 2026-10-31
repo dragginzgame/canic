@@ -65,7 +65,7 @@ fn all_metric_families_are_public_facade_usable() {
             assert_eq!(availability.labels, ["timer", "inventory", "available"]);
             assert!(availability.principal.is_none());
             match &availability.value {
-                MetricValue::Count(value) => assert_eq!(*value, 0),
+                MetricValue::Count { count: value, .. } => assert_eq!(*value, 0),
                 value => panic!("unexpected timer inventory availability value: {value:?}"),
             }
         } else {

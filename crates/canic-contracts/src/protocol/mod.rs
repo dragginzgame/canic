@@ -39,10 +39,6 @@ pub const CANIC_WASM_STORE_PUBLISH_FIXTURE: &str = "canic_wasm_store_publish_fix
 pub const CANIC_WASM_STORE_CHUNK: &str = "canic_wasm_store_chunk";
 /// Template payload publication endpoint owned by Wasm Store.
 pub const CANIC_WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
-/// Upstream supported standards query.
-pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
-/// Upstream consent-message query.
-pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";
 
 /// Maximum encoded payload accepted by state and topology cascade endpoints.
 pub const CASCADE_SNAPSHOT_MAX_BYTES: usize = 16_384;

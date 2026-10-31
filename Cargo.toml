@@ -31,18 +31,18 @@ members = [
     "canisters/test/sharding_root_stub",
     # Production packages
     "crates/canic",
-    "crates/canic-backup",
+    "crates/canic-auth",
+    "crates/canic-blob-service",
     "crates/canic-cli",
     "crates/canic-contracts",
     "crates/canic-control-plane",
     "crates/canic-core",
     "crates/canic-host",
+    "crates/canic-icydb",
     "crates/canic-macros",
     # Tests and tooling packages
     "crates/canic-testing-internal",
     "crates/canic-tests",
-    # Production packages
-    "integrations/blob-service",
 ]
 exclude = [
     "integrations/blob-service/consumer",
@@ -53,7 +53,7 @@ resolver = "3"
 [workspace.package]
 rust-version = "1.91.0"
 edition = "2024"
-version = "0.112.0"
+version = "0.113.0"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -66,40 +66,43 @@ readme = "README.md"
 [workspace.dependencies]
 # Production dependencies
 async-trait = "0.1"
-canic = { version = "0.112.0", path = "crates/canic", default-features = false }
-canic-backup = { version = "0.112.0", path = "crates/canic-backup" }
-canic-contracts = { version = "0.112.0", path = "crates/canic-contracts" }
-canic-control-plane = { version = "0.112.0", path = "crates/canic-control-plane", default-features = false }
-canic-core = { version = "0.112.0", path = "crates/canic-core" }
-canic-host = { version = "0.112.0", path = "crates/canic-host" }
-canic-macros = { version = "0.112.0", path = "crates/canic-macros" }
+canic = { version = "0.113.0", path = "crates/canic", default-features = false }
+canic-contracts = { version = "0.113.0", path = "crates/canic-contracts" }
+canic-control-plane = { version = "0.113.0", path = "crates/canic-control-plane", default-features = false }
+canic-core = { version = "0.113.0", path = "crates/canic-core" }
+canic-host = { version = "0.113.0", path = "crates/canic-host" }
+canic-macros = { version = "0.113.0", path = "crates/canic-macros" }
 clap = { version = "4.6.1", features = ["derive"] }
 crc32fast = "1.5.2"
 ctor = { version = "1.0", default-features = false, features = ["proc_macro"] }
 futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
-ic-auth = { version = "0.19.0", default-features = false }
-ic-auth-protocol-types = "0.19.0"
-ic-backup = { version = "0.45.0", default-features = false }
-ic-blob-storage = "0.51.0"
-ic-blob-storage-contracts = "0.51.0"
-ic-build = { version = "0.69.0" }
-ic-host-artifacts = { version = "0.69.0", default-features = false }
-ic-host-fs = { version = "0.69.0", default-features = false }
-ic-host-process = { version = "0.69.0", default-features = false }
-ic-host-text = "0.69.0"
-ic-host-tools = "0.69.0"
-ic-memory = "0.51.10"
-ic-metrics = "0.16.3"
-ic-platform = { version = "0.7.0", default-features = false }
-ic-query = { version = "0.75.0", default-features = false, features = [
+ic-auth = { version = "0.23.0", default-features = false }
+ic-auth-protocol-types = "0.23.0"
+ic-backup = { version = "0.50.2", default-features = false }
+ic-backup-agent = "0.50.2"
+ic-blob-storage = "0.58.0"
+ic-blob-storage-contracts = "0.58.0"
+ic-build = { version = "0.70.3" }
+ic-call = { version = "0.8.2", default-features = false }
+ic-host-artifacts = { version = "0.70.3", default-features = false }
+ic-host-fs = { version = "0.70.3", default-features = false }
+ic-host-process = { version = "0.70.3", default-features = false }
+ic-host-text = "0.70.3"
+ic-host-tools = "0.70.3"
+ic-logging = "0.17.2"
+ic-memory = "0.56.0"
+ic-metrics = "0.17.5"
+ic-metrics-stable = "0.56.0"
+ic-platform = { version = "0.8.2", default-features = false }
+ic-query = { version = "0.76.2", default-features = false, features = [
     "subnet-catalog-host",
 ] }
-ic-storage = "0.51.10"
-ic-testkit = { version = "0.69.0" }
-ic-timers = "0.31.11"
-ic-wire = { version = "0.7.18", default-features = false }
+ic-storage = "0.56.0"
+ic-testkit = { version = "0.70.3" }
+ic-timers = "0.32.1"
+ic-wire = { version = "0.7.23", default-features = false }
 num-bigint = { version = "0.4", default-features = false }
 proc-macro2 = "1.0"
 quote = "1.0"
@@ -126,9 +129,10 @@ toml = "1.0"
 url = "2.5.8"
 
 # Tests and tooling only
-canic-blob-service = { version = "0.112.0", path = "integrations/blob-service" }
-canic-cli = { version = "0.112.0", path = "crates/canic-cli" }
-canic-testing-internal = { version = "0.112.0", path = "crates/canic-testing-internal" }
+canic-blob-service = { version = "0.113.0", path = "crates/canic-blob-service" }
+canic-cli = { version = "0.113.0", path = "crates/canic-cli" }
+canic-icydb = { version = "0.113.0", path = "crates/canic-icydb" }
+canic-testing-internal = { version = "0.113.0", path = "crates/canic-testing-internal" }
 prost = "0.14.4"
 
 # Rust lint hygiene
@@ -170,7 +174,6 @@ wildcard_imports = "allow"
 # --------------------------------------------------------------------
 [patch.crates-io]
 canic = { path = "crates/canic" }
-canic-backup = { path = "crates/canic-backup" }
 canic-cli = { path = "crates/canic-cli" }
 canic-control-plane = { path = "crates/canic-control-plane" }
 canic-contracts = { path = "crates/canic-contracts" }

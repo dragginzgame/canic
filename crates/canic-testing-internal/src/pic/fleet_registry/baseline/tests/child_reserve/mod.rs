@@ -72,6 +72,9 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     pic.advance_time(Duration::from_secs(30));
     pic.tick();
     assert_host_origin(&mut pic, coordinator, &plan, &origin);
+    // Recovery must also tolerate a delayed observation that expires transient leases.
+    pic.advance_time(Duration::from_secs(300));
+    pic.tick();
     pic.add_cycles(root, 5_000_000_000_000);
     let mut complete = false;
     for _ in 0..240 {
@@ -86,7 +89,8 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     }
     assert!(
         complete,
-        "bootstrap completes after replenishing its retained Root"
+        "{}",
+        bootstrap_failure_diagnostic(&pic, coordinator, root, operation_id),
     );
     let recovered = operation(&pic, root, origin.operation_id);
     assert!(recovered.last_failure.is_none());
@@ -98,6 +102,27 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
         fixture_readiness(&pic, root, claim.canister_id).status,
         canic::dto::runtime::ReadinessStatus::Ready
     );
+}
+
+fn bootstrap_failure_diagnostic(
+    pic: &PocketIc,
+    coordinator: Principal,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> String {
+    let status = provisioning_status(pic, coordinator, operation_id);
+    let blocked = status
+        .pending_root_failure
+        .as_ref()
+        .and_then(|failure| failure.origin.as_ref())
+        .map(|failure| operation(pic, root, failure.operation_id));
+    format!(
+        "bootstrap must complete after replenishing its retained Root: phase={:?}, activation={:?}, failure={:?}, child={blocked:?}, root_cycles={}",
+        status.phase,
+        status.current_activation,
+        status.pending_root_failure,
+        pic.cycle_balance(root),
+    )
 }
 
 /// Use the maintained host observer with a real selected operator and protected IC status.

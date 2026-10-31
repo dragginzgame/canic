@@ -41,9 +41,9 @@ fn committed_pair_survives_restore_and_replacement_retains_consumption() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (first, replay, login) = pair(false);
-    store.admit(&first, &replay, &login).unwrap();
+    store.admit(first.clone(), replay, &login).unwrap();
     let (second, replay, login) = pair(true);
-    store.admit(&second, &replay, &login).unwrap();
+    store.admit(second.clone(), replay, &login).unwrap();
     let before_bytes = with_indexes(|i| i.encoded_bytes).unwrap();
     invalidate_indexes();
     let restored = LocalApplicationAuthorizationStateOps::restore_application_session_state(
@@ -55,7 +55,9 @@ fn committed_pair_survives_restore_and_replacement_retains_consumption() {
     assert_eq!(restore_ledger().occupancy(), (1, 0));
     store
         .read(|tx| {
-            assert_eq!(tx.session(second.caller())?, Some(second.clone()));
+            let session = tx.session(second.caller())?;
+            assert!(matches!(&session, Some(Cow::Owned(_))));
+            assert_eq!(session.as_deref(), Some(&second));
             assert!(tx.replay_exists(first.fingerprint())?);
             assert!(tx.replay_exists(second.fingerprint())?);
             Ok(())
@@ -64,7 +66,7 @@ fn committed_pair_survives_restore_and_replacement_retains_consumption() {
     let before = LocalApplicationAuthorizationState::export();
     let (session, replay, login) = pair(false);
     assert_eq!(
-        store.admit(&session, &replay, &login),
+        store.admit(session, replay, &login),
         Err(SessionError::ReplayConflict)
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), before);
@@ -80,7 +82,7 @@ fn mismatched_admission_preserves_records_and_indexes() {
     let (session, _, login) = pair(false);
     let (_, different_replay, _) = pair(true);
     assert_eq!(
-        store.admit(&session, &different_replay, &login),
+        store.admit(session, different_replay, &login),
         Err(SessionError::InvalidPolicyOrRecord)
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), before);
@@ -93,7 +95,7 @@ fn corrupt_canonical_session_is_refused_without_installing_indexes() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session, replay, &login).unwrap();
     let mut corrupt = LocalApplicationAuthorizationState::export();
     corrupt.sessions[0].shared_session.push(0);
     LocalApplicationAuthorizationState::import(corrupt.clone());
@@ -122,7 +124,7 @@ fn stale_generation_and_exhausted_byte_budget_commit_neither_record() {
     let before = LocalApplicationAuthorizationState::export();
     let (session, replay, login) = pair(false);
     assert_eq!(
-        store.admit(&session, &replay, &login),
+        store.admit(session, replay, &login),
         Err(SessionError::InvalidPolicyOrRecord)
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), before);
@@ -139,7 +141,7 @@ fn stale_generation_and_exhausted_byte_budget_commit_neither_record() {
     let before = LocalApplicationAuthorizationState::export();
     let (session, replay, login) = pair(false);
     assert_eq!(
-        store.admit(&session, &replay, &login),
+        store.admit(session, replay, &login),
         Err(SessionError::ByteCapacity)
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), before);
@@ -151,9 +153,9 @@ fn logout_persists_denial_and_preserves_replay_through_restoration() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session.clone(), replay, &login).unwrap();
     let (other, replay, other_login) = fixture::pair_for_browser(false, 2);
-    store.admit(&other, &replay, &other_login).unwrap();
+    store.admit(other.clone(), replay, &other_login).unwrap();
     let mut ledger = restore_ledger();
     let mut budget = SessionAdmissionBudget::new(32, 1, 0).unwrap();
     assert!(matches!(
@@ -173,10 +175,12 @@ fn logout_persists_denial_and_preserves_replay_through_restoration() {
     )
     .unwrap();
     assert_eq!((stats.sessions, stats.replays), (1, 2));
-    assert_eq!(
-        store.read(|tx| tx.session(other.caller())).unwrap(),
-        Some(other)
-    );
+    store
+        .read(|tx| {
+            assert_eq!(tx.session(other.caller())?.as_deref(), Some(&other));
+            Ok(())
+        })
+        .unwrap();
     assert_eq!(stats.stable_bytes, expected_bytes);
     assert!(restore_ledger().is_revoked(session.caller(), NOW).unwrap());
     let before = LocalApplicationAuthorizationState::export();
@@ -193,7 +197,7 @@ fn unknown_logout_pool_is_bounded_without_erasing_admitted_logins() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session.clone(), replay, &login).unwrap();
     let mut ledger = restore_ledger();
     let mut budget = SessionAdmissionBudget::new(512, 1, 0).unwrap();
     for id in 0..MAX_APPLICATION_UNKNOWN_LOGOUTS {
@@ -224,10 +228,12 @@ fn unknown_logout_pool_is_bounded_without_erasing_admitted_logins() {
         restore_ledger().occupancy(),
         (1, MAX_APPLICATION_UNKNOWN_LOGOUTS)
     );
-    assert_eq!(
-        store.read(|tx| tx.session(session.caller())).unwrap(),
-        Some(session)
-    );
+    store
+        .read(|tx| {
+            assert_eq!(tx.session(session.caller())?.as_deref(), Some(&session));
+            Ok(())
+        })
+        .unwrap();
     let mut missing = LocalApplicationAuthorizationState::export();
     missing.logins.clear();
     assert!(matches!(
@@ -242,7 +248,7 @@ fn repeated_logout_cannot_replace_retained_account_binding() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session.clone(), replay, &login).unwrap();
     let mut ledger = restore_ledger();
     let mut budget = SessionAdmissionBudget::new(32, 1, 0).unwrap();
     let revoked = ic_auth::session::logout_session(
@@ -304,7 +310,7 @@ fn restoration_rejects_login_binding_mismatch_and_revoked_live_session() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session.clone(), replay, &login).unwrap();
     let original = LocalApplicationAuthorizationState::export();
     let (_, _, other_login) = fixture::pair_for_account(false, 1, Principal::from_slice(&[44]));
     let mut mismatched = original.clone();
@@ -345,7 +351,7 @@ fn shared_authorization_enforces_expiry_scope_generation_and_revocation() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session.clone(), replay, &login).unwrap();
     let mut ledger = restore_ledger();
     assert_eq!(
         fixture::authorize(&mut store, &mut ledger, NOW, 0, &["read".into()], |_| {}),
@@ -382,7 +388,7 @@ fn canonical_sessions_restore_and_cleanup_at_the_exclusive_deadline() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session.clone(), replay, &login).unwrap();
     let mut ledger = restore_ledger();
     assert_eq!(
         fixture::authorize(
@@ -462,7 +468,7 @@ fn restoration_requires_unique_sessions_and_a_reservation_for_every_session() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session, replay, &login).unwrap();
     let original = LocalApplicationAuthorizationState::export();
     let mut duplicated = original.clone();
     duplicated.sessions.push(duplicated.sessions[0].clone());
@@ -489,7 +495,9 @@ fn maximum_admitted_state_reconstructs_within_stable_and_heap_bounds() {
         let device = u16::try_from(id).unwrap();
         for second in [false, true] {
             let (session, replay, login) = fixture::pair_for_browser(second, device);
-            store.admit(&session, &replay, &login).unwrap();
+            store
+                .admit(session.clone(), replay.clone(), &login)
+                .unwrap();
         }
     }
     invalidate_indexes();
@@ -576,9 +584,7 @@ fn engine_admission_commits_directly_and_exact_retry_does_not_verify_again() {
     let before = LocalApplicationAuthorizationState::export();
     assert_eq!(
         fixture::establish(&mut store, &mut logins, &mut budget, false, 1, account),
-        Ok(ic_auth::session::SessionEstablished::ExactRetry(
-            session.clone()
-        )),
+        Ok(ic_auth::session::SessionEstablished::ExactRetry(session)),
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), before);
     assert_eq!(
@@ -593,7 +599,8 @@ fn engine_admission_commits_directly_and_exact_retry_does_not_verify_again() {
     .unwrap();
     let mut restored = restore_ledger();
     assert_eq!(
-        fixture::authorize(&mut store, &mut restored, NOW, 0, &["read".into()], |_| {}),
+        fixture::authorize(&mut store, &mut restored, NOW, 0, &["read".into()], |_| {})
+            .map(|value| ic_auth::session::SessionReceipt::from(&value)),
         Ok(session)
     );
     let LogoutResult::Revoked { deny_until_ns } = ic_auth::session::logout_session(
@@ -787,7 +794,9 @@ fn issuer_scoped_identity_survives_restoration_and_independent_logout() {
     for device in 1..=2 {
         let (session, replay, login) =
             fixture::pair_for_browser(false, u16::try_from(device).unwrap());
-        store.admit(&session, &replay, &login).unwrap();
+        store
+            .admit(session.clone(), replay.clone(), &login)
+            .unwrap();
     }
     let mut ledger = restore_ledger();
     let mut budget = SessionAdmissionBudget::new(1, 1, NOW - 1).unwrap();
@@ -847,7 +856,7 @@ fn issuer_scoped_identity_survives_restoration_and_independent_logout() {
     assert_eq!(restored.sessions, 2);
 
     let (session, replay, login) = fixture::pair_for_browser(false, 130);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session, replay, &login).unwrap();
 }
 
 #[test]
@@ -856,7 +865,7 @@ fn cleanup_rejects_invalid_login_binding_before_expiring_its_session() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session.clone(), replay, &login).unwrap();
     let original = LocalApplicationAuthorizationState::export();
     let (_, _, other_login) = fixture::pair_for_account(false, 1, Principal::from_slice(&[44]));
     let mut invalid = original.clone();
@@ -939,7 +948,7 @@ fn persisted_clock_fences_shared_ledger_restore_without_extending_login() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session, replay, &login).unwrap();
     LocalApplicationAuthorizationStateOps::cleanup_application_sessions(NOW).unwrap();
     let checkpoint = LocalApplicationAuthorizationState::export();
     let restore = |now| {
@@ -1043,7 +1052,7 @@ fn shared_pruning_preserves_ledger_on_failed_commit_and_retains_clock() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session, replay, &login).unwrap();
     let mut ledger = restore_ledger();
     let until = login.until_ns();
     let mut before = LocalApplicationAuthorizationState::export();
@@ -1079,7 +1088,7 @@ fn shared_pruning_rejects_an_incomplete_runtime_ledger() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
-    store.admit(&session, &replay, &login).unwrap();
+    store.admit(session, replay, &login).unwrap();
     let mut ledger = fixture::ledger();
     let mut before = LocalApplicationAuthorizationState::export();
     assert_eq!(
@@ -1185,7 +1194,7 @@ fn startup_clock_rollback_closes_indexes_and_preserves_original_leases() {
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut owner = store();
     let (session, replay, login) = pair(false);
-    owner.admit(&session, &replay, &login).unwrap();
+    owner.admit(session.clone(), replay, &login).unwrap();
     LocalApplicationAuthorizationStateOps::cleanup_application_sessions(NOW).unwrap();
     let mut checkpoint = LocalApplicationAuthorizationState::export();
     assert_eq!(
@@ -1206,10 +1215,12 @@ fn startup_clock_rollback_closes_indexes_and_preserves_original_leases() {
         restored.stable_bytes,
         encoded_state_len(&checkpoint).unwrap()
     );
-    assert_eq!(
-        owner.read(|tx| tx.session(session.caller())).unwrap(),
-        Some(session)
-    );
+    owner
+        .read(|tx| {
+            assert_eq!(tx.session(session.caller())?.as_deref(), Some(&session));
+            Ok(())
+        })
+        .unwrap();
 }
 
 #[test]
@@ -1299,7 +1310,10 @@ fn restored_session_requires_current_enrollment_without_rewriting_its_lease() {
             },
         );
         if variant == 0 {
-            assert_eq!(actual, Ok(session.clone()));
+            assert_eq!(
+                actual.map(|value| ic_auth::session::SessionReceipt::from(&value)),
+                Ok(session)
+            );
         } else {
             assert_eq!(actual, Err(SessionError::StaleAuthority));
         }
@@ -1355,7 +1369,8 @@ fn maintenance_clock_refusal_fences_authorization_until_valid_restore() {
             0,
             &["read".into()],
             |_| {}
-        ),
+        )
+        .map(|value| ic_auth::session::SessionReceipt::from(&value)),
         Ok(session)
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), checkpoint);

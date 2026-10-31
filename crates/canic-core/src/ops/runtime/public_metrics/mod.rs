@@ -5,16 +5,15 @@
 //! Boundary: public query projection reads cached values only.
 
 mod memory;
+mod operations;
+mod performance;
 mod process;
 
-#[cfg(feature = "sharding")]
-use crate::ops::storage::placement::sharding::ShardingRegistryOps;
 use crate::{
     InternalError,
     config::{Config, RoleRuntimeConfig},
     domain::public_metrics::PublicMetricFamily,
     dto::{
-        metrics::MetricValue,
         page::{Page, PageRequest},
         public_status::{
             PublicCounterDelta, PublicHealth, PublicHealthStatus, PublicHistoryPoint,
@@ -23,14 +22,16 @@ use crate::{
         },
     },
     model::public_metrics::{
-        MAX_HISTORY_BYTES, MAX_HISTORY_SERIES, MAX_PUBLIC_METRIC_TEXT_BYTES, MAX_PUBLIC_METRICS,
+        MAX_HISTORY_BYTES, MAX_HISTORY_SERIES, MAX_PUBLIC_METRIC_TEXT_BYTES,
         PUBLIC_HISTORY_RETENTION_NS, PUBLIC_HISTORY_SLOTS, PUBLIC_METRICS_CADENCE_NS,
         PUBLIC_METRICS_STALE_AFTER_NS, PublicHistoryCache, PublicMetricSample, PublicMetricsCache,
     },
-    ops::{
-        ic::IcOps,
-        runtime::{env::EnvOps, metrics},
-    },
+    ops::{ic::IcOps, runtime::env::EnvOps},
+};
+#[cfg(feature = "sharding")]
+use crate::{
+    model::public_metrics::MAX_PUBLIC_METRICS,
+    ops::storage::placement::sharding::ShardingRegistryOps,
 };
 use std::{cell::Cell, collections::BTreeSet};
 
@@ -290,35 +291,18 @@ impl PublicMetricsOps {
             }],
             PublicMetricFamily::Operations => {
                 let mut rows = process::operations()?;
-                rows.extend(operation_metrics()?);
+                rows.extend(operations::sample()?);
                 rows
             }
             PublicMetricFamily::Performance => {
                 let mut rows = process::memory();
-                rows.extend(performance_metrics()?);
+                rows.extend(performance::sample()?);
                 rows
             }
             PublicMetricFamily::ShardOccupancy => shard_metrics(),
         };
         for row in &mut rows {
             row.observed_at_ns = now;
-            // Preserve source-owned timer registrations; aggregate timer events remain gauges.
-            let counter = (family == PublicMetricFamily::Operations
-                && !row.name.starts_with("cycles_funding.icp_refill.")
-                && !row.name.starts_with("timer."))
-                || (family == PublicMetricFamily::Performance
-                    && !row.name.starts_with("perf.timer.")
-                    && !row.name.starts_with("memory."));
-            if counter {
-                row.kind = PublicMetricKind::Counter {
-                    window_id: 0,
-                    saturated: if matches!(row.unit.as_str(), "cycles" | "icp_e8s") {
-                        row.value == u128::MAX
-                    } else {
-                        row.value == u128::from(u64::MAX)
-                    },
-                };
-            }
         }
         if family == PublicMetricFamily::Performance {
             // Allocation rows own their source times, including retained values on failure.
@@ -378,154 +362,6 @@ fn metric_name(labels: &[String], suffix_bytes: usize) -> Result<String, Interna
         return Err(InternalError::invalid_input());
     }
     Ok(labels.join("."))
-}
-
-fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
-    metrics::bounded_core_entries(MAX_PUBLIC_METRICS + 1)?
-        .into_iter()
-        .take(MAX_PUBLIC_METRICS + 1)
-        .map(|row| {
-            let suffix_bytes = if matches!(&row.value, MetricValue::CountAndU64 { .. }) {
-                6
-            } else {
-                0
-            };
-            let name = metric_name(&row.labels, suffix_bytes)?;
-            let amount_unit = if row.labels.iter().any(|label| label == "amount_e8s") {
-                "icp_e8s"
-            } else {
-                "cycles"
-            };
-            Ok(match row.value {
-                MetricValue::Count(value) => vec![PublicMetricSample {
-                    name,
-                    canister_id: row.principal,
-                    value: u128::from(value),
-                    unit: "count".into(),
-                    observed_at_ns: 0,
-                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                }],
-                MetricValue::U128(value) => vec![PublicMetricSample {
-                    name,
-                    canister_id: row.principal,
-                    value,
-                    unit: amount_unit.into(),
-                    observed_at_ns: 0,
-                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                }],
-                MetricValue::CountAndU64 { count, value_u64 } => vec![
-                    PublicMetricSample {
-                        name: format!("{name}.count"),
-                        canister_id: row.principal,
-                        value: u128::from(count),
-                        unit: "count".into(),
-                        observed_at_ns: 0,
-                        kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                    },
-                    PublicMetricSample {
-                        name,
-                        canister_id: row.principal,
-                        value: u128::from(value_u64),
-                        unit: "value".into(),
-                        observed_at_ns: 0,
-                        kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                    },
-                ],
-            })
-        })
-        .collect::<Result<Vec<_>, InternalError>>()
-        .map(|rows| rows.into_iter().flatten().collect())
-}
-
-fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
-    let inventory = ic_timers::timer_inventory().ok();
-    let timers = inventory
-        .as_ref()
-        .map_or(&[][..], |inventory| inventory.timers());
-    let mut rows = checkpoint_overflow_metrics();
-    let measured = metrics::bounded_performance_entries(MAX_PUBLIC_METRICS / 2 + 1, timers)?
-        .into_iter()
-        .take(MAX_PUBLIC_METRICS / 2 + 1)
-        .map(|row| {
-            let MetricValue::CountAndU64 { count, value_u64 } = row.value else {
-                return Ok(Vec::new());
-            };
-            let name = metric_name(&row.labels, 6)?;
-            let registration = timers.iter().find_map(|timer| {
-                let identity = timer.identity();
-                let labels = &row.labels;
-                let matches = labels.len() == 6
-                    && labels[..5].iter().map(String::as_str).eq([
-                        "perf",
-                        "timer",
-                        identity.owner(),
-                        identity.subsystem(),
-                        identity.name(),
-                    ]);
-                matches.then(|| timer.registration_id())
-            });
-            Ok(vec![
-                PublicMetricSample {
-                    name: format!("{name}.calls"),
-                    canister_id: None,
-                    value: u128::from(count),
-                    unit: "count".into(),
-                    observed_at_ns: 0,
-                    kind: timer_measurement_kind(registration, count),
-                },
-                PublicMetricSample {
-                    name,
-                    canister_id: None,
-                    value: u128::from(value_u64),
-                    unit: "instructions".into(),
-                    observed_at_ns: 0,
-                    kind: timer_measurement_kind(registration, value_u64),
-                },
-            ])
-        })
-        .collect::<Result<Vec<_>, InternalError>>()?;
-    rows.extend(measured.into_iter().flatten());
-    Ok(rows)
-}
-
-fn checkpoint_overflow_metrics() -> Vec<PublicMetricSample> {
-    let Some(overflow) = crate::perf::checkpoint_overflow_entry() else {
-        return Vec::new();
-    };
-    vec![
-        PublicMetricSample {
-            name: "perf.checkpoint_overflow.calls".into(),
-            canister_id: None,
-            value: u128::from(overflow.count),
-            unit: "count".into(),
-            observed_at_ns: 0,
-            kind: PublicMetricKind::Gauge,
-        },
-        PublicMetricSample {
-            name: "perf.checkpoint_overflow".into(),
-            canister_id: None,
-            value: overflow.total_instructions,
-            unit: "instructions".into(),
-            observed_at_ns: 0,
-            kind: PublicMetricKind::Gauge,
-        },
-    ]
-}
-
-fn timer_measurement_kind(
-    registration: Option<ic_timers::TimerRegistrationId>,
-    value: u64,
-) -> PublicMetricKind {
-    registration.map_or(PublicMetricKind::Gauge, |id| {
-        PublicMetricKind::TimerCounter {
-            registration: crate::domain::public_metrics::TimerMetricRegistration {
-                canister_version: id.epoch().canister_version(),
-                started_at_ns: id.epoch().started_at_ns(),
-                sequence: id.sequence(),
-            },
-            saturated: value == u64::MAX,
-        }
-    })
 }
 
 #[cfg(feature = "sharding")]
@@ -820,7 +656,7 @@ mod tests {
         let scope = "x".repeat(129);
         crate::perf::record_checkpoint(&scope, "wide", u64::MAX);
         crate::perf::record_checkpoint(&scope, "wide", u64::MAX);
-        let rows = checkpoint_overflow_metrics();
+        let rows = performance::sample().unwrap();
         assert_eq!(rows[0].name, "perf.checkpoint_overflow.calls");
         assert_eq!(rows[0].value, 2);
         assert_eq!(rows[1].name, "perf.checkpoint_overflow");
@@ -991,6 +827,21 @@ mod counter_tests {
             counter_delta(&first, &second),
             Some(PublicCounterDelta {
                 amount: 5,
+                elapsed_ns: 10
+            })
+        );
+        let capped = PublicHistorySample {
+            value: u128::MAX,
+            ..second
+        };
+        let near_cap = PublicHistorySample {
+            value: u128::MAX - 1,
+            ..first
+        };
+        assert_eq!(
+            counter_delta(&near_cap, &capped),
+            Some(PublicCounterDelta {
+                amount: 1,
                 elapsed_ns: 10
             })
         );

@@ -51,7 +51,7 @@ fn counts(fixture: &CachedPocketIcBaseline<Principal>) -> PlainReply {
     .expect("Candid harness call")
 }
 
-fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u64 {
+fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u128 {
     let limits = canic_contracts::protocol::protected_runtime::RESPONSE_LIMITS;
     let request = ic_wire::native::encode_request(7010, &method, limits).unwrap();
     let reply = fixture

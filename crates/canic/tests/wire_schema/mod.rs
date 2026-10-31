@@ -21,19 +21,19 @@ const RESPONSE: Limits = Limits {
     depth: 16,
 };
 
-#[canic::canic_query(public, name = "identity", on_access_denied = "reject",
+#[canic::query(public, name = "identity", on_access_denied = "reject",
     wire(id = crate::IDENTITY_METHOD_ID, request = REQUEST, response = RESPONSE))]
 fn echo(principal: Principal) -> Principal {
     principal
 }
 
-#[canic::canic_query(public, composite, on_access_denied = "reject",
+#[canic::query(public, composite, on_access_denied = "reject",
     wire(id = 9002, request = REQUEST, response = RESPONSE))]
 fn observed() -> u64 {
     7
 }
 
-#[canic::canic_update(public, on_access_denied = "reject",
+#[canic::update(public, on_access_denied = "reject",
     wire(id = 9003, request = REQUEST, response = RESPONSE))]
 fn write(value: Option<u64>) -> Option<u64> {
     value

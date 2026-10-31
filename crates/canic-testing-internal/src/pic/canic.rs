@@ -45,6 +45,36 @@ use {
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
 
+/// Drain outstanding callbacks before capturing or restoring a fixture snapshot set.
+///
+/// # Panics
+/// Panics if a captured controller cannot stop one of its canisters.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn stop_snapshot_targets(
+    pic: &PocketIc,
+    targets: &[ic_testkit::pic::CanisterSnapshotTarget],
+) {
+    for target in targets {
+        pic.stop_canister(target.canister_id, target.sender)
+            .expect("stop fixture snapshot target and drain callbacks");
+    }
+}
+
+/// Resume a fixture only after its complete captured set has been prepared.
+///
+/// # Panics
+/// Panics if a captured controller cannot restart one of its canisters.
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
+pub(super) fn start_snapshot_targets(
+    pic: &PocketIc,
+    targets: &[ic_testkit::pic::CanisterSnapshotTarget],
+) {
+    for target in targets {
+        pic.start_canister(target.canister_id, target.sender)
+            .expect("restart prepared fixture snapshot target");
+    }
+}
+
 ///
 /// ManagedRootInstallInput
 ///

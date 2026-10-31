@@ -25,15 +25,31 @@ Each row has:
 | ----- | ------- |
 | `labels` | Ordered string dimensions. The first label is always the metric family inside the selected tier. |
 | `principal` | Optional principal dimension when the family is naturally principal-scoped. |
-| `value` | Metric payload: `Count`, `CountAndU64`, or `U128`. |
+| `value` | Metric payload: `Count`, `Measurement`, or `U128`. |
 
-`CountAndU64` uses `count` as the event/sample count. The `value_u64`
-meaning is family-specific.
+`Measurement` carries `count: u64`, `total: u128`, `count_overflowed: bool`
+and `total_overflowed: bool` for the same admitted observation cohort. Numeric
+caps with false flags remain exact. The two flags describe source accumulation;
+labels establish the measured unit. Performance rows use instructions.
 
-`canic info metrics` keeps the default text table compact. It renders
-`CountAndU64` rows as `COUNT` plus `AVG/CALL`, omits raw totals, and keeps
-full canister ids, principal dimensions, and raw totals behind `--verbose`.
-`--json` preserves the raw metric payload shape.
+`Count { count: u128, exact: bool }` and `U128 { value: u128, exact: bool }`
+carry scalar events and quantities. Canic-owned diagnostic accumulators use
+IC Metrics counters: an exact numeric cap remains exact, and actual overflow
+sets sticky lost quality. `exact: false` means only a lower bound; it does not
+assert that overflow was observed. Forwarded timer counters preserve their source
+overflow flags, including exact numeric caps. Retained refill counts lack source
+overflow state, so their numeric cap is conservatively inexact. Latest delay and retained target quantities remain direct observations.
+
+`canic info metrics` renders measurement rows as `COUNT` plus `AVG/CALL`,
+rounding to the nearest tenth with exact halves upward. Empty or overflowed
+means display `-`; known lower bounds use `>=` on their count or verbose total.
+Full canister IDs, principal dimensions and raw totals remain behind `--verbose`.
+Scalar `Count` and `U128` rows never acquire an average, and inexact scalars display
+`>=` in their existing count/amount column. `--nonzero` removes only known exact
+zero values. `--json` retains `type: "count"` / `type: "u128"` and each scalar's
+`exact` field, or measurement fields with `type: "measurement"`. Wide integer
+literals require a lossless numeric parser. It does not encode a clipped number
+as exact.
 
 `--limit` bounds rows fetched per canister before `--nonzero` filters zero values.
 The CLI follows short server pages within that cap. Each JSON canister report
@@ -43,6 +59,11 @@ and `truncated` (`fetched < total`). Failed/unavailable queries have `total: nul
 Text output warns about incomplete coverage even when filtering leaves no rows.
 Omitted rows may be nonzero: raise `--limit` to inspect more rows. Pages are live
 observations, so changing metrics between requests do not form an atomic snapshot.
+
+IC Metrics owns counter and measurement arithmetic. Canic owns invocation
+attribution, registry limits, units, authorization and publication history.
+Balances, quotas, budgets and persisted refill records remain with their
+operational owners; they are not diagnostic counters.
 
 ## Query Perf Samples
 
@@ -55,7 +76,7 @@ same query call:
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
 };
-#[canic_query(requires(env::build_local_only()),
+#[query(requires(env::build_local_only()),
     wire(id = 0x4155_4454_0000_0010, request = LIMITS, response = LIMITS))]
 async fn audit_time_probe() -> Result<QueryPerfSample<u64>, Error> {
     Ok(MetricsQuery::sample_query(ic_platform::cdk::api::time()))
@@ -143,7 +164,7 @@ Inter-canister counters record Call builder construction, including builders nev
 executed. Execution outcomes are recorded separately under `platform_call`.
 The heap retains the first 1,024 distinct `(target, method)` identities with method
 names of at most 128 UTF-8 bytes. Existing admitted identities continue counting
-at capacity. Excess identities and oversized names increment a saturating
+at capacity. Excess identities and oversized names increment a tracked wide
 `inter_canister_call.overflow` row with no principal; their text is not retained.
 Snapshots clone at most 1,024 retained identities plus that aggregate row. These
 counters reset with the heap. Clients must accept the principal-free overflow row.
@@ -163,15 +184,25 @@ use the existing family-specific dimensions:
 | `intent` | `[surface, operation, outcome, reason]` | `None` | `Count` |
 | `inter_canister_call` | `[method]` or `[overflow]` | Target canister principal; `None` for overflow | `Count` |
 | `lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` |
-| `perf` | `[endpoint, call_kind, name]`, `[timer, owner, subsystem, name]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
+| `perf` | `[endpoint, call_kind, name]`, `[timer, owner, subsystem, name, phase]`, or `[checkpoint, scope, label]` | `None` | `Measurement` |
 | `platform_call` | `[surface, mode, outcome, reason]` | `None` | `Count` |
 | `placement_index` | `[operation, outcome, reason]` | `None` | `Count` |
 | `replay` | `[operation, outcome, reason]` | `None` | `Count` |
 | `root_capability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` |
 | `scaling` | `[operation, outcome, reason]` | `None` | `Count` |
 | `sharding` | `[operation, outcome, reason]` | `None` | `Count` |
-| `timer` | `[policy, owner, subsystem, name]` or `[inventory, available]` | `None` | `CountAndU64` for timer rows; `Count` for availability |
+| `timer` | `[policy, owner, subsystem, name, metric]` or `[inventory, available]` | `None` | `Count` for starts/availability; `U128` for latest delay |
 | `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
+
+ICP-refill status rows aggregate by emitted trigger kind, phase and status;
+sequence numbers and equivalent error codes do not produce duplicate rows. The
+record-derived index applies this grouping before bounded selection and rebuilds
+it from the unchanged records. Error rows retain their distinct error labels.
+Protected Core diagnostics retain child-principal funding and refill-target
+amounts. The public `operations` family selects only anonymous aggregate funding
+and refill status/error counts; it never republishes those principal dimensions
+or target amounts. Its record-derived counts remain gauges rather than cumulative
+history counters.
 
 Delegated-auth renewal rows use the existing `delegated_auth` family with
 the bounded operation label `renewal_sweep`. Outcomes are
@@ -179,13 +210,18 @@ the bounded operation label `renewal_sweep`. Outcomes are
 `ok`, `invalid_state`, `cert_expired`, `issuer_proof_unavailable`,
 `cert_hash_mismatch`, `disabled`, and `root_proof_prepare_failed`.
 
-For `timer`, `count` is accepted consumer-work starts and `value_u64` is the
-latest armed delay in milliseconds. Delay is deliberately a value rather than
-a key, so exact-deadline rescheduling does not create unbounded metric rows.
-Timer rows come from the shared `ic-timers` inventory, so they include Canic,
-application, and other framework owners in the same canister. Timer `perf`
-rows use completed work-instruction samples as `count` and their saturating
-instruction total as `value_u64`. These samples bracket the complete accepted
+For `timer`, `work_started` is a `Count` row of accepted consumer-work starts.
+`latest_armed_delay_ms` is a separate scalar `U128` row containing the latest
+armed delay, floored from nanoseconds to milliseconds. No delay row is emitted
+when the source has no latest delay; a measured zero delay remains a row. The
+latest delay is not divided by the number of starts. Delay values never become
+label dimensions, so rescheduling does not create unbounded rows.
+
+Timer rows come from the shared `ic-timers` inventory, covering Canic,
+application and other framework owners in the same canister. Timer `perf` rows
+use completed instruction samples as `count` and their full wide accumulated
+total as `total`, preserving each source quality flag for scheduler/work phases.
+These samples bracket the complete accepted
 shared-runtime callback path, including registry acceptance, consumer work,
 completion accounting, and successor binding; they are not isolated
 application-function benchmarks. Runtime timer status schema 1 separately

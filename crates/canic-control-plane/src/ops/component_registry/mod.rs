@@ -5964,8 +5964,8 @@ fn completed_subtree_leaf_record(
 fn subtree_directory_synchronized_receipt_hash(
     receipt: &RootComponentSubtreeDirectorySynchronizedRecord,
 ) -> Result<[u8; 32], InternalError> {
-    const DOMAIN: &[u8] = b"canic.component-subtree-removal.completed-leaf.v1";
-    let payload = canic_core::cdk::serialize::serialize(receipt)
+    const DOMAIN: &[u8] = b"canic.component-subtree-removal.completed-leaf.wire.v1";
+    let payload = canic_contracts::protocol::authority::encode(receipt)
         .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);

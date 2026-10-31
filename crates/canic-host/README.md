@@ -173,3 +173,44 @@ and provisioning-plan validation. Control Plane retains the deterministic
 fixture-content compiler and `installation::FleetCoordinatorInitArgs`, whose
 configuration is owned by Core. These are deliberate remaining dependencies;
 the contract extraction does not establish complete host/runtime independence.
+
+
+## Backup checkpoint integration
+
+`backup::checkpoint` binds a complete installed Root unit and exact bounded Wire
+commands to published IC Backup's original workflow, stage and attempt records.
+IC Backup remains the execution coordinator; Host does not add a second journal
+or ready-operation loop. Contracts owns the unchanged canonical checkpoint hashes.
+
+The original intent is create-only, private and bounded; reads reject leaf symlinks.
+A supplied provider must establish fresh actual authority, retain original signed
+ingress and independently qualify replies. The adapter preserves returned bytes
+and pending spending on failure. Host settlement never settles Root-paid effects.
+There is no default live provider or snapshot permission in this module.
+
+The installed two-participant fixture qualifies original host accounting and
+same-operation recovery; its simulator snapshot authority is not production
+Root-paid dispatch. Generic application-ingress transport from
+[IC Backup #74](https://github.com/dragginzgame/ic-backup/issues/74) ships in
+Backup Agent 0.50.0. `AgentCheckpointProvider` connects typed original reservations
+to that single-submit owner. It requires `CheckpointAdmission` and synchronous
+durable ingress/reply retainers, with no permissive defaults. Begin carries the
+complete canonical unit digest, checked by Root before mutation; the upstream
+payload digest commits those exact Wire bytes and bounded replies. The
+checkpoint status endpoint and recovery binding use replicated
+read-only updates, as required by its observation lane. Existing retained
+commitments must not be reinterpreted as new transport authority.
+Live backup and restore remain unavailable until the production adapter is qualified;
+[Canic #513](https://github.com/dragginzgame/canic/issues/513) owns that integration.
+
+
+`backup::checkpoint::reconcile_checkpoint` owns one recovery observation for
+an original pending update. It verifies the frozen intent and stage, binds the
+Root status update to the original mutation attempt, reserves the existing
+observation allowance and requires independent provider qualification before
+an Applied receipt. The installed fixture delegates these transitions to Host.
+Missing/stale/foreign status, lost observations and failed qualification preserve
+pending uncertainty; repeating the helper grants no reissue. Replicated invocation
+alone does not establish live authority or reply attribution. Recovery of a lost observation from
+retained authenticated transport evidence remains unfinished with the transport
+integration; this helper does not invent a receipt or replacement budget.

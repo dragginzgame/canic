@@ -2,7 +2,7 @@ use super::{cost_guard::*, execution::*, replay::*, *};
 use crate::{
     cdk::types::Principal,
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger},
-    infra::ic::icp_refill::{NotifyTopUpError, TransferError},
+    infra::ic::icp_refill::{NotifyError, TransferError},
     model::replay::{ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus},
     ops::{
         cost_guard::CostGuardOps,
@@ -97,7 +97,7 @@ fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
         created_at_time_ns: record.created_at_time_ns,
         ledger_block_index: record.ledger_block_index,
         notify_attempts: record.notify_attempts,
-        cycles_sent: record.cycles_sent.clone(),
+        cycles_sent: record.cycles_sent.clone().map(Nat),
         status: record.status.into(),
         error_code: record.error_code.map(Into::into),
         error_message: record.error_message.clone(),
@@ -545,7 +545,7 @@ fn refill_replay_commits_terminal_response_for_replay() {
     let mut record = sample_record(IcpRefillStatus::Completed);
     record.operation_id = operation_id;
     record.ledger_block_index = Some(123);
-    record.cycles_sent = Some(Nat::from(456_u64));
+    record.cycles_sent = Some((456_u64).into());
     let operation = operation_from_record(&record);
     let response = IcpRefillStoreOps::to_response(&operation);
     finish_icp_refill_replay(&token, &operation, &response, None)
@@ -637,7 +637,7 @@ fn refill_retry_finishes_cost_settlement_without_ledger_call() {
     stage_receipt_response(
         &token,
         crate::ops::replay::ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-        crate::ops::replay::encode_replay_response(&response).expect("response bytes"),
+        crate::ops::replay::encode_icp_refill_replay_response(&response).expect("response bytes"),
         1_001,
     )
     .expect("stage response");
@@ -684,7 +684,7 @@ fn refill_retry_promotes_staged_response_without_ledger_call() {
     stage_receipt_response(
         &token,
         crate::ops::replay::ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-        crate::ops::replay::encode_replay_response(&response).expect("response bytes"),
+        crate::ops::replay::encode_icp_refill_replay_response(&response).expect("response bytes"),
         1_001,
     )
     .expect("stage response");
@@ -1125,7 +1125,7 @@ fn notify_processing_before_attempt_cap_stays_retryable() {
     record.ledger_block_index = Some(44);
     IcpRefillRecordOps::insert(record.clone()).expect("insert refill record");
 
-    let record = apply_notify_error(record.id, 1, NotifyTopUpError::Processing)
+    let record = apply_notify_error(record.id, 1, NotifyError::Processing)
         .expect("processing should remain retryable before cap");
 
     assert_eq!(record.status, IcpRefillStatus::NotifyProcessing);
@@ -1140,7 +1140,7 @@ fn notify_refunded_preserves_refund_block_index() {
     let record = apply_notify_error(
         record.id,
         1,
-        NotifyTopUpError::Refunded {
+        NotifyError::Refunded {
             block_index: Some(55),
             reason: "refunded by cmc".to_string(),
         },
@@ -1159,7 +1159,7 @@ fn notify_refunded_preserves_refund_block_index() {
 fn notify_transaction_too_old_preserves_min_block_index() {
     let record = stored_record(10_005, 105, IcpRefillStatus::Transferred);
 
-    let record = apply_notify_error(record.id, 1, NotifyTopUpError::TransactionTooOld(56))
+    let record = apply_notify_error(record.id, 1, NotifyError::TransactionTooOld(56))
         .expect("transaction-too-old notify result should be recorded");
 
     assert_eq!(record.status, IcpRefillStatus::TransactionTooOld);
@@ -1179,7 +1179,7 @@ fn notify_invalid_transaction_is_terminal() {
     let record = apply_notify_error(
         record.id,
         1,
-        NotifyTopUpError::InvalidTransaction("bad top-up block".to_string()),
+        NotifyError::InvalidTransaction("bad top-up block".to_string()),
     )
     .expect("invalid transaction notify result should be recorded");
 
@@ -1201,7 +1201,7 @@ fn notify_other_error_stays_retryable_before_attempt_cap() {
     let record = apply_notify_error(
         record.id,
         1,
-        NotifyTopUpError::Other {
+        NotifyError::Other {
             error_code: 12,
             error_message: "cmc busy".to_string(),
         },

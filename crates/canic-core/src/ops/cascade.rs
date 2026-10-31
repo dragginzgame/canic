@@ -9,7 +9,7 @@ use crate::{
     dto::cascade::{
         StateCascadeReport, StateSnapshotInput, TopologyPathNode, TopologySnapshotInput,
     },
-    ops::{cascade_report::StateCascadeReportOps, ic::call::CallOps, prelude::*},
+    ops::{cascade_report::StateCascadeReportOps, ic::call::execute as execute_call, prelude::*},
     view::state_cascade::StateCascadeTarget,
 };
 use canic_contracts::{
@@ -17,6 +17,7 @@ use canic_contracts::{
     ids::CanisterRole,
     protocol::cascade as protocol,
 };
+use ic_call::{Call, WaitPolicy};
 
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
@@ -307,11 +308,10 @@ impl CascadeOps {
         let bytes = ic_wire::native::encode_request(id, request, protocol::REQUEST_LIMITS)
             .map_err(|_| InternalError::invariant())?;
         // Preserve the original cascade's unbounded wait and public error semantics.
-        let reply = CallOps::unbounded_wait(pid, method)
-            .with_raw_args(bytes)
-            .execute()
-            .await?
-            .into_bytes();
+        let reply =
+            execute_call(Call::new(pid.into(), method, WaitPolicy::Unbounded).take_raw_args(bytes))
+                .await?
+                .into_bytes();
         let result: Result<R, crate::dto::error::Error> =
             ic_wire::native::decode_response(id, &reply, protocol::RESPONSE_LIMITS)
                 .map_err(|_| InternalError::invariant())?;

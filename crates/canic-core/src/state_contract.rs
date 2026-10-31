@@ -27,7 +27,6 @@ use crate::role_contract::{
             INTENT_EXPIRY_INDEX_KEY, INTENT_META_KEY, INTENT_PENDING_KEY,
             INTENT_RECEIPT_BACKED_RECORDS_KEY, INTENT_RECORDS_KEY, INTENT_TOTALS_KEY,
         },
-        log::LOG_ENTRIES_KEY,
         placement::{
             PLACEMENT_ACKNOWLEDGEMENT_INDEX_KEY, PLACEMENT_INDEX_REGISTRY_KEY,
             PLACEMENT_SCALING_REGISTRY_KEY,
@@ -150,6 +149,16 @@ pub fn canic_state_descriptors() -> Vec<StateAllocationDescriptor> {
 fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
     vec![
         descriptor(
+            StateAllocationKey::CoreProviderMetrics,
+            Vec::new(),
+            vec![ReservedMemoryManifest {
+                label: "provider_metrics".to_string(),
+                memory_key: crate::role_contract::allocation::memory::metrics::PROVIDER_METRICS_KEY.to_string(),
+                owner: AllocationOwner::CanicCore.as_str().to_string(),
+                reason: "Optional governed map; IC Metrics Stable owns its V1 records and validated snapshots. Canic owns provider registration and restore cadence.".to_string(),
+            }],
+        ),
+        descriptor(
             StateAllocationKey::CoreRuntimeChildren,
             runtime_children_domains(),
             Vec::new(),
@@ -198,11 +207,6 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
         descriptor(
             StateAllocationKey::CoreCyclesIcpRefillRecords,
             icp_refill_domains(),
-            Vec::new(),
-        ),
-        descriptor(
-            StateAllocationKey::CoreRuntimeLog,
-            runtime_log_domains(),
             Vec::new(),
         ),
         descriptor(StateAllocationKey::CoreIntent, intent_domains(), Vec::new()),
@@ -555,19 +559,6 @@ fn cycles_domains() -> Vec<StateDomainManifest> {
     ]
 }
 
-fn runtime_log_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::log::{LogEntriesData, LogEntryRecord};
-
-    vec![state_domain(
-        "runtime_log",
-        LOG_ENTRIES_KEY,
-        LogEntryRecord::STATE_CONTRACT_NAME,
-        LogEntriesData::STATE_CONTRACT_NAME,
-        85,
-        "runtime_log_restores_exact_sequence_and_retention_order",
-    )]
-}
-
 fn icp_refill_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::icp_refill::{IcpRefillRecord, IcpRefillRecordsData};
 
@@ -742,8 +733,18 @@ mod tests {
         let descriptors = canic_state_descriptors();
         let mut descriptor_ids = descriptors
             .iter()
-            .flat_map(|descriptor| descriptor.state.iter())
-            .filter_map(|domain| domain.memory_key.clone())
+            .flat_map(|descriptor| {
+                descriptor
+                    .state
+                    .iter()
+                    .filter_map(|domain| domain.memory_key.clone())
+                    .chain(
+                        descriptor
+                            .reserved_memory
+                            .iter()
+                            .map(|entry| entry.memory_key.clone()),
+                    )
+            })
             .collect::<Vec<_>>();
         let mut allocation_ids = crate::role_contract::allocation::allocation_definitions()
             .iter()
@@ -755,11 +756,6 @@ mod tests {
         descriptor_ids.sort_unstable();
         allocation_ids.sort_unstable();
 
-        assert!(
-            descriptors
-                .iter()
-                .all(|descriptor| descriptor.reserved_memory.is_empty())
-        );
         assert_eq!(descriptor_ids, allocation_ids);
     }
 
@@ -908,14 +904,13 @@ mod tests {
     }
 
     #[test]
-    fn cycles_and_log_descriptors_reference_canonical_data_types() {
+    fn cycle_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             cycles::{
                 CycleTopupEventRecord, CycleTopupEventsData, CycleTrackerData,
                 CycleTrackerEntryRecord, CyclesFundingLedgerData, CyclesFundingLedgerRecord,
             },
             icp_refill::{IcpRefillRecord, IcpRefillRecordsData},
-            log::{LogEntriesData, LogEntryRecord},
         };
 
         let descriptors = canic_state_descriptors();
@@ -932,12 +927,6 @@ mod tests {
                 "cycles_topup_events",
                 CycleTopupEventRecord::STATE_CONTRACT_NAME,
                 CycleTopupEventsData::STATE_CONTRACT_NAME,
-            ),
-            (
-                StateAllocationKey::CoreRuntimeLog,
-                "runtime_log",
-                LogEntryRecord::STATE_CONTRACT_NAME,
-                LogEntriesData::STATE_CONTRACT_NAME,
             ),
             (
                 StateAllocationKey::CoreCycles,

@@ -172,6 +172,10 @@ fn canonical_allocations_match_the_active_memory_map() {
             vec!["canic.core.runtime.bindings.v1".to_string()],
         ),
         (
+            StateAllocationKey::CoreProviderMetrics,
+            vec!["canic.core.metrics.providers.v1".to_string()],
+        ),
+        (
             StateAllocationKey::CoreFleetState,
             vec!["canic.core.fleet.state.v1".to_string()],
         ),
@@ -210,10 +214,6 @@ fn canonical_allocations_match_the_active_memory_map() {
         (
             StateAllocationKey::CoreCyclesIcpRefillRecords,
             vec!["canic.core.cycles.icp_refill_records.v1".to_string()],
-        ),
-        (
-            StateAllocationKey::CoreRuntimeLog,
-            vec!["canic.core.log.entries.v1".to_string()],
         ),
         (
             StateAllocationKey::CoreIntent,
@@ -1025,7 +1025,6 @@ fn surplus_state_feature_allocates_normally() {
             "canic.core.cycles.tracker.v1".to_string(),
             "canic.core.cycles.topup_events.v1".to_string(),
             "canic.core.cycles.funding_ledger.v1".to_string(),
-            "canic.core.log.entries.v1".to_string(),
             "canic.core.intent.meta.v1".to_string(),
             "canic.core.intent.records.v1".to_string(),
             "canic.core.intent.totals.v1".to_string(),
@@ -1102,7 +1101,6 @@ fn repeated_selection_merges_allocation_provenance() {
             "canic.core.cycles.topup_events.v1".to_string(),
             "canic.core.cycles.funding_ledger.v1".to_string(),
             "canic.core.cycles.icp_refill_records.v1".to_string(),
-            "canic.core.log.entries.v1".to_string(),
             "canic.core.intent.meta.v1".to_string(),
             "canic.core.intent.records.v1".to_string(),
             "canic.core.intent.totals.v1".to_string(),
@@ -1159,7 +1157,6 @@ fn built_in_wasm_store_owns_template_gc_and_fixture_ids() {
             "canic.core.cycles.tracker.v1".to_string(),
             "canic.core.cycles.topup_events.v1".to_string(),
             "canic.core.cycles.funding_ledger.v1".to_string(),
-            "canic.core.log.entries.v1".to_string(),
             "canic.core.intent.meta.v1".to_string(),
             "canic.core.intent.records.v1".to_string(),
             "canic.core.intent.totals.v1".to_string(),

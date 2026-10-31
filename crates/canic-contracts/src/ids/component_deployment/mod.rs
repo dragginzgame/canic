@@ -304,14 +304,10 @@ mod tests {
     fn deployment_names_validate_serde_and_wire_input() {
         let invalid_wire =
             crate::protocol::authority::encode("bad/name").expect("encode invalid service ID");
-        let invalid_cbor = {
-            let mut bytes = Vec::new();
-            serde_cbor::to_writer(&mut bytes, &"bad/name").expect("encode invalid service ID");
-            bytes
-        };
+        let invalid_storage = crate::serialization::serialize(&"bad/name").unwrap();
 
         assert!(crate::protocol::authority::decode::<FleetServiceId>(&invalid_wire).is_err());
-        assert!(serde_cbor::from_reader::<FleetServiceId, _>(invalid_cbor.as_slice()).is_err());
+        assert!(crate::serialization::deserialize::<FleetServiceId>(&invalid_storage).is_err());
     }
 
     #[test]

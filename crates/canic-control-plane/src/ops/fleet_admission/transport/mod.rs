@@ -10,7 +10,10 @@ use canic_contracts::{
     },
     protocol::admission_control as protocol,
 };
-use canic_core::control_plane_support::{error::InternalError, ops::ic::call::CallOps};
+use canic_core::control_plane_support::{
+    error::InternalError, ops::ic::call::execute as execute_call,
+};
+use ic_call::{Call, WaitPolicy};
 use ic_platform::principal::ExternalPrincipal;
 
 pub async fn prepare(
@@ -60,11 +63,18 @@ async fn call<T: serde::Serialize + Sync>(
 ) -> Result<FleetAdmissionRootReceipt, InternalError> {
     let bytes = ic_wire::native::encode_request(id, request, protocol::REQUEST_LIMITS)
         .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::bounded_wait(root, method)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            root.into(),
+            method,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let result: Result<native::RootReceipt, Error> =
         ic_wire::native::decode_response(id, &reply, protocol::RESPONSE_LIMITS)
             .map_err(|_| InternalError::invariant())?;

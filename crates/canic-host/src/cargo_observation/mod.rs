@@ -3,13 +3,56 @@
 //! Canic selects features, budgets and graph interpretation. IC Build owns
 //! command rendering, Host owns bounded execution, and Cargo owns metadata decoding.
 
+#[cfg(test)]
+mod tests;
+
 use crate::cargo_command;
 use ic_build::cargo::observation::{
     CargoMetadataSpec, CargoTreeSpec, decode_metadata, schema::Metadata,
 };
 use ic_build::cargo::selection::CargoFeatureSelection;
-use ic_host_process::tool::{OutputLimit, OutputLimits, capture_command};
-use std::path::Path;
+use ic_host_process::tool::{
+    CompletedExecution, OutputLimit, OutputLimits, ToolError, capture_command,
+};
+use std::{
+    error::Error as StdError,
+    fmt,
+    path::{Path, PathBuf},
+};
+
+/// Cargo's bounded failure output remains available at the consumer diagnostic boundary.
+#[derive(Debug)]
+struct MetadataObservationError {
+    manifest: PathBuf,
+    source: ToolError,
+}
+
+impl fmt::Display for MetadataObservationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "Cargo metadata for {} failed: {}",
+            self.manifest.display(),
+            self.source
+        )?;
+        if let Some(execution) = self.source.execution_error()
+            && !execution.evidence.stderr.is_empty()
+        {
+            write!(
+                formatter,
+                "\n{}",
+                String::from_utf8_lossy(&execution.evidence.stderr)
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl StdError for MetadataObservationError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        Some(&self.source)
+    }
+}
 
 const fn limits() -> OutputLimits {
     OutputLimits {
@@ -70,9 +113,13 @@ pub fn cargo_metadata_catalog_for_manifest(
 }
 
 fn capture_metadata(spec: &CargoMetadataSpec<'_>) -> Result<Metadata, Box<dyn std::error::Error>> {
-    let output = capture_command(&mut spec.command(cargo_command())?, limits())?
-        .require_success()?
-        .require_complete()?;
+    let output = capture_command(&mut spec.command(cargo_command())?, limits())
+        .and_then(CompletedExecution::require_success)
+        .and_then(CompletedExecution::require_complete)
+        .map_err(|source| MetadataObservationError {
+            manifest: spec.manifest_path.to_path_buf(),
+            source,
+        })?;
     Ok(decode_metadata(&output.stdout)?)
 }
 

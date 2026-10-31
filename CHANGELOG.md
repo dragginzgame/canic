@@ -6,14 +6,165 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.112.1] - Unreleased
-
-### ➕ Added
+## [0.113.1] - Unreleased
 
 - Expose current application-work admission for deferred adapters, combining
   restored readiness with activation, application startup and the snapshot fence.
   Recheck before new effects; existing call settlement remains independent.
-  See [the detailed notes](docs/changelog/0.112.md).
+  See [the detailed notes](docs/changelog/0.113.md).
+
+## [0.113.0] - 2026-10-30
+
+- **Breaking — Wire storage hard cut:** encode owned stable records and checkpoints
+  with bounded IC Wire, removing the CBOR/u128 adapter and decoding tree. Use explicit
+  Wire domains for internal checkpoint/caller commitments; retain dedicated Fleet
+  activation and release-build CBOR evidence. Clean reinstall is required.
+
+- **Breaking — Call stack hard cut:** remove Canic's generic call builder,
+  response wrappers and prelude export. Use IC Call/Platform directly with Wire
+  for owned RPCs; framework metrics count attempted execution instead of unused
+  request construction ([#700](https://github.com/dragginzgame/canic/issues/700)).
+
+- **Breaking — Backup hard cut:** remove `canic-backup` and the old backup/restore
+  CLI, including private plans, manifests, journals and command runner. Remove
+  workspace, package and CI wiring; retain the Host adapter over IC Backup 0.50.2.
+  Live backup and restore are unavailable until the thin production integration
+  is qualified. Retained operation data and historical evidence are untouched.
+
+- Adopt published IC Backup/Agent 0.50.2 operator composition. Use upstream
+  bounded advancement and original-journal inspection in checkpoint qualification,
+  preserving mandatory admission, lost-reply recovery and effect-free replay.
+  Live operations remain unavailable after the approved CLI hard cut.
+
+- Adopt published IC Backup 0.50.2 for the existing Host checkpoint/recovery
+  adapter. Use controller-protected replicated status updates
+  for original recovery observations; production Agent transport and live capture
+  remain unfinished.
+
+- Bind checkpoint begin to the exact complete unit before Root changes state.
+  Delegate checkpoint payload commitments and typed reservations to IC Backup,
+  with a thin Agent adapter requiring explicit admission and durable retainers.
+  Remove unused Backup error dependencies from unrelated CLI commands.
+
+- Move original checkpoint lost-update reconciliation into the Host adapter.
+  Bind status observations to their original workflow/update/attempt and retain
+  IC Backup's finite observation allowance. Missing, stale, foreign or
+  unqualified replies preserve pending uncertainty without mutation redispatch.
+
+- Integrate original Root checkpoint preparation under `canic-host::backup`,
+  using IC Backup's workflow/stage/attempt coordinator. Share checkpoint identity
+  hashing through Contracts; retain bounded create-only intents with no-follow
+  reads. Preserve lost-reply spending, cold continuation and terminal replay.
+  Live capture and production restore integration remain unfinished.
+
+- Correct optional ICRC-21 consent mounting to the required public Candid update;
+  retain ICRC-10 discovery as a query and use canonical standard document URLs.
+  Compare the complete generated service against the pinned external contract.
+
+- Update the published IC cohort across the root and both Blob consumers: Blob
+  0.58.0, Persistence 0.56.0, Tooling 0.70.3, Auth 0.23.0, Backup 0.50.2,
+  Query 0.76.2 and Platform/Call 0.8.2. Align locks and exact build/test tools,
+  preserving one Memory/Timers runtime in each deployed graph.
+
+- Adopt Auth/protocol 0.23.0 with admitted limits/scopes, consuming session writes
+  and compact admission receipts; retain current-authority authorization and retries.
+- Adopt Persistence 0.56's bounded Wire allocation ledger and Metrics Stable rows.
+  Deploy by clean reinstall; retain current-release restoration and recovery.
+
+- Select Timers 0.32.1, Metrics 0.17.5, Logging 0.17.2 and Wire 0.7.23.
+  Retain reviewed Shared Tooling 0.27.6 and the complete snapshot lifecycle.
+
+- Separate IcyDB metrics endpoint mounting from recording capability: keep explicit
+  read authorization and controller-only reset for the coordinated bounded recorder.
+  Qualify public/controller mounts with framework-owned consumer contracts.
+- Apply the role's metrics reporting switch to managed adapter metric reads and
+  reset, without changing upstream recording, storage or authorization. Cover the
+  default selection and verify enabled config does not mount undeclared endpoints.
+
+### 🩹 Fixed
+
+- Retry child allocation after pool-maintenance lease takeover instead of retaining
+  a permanent failure; preserve the reserved claim through delayed funding recovery.
+- Include the independently built Store in Root fixture artifact batches so fresh
+  setups and dependency changes cannot consume a stale Store from a prior build.
+- Retain bounded Cargo metadata diagnostics and their typed execution cause through
+  nested error wrappers.
+- Align NNS and signed-management fixtures with Platform request types.
+- Correct composition-fixture visibility and include the shared tool catalog in release lint.
+- Update endpoint and trap ownership guards for the Wire attribute names and adapter layout.
+- Prepare pinned Rust tools and the release metadata editor in ordinary CI;
+  qualify optimizer physical paths and portable manifest FIFO fixtures on macOS.
+  Refresh the embedded allocation peer for the current graph and retain exact
+  artifact/provenance comparisons when verification refuses a stale fixture.
+
+### 🔧 Changed
+
+- Delegate final-artifact capture and staging lifetime to IC Build. Bind complete
+  build reuse to the shared Cargo recipe, every contributing workspace catalog
+  and bounded Cargo configuration includes; keep release admission with Canic.
+
+- Add heap-default provider counters and measurements with immutable per-provider
+  stable storage through IC Metrics Stable 0.54.0. Blob admission/reference
+  observations use the existing application sampler and cached public query;
+  replay does not count as newly applied work. Preserve protected log/metric
+  queries, explicit publication and the sole host memory/lifecycle owners.
+
+- **Breaking — runtime logs:** use published IC Logging for bounded heap history,
+  filtering and retention. Remove the private stable log store and its memory/state
+  declarations. Log history resets on upgrade or reinstall; Canic retains query
+  authorization, Wire response shapes, configuration and retention scheduling.
+
+- Share Registry entry-size measurement while preserving capacity reservations.
+- Share Coordinator Root lookup logic while preserving snapshot and joining admission rules.
+- Complete the IC Metrics arithmetic cutover: retain wide totals and actual
+  overflow quality in protected Wire and CLI payloads, distinguish measurements
+  from scalar timer delays, and keep principal-scoped funding protected. Normalize
+  refill metric identities before bounded selection. Canic retains attribution,
+  authorization, history and spending policy; no compatibility payload is retained
+  ([#599](https://github.com/dragginzgame/canic/pull/599)).
+
+- Make ICRC discovery and consent an explicit, optional `canic::icrc::mount!`
+  adapter. Remove global/component configuration switches, role capabilities,
+  generated flags, automatic startup mounting and the global consent registry.
+  Preserve Platform ICRC-21 identities and application-owned consent policy;
+  correct ICRC-10 discovery to named `name`/`url` records. Ordinary qualification
+  explicitly runs the feature-gated adapter tests
+  ([#706](https://github.com/dragginzgame/canic/issues/706)).
+
+- Standardize adapter endpoint composition on `mount!`; rename IcyDB’s
+  `endpoints!` without a compatibility alias. Add an unpublished `canic-auth`
+  scaffold with compile-time mounting refusal and explicit integration obligations.
+  The IcyDB public macro rename requires the selected minor release boundary.
+
+- Move the Blob adapter to `crates/canic-blob-service`, alongside `canic-icydb`.
+  Keep independent consumer fixtures under `integrations/blob-service` and update
+  their package paths; standardize adapter placement in AGENTS.md.
+
+- Share normal and verbose cycle-table formatting while preserving their existing output.
+
+- Adopt IC Call 0.7.3 for prepared inter-canister requests and cost queries,
+  retaining Canic's protocol helpers, metrics and caller-owned recovery policy.
+
+- Add the `canic-icydb` adapter to the publication family, with Wire endpoints,
+  paired lifecycle hooks and shared committed memory for managed composition.
+
+- Adopt Auth 0.19.5, Backup 0.48.2, Blob 0.53.0, Timers 0.31.16, Wire 0.7.20, Query 0.75.5,
+  IC Tooling 0.69.7 and Shared Tooling 0.27.3 across the owning catalogs and
+  lockfiles, with Memory/Storage 0.53.0. Follow Blob’s reinstall-only hard cut and remove retired read fields.
+
+- **Breaking:** rename endpoint attributes to `query`/`update` and
+  `raw_query`/`raw_update`. Typed owned endpoints require explicit IC Wire
+  contracts; external Candid protocols use `candid_query`/`candid_update`.
+  This API hard cut is grouped into the 0.113.0 minor release.
+
+- Use IC Platform's external management/history, NNS, ledger/archive, CMC
+  and asset-read contracts instead of parallel payload types in Canic.
+- Extend timer ownership checks to integration consumers and document the
+  completed timer and Blob engine extraction boundaries.
+- Preserve verified Wasm artifact reuse across release-delivery context and launcher-helper changes
+  without skipping qualification or weakening build-input admission. Compile and
+  admit each serial test selection in one Cargo pass before PocketIC starts.
+  [Detailed notes](docs/changelog/0.113.md).
 
 ## [0.112.0] - 2026-10-28
 

@@ -17,6 +17,7 @@ use ic_auth::portable::{LoginRecordState, LoginRevocationChange};
 use ic_auth::session::{
     Replay, Session, SessionError, SessionLimits, SessionOccupancy, SessionReader, SessionStore,
 };
+use std::borrow::Cow;
 
 /// Target-bound durable backend; no asynchronous work may enter its transaction.
 pub struct ApplicationSessionStore {
@@ -56,8 +57,8 @@ impl SessionStore for ApplicationSessionStore {
 
     fn admit(
         &mut self,
-        session: &Session,
-        replay: &Replay,
+        session: Session,
+        replay: Replay,
         change: &LoginRevocationChange,
     ) -> Result<bool, SessionError> {
         if !matches!(change.state(), LoginRecordState::Reserved(_)) {
@@ -67,7 +68,7 @@ impl SessionStore for ApplicationSessionStore {
         let reader = Reader {
             generation: LocalApplicationAuthorizationStateOps::application_authority_generation(),
         };
-        let (record, replay_record) = reader.prepare_pair(session, replay)?;
+        let (record, replay_record) = reader.prepare_pair(&session, &replay)?;
         let replacing = reader.session(session.caller())?.is_some();
         let login = prepare_login(self, change)?;
         commit_pair(record, replay_record, reader.generation, login)?;
@@ -78,9 +79,12 @@ impl SessionStore for ApplicationSessionStore {
         if !matches!(change.state(), LoginRecordState::Revoked(_)) {
             return Err(SessionError::InvalidPolicyOrRecord);
         }
-        if let Some(session) = self.read(|reader| reader.session(change.caller()))? {
-            session.check_login_change(change)?;
-        }
+        self.read(|reader| {
+            if let Some(session) = reader.session(change.caller())? {
+                session.check_login_change(change)?;
+            }
+            Ok(())
+        })?;
         let login = prepare_login(self, change)?;
         commit_logout(change.caller().into(), login)
     }
@@ -91,17 +95,18 @@ impl SessionReader for Reader {
         self.generation
     }
     fn limits(&self) -> SessionLimits {
-        SessionLimits {
-            max_sessions: MAX_ACTIVE_APPLICATION_SESSIONS,
-            max_replays: MAX_APPLICATION_REPLAY_RECORDS,
-            max_replays_per_caller: MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER,
-            max_encoded_bytes: MAX_APPLICATION_SESSION_STABLE_BYTES,
-        }
+        SessionLimits::new(
+            MAX_ACTIVE_APPLICATION_SESSIONS,
+            MAX_APPLICATION_REPLAY_RECORDS,
+            MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER,
+            MAX_APPLICATION_SESSION_STABLE_BYTES,
+        )
+        .expect("Canic session limits must satisfy IC Auth admission")
     }
     fn session(
         &self,
         caller: ic_auth_protocol_types::Principal,
-    ) -> Result<Option<Session>, SessionError> {
+    ) -> Result<Option<Cow<'_, Session>>, SessionError> {
         let caller: Principal = caller.into();
         let index = with_indexes(|indexes| indexes.session_by_caller.get(&caller).copied())
             .map_err(|_| SessionError::StorageFailure)?;
@@ -113,7 +118,7 @@ impl SessionReader for Reader {
                 if session.caller() != caller.into() {
                     return Err(SessionError::InvalidPolicyOrRecord);
                 }
-                Ok(session)
+                Ok(Cow::Owned(session))
             })
             .transpose()
     }

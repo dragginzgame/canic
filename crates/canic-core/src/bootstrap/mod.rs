@@ -40,10 +40,10 @@ pub mod compiled {
         MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES,
         RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, RoleObservabilityConfig,
         ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
-        ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy,
-        implicit_root_canister_config, implicit_wasm_store_canister_config, validate_app_name,
-        validate_canister_role_name,
+        ShardingConfig, TopupPolicy, implicit_root_canister_config,
+        implicit_wasm_store_canister_config, validate_app_name, validate_canister_role_name,
     };
+    pub use crate::config::schema::{MetricProviderStorage, MetricStorage, MetricStorageConfig};
     pub use crate::{
         config::ComponentChildFundingPolicy, config::ComponentChildSpec,
         config::ComponentDeploymentConfiguration,

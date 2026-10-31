@@ -17,6 +17,115 @@ maximum_instances = 1
 "#;
 
 #[test]
+fn configured_cargo_recipe_changes_invalidate_complete_build_identity() {
+    use ic_build::cargo::execution::CargoRecipe;
+    let (root, context) = infrastructure_build_fixture();
+    let invocation = super::super::artifact::canister_runtime_command(
+        &context,
+        &context.workspace_root.join("Cargo.toml"),
+        context.profile,
+        &crate::canister_build::CanisterArtifactBuildOptions::default(),
+    );
+    let identity = input_identity(&context).unwrap();
+    assert_eq!(
+        identity,
+        input_identity_for_recipe(&context, &invocation.recipe).unwrap()
+    );
+    let mut different = invocation.clone();
+    different.recipe = CargoRecipe::Example("different-target".into());
+    assert_ne!(
+        invocation.command().unwrap().get_args().collect::<Vec<_>>(),
+        different.command().unwrap().get_args().collect::<Vec<_>>()
+    );
+    assert_ne!(
+        identity,
+        input_identity_for_recipe(&context, &different.recipe).unwrap()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn inherited_external_workspace_catalog_and_ancestry_are_frozen() {
+    let (root, context) = infrastructure_build_fixture();
+    let upstream = root.join("upstream");
+    let catalog = upstream.join("Cargo.toml");
+    let original = "[workspace]\nmembers=['canic','canic-control-plane']\nresolver='3'\n[workspace.package]\nversion='0.1.0'\nedition='2024'\nlicense='MIT'\n";
+    fs::write(&catalog, original).unwrap();
+    for name in ["canic", "canic-control-plane"] {
+        let manifest = upstream.join(name).join("Cargo.toml");
+        let source = fs::read_to_string(&manifest)
+            .unwrap()
+            .replace("version = \"0.1.0\"", "version.workspace = true")
+            .replace("edition = \"2024\"", "edition.workspace = true");
+        fs::write(manifest, source).unwrap();
+    }
+    let before = input_snapshot(&context, &[]).unwrap();
+    assert!(matches!(
+        before.entries().get(&catalog),
+        Some(InputEvidenceValue::File { .. })
+    ));
+    fs::write(
+        &catalog,
+        original.replace("license='MIT'", "license='Apache-2.0'"),
+    )
+    .unwrap();
+    assert!(
+        matches!(before.validate_after(&input_spec(&context, &[]).unwrap().0), Err(InputEvidenceError::ChangedInput { path }) if path == catalog)
+    );
+    fs::write(&catalog, original).unwrap();
+    for relative in ["Cargo.lock", ".cargo/config.toml", "rust-toolchain.toml"] {
+        let path = upstream.join(relative);
+        assert_eq!(
+            before.entries().get(&path),
+            Some(&InputEvidenceValue::Missing)
+        );
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "# new contributing input\n").unwrap();
+        assert!(
+            matches!(before.validate_after(&input_spec(&context, &[]).unwrap().0), Err(InputEvidenceError::ChangedInput { path: changed }) if changed == path)
+        );
+        fs::remove_file(&path).unwrap();
+        before
+            .validate_after(&input_spec(&context, &[]).unwrap().0)
+            .unwrap();
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn external_configuration_includes_are_frozen_before_reuse() {
+    let (root, context) = infrastructure_build_fixture();
+    let config = root.join("upstream/.cargo/config.toml");
+    let included = root.join("external-profile.toml");
+    fs::create_dir_all(config.parent().unwrap()).unwrap();
+    fs::write(&config, "include = ['../../external-profile.toml', { path = '../../optional-profile.toml', optional = true }]\n").unwrap();
+    fs::write(&included, "[profile.release]\nlto = false\n").unwrap();
+    let before = input_snapshot(&context, &[]).unwrap();
+    let watched = before
+        .entries()
+        .keys()
+        .find(|path| path.canonicalize().ok().as_ref() == Some(&included))
+        .unwrap()
+        .clone();
+    fs::write(&included, "[profile.release]\nlto = true\n").unwrap();
+    assert!(
+        matches!(before.validate_after(&input_spec(&context, &[]).unwrap().0), Err(InputEvidenceError::ChangedInput { path }) if path == watched)
+    );
+    fs::write(&included, "[profile.release]\nlto = false\n").unwrap();
+    let optional = root.join("optional-profile.toml");
+    fs::write(&optional, "[build]\nrustflags = []\n").unwrap();
+    assert!(
+        matches!(before.validate_after(&input_spec(&context, &[]).unwrap().0), Err(InputEvidenceError::UnobservedInput { path }) if path.ends_with("optional-profile.toml"))
+    );
+    fs::remove_file(&optional).unwrap();
+    fs::remove_file(&included).unwrap();
+    assert!(
+        matches!(input_spec(&context, &[]), Err(BuildReuseError::CargoConfiguration(ic_build::cargo::environment::ConfigurationError::Io { source, .. })) if source.kind() == io::ErrorKind::NotFound)
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn file_fingerprint_preserves_digest_and_typed_path_refusals() {
     let root = temp_dir("build-input-hash");
     fs::create_dir_all(&root).unwrap();

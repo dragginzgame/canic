@@ -139,29 +139,43 @@ product, release and recovery obligations remain binding when applicable.
   planned. Preserve unresolved local defects in their owning issues with a
   self-owned solution; closing an upstream plan does not mean the defect is fixed.
 
-## Repository files: no symlinks
+<a id="repository-files-no-symlinks"></a>
 
-- **Do not create or commit symlinks for maintained repository files or
-  directories.** This includes source, manifests, documentation, scripts, shared
-  snapshots, license files and shipped package assets. Generated source and
-  package outputs follow the same rule; fix their generator when necessary.
-- Use explicit dependency/configuration paths or the canonical package interface.
-  When packaging needs a local file, use a regular copy and verify it against
-  its owner. In particular, package-local `LICENSE` files must be regular files
-  containing the applicable complete terms and notices, never symlinks.
-- The permitted repository-tooling uses are generated selection pointers owned
-  and admitted by Shared Tooling's verified executable store, and deliberately
-  created symlinks in isolated rejection/security fixtures. Keep these outside
-  maintained source and shipped package assets; they do not authorize general
-  file aliases, package-license links or links into sibling checkouts.
-- Operating-system/toolchain layouts and directory aliases outside the maintained
-  repository tree remain external inputs, subject to each tool's path admission.
-  This rule does not authorize deleting existing installations, evidence or link
-  targets. Replace an obsolete repository link without modifying its target.
-- Review tracked Git modes, working-tree paths and actual package file lists
-  when adopting the rule. A clean index alone does not prove generated or packaged
-  files comply. Any other repository-owned use needs a scoped maintainer-approved
-  exception under the baseline's local-authority rules.
+## Repository files: self-contained source and packages
+
+- **Keep source and distributions self-contained; prefer regular files.** This
+  is a portability and reproducibility default, not a claim that symlinks are
+  unidiomatic. Use explicit dependencies/configuration paths or the canonical
+  package interface instead of repository links into sibling checkouts or
+  machine-specific external locations.
+- A narrow internal relative link is acceptable when it removes real maintenance
+  work and stays within the owning checkout. Document its purpose and qualify
+  checkout, tooling and packaging behavior on supported hosts. Avoid dangling
+  links, cycles and implicit external dependencies. Prefer an ordinary reference
+  when it serves the same purpose; do not introduce copied files and a syncing
+  mechanism merely to avoid a useful internal link.
+- Shared snapshots and shipped package assets remain regular, self-contained
+  files. Materialize packaging copies at their generator and verify them against
+  their canonical owner. Package-local `LICENSE` files contain the applicable
+  complete terms and notices as regular files. An internal source link does not
+  authorize shipping an unresolved link or omitting its target from an archive.
+- Generated selection pointers in the verified executable store and deliberate
+  symlinks in isolated security/rejection fixtures remain valid tooling uses.
+  Normal operating-system/toolchain layouts and aliased checkout paths should
+  work where practical; a repository-file preference alone is not a reason to
+  reject them. Preserve each tool's actual path and custody requirements.
+- Concentrate strict link/escape checks at packaging, installation and
+  security-sensitive read/write boundaries. Review Git modes, working paths and
+  package inventories when relevant, but do not build a general symlink scanner
+  into every command. The optional `check-no-symlinks.pl` helper enforces a
+  stricter all-regular inventory for repositories that choose it; it cannot
+  assess justified internal links. Such repositories should select appropriate
+  boundary checks rather than add a parallel exception framework merely to keep
+  that gate. Shared Tooling itself retains this stricter inventory check.
+- Preserve existing installations, evidence and link targets. Replacing an
+  obsolete repository link must not modify its target. Exceptions to the
+  self-contained dependency or shipped-file requirements still need scoped
+  maintainer approval under the baseline's local-authority rules.
 
 ## CLI applications
 
@@ -476,6 +490,11 @@ contracts; ordinary development does not require rereading these mechanics.
 
 ## Rust workspaces and portable tooling
 
+- Governed tools target latest stable during authorized maintenance, while
+  builds keep exact reviewed versions and checksums. Retaining an older version
+  needs a documented compatibility blocker and owning follow-up. Use the
+  [tool freshness workflow](../tasks/cargo-tool-versions.md), including optional
+  sccache; never resolve latest dynamically in builds or create a second installer.
 - Directory names for repositories, workspaces, tooling and operational inputs
   must not contain line-feed (LF) or carriage-return (CR) characters, including
   ancestor directories and resolved symlink destinations. Do not create or select
@@ -658,7 +677,8 @@ contracts; ordinary development does not require rereading these mechanics.
   and the smallest useful verification.
 - Track upstream acceptance separately from verified consumer adoption. Close
   producer issues when their own delivered implementation and required checks
-  are complete; keep outstanding adoption in linked consumer-owned issues.
+  are complete; keep concrete, independently actionable adoption work in linked
+  consumer-owned issues. Shared waiting findings follow the rule below.
   Do not keep or reopen a completed producer issue solely for fleet adoption,
   or create a second open tracker for the same consumer obligations. The
   [issue maintenance procedure](agent-maintenance.md#issue-review-and-repair)
@@ -676,6 +696,32 @@ contracts; ordinary development does not require rereading these mechanics.
 - Report the outcome, changed files, relevant verification, skipped checks,
   remaining risks and open consumer actions. State compatibility and host impact
   when relevant. Do not claim a release proves publication, adoption or deployment.
+
+### Shared dependency findings
+
+- Keep **one active remediation issue per shared dependency root cause**, at the
+  repository that owns the supplying dependency or capability. A matching
+  advisory or inherited defect in multiple consumer graphs does not create
+  multiple implementation outcomes. IC Platform owns findings in its external
+  IC boundary, including the crypto/Agent dependencies supplied through it;
+  other capabilities retain their established owners.
+- Search open and closed issues before filing. Reuse the canonical issue and
+  respect closed consumer redirects. Attach materially new affected-consumer
+  source/lock identities, dependency paths and operation/target evidence there;
+  do not recreate mirrors, repeated unchanged comments or a Shared umbrella.
+- Open a separate consumer issue only for **distinct, independently actionable
+  consumer-owned work**, such as a direct boundary bypass, an integration defect
+  or adoption of an available qualified correction requiring local changes.
+  State that local action and link the supplying issue. Merely waiting for the
+  same supplier or observing the same advisory in another lock is insufficient.
+- Consolidate existing mirrors only after linking their unique evidence and
+  remaining migration requirements from the canonical issue. Close them as
+  superseded/not planned, with an explicit redirect. Preserve historical
+  discussions; do not describe the dependency as fixed or adoption as complete.
+- Tracking consolidation changes no advisory/release gate, scoped acceptance,
+  expiry date or qualification obligation. The supplier closes its issue on its
+  own correction or reviewed decision and required evidence; this neither
+  certifies fleet adoption nor makes each consumer an acknowledgement gate.
 
 ### Repository handoff files
 

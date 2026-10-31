@@ -110,7 +110,7 @@ standalone-local lifecycle supports local development and testing.
 | [Fleet orchestration](docs/features/fleet-orchestration/README.md) | Plan, review, deploy, retry, and recover multi-canister applications |
 | [Scaling and placement](docs/features/scaling-and-placement/README.md) | Control how applications grow and where canisters may run |
 | [Build evidence](docs/features/build-and-evidence/README.md) | Produce Wasm and record exactly how it was built |
-| [Backup and restore](docs/features/backup-and-restore/README.md) | Verify existing backups and perform same-release recovery |
+| [Backup and restore](docs/features/backup-and-restore/README.md) | Backup ownership and current availability |
 | [Blob storage](docs/features/blob-storage/README.md) | Compose the independent blob service as an application |
 | [Operations](docs/features/operations/README.md) | Set up, inspect, diagnose, and operate a Fleet |
 

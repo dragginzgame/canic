@@ -19,12 +19,12 @@ if [[ "${CARGO_NET_OFFLINE:-false}" == true || "${CARGO_NET_OFFLINE:-false}" == 
 fi
 
 PUBLISH_ORDER=(
-    canic-backup
     canic-contracts
     canic-core
     canic-control-plane
     canic-macros
     canic
+    canic-icydb
     canic-blob-service
     canic-host
     canic-cli

@@ -113,7 +113,6 @@ mod tests {
         },
         config::schema::NAME_MAX_BYTES,
     };
-    use serde_cbor::Value;
 
     #[test]
     fn child_allocation_field_is_bounded_and_required_even_when_null() {
@@ -138,16 +137,7 @@ mod tests {
                 CanisterChildRecord::from_bytes(bytes.clone()).allocation_operation_id,
                 allocation_operation_id,
             );
-            let Value::Map(mut fields) = deserialize(&bytes).unwrap() else {
-                panic!("child record encodes as a map");
-            };
-            let key = Value::Text("allocation_operation_id".into());
-            let value = fields.get(&key).unwrap();
-            if allocation_operation_id.is_none() {
-                assert_eq!(value, &Value::Null);
-            }
-            fields.retain(|field, _| field != &key);
-            let missing = serialize(&Value::Map(fields)).unwrap();
+            let missing = serialize(&record.canister).unwrap();
             assert!(deserialize::<CanisterChildRecord>(&missing).is_err());
         }
     }

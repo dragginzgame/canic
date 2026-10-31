@@ -40,31 +40,35 @@ auth-local-application-authorization = [
 auth-root-delegation-state = []
 internal-test-fixtures = []
 
-[dependencies]
-async-trait = { workspace = true }
-canic-contracts.workspace = true
-ctor = { workspace = true }
-ic-auth = { workspace = true }
-ic-auth-protocol-types = { workspace = true }
-ic-memory = { workspace = true }
-ic-metrics.workspace = true
-ic-platform = { workspace = true, features = ["cdk", "candid", "management-canister-types", "icrc-ledger-types"] }
-ic-storage.workspace = true
-ic-timers = { workspace = true }
-ic-wire.workspace = true
-remain = { workspace = true }
-serde = { workspace = true }
-serde_bytes = { workspace = true }
-serde_cbor = { workspace = true }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ic-platform = { workspace = true, features = ["secp256k1"] }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 serde_path_to_error = { workspace = true }
 toml = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+canic-contracts.workspace = true
+ctor = { workspace = true }
+ic-auth = { workspace = true }
+ic-auth-protocol-types = { workspace = true }
+ic-call = { workspace = true }
+ic-logging.workspace = true
+ic-memory = { workspace = true }
+ic-metrics.workspace = true
+ic-metrics-stable.workspace = true
+ic-platform = { workspace = true, features = ["cdk", "cmc-types", "nns-registry-types", "cycles-ledger-types", "candid", "management-canister-types", "icrc-ledger-types"] }
+ic-storage.workspace = true
+ic-timers = { workspace = true }
+ic-wire.workspace = true
+num-bigint = { workspace = true, features = ["serde"] }
+remain = { workspace = true }
+serde = { workspace = true }
+serde_bytes = { workspace = true }
+serde_cbor = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
 
 [build-dependencies]
 

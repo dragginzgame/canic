@@ -4,7 +4,6 @@ mod live;
 mod options;
 mod render;
 
-use canic_backup::discovery::DiscoveryError;
 use canic_host::{
     config_discovery::ConfigDiscoveryError, fleet_ensure::CurrentFleetInventoryError,
     icp::IcpCommandError, icp_config::IcpConfigError, release_set::AppConfigError,
@@ -62,9 +61,6 @@ pub enum ListCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Discovery(#[from] DiscoveryError),
 }
 
 /// Run the deployed canister listing command under `canic info`.

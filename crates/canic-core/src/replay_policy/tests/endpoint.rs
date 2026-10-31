@@ -7,6 +7,19 @@
 use super::*;
 
 #[test]
+fn checkpoint_observation_is_a_read_only_update_without_paid_effects() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_checkpoint_status")
+        .unwrap();
+    assert_eq!(entry.endpoint_kind, EndpointKind::Update);
+    assert_eq!(entry.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(entry.cost_class, CostClass::None);
+    assert!(entry.quota_policy.is_none());
+    assert!(entry.cycle_reserve_policy.is_none());
+}
+
+#[test]
 fn native_inspection_and_role_queries_remain_read_only() {
     let inspection = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

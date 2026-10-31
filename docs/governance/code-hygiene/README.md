@@ -12,8 +12,7 @@ security, deployment or performance correctness.
 
 This directory defines source consistency and readability standards for the
 Canic workspace, including `canic`, `canic-core`, `canic-macros`,
-`canic-control-plane`, `canic-cli`, `canic-host`, and
-`canic-backup`.
+`canic-control-plane`, `canic-cli`, and `canic-host`.
 
 Use this guide while adding or reviewing Rust code. It explains where code
 belongs, how modules should be arranged, what needs documentation, and which

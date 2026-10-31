@@ -9,7 +9,7 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, StableBTreeMap as StableBtreeMap},
     impl_storable_bounded,
 };
-use ic_platform::candid::contract::Nat;
+use num_bigint::BigUint;
 use std::{
     cell::RefCell,
     ops::Bound::{Excluded, Unbounded},
@@ -120,7 +120,8 @@ pub struct IcpRefillRecord {
     /// An issued transfer lacks a definitive outcome, including an earlier lost reply.
     pub transfer_uncertain: bool,
     pub notify_attempts: u32,
-    pub cycles_sent: Option<Nat>,
+    /// Exact observed ledger amount; storage is independent of the external Candid Nat decoder.
+    pub cycles_sent: Option<BigUint>,
     pub status: IcpRefillRecordStatus,
     pub error_code: Option<IcpRefillRecordErrorCode>,
     pub error_message: Option<String>,
@@ -281,7 +282,7 @@ mod tests {
             created_at_time_ns: 14,
             ledger_block_index: Some(15),
             notify_attempts: 16,
-            cycles_sent: Some(Nat::from(17_u64)),
+            cycles_sent: Some(BigUint::from(17_u64)),
             status: IcpRefillRecordStatus::Completed,
             error_code: None,
             error_message: None,

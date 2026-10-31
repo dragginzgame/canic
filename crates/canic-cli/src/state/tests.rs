@@ -33,7 +33,6 @@ fn root_contract() -> ResolvedRoleContract {
         StateAllocationKey::CoreRootDelegationState,
         StateAllocationKey::CoreReplayReceipts,
         StateAllocationKey::CoreCycles,
-        StateAllocationKey::CoreRuntimeLog,
         StateAllocationKey::CoreIntent,
         StateAllocationKey::CoreApplicationReceipts,
         StateAllocationKey::CorePlacementAcknowledgement,
@@ -175,7 +174,7 @@ fn manifest_json_is_manifest_directly() {
             .as_array()
             .expect("state domains")
             .iter()
-            .any(|entry| entry["domain"] == "runtime_log")
+            .any(|entry| entry["domain"] == "cycles_tracker")
     );
 }
 
@@ -193,7 +192,6 @@ fn text_renderers_include_stable_fields() {
     assert!(manifest.contains("template_manifests"));
     assert!(!manifest.contains("reserved_memory"));
     assert!(manifest.contains("cycles_tracker"));
-    assert!(manifest.contains("runtime_log"));
 }
 
 #[test]

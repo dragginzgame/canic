@@ -71,11 +71,12 @@ use canic_core::{
     cdk::utils::hash::hex_bytes,
     control_plane_support::{
         error::InternalError,
-        ops::ic::{IcOps, call::CallOps},
+        ops::ic::{IcOps, call::execute as execute_call},
     },
     log,
     log::Topic,
 };
+use ic_call::{Call, WaitPolicy};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::time::Duration;
 
@@ -520,11 +521,16 @@ impl FleetCoordinatorWorkflow {
             wire::REQUEST_LIMITS,
         )
         .map_err(|_| InternalError::invariant())?;
-        let reply = CallOps::unbounded_wait(root, wire::root_remove::METHOD)
-            .with_raw_args(bytes)
-            .execute()
-            .await?
-            .into_bytes();
+        let reply = execute_call(
+            Call::new(
+                root.into(),
+                wire::root_remove::METHOD,
+                WaitPolicy::Unbounded,
+            )
+            .take_raw_args(bytes),
+        )
+        .await?
+        .into_bytes();
         let result: Result<OperationReceipt, Error> = ic_wire::native::decode_response(
             wire::root_remove::METHOD_ID,
             &reply,
@@ -846,11 +852,11 @@ async fn query_root_removal(
     let bytes =
         ic_wire::native::encode_request(wire::METHOD_ID, &operation_id, wire::REQUEST_LIMITS)
             .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::unbounded_wait(root, wire::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(root.into(), wire::METHOD, WaitPolicy::Unbounded).take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let response: Result<root_removal_read::Status, Error> =
         ic_wire::native::decode_response(wire::METHOD_ID, &reply, wire::RESPONSE_LIMITS)
             .map_err(|_| InternalError::invariant())?;
@@ -1162,11 +1168,11 @@ async fn accept_root_component_provisioning(
         wire::ROOT_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::unbounded_wait(root, wire::accept::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(root.into(), wire::accept::METHOD, WaitPolicy::Unbounded).take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let response: Result<OperationReceipt, Error> =
         ic_wire::native::decode_response(wire::accept::METHOD_ID, &reply, wire::RESPONSE_LIMITS)
             .map_err(|_| InternalError::invariant())?;
@@ -1193,12 +1199,19 @@ async fn call_root_funding_acceptance(
         wire::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::bounded_wait(call.fleet_subnet_root, wire::root_accept::METHOD)
-        .with_raw_args(bytes)
-        .with_cycles(granted_cycles)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            call.fleet_subnet_root.into(),
+            wire::root_accept::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes)
+        .with_cycles(granted_cycles),
+    )
+    .await?
+    .into_bytes();
     let response: Result<funding_control::AcceptanceReceipt, Error> =
         ic_wire::native::decode_response(
             wire::root_accept::METHOD_ID,
@@ -1225,11 +1238,18 @@ async fn call_root_funding_policy_rotation_prepare(
         wire::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::bounded_wait(fleet_subnet_root, wire::root_prepare::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            fleet_subnet_root.into(),
+            wire::root_prepare::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let response: Result<funding_control::RotationReceipt, Error> =
         ic_wire::native::decode_response(
             wire::root_prepare::METHOD_ID,
@@ -1253,11 +1273,18 @@ async fn call_root_funding_policy_rotation_activate(
         wire::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::bounded_wait(fleet_subnet_root, wire::root_activate::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            fleet_subnet_root.into(),
+            wire::root_activate::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let response: Result<funding_control::RotationReceipt, Error> =
         ic_wire::native::decode_response(
             wire::root_activate::METHOD_ID,
@@ -1293,11 +1320,16 @@ async fn query_root_component_provisioning(
         wire::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let reply = CallOps::unbounded_wait(root, wire::provisioning::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let reply = execute_call(
+        Call::new(
+            root.into(),
+            wire::provisioning::METHOD,
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let response: Result<component_read::Provisioning, Error> = ic_wire::native::decode_response(
         wire::provisioning::METHOD_ID,
         &reply,
@@ -1359,11 +1391,16 @@ async fn advance_root_component_directories(
                 wire::SYNCHRONIZE_LIMITS,
             )
             .map_err(|_| InternalError::invariant())?;
-            let reply = CallOps::unbounded_wait(fleet_subnet_root, wire::synchronize::METHOD)
-                .with_raw_args(bytes)
-                .execute()
-                .await?
-                .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    fleet_subnet_root.into(),
+                    wire::synchronize::METHOD,
+                    WaitPolicy::Unbounded,
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let response: Result<batch_control::Synchronization, Error> =
                 ic_wire::native::decode_response(
                     wire::synchronize::METHOD_ID,

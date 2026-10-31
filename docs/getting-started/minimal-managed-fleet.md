@@ -271,13 +271,13 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
 };
 
-#[canic_query(public,
+#[query(public,
     wire(id = 0x4150_5000_0000_0001, request = LIMITS, response = LIMITS))]
 fn whoami_query() -> Result<Principal, Error> {
     Ok(msg_caller())
 }
 
-#[canic_update(public,
+#[update(public,
     wire(id = 0x4150_5000_0000_0002, request = LIMITS, response = LIMITS))]
 fn whoami_update() -> Result<Principal, Error> {
     Ok(msg_caller())

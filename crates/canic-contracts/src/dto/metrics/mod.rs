@@ -34,9 +34,18 @@ pub struct MetricEntry {
     derive(ic_wire::Wire)
 )]
 pub enum MetricValue {
-    Count(u64),
-    CountAndU64 { count: u64, value_u64: u64 },
-    U128(u128),
+    /// Scalar count; false exactness admits only a lower bound.
+    Count { count: u128, exact: bool },
+    /// Count and accumulated total from the same admitted observation cohort.
+    /// Numeric caps remain exact unless their corresponding flag is true.
+    Measurement {
+        count: u64,
+        total: u128,
+        count_overflowed: bool,
+        total_overflowed: bool,
+    },
+    /// Scalar quantity; false exactness admits only a lower bound.
+    U128 { value: u128, exact: bool },
 }
 
 //

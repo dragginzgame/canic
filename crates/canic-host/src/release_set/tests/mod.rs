@@ -63,8 +63,6 @@ package = "role_baseline"
 [auth.delegated_tokens]
 enabled = false
 
-[standards]
-icrc21 = true
 
 
 [component_specs.user_hub]

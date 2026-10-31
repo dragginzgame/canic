@@ -22,6 +22,7 @@ use {
     },
 };
 
+pub(super) use root::qualify_original_host_workflow;
 pub(super) use root::qualify_root_dispatch;
 
 /// Fixture-owned business and hook evidence returned by the participant.

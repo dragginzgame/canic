@@ -30,7 +30,6 @@ pub enum RoleCapability {
     DelegatedTokenVerifier,
     FleetAdmissionProjection,
     FleetCoordinator,
-    Icrc21,
     Index,
     ObservabilityDiagnostics,
     ObservabilityHistory,

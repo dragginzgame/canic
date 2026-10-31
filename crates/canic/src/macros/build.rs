@@ -174,8 +174,6 @@ macro_rules! __canic_build_internal {
             .unwrap_or_else(|finding| panic!("role contract rejected: {finding:?}"))
         };
 
-        let has_icrc21 = __canic_capabilities
-            .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21);
         for capability in &__canic_capabilities {
             match capability {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::AutomaticTopup => {
@@ -204,9 +202,6 @@ macro_rules! __canic_build_internal {
                 }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::LocalApplicationAuthorization => {
                     println!("cargo:rustc-cfg=canic_capability_local_application_authorization");
-                }
-                $crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21 => {
-                    println!("cargo:rustc-cfg=canic_capability_icrc21");
                 }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::ObservabilityDiagnostics => {
                     println!("cargo:rustc-cfg=canic_capability_observability_diagnostics");
@@ -256,9 +251,6 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_is_root");
         }
 
-        if has_icrc21 && $cfg.standards.as_ref().is_some_and(|standards| standards.icrc21) {
-            println!("cargo:rustc-cfg=canic_icrc21_enabled");
-        }
 
         if metrics_core {
             println!("cargo:rustc-cfg=canic_metrics_core");

@@ -512,12 +512,13 @@ fn publication_hash(
 ) -> Result<[u8; 32], CallerPublicationError> {
     let mut canonical = publication.clone();
     canonical.content_hash = [0; 32];
-    let bytes = serialize(&canonical).map_err(|_| CallerPublicationError::InvalidPublication)?;
+    let bytes = canic_contracts::protocol::authority::encode(&canonical)
+        .map_err(|_| CallerPublicationError::InvalidPublication)?;
     if bytes.len() > MAX_CALLER_ROW_BYTES as usize {
         return Err(CallerPublicationError::Capacity);
     }
     let mut hash = Sha256::new();
-    hash.update(b"canic.caller-publication.v1\0");
+    hash.update(b"canic.caller-publication.wire.v1\0");
     hash.update(bytes);
     Ok(hash.finalize().into())
 }

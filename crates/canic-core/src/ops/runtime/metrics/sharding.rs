@@ -8,10 +8,11 @@ use crate::{
     InternalError, model::placement::sharding::CreateBlockedReason,
     ops::runtime::metrics::error::MetricErrorKind,
 };
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static SHARDING_METRICS: RefCell<HashMap<ShardingMetricKey, u64>> =
+    static SHARDING_METRICS: RefCell<HashMap<ShardingMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -182,14 +183,14 @@ impl ShardingMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current sharding metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(ShardingMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(ShardingMetricKey, MeasurementCounter)> {
         SHARDING_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -212,8 +213,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<ShardingMetricKey, u64> {
-        ShardingMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<ShardingMetricKey, u128> {
+        ShardingMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     // Verify sharding metrics accumulate by operation, outcome, and reason.

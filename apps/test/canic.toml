@@ -68,9 +68,6 @@ max_revocation_latency_ns = 60000000000
 # Standards
 # ----------------------------------------------------------------
 
-[standards]
-icrc21 = true # Enable ICRC-21 capability
-
 # ----------------------------------------------------------------
 # Component Definitions
 # ----------------------------------------------------------------
@@ -84,9 +81,6 @@ icrc21 = true # Enable ICRC-21 capability
 component_role = "app"
 maximum_instances = 1
 topup = {}
-
-[component_specs.app.standards]
-icrc21 = true
 
 [component_specs.indexed]
 component_role = "index_hub"
@@ -107,9 +101,6 @@ component_role = "test"
 maximum_instances = 1
 topup = {}
 
-[component_specs.test.standards]
-icrc21 = true
-
 [component_specs.test.auth]
 delegated_token_verifier = true
 role_attestation_cache = true
@@ -119,9 +110,6 @@ role_attestation_cache = true
 component_role = "user_hub"
 maximum_instances = 1
 topup = {}
-
-[component_specs.users.standards]
-icrc21 = true
 
 # --- User Hub Pools ---
 [component_specs.users.sharding.pools.user_shards]
@@ -134,9 +122,6 @@ policy.max_shards = 4
 [component_specs.users.children.user_shard]
 kind = "shard"
 topup = {}
-
-[component_specs.users.children.user_shard.standards]
-icrc21 = true
 
 [component_specs.users.children.user_shard.auth]
 delegated_token_issuer = true
@@ -152,9 +137,6 @@ component_role = "scale_hub"
 maximum_instances = 1
 topup = {}
 
-[component_specs.scaling.standards]
-icrc21 = true
-
 # --- Scale Hub Pools ---
 [component_specs.scaling.scaling.pools.scales]
 canister_role = "scale_replica"
@@ -165,9 +147,6 @@ policy.min_workers = 2
 [component_specs.scaling.children.scale_replica]
 kind = "replica"
 topup = {}
-
-[component_specs.scaling.children.scale_replica.standards]
-icrc21 = true
 
 [component_specs.scaling.spawn_grants.scale_hub.scale_replica]
 maximum_instances_per_parent = 32

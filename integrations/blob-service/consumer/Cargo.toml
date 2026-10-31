@@ -11,10 +11,10 @@ license = "MIT"
 
 [workspace.dependencies]
 canic = { path = "../../../crates/canic", default-features = false }
-canic-blob-service = { path = ".." }
+canic-blob-service = { path = "../../../crates/canic-blob-service" }
 # Tests and tooling only
-ic-host-artifacts = { version = "0.69.0", default-features = false }
-ic-platform = { version = "0.7.0", default-features = false }
+ic-host-artifacts = { version = "0.70.3", default-features = false }
+ic-platform = { version = "0.8.2", default-features = false }
 
 [package]
 name = "blob-service-consumer"

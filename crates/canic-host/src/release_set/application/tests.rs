@@ -282,8 +282,9 @@ fn compiler_freezes_one_canonical_qualified_topology_union() {
             .expect("equivalent union digest")
     );
     assert_eq!(
+        // The current topology commits explicit provider-storage policy.
         hex_bytes(union.digest(&topology).expect("frozen union digest")),
-        "ca9c9fb6aa1768617194a75c67c0ad8768c3923a0032006026babb16fe730c54"
+        "b000b52003c72aa5416b9dd6d1a5ff3fd4bfeccdc8f5d0519108ee874129d911"
     );
 }
 
@@ -445,7 +446,7 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
                 .expect("frozen manifest digest")
                 .into_bytes()
         ),
-        "d516853f7b203e1db1a635624bec967cf5a16f755a1da5b4e38486f5b748afa6"
+        "252fee6b3c1d3c1b3383d22e4b73d54a0e4efcac4d27b9985c1f15d47cc539b5"
     );
 }
 

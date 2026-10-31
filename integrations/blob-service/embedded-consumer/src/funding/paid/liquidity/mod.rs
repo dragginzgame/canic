@@ -3,7 +3,7 @@
 use super::{CashierTopUpStatus, FundingDispatchResult, FundingPreparationResult, payment};
 use crate::funding::{dispatch, funding, preparation};
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_liquidity() {
     for operation in 3..=5 {
         let mut input = payment(operation);
@@ -53,7 +53,7 @@ async fn test_funding_liquidity() {
     ic_platform::cdk::api::msg_reply([]);
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_liquidity_replay() {
     for operation in 3..=5 {
         let mut input = payment(operation);

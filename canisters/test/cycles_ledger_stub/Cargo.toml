@@ -14,7 +14,7 @@ wire-schema = ["dep:canic", "canic/wire-schema"]
 [dependencies]
 canic = { workspace = true, optional = true }
 canic-contracts.workspace = true
-ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-platform = { workspace = true, features = ["cdk", "candid", "nns-registry-types"] }
 ic-wire.workspace = true
 serde = { workspace = true }
 

@@ -55,7 +55,6 @@ ensure_packaged_crate() {
         canic-cli)
             cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
                 --config "patch.crates-io.canic-contracts.path=\"$ROOT/crates/canic-contracts\"" \
-                --config "patch.crates-io.canic-backup.path=\"$ROOT/crates/canic-backup\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" \
                 --config "patch.crates-io.canic-host.path=\"$ROOT/crates/canic-host\"" >/dev/null
             ;;
@@ -71,7 +70,6 @@ populate_isolated_package_root() {
 
     local crate_archive=""
     for crate_archive in \
-        "$PACKAGE_STAGING_ROOT/canic-backup-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-contracts-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-control-plane-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
@@ -98,7 +96,6 @@ resolver = "3"
 
 [patch.crates-io]
 canic = { path = "package-root/canic-$VERSION" }
-canic-backup = { path = "package-root/canic-backup-$VERSION" }
 canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
 canic-contracts = { path = "package-root/canic-contracts-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
@@ -187,7 +184,7 @@ canic::start!();
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
-#[canic_query(requires(caller::is_controller()), wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
+#[query(requires(caller::is_controller()), wire(id = protocol::METHOD_ID, request = protocol::LIMITS, response = protocol::LIMITS))]
 async fn packaged_probe() -> Result<u64, canic::Error> { Ok(7) }
 canic::finish!();
 EOF
@@ -290,7 +287,6 @@ assert_probe_outputs() {
 }
 
 main() {
-    ensure_packaged_crate canic-backup
     ensure_packaged_crate canic-contracts
     ensure_packaged_crate canic-core
     ensure_packaged_crate canic-control-plane

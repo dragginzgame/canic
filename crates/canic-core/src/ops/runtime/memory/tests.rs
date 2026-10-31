@@ -295,6 +295,12 @@ struct RefusableMemory {
     refuse: std::rc::Rc<std::cell::Cell<bool>>,
 }
 
+impl ic_memory::MemoryBacking for RefusableMemory {
+    fn backing_identity(&self) -> ic_memory::BackingIdentity {
+        ic_memory::MemoryBacking::backing_identity(&self.bytes)
+    }
+}
+
 impl Memory for RefusableMemory {
     fn size(&self) -> u64 {
         self.bytes.size()
@@ -440,10 +446,23 @@ fn application_growth_refusal_preserves_extents_and_retry() {
     ));
     assert_eq!(*backing.bytes.borrow(), before);
     drop(runtime);
+    assert!(matches!(
+        ic_memory::MemoryRuntime::new(backing.clone()),
+        Err(ic_memory::RuntimeConstructionError::BackingAlreadyClaimed)
+    ));
     assert_eq!(rows.grow(1), Ok(1));
     let mut bytes = [0; 8];
     rows.read(0, &mut bytes);
     assert_eq!(&bytes, b"retained");
+    drop(rows);
+    let reopened = ic_memory::MemoryRuntime::new(backing).unwrap();
+    assert_eq!(
+        reopened
+            .memory_allocation_summary()
+            .unwrap()
+            .bucket_size_pages,
+        1
+    );
 }
 
 #[test]

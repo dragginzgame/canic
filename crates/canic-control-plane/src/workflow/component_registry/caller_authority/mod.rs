@@ -26,9 +26,10 @@ use canic_contracts::{
 };
 use canic_core::control_plane_support::{
     model::caller_authority::CallerReceiptPhase,
-    ops::{caller_authority::CallerAuthorityOps, ic::call::CallOps},
+    ops::{caller_authority::CallerAuthorityOps, ic::call::execute as execute_call},
     policy::caller_authority::matches_permission,
 };
+use ic_call::{Call, WaitPolicy};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeMap;
 
@@ -302,12 +303,29 @@ async fn require_applications_ready(
             }
             // Query and release callbacks can share one round. Consensus yields
             // the original IC call context while the child's timer progresses.
-            CallOps::bounded_wait(Principal::management_canister(), "raw_rand")
-                .with_args(())?
-                .execute()
-                .await
-                .map_err(|error| startup_failure("consensus_wait", operation, error))?
-                .candid::<Vec<u8>>()?;
+            let args =
+                ic_platform::candid::protocols::management::raw_rand::encode().map_err(|_| {
+                    InternalError::public(canic_contracts::diagnostics::codes::CODEC_FAILED)
+                })?;
+            let response = execute_call(
+                Call::new(
+                    Principal::management_canister().into(),
+                    "raw_rand",
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(args),
+            )
+            .await
+            .map_err(|error| startup_failure("consensus_wait", operation, error))?;
+            let _: (Vec<u8>,) = ic_platform::candid::contract::decode_args_with_config(
+                &response.into_bytes(),
+                &ic_platform::candid::contract::DecoderConfig::new(),
+            )
+            .map_err(|_| {
+                InternalError::public(canic_contracts::diagnostics::codes::CODEC_INVALID)
+            })?;
         }
     }
     Ok(ApplicationStartupProgress::Ready)
@@ -395,12 +413,19 @@ async fn status(
         protocol::caller_authority_status::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::invariant())?;
-    let response = CallOps::bounded_wait(target, protocol::caller_authority_status::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(|_| InternalError::unavailable())?
-        .into_bytes();
+    let response = execute_call(
+        Call::new(
+            target.into(),
+            protocol::caller_authority_status::METHOD,
+            WaitPolicy::Bounded {
+                timeout_seconds: 300,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await
+    .map_err(|_| InternalError::unavailable())?
+    .into_bytes();
     let result: Result<
         canic_contracts::dto::caller_authority_status::CallerAuthorityStatus,
         Error,
@@ -457,8 +482,8 @@ fn update<T: serde::de::DeserializeOwned>(
     .map_err(|_| InternalError::invariant());
     async move {
         let bytes = bytes?;
-        let response = CallOps::bounded_wait(target, method)
-        .with_raw_args(bytes).execute().await.map_err(|error| {
+        let response = execute_call(Call::new(target.into(), method, WaitPolicy::Bounded { timeout_seconds: 300 })
+        .take_raw_args(bytes)).await.map_err(|error| {
             canic_core::log!(canic_core::log::Topic::Rpc, Error,
                 "Caller command transport failed target={target} diagnostic={} platform_rejection={:?}", error.code(), error.platform_rejection());
             InternalError::unavailable()

@@ -1,66 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
-pub fn current_backup_directory_stamp() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs());
-
-    backup_directory_stamp_from_unix(seconds)
-}
-
-fn backup_directory_stamp_from_unix(seconds: u64) -> String {
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let seconds_of_day = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-    let second = seconds_of_day % 60;
-
-    format!("{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}")
-}
-
-pub fn backup_directory_stamp_to_unix(stamp: &str) -> Option<u64> {
-    let (date, time) = stamp.split_once('-')?;
-    if date.len() != 8
-        || time.len() != 6
-        || !date.bytes().all(|byte| byte.is_ascii_digit())
-        || !time.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
-
-    let year = date[0..4].parse::<i64>().ok()?;
-    let month = date[4..6].parse::<i64>().ok()?;
-    let day = date[6..8].parse::<i64>().ok()?;
-    let hour = time[0..2].parse::<u64>().ok()?;
-    let minute = time[2..4].parse::<u64>().ok()?;
-    let second = time[4..6].parse::<u64>().ok()?;
-    if !(1..=12).contains(&month) || hour >= 24 || minute >= 60 || second >= 60 {
-        return None;
-    }
-
-    let days = days_from_civil(year, month, day);
-    if days < 0 || civil_from_days(days) != (year, month, day) {
-        return None;
-    }
-    u64::try_from(days)
-        .ok()?
-        .checked_mul(86_400)?
-        .checked_add(hour.checked_mul(3_600)?)?
-        .checked_add(minute.checked_mul(60)?)?
-        .checked_add(second)
-}
-
-pub fn backup_list_timestamp(seconds: u64) -> String {
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let seconds_of_day = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-
-    format!("{day:02}/{month:02}/{year:04} {hour:02}:{minute:02}")
-}
-
 /// Render an observed Unix-nanosecond deadline without consulting the local clock.
 pub fn utc_timestamp_ns(nanoseconds: u64) -> String {
     let seconds = nanoseconds / 1_000_000_000;
@@ -71,37 +8,6 @@ pub fn utc_timestamp_ns(nanoseconds: u64) -> String {
     let second = seconds % 60;
     let fraction = nanoseconds % 1_000_000_000;
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{fraction:09}Z")
-}
-
-pub fn file_safe_component(value: &str) -> String {
-    let cleaned = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    let cleaned = cleaned.trim_matches('-');
-    if cleaned.is_empty() {
-        "unknown".to_string()
-    } else {
-        cleaned.to_string()
-    }
-}
-
-// Convert a proleptic Gregorian UTC date into days since 1970-01-01.
-const fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = year - (month <= 2) as i64;
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let year_of_era = year - era * 400;
-    let month_prime = month + if month > 2 { -3 } else { 9 };
-    let day_of_year = (153 * month_prime + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-
-    era * 146_097 + day_of_era - 719_468
 }
 
 // Convert days since 1970-01-01 into a proleptic Gregorian UTC date.
@@ -118,24 +24,4 @@ const fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let year = year + (month <= 2) as i64;
 
     (year, month, day)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{backup_directory_stamp_from_unix, backup_directory_stamp_to_unix};
-
-    // Keep backup directory timestamps as compact UTC calendar labels.
-    #[test]
-    fn backup_directory_stamp_uses_calendar_time() {
-        assert_eq!(backup_directory_stamp_from_unix(0), "19700101-000000");
-        assert_eq!(
-            backup_directory_stamp_from_unix(1_715_090_400),
-            "20240507-140000"
-        );
-        assert_eq!(
-            backup_directory_stamp_to_unix("20240507-140000"),
-            Some(1_715_090_400)
-        );
-        assert_eq!(backup_directory_stamp_to_unix("20240532-140000"), None);
-    }
 }

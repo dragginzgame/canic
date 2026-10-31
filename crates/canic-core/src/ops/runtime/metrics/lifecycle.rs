@@ -4,6 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::BTreeMap};
 
 pub use crate::domain::metrics::{
@@ -11,7 +12,7 @@ pub use crate::domain::metrics::{
 };
 
 thread_local! {
-    static LIFECYCLE_METRICS: RefCell<BTreeMap<LifecycleMetricKey, u64>> =
+    static LIFECYCLE_METRICS: RefCell<BTreeMap<LifecycleMetricKey, MeasurementCounter>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -39,7 +40,7 @@ pub struct LifecycleMetrics;
 
 impl LifecycleMetrics {
     /// Read a deterministic bounded prefix for optional public sampling.
-    pub(crate) fn bounded_snapshot(limit: usize) -> Vec<(LifecycleMetricKey, u64)> {
+    pub(crate) fn bounded_snapshot(limit: usize) -> Vec<(LifecycleMetricKey, MeasurementCounter)> {
         LIFECYCLE_METRICS.with_borrow(|counts| {
             counts
                 .iter()
@@ -63,14 +64,14 @@ impl LifecycleMetrics {
                 stage,
                 outcome,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current lifecycle metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(LifecycleMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(LifecycleMetricKey, MeasurementCounter)> {
         LIFECYCLE_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()

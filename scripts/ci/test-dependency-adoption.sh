@@ -36,7 +36,7 @@ if bash "$script" > "$fixture/no-args.log" 2>&1; then exit 1; fi
 [[ ! -s "$TRACE" ]]
 if bash "$script" --workspace > "$fixture/option.log" 2>&1; then exit 1; fi
 [[ ! -s "$TRACE" ]]
-bash "$script" canic-host canic-backup > "$fixture/pass.log"
+bash "$script" canic-host canic-contracts > "$fixture/pass.log"
 # All cheap observations precede Clippy; verifier is last. Repeated identities
 # from a diamond dependency do not reject. Explicit selected packages survive.
 awk '
@@ -45,7 +45,7 @@ awk '
  /^run / { if (!lint || $0 !~ /--example verify_embedded_root$/) exit 1; verify=1 }
  END { if (!verify) exit 1 }
 ' "$TRACE"
-grep -q -- '--package canic-host --package canic-backup' "$TRACE"
+grep -q -- '--package canic-host --package canic-contracts' "$TRACE"
 for manifest in Cargo.toml integrations/blob-service/consumer/Cargo.toml integrations/blob-service/embedded-consumer/Cargo.toml; do
     grep '^metadata ' "$TRACE" | grep -Fq -- "--manifest-path $manifest"
 done

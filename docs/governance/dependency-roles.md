@@ -9,19 +9,31 @@ remains explicitly selected at 0.1.6. Existing tool installations are retained.
 
 ## Classification
 
-The production family is `canic`, `canic-backup`, `canic-cli`, `canic-contracts`,
-`canic-control-plane`, `canic-core`, `canic-host`, `canic-macros` and
+The production family is `canic`, `canic-cli`, `canic-contracts`,
+`canic-control-plane`, `canic-core`, `canic-host`, `canic-icydb`, `canic-macros` and
 `canic-blob-service`. Demo/test Apps, framework probes and internal test crates are
 validation packages. The two independent Blob consumers are validation workspaces.
+`canic-auth` is an unpublished adapter scaffold with no runtime dependencies or
+production consumers; its mounting macro refuses compilation.
 
 The root catalog's tests/tooling-only entries are `canic-blob-service`, `canic-cli`,
-and `canic-testing-internal`. The first two are production packages,
+`canic-icydb` and `canic-testing-internal`. The first three are production packages,
 but these catalog entries are consumed only by validation packages/dev edges.
 A deployment root is not its own dependency. Normal/build dependencies needed by
 production, including supported optional features and transitive uses, are labelled
 production. In particular, `ic-testkit` is used by Host's supported `local-fleet`
 feature; its name does not make it a test-only dependency here. Renamed dependencies
 must be compared using their Cargo package identity, not the catalog key.
+
+`ic-call` is a production dependency of Core and Control Plane. It owns
+prepared request custody and delegates execution/cost queries to Platform's
+existing runtime. Canic retains codecs, metrics and delivery/spending policy;
+the stateless instrumentation function adds no executor, builder or retry owner.
+
+`ic-wire` owns codecs and admission for owned stable values as well as RPCs.
+Contracts uses `serde_cbor` only in external protocol qualification tests; Core and
+Host retain it for dedicated commitment/build evidence and required IC protocols.
+No custom Canic CBOR numeric adapter remains in the production storage graph.
 
 ## Formatting and release checks
 
@@ -60,3 +72,9 @@ Cover both generated infrastructure and application builds; inspect a cache reus
 against its retained evidence as well. Do not treat this broad graph review as a
 receipt for a later build or deployed artifact. Registry availability is a separate
 check. Until this is implemented, repeat exact graph inspection for each deployment.
+
+The matching `canic-icydb` release may share the selected facade’s exact
+`canic-macros` package. Admission checks version/source equality, the local family
+location for path dependencies, and exact procedural-macro identity. This permits
+component exports without pulling the framework runtime into standalone database
+canisters; it does not admit other protected internal paths.

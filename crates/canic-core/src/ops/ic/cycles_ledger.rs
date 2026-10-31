@@ -10,15 +10,15 @@ use crate::{
     dto::fleet_registry::FleetLedgerTransferIntent,
     infra::ic::{
         IcInfraError,
-        cycles_ledger::{
-            CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess, CyclesLedgerInfra,
-            TransferError,
-        },
+        cycles_ledger::{CyclesLedgerInfra, TransferError},
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
 };
 use canic_contracts::cycles::Cycles;
-use ic_platform::candid::contract::Nat;
+use ic_platform::{
+    candid::contract::Nat,
+    cycles_ledger_types::{CreateCanisterError, CreateCanisterSuccess},
+};
 
 /// Operations facade for the IC-mainnet Cycles Ledger.
 
@@ -36,10 +36,7 @@ impl CyclesLedgerOps {
         subnet: Principal,
         amount: Cycles,
         created_at_time: u64,
-    ) -> Result<
-        Result<CyclesLedgerCreateCanisterSuccess, CyclesLedgerCreateCanisterError>,
-        InternalError,
-    > {
+    ) -> Result<Result<CreateCanisterSuccess, CreateCanisterError>, InternalError> {
         map_infra(
             CyclesLedgerInfra::create_canister(controllers, subnet, amount, created_at_time).await,
         )

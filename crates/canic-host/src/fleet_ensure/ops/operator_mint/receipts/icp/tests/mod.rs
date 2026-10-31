@@ -4,8 +4,8 @@ mod archive;
 mod protobuf;
 
 use super::{
-    EncodedBlocksReply, IcpReadError as Error, IcpReadLimits, IcpReadOutcome, IcpTransferRead,
-    prepare_read, verify_read,
+    IcpReadError as Error, IcpReadLimits, IcpReadOutcome, IcpTransferRead,
+    QueryEncodedBlocksResponse, prepare_read, verify_read,
 };
 use crate::fleet_ensure::{
     model::operator_mint::{OperatorMintAuthority, OperatorMintIntentRecord},
@@ -107,11 +107,12 @@ impl Fixture {
         }
     }
 
-    fn reply(&self) -> EncodedBlocksReply {
-        EncodedBlocksReply {
+    fn reply(&self) -> QueryEncodedBlocksResponse {
+        QueryEncodedBlocksResponse {
             chain_length: 90,
+            certificate: None,
             first_block_index: 77,
-            blocks: vec![self.block.clone().into()],
+            blocks: vec![self.block.clone()],
             archived_blocks: vec![],
         }
     }
@@ -135,7 +136,7 @@ impl Fixture {
         ))
     }
 
-    fn evidence(&self, reply: &EncodedBlocksReply) -> Vec<u8> {
+    fn evidence(&self, reply: &QueryEncodedBlocksResponse) -> Vec<u8> {
         self.certificate(
             self.read.request_id(),
             b"replied",
@@ -335,15 +336,15 @@ fn certificate_and_reply_decoding_are_explicitly_bounded() {
 fn missing_blocks_wrong_indices_and_short_chains_stay_unresolved() {
     let fixture = Fixture::new();
     for reply in [
-        EncodedBlocksReply {
+        QueryEncodedBlocksResponse {
             blocks: vec![],
             ..fixture.reply()
         },
-        EncodedBlocksReply {
+        QueryEncodedBlocksResponse {
             first_block_index: 78,
             ..fixture.reply()
         },
-        EncodedBlocksReply {
+        QueryEncodedBlocksResponse {
             chain_length: 77,
             ..fixture.reply()
         },

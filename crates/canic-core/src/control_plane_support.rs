@@ -157,16 +157,12 @@ pub mod ops {
         pub use crate::ops::ic::IcOps;
 
         pub mod call {
-            pub use crate::ops::ic::call::CallOps;
+            pub use crate::ops::ic::call::execute;
         }
 
         pub mod cycles_ledger {
             pub use crate::{
-                infra::ic::cycles_ledger::{
-                    CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess,
-                    TransferError,
-                },
-                ops::ic::cycles_ledger::CyclesLedgerOps,
+                infra::ic::cycles_ledger::TransferError, ops::ic::cycles_ledger::CyclesLedgerOps,
             };
         }
 

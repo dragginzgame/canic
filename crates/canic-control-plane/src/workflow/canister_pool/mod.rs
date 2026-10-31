@@ -231,7 +231,8 @@ async fn maintain_once_for_demand(
     };
     let completion = maintenance_result_completion(&result);
     if !AsyncJobRecoveryOps::finish(attempt, completion, IcOps::now_nanos())? {
-        return Err(InternalError::invariant());
+        // A newer maintenance pass owns the lease; retry against its current state.
+        return Err(InternalError::unavailable());
     }
     result
 }

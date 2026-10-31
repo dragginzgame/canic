@@ -49,9 +49,21 @@ else
     mapfile -t BUILD_CANISTERS <<<"$DEFAULT_BUILD_CANISTERS"
 fi
 
-# Build the ordinary reference artifacts first so the thin-root manifest path
-# can emit once the full configured Component artifact set exists. Root itself
-# builds the implicit bootstrap `wasm_store` artifact internally.
+# Root and Store are independently built infrastructure artifacts. A Root fixture
+# must not import a Store left behind by an earlier source or dependency graph.
+root_selected=false
+store_selected=false
+for canister in "${BUILD_CANISTERS[@]}"; do
+    case "$canister" in
+        root) root_selected=true ;;
+        wasm_store) store_selected=true ;;
+    esac
+done
+if [[ "$root_selected" == true && "$store_selected" == false ]]; then
+    BUILD_CANISTERS=(wasm_store "${BUILD_CANISTERS[@]}")
+fi
+
+# Preserve the selected Component order and the default Root-last ordering.
 for canister in "${BUILD_CANISTERS[@]}"; do
     BUILD_ARTIFACT_ARGS=(
         "$canister"
@@ -69,7 +81,7 @@ for canister in "${BUILD_CANISTERS[@]}"; do
 
     if [ "$canister" = "root" ]; then
         ROOT_WASM_GZ_PATH="$BUILT_ARTIFACT"
-        ROOT_WASM_GZ_BYTES="$(stat -c%s "$ROOT_WASM_GZ_PATH")"
+        ROOT_WASM_GZ_BYTES="$(wc -c < "$ROOT_WASM_GZ_PATH")"
         if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
             echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes" >&2
             exit 1

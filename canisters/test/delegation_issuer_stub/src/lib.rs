@@ -73,19 +73,19 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 /// Exercise the generic synchronous application guard through the native boundary.
-#[canic_query(public, wire(id = protocol::SUBJECT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(public, wire(id = protocol::SUBJECT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn issuer_application_subject() -> Result<ic_platform::Principal, Error> {
     application_subject().map(Into::into)
 }
 
 /// Exercise Fleet admission against the exact local managed projection.
-#[canic_query(requires(caller::is_fleet_admitted()), wire(id = protocol::ADMISSION, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(requires(caller::is_fleet_admitted()), wire(id = protocol::ADMISSION, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn issuer_fleet_admission_probe() -> Result<(), Error> {
     Ok(())
 }
 
 /// Measure one implemented caller-gate denial while enrollment is unavailable.
-#[canic_query(public, wire(id = protocol::DENIAL, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[query(public, wire(id = protocol::DENIAL, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 async fn issuer_application_denial_perf(
     probe: LocalAuthorizationDenialProbe,
 ) -> Result<QueryPerfSample<String>, Error> {
@@ -117,18 +117,18 @@ fn application_subject() -> Result<Principal, Error> {
     }
 }
 
-#[canic_update(public, wire(id = protocol::VERIFY, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(public, wire(id = protocol::VERIFY, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn issuer_verify_role_attestation(request: protocol::VerifyRequest) -> Result<(), Error> {
     AuthApi::verify_role_attestation(&request.attestation.into(), request.min_accepted_epoch)
 }
 
-#[canic_update(requires(auth::attested_local_subnet()), wire(id = protocol::ATTESTED, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(auth::attested_local_subnet()), wire(id = protocol::ATTESTED, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn issuer_require_attested_local_subnet(attestation: SignedRoleAttestation) -> Result<(), Error> {
     let _ = attestation;
     Ok(())
 }
 
-#[canic_update(requires(caller::is_root()), wire(id = protocol::ROOT_GUARD, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+#[update(requires(caller::is_root()), wire(id = protocol::ROOT_GUARD, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
 fn issuer_guard_is_root() -> Result<(), Error> {
     Ok(())
 }

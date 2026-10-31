@@ -414,8 +414,6 @@ impl PlatformCallMetricOutcome {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum PlatformCallMetricReason {
-    CandidDecode,
-    CandidEncode,
     Infra,
     Ok,
 }
@@ -425,8 +423,6 @@ impl PlatformCallMetricReason {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::CandidDecode => "candid_decode",
-            Self::CandidEncode => "candid_encode",
             Self::Infra => "infra",
             Self::Ok => "ok",
         }

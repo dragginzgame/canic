@@ -8,8 +8,10 @@ use crate::{
     InternalError,
     access::AccessError,
     dto::caller_authority::CallerAuthorityPublication,
+    model::caller_authority::CallerAdmissionError,
     ops::{
         caller_authority::CallerAuthorityOps,
+        runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps, ready::ReadyOps},
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
@@ -40,20 +42,18 @@ pub fn require_started() -> Result<(), InternalError> {
 
 /// Share the role-specific startup decision with readiness observations and workers.
 pub fn is_started_or_exempt() -> bool {
-    use crate::ops::runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps};
-
-    EnvOps::is_root()
+    let infrastructure_role = EnvOps::is_root()
         || EnvOps::is_fleet_coordinator_runtime()
-        || EnvOps::canister_role().is_ok_and(|role| role.is_wasm_store())
-        || FleetActivationRuntimeOps::is_standalone_local()
-        || require_started().is_ok()
+        || EnvOps::canister_role().is_ok_and(|role| role.is_wasm_store());
+    if infrastructure_role {
+        return true;
+    }
+    FleetActivationRuntimeOps::is_standalone_local() || require_started().is_ok()
 }
 
 /// Read current host admission before a new deferred application effect.
 /// Restoration alone grants no activation, startup or snapshot authority.
 pub fn is_application_work_admitted() -> bool {
-    use crate::ops::runtime::{fleet_activation::FleetActivationRuntimeOps, ready::ReadyOps};
-
     if !ReadyOps::is_ready() || require_active().is_err() {
         return false;
     }
@@ -76,10 +76,6 @@ pub fn require_initialization_effect() -> Result<(), InternalError> {
 
 /// This mandatory boundary is independent of the application's Boolean access expression.
 pub fn require_endpoint_started(call: crate::ids::EndpointCall) -> Result<(), AccessError> {
-    use crate::{
-        model::caller_authority::CallerAdmissionError,
-        ops::runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
-    };
     if EnvOps::is_root()
         || EnvOps::is_fleet_coordinator_runtime()
         || FleetActivationRuntimeOps::is_standalone_local()

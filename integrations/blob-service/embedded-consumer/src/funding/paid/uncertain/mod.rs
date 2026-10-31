@@ -7,13 +7,13 @@ use ic_blob_storage::{
     ops::service::funding::FundingJournalError,
 };
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_uncertain() {
     execute(false).await;
     ic_platform::cdk::api::msg_reply([]);
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_provider_error() {
     execute(true).await;
     ic_platform::cdk::api::msg_reply([]);
@@ -77,20 +77,20 @@ async fn blocked() {
     ));
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_uncertain_replay() {
     refuse().await;
     ic_platform::cdk::api::msg_reply([]);
 }
 
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_uncertain_pending() {
     blocked().await;
     ic_platform::cdk::api::msg_reply([]);
 }
 
 /// Trap in the settlement callback after shared journal writes, rolling them back.
-#[canic::canic_raw_update(public, payload(max_bytes = 0))]
+#[canic::raw_update(public, payload(max_bytes = 0))]
 async fn test_funding_callback_trap() {
     execute(true).await;
     ic_platform::cdk::api::trap("controlled settlement callback failure");

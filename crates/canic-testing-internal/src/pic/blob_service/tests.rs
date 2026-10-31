@@ -27,7 +27,7 @@ use canic_blob_service::__private::ic_blob_storage_contracts::identity::Provider
 use canic_blob_service::dto::{
     configuration::{
         HostConfigurationView, HostFailure, ServiceBillingInput, ServiceConfigurationInput,
-        ServiceFundingInput, ServiceInstallationInput, ServiceReadInput, ServiceResourceInput,
+        ServiceFundingInput, ServiceInstallationInput, ServiceResourceInput,
     },
     reference::ReferenceUpload,
     tenant::{TenantEnrollmentResponse, TenantFailure, TenantScope, TenantUpdateRequest},
@@ -89,13 +89,6 @@ fn installation(service: Principal) -> ServiceInstallationInput {
                 renewal_ceiling: 10_150,
                 reserve: 100,
                 max_attempts: 6,
-            },
-            reads: ServiceReadInput {
-                sessions: 2,
-                tenant_sessions: 1,
-                reply_bytes: 2048,
-                bytes: 4096,
-                tenant_bytes: 2048,
             },
         },
         project: "canic-managed-blob".into(),
@@ -217,6 +210,7 @@ fn qualify(embedded: bool, funding_case: super::operator::FundingReply, browser:
         .expect("configured consumer node")
         .canister_id;
     let pic = fixture.pic();
+    super::metrics::protected_reads(pic, service, fixture.root());
     let operator = principal(7);
     let tenant = principal(8);
     let stranger = principal(9);
@@ -527,7 +521,15 @@ fn qualify(embedded: bool, funding_case: super::operator::FundingReply, browser:
         let count = super::application::increment(pic, service);
         assert_eq!(count, 42);
     }
-    super::metrics::check(pic, service, 2, false, embedded.then_some(42));
+    super::metrics::admission_replay(pic, permissions[0]);
+    let original_window = super::metrics::check(
+        pic,
+        service,
+        2,
+        super::metrics::Phase::Fresh,
+        embedded.then_some(42),
+        embedded,
+    );
     fixture
         .upgrade_same_release(service, Duration::from_secs(300))
         .expect("same-release restoration");
@@ -540,12 +542,27 @@ fn qualify(embedded: bool, funding_case: super::operator::FundingReply, browser:
             ..admitted_capacity
         }
     );
-    super::metrics::check(pic, service, 2, true, embedded.then_some(42));
+    let restored_window = super::metrics::check(
+        pic,
+        service,
+        2,
+        super::metrics::Phase::Restored,
+        embedded.then_some(42),
+        embedded,
+    );
+    assert_ne!(restored_window, original_window);
     resume();
     resume();
     assert!(!configuration().fenced);
     super::operator::check(pic, &installed.configuration, false);
-    super::metrics::check(pic, service, 2, false, embedded.then_some(42));
+    super::metrics::check(
+        pic,
+        service,
+        2,
+        super::metrics::Phase::Resumed,
+        embedded.then_some(42),
+        embedded,
+    );
     // Background framework updates may legitimately fence the shared owner.
     // Sampling reports that fence; only authenticated recovery can clear it.
     resume();

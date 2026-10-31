@@ -123,7 +123,7 @@ fn validate_census(operation: &CallerJournalRecord) -> Result<(), InternalError>
         return Err(InternalError::invariant());
     }
     let mut hash = Sha256::new();
-    hash.update(b"canic.caller-census.v1\0");
+    hash.update(b"canic.caller-census.wire.v1\0");
     let mut steps = 0_u32;
     let mut principals = BTreeSet::new();
     for ordinal in 0..operation.recipient_count {
@@ -140,7 +140,7 @@ fn validate_census(operation: &CallerJournalRecord) -> Result<(), InternalError>
         recipient.reserved = false;
         recipient.startup_released = recipient.kind != CallerRecipientKind::Enrollment;
         hash.update(
-            canic_core::cdk::serialize::serialize(&recipient)
+            canic_contracts::protocol::authority::encode(&recipient)
                 .map_err(|_| InternalError::invariant())?,
         );
         for index in 0..recipient.step_count {

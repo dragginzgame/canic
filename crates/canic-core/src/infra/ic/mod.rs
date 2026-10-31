@@ -5,8 +5,8 @@
 //! Boundary: ops calls this namespace for low-level IC platform interactions.
 
 pub mod build_network;
-pub mod call;
 pub mod cycles_ledger;
+mod external_candid;
 pub mod icp_refill;
 pub mod known;
 pub mod mgmt;

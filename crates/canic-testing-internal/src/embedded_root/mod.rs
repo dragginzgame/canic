@@ -10,7 +10,13 @@ use canic_core::cdk::utils::hash::sha256_hex;
 use ic_build::artifacts::{WasmBuildSpec, build_wasm_canisters_cached, resolve_cargo_build_inputs};
 use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fs, io, path::Path, process::Command};
+use std::{
+    error::Error,
+    fs, io,
+    path::{Path, PathBuf},
+    process::Command,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 const ARTIFACT: &str =
     "crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm";
@@ -51,12 +57,47 @@ pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
     }
     // A metadata-only change may select the same executable. Prove that fact
     // through the content-addressed build rather than demanding a source rewrite.
-    let (built, _) = build(&workspace, &spec)?;
+    let (built, rebuilt_evidence) = build(&workspace, &spec)?;
     if built != embedded {
-        return Err(io::Error::new(io::ErrorKind::InvalidData,
-            "embedded allocation peer differs from current source; run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root").into());
+        let retained =
+            retain_mismatch(&workspace, &embedded, &built, &evidence, &rebuilt_evidence)?;
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "embedded allocation peer differs from current source (recorded {}; rebuilt {}); comparison retained at {}; run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+                evidence.artifact_sha256,
+                rebuilt_evidence.artifact_sha256,
+                retained.display(),
+            ),
+        )
+        .into());
     }
     Ok(())
+}
+
+// Keep exact bytes and provenance in the existing CI failure-artifact inventory.
+fn retain_mismatch(
+    workspace: &Path,
+    embedded: &[u8],
+    rebuilt: &[u8],
+    recorded_evidence: &FixtureEvidence,
+    rebuilt_evidence: &FixtureEvidence,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let parent = workspace.join("target/validation-failures");
+    fs::create_dir_all(&parent)?;
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let retained = parent.join(format!("embedded-root-{}-{nonce}", std::process::id()));
+    fs::create_dir(&retained)?;
+    for (name, bytes) in [("embedded.wasm", embedded), ("rebuilt.wasm", rebuilt)] {
+        fs::write(retained.join(name), bytes)?;
+    }
+    for (name, evidence) in [
+        ("recorded.json", recorded_evidence),
+        ("rebuilt.json", rebuilt_evidence),
+    ] {
+        fs::write(retained.join(name), serde_json::to_vec_pretty(evidence)?)?;
+    }
+    Ok(retained)
 }
 
 /// Explicit maintainer refresh of the peer and its structured source/tool/lock evidence.

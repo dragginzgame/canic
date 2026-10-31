@@ -495,15 +495,12 @@ mod tests {
     where
         T: Clone + Debug + DeserializeOwned + Eq + Serialize,
     {
-        let encoded = crate::serialization::serialize(&value).expect("encode runtime enum label");
-        let serialized_label: String =
-            crate::serialization::deserialize(&encoded).expect("decode runtime enum label");
-        assert_eq!(serialized_label, label);
-
-        let label_bytes =
-            crate::serialization::serialize(&label).expect("encode canonical runtime enum label");
-        let decoded: T = crate::serialization::deserialize(&label_bytes)
-            .expect("decode canonical runtime enum label");
+        let encoded = crate::serialization::serialize(&value).expect("encode runtime enum");
+        let restored: T = crate::serialization::deserialize(&encoded).expect("decode runtime enum");
+        assert_eq!(restored, value);
+        let encoded_label = serde_json::to_value(&value).unwrap();
+        assert_eq!(encoded_label, serde_json::Value::String(label.into()));
+        let decoded: T = serde_json::from_value(encoded_label).unwrap();
         assert_eq!(decoded, value);
     }
 }

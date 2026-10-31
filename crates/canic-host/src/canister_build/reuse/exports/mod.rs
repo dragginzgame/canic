@@ -190,6 +190,10 @@ fn record_path(
 
 fn recipe_key(context: &WorkspaceBuildContext) -> Result<String, BuildReuseError> {
     let mut recipe = Sha256::new();
+    hash_field(
+        &mut recipe,
+        format!("{:?}", super::super::CANISTER_CARGO_RECIPE).as_bytes(),
+    );
     for field in [
         context
             .config_path

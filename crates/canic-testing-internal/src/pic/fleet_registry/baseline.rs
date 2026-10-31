@@ -1686,6 +1686,33 @@ mod tests {
         pool_assets: Vec<Principal>,
     }
 
+    impl ActiveComponentRegistryBaselineMetadata {
+        const fn snapshot_targets(&self) -> [CanisterSnapshotTarget; 5] {
+            [
+                CanisterSnapshotTarget {
+                    canister_id: self.coordinator,
+                    sender: None,
+                },
+                CanisterSnapshotTarget {
+                    canister_id: self.root,
+                    sender: None,
+                },
+                CanisterSnapshotTarget {
+                    canister_id: self.wasm_store,
+                    sender: Some(self.root),
+                },
+                CanisterSnapshotTarget {
+                    canister_id: self.issuer.canister_id,
+                    sender: Some(self.root),
+                },
+                CanisterSnapshotTarget {
+                    canister_id: self.verifier.canister_id,
+                    sender: Some(self.root),
+                },
+            ]
+        }
+    }
+
     struct ActiveComponentRegistryBaselineRecipe {
         reset_requirements: ResetRequirements,
     }
@@ -1760,34 +1787,26 @@ mod tests {
                 wasm_store,
                 pool_assets,
             };
-            let snapshot_targets = [
-                CanisterSnapshotTarget {
-                    canister_id: metadata.coordinator,
-                    sender: None,
-                },
-                CanisterSnapshotTarget {
-                    canister_id: metadata.root,
-                    sender: None,
-                },
-                CanisterSnapshotTarget {
-                    canister_id: metadata.wasm_store,
-                    sender: Some(metadata.root),
-                },
-                CanisterSnapshotTarget {
-                    canister_id: metadata.issuer.canister_id,
-                    sender: Some(metadata.root),
-                },
-                CanisterSnapshotTarget {
-                    canister_id: metadata.verifier.canister_id,
-                    sender: Some(metadata.root),
-                },
-            ];
-            CachedPocketIcBaseline::capture(
+            let snapshot_targets = metadata.snapshot_targets();
+            crate::pic::canic::stop_snapshot_targets(&pic, &snapshot_targets);
+            let baseline = CachedPocketIcBaseline::capture(
                 ic_testkit::pic::PocketIcInstance::from_borrowed_server(*pic),
                 snapshot_targets,
                 metadata,
-            )
-            .map_err(Into::into)
+            )?;
+            self.drive_to_readiness(&baseline)?;
+            Ok(baseline)
+        }
+
+        fn prepare_restore(
+            &self,
+            baseline: &CachedPocketIcBaseline<Self::Metadata>,
+        ) -> Result<(), Self::Error> {
+            crate::pic::canic::stop_snapshot_targets(
+                baseline.pocket_ic(),
+                &baseline.metadata().snapshot_targets(),
+            );
+            Ok(())
         }
 
         fn reset_non_snapshot_state(
@@ -1808,6 +1827,10 @@ mod tests {
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<(), Self::Error> {
             let metadata = baseline.metadata();
+            crate::pic::canic::start_snapshot_targets(
+                baseline.pocket_ic(),
+                &metadata.snapshot_targets(),
+            );
             wait_for_role_overviews_ready(
                 baseline.pocket_ic(),
                 [

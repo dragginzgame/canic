@@ -1421,3 +1421,96 @@ fn timer_runtime_identity_rejects_versions_and_accepts_one_shared_runtime() {
     graph.edges.get_mut("domain@1").unwrap()[0].package_id = "memory@1".into();
     validate_runtime_identities(&graph).unwrap();
 }
+
+#[test]
+fn icydb_adapter_shares_only_the_selected_facade_macro_package() {
+    let packages = [
+        package("role", "role@1", "/tmp/role/Cargo.toml"),
+        package("canic", "canic@1", "/tmp/crates/canic/Cargo.toml"),
+        package(
+            "canic-icydb",
+            "adapter@1",
+            "/tmp/crates/canic-icydb/Cargo.toml",
+        ),
+        package(
+            "canic-macros",
+            "macros@1",
+            "/tmp/crates/canic-macros/Cargo.toml",
+        ),
+    ];
+    let nodes = [
+        node(
+            "role@1",
+            vec![
+                normal_edge("canic", "canic@1"),
+                normal_edge("canic_icydb", "adapter@1"),
+            ],
+        ),
+        node("canic@1", vec![normal_edge("canic_macros", "macros@1")]),
+        node("adapter@1", vec![normal_edge("canic_macros", "macros@1")]),
+        node("macros@1", Vec::new()),
+    ];
+    let mut graph = runtime_graph(&packages, &nodes);
+    graph.packages.get_mut("macros@1").unwrap().is_proc_macro = true;
+    let direct = graph.edges["role@1"][0].clone();
+    validate_runtime_graph(&graph, &direct).expect("same release adapter and exact shared macro");
+
+    let mut alternate_path = graph.clone();
+    let mut helper = alternate_path.packages["adapter@1"].clone();
+    helper.name = "helper".into();
+    alternate_path.packages.insert("helper@1".into(), helper);
+    alternate_path
+        .edges
+        .get_mut("adapter@1")
+        .unwrap()
+        .push(CargoGraphEdge {
+            alias: "helper".into(),
+            package_id: "helper@1".into(),
+        });
+    alternate_path.edges.insert(
+        "helper@1".into(),
+        vec![CargoGraphEdge {
+            alias: "canic_macros".into(),
+            package_id: "macros@1".into(),
+        }],
+    );
+    assert!(matches!(
+        validate_runtime_graph(&alternate_path, &direct),
+        Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+    ));
+
+    let mut wrong_source = graph.clone();
+    wrong_source.packages.get_mut("adapter@1").unwrap().source = Some("registry+different".into());
+    assert!(matches!(
+        validate_runtime_graph(&wrong_source, &direct),
+        Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+    ));
+    let mut wrong_path = graph.clone();
+    wrong_path
+        .packages
+        .get_mut("adapter@1")
+        .unwrap()
+        .manifest_path = PathBuf::from("/elsewhere/canic-icydb/Cargo.toml");
+    assert!(matches!(
+        validate_runtime_graph(&wrong_path, &direct),
+        Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+    ));
+    let mut wrong_version = graph.clone();
+    wrong_version.packages.get_mut("adapter@1").unwrap().version = "0.0.1".into();
+    assert!(matches!(
+        validate_runtime_graph(&wrong_version, &direct),
+        Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+    ));
+    let mut alternate_macro = graph.clone();
+    alternate_macro.edges.get_mut("canic@1").unwrap().clear();
+    assert!(matches!(
+        validate_runtime_graph(&alternate_macro, &direct),
+        Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+    ));
+    let mut unrelated = graph.clone();
+    unrelated.packages.get_mut("adapter@1").unwrap().name = "unrelated".into();
+    assert!(matches!(
+        validate_runtime_graph(&unrelated, &direct),
+        Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+    ));
+}

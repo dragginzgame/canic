@@ -37,7 +37,6 @@ keys! {
     INTENT_RECEIPT_BACKED_RECORDS_V1 = "canic.core.intent.receipt_backed_records.v1";
     INTENT_RECORDS_V1 = "canic.core.intent.records.v1";
     INTENT_TOTALS_V1 = "canic.core.intent.totals.v1";
-    LOG_ENTRIES_V1 = "canic.core.log.entries.v1";
     PLACEMENT_ACKNOWLEDGEMENT_INDEX_V1 = "canic.core.placement.acknowledgement_index.v1";
     PLACEMENT_INDEX_REGISTRY_V1 = "canic.core.placement.index_registry.v1";
     PLACEMENT_SCALING_REGISTRY_V1 = "canic.core.placement.scaling_registry.v1";

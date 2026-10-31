@@ -1,6 +1,8 @@
 //! Installed Root dispatch over two application-owned checkpoint participants.
 //! Exercises original unit custody and interruption; it grants no snapshot authority.
 
+mod original;
+
 use super::{
     Phase, Principal, caller_authority_status, checkpoint_protocol as protocol, increment, view,
 };
@@ -14,6 +16,8 @@ use canic::{
 use ic_platform::pocket_ic::PocketIc;
 use ic_testkit::pic::CanisterInstallExt;
 use serde::Serialize;
+
+pub(in crate::pic) use original::qualify_original_host_workflow;
 
 #[test]
 pub(in crate::pic) fn qualify_root_dispatch() {
@@ -38,6 +42,7 @@ pub(in crate::pic) fn qualify_root_dispatch() {
         root_install_id: authority.authority.issuer.install_id,
         operation_id: [0xc1; 32],
         expected_sequence: 0,
+        unit_digest: observed_unit_digest(pic, root, &members),
     };
     let controller = Principal::anonymous();
     assert_eq!(status(pic, root), None);
@@ -261,26 +266,29 @@ fn qualify_release(
             .collect::<Vec<_>>(),
         before
     );
-    assert_eq!(increment(pic, members[0]), Ok(1));
-    assert_eq!(increment(pic, members[1]), Ok(2));
+    for (member, previous) in members.iter().zip(before) {
+        assert_eq!(increment(pic, *member), Ok(previous.counter + 1));
+    }
 }
 
 fn status(pic: &PocketIc, root: Principal) -> Option<RootCheckpointStatus> {
+    status_as(pic, root, Principal::anonymous()).unwrap()
+}
+
+fn status_as(
+    pic: &PocketIc,
+    root: Principal,
+    caller: Principal,
+) -> Result<Option<RootCheckpointStatus>, Error> {
     let bytes = ic_wire::native::encode_request(protocol::STATUS, &(), protocol::LIMITS).unwrap();
     let reply = pic
-        .query_call(
-            root,
-            Principal::anonymous(),
-            "canic_root_checkpoint_status",
-            bytes,
-        )
+        .update_call(root, caller, "canic_root_checkpoint_status", bytes)
         .unwrap();
     ic_wire::native::decode_response::<Result<Option<RootCheckpointStatus>, Error>>(
         protocol::STATUS,
         &reply,
         protocol::LIMITS,
     )
-    .unwrap()
     .unwrap()
 }
 
@@ -331,4 +339,17 @@ fn install() -> (crate::pic::root::InitializedRootTopology, Vec<u8>) {
         .snapshot_pids
         .push(second.installation.unwrap().binding.canister_id);
     (fixture, wasm)
+}
+
+fn observed_unit_digest(pic: &PocketIc, root: Principal, members: &[Principal]) -> [u8; 32] {
+    let mut authorities = members
+        .iter()
+        .map(|member| {
+            caller_authority_status(pic, *member, root)
+                .unwrap()
+                .authority
+        })
+        .collect::<Vec<_>>();
+    authorities.sort_by_key(|member| member.receiver.canister());
+    protocol::unit_digest(&authorities).unwrap()
 }

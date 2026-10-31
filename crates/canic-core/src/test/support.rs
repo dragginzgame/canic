@@ -4,7 +4,7 @@ use crate::{
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
-        ShardingConfig, StandardsCanisterConfig,
+        ShardingConfig,
     },
     ops::{
         fleet_admission_policy::{
@@ -151,7 +151,6 @@ pub fn init_sharding_test_config() {
         sharding: None,
         index: None,
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     };
@@ -165,7 +164,6 @@ pub fn init_sharding_test_config() {
         sharding: Some(sharding),
         index: None,
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     };
@@ -179,7 +177,6 @@ pub fn init_sharding_test_config() {
         sharding: None,
         index: None,
         auth: CanisterAuthConfig::default(),
-        standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     };

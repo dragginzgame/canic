@@ -41,6 +41,7 @@ not selected through a facade feature.
 
 | Feature | Default | Enables |
 | --- | --- | --- |
+| `icrc` | No | Explicit `canic::icrc::mount!` discovery/consent adapter; no automatic endpoints or config flags. |
 | `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs without Store-canister endpoints. |
 | `fleet-coordinator-canister` | No | The dedicated canonical Fleet Coordinator lifecycle and Fleet Registry API. Configured application roles should not enable it. |
 | `wasm-store-canister` | No | The canonical `wasm_store` canister API used by generated/bootstrap store packages. Ordinary application roles should not enable it. |
@@ -121,7 +122,7 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 16_384, allocation: 65_536, nodes: 4096, depth: 32,
 };
 
-#[canic::canic_query(public,
+#[canic::query(public,
     wire(id = 0x4150_5000_0000_0001, request = LIMITS, response = LIMITS))]
 fn ping() -> Result<String, canic::Error> {
     Ok("ok".to_string())
@@ -148,19 +149,24 @@ Root has no application hooks or custom endpoint surface.
 
 ## Inter-Canister Calls
 
-Use the Canic call builder for transport, bounded waits, typed public errors and
-call metrics. For owned methods, encode the declared request with
-`ic_wire::native::encode_request`, supply those exact bytes with `with_raw_args`,
-and decode the response with the same method ID and declared response limits.
-IC Wire owns framing and admission; the caller owns authentication, semantic
-validation and retry policy. Preserve original request bytes across an uncertain
-paid effect instead of constructing a fresh operation.
+Depend directly on `ic-call` for prepared one-shot requests and on `ic-wire` for
+owned request/reply framing. Construct `ic_call::Call::new` with the destination,
+method and explicit `WaitPolicy`. Supply encoded bytes with `with_raw_args` or
+`take_raw_args`, select any attachment with `with_cycles`, then call `execute`.
+Decode the raw reply with the same method ID and declared response limits.
+IC Call delegates execution and cost observation to Platform's existing runtime.
+External management, NNS and ledger protocols retain their required Candid
+encoding through Platform's explicit codecs.
 
-`Call::bounded_wait` and `Call::unbounded_wait` both support raw arguments and
-`with_cycles`; `execute` retains the response for bounded decoding. External IC
-protocols that require Candid use `with_arg`, `with_args`, `execute_candid` or
-`execute_candid_tuple`. This transport builder does not replace Canic's protected
-framework protocols for creation, upgrade, placement, recycling or funding.
+Canic exposes no generic call builder or response wrapper. Its framework call
+metrics count attempted execution when the instrumentation future is polled,
+including Platform admission refusals; constructing an unused request records
+nothing. Direct application calls retain their application's instrumentation.
+Canic's framework clients retain authentication, method identities, byte budgets,
+spending authority and effect reconciliation. Preserve original request bytes
+across an uncertain paid effect; a timeout cannot authorize another spend.
+Transport calls do not replace protected framework operations for creation,
+upgrade, placement, recycling or funding.
 
 ## Application Timers
 
@@ -226,3 +232,12 @@ not stand in for Wire identities.
 - [Read the architecture overview](../../docs/architecture/README.md)
 - [Browse all documentation](../../docs/README.md)
 - [Back to the main README](../../README.md)
+
+## Optional ICRC endpoints
+
+Role startup does not install ICRC endpoints. Select the `icrc` feature and
+`canic::icrc::mount!(limits = LIMITS)` for discovery only, or add
+`consent = handler` for application-owned ICRC-21 consent. No `canic.toml` flag
+or global handler registration is involved. See the
+[adapter guide](../../docs/features/runtime/icrc-adapter.md) for migration,
+external record shape and caller-owned limits/policy.

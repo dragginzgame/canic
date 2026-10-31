@@ -7,9 +7,10 @@ use crate::{
         fleet_activation::{FleetActivationRequest, FleetCredentialGenerationRequest},
         role::OperationReceipt,
     },
-    ops::ic::call::CallOps,
+    ops::ic::call::execute as execute_call,
 };
 use canic_contracts::protocol::store_activation as wire;
+use ic_call::{Call, WaitPolicy};
 
 /// Prepare the existing credential generation through an unbounded IC call.
 pub async fn prepare(
@@ -45,11 +46,10 @@ async fn send(
 ) -> Result<OperationReceipt, InternalError> {
     let payload = ic_wire::native::encode_request(id, &request, wire::REQUEST_LIMITS)
         .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_FAILED))?;
-    let bytes = CallOps::unbounded_wait(pid, method)
-        .with_raw_args(payload)
-        .execute()
-        .await?
-        .into_bytes();
+    let bytes =
+        execute_call(Call::new(pid.into(), method, WaitPolicy::Unbounded).take_raw_args(payload))
+            .await?
+            .into_bytes();
     ic_wire::native::decode_response::<Result<OperationReceipt, Error>>(
         id,
         &bytes,
@@ -71,11 +71,16 @@ pub async fn status(
         status::REQUEST_LIMITS,
     )
     .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_FAILED))?;
-    let bytes = CallOps::unbounded_wait(pid, status::activation::METHOD)
-        .with_raw_args(bytes)
-        .execute()
-        .await?
-        .into_bytes();
+    let bytes = execute_call(
+        Call::new(
+            pid.into(),
+            status::activation::METHOD,
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
     let reply: Result<
         canic_contracts::dto::runtime_reporting::FleetActivationStatusResponse,
         Error,

@@ -124,7 +124,7 @@ fn reading(
         return Err(CostComparisonFailure::InvalidMetric);
     };
     let value = source::value(row)?;
-    if value > u128::from(u64::MAX) {
+    if row.unit == "count" && value > u128::from(u64::MAX) {
         return Err(CostComparisonFailure::InvalidMetric);
     }
     Ok((
@@ -133,7 +133,7 @@ fn reading(
             value,
             observed_at_ns: row.observed_at_ns,
             window_id: registration.sequence,
-            saturated: saturated || value == u128::from(u64::MAX),
+            saturated,
         },
     ))
 }

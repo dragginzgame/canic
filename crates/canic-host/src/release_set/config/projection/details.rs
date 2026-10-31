@@ -50,9 +50,6 @@ pub(in crate::release_set) fn configured_role_details_from_config(
             if canister.auth.role_attestation_cache {
                 role_details.insert("auth role-attestation-cache".to_string());
             }
-            if canister.standards.icrc21 {
-                role_details.insert("standard icrc21".to_string());
-            }
             if let Some(scaling) = &canister.scaling {
                 for (pool_name, pool) in &scaling.pools {
                     role_details.insert(format!(

@@ -73,6 +73,20 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
 fn raw_kind(attribute: &Attribute) -> Option<&'static str> {
     let path = attribute.path();
     let kind = path.segments.last()?.ident.to_string();
+    // Bare Canic query/update imports now share the CDK names. Their required
+    // Wire contract distinguishes them: CDK attributes cannot compile with this
+    // option. Qualified CDK paths are always checked, regardless of options.
+    if path.segments.len() == 1
+        && attribute
+            .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+            .is_ok_and(|options| {
+                options
+                    .iter()
+                    .any(|option| matches!(option, Meta::List(list) if list.path.is_ident("wire")))
+            })
+    {
+        return None;
+    }
     let recognized_path = path.segments.len() == 1
         || (path.segments.len() == 2 && path.segments[0].ident == "ic_cdk")
         || (path.segments.len() == 3
@@ -225,6 +239,32 @@ mod tests {
         }
         .visit_file(&syntax);
         violations
+    }
+
+    #[test]
+    fn owned_wire_attributes_remain_distinct_from_raw_cdk_exports() {
+        let path = "apps/production/src/lib.rs";
+        for kind in ["query", "update"] {
+            let options = "public, wire(id = METHOD, request = LIMITS, response = LIMITS)";
+            assert!(check(&format!("#[{kind}({options})] fn owned() {{}}"), path).is_empty());
+            assert!(
+                check(
+                    &format!("#[canic::{kind}({options})] fn owned() {{}}"),
+                    path
+                )
+                .is_empty()
+            );
+            for raw in [kind.to_owned(), format!("ic_platform::cdk::{kind}")] {
+                assert!(!check(&format!("#[{raw}] fn bypass() {{}}"), path).is_empty());
+            }
+            assert!(
+                !check(
+                    &format!("#[ic_platform::cdk::{kind}({options})] fn bypass() {{}}"),
+                    path,
+                )
+                .is_empty()
+            );
+        }
     }
 
     #[test]

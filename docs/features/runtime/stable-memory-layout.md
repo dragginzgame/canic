@@ -1,10 +1,41 @@
 # Stable-memory layout
 
-Canic uses ic-memory 0.36 and a single MemoryManager per canister.
+Canic uses a single `ic-memory` runtime per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
 small populated store from 8 MiB to 1 MiB.
+
+## Upstream allocation and metrics formats
+
+Memory 0.56 owns the bounded native Wire allocation ledger: physical records use
+`ICML` and ledger snapshots use `ICMWIRE1`. Metrics Stable 0.56 retains its Wire
+rows with `ICMW`. Their upstream owners validate these schemas and bounds; Canic
+composes allocation requests and restoration through the single host runtime.
+These release selections require clean reinstall. Same-release restoration uses
+the selected formats and never resets a malformed ledger or substitutes empty rows.
+
+## Owned stable-value format
+
+Canic-owned Serde stable records and checkpoints use native IC Wire with the
+four-byte `CSW\x01` storage marker. Memory ownership selects the exact record
+schema; the marker is checked before record visitors run. Wire owns numeric and
+container encoding, complete-input validation and traversal admission, including
+full-range `u128`. There is no intermediate decoding tree. One value admits at
+most 64 MiB encoded bytes, 1 GiB of conservative traversal allocation allowance,
+64 Mi visited nodes and depth 128. Existing narrower record ceilings remain.
+
+This is a clean-reinstall hard cut. Same-release upgrades, snapshots and
+interruption recovery use the current Wire records; no predecessor reader or
+state conversion is provided. Upstream Auth, Metrics Stable and fixed-width
+records retain their owners' formats.
+
+Checkpoint authority/unit hashes, caller-publication and census hashes, and
+completed-subtree receipt hashes use native `protocol::authority` bytes with
+explicit `.wire.v1` domains, independently of storage envelopes. Their producers
+and validators move together. Dedicated Fleet activation hash inputs and Host
+release-build records retain their fixed CBOR formats and domains; required
+external IC certificates and protocols also retain their specified encoding.
 
 ## Bootstrap and store access
 
@@ -24,6 +55,13 @@ Lifecycle owners restore the state they need synchronously before invoking a
 configured lifecycle participant or scheduling deferred work. A lazy store
 still checks bootstrap readiness and its exact committed stable key.
 Application storage must follow the same bootstrap-before-access ordering.
+
+Provider metrics add `canic.core.metrics.providers.v1` only when a compiled
+variant of that role selects stable provider storage. The active heap variant
+does not open the map. All stable providers share this governed allocation;
+IC Metrics Stable owns its encoded records and checkpoint validation. State
+tooling reports the upstream-owned map as an explicit memory reservation rather
+than inventing a Canic record or snapshot schema.
 Early default-runtime opens return typed `RuntimeOpenError::NotBootstrapped`
 without constructing a manager or selecting its bucket size. Committed ID
 resolution and authority verification also observe only an existing runtime.
@@ -381,7 +419,6 @@ and publication authority before application hooks.
 | `canic.core.cycles.topup_events.v1` | B-tree |
 | `canic.core.cycles.funding_ledger.v1` | B-tree |
 | `canic.core.cycles.icp_refill_records.v1` | B-tree |
-| `canic.core.log.entries.v1` | B-tree |
 | `canic.core.intent.meta.v1` | Cell, including application receipt count |
 | `canic.core.intent.records.v1` | B-tree |
 | `canic.core.intent.totals.v1` | B-tree, including explicit quota-window retention |

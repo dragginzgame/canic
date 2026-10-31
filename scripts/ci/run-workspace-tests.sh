@@ -324,8 +324,12 @@ run_test_command() {
 # Cargo succeeds when a filter selects nothing. Check the selected libtest
 # inventory, including ignored-only selectors, before reporting a suite as run.
 verify_test_selection() {
-    local listing selected
-    listing="$(cargo test --locked "$@" --list)" || return 1
+    local listing selected status=0
+    listing="$(cargo test --locked "$@" --list)" || status=$?
+    if [[ "$status" -ne 0 ]]; then
+        printf '%s\n' "$listing"
+        return "$status"
+    fi
     selected="$(awk '/: test$/ { count++ } END { print count + 0 }' <<<"$listing")"
     if [[ "$selected" -eq 0 ]]; then
         echo "test selector resolved to zero tests: $*" >&2
@@ -371,18 +375,17 @@ run_test() {
         printf '==> plan: cargo test --locked'
         if [[ "$execution" = "parallel" || "$execution" = "native-selected" || "$execution" = "pocketic-serial" ]]; then
             printf ' --no-fail-fast'
-        elif [[ "$execution" = "compile" ]]; then
-            printf ' --no-run'
         fi
         printf ' %q' "${cargo_args[@]}"
         if [ "$execution" = "pocketic-serial" ]; then
             printf ' -- --test-threads=1 --nocapture'
-        elif [[ "$execution" != compile && "${#libtest_args[@]}" -gt 0 ]]; then
+        elif [[ "$execution" == compile || "${#libtest_args[@]}" -gt 0 ]]; then
             printf ' --'
         fi
-        if [[ "$execution" != compile && "${#libtest_args[@]}" -gt 0 ]]; then
+        if [[ "${#libtest_args[@]}" -gt 0 ]]; then
             printf ' %q' "${libtest_args[@]}"
         fi
+        [[ "$execution" != compile ]] || printf ' --list'
         printf '\n'
         record_summary "$label" "0s" "$summary_execution" "PLAN"
         return
@@ -391,10 +394,8 @@ run_test() {
     local status=0
     case "$execution" in
         compile)
-            run_test_command 0 cargo test --locked --no-run "${cargo_args[@]}" || status=$?
-            if [[ "$status" -eq 0 ]]; then
-                verify_test_selection "${cargo_args[@]}" -- "${libtest_args[@]}" || status=$?
-            fi
+            # Listing compiles this exact graph and admits its selected tests in one Cargo pass.
+            run_test_command 0 verify_test_selection "${cargo_args[@]}" -- "${libtest_args[@]}" || status=$?
             ;;
         parallel | native-selected)
             if [[ "$execution" == native-selected ]]; then
@@ -509,6 +510,11 @@ run_ordinary_tests() {
     }
     echo "==> combined inventory: $selected targets across ${#selected_packages[@]} packages"
     run_test parallel "workspace ordinary tests" "${cargo_args[@]}"
+
+    # Optional adapter tests require their feature; default workspace discovery
+    # deliberately does not enable or mount this external protocol surface.
+    run_test native-selected "optional ICRC adapter native tests" \
+        -p canic --features icrc --test icrc_adapter --test icrc_discovery
 
     # The stateful catalogue is deliberately absent from ordinary discovery.
     # Select only its native support modules and cache proofs with the feature on.

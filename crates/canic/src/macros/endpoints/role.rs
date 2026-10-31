@@ -9,7 +9,7 @@
 #[macro_export]
 macro_rules! __canic_emit_public_health_endpoint {
     () => {
-        #[$crate::canic_query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_health::METHOD_ID, request = ::canic::protocol::public_health::REQUEST_LIMITS, response = ::canic::protocol::public_health::RESPONSE_LIMITS))]
+        #[$crate::query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_health::METHOD_ID, request = ::canic::protocol::public_health::REQUEST_LIMITS, response = ::canic::protocol::public_health::RESPONSE_LIMITS))]
         fn canic_public_health() -> ::canic::dto::public_status::PublicHealth {
             ::canic::__internal::core::api::public_status::PublicStatusApi::health()
         }
@@ -52,8 +52,6 @@ macro_rules! __canic_compiled_role_capabilities {
         #[cfg(canic_capability_fleet_coordinator)]
         capabilities
             .insert($crate::__internal::core::role_contract::RoleCapabilityKey::FleetCoordinator);
-        #[cfg(canic_capability_icrc21)]
-        capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21);
         #[cfg(canic_capability_index)]
         capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Index);
         #[cfg(canic_capability_local_application_authorization)]
@@ -106,13 +104,13 @@ macro_rules! __canic_emit_managed_status_endpoint {
         #[cfg(canic_capability_observability_history)]
         $crate::__canic_emit_public_history_endpoint!();
 
-        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_overview::METHOD_ID, request = ::canic::protocol::public_overview::REQUEST_LIMITS, response = ::canic::protocol::public_overview::RESPONSE_LIMITS))]
+        #[$crate::query(public, wire(id = ::canic::protocol::public_overview::METHOD_ID, request = ::canic::protocol::public_overview::REQUEST_LIMITS, response = ::canic::protocol::public_overview::RESPONSE_LIMITS))]
         fn canic_public_overview() -> Result<::canic::dto::role::RoleOverviewResponse, ::canic::Error> {
             Ok($crate::__canic_role_overview!())
         }
 
         #[cfg(canic_capability_child_provisioning)]
-        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_children::METHOD_ID, request = ::canic::protocol::public_children::REQUEST_LIMITS, response = ::canic::protocol::public_children::RESPONSE_LIMITS))]
+        #[$crate::query(public, wire(id = ::canic::protocol::public_children::METHOD_ID, request = ::canic::protocol::public_children::REQUEST_LIMITS, response = ::canic::protocol::public_children::RESPONSE_LIMITS))]
         fn canic_public_children(page: ::canic::dto::page::PageRequest) -> Result<::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>, ::canic::Error> {
             Ok($crate::__internal::core::api::topology::children::CanisterChildrenApi::page(page))
         }
@@ -144,13 +142,13 @@ macro_rules! __canic_emit_managed_status_endpoint {
 
 
         #[cfg(canic_capability_delegated_token_issuer)]
-        #[$crate::canic_query(public, wire(id = ::canic::protocol::issuer_proof::status::METHOD_ID, request = ::canic::protocol::issuer_proof::status::REQUEST_LIMITS, response = ::canic::protocol::issuer_proof::status::RESPONSE_LIMITS))]
+        #[$crate::query(public, wire(id = ::canic::protocol::issuer_proof::status::METHOD_ID, request = ::canic::protocol::issuer_proof::status::REQUEST_LIMITS, response = ::canic::protocol::issuer_proof::status::RESPONSE_LIMITS))]
         fn canic_active_delegation_proof() -> Result<::canic::dto::issuer_proof::ActiveDelegationProofStatusResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status().map(Into::into)
         }
 
         #[cfg(canic_capability_caller_authority)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::PREPARE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::caller_authority::PREPARE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
         fn canic_caller_authority_prepare(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::caller_authority_status::CallerAuthorityReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -162,7 +160,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         }
 
         #[cfg(canic_capability_caller_authority)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::COMMIT_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::caller_authority::COMMIT_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
         fn canic_caller_authority_commit(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::caller_authority_status::CallerAuthorityReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -174,7 +172,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         }
 
         #[cfg(canic_capability_caller_authority)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::COMPLETE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::caller_authority::COMPLETE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
         fn canic_caller_authority_complete(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::caller_authority_status::CallerAuthorityReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -186,7 +184,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         }
 
         #[cfg(canic_capability_caller_authority)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::caller_authority::RELEASE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::caller_authority::RELEASE_ID, request = ::canic::protocol::caller_authority::REQUEST_LIMITS, response = ::canic::protocol::caller_authority::RESPONSE_LIMITS))]
         fn canic_application_startup_release(publication: ::canic::dto::caller_authority_status::CallerAuthorityPublication) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -201,18 +199,18 @@ macro_rules! __canic_emit_managed_status_endpoint {
         }
 
         #[cfg(canic_capability_caller_authority)]
-        #[$crate::canic_query(requires(caller::is_root()), wire(id = ::canic::protocol::caller_authority_status::METHOD_ID, request = ::canic::protocol::caller_authority_status::REQUEST_LIMITS, response = ::canic::protocol::caller_authority_status::RESPONSE_LIMITS))]
+        #[$crate::query(requires(caller::is_root()), wire(id = ::canic::protocol::caller_authority_status::METHOD_ID, request = ::canic::protocol::caller_authority_status::REQUEST_LIMITS, response = ::canic::protocol::caller_authority_status::RESPONSE_LIMITS))]
         fn canic_caller_authority_status(request: ::canic::dto::role::OperationStatusRequest) -> Result<::canic::dto::caller_authority_status::CallerAuthorityStatus, ::canic::Error> {
             $crate::__internal::core::api::caller_authority::CallerAuthorityApi::status(request.operation_id).map(Into::into)
         }
 
-        #[$crate::canic_query(requires(caller::is_root()), wire(id = ::canic::protocol::runtime_reporting::METHOD_ID, request = ::canic::protocol::runtime_reporting::REQUEST_LIMITS, response = ::canic::protocol::runtime_reporting::RESPONSE_LIMITS))]
+        #[$crate::query(requires(caller::is_root()), wire(id = ::canic::protocol::runtime_reporting::METHOD_ID, request = ::canic::protocol::runtime_reporting::REQUEST_LIMITS, response = ::canic::protocol::runtime_reporting::RESPONSE_LIMITS))]
         fn canic_runtime_operation(request: ::canic::dto::role::OperationStatusRequest) -> Result<::canic::dto::runtime_reporting::ComponentRuntimeOperationStatus, ::canic::Error> {
             $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::operation_status(request.operation_id).map(Into::into)
         }
 
         #[cfg(canic_capability_fleet_admission_projection)]
-        #[$crate::canic_query(requires(any(caller::is_controller(), caller::is_root())), wire(id = ::canic::protocol::admission_control::managed_status::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        #[$crate::query(requires(any(caller::is_controller(), caller::is_root())), wire(id = ::canic::protocol::admission_control::managed_status::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
         fn canic_admission_status(page: ::canic::dto::page::PageRequest) -> Result<::canic::dto::admission_control::ManagedStatus, ::canic::Error> {
             $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::status(page).map(Into::into)
         }
@@ -235,7 +233,7 @@ macro_rules! __canic_emit_local_status_endpoint {
         $crate::__canic_emit_public_history_endpoint!();
 
         #[cfg(canic_capability_child_provisioning)]
-        #[$crate::canic_query(public, wire(id = ::canic::protocol::public_children::METHOD_ID, request = ::canic::protocol::public_children::REQUEST_LIMITS, response = ::canic::protocol::public_children::RESPONSE_LIMITS))]
+        #[$crate::query(public, wire(id = ::canic::protocol::public_children::METHOD_ID, request = ::canic::protocol::public_children::REQUEST_LIMITS, response = ::canic::protocol::public_children::RESPONSE_LIMITS))]
         fn canic_public_children(page: ::canic::dto::page::PageRequest) -> Result<::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>, ::canic::Error> {
             Ok($crate::__internal::core::api::topology::children::CanisterChildrenApi::page(page))
         }
@@ -275,7 +273,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
         $crate::__canic_emit_cycles_capability_endpoint!();
 
         #[cfg(canic_capability_fleet_admission_projection)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::admission_control::target_prepare::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::admission_control::target_prepare::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
         fn canic_admission_prepare(request: ::canic::dto::admission_control::PrepareTargetRequest) -> Result<::canic::dto::admission_control::TargetReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -290,7 +288,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
         }
 
         #[cfg(canic_capability_fleet_admission_projection)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::admission_control::target_activate::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::admission_control::target_activate::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
         fn canic_admission_activate(request: ::canic::dto::fleet_admission::FleetAdmissionActivateTargetRequest) -> Result<::canic::dto::admission_control::TargetReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -305,7 +303,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
         }
 
         #[cfg(canic_capability_fleet_admission_projection)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::admission_control::target_open::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::admission_control::target_open::METHOD_ID, request = ::canic::protocol::admission_control::REQUEST_LIMITS, response = ::canic::protocol::admission_control::RESPONSE_LIMITS))]
         fn canic_admission_open(request: ::canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest) -> Result<::canic::dto::admission_control::TargetReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -319,7 +317,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open(request).map(Into::into)
         }
 
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::runtime_configuration::METHOD_ID, request = ::canic::protocol::runtime_configuration::REQUEST_LIMITS, response = ::canic::protocol::runtime_configuration::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::runtime_configuration::METHOD_ID, request = ::canic::protocol::runtime_configuration::REQUEST_LIMITS, response = ::canic::protocol::runtime_configuration::RESPONSE_LIMITS))]
         fn canic_configure_runtime(request: ::canic::dto::runtime_configuration::ComponentRuntimeDirectoryPreparationRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -346,7 +344,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
         $crate::__canic_emit_state_cascade_endpoint!();
 
         #[cfg(canic_capability_delegated_token_issuer)]
-        #[$crate::canic_update(internal, public, wire(id = ::canic::protocol::issuer_proof::INSTALL_ID, request = ::canic::protocol::issuer_proof::REQUEST_LIMITS, response = ::canic::protocol::issuer_proof::RESPONSE_LIMITS))]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::issuer_proof::INSTALL_ID, request = ::canic::protocol::issuer_proof::REQUEST_LIMITS, response = ::canic::protocol::issuer_proof::RESPONSE_LIMITS))]
         fn canic_install_delegation_proof(request: ::canic::dto::issuer_proof::InstallActiveDelegationProofRequest) -> Result<::canic::dto::issuer_proof::InstallActiveDelegationProofResponse, ::canic::Error> {
             $crate::__internal::core::access::expr::eval_default_fleet_guard(
                 $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
@@ -451,7 +449,7 @@ macro_rules! __canic_role_metrics_status {
 #[macro_export]
 macro_rules! __canic_emit_public_metrics_endpoint {
     () => {
-        #[$crate::canic_query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_metrics::METHOD_ID, request = ::canic::protocol::public_metrics::REQUEST_LIMITS, response = ::canic::protocol::public_metrics::RESPONSE_LIMITS))]
+        #[$crate::query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_metrics::METHOD_ID, request = ::canic::protocol::public_metrics::REQUEST_LIMITS, response = ::canic::protocol::public_metrics::RESPONSE_LIMITS))]
         fn canic_public_metrics(request: ::canic::dto::public_status::PublicMetricsRequest) -> ::canic::dto::public_status::PublicMetricsSnapshot {
             ::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request)
         }
@@ -463,7 +461,7 @@ macro_rules! __canic_emit_public_metrics_endpoint {
 #[macro_export]
 macro_rules! __canic_emit_public_history_endpoint {
     () => {
-        #[$crate::canic_query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_history::METHOD_ID, request = ::canic::protocol::public_history::REQUEST_LIMITS, response = ::canic::protocol::public_history::RESPONSE_LIMITS))]
+        #[$crate::query(public, on_access_denied = "reject", wire(id = ::canic::protocol::public_history::METHOD_ID, request = ::canic::protocol::public_history::REQUEST_LIMITS, response = ::canic::protocol::public_history::RESPONSE_LIMITS))]
         fn canic_public_history(request: ::canic::dto::public_status::PublicHistoryRequest) -> ::canic::dto::public_status::PublicHistorySnapshot {
             ::canic::__internal::core::api::public_status::PublicStatusApi::history(request)
         }

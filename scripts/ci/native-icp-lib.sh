@@ -47,8 +47,15 @@ use_native_test_icp() {
         echo "native ICP CLI selection requires the invocation's private scratch" >&2
         return 1
     }
-    bin_dir="$(mktemp -d "$scratch/native-icp.XXXXXX")" || return 1
-    ln -s -- "$candidate" "$bin_dir/icp" || return 1
+    if [[ -v CANIC_TEST_ICP_BIN ]]; then
+        # Isolate arbitrary override siblings from compiler/tool lookup.
+        bin_dir="$(mktemp -d "$scratch/native-icp.XXXXXX")" || return 1
+        ln -s -- "$candidate" "$bin_dir/icp" || return 1
+    else
+        # The verified managed catalog already owns this stable tool directory.
+        # A per-invocation alias would invalidate otherwise identical build inputs.
+        bin_dir="$(dirname -- "$candidate")"
+    fi
     export PATH="$bin_dir:$PATH"
     hash -r
     echo "==> native ICP CLI: $candidate ($version)"

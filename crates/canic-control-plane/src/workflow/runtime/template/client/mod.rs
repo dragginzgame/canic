@@ -22,9 +22,10 @@ use canic_core::{
     cdk::types::Principal,
     control_plane_support::{
         error::InternalError,
-        ops::{cost_guard::CostGuardPermit, ic::call::CallOps},
+        ops::{cost_guard::CostGuardPermit, ic::call::execute as execute_call},
     },
 };
+use ic_call::{Call, WaitPolicy};
 
 ///
 /// WasmStoreInternalClient
@@ -68,12 +69,18 @@ impl WasmStoreInternalClient {
                 protocol::store_inventory::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply =
-                CallOps::bounded_wait(self.store_pid, protocol::store_inventory::catalog::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_inventory::catalog::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<Vec<WasmStoreCatalogEntryResponse>, Error> =
                 ic_wire::native::decode_response(
                     protocol::store_inventory::catalog::METHOD_ID,
@@ -108,12 +115,18 @@ impl WasmStoreInternalClient {
                 protocol::store_publication::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply =
-                CallOps::bounded_wait(self.store_pid, protocol::store_publication::inspect::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_publication::inspect::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<TemplateChunkSetInfoResponse, Error> =
                 ic_wire::native::decode_response(
                     protocol::store_publication::inspect::METHOD_ID,
@@ -141,12 +154,18 @@ impl WasmStoreInternalClient {
                 protocol::store_inventory::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply =
-                CallOps::bounded_wait(self.store_pid, protocol::store_inventory::storage::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_inventory::storage::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<WasmStoreStatusResponse, Error> = ic_wire::native::decode_response(
                 protocol::store_inventory::storage::METHOD_ID,
                 &reply,
@@ -177,12 +196,18 @@ impl WasmStoreInternalClient {
                 protocol::store_publication::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply =
-                CallOps::bounded_wait(self.store_pid, protocol::store_publication::prepare::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_publication::prepare::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<TemplateChunkSetInfoResponse, Error> =
                 ic_wire::native::decode_response(
                     protocol::store_publication::prepare::METHOD_ID,
@@ -214,12 +239,18 @@ impl WasmStoreInternalClient {
                 protocol::store_publication::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply =
-                CallOps::bounded_wait(self.store_pid, protocol::store_publication::stage::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_publication::stage::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<(), Error> = ic_wire::native::decode_response(
                 protocol::store_publication::stage::METHOD_ID,
                 &reply,
@@ -259,11 +290,18 @@ impl WasmStoreInternalClient {
                 protocol::template_bytes::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let bytes = CallOps::bounded_wait(self.store_pid, Self::PUBLISH_CHUNK)
-                .with_raw_args(payload)
-                .execute()
-                .await?
-                .into_bytes();
+            let bytes = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    Self::PUBLISH_CHUNK,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(payload),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<(), Error> = ic_wire::native::decode_response(
                 protocol::template_bytes::METHOD_ID,
                 &bytes,
@@ -293,11 +331,18 @@ impl WasmStoreInternalClient {
                 protocol::store_gc::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply = CallOps::bounded_wait(self.store_pid, protocol::store_gc::METHOD)
-                .with_raw_args(bytes)
-                .execute()
-                .await?
-                .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_gc::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<canic_contracts::dto::role::OperationReceipt, Error> =
                 ic_wire::native::decode_response(
                     protocol::store_gc::METHOD_ID,
@@ -328,12 +373,18 @@ impl WasmStoreInternalClient {
                 protocol::store_control::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let bytes =
-                CallOps::bounded_wait(self.store_pid, protocol::store_control::reclaim::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let bytes = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_control::reclaim::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<canic_contracts::dto::store_control::ReclamationResponse, Error> =
                 ic_wire::native::decode_response(
                     protocol::store_control::reclaim::METHOD_ID,
@@ -370,11 +421,18 @@ impl WasmStoreInternalClient {
                 protocol::wasm_store_chunk::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply = CallOps::bounded_wait(self.store_pid, Self::CHUNK)
-                .with_raw_args(bytes)
-                .execute()
-                .await?
-                .into_bytes();
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    Self::CHUNK,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let response: Result<TemplateChunkResponse, Error> = ic_wire::native::decode_response(
                 protocol::wasm_store_chunk::METHOD_ID,
                 &reply,
@@ -402,12 +460,16 @@ impl WasmStoreInternalClient {
                 protocol::store_publication::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let reply = CallOps::bounded_wait(
-                self.store_pid,
-                protocol::store_publication::fixture_prepare::METHOD,
+            let reply = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_publication::fixture_prepare::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
             )
-            .with_raw_args(bytes)
-            .execute()
             .await?
             .into_bytes();
             let reply: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
@@ -440,12 +502,18 @@ impl WasmStoreInternalClient {
                 protocol::store_catalog::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let bytes =
-                CallOps::bounded_wait(self.store_pid, protocol::store_catalog::fixture::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let bytes = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_catalog::fixture::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
                 ic_wire::native::decode_response(
                     protocol::store_catalog::fixture::METHOD_ID,
@@ -476,12 +544,18 @@ impl WasmStoreInternalClient {
                 protocol::store_catalog::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let bytes =
-                CallOps::bounded_wait(self.store_pid, protocol::store_catalog::grant::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let bytes = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_catalog::grant::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<
                 Option<canic_contracts::dto::runtime_reporting::FixtureGrant>,
                 Error,
@@ -516,12 +590,18 @@ impl WasmStoreInternalClient {
                 protocol::store_control::REQUEST_LIMITS,
             )
             .map_err(|_| InternalError::invalid_input())?;
-            let bytes =
-                CallOps::bounded_wait(self.store_pid, protocol::store_control::grant::METHOD)
-                    .with_raw_args(bytes)
-                    .execute()
-                    .await?
-                    .into_bytes();
+            let bytes = execute_call(
+                Call::new(
+                    self.store_pid.into(),
+                    protocol::store_control::grant::METHOD,
+                    WaitPolicy::Bounded {
+                        timeout_seconds: 300,
+                    },
+                )
+                .take_raw_args(bytes),
+            )
+            .await?
+            .into_bytes();
             let reply: Result<
                 Result<canic_contracts::dto::runtime_reporting::FixtureGrant, FixtureStoreError>,
                 Error,

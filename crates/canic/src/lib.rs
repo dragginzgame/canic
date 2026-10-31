@@ -30,6 +30,8 @@ pub mod diagnostics;
 pub mod dto;
 pub mod endpoint;
 pub mod fleet_admission;
+#[cfg(feature = "icrc")]
+pub mod icrc;
 pub mod ids;
 mod instructions;
 mod macros; // private implementation boundary
@@ -99,7 +101,7 @@ pub mod memory;
 // -----------------------------------------------------------------------------
 pub use canic_contracts::dto::error::Error;
 pub use canic_core::{impl_storable_bounded, impl_storable_unbounded};
-pub use canic_macros::{canic_query, canic_raw_query, canic_raw_update, canic_update};
+pub use canic_macros::{candid_query, candid_update, query, raw_query, raw_update, update};
 pub use diagnostics::{DiagnosticCode, RegisteredDiagnosticCode};
 
 // -----------------------------------------------------------------------------

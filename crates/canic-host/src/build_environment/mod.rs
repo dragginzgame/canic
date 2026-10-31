@@ -8,6 +8,8 @@ use crate::icp::CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV;
 use std::{
     env,
     ffi::{OsStr, OsString},
+    fs,
+    path::{Path, PathBuf},
     process::Command,
     sync::OnceLock,
 };
@@ -18,6 +20,7 @@ const WITHHELD_INPUTS: &[&str] = &[
     CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV,
     "CODEX_SESSION_ID",
     "CODEX_THREAD_ID",
+    "CODEX_TOOL_CALL_ID",
     "CANIC_TEST_SCRATCH",
     "CANIC_TEST_COLOR",
     "CANIC_TEST_PLAN_ONLY",
@@ -44,6 +47,19 @@ const WITHHELD_INPUTS: &[&str] = &[
     "VALIDATION_INPUT_ROOT",
     "VALIDATION_INPUT_BASELINE",
     "GITHUB_STEP_SUMMARY",
+    // Shared release delivery context is not the artifact's release identity.
+    // CANIC_RELEASE_BUILD_ID and other explicit build inputs remain bound.
+    "RELEASE_SOURCE",
+    "RELEASE_PREVIOUS",
+    "RELEASE_VERSION",
+    "RELEASE_DATE",
+    "RELEASE_KIND",
+    "RELEASE_REMOTE",
+    "RELEASE_BRANCH",
+    "RELEASE_COMMIT",
+    "RELEASE_DELIVERY",
+    "RELEASE_PREPARATION_SOURCE",
+    "RELEASE_PREPARED_COMMIT",
 ];
 
 /// Construct a build/tool command from the captured process build environment.
@@ -66,12 +82,65 @@ pub fn inputs() -> Vec<(OsString, OsString)> {
 fn captured() -> &'static Vec<(OsString, OsString)> {
     static ENVIRONMENT: OnceLock<Vec<(OsString, OsString)>> = OnceLock::new();
     ENVIRONMENT.get_or_init(|| {
+        let codex_home = env::var_os("CODEX_HOME")
+            .map(PathBuf::from)
+            .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".codex")));
         env::vars_os()
             .filter(|(key, _)| {
                 key != "SHLVL" && !WITHHELD_INPUTS.iter().any(|name| key == OsStr::new(name))
             })
+            .map(|(key, value)| {
+                let value = if key == "PATH" {
+                    build_path(&value, codex_home.as_deref())
+                } else {
+                    value
+                };
+                (key, value)
+            })
             .chain([(OsString::from("SHLVL"), OsString::from("0"))])
             .collect()
+    })
+}
+
+// Codex creates a fresh PATH directory for editor/sandbox helpers per tool call.
+// Keep real tool-search inputs, including unknown entries in that directory.
+fn build_path(value: &OsStr, codex_home: Option<&Path>) -> OsString {
+    let Some(home) = codex_home else {
+        return value.to_owned();
+    };
+    env::join_paths(env::split_paths(value).filter(|path| !execution_helpers_only(path, home)))
+        .unwrap_or_else(|_| value.to_owned())
+}
+
+fn execution_helpers_only(path: &Path, home: &Path) -> bool {
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    if parent != home.join("tmp/arg0") && parent != home.join("tmp/arg0-linux") {
+        return false;
+    }
+    if !path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(|name| name.starts_with("codex-arg0"))
+    {
+        return false;
+    }
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return true,
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        _ => return false,
+    }
+    let Ok(mut entries) = fs::read_dir(path) else {
+        return false;
+    };
+    entries.all(|entry| {
+        entry.is_ok_and(|entry| {
+            matches!(
+                entry.file_name().to_str(),
+                Some(".lock" | "apply_patch" | "applypatch" | "codex-linux-sandbox")
+            )
+        })
     })
 }
 

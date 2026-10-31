@@ -2,8 +2,7 @@
 
 `canic-cli` provides the `canic` command-line program used by developers and
 operators. It runs on your computer—not inside a canister—and handles App
-setup, builds, local IC networks, deployment planning, diagnostics, backup, and
-recovery.
+setup, builds, local IC networks, deployment planning, diagnostics, and Fleet operations.
 
 Run `canic` without arguments, or run `canic --help`, to see the top-level help.
 Use `canic <command> --help` for one command's options and examples.
@@ -23,7 +22,6 @@ begin with `app`, `build`, `fleet`, `replica`, and `scaffold`.
 admission
 app
 auth
-backup
 build
 component
 cycles
@@ -37,7 +35,6 @@ medic
 network
 observatory
 replica
-restore
 scaffold
 state
 status
@@ -60,19 +57,9 @@ optional `release` field may be omitted or `null`; both mean no release authorit
 Malformed non-null release records and missing required authority fields still
 refuse discovery. Status reads preserve the retained journal bytes.
 
-Snapshot restoration uses `restore plan` for offline review, `restore prepare`
-to validate artifacts and create or adopt the plan and journal, `restore run`
-to preview or execute journaled operations, and `restore status` to inspect
-progress. Backup references use the same row ordering as `backup list`.
-`backup prune` counts verified copies for retention and protects unfinished
-restores, including external journals. Its report includes skipped layouts and
-partial deletion failures; see [local retention](../../docs/features/backup-and-restore/README.md#local-retention).
-
-Fresh `backup create` execution is unavailable until Component Registry topology
-preflight is implemented. It rejects before creating a layout or invoking ICP.
-Dry-run planning does not create a backup or qualify
-live authority. The accepted package-adapter work retains this limitation; see the
-[backup availability boundary](../../docs/features/backup-and-restore/README.md#current-availability).
+Live backup and restore CLI operations are unavailable. The generic engine lives
+in IC Backup; Canic retains its Host checkpoint integration. See the
+[availability boundary](../../docs/features/backup-and-restore/README.md#current-availability).
 
 ## Install
 

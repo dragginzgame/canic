@@ -38,11 +38,9 @@ use std::{
 };
 
 const ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES: u32 = 8_650_000;
-// CBOR encodes a 32-byte `[u8; 32]` key as a two-byte array header followed by
-// at most two bytes per element.
+// Keep the declared ceiling above the Wire marker and 32 fixed key bytes.
 const ROOT_COMPONENT_PROVISIONING_OPERATION_KEY_MAX_BYTES: u32 = 96;
-// The placement owner adds one CBOR map header and the exact two field names to
-// two maximum-width operation keys.
+// The placement owner retains headroom for both keys and their Wire envelope.
 const ROOT_COMPONENT_PROVISIONING_PLACEMENT_RECORD_MAX_BYTES: u32 = 156;
 
 std::thread_local! {

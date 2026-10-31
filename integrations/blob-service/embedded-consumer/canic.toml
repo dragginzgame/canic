@@ -20,6 +20,10 @@ application_init_required = true
 component_role = "backend"
 maximum_instances = 1
 
+# Keep heap as the canister default; retain only Blob's historical observations.
+[component_specs.backend.metrics.providers.blob]
+storage = "stable"
+
 [component_groups.backend.components.backend]
 component_spec = "backend"
 

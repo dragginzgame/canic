@@ -3,7 +3,6 @@ mod binary_arguments;
 mod candid;
 mod canister;
 mod command;
-pub(crate) mod cycles_ledger;
 mod diagnostic;
 mod error;
 mod identity;

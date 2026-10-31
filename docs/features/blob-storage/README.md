@@ -4,7 +4,7 @@ Application blob storage belongs to [ic-blob-storage](https://github.com/draggin
 It owns content, tenant authority, provider access, references and accounting.
 Canic owns Fleet lifecycle and deployment of ordinary application Components.
 
-The Canic-owned adapter lives at `integrations/blob-service` in the main Canic
+The Canic-owned adapter lives at `crates/canic-blob-service` in the main Canic
 workspace, sharing its dependency catalog, lockfile and release version. The upstream library has
 no Canic dependency. See the [extraction design](../../design/0.112-standalone-blob-service-extraction/0.112-design.md)
 and [current handoff](../../status/current.md) for implementation evidence.
@@ -80,7 +80,16 @@ Upstream owns provider and service-policy acceptance; Canic must not duplicate
 that engine to complete its adapter. See the current handoff for the exact graph
 and completed local qualification, rather than treating this scope as evidence.
 
-## Qualified framework integration and remaining deployment evidence
+## Current dependency selection
+
+The root and both private consumer catalogs select published Blob/contracts
+**0.58.0**, Tooling/Testkit **0.70.3**, Platform/Call **0.8.2**,
+Memory/Storage/Metrics Stable **0.56.0**, Auth **0.23.0**, Metrics **0.17.5**,
+Logging **0.17.2**, Timers **0.32.1** and Wire **0.7.23**. Each consumer graph
+has one Memory/Timers runtime. The [current handoff](../../status/current.md)
+names the exact local qualification and its remaining acceptance boundaries.
+
+## Earlier selected framework evidence
 
 Published Blob/contracts **0.47.0** with Tooling/Testkit **0.68.1**, Platform
 **0.6.15**, Wire **0.7.5**, Auth **0.16**, Memory/Storage **0.51.0** and Timers

@@ -8,10 +8,10 @@ mkdir -p "$fixture/make" "$fixture/ci" "$fixture/scripts/ci" "$fixture/.tools/ru
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
 cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$fixture/make/"
 cp "$ROOT/ci/tool-versions.env" "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
-cp "$ROOT/scripts/ci/check-make-execution.sh" "$ROOT/scripts/ci/check-format-tools.sh" \
-    "$ROOT/scripts/ci/run-rust-formatting.pl" \
-    "$ROOT/scripts/ci/ic-tool-pins.sh" "$ROOT/scripts/ci/tool-catalog-records.pl" \
-    "$ROOT/scripts/ci/StableVersion.pm" "$fixture/scripts/ci/"
+bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$fixture" \
+    scripts/ci/check-make-execution.sh scripts/ci/check-format-tools.sh \
+    scripts/ci/run-rust-formatting.pl scripts/ci/ic-tool-pins.sh \
+    scripts/ci/tool-catalog-records.pl
 # Observe every actual formatter invocation in this routing fixture.
 printf '\nFORMAT_RUST_ARGS += --no-cache\n' >> "$fixture/Makefile"
 mkdir -p "$fixture/integrations/blob-service/consumer" "$fixture/integrations/blob-service/embedded-consumer"

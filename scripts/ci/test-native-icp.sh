@@ -32,6 +32,7 @@ fn main() {
 RUST
 rustc --edition 2024 --crate-name native_icp_fixture "$fixture/native.rs" -o "$fixture/cargo/bin/icp"
 cp "$fixture/cargo/bin/icp" "$fixture/alternate path/icp"
+cp "$fixture/cargo/bin/icp" "$fixture/alternate path/rustc"
 cp "$fixture/cargo/bin/icp" "$fixture/.tools/ic/bin/icp"
 cat > "$fixture/launcher/icp" <<'SH'
 #!/bin/sh
@@ -47,8 +48,7 @@ export NATIVE_ICP_FIXTURE_VERSION="$required_version"
     export CARGO_HOME="$fixture/cargo" PATH="$fixture/launcher:$original_path"
     use_native_test_icp "$fixture/scratch" "$required_version" "$fixture"
     selected="$(command -v icp)"
-    [[ "$selected" == "$fixture/scratch/"*/icp && -L "$selected" ]]
-    [[ "$(readlink "$selected")" == "$fixture/.tools/ic/bin/icp" ]]
+    [[ "$selected" == "$fixture/.tools/ic/bin/icp" ]]
     [[ "$(icp --version)" == "icp $required_version" ]]
     [[ "$(command -v rustc)" == "$(PATH="$original_path" command -v rustc)" ]]
 )
@@ -59,13 +59,20 @@ export NATIVE_ICP_FIXTURE_VERSION="$required_version"
     unset CANIC_TEST_ICP_BIN ICP_CLI_INSTALL_DIR
     export CARGO_HOME="$fixture/missing" PATH="$fixture/alternate path:$original_path"
     use_native_test_icp "$fixture/scratch" "$required_version" "$fixture"
-    [[ "$(readlink "$(command -v icp)")" == "$fixture/.tools/ic/bin/icp" ]]
+    [[ "$(command -v icp)" == "$fixture/.tools/ic/bin/icp" ]]
 )
 (
     export CANIC_TEST_ICP_BIN="$fixture/alternate path/icp"
     use_native_test_icp "$fixture/scratch" "$required_version" "$fixture"
     [[ "$(readlink "$(command -v icp)")" == "$CANIC_TEST_ICP_BIN" ]]
+    [[ "$(command -v rustc)" == "$(PATH="$original_path" command -v rustc)" ]]
 )
+
+# Separate default invocations have stable PATH/build inputs, despite fresh scratch.
+mkdir -p "$fixture/scratch-second"
+first_path="$(unset CANIC_TEST_ICP_BIN; use_native_test_icp "$fixture/scratch" "$required_version" "$fixture" >/dev/null; printf '%s' "$PATH")"
+second_path="$(unset CANIC_TEST_ICP_BIN; use_native_test_icp "$fixture/scratch-second" "$required_version" "$fixture" >/dev/null; printf '%s' "$PATH")"
+[[ "$first_path" == "$second_path" ]]
 
 # Refusals neither replace PATH nor expose an invocation tool directory.
 expect_refusal() {

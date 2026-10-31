@@ -215,21 +215,17 @@ impl IcpCli {
         &self,
         canister_id: Principal,
     ) -> Result<(), IcpManagementCallError> {
-        #[derive(CandidType)]
-        #[candid_path("ic_platform::candid::contract")]
-        struct UninstallRequest {
-            canister_id: Principal,
-            sender_canister_version: Option<u64>,
-        }
         self.measure_request(
             crate::icp::IcpRequestKind::Update,
             Some(&canister_id.to_text()),
             Some("uninstall_code"),
             || {
-                let argument = ic_platform::candid::contract::encode_one(UninstallRequest {
-                    canister_id,
-                    sender_canister_version: None,
-                })
+                let argument = ic_platform::candid::contract::encode_one(
+                    ic_platform::management_canister_types::UninstallCodeArgs {
+                        canister_id,
+                        sender_canister_version: None,
+                    },
+                )
                 .map_err(IcpManagementCallError::CandidEncode)?;
                 let agent = self.authenticated_agent()?;
                 self.record_remote_call();

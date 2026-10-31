@@ -1,7 +1,9 @@
 //! Application endpoints use native Wire; external Candid and lifecycle bounds remain distinct.
 //!
 //! Use `wire(id = METHOD_ID, request = REQUEST_LIMITS, response = RESPONSE_LIMITS)`
-//! for Canic-owned application methods. See the native Wire section below for
+//! on `#[canic::query]` and `#[canic::update]` for Canic-owned application methods.
+//! These attributes require Wire. Required external protocols use
+//! `#[canic::candid_query]` and `#[canic::candid_update]`. See the native Wire section below for
 //! framing, generated schemas and caller behavior. The following `ArgumentLimits`
 //! examples describe the external Candid adapter only.
 //!
@@ -21,10 +23,10 @@
 //!     max_bytes: 32 * 1024, decoding_quota: 100_000, skipping_quota: 10_000,
 //!     max_type_len: 128, max_header_len: 4096,
 //! };
-//! #[canic::canic_update(requires(caller::is_controller()),
+//! #[canic::candid_update(requires(caller::is_controller()),
 //!     on_access_denied = "reject", decode = LIMITS)]
 //! fn accept(bytes: Vec<u8>) -> u64 { bytes.len() as u64 }
-//! #[canic::canic_query(public, on_access_denied = "reject", decode = LIMITS)]
+//! #[canic::candid_query(public, on_access_denied = "reject", decode = LIMITS)]
 //! fn size(bytes: Vec<u8>) -> u64 { bytes.len() as u64 }
 //! ```
 //!
@@ -39,28 +41,28 @@
 //! Plain guarded replies require an explicit rejection choice:
 //!
 //! ```compile_fail
-//! #[canic::canic_query(public)]
+//! #[canic::candid_query(public)]
 //! fn plain() -> u64 { 1 }
 //! ```
 //!
 //! Rejection mode does not remove the explicit access declaration:
 //!
 //! ```compile_fail
-//! #[canic::canic_update(public, requires(caller::is_controller()), on_access_denied = "reject")]
+//! #[canic::candid_update(public, requires(caller::is_controller()), on_access_denied = "reject")]
 //! fn conflicting_access() -> u64 { 1 }
 //! ```
 //!
 //! The mode is explicit and supports only `"reject"`:
 //!
 //! ```compile_fail
-//! #[canic::canic_update(public, on_access_denied = "trap")]
+//! #[canic::candid_update(public, on_access_denied = "trap")]
 //! fn invalid_mode() -> u64 { 1 }
 //! ```
 //!
 //! `decode` requires a constant `ArgumentLimits`, not a byte count:
 //!
 //! ```compile_fail,E0308
-//! #[canic::canic_query(public, decode = 1024)]
+//! #[canic::candid_query(public, decode = 1024)]
 //! fn wrong_policy() -> Result<(), canic::Error> { Ok(()) }
 //! ```
 //!
@@ -71,7 +73,7 @@
 //!     max_bytes: 1024, decoding_quota: 1000, skipping_quota: 100,
 //!     max_type_len: 16, max_header_len: 128,
 //! };
-//! #[canic::canic_update(public, decode = LIMITS, payload(max_bytes = 1024))]
+//! #[canic::candid_update(public, decode = LIMITS, payload(max_bytes = 1024))]
 //! fn conflicting_limits() -> Result<(), canic::Error> { Ok(()) }
 //! ```
 //!
@@ -82,7 +84,7 @@
 //!     max_bytes: 1024, decoding_quota: 1000, skipping_quota: 100,
 //!     max_type_len: 16, max_header_len: 128,
 //! };
-//! #[canic::canic_query(public, decode = LIMITS, decode = LIMITS)]
+//! #[canic::candid_query(public, decode = LIMITS, decode = LIMITS)]
 //! fn duplicate_limits() -> Result<(), canic::Error> { Ok(()) }
 //! ```
 
@@ -122,7 +124,6 @@ pub mod schema;
 mod registration;
 
 use ic_platform::candid::contract::ArgumentDecoder;
-use ic_platform::candid::decoder::DecoderConfig;
 use std::fmt;
 
 ///
@@ -197,21 +198,24 @@ impl ArgumentLimits {
         bytes: &'a [u8],
     ) -> Result<T, ArgumentDecodeError> {
         self.check_size(bytes.len())?;
-        let mut config = DecoderConfig::new();
-        config
-            .set_decoding_quota(self.decoding_quota)
-            .set_skipping_quota(self.skipping_quota)
-            .set_max_type_len(self.max_type_len)
-            .set_max_header_len(self.max_header_len)
-            .set_full_error_message(false);
         // IC lifecycle calls may omit the empty Candid envelope, as in the CDK.
         let bytes = if bytes.is_empty() {
             b"DIDL\x00\x00"
         } else {
             bytes
         };
-        ic_platform::candid::decoder::decode_args_with_config(bytes, &config)
-            .map_err(|_| ArgumentDecodeError::InvalidCandid)
+        ic_platform::candid::decode_args(
+            bytes,
+            ic_platform::candid::DecodeLimits {
+                // Size admission above applies to original bytes, before empty-envelope normalization.
+                reply_bytes: self.max_bytes.max(bytes.len()),
+                decoding_quota: self.decoding_quota,
+                skipping_quota: self.skipping_quota,
+                type_entries: self.max_type_len,
+                header_bytes: self.max_header_len,
+            },
+        )
+        .map_err(|_| ArgumentDecodeError::InvalidCandid)
     }
 
     /// Read platform arguments only after checking their scalar byte length.

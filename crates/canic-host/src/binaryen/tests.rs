@@ -81,19 +81,20 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
     write_executable(
         &executable,
         &crate::test_support::tool_script(
-            "#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf '@BINARYEN_IDENTITY@\\n'\n",
+            "#!/bin/sh\nprintf 'this must not execute' > \"${0%/*}/execution-marker\"\nprintf '@BINARYEN_IDENTITY@\\n'\n",
         ),
     );
 
     let error = admit_binaryen_executable(&executable, &"0".repeat(64), None)
         .expect_err("wrong executable digest must reject");
     let message = error.to_string();
+    let physical_executable = executable.canonicalize().expect("physical executable path");
 
     assert!(matches!(
         error,
-        BinaryenToolError::ExecutableHashMismatch { path, .. } if path == executable
+        BinaryenToolError::ExecutableHashMismatch { path, .. } if path == physical_executable
     ));
-    assert!(message.contains(executable.to_string_lossy().as_ref()));
+    assert!(message.contains(physical_executable.to_string_lossy().as_ref()));
     assert!(message.contains(BINARYEN_REPAIR_COMMAND));
     assert!(!root.join("execution-marker").exists());
     fs::remove_dir_all(root).expect("remove test root");
@@ -114,7 +115,7 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     let admitted =
         admit_binaryen_executable(&executable, &digest, None).expect("admit exact executable");
 
-    assert_eq!(admitted.path(), executable);
+    assert_eq!(admitted.path(), executable.canonicalize().unwrap());
     assert_eq!(admitted.version_identity(), BINARYEN_VERSION_IDENTITY);
     assert_eq!(admitted.sha256(), digest);
     fs::remove_dir_all(root).expect("remove test root");
@@ -209,7 +210,7 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     let admitted =
         admit_binaryen_executable(&destination, &digest, None).expect("admit published executable");
 
-    assert_eq!(admitted.path(), destination);
+    assert_eq!(admitted.path(), destination.canonicalize().unwrap());
     assert_eq!(admitted.version_identity(), BINARYEN_VERSION_IDENTITY);
     assert_eq!(admitted.sha256(), digest);
     fs::remove_dir_all(root).expect("remove test root");

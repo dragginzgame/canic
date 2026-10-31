@@ -42,8 +42,9 @@ dependencies must be distinguished from dependencies compiled into Wasm when
 reviewing Cargo graphs.
 
 This choice applies to configuration formats. JSON remains part of the Root
-bootstrap release-manifest contract, CBOR serves stable storage, and Candid
-serves canister interfaces. Their runtime uses are separate from configuration
+bootstrap release-manifest contract. Wire serves owned RPCs and stable records;
+dedicated commitment/build evidence keeps CBOR, and required external IC
+interfaces retain Candid. These runtime uses are separate from configuration
 parsing. Reuse the existing workspace format libraries for new Canic code;
 upstream transitive parsers do not justify introducing another direct parser.
 

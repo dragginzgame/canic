@@ -202,9 +202,14 @@ fn metrics_failure_report(
 
 const fn metric_value_is_zero(value: &MetricValue) -> bool {
     match value {
-        MetricValue::Count { count } => *count == 0,
-        MetricValue::CountAndU64 { count, value_u64 } => *count == 0 && *value_u64 == 0,
-        MetricValue::U128 { value } => *value == 0,
+        MetricValue::Count { count, exact } => *count == 0 && *exact,
+        MetricValue::Measurement {
+            count,
+            total,
+            count_overflowed,
+            total_overflowed,
+        } => *count == 0 && *total == 0 && !*count_overflowed && !*total_overflowed,
+        MetricValue::U128 { value, exact } => *value == 0 && *exact,
     }
 }
 
@@ -359,12 +364,44 @@ mod tests {
     // Ensure zero filtering treats every payload shape consistently.
     #[test]
     fn detects_zero_metric_values() {
-        assert!(metric_value_is_zero(&MetricValue::Count { count: 0 }));
-        assert!(metric_value_is_zero(&MetricValue::CountAndU64 {
+        assert!(metric_value_is_zero(&MetricValue::Count {
             count: 0,
-            value_u64: 0
+            exact: true
         }));
-        assert!(!metric_value_is_zero(&MetricValue::U128 { value: 1 }));
+        assert!(metric_value_is_zero(&MetricValue::Measurement {
+            count: 0,
+            total: 0,
+            count_overflowed: false,
+            total_overflowed: false,
+        }));
+        assert!(!metric_value_is_zero(&MetricValue::U128 {
+            value: 1,
+            exact: true
+        }));
+    }
+
+    #[test]
+    fn nonzero_filter_retains_unknown_scalar_quality() {
+        for value in [
+            MetricValue::Count {
+                count: 0,
+                exact: false,
+            },
+            MetricValue::U128 {
+                value: 0,
+                exact: false,
+            },
+            MetricValue::Count {
+                count: u128::MAX,
+                exact: true,
+            },
+        ] {
+            assert!(!metric_value_is_zero(&value));
+        }
+        assert!(metric_value_is_zero(&MetricValue::U128 {
+            value: 0,
+            exact: true
+        }));
     }
 
     // Ensure transport preserves the Candid metric kind vocabulary.
@@ -425,7 +462,10 @@ mod tests {
                 .map(|&count| crate::metrics::model::MetricEntry {
                     labels: vec!["sample".into()],
                     principal: None,
-                    value: MetricValue::Count { count },
+                    value: MetricValue::Count {
+                        count: u128::from(count),
+                        exact: true,
+                    },
                 })
                 .collect(),
             total,
@@ -492,7 +532,13 @@ mod tests {
         let report = metrics_success_report(&registry_entry(), page, true);
         assert_eq!(report.status, MetricsCanisterStatus::Ok);
         assert_eq!(report.entries.len(), 1);
-        assert_eq!(report.entries[0].value, MetricValue::Count { count: 7 });
+        assert_eq!(
+            report.entries[0].value,
+            MetricValue::Count {
+                count: 7,
+                exact: true
+            }
+        );
         assert_eq!(report.fetched, 3);
         assert!(!report.truncated);
     }

@@ -645,8 +645,6 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only(crate::protocol::funding_read::coordinator_status::METHOD),
-    query_read_only("icrc10_supported_standards"),
-    query_read_only("icrc21_canister_call_consent_message"),
     endpoint_policy(
         crate::protocol::inspection::METHOD,
         ReplayPolicy::QueryOrReadOnly,
@@ -694,7 +692,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     query_read_only(crate::protocol::protected_state::authority_restore::METHOD),
     query_read_only(crate::protocol::protected_state::fleet_state::METHOD),
-    query_read_only("canic_root_checkpoint_status"),
+    update_read_only("canic_root_checkpoint_status"),
     update_monotonic_transition(
         "canic_root_checkpoint_begin",
         command_kind("root.checkpoint.begin.v1"),
