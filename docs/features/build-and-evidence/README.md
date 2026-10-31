@@ -72,6 +72,8 @@ Wasm cleanup; do not run any cleanup during an active build.
 Generated manifests remain unpublished and the ignored `target/` tree is not
 release source or package content. Direct Cargo binaries use `target/debug/`;
 Make-built binaries use `target/cargo/debug/` by default.
+Independent Blob consumer workspaces use their own workspace-local `target/`;
+run cleanup from the workspace whose artifacts you want to remove.
 
 Generated locks are derived from the selected workspace's current `Cargo.lock`.
 A change to that lock or the generated manifest atomically refreshes the seed;

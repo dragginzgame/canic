@@ -1,3 +1,2 @@
-[build]
-# Plain Cargo cleanup owns the complete disposable repository target tree.
-target-dir = "target"
+# Keep Cargo's built-in target directory: each workspace owns its entire target/.
+# Make build subprocesses select their isolated compiler output explicitly.

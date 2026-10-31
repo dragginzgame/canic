@@ -129,3 +129,22 @@ for command in cargo clean release-clean; do
     [[ ! -e target && -f src/lib.rs && -f .tmp/clean-sentinel/retained ]]
 done
 echo 'Plain Cargo and Make cleanup remove the complete target tree (real Cargo, disposable fixture)'
+
+# Independent Blob workspaces must clean their own target, not a parent's or
+# sibling's. Copy their effective configuration when present in the repository.
+for directory in integrations/blob-service integrations/blob-service/consumer integrations/blob-service/embedded-consumer; do
+    if [[ -d "$ROOT/$directory/.cargo" ]]; then
+        mkdir -p "$directory"
+        cp -R "$ROOT/$directory/.cargo" "$directory/"
+    fi
+done
+mkdir -p target
+touch target/root-sentinel
+for workspace in integrations/blob-service/consumer integrations/blob-service/embedded-consumer; do
+    mkdir -p "$workspace/src" "$workspace/target/cache"
+    printf '[workspace]\n[package]\nname = "nested-clean-fixture"\nversion = "0.1.0"\nedition = "2024"\n' > "$workspace/Cargo.toml"
+    touch "$workspace/src/lib.rs" "$workspace/target/cache/artifact"
+    (cd "$workspace" && cargo clean)
+    [[ ! -e "$workspace/target" && -f target/root-sentinel ]]
+done
+echo 'Independent Blob workspaces clean their own target without deleting parent output'
