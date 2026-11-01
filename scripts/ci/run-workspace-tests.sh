@@ -19,7 +19,7 @@ HEAVY_BUILD_TARGETS_USED=0
 PLAN_ONLY="${CANIC_TEST_PLAN_ONLY:-0}"
 STEP_SUMMARY_INITIALIZED=0
 RUN_STARTED_AT="$SECONDS"
-POCKET_IC_SERVER_TTL_SECONDS=7200
+POCKET_IC_SERVER_IDLE_TTL_SECONDS=7200
 TESTKIT_SERVER=""
 INTERRUPTED_STATUS=0
 SCCACHE_STATS_ACTIVE=0
@@ -154,9 +154,9 @@ run_pocketic_command() {
     local sequence="$((TEST_LOG_SEQUENCE + 1))" status=0
     local stdout="$CANIC_TEST_SCRATCH/pocketic-$sequence.stdout"
     local stderr="$CANIC_TEST_SCRATCH/pocketic-$sequence.stderr"
+    # The command owns active server lifetime and cleanup; retain only idle expiry.
     run_test_command 1 "$TESTKIT_SERVER" run \
-        --ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
-        --idle-ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
+        --idle-ttl "$POCKET_IC_SERVER_IDLE_TTL_SECONDS" \
         --server-stdout "$stdout" --server-stderr "$stderr" -- "$@" || status=$?
     if [[ "$status" -ne 0 ]]; then
         echo '==> PocketIC server output (last 40 lines per stream; complete files retained in scratch)' >&2

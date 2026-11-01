@@ -184,3 +184,53 @@ fn bundle_executable_runs_with_its_relative_library_before_and_after_selection()
     publish_bundle("wasm-opt", &candidate, &library, &destination, admit).unwrap();
     admit(&fs::canonicalize(&destination).unwrap()).unwrap();
 }
+
+#[test]
+fn archive_download_retries_tls_failures_before_returning_the_final_error() {
+    use std::{
+        io::Write,
+        net::TcpListener,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        thread,
+        time::Duration,
+    };
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let stopped = Arc::new(AtomicBool::new(false));
+    let server_stopped = Arc::clone(&stopped);
+    let server = thread::spawn(move || {
+        let mut attempts = 0;
+        while !server_stopped.load(Ordering::Relaxed) {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    attempts += 1;
+                    stream
+                        .set_write_timeout(Some(Duration::from_secs(1)))
+                        .unwrap();
+                    // A plaintext response to ClientHello forces curl's TLS
+                    // failure path, which its default retry policy excludes.
+                    let _ = stream.write_all(b"HTTP/1.1 503 Unavailable\r\n\r\n");
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("accept TLS failure fixture: {error}"),
+            }
+        }
+        attempts
+    });
+    let temp = TempDirectory::create("download-tls-retry").unwrap();
+    let result = download_archive(
+        &format!("https://{address}/archive"),
+        &temp.path.join("archive"),
+    );
+    stopped.store(true, Ordering::Relaxed);
+    let attempts = server.join().unwrap();
+    assert!(matches!(result, Err(InstallError::ArchiveDownload { .. })));
+    assert_eq!(attempts, 4);
+}
