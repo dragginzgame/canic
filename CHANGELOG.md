@@ -6,6 +6,14 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.114.1] - Unreleased
+
+### 🩹 Fixed
+
+- Allow native consumers to link multiple canister libraries with overlapping
+  framework methods. Wasm export names and runtime behaviour are unchanged.
+  See [detailed notes](docs/changelog/0.114.md).
+
 ## [0.114.0] - 2026-10-31
 
 ### ⚠️ Breaking

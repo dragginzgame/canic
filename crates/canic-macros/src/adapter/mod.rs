@@ -6,6 +6,9 @@
 )]
 pub(crate) mod wire;
 
+#[cfg(test)]
+mod tests;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Signature, Type};
@@ -254,10 +257,11 @@ pub(crate) fn export_entrypoint(
     } else {
         format!("{} {}", kind.export(), method)
     };
+    // Host consumers may link several canister libraries with the same IC methods.
     let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
     quote! {
         #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
-        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
+        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = concat!(env!("CARGO_CRATE_NAME"), "__", #host_export)))]
         fn #name() {
             #executor(|| { #execute });
         }
