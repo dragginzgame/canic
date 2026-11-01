@@ -1,5 +1,29 @@
 # Current handoff — 2026-10-31
 
+## Jobs application qualification — 2026-11-01
+
+This isolated contribution starts from delivered Canic 0.114.0 at
+`e753785953e6805461ac337868c32163f65c3209`, branch
+`codex/jobs-application-qualification`. Normal sibling checkouts remain read-only.
+The private managed lifecycle probe now composes published Jobs 0.33.2 with its
+existing Canic memory/lifecycle/Fleet owners and the already selected Timers
+0.35.0. No other supplier selection, own version, release or deployment changes.
+Open 0.114.1 notes describe this qualification batch only.
+
+The five native queue cases and the single governed installed case pass. The
+installed case covers an actual intent-writing trap, same-release restore,
+lost-reply uncertainty without redelivery, exact receipt disposition and corrupt
+restore refusal. Focused probe/harness Clippy and the private integration's Rust 1.91 check also
+pass. The Wire producer admits the same installed Wasm and the governed worker
+partition check passes. Their exact commands/results and original Wasm/graph custody are retained outside
+`target/` at `/tmp/ic-scheduling-improvements.VvCLTy/`. No complete Canic CI or
+release gate is claimed. The [qualification contract](../features/jobs-qualification.md)
+owns scope and the reproducible installed selector. #502 stays an assessment of
+existing domain owners; this fixture does not close or replace that assessment.
+
+The following sections retain prior release/adoption context and do not select
+new execution for this isolated PR.
+
 ## Current work and authority
 
 Canic 0.113.0 remains the published local HEAD at

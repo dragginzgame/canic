@@ -2233,6 +2233,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-jobs"
+version = "0.33.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5b04b137b52edd7af2cfe2cc67bd7a9c479138beace660f9c2aa2c176f548ba"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "ic-logging"
 version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2986,8 +2995,10 @@ name = "managed_lifecycle_probe"
 version = "0.114.0"
 dependencies = [
  "canic",
+ "ic-jobs",
  "ic-memory",
  "ic-platform",
+ "ic-timers",
  "ic-wire",
  "serde",
  "serde_cbor",

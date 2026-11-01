@@ -132,6 +132,7 @@ canic-blob-service = { version = "0.114.0", path = "crates/canic-blob-service" }
 canic-cli = { version = "0.114.0", path = "crates/canic-cli" }
 canic-icydb = { version = "0.114.0", path = "crates/canic-icydb" }
 canic-testing-internal = { version = "0.114.0", path = "crates/canic-testing-internal" }
+ic-jobs = "0.33.2"
 prost = "0.14.4"
 
 # Rust lint hygiene

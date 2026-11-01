@@ -6,6 +6,14 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.114.1] - Unreleased
+
+### 🧪 Testing
+
+- Qualify an application-owned durable Jobs queue under Canic's existing memory,
+  lifecycle, admission and timer owners, including IC intent rollback and
+  lost-reply recovery. [Detailed notes](docs/changelog/0.114.md).
+
 ## [0.114.0] - 2026-10-31
 
 ### ⚠️ Breaking

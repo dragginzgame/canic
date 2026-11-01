@@ -2,6 +2,7 @@
 
 mod checkpoint;
 mod initialization;
+mod jobs;
 mod protocol;
 
 use canic::{Error, prelude::*};
