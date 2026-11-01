@@ -300,5 +300,19 @@ pub(super) fn rustflags(source: &Path) -> io::Result<String> {
     ] {
         flags.push(format!("--remap-path-prefix={}={name}", path.display()));
     }
+    // rustc resolves inlined standard-library locations into rust-src when it
+    // is installed. Keep the compiler's virtual path on both kinds of host;
+    // remapping /rustc itself does not affect locations from crate metadata.
+    let identity =
+        String::from_utf8(output(Command::new("rustc").arg("-vV"))?).map_err(io::Error::other)?;
+    let commit = identity
+        .lines()
+        .find_map(|line| line.strip_prefix("commit-hash: "))
+        .filter(|hash| hash.len() == 40 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .ok_or_else(|| io::Error::other("rustc must report its source commit"))?;
+    flags.push(format!(
+        "--remap-path-prefix={}/lib/rustlib/src/rust=/rustc/{commit}",
+        sysroot.trim(),
+    ));
     Ok(flags.join("\u{1f}"))
 }

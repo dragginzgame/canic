@@ -206,6 +206,34 @@ pub const AUDIT_ROOT_BALANCE: WireCallSpec = WireCallSpec {
 /// Release only the fixture hold under the raw controller guard.
 pub const RELEASE_FIXTURE: WireCallSpec = spec("test_release_fixture", 0x5445_5354_0000_0900);
 
+/// Application-owned Jobs queue contract; budgets match the actual probe declarations.
+const fn jobs_spec(method: &'static str, method_id: u64) -> WireCallSpec {
+    let limits = ic_wire::Limits {
+        bytes: 8192,
+        allocation: 65_536,
+        nodes: 2048,
+        depth: 32,
+    };
+    WireCallSpec {
+        method,
+        method_id,
+        request_limits: limits,
+        response_limits: limits,
+    }
+}
+pub const MANAGED_JOBS_ENQUEUE: WireCallSpec =
+    jobs_spec("managed_jobs_enqueue", 0x5445_5354_0000_0A00);
+pub const MANAGED_JOBS_DRAIN: WireCallSpec = jobs_spec("managed_jobs_drain", 0x5445_5354_0000_0A01);
+pub const MANAGED_JOBS_STATUS: WireCallSpec =
+    jobs_spec("managed_jobs_status", 0x5445_5354_0000_0A02);
+pub const MANAGED_JOBS_EFFECT: WireCallSpec =
+    jobs_spec("managed_jobs_effect", 0x5445_5354_0000_0A03);
+pub const MANAGED_JOBS_RECONCILE: WireCallSpec =
+    jobs_spec("managed_jobs_reconcile", 0x5445_5354_0000_0A04);
+pub const MANAGED_JOBS_FAULT: WireCallSpec = jobs_spec("managed_jobs_fault", 0x5445_5354_0000_0A05);
+pub const MANAGED_JOBS_CORRUPT: WireCallSpec =
+    jobs_spec("managed_jobs_corrupt", 0x5445_5354_0000_0A06);
+
 #[cfg(test)]
 mod tests {
     use super::*;

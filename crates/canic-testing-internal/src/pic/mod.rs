@@ -18,6 +18,8 @@ mod fleet_coordinator;
 #[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 mod fleet_registry;
 pub mod issuer_probe;
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod jobs;
 #[cfg(test)]
 mod journey_policy;
 mod lifecycle;
@@ -295,6 +297,7 @@ mod governed_suite {
 
     fn worker_groups() -> [Vec<GovernedTestCase>; 2] {
         let mut regular = lifecycle::governed_runtime_cases();
+        regular.extend(jobs::governed_cases());
         regular.extend(fleet_registry::governed_pocketic_cases());
         regular.extend(fleet_coordinator::governed_pocketic_cases());
         // The retained timing baseline leaves this worker about 350s shorter.
@@ -357,6 +360,7 @@ mod governed_suite {
     fn ordered_governed_pocketic_cases() -> Vec<GovernedTestCase> {
         let mut cases = fleet_registry::governed_recovery_cases();
         cases.extend(lifecycle::governed_runtime_cases());
+        cases.extend(jobs::governed_cases());
         cases.extend(fleet_registry::governed_pocketic_cases());
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_support_cases());

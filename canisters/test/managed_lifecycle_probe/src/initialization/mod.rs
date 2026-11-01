@@ -23,6 +23,9 @@ pub fn memory() -> canic::memory::MemoryBootstrap {
         .requests
         .push(ic_memory::MemoryRequest::new("managed-probe", super::checkpoint::KEY).unwrap());
     input
+        .requests
+        .push(ic_memory::MemoryRequest::new("managed-probe", super::jobs::KEY).unwrap());
+    input
 }
 
 thread_local! {
@@ -30,6 +33,7 @@ thread_local! {
 }
 
 pub fn install() {
+    super::jobs::install();
     super::checkpoint::open();
     let (_, args): (CanisterInitPayload, Option<Vec<u8>>) =
         canic::endpoint::read_initialization(LIMITS).expect("bounded init envelope");
@@ -39,6 +43,7 @@ pub fn install() {
 }
 
 pub fn restore() {
+    super::jobs::restore();
     super::checkpoint::open();
     let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0);

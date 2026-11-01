@@ -8,8 +8,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.114.1] - Unreleased
 
+### 🧪 Testing
+
+- Qualify an application-owned durable Jobs queue under Canic's existing memory,
+  lifecycle, admission and timer owners, including IC intent rollback and
+  lost-reply recovery. [Detailed notes](docs/changelog/0.114.md).
+
 ### 🩹 Fixed
 
+- Make embedded allocation-peer builds independent of installed Rust sources,
+  preserve native recovery fixture path identity, retry failed tool downloads
+  and keep active PocketIC workers alive until their command completes
+  ([#551](https://github.com/dragginzgame/canic/issues/551),
+  [#450](https://github.com/dragginzgame/canic/issues/450)).
 - Allow native consumers to link multiple canister libraries with overlapping
   framework methods. Wasm export names and runtime behaviour are unchanged.
   See [detailed notes](docs/changelog/0.114.md).

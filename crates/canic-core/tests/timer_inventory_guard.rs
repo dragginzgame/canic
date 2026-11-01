@@ -744,6 +744,7 @@ fn recovery_takeovers_recheck_each_owners_authoritative_domain_demand() {
 
 fn native_registration_owners() -> BTreeSet<String> {
     [
+        "canisters/test/managed_lifecycle_probe/src/jobs/workflow.rs",
         "canisters/test/runtime_probe/src/lib.rs",
         "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
         "crates/canic-core/src/workflow/fixture_provisioning/timer/mod.rs",
@@ -766,6 +767,7 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
     [
         "Cargo.toml",
         "apps/test/test/Cargo.toml",
+        "canisters/test/managed_lifecycle_probe/Cargo.toml",
         "canisters/test/runtime_probe/Cargo.toml",
         "crates/canic-control-plane/Cargo.toml",
         "crates/canic-core/Cargo.toml",

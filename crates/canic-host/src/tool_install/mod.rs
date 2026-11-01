@@ -123,6 +123,13 @@ fn download_archive(url: &str, archive: &Path) -> Result<(), InstallError> {
             "--proto-redir",
             "=https",
             "--tlsv1.2",
+            "--retry",
+            "3",
+            "--retry-all-errors",
+            "--retry-max-time",
+            "120",
+            "--connect-timeout",
+            "30",
             "-fsSL",
             "-o",
         ])

@@ -342,15 +342,16 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
 /// Panics if the probe cannot be built or PocketIC cannot start.
 #[must_use]
 pub fn install_managed_lifecycle_fixture() -> ManagedLifecycleFixture {
-    let workspace_root = workspace_root();
-
-    let wasms = build_managed_lifecycle_canister_once(&workspace_root);
-
     ManagedLifecycleFixture {
         root: fake_principal(1),
-        wasm: wasms.wasm("managed_lifecycle_probe"),
+        wasm: managed_lifecycle_wasm(),
         pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
     }
+}
+
+/// Reuse the managed application's authoritative build recipe in selected cases.
+pub(super) fn managed_lifecycle_wasm() -> Vec<u8> {
+    build_managed_lifecycle_canister_once(&workspace_root()).wasm("managed_lifecycle_probe")
 }
 
 /// Encode the intentionally invalid init payload used by lifecycle boundary checks.
