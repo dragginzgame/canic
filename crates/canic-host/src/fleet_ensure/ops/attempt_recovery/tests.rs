@@ -112,11 +112,27 @@ fn changed_owner_and_wrong_digest_refuse_before_any_allowance_changes() {
 #[test]
 fn interrupted_local_grant_publication_resumes_exactly_once() {
     let directory = crate::test_support::temp_dir("attempt-recovery-partial");
-    let paths = EnsurePaths::under(&directory, "local", "survey");
+    assert_interrupted_publication(&directory);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn interrupted_publication_through_aliased_workspace_resumes_exactly_once() {
+    let parent = crate::test_support::temp_dir("attempt-recovery-alias");
+    std::fs::create_dir_all(parent.join("physical/temp")).unwrap();
+    std::os::unix::fs::symlink("physical", parent.join("alias")).unwrap();
+    assert_interrupted_publication(&parent.join("alias/temp/workspace"));
+    std::fs::remove_dir_all(parent).unwrap();
+}
+
+fn assert_interrupted_publication(directory: &std::path::Path) {
+    std::fs::create_dir_all(directory).unwrap();
+    let paths = EnsurePaths::under(&directory.canonicalize().unwrap(), "local", "survey");
     exhausted_survey(&paths, [1; 32]);
     exhausted_survey(&paths, [2; 32]);
     let review =
-        crate::fleet_ensure::workflow::attempt_recovery::review(&directory, "local", "survey")
+        crate::fleet_ensure::workflow::attempt_recovery::review(directory, "local", "survey")
             .unwrap();
     let (path, bytes) = owner::prepare(&paths, &review.owners[0]).unwrap().unwrap();
     ic_host_fs::durable::write_bytes(
@@ -129,7 +145,7 @@ fn interrupted_local_grant_publication_resumes_exactly_once() {
     )
     .unwrap();
     crate::fleet_ensure::workflow::attempt_recovery::apply(
-        &directory,
+        directory,
         "local",
         "survey",
         review.review_sha256,
@@ -139,7 +155,6 @@ fn interrupted_local_grant_publication_resumes_exactly_once() {
     for reviewed in &review.owners {
         assert!(owner::prepare(&paths, reviewed).unwrap().is_none());
     }
-    std::fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]

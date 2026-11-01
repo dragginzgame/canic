@@ -280,3 +280,78 @@ fn changed_sources_need_qualification_but_wrong_artifacts_never_reuse_evidence()
         io::ErrorKind::InvalidData
     );
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore = "explicit Rust-source-presence Wasm reproduction; requires rust-src and Wasm std"]
+fn rust_source_presence_preserves_inlined_standard_library_locations() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let fixture = source::FixtureSource {
+        root: workspace.join(format!(
+            "target/embedded-root/rust-source-{}-{nonce}",
+            std::process::id()
+        )),
+    };
+    let sysroot = String::from_utf8(
+        source::output(Command::new("rustc").args(["--print", "sysroot"])).unwrap(),
+    )
+    .unwrap();
+    let sysroot = Path::new(sysroot.trim());
+    assert!(
+        sysroot.join("lib/rustlib/src/rust/library").is_dir(),
+        "install rust-src before this explicit qualification"
+    );
+    let without_source = fixture.root.join("without-source");
+    fs::create_dir_all(without_source.join("lib/rustlib")).unwrap();
+    std::os::unix::fs::symlink(
+        sysroot.join("lib/rustlib").join(TARGET),
+        without_source.join("lib/rustlib").join(TARGET),
+    )
+    .unwrap();
+    let probe = fixture.root.join("probe.rs");
+    // BTreeMap instantiation carries standard-library panic locations from
+    // compiler metadata; a user-code bounds check alone misses this regression.
+    fs::write(
+        &probe,
+        r#"#[unsafe(no_mangle)]
+pub extern "C" fn collection_probe(count: usize) -> u8 {
+    let mut values = std::collections::BTreeMap::new();
+    for key in 0..count { values.insert(key, key as u8); }
+    values.remove(&count).unwrap_or(0)
+}
+"#,
+    )
+    .unwrap();
+    let flags = source::rustflags(&fixture.root).unwrap();
+    let mut artifacts = Vec::new();
+    for (name, selected) in [("with", sysroot), ("without", without_source.as_path())] {
+        let artifact = fixture.root.join(format!("{name}.wasm"));
+        source::output(
+            Command::new("rustc")
+                .arg(&probe)
+                .args([
+                    "--crate-name",
+                    "collection_probe",
+                    "--crate-type",
+                    "cdylib",
+                    "--target",
+                    TARGET,
+                    "-O",
+                    "-C",
+                    "strip=symbols",
+                ])
+                .args(flags.split('\u{1f}'))
+                .arg("--sysroot")
+                .arg(selected)
+                .arg("-o")
+                .arg(&artifact),
+        )
+        .unwrap();
+        artifacts.push(fs::read(artifact).unwrap());
+    }
+    assert_eq!(sha256_hex(&artifacts[0]), sha256_hex(&artifacts[1]));
+}

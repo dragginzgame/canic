@@ -29,6 +29,16 @@ cat > "$fixture/bin/pocket-ic" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == --version ]]; then printf 'pocket-ic-server 16.1.0\n'; exit 0; fi
+# The command owns active lifetime; only the server's idle timeout is finite.
+arguments=("$@")
+idle_ttl=''
+for ((index=0; index<${#arguments[@]}; index++)); do
+    case "${arguments[index]}" in
+        --hard-ttl|--hard-ttl=*) echo 'active server lifetime must remain command-owned' >&2; exit 29 ;;
+        --ttl) idle_ttl="${arguments[index+1]}" ;;
+    esac
+done
+[[ "$idle_ttl" == 7200 ]]
 printf '%s\n' "$$" > "$CANIC_TEST_SCRATCH/server.pid"
 while [[ "$#" -gt 0 ]]; do
     if [[ "$1" == --port-file ]]; then
