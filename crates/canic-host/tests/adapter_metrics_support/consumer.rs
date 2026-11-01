@@ -9,22 +9,25 @@ canic_icydb::mount! {
 
 // Disabled endpoints must leave these exact export identities available.
 #[cfg(any(not(canic_capability_observability_metrics), not(METRICS_MOUNTED)))]
-#[unsafe(export_name = "canister_query.icydb_metrics")]
+#[unsafe(export_name = concat!(env!("CARGO_CRATE_NAME"), "__canister_query.icydb_metrics"))]
 fn disabled_read_identity() {}
 #[cfg(any(not(canic_capability_observability_metrics), not(METRICS_MOUNTED)))]
-#[unsafe(export_name = "canister_update.icydb_metrics_reset")]
+#[unsafe(export_name = concat!(env!("CARGO_CRATE_NAME"), "__canister_update.icydb_metrics_reset"))]
 fn disabled_reset_identity() {}
 
 unsafe extern "C" {
-    #[link_name = "canister_query.icydb_metrics"]
+    #[link_name = concat!(env!("CARGO_CRATE_NAME"), "__canister_query.icydb_metrics")]
     fn selected_read();
-    #[link_name = "canister_update.icydb_metrics_reset"]
+    #[link_name = concat!(env!("CARGO_CRATE_NAME"), "__canister_update.icydb_metrics_reset")]
     fn selected_reset();
 }
 
 #[test]
 fn selected_metrics_exports_link_without_executing_platform_calls() {
-    assert_eq!(cfg!(canic_capability_observability_metrics), EXPECTED_CAPABILITY);
+    assert_eq!(
+        cfg!(canic_capability_observability_metrics),
+        EXPECTED_CAPABILITY
+    );
     // Enabled builds link the real exports; disabled builds collide if either
     // real export leaks past the role policy. Never call either IC entrypoint.
     std::hint::black_box(selected_read as unsafe extern "C" fn());
