@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   lifecycle, admission and timer owners, including IC intent rollback and
   lost-reply recovery. [Detailed notes](docs/changelog/0.114.md).
 
+### 🩹 Fixed
+
+- Allow native consumers to link multiple canister libraries with overlapping
+  framework methods. Wasm export names and runtime behaviour are unchanged.
+  See [detailed notes](docs/changelog/0.114.md).
+
 ## [0.114.0] - 2026-10-31
 
 ### ⚠️ Breaking

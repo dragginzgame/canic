@@ -1,3 +1,20 @@
+# PR #722 CI repair — 2026-11-01
+
+This branch incorporates main through `2c2272b` (native export scoping and
+its metrics fixture repair), retaining both sets of 0.114.1 notes. The private
+managed lifecycle probe's manifest and Jobs wakeup workflow are explicit members
+of the closed timer rosters. The scanners and rejection rules remain intact.
+Focused timer inventory qualification passes all 15 cases; warning-denied Clippy
+for that integration target passes. Original installed Jobs qualification remains
+recorded below and is not claimed as a fresh run on this merged source.
+
+Evidence: `/tmp/canic-timer-ci-repair.Ioj4mAWX/pr722-timer-inventory.log` and
+`pr722-inventory-clippy.log`. Main's embedded allocation-peer byte mismatch
+(#551) and macOS interrupted-publication fixture failure (#450) are separate
+repairs in progress. No Canic merge, release or package publication is selected.
+
+---
+
 # Current handoff — 2026-10-31
 
 ## Jobs application qualification — 2026-11-01
