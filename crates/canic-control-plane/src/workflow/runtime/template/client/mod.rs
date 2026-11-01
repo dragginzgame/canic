@@ -25,7 +25,7 @@ use canic_core::{
         ops::{cost_guard::CostGuardPermit, ic::call::execute as execute_call},
     },
 };
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 
 ///
 /// WasmStoreInternalClient

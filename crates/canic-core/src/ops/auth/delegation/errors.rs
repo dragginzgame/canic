@@ -90,10 +90,14 @@ mod tests {
         use ic_auth::delegation::DelegationProofError;
         for cause in [
             DelegationProofError::StaleAuthority {
-                field: "proof_epoch",
+                field: ic_auth::delegation::DelegationField::ProofEpoch,
             },
-            DelegationProofError::RootSignatureBindingMismatch { field: "key_id" },
-            DelegationProofError::RootKeyPolicyBindingMismatch { field: "key_id" },
+            DelegationProofError::RootSignatureBindingMismatch {
+                field: ic_auth::delegation::DelegationField::KeyId,
+            },
+            DelegationProofError::RootKeyPolicyBindingMismatch {
+                field: ic_auth::delegation::DelegationField::KeyId,
+            },
         ] {
             let mapped = map_install_active_delegation_proof_error(
                 InstallActiveDelegationProofError::RootProofInvalid(cause),

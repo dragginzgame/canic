@@ -4,6 +4,7 @@ set -euo pipefail
 
 # This fixture owns its Make controls; production admission is tested below.
 unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
+unset RELEASE_VERSION_MODE
 export RELEASE_DELIVERY=direct
 
 ROOT="${BASH_SOURCE[0]}"
@@ -56,6 +57,7 @@ target="$1"
 shift
 for argument in "$@"; do export "$argument"; done
 if [[ "$target" == release-version ]]; then cat version; exit; fi
+if [[ "$target" == release-base-version ]]; then cat base-version; exit; fi
 printf '%s\n' "$target" >> events
 printf '%s %s %s\n' "$target" "$RELEASE_VERSION" "${RELEASE_COMMIT:-}" >> selections
 if [[ "$target" == release-verify ]]; then
@@ -68,7 +70,9 @@ if [[ "${FIXTURE_DRIFT_TARGET:-}" == "$target" ]]; then
     printf '%s\n' "$FIXTURE_DRIFT_URL" > destination
 fi
 case "$target" in
-    release-preflight) [[ "$(cat version)" == "$RELEASE_PREVIOUS" ]] || exit 1 ;;
+    release-preflight)
+        [[ "$(cat version)" == "$RELEASE_PREVIOUS" ||
+           ( "${RELEASE_VERSION_MODE:-}" == pending && "$(cat version)" == "$RELEASE_VERSION" ) ]] || exit 1 ;;
     release-verify) ;;
     release-prepare-version)
         [[ "$(tail -n 1 ".release-state/$RELEASE_VERSION.plan")" == prepare ]] || exit 1
@@ -357,6 +361,30 @@ for kind in patch minor major; do
     [[ "$(tail -n 1 ".release-state/$candidate.plan")" == complete ]] || exit 1
     [[ "$(cat 'release file.txt')" == 'retained build artifact' ]] || exit 1
     [[ ! -e .release-state/lock ]] || exit 1
+done
+
+# A pending VERSION is finalized as-is, without skipping preparation or bumping
+# again. Wrong release kinds reject before validation or delivery.
+for pending_case in success retry wrong-kind; do
+    new_fixture "pending-version-$pending_case"
+    printf '0.1.0\n' > base-version
+    printf '0.1.1\n' > version
+    export RELEASE_VERSION_MODE=pending
+    if [[ "$pending_case" == wrong-kind ]]; then
+        expect_failure minor origin main
+        [[ "$(count_event release-verify)" == 0 && "$(count_event commit)" == 0 ]]
+    else
+        if [[ "$pending_case" == retry ]]; then
+            FIXTURE_FAIL_TARGET=release-prepared-check expect_failure patch origin main
+            bash "$ROOT/scripts/ci/run-release.sh" resume 0.1.1 origin main > recovered-output
+        else
+            bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output
+        fi
+        [[ "$(cat version)" == 0.1.1 && "$(cat tag)" == 0.1.1 ]]
+        [[ "$(count_event release-verify)" == 1 && "$(count_event commit)" == 1 ]]
+        [[ "$(count_event release-prepare-version)" -ge 1 ]]
+    fi
+    unset RELEASE_VERSION_MODE
 done
 
 # A typed busy admission after metadata preparation preserves saved validation

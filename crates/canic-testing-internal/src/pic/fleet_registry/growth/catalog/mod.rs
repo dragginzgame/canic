@@ -9,7 +9,7 @@ use canic_host::{
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_query::{
-    nns::NnsSourceRequest,
+    report::CollectionSourceRequest,
     subnet_catalog::{
         CatalogAssurance, CatalogSourceSelection, ClassificationSource, GeographicScope,
         MAINNET_NETWORK, RawSubnetCatalog, RoutingRange, SubnetCatalogCacheRequest,
@@ -73,7 +73,10 @@ struct SyntheticCatalog {
 }
 
 impl SubnetCatalogSource for SyntheticCatalog {
-    fn fetch_catalog<'a>(&'a self, request: &'a NnsSourceRequest) -> SubnetCatalogSourceFuture<'a> {
+    fn fetch_catalog<'a>(
+        &'a self,
+        request: &'a CollectionSourceRequest,
+    ) -> SubnetCatalogSourceFuture<'a> {
         Box::pin(std::future::ready(self.snapshot(request)))
     }
 }
@@ -81,7 +84,7 @@ impl SubnetCatalogSource for SyntheticCatalog {
 impl SyntheticCatalog {
     fn snapshot(
         &self,
-        request: &NnsSourceRequest,
+        request: &CollectionSourceRequest,
     ) -> Result<RawSubnetCatalog, SubnetCatalogHostError> {
         let start = self
             .ranges

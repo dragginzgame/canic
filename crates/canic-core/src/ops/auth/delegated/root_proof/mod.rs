@@ -12,6 +12,8 @@ use crate::{
     dto::auth::{DelegationCert, RootProof},
     ops::auth::AuthChainKeyRootVerifierConfig,
 };
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+use ic_auth::delegation::{DelegationField, DelegationProofError, DelegationTarget};
 use thiserror::Error;
 
 /// Canic context and retained proof material for one Root verification.
@@ -120,18 +122,17 @@ pub(in crate::ops::auth) const fn verify_root_delegation_proof(
 }
 
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
-pub(in crate::ops::auth) fn map_verification_error(
+pub(in crate::ops::auth) const fn map_verification_error(
     cause: ic_auth::delegation::DelegationProofError,
 ) -> crate::InternalError {
-    use ic_auth::delegation::DelegationProofError;
     match cause {
         DelegationProofError::Expired {
-            target: "root_key_policy",
+            target: DelegationTarget::RootKeyPolicy,
         }
         | DelegationProofError::StaleAuthority { .. }
         | DelegationProofError::RootKeyPolicyBindingMismatch { .. }
         | DelegationProofError::BindingMismatch {
-            field: "root_public_key" | "key_version",
+            field: DelegationField::RootPublicKey | DelegationField::KeyVersion,
         } => crate::InternalError::auth_material_stale(),
         DelegationProofError::RootSignatureBindingMismatch { .. } => {
             crate::InternalError::invalid_input()

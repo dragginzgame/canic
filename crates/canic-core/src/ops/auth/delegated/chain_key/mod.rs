@@ -107,7 +107,7 @@ mod tests {
         },
     };
     use canic_contracts::ids::{BuildNetwork, CanisterRole};
-    use ic_auth::delegation::DelegationProofError;
+    use ic_auth::delegation::{DelegationField, DelegationProofError, DelegationTarget};
     use ic_platform::ecdsa::{PrehashSigner, SigningKey};
 
     fn p(id: u8) -> Principal {
@@ -278,7 +278,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::BindingMismatch {
-                    field: "issuer_canister_id"
+                    field: DelegationField::IssuerCanisterId
                 }
             ))
         );
@@ -300,7 +300,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::BindingMismatch {
-                    field: "leaf_audience"
+                    field: DelegationField::LeafAudience
                 }
             ))
         );
@@ -323,7 +323,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::BindingMismatch {
-                    field: "leaf_grants"
+                    field: DelegationField::LeafGrants
                 }
             ))
         );
@@ -342,7 +342,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::BindingMismatch {
-                    field: "root_canister_id"
+                    field: DelegationField::RootCanisterId
                 }
             ))
         );
@@ -361,7 +361,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::BindingMismatch {
-                    field: "leaf_batch_window"
+                    field: DelegationField::LeafBatchWindow
                 }
             ))
         );
@@ -380,7 +380,9 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                DelegationProofError::RootKeyPolicyBindingMismatch { field: "key_id" }
+                DelegationProofError::RootKeyPolicyBindingMismatch {
+                    field: DelegationField::KeyId
+                }
             ))
         );
     }
@@ -398,7 +400,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::RootSignatureBindingMismatch {
-                    field: "derivation_path_hash",
+                    field: DelegationField::DerivationPathHash,
                 }
             ))
         );
@@ -417,7 +419,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::BindingMismatch {
-                    field: "root_public_key"
+                    field: DelegationField::RootPublicKey
                 }
             ))
         );
@@ -435,7 +437,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::StaleAuthority {
-                    field: "proof_epoch"
+                    field: DelegationField::ProofEpoch
                 }
             ))
         );
@@ -453,7 +455,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::StaleAuthority {
-                    field: "registry_epoch"
+                    field: DelegationField::RegistryEpoch
                 }
             ))
         );
@@ -471,7 +473,7 @@ mod tests {
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
                 DelegationProofError::TtlExceeded {
-                    target: "batch",
+                    target: DelegationTarget::Batch,
                     ttl_ns: 400,
                     max_ttl_ns: 399,
                 }
@@ -607,9 +609,9 @@ mod tests {
                 }
             });
             let field = if derivation {
-                "derivation_path_hash"
+                DelegationField::DerivationPathHash
             } else {
-                "key_id"
+                DelegationField::KeyId
             };
             let expected_cause = if signature_only || conflicting_metadata {
                 DelegationProofError::RootSignatureBindingMismatch { field }

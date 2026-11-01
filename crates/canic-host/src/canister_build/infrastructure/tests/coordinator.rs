@@ -30,6 +30,7 @@ fn coordinator_declaration_pass_exports_candid_only_from_the_selected_leaf() {
         .collect::<Vec<_>>();
     assert_eq!(local.first().map(String::as_str), Some("rustc"));
     assert!(local.contains(&"--locked".to_string()));
+    assert!(local.contains(&"--features=canic/candid-export".to_string()));
     assert_eq!(local.iter().filter(|arg| *arg == "--lib").count(), 1);
     assert!(
         local
@@ -56,6 +57,7 @@ fn coordinator_declaration_pass_exports_candid_only_from_the_selected_leaf() {
         .collect::<Vec<_>>();
     assert_eq!(ic.first().map(String::as_str), Some("build"));
     assert!(ic.contains(&"--locked".to_string()));
+    assert!(!ic.iter().any(|arg| arg.starts_with("--features")));
     assert_eq!(ic.iter().filter(|arg| *arg == "--lib").count(), 1);
     assert_eq!(
         cargo_command_for_role(InfrastructureRole::Coordinator, &context, manifest, false)

@@ -6,8 +6,10 @@
 
 use super::MgmtInfra;
 use crate::infra::ic::{IcInfraError, external_candid::decode_args};
-use ic_call::{Call, WaitPolicy};
-use ic_platform::candid::contract::encode_one;
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    candid::contract::encode_one,
+};
 use ic_platform::{
     management_canister_types::{
         CanisterIdRecord, CanisterInfoArgs, CanisterInfoResult, CanisterStatusResult,
@@ -36,7 +38,7 @@ impl MgmtInfra {
     /// Observe the latest history entry through a replicated management call.
     pub async fn canister_history(
         canister_pid: Principal,
-    ) -> Result<ic_call::Response, IcInfraError> {
+    ) -> Result<ic_platform::call::Response, IcInfraError> {
         Call::new(
             Principal::management_canister().into(),
             "canister_info",

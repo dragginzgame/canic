@@ -17,7 +17,7 @@ use canic_contracts::{
     ids::CanisterRole,
     protocol::cascade as protocol,
 };
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;

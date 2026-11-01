@@ -10,8 +10,8 @@ use crate::infra::ic::{
     known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
 };
 use canic_contracts::ids::BuildNetwork;
-use ic_call::{Call, WaitPolicy};
 use ic_platform::{
+    call::{Call, WaitPolicy},
     candid::contract::{Nat, encode_args, encode_one},
     principal::ExternalPrincipal as Principal,
 };

@@ -62,9 +62,6 @@ export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
 CANIC_BLOB_WORKSPACES := integrations/blob-service/consumer \
                          integrations/blob-service/embedded-consumer
-CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target/cargo
-CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
-export CARGO_TARGET_DIR
 # Linux uses the checksum-pinned archive; other hosts use the existing Rust owner.
 ifeq ($(shell uname -s):$(shell uname -m),Linux:x86_64)
 CANIC_MANAGED_SCCACHE_BIN := $(CURDIR)/.tools/canic-sccache/bin/sccache
@@ -381,6 +378,7 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-pinned-ci-tools.sh
 	bash scripts/ci/test-build-environment.sh
+	bash scripts/ci/test-cargo-clean.sh
 	bash scripts/ci/test-shared-release-adoption.sh
 	bash scripts/ci/test-canic-formatters.sh
 	bash scripts/ci/test-dependency-adoption.sh

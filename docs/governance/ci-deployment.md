@@ -180,9 +180,9 @@ tests fingerprint that sysroot and compile small declaration fixtures; artifact
 preflight tests resolve the actual Fast-profile toolchain. These prerequisites
 do not start PocketIC or require the full deployment-tool installation.
 
-Direct Cargo and Make-based work within this checkout share the repository
-`target/`. Repository Cargo configuration also directs standalone audit fixtures
-there by default. Every Make invocation selects the centrally pinned sccache
+Direct Cargo and Make-based work within this checkout use Cargo's workspace
+default `target/`. Independent fixture workspaces retain their own default
+output. Every Make invocation selects the centrally pinned sccache
 through the repository wrapper and defaults cached builds to `CARGO_INCREMENTAL=0`.
 Linux x86_64 uses `.tools/canic-sccache/bin/sccache`, prepared by the existing
 checksum installer. Other supported hosts use the existing shared Rust installer
@@ -207,15 +207,21 @@ authoritative. Explicit cache binaries must report the governed version; setup
 does not overwrite them. A custom wrapper must be executable and owns its own
 runtime behavior; the Canic wrapper admits runtime overrides through the shared
 launcher. A prepared subprocess never serves as persistent environment setup. Repository Cargo and Make default compiler output to
-`target/cargo/`; Host defaults to `target/canic-wasm/` when no output override is
+`target/`; Host defaults to `target/canic-wasm/` when no output override is
 provided. `target/canic-packages/` holds configuration-keyed generated source,
 not compiler output. Root package lookup resolves configuration aliases before
 deriving its workspace-relative identity; selecting an alias does not create a
 second package or change configuration isolation. Overrides that enclose or enter
 that source tree are refused before generation, including physical overlap through symlinks. Select a sibling
 output directory or a separate external directory instead. `make clean-wasm`
-owns generated-source cleanup; `cargo clean` removes only its selected compiler
-output. These storage-maintenance commands must not race active builds.
+retains its selective Wasm/generated-source scope. Plain `cargo clean` removes
+the workspace's whole `target/`; explicit Cargo environment/CLI selections retain
+their usual meanings. General `make clean` explicitly selects the whole workspace
+`target/`, even with an inherited child-output setting. Both remove nested caches,
+generated source and evidence beneath that directory. Keep evidence that must
+survive cleanup outside `target/`. No build or release invokes cleanup implicitly,
+and cleanup must not race active builds. Separate `.tmp` working copies and tool
+stores retain their own cleanup scope.
 Canic artifact builds keep incremental compilation
 disabled for deterministic Wasm output. Installed `canic build` leaves compiler
 wrapper selection to Cargo and the operator's explicit configuration.

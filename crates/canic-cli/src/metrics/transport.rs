@@ -35,7 +35,6 @@ const METRICS_UNAVAILABLE_HINT: &str =
 const METRICS_EMPTY_HINT: &str =
     "no metrics rows; check whether this tier is enabled by the deployed role profile";
 const METRICS_NONZERO_EMPTY_HINT: &str = "no nonzero rows among fetched metrics; rerun without --nonzero or check the deployed role profile";
-const METRICS_WORKER_PANIC: &str = "metrics query worker panicked";
 
 #[derive(Debug, ThisError)]
 enum MetricsQueryError {
@@ -99,7 +98,7 @@ fn collect_metrics_entry_reports(
     collect_ordered_reports(
         entries,
         |entry| query(entry),
-        |entry| metrics_message_error_report(entry, METRICS_WORKER_PANIC),
+        |entry, failure| metrics_message_error_report(entry, &format!("metrics {failure}")),
     )
 }
 
@@ -422,7 +421,10 @@ mod tests {
         assert_eq!(reports.len(), 1);
         assert_eq!(reports[0].canister_id, entry.pid);
         assert_eq!(reports[0].status, MetricsCanisterStatus::Error);
-        assert_eq!(reports[0].error.as_deref(), Some(METRICS_WORKER_PANIC));
+        assert_eq!(
+            reports[0].error.as_deref(),
+            Some("metrics query worker panicked")
+        );
     }
 
     #[test]

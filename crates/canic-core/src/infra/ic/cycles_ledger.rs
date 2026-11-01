@@ -9,8 +9,8 @@ use crate::{
     infra::ic::{IcInfraError, external_candid::decode_one, known::CYCLES_LEDGER_CANISTER},
 };
 use canic_contracts::cycles::Cycles;
-use ic_call::{Call, WaitPolicy};
 use ic_platform::{
+    call::{Call, WaitPolicy},
     candid::contract::{Nat, encode_one},
     cycles_ledger_types::{self as ledger, CreateCanisterError, CreateCanisterSuccess},
     icrc_ledger_types::TransferArg,

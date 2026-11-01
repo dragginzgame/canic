@@ -12,7 +12,7 @@ use crate::subnet_catalog::{
 };
 use crate::test_support::temp_dir;
 use ic_query::{
-    nns::NnsSourceRequest,
+    report::CollectionSourceRequest,
     subnet_catalog::{
         SubnetCatalogSource, SubnetCatalogSourceFuture, load_subnet_catalog_detailed_with_source,
     },
@@ -72,7 +72,10 @@ impl Drop for PendingGuard<'_> {
 }
 
 impl SubnetCatalogSource for PendingSource {
-    fn fetch_catalog<'a>(&'a self, request: &'a NnsSourceRequest) -> SubnetCatalogSourceFuture<'a> {
+    fn fetch_catalog<'a>(
+        &'a self,
+        request: &'a CollectionSourceRequest,
+    ) -> SubnetCatalogSourceFuture<'a> {
         Box::pin(async move {
             if request.endpoint == MAINNET_CATALOG_ENDPOINTS[1] {
                 let _guard = PendingGuard(&self.dropped);
@@ -189,7 +192,10 @@ impl Drop for CountDrop<'_> {
 }
 
 impl SubnetCatalogSource for ConcurrentPendingSource {
-    fn fetch_catalog<'a>(&'a self, _: &'a NnsSourceRequest) -> SubnetCatalogSourceFuture<'a> {
+    fn fetch_catalog<'a>(
+        &'a self,
+        _: &'a CollectionSourceRequest,
+    ) -> SubnetCatalogSourceFuture<'a> {
         Box::pin(async move {
             let _guard = CountDrop(&self.dropped);
             self.started.fetch_add(1, Ordering::SeqCst);

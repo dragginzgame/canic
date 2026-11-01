@@ -17,7 +17,7 @@ permission to allocate new attempts or spending in the upstream engine.
 [IC Backup](https://github.com/dragginzgame/ic-backup) owns generic plans, artifacts,
 immutable manifests, original stage/attempt journals, bounded workflow advancement,
 progress inspection and guarded source-reference release. Canic selects published
-Backup and Backup Agent 0.50.2. No local dependency override is required.
+Backup and Backup Agent 0.51.1. No local dependency override is required.
 
 Canic retains Fleet identities, exact release/controller authority, application
 checkpoint hooks and the thin `canic_host::backup::checkpoint` integration.

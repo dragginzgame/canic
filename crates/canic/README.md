@@ -157,12 +157,12 @@ available independently of this build feature.
 
 ## Inter-Canister Calls
 
-Depend directly on `ic-call` for prepared one-shot requests and on `ic-wire` for
-owned request/reply framing. Construct `ic_call::Call::new` with the destination,
-method and explicit `WaitPolicy`. Supply encoded bytes with `with_raw_args` or
+Depend directly on `ic-platform` for prepared one-shot requests and on `ic-wire`
+for owned request/reply framing. Construct `ic_platform::call::Call::new` with
+the destination, method and explicit `WaitPolicy`. Supply encoded bytes with `with_raw_args` or
 `take_raw_args`, select any attachment with `with_cycles`, then call `execute`.
 Decode the raw reply with the same method ID and declared response limits.
-IC Call delegates execution and cost observation to Platform's existing runtime.
+Platform owns prepared calls, execution and cost observation in one runtime.
 External management, NNS and ledger protocols retain their required Candid
 encoding through Platform's explicit codecs.
 

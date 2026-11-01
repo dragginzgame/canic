@@ -15,6 +15,7 @@ use crate::{
 };
 use canic_contracts::ids::{BuildNetwork, CanisterRole, FleetKey};
 use ic_auth::canonical::CanonicalAuthError as ProtocolError;
+use ic_auth_protocol_types::{ScopeLabel, ScopeLabelError};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -35,10 +36,8 @@ pub enum CanonicalAuthError {
     EmptyRole,
     #[error("delegated auth role contains invalid characters: {role}")]
     InvalidRole { role: String },
-    #[error("delegated auth scope is empty")]
-    EmptyScope,
-    #[error("delegated auth scope contains invalid characters: {scope}")]
-    InvalidScope { scope: String },
+    #[error(transparent)]
+    Scope(#[from] ScopeLabelError),
     #[error("delegated auth scopes must be strictly sorted and unique")]
     NonCanonicalScopes,
     #[error("delegated auth role grants must be strictly sorted and unique")]
@@ -53,8 +52,7 @@ impl From<ic_auth::canonical::CanonicalAuthError> for CanonicalAuthError {
     fn from(error: ic_auth::canonical::CanonicalAuthError) -> Self {
         match error {
             ProtocolError::LengthOverflow => Self::LengthOverflow,
-            ProtocolError::EmptyScope => Self::EmptyScope,
-            ProtocolError::InvalidScope { scope } => Self::InvalidScope { scope },
+            ProtocolError::Scope(error) => Self::Scope(error),
             ProtocolError::NonCanonicalScopes => Self::NonCanonicalScopes,
             ProtocolError::NonCanonicalRoles => Self::NonCanonicalRoles,
         }
@@ -293,7 +291,7 @@ fn validate_role(role: &CanisterRole) -> Result<(), CanonicalAuthError> {
 }
 
 pub fn validate_scope_label(scope: &str) -> Result<(), CanonicalAuthError> {
-    Ok(ic_auth::canonical::validate_scope_label(scope)?)
+    Ok(ScopeLabel::validate(scope)?)
 }
 
 fn encode_string(out: &mut Vec<u8>, value: &str) {

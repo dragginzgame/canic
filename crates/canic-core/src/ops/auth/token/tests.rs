@@ -9,6 +9,7 @@ use crate::{
         root_proof::RootDelegationProofError,
     },
 };
+use ic_auth::delegation::{DelegationField, DelegationTarget};
 use ic_platform::ecdsa::{
     PrehashSigner, Signature as K256TestSignature, SigningKey as K256SigningKey,
 };
@@ -117,20 +118,24 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
     let cases = [
         (
             RootDelegationProofError::Verification(
-                ic_auth::delegation::DelegationProofError::Expired { target: "batch" },
+                ic_auth::delegation::DelegationProofError::Expired {
+                    target: DelegationTarget::Batch,
+                },
             ),
             crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
         ),
         (
             RootDelegationProofError::Verification(
-                ic_auth::delegation::DelegationProofError::NotYetValid { target: "batch" },
+                ic_auth::delegation::DelegationProofError::NotYetValid {
+                    target: DelegationTarget::Batch,
+                },
             ),
             crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code(),
         ),
         (
             RootDelegationProofError::Verification(
                 ic_auth::delegation::DelegationProofError::Expired {
-                    target: "root_key_policy",
+                    target: DelegationTarget::RootKeyPolicy,
                 },
             ),
             crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
@@ -138,7 +143,7 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
         (
             RootDelegationProofError::Verification(
                 ic_auth::delegation::DelegationProofError::StaleAuthority {
-                    field: "proof_epoch",
+                    field: DelegationField::ProofEpoch,
                 },
             ),
             crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
@@ -152,7 +157,7 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
         (
             RootDelegationProofError::Verification(
                 ic_auth::delegation::DelegationProofError::RootSignatureBindingMismatch {
-                    field: "key_id",
+                    field: DelegationField::KeyId,
                 },
             ),
             crate::diagnostics::codes::REQUEST_INVALID.raw_code(),
@@ -160,7 +165,7 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
         (
             RootDelegationProofError::Verification(
                 ic_auth::delegation::DelegationProofError::RootKeyPolicyBindingMismatch {
-                    field: "key_id",
+                    field: DelegationField::KeyId,
                 },
             ),
             crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),

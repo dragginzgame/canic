@@ -28,6 +28,11 @@ fn root_commands_bind_config_and_separate_declaration_from_runtime() {
                 .unwrap();
         let args = command.get_args().collect::<Vec<_>>();
         assert_eq!(args[0], "build");
+        assert_eq!(
+            args.iter()
+                .any(|arg| *arg == "--features=canic/candid-export"),
+            declaration
+        );
         assert!(args.iter().any(|arg| *arg == "--locked"));
         assert!(args.iter().any(|arg| *arg == "--lib"));
         assert!(

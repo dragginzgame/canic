@@ -24,7 +24,7 @@ logic in the application package.
 - one shared cross-framework inventory through `ic-timers 0.8.1`, with
   application timer registrations owned directly by their consuming crate
 - protected framework calls with measurements; application transport and owned
-  request/reply codecs come directly from IC Call/Platform and IC Wire
+  prepared calls and request/reply codecs come directly from IC Platform and IC Wire
 - optional sets of public methods selected with Cargo features
 
 Use the same `canic` version in normal and build dependencies. Each canister

@@ -51,8 +51,8 @@ independent of App configuration. Cargo graphs are validated before artifact
 finalization. Canonical Coordinator/Store Candid ships in `canic/candid`; Root
 Candid follows its configured capabilities.
 
-`target/` is a disposable aggregate, not a compiler output root. Repository Cargo
-and Make use `target/cargo/`; Host's unset-output default remains
+Repository Cargo and Make use Cargo's default `target/`; independent nested
+workspaces keep their own defaults. Host's unset-output default remains
 `target/canic-wasm/`. Generated source stays in the sibling `canic-packages/`
 tree, preserving inherited Cargo configuration. Selected generated source is
 admitted and fingerprinted normally; application source scans exclude their
@@ -60,10 +60,13 @@ admitted and fingerprinted normally; application source scans exclude their
 not enclose or enter the generated-source tree (including through symlinks).
 Use `target/cargo/`, `target/custom/`, or a separate external output directory;
 an override to workspace `target/` is rejected before generation. `make clean-wasm`
-owns removal of generated packages; no cache is removed during an active build.
+retains selective removal of generated packages. Plain `cargo clean` and general
+`make clean` remove the whole workspace `target/`, including generated packages,
+nested caches and evidence; keep evidence that must survive outside that tree.
+No cache is removed during an active build.
 Generated manifests remain unpublished and the ignored `target/` tree is not
-release source or package content. Existing output in `target/debug/` is historical
-cache, not the new default executable location; no automatic migration is performed.
+release source or package content. The default repository CLI is
+`target/debug/canic`.
 
 Generated locks are derived from the selected workspace's current `Cargo.lock`.
 A change to that lock or the generated manifest atomically refreshes the seed;

@@ -1,3 +1,5 @@
+//! Keep the latest declared release paired with its detailed notes, before and after dating.
+
 use std::{fs, path::Path};
 
 fn workspace_root() -> &'static Path {
@@ -8,32 +10,89 @@ fn workspace_root() -> &'static Path {
         .expect("workspace root should exist")
 }
 
-#[test]
-fn pending_changelog_version_has_matching_detailed_notes() {
-    let root = workspace_root();
-    let root_changelog = root.join("CHANGELOG.md");
-    let root_source =
-        fs::read_to_string(&root_changelog).expect("root changelog should be readable");
+#[derive(Debug, Eq, PartialEq)]
+enum ReleaseSelectionError {
+    MissingRelease,
+    MultiplePending,
+    PendingNotLatest,
+}
 
-    let candidates = root_source
+fn latest_release(source: &str) -> Result<&str, ReleaseSelectionError> {
+    let candidates = source
         .lines()
-        .map(|line| line.strip_suffix(" - Unreleased").unwrap_or(line))
-        .filter_map(|line| line.strip_prefix("## [")?.strip_suffix(']'))
-        .filter(|version| {
+        .filter_map(|line| {
+            let (version, suffix) = line.strip_prefix("## [")?.split_once(']')?;
             let components = version.split('.').collect::<Vec<_>>();
-            components.len() == 3
+            let numbered = components.len() == 3
                 && components
                     .iter()
-                    .all(|component| component.parse::<u64>().is_ok())
+                    .all(|component| component.parse::<u64>().is_ok());
+            let pending = suffix.is_empty() || suffix == " - Unreleased";
+            (numbered && (pending || suffix.starts_with(" - "))).then_some((version, pending))
         })
         .collect::<Vec<_>>();
-    let [version] = candidates.as_slice() else {
-        panic!("root changelog must select one numbered pending release: {candidates:?}");
+    let Some((version, is_pending)) = candidates.first() else {
+        return Err(ReleaseSelectionError::MissingRelease);
     };
+    let pending_count = candidates.iter().filter(|(_, pending)| *pending).count();
+    if pending_count > 1 {
+        return Err(ReleaseSelectionError::MultiplePending);
+    }
+    if pending_count == 1 && !is_pending {
+        return Err(ReleaseSelectionError::PendingNotLatest);
+    }
+    Ok(version)
+}
+
+fn detailed_notes_match(source: &str, version: &str) -> bool {
+    let heading = format!("## [{version}]");
+    let dated_heading = format!("{heading} - ");
+    source
+        .lines()
+        .any(|line| line == heading || line.starts_with(&dated_heading))
+}
+
+#[test]
+fn latest_changelog_release_has_matching_detailed_notes() {
+    let root = workspace_root();
+    let root_source =
+        fs::read_to_string(root.join("CHANGELOG.md")).expect("root changelog should be readable");
+    let version = latest_release(&root_source).expect("one latest numbered release");
     let minor = version.rsplit_once('.').expect("release minor line").0;
     let detailed = root.join(format!("docs/changelog/{minor}.md"));
     let source = fs::read_to_string(detailed).expect("selected detailed notes must exist");
-    assert!(source.lines().any(|line| {
-        line.strip_suffix(" - Unreleased").unwrap_or(line) == format!("## [{version}]")
-    }));
+    assert!(detailed_notes_match(&source, version));
+}
+
+#[test]
+fn release_selection_accepts_finalization_and_refuses_ambiguous_drafts() {
+    for (source, expected) in [
+        ("## [1.2.3]\n", Ok("1.2.3")),
+        ("## [1.2.3] - Unreleased\n", Ok("1.2.3")),
+        ("## [1.2.3] - 2026-10-31\n", Ok("1.2.3")),
+        ("## [1.2.3]\n## [1.2.2] - 2026-10-30\n", Ok("1.2.3")),
+        (
+            "## [1.2.3]\n## [1.2.2] - Unreleased\n",
+            Err(ReleaseSelectionError::MultiplePending),
+        ),
+        (
+            "## [1.2.3] - 2026-10-31\n## [1.2.2]\n",
+            Err(ReleaseSelectionError::PendingNotLatest),
+        ),
+        ("# Changelog\n", Err(ReleaseSelectionError::MissingRelease)),
+    ] {
+        assert_eq!(latest_release(source), expected);
+    }
+}
+
+#[test]
+fn matching_notes_cover_pending_and_released_headings() {
+    for source in [
+        "## [1.2.3]\n",
+        "## [1.2.3] - Unreleased\n",
+        "## [1.2.3] - 2026-10-31\n",
+    ] {
+        assert!(detailed_notes_match(source, "1.2.3"));
+        assert!(!detailed_notes_match(source, "1.2.2"));
+    }
 }

@@ -585,7 +585,12 @@ impl RootComponentProvisioningOps {
     ) -> Result<RootComponentProvisioningView, InternalError> {
         commit_member_advance(request, |current| {
             let member = Self::next_member_reservation(current)?;
-            validate_reserved_member(current, &member, allocation)?;
+            validate_member_progress(
+                current,
+                &member,
+                allocation,
+                ExpectedMemberProgress::Reserved,
+            )?;
             advance_reservation_cursor(current).map(ProvisioningCursorAdvance::Reservation)
         })
     }
@@ -610,7 +615,12 @@ impl RootComponentProvisioningOps {
     ) -> Result<RootComponentProvisioningView, InternalError> {
         commit_member_advance(request, |current| {
             let member = Self::next_member_install(current)?;
-            validate_installed_member(current, &member, allocation)?;
+            validate_member_progress(
+                current,
+                &member,
+                allocation,
+                ExpectedMemberProgress::Verified,
+            )?;
             advance_install_cursor(current).map(ProvisioningCursorAdvance::Install)
         })
     }
@@ -3144,30 +3154,34 @@ fn member_view(
     })
 }
 
-fn validate_reserved_member(
-    view: &RootComponentProvisioningView,
-    member: &RootComponentProvisioningMemberView,
-    allocation: &RootComponentAllocationView,
-) -> Result<(), InternalError> {
-    validate_member_authority(view, member, allocation)?;
-    if !matches!(
-        allocation.progress,
-        RootComponentAllocationProgressView::Reserved
-    ) {
-        return Err(InternalError::conflict());
-    }
-    Ok(())
+///
+/// ExpectedMemberProgress
+///
+/// Exact allocation phase required by the provisioning cursor being advanced.
+///
+
+#[derive(Clone, Copy)]
+enum ExpectedMemberProgress {
+    Reserved,
+    Verified,
 }
 
-fn validate_installed_member(
+fn validate_member_progress(
     view: &RootComponentProvisioningView,
     member: &RootComponentProvisioningMemberView,
     allocation: &RootComponentAllocationView,
+    expected: ExpectedMemberProgress,
 ) -> Result<(), InternalError> {
     validate_member_authority(view, member, allocation)?;
     if !matches!(
-        allocation.progress,
-        RootComponentAllocationProgressView::Verified { .. }
+        (expected, &allocation.progress),
+        (
+            ExpectedMemberProgress::Reserved,
+            RootComponentAllocationProgressView::Reserved
+        ) | (
+            ExpectedMemberProgress::Verified,
+            RootComponentAllocationProgressView::Verified { .. }
+        )
     ) {
         return Err(InternalError::conflict());
     }

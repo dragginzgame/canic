@@ -11,9 +11,11 @@ use crate::{
     log,
     log::Topic,
 };
-use ic_call::{Call, WaitPolicy};
-use ic_platform::candid::contract::encode_one;
 use ic_platform::nns_registry_types::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse};
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    candid::contract::encode_one,
+};
 use thiserror::Error as ThisError;
 
 ///

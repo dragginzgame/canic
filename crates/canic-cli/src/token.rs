@@ -29,13 +29,15 @@ Usage: canic token [token-or-ledger-id] <command> [OPTIONS]
 
 Commands:
   balance   Display the selected identity token balance
-  transfer  Transfer tokens to an account, principal, or Canic Fleet target
+  transfer  Transfer tokens between ledger accounts
   help      Print this message or the help of the given subcommand(s)
+
+Transfers credit token ledger accounts. Native canister cycles funding uses
+canic cycles topup. The transfer example credits the selected identity's account.
 
 Examples:
   canic token balance
-  canic token transfer 1.25 aaaaa-aa
-  canic token icp transfer 1.25 demo/app";
+  canic token icp transfer 1.25 \"$(icp identity principal)\"";
 
 ///
 /// TokenCommandError
@@ -306,7 +308,8 @@ fn balance_command() -> ClapCommand {
 fn transfer_command() -> ClapCommand {
     ClapCommand::new("transfer")
         .bin_name("canic token transfer")
-        .about("Transfer tokens to an account, principal, or Canic Fleet target")
+        .about("Transfer tokens between ledger accounts")
+        .after_help("Credits the recipient's token ledger account. Use canic cycles topup to fund a current Fleet Coordinator or Root's native cycles balance.")
         .disable_help_flag(true)
         .arg(
             value_arg("amount")
@@ -318,7 +321,7 @@ fn transfer_command() -> ClapCommand {
             value_arg("receiver")
                 .value_name("receiver-or-fleet-target")
                 .required(true)
-                .help("Raw receiver, or Canic selector like <fleet>/<role-or-canister>"),
+                .help("Ledger account or owner principal, or Canic selector <fleet>/<role-or-canister>"),
         )
         .arg(
             value_arg("to-subaccount")

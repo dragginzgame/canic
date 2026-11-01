@@ -7,10 +7,12 @@
 use super::MgmtInfra;
 use crate::infra::ic::external_candid::decode_args;
 use crate::{cdk::types::Principal, infra::ic::IcInfraError};
-use ic_call::{Call, WaitPolicy};
-use ic_platform::candid::contract::encode_one;
 use ic_platform::management_canister_types::{
     CanisterIdRecord, DeleteCanisterSnapshotArgs, Snapshot,
+};
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    candid::contract::encode_one,
 };
 
 impl MgmtInfra {

@@ -9,7 +9,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-validation-adapter.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf -- "$FIXTURE"; else printf "Validation adapter fixture retained: %s\n" "$FIXTURE" >&2; fi' EXIT
 mkdir -p "$FIXTURE/scripts/ci" "$FIXTURE/make" "$FIXTURE/ci"
-cp "$ROOT/scripts/ci/"{run-canic-validation-targets,run-validation-targets,check-make-execution,verify-file-checksum,ic-tool-pins}.sh "$FIXTURE/scripts/ci/"
+bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$FIXTURE" \
+    scripts/ci/run-validation-targets.sh
+cp "$ROOT/scripts/ci/"{run-canic-validation-targets,ic-tool-pins}.sh "$FIXTURE/scripts/ci/"
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$FIXTURE/"
 cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$FIXTURE/make/"
 cp "$ROOT/ci/"{ic-tools.tsv,tool-versions.env} "$FIXTURE/ci/"

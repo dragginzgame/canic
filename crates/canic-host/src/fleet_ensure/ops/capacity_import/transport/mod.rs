@@ -31,8 +31,8 @@ use ic_platform::{
     management_canister_types::{CanisterSettings, UpdateSettingsArgs},
     principal::ExternalPrincipal as Principal,
 };
+use ic_wire::ByteBuf;
 use serde::Deserialize;
-use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};
 use std::time::Duration;
 

@@ -75,7 +75,7 @@ const FORBIDDEN_EFFECT_FRAGMENTS: &[&str] = &[
     "TimerOps",
     "IcOps",
     "MgmtOps",
-    "ic_call::",
+    "ic_platform::call::",
     "CandidType",
     "Serialize",
     "Deserialize",

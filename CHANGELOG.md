@@ -6,11 +6,53 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.113.1] - Unreleased
+## [0.114.1] - Unreleased
 
-- Enable Candid service registration and printing only in the dedicated Wasm
-  declaration pass; native tools retain service generation. Runtime builds no
-  longer select the printer through Canic. See [detailed notes](docs/changelog/0.113.md).
+- Keep Candid service printing in declaration builds and native tooling, reducing
+  deployed Wasm dependencies. External codecs and generated interfaces remain
+  unchanged; Candid type-error diagnostics use upstream Debug formatting.
+  [Detailed notes](docs/changelog/0.114.md).
+
+## [0.114.0] - 2026-10-31
+
+### ⚠️ Breaking
+
+- Move prepared-call ownership into Platform and remove the standalone Call
+  dependency. Rebuild callers of the framework execution boundary.
+- Adopt Blob 0.61.0's current upload-certificate assessment contract and Auth
+  0.28.0's typed scopes and diagnostics. Regenerate Blob callers from the current
+  schema and rebuild consumers against the new dependency identities.
+
+### 🔧 Changed
+
+- Share Store adoption receipt projection and member authority/progress checks,
+  preserving exact operation scope and typed refusals
+  ([#690](https://github.com/dragginzgame/canic/issues/690),
+  [#691](https://github.com/dragginzgame/canic/issues/691)).
+- Adopt reviewed Shared Tooling revision `619d194`, including release-group
+  catalog checks and standard workspace cleanup. Restore Cargo's default `target/`;
+  explicit `make clean` removes its nested caches and evidence. Keep Canic's
+  coordinated publication family and release authority local.
+
+- Align Backup/Agent 0.53.1, Memory/Storage 0.60.3, Metrics Stable 0.61.1,
+  Metrics 0.24.1, Platform 0.15.3, Timers 0.35.0 and Wire 0.13.2 across the
+  root and both Blob consumers. Use Query 0.79.0, Host Tools/Testkit 0.75.1,
+  Build/Host helpers 0.73.2 and Logging 0.23.3 with the same runtime owners.
+  [Detailed notes](docs/changelog/0.114.md).
+
+- Use Wire's byte-buffer identity in Host handoff and archive boundaries,
+  preserving external encodings ([#714](https://github.com/dragginzgame/canic/issues/714)).
+
+### 🩹 Fixed
+
+- Preserve diagnostic report rows when a bounded worker cannot start, and
+  distinguish ledger transfers from native canister funding in CLI help
+  ([#277](https://github.com/dragginzgame/canic/issues/277),
+  [#367](https://github.com/dragginzgame/canic/issues/367)).
+- Keep release-note and executable-path CI fixtures valid after finalization
+  and on aliased temporary directories ([#450](https://github.com/dragginzgame/canic/issues/450)).
+- Keep logging limits with the upstream recorder while preserving resets when
+  configured limits change ([#712](https://github.com/dragginzgame/canic/issues/712)).
 
 ## [0.113.0] - 2026-10-30
 

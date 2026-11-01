@@ -1,8 +1,9 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `a7f85d45d4212d4c39225f58597580560a333550` (0.26.20),
-with 138 selected files. Explicit entrypoints record the maintained selection;
+committed revision `619d194875369e0f72b45477b66adb430acbf6b7`,
+with 148 selected files. Its committed `VERSION` is 0.27.23; the manifest retains
+that canonical stamp and exact revision. Explicit entrypoints record the maintained selection;
 the exporter derives required companions and verifies ownership before retiring
 unused payloads. Refreshes reuse that selection without repeating file arguments.
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
@@ -31,6 +32,28 @@ The Blob adapter belongs to the main workspace.
 Application packages already satisfy the standard `apps/` layout. Snapshot
 adoption does not move packages or merge independently selected managed graphs;
 [#473](https://github.com/dragginzgame/canic/issues/473) records this boundary.
+The shared core/integration rule requires evidence of the actual introducing
+dependencies before treating an integration stack as a core upgrade constraint.
+Canic retains its current approved workspace boundaries. Its framework runtime
+uses the upstream Memory, Metrics, Platform, Timers and Wire types directly;
+moving a test dependency alone cannot qualify mismatched runtime contracts.
+
+The snapshot includes opt-in independent release-group helpers and delegated
+delivery rules. Canic retains its coordinated publication family, existing
+package versions and local release authority; adoption selects no independent
+release groups or release execution. Complete member catalogs and inline
+group explanations apply to independently grouped workspaces; Canic keeps its
+existing dependency catalog because it remains one coordinated family. The new
+pending VERSION automation applies only where that file owns the repository
+version. Canic retains Cargo package versions, its current pending notes and
+maintainer-directed release preparation; it adds no second version owner.
+
+Cargo uses its built-in workspace `target/` default. General `make clean` selects
+that whole tree even with an inherited child-output setting; direct Cargo
+overrides retain their normal meaning. Explicit cleanup can remove retained
+evidence, so evidence that must survive belongs outside `target/`. Builds and
+releases still preserve artifacts automatically. Cleanup qualification uses
+disposable workspaces, including refusal of an untagged explicit target.
 
 ## Repository setup
 

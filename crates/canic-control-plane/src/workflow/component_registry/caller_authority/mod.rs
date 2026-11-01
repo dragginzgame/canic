@@ -29,8 +29,10 @@ use canic_core::control_plane_support::{
     ops::{caller_authority::CallerAuthorityOps, ic::call::execute as execute_call},
     policy::caller_authority::matches_permission,
 };
-use ic_call::{Call, WaitPolicy};
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::{
+    call::{Call, WaitPolicy},
+    principal::ExternalPrincipal as Principal,
+};
 use std::collections::BTreeMap;
 
 const MAX_READINESS_ATTEMPTS: usize = 60;

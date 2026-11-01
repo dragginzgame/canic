@@ -25,7 +25,7 @@ use canic_core::control_plane_support::{
     model::application_checkpoint::{RootCheckpointPhase, RootCheckpointRecord},
     ops::{application_checkpoint::command, ic::call::execute as execute_call},
 };
-use ic_call::{Call, WaitPolicy};
+use ic_platform::call::{Call, WaitPolicy};
 
 /// Stable checkpoint transactions; no method grants snapshot spending authority.
 pub struct RootCheckpointOps;

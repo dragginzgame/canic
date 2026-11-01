@@ -10,7 +10,7 @@ use crate::subnet_catalog::{
     view::{CatalogAcquisitionProgress, CatalogAcquisitionStage, RegistryCollectionProgress},
 };
 use ic_query::{
-    nns::NnsSourceRequest,
+    report::CollectionSourceRequest,
     subnet_catalog::{
         CatalogLoadOutcome, CatalogReadPolicy, SubnetCatalogDetailedSourceFuture,
         SubnetCatalogHostError, SubnetCatalogLoadFailure, SubnetCatalogLoadRequest,
@@ -203,7 +203,10 @@ impl TrackedSource<'_> {
 }
 
 impl SubnetCatalogSource for TrackedSource<'_> {
-    fn fetch_catalog<'a>(&'a self, request: &'a NnsSourceRequest) -> SubnetCatalogSourceFuture<'a> {
+    fn fetch_catalog<'a>(
+        &'a self,
+        request: &'a CollectionSourceRequest,
+    ) -> SubnetCatalogSourceFuture<'a> {
         Box::pin(async move {
             self.fetch_catalog_detailed(request)
                 .await
@@ -213,7 +216,7 @@ impl SubnetCatalogSource for TrackedSource<'_> {
 
     fn fetch_catalog_detailed<'a>(
         &'a self,
-        request: &'a NnsSourceRequest,
+        request: &'a CollectionSourceRequest,
     ) -> SubnetCatalogDetailedSourceFuture<'a> {
         Box::pin(async move {
             self.state

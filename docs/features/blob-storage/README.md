@@ -83,11 +83,16 @@ and completed local qualification, rather than treating this scope as evidence.
 ## Current dependency selection
 
 The root and both private consumer catalogs select published Blob/contracts
-**0.58.0**, Tooling/Testkit **0.70.3**, Platform/Call **0.8.2**,
-Memory/Storage/Metrics Stable **0.56.0**, Auth **0.23.0**, Metrics **0.17.5**,
-Logging **0.17.2**, Timers **0.32.1** and Wire **0.7.23**. Each consumer graph
+**0.59.1**, Tooling/Testkit **0.70.5**, Platform/Call **0.8.3**,
+Memory/Storage/Metrics Stable **0.56.4**, Auth **0.25.1**, Metrics **0.17.7**,
+Logging **0.18.1**, Timers **0.32.4** and Wire **0.7.25**. Each consumer graph
 has one Memory/Timers runtime. The [current handoff](../../status/current.md)
 names the exact local qualification and its remaining acceptance boundaries.
+
+Blob 0.59 removes the upload-certificate assessment's blocker list and changes
+its Wire identity to `0x424c_4f42_0059_0009`. Regenerate callers from the selected
+artifact's current schema. Metrics stays on the compatible 0.17 runtime shared
+by Blob, Metrics Stable, Query and Timers until their 0.18 adoption is published.
 
 ## Earlier selected framework evidence
 
@@ -297,7 +302,7 @@ separate workspace and can be built explicitly with:
 
 ```sh
 cd integrations/blob-service/embedded-consumer
-../../../target/cargo/debug/canic build embedded-app --workspace . --config canic.toml --icp-root . --profile fast --json
+../../../target/debug/canic build embedded-app --workspace . --config canic.toml --icp-root . --profile fast --json
 ```
 
 Build the complete App for managed installation: selecting only `backend` emits
@@ -353,7 +358,7 @@ separate `consumer-app` workspace and configuration. Build it explicitly:
 ```sh
 cargo build --locked -p canic-cli --bin canic
 cd integrations/blob-service/consumer
-../../../target/cargo/debug/canic build consumer-app --workspace . --config canic.toml --icp-root . --profile fast --json
+../../../target/debug/canic build consumer-app --workspace . --config canic.toml --icp-root . --profile fast --json
 ```
 
 The complete App build above stamps the release-build identity required by

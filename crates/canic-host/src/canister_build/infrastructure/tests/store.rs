@@ -140,6 +140,11 @@ fn wasm_store_declaration_build_uses_the_canonical_candid_environment() {
     .command()
     .unwrap();
 
+    assert!(
+        command
+            .get_args()
+            .any(|arg| arg == "--features=canic/candid-export")
+    );
     assert_eq!(
         command.get_args().next(),
         Some(std::ffi::OsStr::new("build"))
