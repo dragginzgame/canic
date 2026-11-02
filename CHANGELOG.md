@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 🩹 Fixed
 
+- Allow native consumers to link multiple canister libraries with overlapping
+  framework methods. Wasm export names and runtime behaviour are unchanged.
+  See [detailed notes](docs/changelog/0.114.md).
+
 - Permit explicit ICRC selection in governed managed-package admission while
   preserving the exact declared role feature closure
   ([#706](https://github.com/dragginzgame/canic/issues/706)).
