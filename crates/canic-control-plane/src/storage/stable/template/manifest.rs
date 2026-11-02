@@ -16,7 +16,14 @@ std::thread_local! {
     static TEMPLATE_MANIFESTS: RefCell<
         StableBtreeMap<TemplateReleaseKeyRecord, TemplateManifestRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::TEMPLATE_MANIFESTS_V1)),
+        {
+            let allocation = canic_core::memory::open(crate::memory::keys::TEMPLATE_MANIFESTS_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 

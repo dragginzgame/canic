@@ -116,6 +116,31 @@ pub const TOPUP_COLLISION: WireCallSpec = WireCallSpec {
 };
 /// Installed recovery fixture `test_topup_demand` contract.
 pub const TOPUP_DEMAND: WireCallSpec = spec("test_topup_demand", 0x5445_5354_0000_0507);
+
+/// Configure actual callback fault boundaries in the disposable Shard.
+pub const TOPUP_CALLBACK_FAULT: WireCallSpec =
+    spec("test_topup_callback_fault", 0x5445_5354_0000_0509);
+/// Observe the Shard callback and its durable business lease.
+pub const TOPUP_CALLBACK_PROBE: WireCallSpec =
+    spec("test_topup_callback_probe", 0x5445_5354_0000_050a);
+
+/// Selected fault in the actual production top-up callback.
+#[derive(Clone, Copy, serde::Serialize)]
+pub enum CallbackFault {
+    None,
+    BeforeAwait,
+    AfterAwait,
+    HoldReply,
+}
+
+/// Exact callback and lease observations returned by the installed Shard.
+#[derive(Debug, serde::Deserialize)]
+pub struct CallbackProbe {
+    pub entered: u64,
+    pub operation_id: Option<[u8; 32]>,
+    pub lease_deadline_ns: Option<u64>,
+    pub held: bool,
+}
 /// Installed recovery fixture `test_topup_exhaustion` contract.
 pub const TOPUP_EXHAUSTION: WireCallSpec = spec("test_topup_exhaustion", 0x5445_5354_0000_0508);
 

@@ -50,9 +50,14 @@ std::thread_local! {
             RootComponentOperationRecord,
             DefaultMemoryImpl,
         >,
-    > = RefCell::new(StableBtreeMap::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_OPERATIONS_V1),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_OPERATIONS_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 std::thread_local! {
@@ -62,18 +67,27 @@ std::thread_local! {
             RootComponentProvisioningPlacementRecord,
             DefaultMemoryImpl,
         >,
-    > = RefCell::new(StableBtreeMap::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_PLACEMENTS_V1),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_PLACEMENTS_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 std::thread_local! {
     static ROOT_COMPONENT_PROVISIONING_STATE: RefCell<
         Cell<RootComponentProvisioningStateRecord, DefaultMemoryImpl>,
-    > = RefCell::new(Cell::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_STATE_V1),
-        RootComponentProvisioningStateRecord::default(),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_STATE_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            Cell::create(allocation, RootComponentProvisioningStateRecord::default())
+        } else {
+            Cell::load(allocation).expect("retained stable cell")
+        }
+    });
 }
 
 /// Stable operation-map key separating batch and Directory-confirmation authority.

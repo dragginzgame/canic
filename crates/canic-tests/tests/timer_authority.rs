@@ -18,11 +18,12 @@ use canic::{
 use canic_testing_internal::pic::{
     CanicPicExt, install_lifecycle_boundary_fixture, runtime_probe as timer_probe, upgrade_args,
 };
+use ic_host_artifacts::wasm::{ExportKind, InspectionLimits};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 use std::time::Duration;
 use {
-    ic_platform::pocket_ic::PocketIc,
+    ic_platform::pocket_ic::{ErrorCode, PocketIc},
     ic_testkit::pic::{CanisterInstallExt, RetryPolicy},
 };
 
@@ -608,12 +609,14 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
 #[test]
 fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
     let fixture = install_lifecycle_boundary_fixture();
+    assert_composed_wasm_exports(&fixture.runtime_probe_wasm);
     let canister_id = fixture.install_runtime_probe_canister();
 
     assert_application_timer_rows(&fixture.pic, canister_id);
 
     wait_for_fixture_ready(&fixture.pic, canister_id, "install");
     assert_component_binding(&fixture.pic, canister_id, fixture.root);
+    assert_adapter_startup_progress(&fixture.pic, canister_id);
 
     fixture
         .pic
@@ -634,6 +637,157 @@ fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
 
     wait_for_fixture_ready(&fixture.pic, canister_id, "post_upgrade");
     assert_component_binding(&fixture.pic, canister_id, fixture.root);
+    assert_adapter_startup_progress(&fixture.pic, canister_id);
+}
+
+fn assert_composed_wasm_exports(wasm: &[u8]) {
+    let facts = ic_host_artifacts::wasm::inspect(
+        wasm,
+        InspectionLimits {
+            module_bytes: wasm.len(),
+            sections: wasm.len() / 2,
+            exports: u32::try_from(wasm.len()).unwrap(),
+            custom_sections: wasm.len() / 2,
+        },
+    )
+    .expect("inspect the installed composed artifact, rejecting duplicate exports");
+    for name in [
+        "canister_init".to_owned(),
+        "canister_post_upgrade".to_owned(),
+        "canister_global_timer".to_owned(),
+        "canister_update <ic-timers internal> dispatch".to_owned(),
+        format!("canister_query {}", protocol::protected_runtime::METHOD),
+        format!("canister_query {}", protocol::CANIC_PUBLIC_METRICS),
+        format!("canister_query {}", protocol::CANIC_PUBLIC_HISTORY),
+        "canister_query adapter_runtime_binding".to_owned(),
+    ] {
+        assert_eq!(
+            facts.exports.get(name.as_str()).unwrap().kind,
+            ExportKind::Function
+        );
+    }
+    assert!(
+        !facts
+            .exports
+            .contains_key("canister_query <ic-timers internal> dispatch")
+    );
+}
+
+fn assert_adapter_startup_progress(pic: &PocketIc, canister: Principal) {
+    for _ in 0..20 {
+        let timers = runtime_status(pic, canister)
+            .timers
+            .into_iter()
+            .filter(|timer| {
+                timer.owner == "icydb" && timer.subsystem == "startup" && timer.name == "recovery"
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(timers.len(), 1, "one adapter-owned startup registration");
+        let timer = &timers[0];
+        if timer.successes_since_runtime_start == 2 {
+            assert_eq!(timer.registration, TimerRegistrationStatus::Unregistered);
+            assert_eq!(timer.condition, TimerProcessCondition::Idle);
+            assert_eq!(timer.next_due_at_ns, None);
+            return;
+        }
+        pic.tick();
+    }
+    panic!("the composed adapter's native startup callback did not complete");
+}
+
+#[test]
+fn watchdog_traps_preserve_the_successor_and_explicit_cancellation() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister = fixture.install_runtime_probe_canister();
+    wait_for_fixture_ready(&fixture.pic, canister, "install");
+    watchdog_control(
+        &fixture.pic,
+        canister,
+        timer_probe::SET_WATCHDOG_TRAP,
+        &true,
+    );
+    watchdog_control(&fixture.pic, canister, timer_probe::SCHEDULE_WATCHDOG, &());
+    for _ in 0..20 {
+        if watchdog_status(&fixture.pic, canister).last_outcome
+            == Some(canic::dto::runtime::TimerExecutionOutcome::Unacknowledged)
+        {
+            break;
+        }
+        // Synchronous work traps roll back their observations. The next
+        // committed cadence scheduler records the unacknowledged attempt.
+        fixture.pic.advance_time(Duration::from_secs(1));
+        fixture.pic.tick();
+    }
+    let trapped = watchdog_status(&fixture.pic, canister);
+    assert_eq!(
+        trapped.last_outcome,
+        Some(canic::dto::runtime::TimerExecutionOutcome::Unacknowledged)
+    );
+    assert_eq!(trapped.successes_since_runtime_start, 0);
+    assert!(trapped.next_due_at_ns.is_some());
+    watchdog_control(&fixture.pic, canister, timer_probe::CANCEL_WATCHDOG, &false);
+    let cancelled = watchdog_status(&fixture.pic, canister);
+    assert_eq!(cancelled.condition, TimerProcessCondition::Disabled);
+    assert_eq!(cancelled.next_due_at_ns, None);
+    fixture.pic.advance_time(Duration::from_secs(61));
+    tick(&fixture.pic, 12);
+    assert_eq!(
+        watchdog_status(&fixture.pic, canister).successes_since_runtime_start,
+        0
+    );
+    watchdog_control(
+        &fixture.pic,
+        canister,
+        timer_probe::SET_WATCHDOG_TRAP,
+        &false,
+    );
+    watchdog_control(&fixture.pic, canister, timer_probe::SCHEDULE_WATCHDOG, &());
+    tick(&fixture.pic, 12);
+    let completed = watchdog_status(&fixture.pic, canister);
+    assert_eq!(completed.successes_since_runtime_start, 1);
+    assert_eq!(completed.condition, TimerProcessCondition::Idle);
+    assert_eq!(completed.next_due_at_ns, None);
+    assert!(completed.schedules_since_runtime_start > trapped.schedules_since_runtime_start);
+    fixture.pic.advance_time(Duration::from_secs(61));
+    tick(&fixture.pic, 12);
+    assert_eq!(
+        watchdog_status(&fixture.pic, canister).successes_since_runtime_start,
+        1
+    );
+}
+
+fn watchdog_control<T: serde::Serialize>(
+    pic: &PocketIc,
+    canister: Principal,
+    spec: ic_testkit::pic::WireCallSpec,
+    input: &T,
+) {
+    ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+        pic,
+        canister,
+        Principal::anonymous(),
+        spec,
+        input,
+    )
+    .unwrap()
+    .unwrap();
+}
+
+fn watchdog_status(
+    pic: &PocketIc,
+    canister: Principal,
+) -> canic::dto::runtime::CanisterTimerStatus {
+    let timers = runtime_status(pic, canister)
+        .timers
+        .into_iter()
+        .filter(|timer| {
+            timer.owner == "runtime-probe"
+                && timer.subsystem == "application"
+                && timer.name == "cost-watchdog"
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(timers.len(), 1, "one retained fixture watchdog");
+    timers.into_iter().next().unwrap()
 }
 
 fn assert_component_binding(pic: &PocketIc, canister_id: Principal, stranger: Principal) {
@@ -835,6 +989,7 @@ fn malformed_timer_frames_cannot_register_work() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister = fixture.install_runtime_probe_canister();
     wait_for_fixture_ready(&fixture.pic, canister, "install");
+    assert_private_dispatch_admission(&fixture.pic, canister, fixture.root);
     let spec = timer_probe::FILL_REGISTRY;
     let request = ic_wire::native::encode_request(spec.method_id, &(), spec.request_limits)
         .expect("bounded timer request");
@@ -874,6 +1029,23 @@ fn malformed_timer_frames_cannot_register_work() {
         assert!(reply.is_err());
         assert_eq!(identities(), before);
     }
+}
+
+fn assert_private_dispatch_admission(pic: &PocketIc, canister: Principal, stranger: Principal) {
+    const DISPATCH: &str = "<ic-timers internal> dispatch";
+    assert_adapter_startup_progress(pic, canister);
+    let before = runtime_status(pic, canister).timers;
+    for caller in [Principal::anonymous(), stranger] {
+        let error = pic
+            .update_call(canister, caller, DISPATCH, 0_u64.to_le_bytes().to_vec())
+            .expect_err("controller and non-controller ingress must not claim native work");
+        assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
+        let error = pic
+            .query_call(canister, caller, DISPATCH, 0_u64.to_le_bytes().to_vec())
+            .expect_err("the private dispatch is not a query surface");
+        assert_eq!(error.error_code, ErrorCode::CanisterMethodNotFound);
+    }
+    assert_eq!(runtime_status(pic, canister).timers, before);
 }
 
 #[test]
@@ -993,6 +1165,71 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
             "idle timer owner {label} must execute no callback during 24 hours"
         );
     }
+}
+
+#[test]
+fn terminal_intents_clear_cleanup_demand_without_disabling_the_retained_owner() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister = fixture.install_runtime_probe_canister();
+    wait_for_fixture_ready(&fixture.pic, canister, "install");
+    for (seed, terminal) in [
+        (10, timer_probe::COMMIT_INTENT),
+        (11, timer_probe::ROLLBACK_INTENT),
+    ] {
+        let intent = begin_intent(&fixture.pic, canister, seed, Some(600)).unwrap();
+        let armed = intent_cleanup_status(&fixture.pic, canister);
+        assert_eq!(armed.registration, TimerRegistrationStatus::Scheduled);
+        assert!(armed.next_due_at_ns.is_some());
+        ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+            &fixture.pic,
+            canister,
+            Principal::anonymous(),
+            terminal,
+            &intent,
+        )
+        .unwrap()
+        .unwrap();
+        let idle = intent_cleanup_status(&fixture.pic, canister);
+        assert!(idle.enabled);
+        assert_eq!(idle.registration, TimerRegistrationStatus::Unregistered);
+        assert_eq!(idle.condition, TimerProcessCondition::Idle);
+        assert_eq!(idle.next_due_at_ns, None);
+        assert_eq!(
+            idle.executions_since_runtime_start,
+            armed.executions_since_runtime_start
+        );
+        assert_eq!(
+            idle.schedules_since_runtime_start,
+            armed.schedules_since_runtime_start
+        );
+        let replacement = begin_intent(&fixture.pic, canister, seed + 20, Some(600)).unwrap();
+        assert_ne!(replacement, intent);
+        assert_eq!(
+            intent_cleanup_status(&fixture.pic, canister).registration,
+            TimerRegistrationStatus::Scheduled
+        );
+        ic_testkit::pic::update_wire::<_, Result<(), Error>>(
+            &fixture.pic,
+            canister,
+            Principal::anonymous(),
+            timer_probe::ROLLBACK_INTENT,
+            &replacement,
+        )
+        .unwrap()
+        .unwrap();
+    }
+    begin_intent(&fixture.pic, canister, 12, None).unwrap();
+    let idle = intent_cleanup_status(&fixture.pic, canister);
+    fixture.pic.advance_time(Duration::from_secs(601));
+    tick(&fixture.pic, 12);
+    let later = intent_cleanup_status(&fixture.pic, canister);
+    assert!(later.enabled);
+    assert_eq!(later.condition, TimerProcessCondition::Idle);
+    assert_eq!(later.next_due_at_ns, None);
+    assert_eq!(
+        later.executions_since_runtime_start,
+        idle.executions_since_runtime_start
+    );
 }
 
 fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus {

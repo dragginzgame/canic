@@ -200,10 +200,21 @@ fn producer_fixture_context() -> WorkspaceBuildContext {
         .canonicalize()
         .unwrap();
     match selected.as_str() {
-        "dedicated" => return context,
-        "embedded" => {
-            context.workspace_root = root.join("integrations/blob-service/embedded-consumer");
-            context.role = "backend".into();
+        "dedicated" | "embedded" => {
+            let output = std::process::Command::new("perl")
+                .arg(root.join("scripts/dev/prepare-integration-workspace.pl"))
+                .arg("--prepare")
+                .output()
+                .expect("prepare disposable integration workspace");
+            assert!(output.status.success(), "prepare integration build source");
+            let workspace = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+            let (relative, role) = if selected == "dedicated" {
+                ("integrations/blob-service/consumer", "blob")
+            } else {
+                ("integrations/blob-service/embedded-consumer", "backend")
+            };
+            context.workspace_root = workspace.join(relative);
+            context.role = role.into();
             context.config_path = context.workspace_root.join("canic.toml");
         }
         "root" | "wasm_store" | "fleet_coordinator" => {

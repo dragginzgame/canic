@@ -1757,7 +1757,7 @@ fn require_fiduciary_acknowledgement(
             "{role} Subnet {subnet} is absent from validated Registry evidence"
         ))
     })?;
-    let fiduciary = info.subnet_specialization == SubnetSpecialization::Fiduciary;
+    let fiduciary = info.classification.subnet_specialization == SubnetSpecialization::Fiduciary;
     if fiduciary != acknowledged {
         return Err(FleetGenerateError::Authority(format!(
             "{role} Subnet {subnet} Fiduciary cost acknowledgement differs from validated Registry classification"

@@ -10,12 +10,12 @@ use crate::{
     log::{Level, Topic},
     ops::{config::ConfigOps, ic::IcOps, runtime::log::LogOps},
     workflow::runtime::timer::{
-        TimerError, cancel_owned_once, ensure_owned_once, owned_once_identity, require_active,
-        with_owned_once,
+        TimerError, cancel_owned_once, owned_once_identity, require_active,
     },
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    reconcile_once,
 };
 use std::cell::RefCell;
 
@@ -74,22 +74,20 @@ impl LogRetentionWorkflow {
             Some(max_age_secs) => Self::next_deadline_ns(max_age_secs),
             None => None,
         };
-        Self::ensure_declared()?;
         require_active()?;
-        with_owned_once(&LOG_RETENTION_TIMER, |registration| {
-            registration.reconcile_schedule(deadline.map(TimerSchedule::At))
-        })?
-        .ok_or(TimerError::MissingClaim)?
-        .map_err(TimerError::from)?;
+        LOG_RETENTION_TIMER.with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            reconcile_once(
+                &mut registration,
+                &Self::timer_identity()?,
+                deadline.map(TimerSchedule::At),
+                |_context| async { Self::run_due_batch() },
+            )
+            .map_err(TimerError::from)
+        })?;
         Ok(())
-    }
-
-    fn ensure_declared() -> Result<(), TimerError> {
-        ensure_owned_once(
-            &LOG_RETENTION_TIMER,
-            Self::timer_identity,
-            |_context| async { Self::run_due_batch() },
-        )
     }
 
     pub(crate) fn run_due_batch() -> OnceRunResult {

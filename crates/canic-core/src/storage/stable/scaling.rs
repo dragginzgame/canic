@@ -14,7 +14,14 @@ std::thread_local! {
     static SCALING_REGISTRY: RefCell<
         StableBtreeMap<Principal, WorkerEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_SCALING_REGISTRY_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::PLACEMENT_SCALING_REGISTRY_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 

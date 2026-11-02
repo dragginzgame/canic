@@ -15,7 +15,7 @@ pub fn post_upgrade_root_canister_before_bootstrap(
     config: ConfigModel,
     config_source: &str,
 ) -> bool {
-    crate::api::timer::TimerApi::initialize_root_runtime_required();
+    crate::api::timer::TimerApi::initialize_shared_runtime_required();
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricRole::Root,

@@ -3,11 +3,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=scripts/ci/fixture-lifecycle.sh
 source "$ROOT/scripts/ci/fixture-lifecycle.sh"
-fixture="$(fixture_create "${TMPDIR:-/tmp}/canic-adoption-test.XXXXXX")"
+scratch_parent="${TMPDIR:-$ROOT/target/tmp}"
+mkdir -p "$scratch_parent"
+fixture="$(fixture_create "$scratch_parent/canic-adoption-test.XXXXXX")"
 fixture_complete=false
 trap 'fixture_finish "$?" "$fixture" "Adoption fixtures retained"' EXIT
 mkdir -p "$fixture/scripts/"{ci,dev} "$fixture/bin"
 cp "$ROOT/scripts/dev/check-dependency-adoption.sh" "$fixture/scripts/dev/"
+cp "$ROOT/scripts/dev/prepare-integration-workspace.pl" "$fixture/scripts/dev/"
+git init -q "$fixture"
+printf 'target/\n' > "$fixture/.gitignore"
 cat > "$fixture/scripts/ci/check-cargo-dependency-boundaries.sh" <<'BOUNDARY'
 #!/usr/bin/env bash
 printf 'boundary\n' >> "$TRACE"
@@ -19,11 +24,18 @@ printf '%s\n' "$*" >> "$TRACE"
 if [[ "${FAIL_STAGE:-}" == "$1" ]]; then exit 17; fi
 case "$1" in
     tree)
-        echo 'ic-memory v0.50.1'
-        echo 'ic-memory v0.50.1 (*)'
-        echo 'ic-platform v0.5.0'
-        echo 'ic-storage v0.50.0'
-        [[ "${DUPLICATE:-}" != yes ]] || echo 'ic-memory v0.49.4'
+        echo 'ic-memory v0.62.1'
+        echo 'ic-memory v0.62.1 (*)'
+        echo 'ic-platform v0.16.0'
+        echo 'ic-platform v0.17.0'
+        [[ "${MISSING:-}" == ic-platform-runtime ]] || echo 'ic-platform-runtime v0.17.1'
+        [[ "${MISSING:-}" == ic-platform-runtime-guard ]] || echo 'ic-platform-runtime-guard v0.17.1'
+        echo 'ic-storage v0.62.1'
+        case "${DUPLICATE:-}" in
+            yes) echo 'ic-memory v0.61.0' ;;
+            ic-platform-runtime) echo 'ic-platform-runtime v0.16.0' ;;
+            ic-platform-runtime-guard) echo 'ic-platform-runtime-guard v0.16.0' ;;
+        esac
         ;;
 esac
 exit 0
@@ -50,7 +62,7 @@ for manifest in Cargo.toml integrations/blob-service/consumer/Cargo.toml integra
     grep '^metadata ' "$TRACE" | grep -Fq -- "--manifest-path $manifest"
 done
 for manifest in integrations/blob-service/consumer/Cargo.toml integrations/blob-service/embedded-consumer/Cargo.toml; do
-    grep '^clippy ' "$TRACE" | grep -Fq -- "--manifest-path $manifest"
+    grep '^clippy ' "$TRACE" | grep -Fq -- "--manifest-path $fixture/target/integrations/workspace/$manifest"
 done
 for stage in metadata boundary tree clippy run; do
     : > "$TRACE"
@@ -64,8 +76,20 @@ for stage in metadata boundary tree clippy run; do
 done
 : > "$TRACE"
 if DUPLICATE=yes bash "$script" canic-host > "$fixture/duplicate.log" 2>&1; then exit 1; fi
-grep -q 'ic-memory v0.49.4' "$fixture/duplicate.log"
+grep -q 'ic-memory v0.61.0' "$fixture/duplicate.log"
 if grep -q '^clippy ' "$TRACE"; then exit 1; fi
+for owner in ic-platform-runtime ic-platform-runtime-guard; do
+    for condition in duplicate missing; do
+        : > "$TRACE"
+        if [[ "$condition" == duplicate ]]; then
+            if DUPLICATE="$owner" bash "$script" canic-host > "$fixture/$owner-$condition.log" 2>&1; then exit 1; fi
+        else
+            if MISSING="$owner" bash "$script" canic-host > "$fixture/$owner-$condition.log" 2>&1; then exit 1; fi
+        fi
+        grep -q "Conflicting $owner identities" "$fixture/$owner-$condition.log"
+        if grep -q '^clippy ' "$TRACE"; then exit 1; fi
+    done
+done
 : > "$TRACE"
 bash "$script" --admission-only > "$fixture/admission.log"
 if grep -Eq '^(clippy|run) ' "$TRACE"; then exit 1; fi

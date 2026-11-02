@@ -4,7 +4,9 @@ set -euo pipefail
 # Execute the real version transaction in toy workspaces with fake Git authority.
 # No source repository commits, refs, index writes or package versions change.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-shared-release.XXXXXX")"
+scratch_parent="${TMPDIR:-$ROOT/target/tmp}"
+mkdir -p "$scratch_parent"
+fixture="$(mktemp -d "$scratch_parent/canic-shared-release.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf -- "$fixture"; else echo "Release adoption evidence retained: $fixture" >&2; fi' EXIT
 mkdir -p "$fixture/base/scripts/ci" "$fixture/base/scripts/release" \
     "$fixture/base/scripts/dev" "$fixture/base/docs/changelog" "$fixture/base/member/src" "$fixture/bin"
@@ -37,6 +39,7 @@ version.workspace = true
 edition = "2024"
 TOML
 printf 'pub fn fixture() {}\n' > "$fixture/base/member/src/lib.rs"
+# shellcheck disable=SC2016 # The generated script needs the literal runtime default.
 printf 'CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-1.2.3}"\n' > "$fixture/base/scripts/dev/install_dev.sh"
 for notes in CHANGELOG.md docs/changelog/1.2.md; do
     printf '# Fixture\n\n## [1.2.4]\n\n- Current batch.\n\n## [1.2.3]\n\n- Retained undated history.\n' > "$fixture/base/$notes"

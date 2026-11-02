@@ -27,10 +27,14 @@ const ROOT_FLEET_REGISTRY_MIRROR_MAX_BYTES: u32 = 4_194_304;
 std::thread_local! {
     static ROOT_FLEET_REGISTRY_MIRROR:
         RefCell<Cell<RootFleetRegistryMirrorStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            canic_core::memory::open(crate::memory::keys::ROOT_FLEET_REGISTRY_MIRROR_V1),
-            RootFleetRegistryMirrorStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::ROOT_FLEET_REGISTRY_MIRROR_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, RootFleetRegistryMirrorStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 /// Durable validated candidate and optional exact Coordinator acknowledgement.

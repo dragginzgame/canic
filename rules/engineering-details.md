@@ -1,4 +1,5 @@
 # Engineering contracts by task
+<!-- Shared companions: docs/tool-store-maintenance.md -->
 
 These contracts supplement the [engineering baseline](../DRAGGINZGAME.md).
 Read the applicable sections when the task touches their subject. This file is
@@ -71,7 +72,7 @@ product, release and recovery obligations remain binding when applicable.
   recovery and indirect calls from scripts or Make targets. "Keep going",
   "prepare the release", "work on 0.4" and "ready to push?" authorize no such
   effects unless the session already delegates delivery. Prepare source, numbered
-  changelog notes, the matching canonical pending `VERSION` under the
+  changelog notes, and in Shared Tooling only the matching pending `VERSION` under the
   [next-version rules](changelogs.md#automatic-next-version-selection), and
   validation within the established scope. A release/ship/deploy
   request delegates its corresponding workflow and routine group/version/order
@@ -296,6 +297,70 @@ product, release and recovery obligations remain binding when applicable.
   Follow the [pre-1.0 contract rules](#pre-10-contracts); do not silently change a
   public interface or introduce parallel codecs/fallback readers for adoption.
 
+## Wasm optimization
+
+- Shared Tooling owns the common decision process and evidence requirements.
+  IC Tooling's `ic-build` owns reusable Cargo/Wasm optimization mechanics and
+  the canonical recommendations, recipe definitions and qualification evidence.
+  Improve that owner when shared support is missing; do not establish competing
+  general-purpose optimizer policies in consumers. Existing local adapters stay
+  explicit until a qualified shared replacement is available.
+- A dependency owner's required target/backend flags must be explicit inputs to
+  the consuming build recipe, not assumed to propagate from that dependency's
+  Cargo configuration. The build owner must compose existing flags, resolve
+  environment/config precedence, reject contradictory selections and record the
+  effective command. Qualify actual caller wiring and bind those settings to
+  artifact provenance/cache identity; recommendation text alone is not adoption.
+- Consumers own deployment limits, representative workloads, required Wasm
+  features, interface/upgrade compatibility and release admission. They select
+  a qualified recipe and record product-specific deviations with their reason
+  and evidence. Cargo profile settings still belong in the consuming workspace;
+  depending on `ic-build` does not inherit or enforce a profile. Shared recipes
+  must expose their effective settings so local projections can be checked.
+- Define the objective before selecting settings: raw Wasm/code-section limits,
+  runtime instruction or cycle budgets, and the priority among them. A setting
+  called `z`, `Oz` or `O3` is not proof of an optimum. Prefer a reproducible,
+  qualified choice; do not silently search for and change the recipe on each
+  release.
+- Wasm footprint comparisons, benchmark summaries and optimization acceptance
+  report two separate metrics from the same final uncompressed module: total
+  module bytes (all sections) and code-section bytes. Show absolute before/after
+  values and byte deltas for both; percentages may supplement them. Label units
+  explicitly, using bytes and optionally MiB (1 MiB = 1,048,576 bytes). If either
+  measurement is unavailable, say so; do not substitute compressed size or infer
+  code-section size from total size. State the code-section measurement method
+  when reporting headroom against the IC admission limit.
+- The IC [resource limits](https://docs.internetcomputer.org/references/resource-limits/)
+  currently list a 12 MiB (12,582,912-byte) code-section limit per canister
+  (checked 2026-11-01). This is distinct from total module size. Verify the target
+  network/runtime limit when making admission claims; compression cannot reduce
+  the code-section size checked by the runtime.
+- Do not use gzip, zip or other compressed byte counts to rank Wasm footprint,
+  claim Wasm size savings or establish code-section headroom. Omit compressed
+  sizes from Wasm comparison tables, progress updates and final summaries unless
+  transport/compression measurement is explicitly requested. A requested transport
+  comparison must be labelled separately and cannot replace either raw metric.
+  This reporting rule does not remove compression or required upload admission
+  checks from deployment tooling.
+- Treat compiler optimization and post-link `wasm-opt` as separate stages of
+  one recipe. Record compiler/target and optimizer identities, Cargo profile,
+  LTO/codegen settings, ordered optimizer arguments, features and input identity.
+  Compare final deployable artifacts under matched inputs; a post-link pass
+  does not erase the effect of the compiler profile. Preserve required module
+  contracts and run the relevant runtime/upgrade checks when settings change.
+- Routine performance work uses the actual deployment recipe as its primary
+  measurement. Library benchmarks name the consumer recipe they represent and
+  state any missing deployment stages. Keep correctness controls for matched
+  logical values; additional profiles answer a named comparison question.
+  Do not require an exhaustive optimization matrix in ordinary consumer CI.
+- Reconsider recommendations when compiler/optimizer changes, workload changes
+  or observed regressions justify it. Use a small explicit candidate comparison,
+  widening it only when the result needs it. Retain absolute final sizes and
+  runtime costs, tradeoffs and limitations at the owning recipe. A codec beating
+  another codec under two profiles does not choose between those profiles.
+  Tool upgrades or changed recommendations require consumer qualification before
+  adoption; they do not silently rewrite deployment settings.
+
 ## Gzip encoding
 
 - IC Tooling's `ic-host-artifacts::artifact::encode_gzip`, behind its `gzip`
@@ -503,6 +568,22 @@ contracts; ordinary development does not require rereading these mechanics.
   on success, failure and retry. Never append cargo clean or equivalent cleanup.
   Cleanup requires explicit scope and authority. Tools may clean temporary files
   they own; they must not erase consumer artifacts or the only retained evidence.
+- Managed tool setup retains current declared requirements across consumers,
+  selected deliverables, small provenance receipts and explicitly needed recovery
+  evidence. Successful builds discard their private compiler scratch after byte
+  admission, while installation custody is still held. Historical selectors and
+  automatic previous-version fallbacks are not permanent liveness roots. Use the
+  producer's [store maintenance contract](../docs/tool-store-maintenance.md),
+  including expiring failed attempts, recovery pins, preview, physical-byte
+  accounting and explicit quiescence where executable users cannot be leased.
+  Updating one consumer must not upgrade or reclaim another consumer's selection.
+- Product owners declare native cache roots and age/size budgets, separate final
+  deliverables and receipts from incremental/compiler output, and enforce those
+  budgets at a serialized maintenance boundary. An active build or recovery pin
+  prevents reclamation, not an unlimited retention exemption after work finishes.
+  Adopt shared mechanics rather than adding consumer-specific deletion scripts.
+  Legacy stores, unknown ownership and unrelated files require explicit migration;
+  a policy update alone does not authorize a one-off machine cleanup.
 - Explicit workspace cleanup is the disk-reclamation boundary. With no operator
   overrides or package/profile/target selection, `cargo clean` must remove the
   owning workspace's entire `target/`, including nested compiler outputs, generated
@@ -517,7 +598,22 @@ contracts; ordinary development does not require rereading these mechanics.
   Clearly named selective cleanup commands may keep their documented scope.
   Operator-selected Cargo environment variables and CLI filters retain their
   normal meanings; do not override the user's Cargo installation or global config.
-- Retention prohibits automatic cleanup, not user-requested cleanup. Do not run
+- Workspace-owned scratch belongs beneath the owning workspace's `target/`,
+  normally `target/tmp/`, including generated fixture projects, temporary build
+  trees and intermediate downloads. Create unique per-run directories there so
+  explicit workspace cleanup reclaims them along with compiler outputs. Do not
+  default to repository `.tmp/`, `tmp/` or system `/tmp` merely for convenience.
+- Use outside-target scratch only when the operation needs it, such as an atomic
+  replacement on the destination filesystem, a fixture that removes `target/`
+  itself, or evidence explicitly required to survive cleanup. Document the reason,
+  ownership and cleanup/retention boundary alongside the caller. A `.tmp` filename
+  used for an atomic write is not a general scratch directory. Keep overrides
+  local to the command; do not globally change `TMPDIR` or another workspace's
+  output location. Repositories without Cargo use their documented artifact root.
+  Existing outside-target artifacts still require scoped cleanup authority;
+  adopting this rule does not authorize deleting or relocating retained evidence.
+- Consumer artifact preservation does not prohibit user-requested cleanup or the
+  admitted managed-cache lifecycle above. Do not run
   cleanup concurrently with builds. Evidence that must survive an explicit clean
   belongs outside `target/`; document any separate tool stores or caches rather
   than implying Cargo cleans them. Qualify cleanup changes with disposable

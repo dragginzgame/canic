@@ -13,7 +13,14 @@ std::thread_local! {
     static PLACEMENT_INDEX_REGISTRY: RefCell<
         StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_INDEX_REGISTRY_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::PLACEMENT_INDEX_REGISTRY_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 

@@ -11,10 +11,14 @@ std::thread_local! {
     // All the environment variables a canister needs
     //
     static ENV: RefCell<Cell<EnvRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            crate::memory::open(crate::memory::keys::RUNTIME_BINDINGS_V1),
-            EnvRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = crate::memory::open(crate::memory::keys::RUNTIME_BINDINGS_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, EnvRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 ///

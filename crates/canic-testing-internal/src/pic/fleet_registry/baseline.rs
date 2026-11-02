@@ -17949,6 +17949,14 @@ cycles = "80T"
                 sibling_funding::sibling_topups_retain_distinct_receipts_after_both_replies_are_lost,
             ),
             (
+                "native topup recovery preserves callbacks and live paid attempts",
+                sibling_funding::timer_recovery::native_topup_recovery_preserves_callbacks_and_live_paid_attempts,
+            ),
+            (
+                "Root snapshot keeps pool demand coherent across history and rearm",
+                sibling_funding::timer_recovery::root_snapshot_keeps_pool_demand_coherent_across_history_and_rearm,
+            ),
+            (
                 "child grant refreshes Root funding deadline without repeating credit",
                 funding_deadline::child_grant_refreshes_root_funding_deadline_without_repeating_credit,
             ),

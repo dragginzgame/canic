@@ -88,11 +88,18 @@ pub(super) fn failed_sync(
     failure: GatewaySyncFailure,
 ) {
     assert_eq!(sync(pic, scope, operator), Err(failure));
+    let original = status(pic, scope, operator).gateways;
+    let original_sequence = original
+        .pending_sequence
+        .expect("provider refusal retains original attempt");
+    assert_eq!(sync(pic, scope, operator), Err(failure));
     let pending = status(pic, scope, operator).gateways;
     let sequence = pending
         .pending_sequence
-        .expect("provider refusal retains original attempt");
-    assert_eq!(sync(pic, scope, operator), Err(GatewaySyncFailure::Busy));
+        .expect("failed replacement refresh retains its own identity");
+    assert_eq!(sequence, original_sequence + 1);
+    assert_eq!(pending.last_sequence, sequence);
+    assert_eq!(pending.members, original.members);
     let cancel = |actor, sequence| -> Result<(), GatewaySyncFailure> {
         update(
             pic,
@@ -102,6 +109,10 @@ pub(super) fn failed_sync(
             GatewaySyncCancellation { scope, sequence },
         )
     };
+    assert_eq!(
+        cancel(operator, original_sequence),
+        Err(GatewaySyncFailure::Conflict)
+    );
     assert_eq!(
         cancel(scope.payment_account.into(), sequence),
         Err(GatewaySyncFailure::Denied)

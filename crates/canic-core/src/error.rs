@@ -136,6 +136,12 @@ impl InternalError {
         self.platform_rejection.as_deref()
     }
 
+    /// Raw callback rejection evidence; it never grants effect or replay authority.
+    #[must_use]
+    pub const fn platform_rejection_code(&self) -> Option<u32> {
+        self.platform_rejection_code
+    }
+
     /// Attach only the first originating owner; outer workflows preserve its exact context.
     #[must_use]
     pub fn with_provisioning_failure(

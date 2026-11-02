@@ -48,6 +48,32 @@ impl AuthorityRestoreFenceOps {
             .ok_or_else(fence_uninitialized)
     }
 
+    /// Return the same operation's committed seal without another history observation.
+    pub fn completed_prepare(
+        request: AuthoritySnapshotRequest,
+        authority_canister: Principal,
+    ) -> Result<Option<AuthorityRestoreFenceStatusResponse>, InternalError> {
+        require_operation_id(request.operation_id)?;
+        let record = require_authority(authority_canister)?;
+        let complete = matches!(&record.state,
+            AuthorityRestoreFenceStateRecord::Sealed { operation_id, .. }
+                if *operation_id == request.operation_id);
+        Ok(complete.then(|| record_to_status(record)))
+    }
+
+    /// Return the exact completed live-resume receipt without reconstructing producers.
+    pub fn completed_resume(
+        request: AuthoritySnapshotRequest,
+        authority_canister: Principal,
+    ) -> Result<Option<AuthorityRestoreFenceStatusResponse>, InternalError> {
+        require_operation_id(request.operation_id)?;
+        let record = require_authority(authority_canister)?;
+        let complete = matches!(&record.state,
+            AuthorityRestoreFenceStateRecord::Open { last_resume: Some(receipt) }
+                if receipt.operation_id == request.operation_id);
+        Ok(complete.then(|| record_to_status(record)))
+    }
+
     /// Validate a snapshot seal without changing durable authority state.
     pub fn validate_prepare(
         request: AuthoritySnapshotRequest,

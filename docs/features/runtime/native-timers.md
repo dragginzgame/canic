@@ -207,11 +207,60 @@ construct retained declarations on a fresh heap and then reconcile their
 desired state. Use direct registration for transient `RemoveWhenStopped`
 work.
 
+Canic's retained cleanup, retention, sampling, renewal, funding, acknowledgement
+and application-startup owners use `reconcile_once` directly. Native reconciliation
+publishes an empty owner slot only after initial admission succeeds. Existing
+registrations retain their callback authority. Domain requests that may advance
+a deadline without postponing an earlier safety check use native
+`ensure_scheduled` on that retained registration.
+
+IC Timers owns registration, wakeups, callback progress and cancellation. Canic
+owns its domain demand, durable attempt identities, exact handle custody for
+snapshot suspension and thin lifecycle deferral. Every role initializes the same
+shared runtime before its domain owners reconstruct demand.
+
 When a callback can trigger a paid or externally mutating effect, persist the
 application operation or receipt identity before the effect. A response lost
 after the effect must retry that same operation identity; a provider callback
 generation or `RetryAfter` directive is not an application idempotency key and
 must not be copied into a generic recovery record.
+
+## Recover Abandoned Callbacks
+
+Canic retains durable business attempts for cycle top-up, placement
+acknowledgements, issuer renewal and pool maintenance. Its recovery watchdog
+rearms the exact native owner after confirmed callback abandonment. The native
+callback then claims or resumes the business attempt and returns its actual
+retry, deadline or stop decision to Timers. Recovery does not spawn a separate
+copy of the workflow or discard its completion directive.
+
+An expired business lease alone does not authorize replacing a native callback
+that is still scheduled or running. A pending IC response can outlive that
+lease; recovery leaves the callback and its original paid-operation identity
+intact. Explicit cancellation, invariant failure and provider control failure
+also remain distinct from recovery demand. Snapshot suspension gates recovery
+until the authority owner explicitly resumes.
+
+Normal demand becoming empty leaves a retained ordinary registration idle
+and keeps its declaration. Clearing normal demand does not count as explicit
+cancellation. Prior explicit cancellation remains disabled until the owner
+rearms it. A later durable deadline rearms the same owner. Runtime
+`next_due_at_ns` describes current demand; a metric named for the last armed
+delay is historical evidence and may remain after the current deadline clears.
+
+## Keep Snapshot Custody Atomic
+
+Root snapshot preparation observes IC history while its producers retain their
+normal demand. After that await, it rechecks quiescence and suspends both Core
+and Control Plane timer owners in the same callback that commits the durable
+seal. A busy refusal leaves producers intact; a failure after suspension starts
+traps so suspension and sealing roll back together.
+
+Resume reconstructs both producer sets while the fence remains sealed, then
+opens mutation in that same callback. An exact completed resume replay returns
+its stored receipt without observing history or rebuilding timers. Repeated
+prepare on the matching seal retains the same receipt and suspended demand.
+These are same-release interruption and replay contracts.
 
 ## Compose Synchronous Lifecycle Work
 

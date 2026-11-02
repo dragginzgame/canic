@@ -45,8 +45,8 @@ use canic_core::{
 use ic_timers::{
     AfterCompletionDecision, AfterCompletionRegistration, AfterCompletionRunResult, OnceDecision,
     OnceRunResult, TimerCadence, TimerCompletion, TimerCompletionOutcome, TimerIdentity,
-    TimerReconcileState, WatchdogDecision, WatchdogReconcileState, WatchdogRegistration,
-    WatchdogRunResult, reconcile_after_completion, reconcile_watchdog,
+    TimerReconcileState, TimerSchedule, WatchdogDecision, WatchdogReconcileState,
+    WatchdogRegistration, WatchdogRunResult, reconcile_after_completion, reconcile_watchdog,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -119,11 +119,7 @@ pub fn start() -> Result<(), InternalError> {
     )
     .map_err(|_error| InternalError::invariant())?;
     MAINTENANCE_ENABLED.set(true);
-    TimerApi::defer_lifecycle_result_required(
-        Duration::ZERO,
-        "canic:canister_pool:maintain_initial",
-        async { run_maintenance_timer().await },
-    );
+    request_maintenance_now().map_err(|_| InternalError::invariant())?;
     Ok(())
 }
 
@@ -313,23 +309,29 @@ async fn run_maintenance_timer() -> OnceRunResult {
     finish_maintenance_timer(attempt, maintain_once_inner().await)
 }
 
-/// Dispatch one watchdog-owned takeover without awaiting fallible work.
+/// Re-arm native maintenance without stealing an attempt from a live callback.
 pub fn dispatch_async_job_recovery() -> bool {
-    let attempt = match claim_maintenance() {
-        Ok(AsyncJobClaim::Acquired(attempt)) => attempt,
-        Ok(AsyncJobClaim::Busy { .. }) | Err(_) => return false,
+    if !MAINTENANCE_ENABLED.get() {
+        return false;
+    }
+    let Ok(identity) = TimerIdentity::try_new("canic", "canister_pool", "maintain") else {
+        return false;
     };
-    spawn_maintenance(attempt);
-    true
+    let expired = AsyncJobRecoveryOps::expired_deadline(
+        AsyncJobOwner::CanisterPoolMaintenance,
+        IcOps::now_nanos(),
+    )
+    .is_some();
+    if !TimerApi::registration_requires_recovery(&identity, expired).unwrap_or(false) {
+        return false;
+    }
+    request_maintenance_now().is_ok()
 }
 
 fn run_recovery_watchdog() -> WatchdogRunResult {
     let now_ns = IcOps::now_nanos();
     let mut recovered = TimerApi::recover_expired_root_async_jobs(now_ns);
-    if AsyncJobRecoveryOps::expired_deadline(AsyncJobOwner::CanisterPoolMaintenance, now_ns)
-        .is_some()
-        && dispatch_async_job_recovery()
-    {
+    if dispatch_async_job_recovery() {
         recovered = recovered.saturating_add(1);
     }
     let completion = if recovered == 0 {
@@ -372,10 +374,7 @@ fn reconcile_maintenance_timer(desired: TimerReconcileState) -> Result<(), Autho
                 desired,
                 |_context| async {
                     let result = run_maintenance_timer().await;
-                    AfterCompletionRunResult::new(
-                        result.completion(),
-                        AfterCompletionDecision::RecurAfterCompletion,
-                    )
+                    maintenance_recurrence(result, MAINTENANCE_ENABLED.get())
                 },
             )
             .map_err(AuthorityTimerError::from)
@@ -428,10 +427,35 @@ fn cancel_maintenance_timer() -> Result<(), AuthorityTimerError> {
         .map_err(|_| AuthorityTimerError::CustodyBusy)?
 }
 
-fn spawn_maintenance(attempt: AsyncJobAttempt) {
-    ic_platform::cdk::futures::spawn(async move {
-        let _result = finish_maintenance_timer(attempt, maintain_once_inner().await);
-    });
+fn request_maintenance_now() -> Result<(), AuthorityTimerError> {
+    TimerApi::require_active()?;
+    MAINTENANCE_TIMER
+        .try_with(|registration| {
+            let registration = registration
+                .try_borrow()
+                .map_err(|_| AuthorityTimerError::CustodyBusy)?;
+            registration
+                .as_ref()
+                .ok_or(AuthorityTimerError::MissingClaim)?
+                .reconcile_schedule(Some(TimerSchedule::After(Duration::ZERO)))
+                .map_err(AuthorityTimerError::from)
+        })
+        .map_err(|_| AuthorityTimerError::CustodyBusy)?
+}
+
+fn maintenance_recurrence(result: OnceRunResult, enabled: bool) -> AfterCompletionRunResult {
+    let decision =
+        if !enabled || result.completion().outcome() == TimerCompletionOutcome::InvariantFailure {
+            AfterCompletionDecision::Stop
+        } else {
+            match result.decision() {
+                OnceDecision::Stop => AfterCompletionDecision::RecurAfterCompletion,
+                OnceDecision::ContinueImmediately => AfterCompletionDecision::ContinueImmediately,
+                OnceDecision::RetryAfter(delay) => AfterCompletionDecision::RetryAfter(delay),
+                OnceDecision::ScheduleAt(deadline) => AfterCompletionDecision::ScheduleAt(deadline),
+            }
+        };
+    AfterCompletionRunResult::new(result.completion(), decision)
 }
 
 fn claim_maintenance() -> Result<AsyncJobClaim, InternalError> {
@@ -833,6 +857,45 @@ const fn require_ready_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_maintenance_keeps_busy_deadlines_retries_and_terminal_stops() {
+        for (decision, expected) in [
+            (
+                OnceDecision::Stop,
+                AfterCompletionDecision::RecurAfterCompletion,
+            ),
+            (
+                OnceDecision::ScheduleAt(42),
+                AfterCompletionDecision::ScheduleAt(42),
+            ),
+            (
+                OnceDecision::ContinueImmediately,
+                AfterCompletionDecision::ContinueImmediately,
+            ),
+            (
+                OnceDecision::RetryAfter(Duration::from_secs(5)),
+                AfterCompletionDecision::RetryAfter(Duration::from_secs(5)),
+            ),
+        ] {
+            let result = maintenance_recurrence(
+                OnceRunResult::new(TimerCompletion::success(7), decision),
+                true,
+            );
+            assert_eq!(result.decision(), expected);
+            assert_eq!(result.completion().work_count(), 7);
+        }
+        for (completion, enabled) in [
+            (TimerCompletion::invariant_failure(0), true),
+            (TimerCompletion::success(1), false),
+        ] {
+            let result = maintenance_recurrence(
+                OnceRunResult::new(completion, OnceDecision::ContinueImmediately),
+                enabled,
+            );
+            assert_eq!(result.decision(), AfterCompletionDecision::Stop);
+        }
+    }
 
     #[test]
     fn import_subnet_requires_exact_nns_routing_evidence() {

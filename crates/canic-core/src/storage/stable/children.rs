@@ -23,7 +23,14 @@ std::thread_local! {
     static CANISTER_CHILDREN: RefCell<
         StableBtreeMap<Principal, CanisterChildRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::RUNTIME_CANISTER_CHILDREN_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::RUNTIME_CANISTER_CHILDREN_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 

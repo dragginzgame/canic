@@ -17,6 +17,7 @@ mod delegation;
 mod fleet_coordinator;
 #[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 mod fleet_registry;
+pub mod icrc;
 pub mod issuer_probe;
 #[cfg(test)]
 mod journey_policy;

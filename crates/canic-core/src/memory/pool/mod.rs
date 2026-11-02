@@ -46,6 +46,9 @@ mod tests {
 
     #[test]
     fn composed_host_retains_keys_and_payload_across_two_cold_reopens() {
+        let core_key = ic_memory::StableKey::parse("canic.core.rows.v1").unwrap();
+        let app_key = ic_memory::StableKey::parse("app.rows.v1").unwrap();
+        let control_plane_key = ic_memory::StableKey::parse("canic.control_plane.rows.v1").unwrap();
         let pool = framework_pool(
             vec![MemoryAuthority::new("app", "app.").unwrap()],
             Vec::new(),
@@ -65,13 +68,13 @@ mod tests {
             (CANIC_CORE_MEMORY_AUTHORITY, "canic.core.rows.v1"),
             ("app", "app.rows.v1"),
         ]);
-        let config = ic_memory::MemoryManagerConfig::new(1).unwrap();
+        let config = ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap());
         let mut runtime = MemoryRuntime::new_with_config(backing.clone(), config).unwrap();
         runtime.bootstrap(&initial, &pool, &policy).unwrap();
-        let core_id = runtime.memory_id("canic.core.rows.v1").unwrap();
-        let app_id = runtime.memory_id("app.rows.v1").unwrap();
+        let core_id = runtime.memory_id(&core_key).unwrap();
+        let app_id = runtime.memory_id(&app_key).unwrap();
         assert_ne!(core_id, app_id);
-        let rows = runtime.open_memory("canic.core.rows.v1").unwrap();
+        let rows = runtime.open_memory(&core_key).unwrap();
         rows.grow(1).unwrap();
         rows.write(0, b"retained");
         drop(rows);
@@ -87,8 +90,8 @@ mod tests {
         ]);
         let mut runtime = MemoryRuntime::new_with_config(backing.clone(), config).unwrap();
         runtime.bootstrap(&changed, &pool, &policy).unwrap();
-        assert_eq!(runtime.memory_id("app.rows.v1").unwrap(), app_id);
-        let control_id = runtime.memory_id("canic.control_plane.rows.v1").unwrap();
+        assert_eq!(runtime.memory_id(&app_key).unwrap(), app_id);
+        let control_id = runtime.memory_id(&control_plane_key).unwrap();
         assert_ne!(control_id, core_id);
         let before = backing.borrow().clone();
         let admissions = ADMISSIONS.load(Ordering::SeqCst);
@@ -118,15 +121,12 @@ mod tests {
         ]);
         let mut runtime = MemoryRuntime::new_with_config(backing, config).unwrap();
         runtime.bootstrap(&restored, &pool, &policy).unwrap();
-        assert_eq!(runtime.memory_id("canic.core.rows.v1").unwrap(), core_id);
-        assert_eq!(runtime.memory_id("app.rows.v1").unwrap(), app_id);
-        assert_eq!(
-            runtime.memory_id("canic.control_plane.rows.v1").unwrap(),
-            control_id
-        );
+        assert_eq!(runtime.memory_id(&core_key).unwrap(), core_id);
+        assert_eq!(runtime.memory_id(&app_key).unwrap(), app_id);
+        assert_eq!(runtime.memory_id(&control_plane_key).unwrap(), control_id);
         let mut payload = [0; 8];
         runtime
-            .open_memory("canic.core.rows.v1")
+            .open_memory(&core_key)
             .unwrap()
             .read(0, &mut payload);
         assert_eq!(&payload, b"retained");
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn populated_unmanaged_slot_requires_explicit_physical_exclusion() {
         let backing = crate::memory::fixtures::unmanaged(1);
-        let config = ic_memory::MemoryManagerConfig::new(1).unwrap();
+        let config = ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap());
         let custody_before = backing.borrow()[65_536..].to_vec();
         let declarations = requests(&[(CANIC_CORE_MEMORY_AUTHORITY, "canic.core.rows.v1")]);
         let policy = crate::memory::CanicMemoryManagerPolicy::new();
@@ -192,7 +192,7 @@ mod tests {
         assert!(matches!(
             pool.validate_authority(
                 &ic_memory::StableKey::parse("app.rows.v1").unwrap(),
-                CANIC_CORE_MEMORY_AUTHORITY
+                CANIC_CORE_MEMORY_AUTHORITY,
             ),
             Err(MemoryAllocationPoolError::AuthorityMismatch { .. })
         ));

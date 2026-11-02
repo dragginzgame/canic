@@ -362,7 +362,16 @@ mod tests {
     #[test]
     fn activation_is_owned_by_the_registry_row_and_survives_reopen() {
         let runtime = crate::memory::fixtures::runtime(&["test.shards.v1"], 1);
-        let mut records = BTreeMap::init(runtime.open_memory("test.shards.v1").unwrap());
+        let mut records = {
+            let allocation = runtime
+                .open_memory(&ic_memory::StableKey::parse("test.shards.v1").unwrap())
+                .unwrap();
+            if ic_memory::Memory::size(&allocation) == 0 {
+                BTreeMap::create(allocation)
+            } else {
+                BTreeMap::load(allocation)
+            }
+        };
         let active =
             ShardEntryRecord::try_new("pool", 0, CanisterRole::new("shard"), 10, 1, [1; 32])
                 .unwrap();
@@ -372,9 +381,16 @@ mod tests {
         records.insert(p(1), active.clone());
         records.insert(p(2), inactive.clone());
         drop(records);
-        let reopened = BTreeMap::<Principal, ShardEntryRecord, _>::init(
-            runtime.open_memory("test.shards.v1").unwrap(),
-        );
+        let reopened = {
+            let allocation = runtime
+                .open_memory(&ic_memory::StableKey::parse("test.shards.v1").unwrap())
+                .unwrap();
+            if ic_memory::Memory::size(&allocation) == 0 {
+                BTreeMap::<Principal, ShardEntryRecord, _>::create(allocation)
+            } else {
+                BTreeMap::<Principal, ShardEntryRecord, _>::load(allocation)
+            }
+        };
         assert_eq!(reopened.get(&p(1)), Some(active));
         assert_eq!(reopened.get(&p(2)), Some(inactive));
         ShardingRegistryOps::clear_for_test();

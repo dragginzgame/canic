@@ -5,7 +5,7 @@
 //! Ops validates transitions and capacity before committing these protected records.
 
 use crate::{
-    cdk::structures::{BoundedCell, DefaultMemoryImpl, StableBTreeMap as BTreeMap},
+    cdk::structures::{DefaultMemoryImpl, StableBTreeMap as BTreeMap, StableCell},
     model::caller_authority::{
         CallerReceiptRecord, CallerReceiverRecord, CallerRowKey, CallerSourceRecord,
     },
@@ -62,10 +62,24 @@ impl_storable_bounded!(CallerRowRecord, MAX_CALLER_ROW_BYTES, false);
 impl_storable_bounded!(CallerReceiverRecord, MAX_CALLER_ROW_BYTES, false);
 
 thread_local! {
-    static HEADER: RefCell<BoundedCell<Option<CallerReceiverRecord>, DefaultMemoryImpl>> =
-        RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_HEADER_V1), None));
+    static HEADER: RefCell<StableCell<Option<CallerReceiverRecord>, DefaultMemoryImpl>> =
+        RefCell::new({
+            let allocation = crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_HEADER_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableCell::create(allocation, None)
+            } else {
+                StableCell::load(allocation).expect("retained stable cell")
+            }
+        });
     static ROWS: RefCell<BTreeMap<CallerRowKey, CallerRowRecord, DefaultMemoryImpl>> =
-        RefCell::new(BTreeMap::init(crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_ROWS_V1)));
+        RefCell::new({
+            let allocation = crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_ROWS_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                BTreeMap::create(allocation)
+            } else {
+                BTreeMap::load(allocation)
+            }
+        });
 }
 
 /// Receiver's durable control-header owner.

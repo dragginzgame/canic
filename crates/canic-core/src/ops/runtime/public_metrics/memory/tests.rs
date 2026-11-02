@@ -30,7 +30,7 @@ fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
     let backing = crate::memory::fixtures::all_slots();
     let mut runtime = ic_memory::MemoryRuntime::new_with_config(
         backing.clone(),
-        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     runtime

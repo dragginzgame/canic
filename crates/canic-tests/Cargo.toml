@@ -23,7 +23,7 @@ canic-core = { workspace = true }
 canic-host = { workspace = true }
 ic-host-artifacts = { workspace = true, features = ["wasm"] }
 ic-memory = { workspace = true, features = ["test-support"] }
-ic-platform = { workspace = true, features = ["agent", "candid-parser", "stable-structures"] }
+ic-platform = { workspace = true, features = ["agent", "candid-parser", "icrc-ledger-types", "stable-structures"] }
 serde_json = { workspace = true }
 
 [lints]

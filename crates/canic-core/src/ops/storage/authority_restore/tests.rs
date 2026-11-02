@@ -12,6 +12,63 @@ fn reset() {
 }
 
 #[test]
+fn completed_snapshot_steps_are_exact_read_only_receipts() {
+    reset();
+    let authority = principal(31);
+    AuthorityRestoreFenceOps::initialize(authority).unwrap();
+    let request = AuthoritySnapshotRequest {
+        operation_id: [31; 32],
+    };
+    let other = AuthoritySnapshotRequest {
+        operation_id: [32; 32],
+    };
+    assert!(
+        AuthorityRestoreFenceOps::completed_prepare(request, authority)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        AuthorityRestoreFenceOps::completed_resume(request, authority)
+            .unwrap()
+            .is_none()
+    );
+    let sealed = AuthorityRestoreFenceOps::prepare(request, authority, 11, 13).unwrap();
+    let before = AuthorityRestoreFenceStore::export();
+    assert_eq!(
+        AuthorityRestoreFenceOps::completed_prepare(request, authority).unwrap(),
+        Some(sealed)
+    );
+    assert!(
+        AuthorityRestoreFenceOps::completed_prepare(other, authority)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        AuthorityRestoreFenceOps::completed_resume(request, authority)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(AuthorityRestoreFenceStore::export(), before);
+    let resumed = AuthorityRestoreFenceOps::resume(request, authority, 11, 17).unwrap();
+    let before = AuthorityRestoreFenceStore::export();
+    assert_eq!(
+        AuthorityRestoreFenceOps::completed_resume(request, authority).unwrap(),
+        Some(resumed)
+    );
+    assert!(
+        AuthorityRestoreFenceOps::completed_resume(other, authority)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        AuthorityRestoreFenceOps::completed_prepare(request, authority)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(AuthorityRestoreFenceStore::export(), before);
+}
+
+#[test]
 fn restored_sealed_authority_cannot_resume_after_history_advances() {
     reset();
     let authority = principal(1);

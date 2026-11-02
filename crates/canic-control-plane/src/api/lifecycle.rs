@@ -110,38 +110,19 @@ impl LifecycleApi {
         crate::workflow::root_admission::status(request).map_err(Into::into)
     }
 
-    /// Suspend the exact Root control-plane owners before core authority sealing.
+    /// Compose Root producer suspension with Core's post-observation authority seal.
     pub async fn prepare_authority_snapshot(
         request: canic_contracts::dto::authority_restore::AuthoritySnapshotRequest,
     ) -> Result<
         canic_contracts::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
         canic_contracts::dto::error::Error,
     > {
-        crate::workflow::root_funding::require_authority_snapshot_resumable()
-            .map_err(canic_contracts::dto::error::Error::from)?;
-        canic_core::api::timer::TimerApi::require_root_authority_snapshot_resumable().map_err(
-            |_error| canic_core::control_plane_support::error::InternalError::invariant(),
-        )?;
-        crate::workflow::canister_pool::suspend_for_authority_snapshot().map_err(|_error| {
-            canic_core::control_plane_support::error::InternalError::invariant()
-        })?;
-        match canic_core::api::authority_restore::AuthorityRestoreApi::prepare_root_snapshot(
+        canic_core::api::authority_restore::AuthorityRestoreApi::prepare_root_snapshot(
             request,
+            crate::workflow::root_funding::require_authority_snapshot_resumable,
+            crate::workflow::canister_pool::suspend_for_authority_snapshot,
         )
         .await
-        {
-            Ok(status) => Ok(status),
-            Err(error) => {
-                crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(
-                    |resume_error| {
-                        IcOps::trap(format!(
-                            "Root timer rollback failed after snapshot rejection: {resume_error}"
-                        ))
-                    },
-                );
-                Err(error)
-            }
-        }
     }
 
     /// Resume core authority and then reconstruct exact Root control-plane demand.
@@ -151,15 +132,11 @@ impl LifecycleApi {
         canic_contracts::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
         canic_contracts::dto::error::Error,
     > {
-        let status =
-            canic_core::api::authority_restore::AuthorityRestoreApi::resume_root_snapshot(request)
-                .await?;
-        crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(|error| {
-            IcOps::trap(format!(
-                "Root timer reconstruction failed while authority remained sealed: {error}"
-            ))
-        });
-        Ok(status)
+        canic_core::api::authority_restore::AuthorityRestoreApi::resume_root_snapshot(
+            request,
+            crate::workflow::canister_pool::resume_after_authority_snapshot,
+        )
+        .await
     }
 
     /// Return exact Store evidence under the original operation observer authority.

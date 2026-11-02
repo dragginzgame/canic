@@ -1,6 +1,8 @@
 //! Canic-owned managed lifecycle and explicit admission guard qualification.
 
 mod checkpoint;
+#[cfg(feature = "icrc-discovery")]
+mod icrc;
 mod initialization;
 mod protocol;
 

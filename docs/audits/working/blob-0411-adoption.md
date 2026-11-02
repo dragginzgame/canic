@@ -1,6 +1,6 @@
 # Blob ownership and acceptance audit
 
-## Current mounted coverage summary — Blob 0.47.0
+## Current mounted acceptance — Blob 0.66 adoption
 
 This supersedes the historical inventory below. The canonical method owner is
 `ic_blob_storage_contracts::mount_service_endpoints!`, expanded by the Canic
@@ -11,12 +11,41 @@ adapter; export parity is not exhaustive behavioral coverage.
 | Upload, reference, tenant, certificate and read descriptors | `pic/blob_service/journey/` and managed installation cases, both shapes | Actual provider bytes/browser deployment |
 | Local status, admission, manifest, content, capacity and receipts | `journey/inspection/`, original identities and restored observations | Selected assertions, not exhaustive branch coverage |
 | Tenant/service upload history | `journey/inspection/pagination/`, result/scan boundaries, scope and complete union | Concurrent live provider activity is not simulated |
-| Gateway sync/cancel/revoke | `operator/provider/{gateways,races}/`, success, bounds, exact cancellation, discarded reply, held stale callbacks and fencing, both shapes | Default-branch delivery |
+| Gateway sync/cancel/revoke | `operator/provider/{gateways,races}/`, success, bounds, explicit supersession, exact current cancellation, discarded reply, held stale callbacks and fencing, both shapes | Default-branch delivery |
 | Account balance and payment relationship | `operator/provider/{account,relationship}/`, exact bindings, typed provider/decode refusals | Actual provider/payer linkage |
 | Funding history/outcome/assessment | `operator/funding/`, empty/refunded records and cursors; `paid/outcome/` covers exact acknowledged, credit-required and unknown-transfer outcomes, refunds/grants/fences, caller/intent refusal and read-only replay through recovery | Positive independently confirmed credit and receipt replay remain #494; real-provider evidence remains Blob #34 |
 | External GC callbacks | `operator/provider/gc/`, bounds, caller/revocation, atomic refusal, replay and restore, both shapes | Physical deletion and billing cessation |
+| Generated tenant query/update clients | `browser/`, retained schemas and compiled codecs against both installed shapes; caller/binding denial, malformed frames and unchanged mutation replay | Deployed browser login, upload and download |
 
-Current requalification uses Blob/Contracts 0.47, Tooling/Testkit 0.68.1,
+The current Canic locks select Blob/Contracts 0.66, Memory/Storage 0.62.1,
+Metrics 0.25.1, Metrics Stable 0.64, Platform 0.17 and Wire 0.14.2. Timers 0.36
+now supplies the matching executor; the stable metrics adapter's type mismatch
+is also resolved. Blob's engine and the matching Query 0.84 are now published;
+all three maintained graphs resolve and pass dependency admission with Auth 0.30.
+The Blob adapter consumes checked upstream keys from the
+single committed host runtime. Explicit fresh creation and retained loading keep
+lazy framework stores without an initialize-on-load fallback. Gateway tests now
+exercise superseded failures and two held reads whose callbacks arrive in reverse
+order. On 2026-11-02, the dedicated managed installation/recovery case passes
+(459s), all five embedded funding profiles pass (577s), and the generated-client
+case passes for both shapes (133s). These use complete locked managed builds,
+Testkit 0.78, Node 24.21.0 and TypeScript 6.0.3. Both private consumers also pass
+strict Clippy and allocation-peer verification. The initial dedicated failure
+was an undersized fixture method-name budget; it now derives aggregate bytes
+from its four held replies, and focused Clippy plus the installed rerun pass.
+All three lockfiles remain unchanged through this qualification.
+
+Retained evidence is in `target/upstream-adoption/20261102/` (admission,
+private-consumer Clippy/peer verification and `dedicated-fixed.log`) and
+`target/integrations/checks/blob66-20261102/` (embedded, generated clients,
+source hashes and `results.json`). Local current-family qualification is
+complete. Default-branch delivery, positive independent credit/receipt replay
+(#494) and real-provider/browser acceptance remain separate open work.
+The [current handoff](../../status/current.md) records exact execution results.
+
+### Earlier Blob 0.47 evidence
+
+Retained requalification uses Blob/Contracts 0.47, Tooling/Testkit 0.68.1,
 Platform 0.6.15, Wire 0.7.5, Auth 0.16, Memory/Storage 0.51 and Timers 0.31.
 The two-composition generated-client case and all five embedded profiles pass (536s/255s),
 including finalized Wasm, exact retained schemas/bindings, permissions, held-reply

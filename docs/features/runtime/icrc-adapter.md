@@ -2,8 +2,11 @@
 
 Canic's role startup emits owned Wire endpoints. ICRC discovery and wallet consent
 are explicit application adapters, independent of `canic.toml`, role capabilities
-and the build-generated cfg catalog. Enabling the feature alone mounts nothing.
-Outbound management, CMC and ledger clients are unchanged.
+and the build-generated cfg catalog. Enabling the feature alone mounts nothing. The governed build admits explicit ICRC
+selection independently of compiled role authority. A package may forward its
+`icrc` feature to `canic/icrc`; feature forwarding cannot enable role capabilities.
+Platform owns the external types; Canic retains the small endpoint adapter.
+Outbound management, CMC and ledger clients remain independent.
 
 Enable `canic`'s `icrc` Cargo feature in the application canister, then mount before
 `canic::finish!()`:
@@ -20,10 +23,8 @@ canic::icrc::mount!(limits = ICRC_LIMITS);
 ```
 
 This mounts only `icrc10_supported_standards`. It returns the external named
-`SupportedStandard { name, url }` records and advertises ICRC-10. The previous
-unconditional discovery response used tuple pairs, which do not match the
-[ICRC-10 contract](https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10/ICRC-10.did).
-Regenerate consumers for the corrected external response.
+`SupportedStandard { name, url }` records from Platform and advertises ICRC-10,
+as specified by the [external contract](https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10/ICRC-10.did).
 
 To also support consent, supply a synchronous handler:
 
@@ -44,9 +45,11 @@ execution of that application operation. There is no global handler registry,
 registration hook, cfg switch or adapter-owned lifecycle.
 
 Discovery is a public external Candid query; ICRC-21 consent is a public external
-Candid update, as required by the external contract. The artifact supplies
+Candid update, as required by the external contract. Discovery also supports
+[replicated query calls](https://docs.internetcomputer.org/references/ic-interface-spec/).
+The artifact supplies
 all argument limits; the example values above are not defaults. Mounting them
-uses Platform 0.8.3's bounded Candid decoder, including its ceiling of 16
+uses Platform 0.16.0's bounded Candid decoder, including its ceiling of 16
 constructed wire levels before upstream decoding. Canic preserves caller-selected
 byte/work/header limits and empty lifecycle envelope normalization. This admission
 also checks skipped values; raw unbounded Candid adapters retain their distinct
@@ -55,26 +58,33 @@ boundary and oversized input rejection on the selected dependency graph. Update
 byte limits are also enforced by ingress inspection before execution.
 Owned application endpoints remain Wire, regardless of visibility.
 
-For the pending 0.113 hard cut, remove the global and component/child `[standards]`
-tables from configuration. Delete uses of the old `api::protocol::icrc21`
-dispatcher and select either no adapter, discovery only, or the direct consent
-handler above. Default Coordinator/Store Candid inventories contain no ICRC
-methods; applications deliberately mounting the adapter generate their own exact
-external service metadata. Rebuild artifacts and their current release identities
-through the governed source/build flow. No retained authority, cycle accounting,
-transport retry policy or release version is changed by this adapter.
+The embedded `request.arg` remains opaque to the adapter. The application
+interprets it using the described method's own protocol, including Wire for
+Canic-owned calls. Producing consent does not execute that method, admit its
+caller to the Fleet or grant application spending authority.
 
-Focused qualification covers the two adapter integration tests, protocol and
-managed-endpoint contracts, configuration/topology and role/feature catalog parity.
-The pending 0.113 batch remains uncommitted; release and publication remain
-maintainer-owned. Application-specific consent semantics remain application tests.
+## Maintained qualification
 
+The [native adapter tests](../../../crates/canic/tests/icrc_adapter/mod.rs)
+compare the complete generated service against the pinned external DID, including
+ICRC-21's update mode. Discovery uses Platform's exact named-record identity.
+Default role service inventories remain independent of optional application mounts.
 
-The complete generated ICRC-10/21 service is compared with the pinned external DID
-in `crates/canic/tests/icrc_adapter/contract.did`, including the consent update mode.
-Current installed evidence covers default, feature-only, discovery and consent
-profiles, anonymous successful/unsupported consent calls, absent query routing for
-consent, and input limits. See `target/icrc-completion-20261029/README.md`.
-These standalone proofs do not validate an application's consent descriptions or
-constitute a managed Fleet deployment. The earlier query-based consent proof is
-historical and is superseded by this corrected update-based proof.
+The [installed target](../../../crates/canic-tests/tests/icrc_mounting.rs) builds
+the existing managed-lifecycle probe in four explicit profiles: default, feature
+only, discovery and consent. It inspects the actual exports and uses ordinary
+managed activation with one lifecycle, timer and memory owner. It checks:
+
+- Exact mounted methods, public query/update exports and standard names/URLs,
+  including discovery through the IC replicated-query path.
+- Anonymous and non-admitted callers receiving application-owned consent, with
+  metadata, embedded Wire arguments and typed application refusals preserved.
+- No described-operation execution or new admission authority; the normal
+  application guard still refuses an unadmitted caller and permits an admitted one.
+- Malformed/oversized envelopes and Platform's 16/17-level unused-header boundary.
+- Same-release restoration of the selected static handler without registration.
+
+Run the focused installed proof with `make test-pocketic-case CASE=icrc_mounting`.
+Applications own their actual consent descriptions, language/device support and
+business policy. These framework tests qualify local managed-App composition;
+full Fleet deployment and wallet-client acceptance retain their owning flows.

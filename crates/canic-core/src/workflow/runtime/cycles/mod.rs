@@ -48,8 +48,8 @@ use crate::{
         runtime::{
             async_job::AsyncJobWorkflow,
             timer::{
-                TimerAuthorityWorkflow, TimerError, cancel_owned_once, ensure_owned_once,
-                owned_once_identity, require_active, with_owned_once,
+                TimerAuthorityWorkflow, TimerError, cancel_owned_once, owned_once_identity,
+                require_active, with_owned_once,
             },
         },
     },
@@ -57,6 +57,7 @@ use crate::{
 use canic_contracts::cycles::Cycles;
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    reconcile_once,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -119,25 +120,29 @@ impl CycleWorkflow {
         cancel_owned_once(&TOPUP_TIMER)
     }
 
-    /// Recover one expired automatic-top-up attempt from current capability demand.
+    /// Re-arm abandoned native work from current capability demand and its exact attempt.
     pub(crate) fn recover_expired_timer(now_ns: u64) -> bool {
-        let owner = AsyncJobOwner::CycleTopup;
-        if !AsyncJobWorkflow::has_expired_attempt(owner, now_ns) {
+        if require_active().is_err() {
             return false;
         }
+        let owner = AsyncJobOwner::CycleTopup;
         match Self::automatic_topup_config() {
             Ok(Some(_)) => {}
             Ok(None) => return AsyncJobWorkflow::abandon_expired(owner, now_ns),
             Err(_) => return false,
         }
-        let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
+        let Ok(identity) = Self::timer_identity() else {
             return false;
         };
-        ic_platform::cdk::futures::spawn(async move {
-            let result = Self::run_attempt(attempt).await;
-            let _ = AsyncJobWorkflow::finish(attempt, result);
-        });
-        true
+        if !TimerAuthorityWorkflow::registration_requires_recovery(
+            &identity,
+            AsyncJobWorkflow::has_expired_attempt(owner, now_ns),
+        )
+        .unwrap_or(false)
+        {
+            return false;
+        }
+        Self::reconcile_timer(Some(now_ns), DeadlineUpdate::Exact).is_ok()
     }
 
     /// Record the lifecycle balance and reconcile the sole top-up safety deadline.
@@ -217,7 +222,11 @@ impl CycleWorkflow {
             Ok(attempt) => attempt,
             Err(result) => return result,
         };
+        #[cfg(feature = "internal-test-fixtures")]
+        fixture::before_callback(attempt);
         let result = Self::run_attempt(attempt).await;
+        #[cfg(feature = "internal-test-fixtures")]
+        fixture::after_callback().await;
         AsyncJobWorkflow::finish(attempt, result)
     }
 
@@ -740,8 +749,19 @@ impl CycleWorkflow {
 
     fn declare_timer() -> Result<(), TimerError> {
         require_active()?;
-        ensure_owned_once(&TOPUP_TIMER, Self::timer_identity, |_context| async {
-            Self::run_registered().await
+        TOPUP_TIMER.with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            if registration.is_none() {
+                reconcile_once(
+                    &mut registration,
+                    &Self::timer_identity()?,
+                    None,
+                    |_context| async { Self::run_registered().await },
+                )?;
+            }
+            Ok(())
         })
     }
 

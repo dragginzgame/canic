@@ -46,18 +46,6 @@ impl AsyncJobWorkflow {
         }
     }
 
-    /// Claim only an expired attempt for owner-specific watchdog recovery.
-    pub fn claim_expired(owner: AsyncJobOwner, now_ns: u64) -> Option<AsyncJobAttempt> {
-        if !Self::has_expired_attempt(owner, now_ns) {
-            return None;
-        }
-        let lease_expires_at_ns = now_ns.checked_add(ASYNC_JOB_LEASE_NS)?;
-        match AsyncJobRecoveryOps::claim(owner, now_ns, lease_expires_at_ns) {
-            Ok(AsyncJobClaim::Acquired(attempt)) => Some(attempt),
-            Ok(AsyncJobClaim::Busy { .. }) | Err(_) => None,
-        }
-    }
-
     /// Clear an expired attempt after its authoritative domain proves no work remains.
     pub fn abandon_expired(owner: AsyncJobOwner, now_ns: u64) -> bool {
         if AsyncJobRecoveryOps::expired_deadline(owner, now_ns).is_none() {

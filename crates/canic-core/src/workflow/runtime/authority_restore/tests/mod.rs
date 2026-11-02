@@ -1,4 +1,4 @@
-//! Release refusal preserves producers until read-only timer and paid-owner checks succeed.
+//! Authority refusal preserves producers until read-only timer and paid-owner checks succeed.
 
 use super::*;
 use crate::{diagnostics::codes, ops::storage::async_job_recovery::AsyncJobOwner};
@@ -13,7 +13,7 @@ fn busy_release_preflight_never_observes_settlement_or_cancels_producers() {
     ] {
         let observed = Cell::new(false);
         let suspended = Cell::new(false);
-        let failure = quiesce_release(
+        let failure = quiesce_authority(
             || Err(error),
             || {
                 observed.set(true);
@@ -36,7 +36,7 @@ fn unpaid_obligation_refuses_before_cancellation_and_retry_runs_in_order() {
     let steps = RefCell::new(Vec::new());
     let unsettled = Cell::new(true);
     let attempt = || {
-        quiesce_release(
+        quiesce_authority(
             || {
                 steps.borrow_mut().push("preflight");
                 Ok(())
@@ -65,11 +65,50 @@ fn unpaid_obligation_refuses_before_cancellation_and_retry_runs_in_order() {
 
 #[test]
 fn unexpected_timer_custody_does_not_become_a_retryable_busy_refusal() {
-    let failure = quiesce_release(
+    let failure = quiesce_authority(
         || Err(TimerError::MissingClaim),
         || panic!("preflight refusal must precede settlement"),
         || panic!("preflight refusal must precede cancellation"),
     )
     .unwrap_err();
     assert_eq!(failure.code(), InternalError::invariant().code());
+}
+
+#[test]
+fn post_observation_preflight_sees_new_live_work_before_any_suspension() {
+    let live = Cell::new(false);
+    let suspended = Cell::new(false);
+    let preflight = || {
+        if live.get() {
+            Err(TimerError::RunningClaim(
+                "canic/canister_pool/maintain".into(),
+            ))
+        } else {
+            Ok(())
+        }
+    };
+    require_quiescence(preflight, || Ok(())).unwrap();
+    live.set(true);
+    let error = quiesce_authority(
+        preflight,
+        || Ok(()),
+        || {
+            suspended.set(true);
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), codes::STATE_CONFLICT);
+    assert!(!suspended.get());
+    live.set(false);
+    quiesce_authority(
+        preflight,
+        || Ok(()),
+        || {
+            suspended.set(true);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(suspended.get());
 }

@@ -13,6 +13,9 @@ role = "test"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+icrc = ["canic/icrc"]
+icrc-consent = ["icrc-discovery"]
+icrc-discovery = ["icrc"]
 wire-schema = ["canic/wire-schema"]
 
 [dependencies]

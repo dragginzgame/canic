@@ -1,5 +1,5 @@
 # Common release commands
-<!-- Shared companions: docs/cargo-publication.md -->
+<!-- Shared companions: docs/cargo-publication.md docs/release-validation-reuse.md -->
 
 Every `dragginzgame` repository, including Shared Tooling and repositories without
 a publishable package, must provide these Make targets:
@@ -51,6 +51,11 @@ The default `released` mode and Cargo release-group adapters retain their existi
 version selection; pending-file mode cannot be used with a Cargo release group.
 
 ## Required workflow
+
+Content-bound reuse across independent groups has an
+[opt-in exact-input stage interface](release-validation-reuse.md). Consumers must
+qualify their selected stages and fresh group admission before integrating it.
+Existing complete gates and retained receipts keep their current meaning.
 
 The default `RELEASE_DELIVERY=direct` workflow is:
 
@@ -105,9 +110,10 @@ effects remain outside that scope. Keep the finalized release at the
 top of the changelog until subsequent work needs a new numbered, undated pending
 entry under the [automatic next-version rules](../rules/changelogs.md).
 
-Agents maintain that proposed changelog version and canonical standalone `VERSION`
-file during ordinary development. The proposal does not bump package metadata or
-execute a release. Select the
+Agents maintain that proposed changelog version during ordinary development.
+Shared Tooling alone also maintains its standalone `VERSION` file automatically;
+this is not a sibling adoption requirement. The proposal does not bump package
+metadata or execute a release. Select the
 matching release kind when invoking the explicitly authorized command; its computed
 candidate must agree with the pending heading and the complete batch's
 compatibility impact before finalization.
@@ -1103,3 +1109,37 @@ Host's adoption retains its original validation receipt format and reconstructio
 of expected release bytes from the selected source. Testkit and Backup have
 additional metadata contracts; they must qualify their own callbacks and recovery
 fixtures before replacing their local preparation mechanics.
+
+### Read-only grouped bootstrap observation
+
+`bash scripts/ci/observe-cargo-release-bootstrap.sh policy` returns the complete
+source-only policy after common shape, path and unique-membership admission.
+It does not run Cargo or establish filesystem/graph ownership. Native consumers
+can project it instead of maintaining a parallel policy validator.
+
+The `observe` operation additionally uses locked, offline Cargo `metadata --no-deps` for
+workspace/member discovery and the prepared yq TOML parser for the root catalog
+and lock. It accepts a virtual workspace with literal package versions, including
+partially changed member manifests and coherent per-group local lock versions.
+It reports each group's member paths and declared/locked versions, target directory,
+a derived `coherent` flag and group-editor inputs for a scratch root catalog.
+The scratch requirements retain their existing operators. `inputs` maps every
+observed policy/manifest/lock path to its SHA-256 byte identity; changing only a
+comment still changes the observation. The derived coherence includes the catalog.
+Full local alias requirements are admitted as observations, not transitions. Missing, duplicate or foreign local lock identities,
+unsupported policy, parser failure and outside-root members refuse. Workspace
+inheritance mode is outside this bootstrap-only contract.
+
+Inputs are captured before parsing and compared again before output. Parser or
+Cargo failure, unsafe file routes, wrong catalog paths and byte drift publish no
+observation. Failed observation evidence is retained at the printed location.
+The exported script declares its complete helper closure.
+
+Consumers own exact input custody across their own helpers, tool/compiler selection,
+allowed previous/candidate projections and scratch preparation. Re-observe after
+helpers or effects; neither output is a cached proof. This helper does not fetch,
+render, repair source or authorize release effects.
+Normal group plans still require successful full locked metadata and unchanged
+version/catalog admission. Qualify a consumer's actual scratch recovery before
+retiring its existing bootstrap code. See
+[#333 — Review a shared read-only observation boundary for grouped Cargo bootstrap](https://github.com/dragginzgame/shared-tooling/issues/333).

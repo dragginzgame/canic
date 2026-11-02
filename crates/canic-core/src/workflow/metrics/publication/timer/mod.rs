@@ -10,14 +10,12 @@ use crate::{
     ops::{ic::IcOps, runtime::public_metrics::PublicMetricsOps},
     workflow::{
         metrics::publication::PublicMetricsWorkflow,
-        runtime::timer::{
-            TimerError, cancel_owned_once, ensure_owned_once, owned_once_identity, require_active,
-            with_owned_once,
-        },
+        runtime::timer::{TimerError, cancel_owned_once, owned_once_identity, require_active},
     },
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    reconcile_once,
 };
 use std::cell::RefCell;
 
@@ -48,15 +46,19 @@ impl PublicSamplingTimer {
             return Ok(());
         }
         require_active()?;
-        ensure_owned_once(&SAMPLING_TIMER, Self::timer_identity, |_context| async {
-            Self::run()
-        })?;
         let deadline = next_deadline(IcOps::now_nanos());
-        with_owned_once(&SAMPLING_TIMER, |registration| {
-            registration.reconcile_schedule(deadline.map(TimerSchedule::At))
-        })?
-        .ok_or(TimerError::MissingClaim)?
-        .map_err(TimerError::from)?;
+        SAMPLING_TIMER.with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            reconcile_once(
+                &mut registration,
+                &Self::timer_identity()?,
+                deadline.map(TimerSchedule::At),
+                |_context| async { Self::run() },
+            )
+            .map_err(TimerError::from)
+        })?;
         Ok(())
     }
 

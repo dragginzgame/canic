@@ -36,15 +36,30 @@ thread_local! {
 }
 
 thread_local! {
-    static APPLICATION_LOGINS: RefCell<BTreeMap<Principal, LocalApplicationLoginRecord, DefaultMemoryImpl>> = RefCell::new(BTreeMap::init(
-        crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_LOGINS_V1)
-    ));
-    static APPLICATION_SESSIONS: RefCell<StableVec<LocalApplicationSessionRecord, DefaultMemoryImpl>> = RefCell::new(StableVec::init(
-        crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_SESSIONS_V1)
-    ));
-    static APPLICATION_REPLAYS: RefCell<StableVec<LocalApplicationReplayRecord, DefaultMemoryImpl>> = RefCell::new(StableVec::init(
-        crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_REPLAYS_V1)
-    ));
+    static APPLICATION_LOGINS: RefCell<BTreeMap<Principal, LocalApplicationLoginRecord, DefaultMemoryImpl>> = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_LOGINS_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            BTreeMap::create(allocation)
+        } else {
+            BTreeMap::load(allocation)
+        }
+    });
+    static APPLICATION_SESSIONS: RefCell<StableVec<LocalApplicationSessionRecord, DefaultMemoryImpl>> = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_SESSIONS_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableVec::create(allocation)
+        } else {
+            StableVec::load(allocation)
+        }
+    });
+    static APPLICATION_REPLAYS: RefCell<StableVec<LocalApplicationReplayRecord, DefaultMemoryImpl>> = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_REPLAYS_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableVec::create(allocation)
+        } else {
+            StableVec::load(allocation)
+        }
+    });
 }
 
 thread_local! {
@@ -62,10 +77,19 @@ fn init_local_application_authorization_state()
 -> Cell<LocalApplicationAuthorizationStateRecord, DefaultMemoryImpl> {
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     {
-        Cell::init(
-            crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_STATE_V1),
-            LocalApplicationAuthorizationStateRecord::default(),
-        )
+        {
+            let allocation = crate::memory::open(
+                crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_STATE_V1,
+            );
+            if ic_memory::Memory::size(&allocation) == 0 {
+                Cell::create(
+                    allocation,
+                    LocalApplicationAuthorizationStateRecord::default(),
+                )
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        }
     }
 
     #[cfg(not(any(test, feature = "auth-local-application-authorization")))]
@@ -75,10 +99,15 @@ fn init_local_application_authorization_state()
 fn init_delegated_token_issuer_state() -> Cell<DelegatedTokenIssuerStateRecord, DefaultMemoryImpl> {
     #[cfg(any(test, feature = "auth-delegated-token-issuer-state"))]
     {
-        Cell::init(
-            crate::memory::open(crate::memory::keys::AUTH_DELEGATED_TOKEN_ISSUER_STATE_V1),
-            DelegatedTokenIssuerStateRecord::default(),
-        )
+        {
+            let allocation =
+                crate::memory::open(crate::memory::keys::AUTH_DELEGATED_TOKEN_ISSUER_STATE_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, DelegatedTokenIssuerStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        }
     }
 
     #[cfg(not(any(test, feature = "auth-delegated-token-issuer-state")))]
@@ -88,10 +117,15 @@ fn init_delegated_token_issuer_state() -> Cell<DelegatedTokenIssuerStateRecord, 
 fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, DefaultMemoryImpl> {
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     {
-        Cell::init(
-            crate::memory::open(crate::memory::keys::AUTH_ROOT_DELEGATION_STATE_V1),
-            RootDelegationStateRecord::default(),
-        )
+        {
+            let allocation =
+                crate::memory::open(crate::memory::keys::AUTH_ROOT_DELEGATION_STATE_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, RootDelegationStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        }
     }
 
     #[cfg(not(any(test, feature = "auth-root-delegation-state")))]

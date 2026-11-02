@@ -69,7 +69,16 @@ where
     V: Storable,
 {
     let runtime = crate::memory::fixtures::runtime(&["test.rows.v1"], 16);
-    let mut map = StableBtreeMap::<K, V, _>::init(runtime.open_memory("test.rows.v1").unwrap());
+    let mut map = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::<K, V, _>::create(allocation)
+        } else {
+            StableBtreeMap::<K, V, _>::load(allocation)
+        }
+    };
     for (key, value) in entries {
         assert!(map.insert(key, value).is_none());
     }
@@ -88,13 +97,39 @@ fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
             "test.acknowledgement.v1",
             "test.totals.v1",
         ],
-        ic_memory::MemoryManagerConfig::new(16).unwrap(),
+        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(16).unwrap()),
     )
     .unwrap();
-    let mut primary = StableBtreeMap::init(runtime.open_memory("test.primary.v1").unwrap());
-    let mut acknowledgements =
-        StableBtreeMap::init(runtime.open_memory("test.acknowledgement.v1").unwrap());
-    let mut totals = StableBtreeMap::init(runtime.open_memory("test.totals.v1").unwrap());
+    let mut primary = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.primary.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    };
+    let mut acknowledgements = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.acknowledgement.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    };
+    let mut totals = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.totals.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    };
 
     for seed in ascending() {
         let record = receipt_record(seed, terminal_state());
@@ -123,12 +158,39 @@ fn managed_application_ascending_pages_with_reservation(
         "test",
         "test.",
         &["test.primary.v1", "test.eligibility.v1", "test.totals.v1"],
-        ic_memory::MemoryManagerConfig::new(16).unwrap(),
+        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(16).unwrap()),
     )
     .unwrap();
-    let mut primary = StableBtreeMap::init(runtime.open_memory("test.primary.v1").unwrap());
-    let mut eligibility = StableBtreeMap::init(runtime.open_memory("test.eligibility.v1").unwrap());
-    let mut totals = StableBtreeMap::init(runtime.open_memory("test.totals.v1").unwrap());
+    let mut primary = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.primary.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    };
+    let mut eligibility = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.eligibility.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    };
+    let mut totals = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.totals.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    };
 
     if reserve_eligibility {
         let required_pages = super::intent::application_eligibility_required_pages(RECORDS)
@@ -233,12 +295,22 @@ fn application_eligibility_entry(
 fn empty_bounded_singletons_allocate_only_their_cell_header() {
     fn check<T: Storable>() {
         let runtime = crate::memory::fixtures::runtime(&["test.cell.v1"], 1);
-        let cell = crate::cdk::structures::BoundedCell::init(
-            runtime.open_memory("test.cell.v1").unwrap(),
-            None::<T>,
-        );
+        let cell = {
+            let allocation = runtime
+                .open_memory(&ic_memory::StableKey::parse("test.cell.v1").unwrap())
+                .unwrap();
+            if ic_memory::Memory::size(&allocation) == 0 {
+                crate::cdk::structures::StableCell::create(allocation, None::<T>)
+            } else {
+                crate::cdk::structures::StableCell::load(allocation).expect("retained stable cell")
+            }
+        };
         assert!(cell.get().is_none());
-        let id = usize::from(runtime.memory_id("test.cell.v1").unwrap());
+        let id = usize::from(
+            runtime
+                .memory_id(&ic_memory::StableKey::parse("test.cell.v1").unwrap())
+                .unwrap(),
+        );
         assert_eq!(
             runtime.memory_allocations().unwrap().memories[id]
                 .virtual_extent

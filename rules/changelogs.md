@@ -262,8 +262,8 @@ selects the group's own ledger; it does not finalize a shared historical file.
   view and detail link aligned, including when a candidate changes minor line.
 - In the handoff, state the selected next version and the compatibility reason,
   including the affected contract and required action for a breaking change.
-- When a dedicated `VERSION` file is the canonical repository version, prepare
-  it automatically with the pending changelog during meaningful implementation.
+- In Shared Tooling only, prepare root `VERSION` automatically with the pending
+  changelog during meaningful implementation.
   No separate version-edit request is needed. Use `## [X.Y.Z] - Unreleased` for
   this workflow so a prepared version is distinguishable from undated historical
   releases. Keep the file and heading equal; reuse that pair for further pending
@@ -273,14 +273,14 @@ selects the group's own ledger; it does not finalize a shared historical file.
   before adding the batch's notes, and `make check-version` rejects drift in CI.
   Its release adapter derives the released base from the entry below the explicit
   pending heading, then finalizes the prepared identity without a second bump.
-  Other VERSION-backed repositories must wire the same distinction into their
-  local release adapter before adopting this automation; do not patch snapshots.
+  This is Shared Tooling's local workflow, not a consumer adoption requirement.
+  Do not introduce `VERSION` or pending-file release mode in sibling workspaces.
 - This pending-file authority does not extend to Cargo/npm package versions,
   lockfiles, unrelated groups, commits, tags, pushes, publication or deployment.
   Do not introduce a root `VERSION` in a workspace with independent release groups
   or treat a file mirroring package metadata as an independent version owner.
   Requests such as "work on 0.4", "prepare 0.4" or "0.4 changelog" select the work,
-  notes and canonical VERSION where applicable, not release execution. Commit and
+  notes and, in Shared Tooling only, `VERSION`, not release execution. Commit and
   PR authority follows the [contribution rules](contributions.md).
 
 For a latest finalized release of `0.14.7`:

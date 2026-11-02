@@ -77,10 +77,14 @@ fn root_deletion_retained_cycles_target(
 std::thread_local! {
     static ROOT_COMPONENT_REGISTRY:
         RefCell<Cell<RootComponentRegistryStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_STATE_V1),
-            RootComponentRegistryStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_STATE_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, RootComponentRegistryStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -91,9 +95,14 @@ std::thread_local! {
             RootComponentDrainingRecord,
             DefaultMemoryImpl,
         >,
-    > = RefCell::new(StableBtreeMap::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_DRAINING_V1),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_DRAINING_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -104,9 +113,14 @@ std::thread_local! {
             RootComponentSubtreeRemovalCompletedLeafRecord,
             DefaultMemoryImpl,
         >,
-    > = RefCell::new(StableBtreeMap::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_V1),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -117,9 +131,14 @@ std::thread_local! {
             ComponentRegistryEntryRecord,
             DefaultMemoryImpl,
         >,
-    > = RefCell::new(StableBtreeMap::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_ENTRIES_V1),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_ENTRIES_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -130,9 +149,14 @@ std::thread_local! {
             ComponentRegistryPrincipalIndexRecord,
             DefaultMemoryImpl,
         >,
-    > = RefCell::new(StableBtreeMap::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PRINCIPAL_INDEX_V1),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PRINCIPAL_INDEX_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -143,9 +167,14 @@ std::thread_local! {
             RootComponentAllocationRecord,
             DefaultMemoryImpl,
         >,
-    > = RefCell::new(StableBtreeMap::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_ALLOCATIONS_V1),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_ALLOCATIONS_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 ///

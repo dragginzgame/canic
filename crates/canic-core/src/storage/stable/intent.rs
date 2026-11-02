@@ -38,16 +38,27 @@ type ApplicationReceiptEligibilityState = Option<ApplicationReceiptEligibilityMa
 
 std::thread_local! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            crate::memory::open(crate::memory::keys::INTENT_META_V1),
-            IntentStoreMetaRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = crate::memory::open(crate::memory::keys::INTENT_META_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, IntentStoreMetaRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 std::thread_local! {
     static APPLICATION_RECEIPT_ELIGIBILITY: RefCell<ApplicationReceiptEligibilityState> = {
         let memory = crate::memory::open(crate::memory::keys::APPLICATION_RECEIPT_ELIGIBILITY_V1);
-        let map = StableBtreeMap::init(memory);
+        let map = {
+            let allocation = memory;
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        };
         RefCell::new(Some(map))
     };
 }
@@ -59,14 +70,28 @@ std::thread_local! {
             ReceiptBackedIntentRecord,
             DefaultMemoryImpl,
         >
-    > = RefCell::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_RECEIPT_BACKED_RECORDS_V1)));
+    > = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::INTENT_RECEIPT_BACKED_RECORDS_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 std::thread_local! {
     static INTENT_EXPIRY_INDEX: RefCell<
         StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_EXPIRY_INDEX_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::INTENT_EXPIRY_INDEX_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 
@@ -77,14 +102,28 @@ std::thread_local! {
             PlacementAcknowledgementEntryRecord,
             DefaultMemoryImpl,
         >
-    > = RefCell::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_ACKNOWLEDGEMENT_INDEX_V1)));
+    > = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::PLACEMENT_ACKNOWLEDGEMENT_INDEX_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 std::thread_local! {
     static INTENT_RECORDS: RefCell<
         StableBtreeMap<IntentId, IntentRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_RECORDS_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::INTENT_RECORDS_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 
@@ -92,7 +131,14 @@ std::thread_local! {
     static INTENT_TOTALS: RefCell<
         StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_TOTALS_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::INTENT_TOTALS_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 
@@ -100,7 +146,14 @@ std::thread_local! {
     static INTENT_PENDING: RefCell<
         StableBtreeMap<IntentId, IntentPendingEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_PENDING_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::INTENT_PENDING_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 

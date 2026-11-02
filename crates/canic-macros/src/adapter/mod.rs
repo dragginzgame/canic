@@ -257,7 +257,7 @@ pub(crate) fn export_entrypoint(
     let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
     quote! {
         #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
-        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
+        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = concat!(env!("CARGO_CRATE_NAME"), "__", #host_export)))]
         fn #name() {
             #executor(|| { #execute });
         }

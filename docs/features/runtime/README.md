@@ -21,7 +21,7 @@ logic in the application package.
   canister is being built
 - `canic::start!()` to restore Canic state and connect public methods at startup
 - stable-memory helpers under `canic::memory` for persistent canister data
-- one shared cross-framework inventory through `ic-timers 0.8.1`, with
+- one shared cross-framework inventory through the catalog's `ic-timers`, with
   application timer registrations owned directly by their consuming crate
 - protected framework calls with measurements; application transport and owned
   prepared calls and request/reply codecs come directly from IC Platform and IC Wire
@@ -43,6 +43,37 @@ per-provider stable recording under the same host lifecycle.
 See [endpoint argument and reply controls](update-payload-limits.md) before setting
 client request budgets: ordinary managed updates inherit a 16 KiB encoded
 argument limit, including bare CDK update endpoints.
+
+## Platform-Owned Calls
+
+Application code prepares and executes `ic_platform::call::Call` directly.
+Supply the exact Wire frame or required external protocol bytes, wait policy and
+attachment. Construction is inert; empty raw bytes do not encode Candid unit.
+Canic has no generic application call builder. Its stateless framework adapter
+adds bounded target/method and outcome counters and projects errors around one
+Platform execution. Platform owns submission, callbacks, cleanup and the executor.
+
+`Started` means a polled attempt, including a local submission refusal.
+`Completed` means a transport response arrived, before the consuming protocol
+decodes it. A malformed reply therefore differs from transport failure. A dropped
+future or trapping callback may leave only `Started`; these volatile counters
+are not pending-effect records or spending authority. Refunds must be read in
+the matching callback before another await; an attachment is not a refund.
+
+`PLATFORM_UNAVAILABLE` never establishes that a remote effect was absent.
+A callee may commit state or accept cycles before rejecting; bounded
+`SYS_UNKNOWN` leaves the response unresolved. A decode error also follows a
+possibly completed effect. Preserve the original journal, operation identity and
+issued budget; reconcile authoritative evidence instead of issuing another paid
+operation from an availability error. Dropping a future does not cancel its
+remote effect, and a bounded unknown response does not promise attachment recovery.
+These are the IC's [bounded-call and cleanup contracts](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/).
+
+The [installed call qualification](../../../crates/canic-tests/tests/platform_call.rs)
+checks the production adapter, real effect/refund observations, trap cleanup and
+representative cascade, management and required external Ledger codecs. Its
+fixture controls are compiled only for disposable validation; Relay remains a
+separate explicit durable request/result owner.
 
 ## Boundary
 

@@ -16,7 +16,14 @@ const ACCOUNTING_KEY: [u8; KEY_BYTES] = [0; KEY_BYTES];
 
 std::thread_local! {
     static FIXTURES: RefCell<BTreeMap<[u8; KEY_BYTES], Vec<u8>, DefaultMemoryImpl>> =
-        RefCell::new(BTreeMap::init(canic_core::memory::open(crate::memory::keys::FIXTURE_STORE_V1)));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::FIXTURE_STORE_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                BTreeMap::create(allocation)
+            } else {
+                BTreeMap::load(allocation)
+            }
+        });
 }
 
 /// Exact descriptor and monotonic ingestion progress, committed with each chunk.

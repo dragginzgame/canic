@@ -121,6 +121,25 @@ mod tests {
     }
 
     #[test]
+    fn transport_projection_preserves_opaque_rejection_evidence_without_replay_authority() {
+        for code in [4, 6, u32::MAX] {
+            let rejected = ic_platform::cdk::call::CallRejected::with_rejection(
+                code,
+                "opaque rejection".into(),
+            );
+            let error = InternalError::from(OpsError::from(ic::IcInfraError::from(
+                CallFailed::CallRejected(rejected),
+            )));
+            assert_eq!(error.public_code(), Some(codes::PLATFORM_UNAVAILABLE));
+            assert_eq!(error.platform_rejection_code(), Some(code));
+            assert_eq!(
+                Error::from(error),
+                Error::from_registered(codes::PLATFORM_UNAVAILABLE)
+            );
+        }
+    }
+
+    #[test]
     fn unspecified_call_failure_is_not_attributed_to_funding() {
         let failure = CallFailed::CallPerformFailed(CallPerformFailed);
         let error = InternalError::from(ic::IcInfraError::from(failure));

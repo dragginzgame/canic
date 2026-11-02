@@ -39,6 +39,8 @@ canic	release_index_guard	full	parallel	ordinary
 canic	workspace_manifest	full	parallel	ordinary
 canic-tests	pic_receipt_backed_intent	full	pocketic-serial	runtime
 canic-tests	pic_root_baseline_restore	full	pocketic-serial	runtime
+canic-tests	icrc_mounting	full	pocketic-serial	runtime
+canic-tests	platform_call	full	pocketic-serial	runtime
 canic-tests	pic_root_funding_recovery	full	pocketic-serial	runtime
 canic-tests	pic_root_inspection_reserve	full	pocketic-serial	runtime
 canic-tests	timer_authority	full	pocketic-serial	runtime

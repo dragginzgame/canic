@@ -88,7 +88,7 @@ fn init_nonroot_before_bootstrap(
     authority: RoleRuntimeAuthority,
     initialize: impl FnOnce(CanisterRole) -> Result<(), crate::InternalError>,
 ) {
-    crate::api::timer::TimerApi::initialize_nonroot_runtime_required();
+    crate::api::timer::TimerApi::initialize_shared_runtime_required();
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::Init,
         LifecycleMetricRole::Nonroot,

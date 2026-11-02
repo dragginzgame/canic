@@ -3,6 +3,8 @@
 //! Responsibility: qualify caller-scoped funding identities against a real shared Hub.
 //! Boundary: disposable Shards drive the production attempt and RPC; no transfer is mocked.
 
+pub(super) mod timer_recovery;
+
 use super::*;
 use canic::dto::{
     observability::{CanisterObservabilityResponse, ChildFundingUsage},
@@ -12,54 +14,14 @@ use canic::dto::{
 const GRANT: u128 = 1_000_000_000_000;
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "keep the ordered PocketIC scenario and its authority assertions together"
-)]
 pub(super) fn sibling_topups_retain_distinct_receipts_after_both_replies_are_lost() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace =
-        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
-    let config_path = workspace.join("apps/test/test-configs/fixture-sibling-funding.toml");
-    let config = AppConfigSnapshot::load(&config_path).unwrap();
-    let pic = build_pic();
-    let coordinator = pic.create_canister();
-    pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
-    let root_wasm = crate::pic::artifacts::build_generated_fleet_wasm(
-        &workspace,
-        &config_path,
-        "root",
-        CanicWasmBuildProfile::Fast,
-    );
-    let components = build_component_fixture_wasms(
-        &workspace,
-        &config_path,
-        "fleet-sibling-funding",
-        &[
-            ("user_hub", "canister_user_hub"),
-            ("user_shard", "canister_user_shard"),
-        ],
-    );
-    let fixture =
-        install_fixture_root(&pic, coordinator, &config_path, &[], root_wasm, &components);
-    super::state_cascade::activate_components(&pic, coordinator, &fixture, &config);
-    let root = fixture.root_id;
-    let workloads = root_pool_status(&pic, root)
-        .entries
-        .into_iter()
-        .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
-        .map(|entry| entry.canister_id)
-        .collect::<Vec<_>>();
-    let hub = workloads.iter().copied().find(|&canister| {
-        matches!(managed_binding_status(&pic, root, canister), ManagedCanisterBinding::Component(binding) if binding.role.as_str() == "user_hub")
-    }).unwrap();
-    let children = workloads.iter().copied().filter(|&canister| {
-        matches!(managed_binding_status(&pic, root, canister), ManagedCanisterBinding::ComponentChild(binding) if binding.role.as_str() == "user_shard")
-    }).collect::<Vec<_>>();
-    let [first, second] = children.as_slice() else {
-        panic!("exactly two configured siblings");
-    };
-    let (first, second) = (*first, *second);
+    let SiblingFundingFixture {
+        pic,
+        root,
+        hub,
+        children: [first, second],
+    } = install_sibling_funding_fixture();
     assert_ne!(first, second);
     let mut operations = Vec::new();
     for child in [first, second] {
@@ -345,5 +307,63 @@ fn qualify_automatic_siblings(
             .map(Cycles::to_u128)
             .collect::<Vec<_>>();
         assert_eq!(grants, [GRANT], "one production timer grant per sibling");
+    }
+}
+
+struct SiblingFundingFixture {
+    pic: PocketIc,
+    root: Principal,
+    hub: Principal,
+    children: [Principal; 2],
+}
+
+fn install_sibling_funding_fixture() -> SiblingFundingFixture {
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
+    let config_path = workspace.join("apps/test/test-configs/fixture-sibling-funding.toml");
+    let config = AppConfigSnapshot::load(&config_path).unwrap();
+    let pic = build_pic();
+    let coordinator = pic.create_canister();
+    pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+    let root_wasm = crate::pic::artifacts::build_generated_fleet_wasm(
+        &workspace,
+        &config_path,
+        "root",
+        CanicWasmBuildProfile::Fast,
+    );
+    let components = build_component_fixture_wasms(
+        &workspace,
+        &config_path,
+        "fleet-sibling-funding",
+        &[
+            ("user_hub", "canister_user_hub"),
+            ("user_shard", "canister_user_shard"),
+        ],
+    );
+    let fixture =
+        install_fixture_root(&pic, coordinator, &config_path, &[], root_wasm, &components);
+    super::state_cascade::activate_components(&pic, coordinator, &fixture, &config);
+    let root = fixture.root_id;
+    let workloads = root_pool_status(&pic, root)
+        .entries
+        .into_iter()
+        .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
+        .map(|entry| entry.canister_id)
+        .collect::<Vec<_>>();
+    let hub = workloads.iter().copied().find(|&canister| {
+        matches!(managed_binding_status(&pic, root, canister), ManagedCanisterBinding::Component(binding) if binding.role.as_str() == "user_hub")
+    }).unwrap();
+    let children = workloads.iter().copied().filter(|&canister| {
+        matches!(managed_binding_status(&pic, root, canister), ManagedCanisterBinding::ComponentChild(binding) if binding.role.as_str() == "user_shard")
+    }).collect::<Vec<_>>();
+    let [first, second] = children.as_slice() else {
+        panic!("exactly two configured siblings");
+    };
+    let (first, second) = (*first, *second);
+    SiblingFundingFixture {
+        pic,
+        root,
+        hub,
+        children: (first, second).into(),
     }
 }

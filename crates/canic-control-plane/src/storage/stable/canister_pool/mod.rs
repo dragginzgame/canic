@@ -18,22 +18,40 @@ use std::cell::RefCell;
 std::thread_local! {
     static CANISTER_POOL: RefCell<
         StableBtreeMap<Principal, CanisterPoolAssetRecord, DefaultMemoryImpl>
-    > = RefCell::new(StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_INVENTORY_ASSETS_V1)));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_INVENTORY_ASSETS_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 std::thread_local! {
     static CANISTER_POOL_HANDOFF_RECEIPTS: RefCell<
         StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, DefaultMemoryImpl>
-    > = RefCell::new(StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_V1)));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation)
+        } else {
+            StableBtreeMap::load(allocation)
+        }
+    });
 }
 
 std::thread_local! {
     static CANISTER_POOL_STATE: RefCell<
         Cell<CanisterPoolStateRecord, DefaultMemoryImpl>
-    > = RefCell::new(Cell::init(
-        canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_STATE_V1),
-        CanisterPoolStateRecord::default(),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_STATE_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            Cell::create(allocation, CanisterPoolStateRecord::default())
+        } else {
+            Cell::load(allocation).expect("retained stable cell")
+        }
+    });
 }
 
 /// Why one autonomous pool refill stopped without a recoverable principal.
@@ -377,10 +395,19 @@ mod tests {
             "test",
             "test.",
             &["test.receipts.v1"],
-            ic_memory::MemoryManagerConfig::new(1).unwrap(),
+            ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
         )
         .unwrap();
-        let mut receipts = StableBtreeMap::init(runtime.open_memory("test.receipts.v1").unwrap());
+        let mut receipts = {
+            let allocation = runtime
+                .open_memory(&ic_memory::StableKey::parse("test.receipts.v1").unwrap())
+                .unwrap();
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        };
         receipts.insert(maximum_principal(), structurally_maximal);
         assert_eq!(
             receipts.get(&maximum_principal()),

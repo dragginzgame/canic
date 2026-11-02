@@ -32,8 +32,22 @@ use std::cell::RefCell;
 std::thread_local! {
     static SHARDING_CORE: RefCell<ShardingCore<DefaultMemoryImpl>> = RefCell::new(
         ShardingCore::new(
-            StableBtreeMap::init(crate::memory::open(crate::memory::keys::SHARDING_REGISTRY_V1)),
-            StableBtreeMap::init(crate::memory::open(crate::memory::keys::SHARDING_ASSIGNMENTS_V1)),
+            {
+                let allocation = crate::memory::open(crate::memory::keys::SHARDING_REGISTRY_V1);
+                if ic_memory::Memory::size(&allocation) == 0 {
+                    StableBtreeMap::create(allocation)
+                } else {
+                    StableBtreeMap::load(allocation)
+                }
+            },
+            {
+                let allocation = crate::memory::open(crate::memory::keys::SHARDING_ASSIGNMENTS_V1);
+                if ic_memory::Memory::size(&allocation) == 0 {
+                    StableBtreeMap::create(allocation)
+                } else {
+                    StableBtreeMap::load(allocation)
+                }
+            },
         )
     );
 }

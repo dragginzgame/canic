@@ -5,7 +5,7 @@
 //! Boundary: ops converts complete model state to and from this memory-ID-61 record.
 
 use crate::{
-    cdk::structures::{BoundedCell, DefaultMemoryImpl},
+    cdk::structures::{DefaultMemoryImpl, StableCell},
     model::fleet_admission_projection::FleetAdmissionTargetTransitionPhaseModel,
     storage::prelude::*,
 };
@@ -14,8 +14,15 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static FLEET_ADMISSION_PROJECTION: RefCell<
-        BoundedCell<Option<FleetAdmissionProjectionRecord>, DefaultMemoryImpl>,
-    > = RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::FLEET_ADMISSION_PROJECTION_V1), None));
+        StableCell<Option<FleetAdmissionProjectionRecord>, DefaultMemoryImpl>,
+    > = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::FLEET_ADMISSION_PROJECTION_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableCell::create(allocation, None)
+        } else {
+            StableCell::load(allocation).expect("retained stable cell")
+        }
+    });
 }
 
 /// Stable local fence/open phase.

@@ -8,7 +8,7 @@ pub fn runtime(keys: &[&str], bucket_pages: u16) -> MemoryRuntime<VectorMemory> 
         "test",
         "test.",
         keys,
-        MemoryManagerConfig::new(bucket_pages).unwrap(),
+        MemoryManagerConfig::new(std::num::NonZeroU16::new(bucket_pages).unwrap()),
     )
     .unwrap()
 }

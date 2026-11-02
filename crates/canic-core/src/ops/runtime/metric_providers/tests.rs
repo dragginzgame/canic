@@ -72,14 +72,16 @@ fn mixed_providers_share_one_store_and_only_stable_counters_survive_reopen() {
         "metrics",
         "metrics.",
         &[KEY],
-        MemoryManagerConfig::new(1).unwrap(),
+        MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     let mut registry = declared();
     registry
         .activate(&mixed(), true, 7, || {
-            Ok(MetricsStore::new(StableBTreeMap::new(
-                runtime.open_memory(KEY).unwrap(),
+            Ok(MetricsStore::new(StableBTreeMap::create(
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -90,7 +92,9 @@ fn mixed_providers_share_one_store_and_only_stable_counters_survive_reopen() {
     reopened
         .activate(&mixed(), false, 8, || {
             Ok(MetricsStore::new(StableBTreeMap::load(
-                runtime.open_memory(KEY).unwrap(),
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -116,14 +120,16 @@ fn caps_are_exact_until_actual_overflow_and_quality_survives_storage() {
         "metrics",
         "metrics.",
         &[KEY],
-        MemoryManagerConfig::new(1).unwrap(),
+        MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     let mut registry = declared();
     registry
         .activate(&mixed(), true, 7, || {
-            Ok(MetricsStore::new(StableBTreeMap::new(
-                runtime.open_memory(KEY).unwrap(),
+            Ok(MetricsStore::new(StableBTreeMap::create(
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -149,7 +155,9 @@ fn caps_are_exact_until_actual_overflow_and_quality_survives_storage() {
     reopened
         .activate(&mixed(), false, 8, || {
             Ok(MetricsStore::new(StableBTreeMap::load(
-                runtime.open_memory(KEY).unwrap(),
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -218,17 +226,25 @@ fn restore_never_initializes_missing_stable_counter_records() {
         "metrics",
         "metrics.",
         &[KEY],
-        MemoryManagerConfig::new(1).unwrap(),
+        MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     drop(MetricsStore::new(
-        StableBTreeMap::<Vec<u8>, Vec<u8>, _>::new(runtime.open_memory(KEY).unwrap()),
+        StableBTreeMap::<Vec<u8>, Vec<u8>, _>::create(
+            runtime
+                .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                .unwrap(),
+        ),
     ));
     let before = memory.borrow().clone();
     let mut registry = declared();
     assert!(matches!(
         registry.activate(&mixed(), false, 8, || Ok(MetricsStore::new(
-            StableBTreeMap::load(runtime.open_memory(KEY).unwrap())
+            StableBTreeMap::load(
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap()
+            )
         ))),
         Err(ProviderMetricsError::Missing)
     ));
@@ -245,14 +261,16 @@ fn rejected_storage_update_keeps_old_value_and_makes_reporting_unavailable() {
         "metrics",
         "metrics.",
         &[KEY],
-        MemoryManagerConfig::new(1).unwrap(),
+        MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     let mut registry = declared();
     registry
         .activate(&mixed(), true, 7, || {
-            Ok(MetricsStore::new(StableBTreeMap::new(
-                runtime.open_memory(KEY).unwrap(),
+            Ok(MetricsStore::new(StableBTreeMap::create(
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -294,15 +312,17 @@ fn retained_measurements_keep_real_zero_distinct_from_no_samples() {
         "metrics",
         "metrics.",
         &[KEY],
-        MemoryManagerConfig::new(1).unwrap(),
+        MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     let mut registry = ProviderMetrics::default();
     registry.register("blob", MEASUREMENTS).unwrap();
     registry
         .activate(&mixed(), true, 7, || {
-            Ok(MetricsStore::new(StableBTreeMap::new(
-                runtime.open_memory(KEY).unwrap(),
+            Ok(MetricsStore::new(StableBTreeMap::create(
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -323,7 +343,9 @@ fn retained_measurements_keep_real_zero_distinct_from_no_samples() {
     reopened
         .activate(&mixed(), false, 8, || {
             Ok(MetricsStore::new(StableBTreeMap::load(
-                runtime.open_memory(KEY).unwrap(),
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -396,14 +418,16 @@ fn malformed_retained_record_is_not_an_empty_or_fresh_counter() {
         "metrics",
         "metrics.",
         &[KEY],
-        MemoryManagerConfig::new(1).unwrap(),
+        MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     let mut registry = declared();
     registry
         .activate(&mixed(), true, 1, || {
-            Ok(MetricsStore::new(StableBTreeMap::new(
-                runtime.open_memory(KEY).unwrap(),
+            Ok(MetricsStore::new(StableBTreeMap::create(
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap(),
             )))
         })
         .unwrap();
@@ -415,7 +439,11 @@ fn malformed_retained_record_is_not_an_empty_or_fresh_counter() {
     let mut reopened = declared();
     assert!(matches!(
         reopened.activate(&mixed(), false, 2, || Ok(MetricsStore::new(
-            StableBTreeMap::load(runtime.open_memory(KEY).unwrap())
+            StableBTreeMap::load(
+                runtime
+                    .open_memory(&ic_memory::StableKey::parse(KEY).unwrap())
+                    .unwrap()
+            )
         ))),
         Err(ProviderMetricsError::Store(_))
     ));

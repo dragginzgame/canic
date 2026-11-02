@@ -26,13 +26,12 @@ use crate::{
     workflow::runtime::{
         async_job::AsyncJobWorkflow,
         auth::{provisioning, root_delegation_batch},
-        timer::{
-            TimerAuthorityWorkflow, TimerError, ensure_owned_once, require_active, with_owned_once,
-        },
+        timer::{TimerAuthorityWorkflow, TimerError, require_active, with_owned_once},
     },
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    reconcile_once,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -70,10 +69,10 @@ impl RootIssuerRenewalWorkflow {
 
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(super) fn recover_expired(now_ns: u64) -> bool {
-        let owner = AsyncJobOwner::AuthRenewal;
-        if !AsyncJobWorkflow::has_expired_attempt(owner, now_ns) {
+        if require_active().is_err() {
             return false;
         }
+        let owner = AsyncJobOwner::AuthRenewal;
         if !AuthOps::has_enabled_root_issuer_renewal_templates() {
             return AsyncJobWorkflow::abandon_expired(owner, now_ns);
         }
@@ -83,14 +82,18 @@ impl RootIssuerRenewalWorkflow {
         if !config.enabled {
             return AsyncJobWorkflow::abandon_expired(owner, now_ns);
         }
-        let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
+        let Ok(identity) = Self::timer_identity() else {
             return false;
         };
-        ic_platform::cdk::futures::spawn(async move {
-            let result = crate::perf::with_async_context(Self::run_scheduled()).await;
-            let _ = AsyncJobWorkflow::finish(attempt, result);
-        });
-        true
+        if !TimerAuthorityWorkflow::registration_requires_recovery(
+            &identity,
+            AsyncJobWorkflow::has_expired_attempt(owner, now_ns),
+        )
+        .unwrap_or(false)
+        {
+            return false;
+        }
+        Self::reconcile_deadline(Some(now_ns)).is_ok()
     }
 
     pub(super) fn reconcile() -> Result<(), InternalError> {
@@ -330,8 +333,19 @@ impl RootIssuerRenewalWorkflow {
 
     fn declare_timer() -> Result<(), TimerError> {
         require_active()?;
-        ensure_owned_once(&RENEWAL_TIMER, Self::timer_identity, |_context| {
-            crate::perf::with_async_context(Self::run_registered())
+        RENEWAL_TIMER.with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            if registration.is_none() {
+                reconcile_once(
+                    &mut registration,
+                    &Self::timer_identity()?,
+                    None,
+                    |_context| crate::perf::with_async_context(Self::run_registered()),
+                )?;
+            }
+            Ok(())
         })
     }
 

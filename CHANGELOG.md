@@ -6,6 +6,48 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.114.1]
+
+### 🔧 Changed
+
+- Adopt Blob 0.66, Query 0.84, Auth 0.30, Platform 0.17, Memory/Storage 0.62
+  and Metrics 0.25 across the root and both independent Blob consumers.
+  Refresh Shared Tooling 0.27.26 with bounded tool-build scratch.
+- Adapt Blob composition to checked memory grants, strict retained-store loading
+  and superseding gateway refreshes across the dedicated/embedded consumers
+  with installed recovery and generated-client qualification
+  ([#622](https://github.com/dragginzgame/canic/issues/622)).
+- Keep private Blob qualification caches and generated artifacts under the root
+  build directory, covered by one explicit cleanup.
+- Qualify explicit optional ICRC mounting through managed activation, consent policy,
+  input admission and same-release restoration
+  ([#706](https://github.com/dragginzgame/canic/issues/706)).
+- Remove the generic retained timer registration layer; use native reconciliation
+  and one shared lifecycle runtime initializer.
+- Refresh Auth, Backup and the native certificate/signature projections. Admit
+  the actual Platform runtime and guard identities independently of pure protocol
+  facades; retain the pinned release-metadata editor.
+  [Detailed notes](docs/changelog/0.114.md).
+
+### 🩹 Fixed
+
+- Permit explicit ICRC selection in governed managed-package admission while
+  preserving the exact declared role feature closure
+  ([#706](https://github.com/dragginzgame/canic/issues/706)).
+- Preserve cascade encoding/decoding error stages and qualify Platform-owned call
+  execution, callback refunds, cleanup and uncertain effects
+  ([#700](https://github.com/dragginzgame/canic/issues/700)).
+- Keep intent cleanup idle after commit/rollback clears its last deadline, and
+  rearm later finite work ([#545](https://github.com/dragginzgame/canic/issues/545)).
+- Recover abandoned timer callbacks through their retained native owners and
+  preserve live paid attempts ([#398](https://github.com/dragginzgame/canic/issues/398)).
+- Commit Root snapshot seals and producer suspension together, with effect-free
+  completed resume replay ([#176](https://github.com/dragginzgame/canic/issues/176)).
+- Retry transient host-tool downloads ([#450](https://github.com/dragginzgame/canic/issues/450)).
+- Use physical workspace paths in native recovery fixtures ([#450](https://github.com/dragginzgame/canic/issues/450)).
+- Let commands own active PocketIC server lifetimes ([#474](https://github.com/dragginzgame/canic/issues/474)).
+- Refresh the allocation peer for the locked runtime graph ([#551](https://github.com/dragginzgame/canic/issues/551)).
+
 ## [0.114.0] - 2026-10-31
 
 ### ⚠️ Breaking

@@ -35,11 +35,13 @@ if [[ "$mode" != fixtures-only ]]; then
         tree="$(cargo tree --locked --offline --manifest-path "$manifest" \
             --package "${roots[$index]}" --target wasm32-unknown-unknown \
             --edges normal --prefix none --format '{p}')"
-        for owner in ic-memory ic-platform ic-storage; do
+        # Platform's facade can also supply runtime-free protocol identities.
+        # Runtime owns execution; its exact guard must remain unique as well.
+        for owner in ic-memory ic-platform-runtime ic-platform-runtime-guard ic-storage; do
             identities="$(printf '%s\n' "$tree" | awk -v owner="$owner" \
                 '$1 == owner { sub(/ \(\*\)$/, ""); print }' | LC_ALL=C sort -u)"
             count="$(printf '%s\n' "$identities" | awk 'NF { count++ } END { print count+0 }')"
-            if (( count > 1 )); then
+            if (( count != 1 )); then
                 printf 'Conflicting %s identities in %s:\n%s\n' "$owner" "$manifest" "$identities" >&2
                 cargo tree --locked --offline --manifest-path "$manifest" \
                     --package "${roots[$index]}" --target wasm32-unknown-unknown --edges normal >&2
@@ -56,7 +58,10 @@ if [[ "$mode" == packages ]]; then
 fi
 for manifest in "${manifests[@]:1}"; do
     echo "==> fixture Clippy: $manifest"
-    cargo clippy --locked --offline --manifest-path "$manifest" --all-targets --all-features -- -D warnings
+    integration_workspace="$(perl scripts/dev/prepare-integration-workspace.pl --path)"
+    perl scripts/dev/prepare-integration-workspace.pl --run \
+        cargo clippy --locked --offline --manifest-path "$integration_workspace/$manifest" \
+        --all-targets --all-features -- -D warnings
 done
 echo '==> embedded allocation peer qualification (read-only)'
 cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root

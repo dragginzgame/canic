@@ -29,6 +29,15 @@ cat > "$fixture/bin/pocket-ic" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == --version ]]; then printf 'pocket-ic-server 16.1.0\n'; exit 0; fi
+arguments=("$@")
+idle_ttl=''
+for ((index=0; index<${#arguments[@]}; index++)); do
+    case "${arguments[$index]}" in
+        --hard-ttl|--hard-ttl=*) echo 'owned test server must follow its command lifetime' >&2; exit 29 ;;
+        --ttl) idle_ttl="${arguments[$((index + 1))]}" ;;
+    esac
+done
+[[ "$idle_ttl" == 7200 ]]
 printf '%s\n' "$$" > "$CANIC_TEST_SCRATCH/server.pid"
 while [[ "$#" -gt 0 ]]; do
     if [[ "$1" == --port-file ]]; then

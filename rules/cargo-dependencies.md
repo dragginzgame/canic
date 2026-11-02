@@ -18,7 +18,8 @@ through `bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$PWD"
 --external-ic`. This checks canonical dependency names, including aliases,
 optional, build, development and target-specific declarations, using locked
 offline Cargo metadata. The sole allowed direct package owner for the listed
-external IC dependencies is `ic-platform`. Its canonical `ic-platform-types`
+external IC dependencies is `ic-platform`, subject to the narrow identity and
+native implementation exceptions below. Its canonical `ic-platform-types`
 identity supplier additionally owns only the optional `ic_principal` dependency
 needed for registry conversions and unchanged upstream self-authentication.
 
@@ -73,9 +74,16 @@ Do not infer ownership from an `ic-` prefix or prohibit our owned packages.
 
 ## External IC dependency boundary
 
+The Platform-owned `ic-platform-pocket-ic` implementation package may select
+`candid`, `ic-certification` and `ic-management-canister-types` only as normal
+dependencies under `cfg(not(target_family = "wasm"))`. This narrow maintenance
+exception preserves the existing facade and native-only graph; it grants no
+server ownership, other IC dependencies, portable/Wasm declarations or build/dev
+exception. Consumer dependency policies can restrict it further.
+
 All IC-specific dependencies maintained outside `dragginzgame`, including DFINITY
 packages, must be consumed through explicit `ic-platform` features and interfaces.
-The sole additional owner is `ic-platform-types` for `ic_principal`: conversion
+The canonical identity owner is `ic-platform-types` for `ic_principal`: conversion
 impls must live with the canonical owned type to satisfy Rust coherence. That
 exception admits no Candid, runtime, storage or other external IC dependency.
 The IC Platform repository is the sole direct dependency owner for these upstream
@@ -194,6 +202,14 @@ availability is separate evidence; a cached offline build or a `version` beside
   Use `cargo update --package NAME --precise VERSION` when an exact version was
   selected. Review its lockfile changes, including required transitive changes.
   Network access does not authorize unrelated upgrades or a broad `cargo update`.
+- Before planning a downstream release cascade, apply the
+  [adoption planning contract](../docs/cargo-graph-checks.md#dependency-adoption-planning).
+  Every additional dependency upgrade must have a required contract/security
+  reason or be explicitly selected as an optional refresh. Compatible external
+  patch availability alone does not justify raising a minimum or republishing
+  unchanged consumers. Raise minimums when the delivered contract actually needs
+  the newer fix/capability, and qualify that requirement. This does not relax the
+  exact current-version catalog rule for local workspace members.
 - Release/deployment preparation for an already selected graph uses
   `cargo fetch --locked` before dependent builds or checks. That preparation is
   included in the authorized release/deployment workflow. A plain deployment

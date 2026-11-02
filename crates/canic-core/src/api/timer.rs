@@ -20,21 +20,16 @@ pub use crate::workflow::runtime::timer::TimerError;
 pub struct TimerApi;
 
 impl TimerApi {
-    /// Initialize the shared runtime and fixed non-root declarations during lifecycle restore.
+    /// Admit native owner recovery without replacing scheduled or still-running work.
     #[doc(hidden)]
-    pub fn initialize_nonroot_runtime_required() {
-        TimerAuthorityWorkflow::initialize_nonroot_runtime()
-            .unwrap_or_else(|error| IcOps::trap(format!("timer runtime init failed: {error}")));
+    pub fn registration_requires_recovery(
+        identity: &ic_timers::TimerIdentity,
+        expired_attempt: bool,
+    ) -> Result<bool, TimerError> {
+        TimerAuthorityWorkflow::registration_requires_recovery(identity, expired_attempt)
     }
 
-    /// Initialize the shared runtime and fixed root declarations during lifecycle restore.
-    #[doc(hidden)]
-    pub fn initialize_root_runtime_required() {
-        TimerAuthorityWorkflow::initialize_root_runtime()
-            .unwrap_or_else(|error| IcOps::trap(format!("timer runtime init failed: {error}")));
-    }
-
-    /// Initialize the shared runtime for a canister with no Canic runtime jobs.
+    /// Initialize the shared runtime before domain owners reconstruct their jobs.
     #[doc(hidden)]
     pub fn initialize_shared_runtime_required() {
         TimerAuthorityWorkflow::initialize_shared_runtime()

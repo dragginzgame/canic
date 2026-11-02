@@ -94,6 +94,13 @@ audit failures retain a bounded JSON phase/status summary in
 `target/dependency-audits/`; raw tool stderr and database scratch remain private
 and are not uploaded. These diagnostics do not establish hosted-runner success.
 
+Post-update dependency admission checks the root Blob adapter and both private
+consumers' normal Wasm graphs. Each requires one `ic-memory`, `ic-storage`,
+`ic-platform-runtime` and `ic-platform-runtime-guard` identity. Count the actual
+execution owner and its guard: runtime-free Platform protocol facades may retain
+distinct package identities. This does not admit two runtimes, bridge checked
+handles or replace installed lifecycle/recovery qualification.
+
 ## Command Authority
 
 An unambiguous maintainer instruction in the current conversation authorizes
@@ -181,8 +188,18 @@ preflight tests resolve the actual Fast-profile toolchain. These prerequisites
 do not start PocketIC or require the full deployment-tool installation.
 
 Direct Cargo and Make-based work within this checkout use Cargo's workspace
-default `target/`. Independent fixture workspaces retain their own default
-output. Every Make invocation selects the centrally pinned sccache
+default `target/`. The independent Blob fixtures keep their separate Cargo
+workspaces and locks, but their native Cargo configurations select
+`target/integrations/native/<consumer>/` under the repository root. Governed Blob
+artifact qualification and dependency-adoption compilation use a synchronized
+source workspace at `target/integrations/workspace/`, prepared by
+`scripts/dev/prepare-integration-workspace.pl --run PROGRAM [ARGS ...]`.
+The helper copies current tracked and non-ignored untracked source, omits deleted
+inputs and ignored output/state, and holds its preparation lock through the child
+build. Unchanged source and build caches are reused. The ordinary Host layout
+inside that disposable workspace keeps compiler output, generated packages and
+fixture release artifacts under the repository `target/`. Other independent
+workspaces retain Cargo's own defaults. Every Make invocation selects the centrally pinned sccache
 through the repository wrapper and defaults cached builds to `CARGO_INCREMENTAL=0`.
 Linux x86_64 uses `.tools/canic-sccache/bin/sccache`, prepared by the existing
 checksum installer. Other supported hosts use the existing shared Rust installer
@@ -733,8 +750,10 @@ after the source candidate is frozen. Publication may proceed only when the
 downstream preflight and normal release gate both identify that unchanged
 source candidate.
 
-The test target allocates one private repository-owned
-`.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success;
+The governed PocketIC test target allocates one private repository-owned
+`.tmp/test-runtime.<suffix>` directory. This is the exception for interruption
+and recovery evidence that must survive an explicit Cargo clean while its
+failure is investigated. It clears only that scratch on success;
 failure or handled interrupt retains the scratch and prints its path. On every
 exit, cleanup forcibly stops only a detached PocketIC server whose exact
 `--port-file` is a direct child of that invocation's scratch; this avoids the
@@ -743,6 +762,11 @@ invocation's server. Cleanup
 never sweeps a shared path or another concurrent invocation's scratch. Canic
 scripts must clean their own temporary files; explicit cleanup must not sweep
 unrelated repository scratch or global `/tmp` content.
+Ordinary integration-copy, Cargo-cleanup, dependency-adoption and release-adapter
+regressions default their disposable workspaces to `target/tmp/`, honoring a
+command-local `TMPDIR` override. Shared Tooling's managed Cargo tools discard
+successful compiler scratch after byte/receipt admission; this does not clean
+Canic release artifacts or another consumer's selected tool generation.
 Before its final atomic network update, `make release-push` verifies the exact
 release commit/tag pair from committed `HEAD`, refreshes the current `origin`
 branch, requires fast-forward ancestry and rejects any conflicting remote tag.

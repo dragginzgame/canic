@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::{
-        structures::{BoundedCell, DefaultMemoryImpl},
+        structures::{DefaultMemoryImpl, StableCell},
         types::Principal,
     },
     storage::prelude::*,
@@ -18,8 +18,15 @@ pub const MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES: u32 = 512;
 
 std::thread_local! {
     static AUTHORITY_RESTORE_FENCE: RefCell<
-        BoundedCell<Option<AuthorityRestoreFenceRecord>, DefaultMemoryImpl>,
-    > = RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::AUTHORITY_RESTORE_FENCE_V1), None));
+        StableCell<Option<AuthorityRestoreFenceRecord>, DefaultMemoryImpl>,
+    > = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::AUTHORITY_RESTORE_FENCE_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            StableCell::create(allocation, None)
+        } else {
+            StableCell::load(allocation).expect("retained stable cell")
+        }
+    });
 }
 
 /// Exact terminal receipt retained after one live authority snapshot resumes.

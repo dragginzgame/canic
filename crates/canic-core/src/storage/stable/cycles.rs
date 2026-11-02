@@ -18,9 +18,14 @@ std::thread_local! {
     // CYCLE_TRACKER
     //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
-        RefCell::new(CycleTracker::new(StableBtreeMap::init(
-            crate::memory::open(crate::memory::keys::CYCLES_TRACKER_V1),
-        )));
+        RefCell::new(CycleTracker::new({
+            let allocation = crate::memory::open(crate::memory::keys::CYCLES_TRACKER_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        }));
 }
 
 std::thread_local! {
@@ -28,9 +33,14 @@ std::thread_local! {
     // CYCLE_TOPUP_EVENTS
     //
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
-        RefCell::new(CycleTopupEvents::new(StableBtreeMap::init(
-            crate::memory::open(crate::memory::keys::CYCLES_TOPUP_EVENTS_V1),
-        )));
+        RefCell::new(CycleTopupEvents::new({
+            let allocation = crate::memory::open(crate::memory::keys::CYCLES_TOPUP_EVENTS_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        }));
 }
 
 std::thread_local! {
@@ -38,9 +48,14 @@ std::thread_local! {
     // CYCLES_FUNDING_LEDGER
     //
     static CYCLES_FUNDING_LEDGER: RefCell<CyclesFundingLedger> =
-        RefCell::new(CyclesFundingLedger::new(StableBtreeMap::init(
-            crate::memory::open(crate::memory::keys::CYCLES_FUNDING_LEDGER_V1),
-        )));
+        RefCell::new(CyclesFundingLedger::new({
+            let allocation = crate::memory::open(crate::memory::keys::CYCLES_FUNDING_LEDGER_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        }));
 }
 
 ///

@@ -35,6 +35,15 @@ cat > "$fixture/bin/pocket-ic" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == --version ]]; then printf 'pocket-ic-server 16.1.0\n'; exit 0; fi
+arguments=("$@")
+idle_ttl=''
+for ((index=0; index<${#arguments[@]}; index++)); do
+    case "${arguments[$index]}" in
+        --hard-ttl|--hard-ttl=*) echo 'owned test server must follow its command lifetime' >&2; exit 29 ;;
+        --ttl) idle_ttl="${arguments[$((index + 1))]}" ;;
+    esac
+done
+[[ "$idle_ttl" == 7200 ]]
 printf '%s\n' "$$" >> "$WORKER_FIXTURE_PIDS"
 printf 'raw-server-first-line\n'
 for ((line=0; line<1000; line++)); do printf 'raw-server-context-%s\n' "$line"; done

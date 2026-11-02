@@ -8,7 +8,7 @@ use ic_blob_storage::ops::service::{
     installation::{self, INSTALLATION_MEMORY_KEY, ServiceInstallationMemories},
     stores::grants,
 };
-use ic_memory::{DefaultMemoryImpl, RuntimeMemory};
+use ic_memory::{DefaultMemoryImpl, RuntimeMemory, StableKey};
 
 pub(super) type Memory = DefaultMemoryImpl;
 
@@ -37,9 +37,11 @@ pub fn host() -> canic::memory::MemoryBootstrap {
 }
 
 pub(super) fn open() -> ServiceInstallationMemories<RuntimeMemory<Memory>> {
-    let lookup = |key: &str| Ok::<_, ic_memory::RuntimeOpenError>(canic::memory::open(key));
+    let runtime = canic::memory::runtime::shared_runtime().expect("bootstrapped host runtime");
+    let lookup = |key: &StableKey| runtime.open_memory(key);
+    let installation_key = StableKey::parse(INSTALLATION_MEMORY_KEY).expect("configuration key");
     ServiceInstallationMemories {
-        configuration: lookup(INSTALLATION_MEMORY_KEY).expect("configuration grant"),
+        configuration: lookup(&installation_key).expect("configuration grant"),
         stores: grants::open(lookup).expect("service grants"),
     }
 }

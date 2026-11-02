@@ -39,6 +39,25 @@ for package in consumer ic-platform; do
     if [[ "$package" == consumer ]]; then [[ "$status" != 0 ]] || exit 1
     else [[ "$status" == 0 ]] || exit 1; fi
 done
+# The maintained PocketIC implementation owns only its three native SDK inputs.
+# The common exception never grants build/dev or portable/Wasm declarations.
+for dependency in candid ic-certification ic-management-canister-types ic-agent; do
+    for profile in native portable wasm build dev; do
+        perl -MJSON::PP -e '
+          my ($root,$dependency,$profile)=@ARGV;
+          my $target=$profile eq "portable" ? undef : $profile eq "wasm" ? q{cfg(target_family = "wasm")} : q{cfg(not(target_family = "wasm"))};
+          my $kind=$profile eq "build" || $profile eq "dev" ? $profile : undef;
+          print encode_json({version=>1,workspace_root=>$root,workspace_members=>["member"],packages=>[{id=>"member",name=>"ic-platform-pocket-ic",dependencies=>[{name=>$dependency,rename=>"hidden",kind=>$kind,target=>$target}]}]});
+        ' "$FIXTURE" "$dependency" "$profile" > "$FIXTURE/metadata.json"
+        printf '[{"dependency":"%s","allowed_packages":["ic-platform-pocket-ic"]}]\n' "$dependency" > "$FIXTURE/ci/cargo-dependency-boundaries.json"
+        actual=reject
+        if bash "$root/scripts/ci/check-cargo-dependency-boundaries.sh" --consumer "$FIXTURE" --external-ic > "$FIXTURE/pocket-$dependency-$profile.log" 2>&1; then actual=pass; fi
+        expected=reject
+        if [[ "$profile" == native && "$dependency" != ic-agent ]]; then expected=pass; fi
+        [[ "$actual" == "$expected" ]] || { cat "$FIXTURE/pocket-$dependency-$profile.log" >&2; exit 1; }
+    done
+done
+
 # Stable canonical identity owns the registry Principal conversions. This narrow
 # exception cannot grant Candid or another external IC dependency to that owner.
 for package in consumer ic-platform ic-platform-types; do

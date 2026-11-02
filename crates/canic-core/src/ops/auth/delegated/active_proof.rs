@@ -249,7 +249,7 @@ mod tests {
                 derivation_path_hash: chain_key_derivation_path_hash(&[b"canic".to_vec()]).unwrap(),
                 public_key: signing_key()
                     .verifying_key()
-                    .to_encoded_point(true)
+                    .to_sec1_point(true)
                     .as_bytes()
                     .to_vec(),
                 key_version: 4,
@@ -365,7 +365,7 @@ mod tests {
         verifier.policy.public_key = SigningKey::from_slice(&[9; 32])
             .unwrap()
             .verifying_key()
-            .to_encoded_point(true)
+            .to_sec1_point(true)
             .as_bytes()
             .to_vec();
         assert_eq!(

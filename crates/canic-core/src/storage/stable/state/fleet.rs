@@ -13,10 +13,14 @@ pub use crate::domain::state::FleetMode;
 
 std::thread_local! {
     static FLEET_STATE: RefCell<Cell<FleetStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            crate::memory::open(crate::memory::keys::FLEET_STATE_V1),
-            FleetStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = crate::memory::open(crate::memory::keys::FLEET_STATE_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, FleetStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 ///

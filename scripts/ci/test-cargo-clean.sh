@@ -3,7 +3,9 @@ set -euo pipefail
 
 # Exercise actual cleanup only in a disposable workspace with marker artifacts.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-cargo-clean.XXXXXX")"
+scratch_parent="${TMPDIR:-$ROOT/target/tmp}"
+mkdir -p "$scratch_parent"
+fixture="$(mktemp -d "$scratch_parent/canic-cargo-clean.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf -- "$fixture"; else echo "Cleanup fixture retained: $fixture" >&2; fi' EXIT
 unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
 unset CARGO_TARGET_DIR CARGO_BUILD_TARGET_DIR
@@ -67,18 +69,30 @@ CARGO_TARGET_DIR="$workspace/target/cargo" make --no-print-directory clean
 
 # Nested workspaces keep their own default compiler output.
 mkdir -p nested-parent/nested/src
-if [[ -f "$ROOT/integrations/blob-service/.cargo/config.toml" ]]; then
-    mkdir -p nested-parent/.cargo
-    cp "$ROOT/integrations/blob-service/.cargo/config.toml" nested-parent/.cargo/
-fi
-if [[ -f "$ROOT/integrations/blob-service/consumer/.cargo/config.toml" ]]; then
-    mkdir -p nested-parent/nested/.cargo
-    cp "$ROOT/integrations/blob-service/consumer/.cargo/config.toml" nested-parent/nested/.cargo/
-fi
 printf '[workspace]\n[package]\nname = "nested-fixture"\nversion = "0.1.0"\nedition = "2024"\n' > nested-parent/nested/Cargo.toml
 printf 'pub fn nested() {}\n' > nested-parent/nested/src/lib.rs
 (cd nested-parent/nested && cargo metadata --no-deps --offline --format-version 1) \
     > "$fixture/nested-metadata.json"
 jq -e --arg target "$workspace/nested-parent/nested/target" '.target_directory == $target' \
     "$fixture/nested-metadata.json" >/dev/null
-echo 'Workspace cleanup, explicit Cargo selection, retained external evidence and nested defaults passed'
+
+# Canic's two private Blob consumers explicitly place native caches under the
+# repository target. Exercise their actual relative configuration at real depth.
+for consumer in consumer embedded-consumer; do
+    consumer_root="$workspace/integrations/blob-service/$consumer"
+    mkdir -p "$consumer_root/.cargo" "$consumer_root/src"
+    cp "$ROOT/integrations/blob-service/$consumer/.cargo/config.toml" "$consumer_root/.cargo/"
+    cp nested-parent/nested/Cargo.toml "$consumer_root/"
+    cp nested-parent/nested/src/lib.rs "$consumer_root/src/"
+    (cd "$consumer_root" && cargo metadata --no-deps --offline --format-version 1) \
+        > "$fixture/$consumer-metadata.json"
+    selected_target="$(jq -er '.target_directory' "$fixture/$consumer-metadata.json")"
+    seed_target "$selected_target"
+    [[ "$(cd "$selected_target" && pwd -P)" == "$workspace/target/integrations/native/$consumer" ]]
+done
+seed_target "$workspace/target"
+mkdir -p target/integrations/workspace/integrations/blob-service/consumer/.canic/release-builds
+printf 'disposable fixture artifact\n' > target/integrations/workspace/integrations/blob-service/consumer/.canic/release-builds/marker
+make --no-print-directory clean
+[[ ! -e target && -f integrations/blob-service/consumer/src/lib.rs && -f "$fixture/retained/evidence" ]]
+echo 'Workspace cleanup, Blob output configuration, retained external evidence and nested defaults passed'

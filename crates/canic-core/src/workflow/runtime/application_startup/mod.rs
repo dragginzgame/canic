@@ -12,11 +12,11 @@ use crate::{
         caller_authority::CallerAuthorityOps,
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
-    workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
+    workflow::runtime::timer::{TimerError, require_active},
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
-    TimerStart, register_once,
+    reconcile_once,
 };
 use std::{cell::RefCell, future::Future, time::Duration};
 
@@ -75,24 +75,31 @@ pub fn schedule<F: Future<Output = ()> + 'static>(
     let pending = FleetActivationOps::application_startup_work()
         .map_err(AccessError::from)?
         .is_some();
-    if with_owned_once(&STARTUP, |_| ())?.is_none() {
-        let claim = register_once(
-            TimerIdentity::try_new("canic", "application", "initialize")
-                .map_err(TimerError::from)?,
-            TimerStart::Retained { initial: None },
-            move |_| run(hook),
-        )
-        .map_err(TimerError::from)?;
-        retain_owned_once(&STARTUP, claim)?;
-    }
     if pending {
         require_active()?;
-        with_owned_once(&STARTUP, |claim| {
-            claim.ensure_scheduled(TimerSchedule::After(Duration::ZERO))
-        })?
-        .ok_or(TimerError::MissingClaim)?
-        .map_err(TimerError::from)?;
     }
+    STARTUP.with(|registration| {
+        let mut registration = registration
+            .try_borrow_mut()
+            .map_err(|_| TimerError::CustodyBusy)?;
+        if registration.is_none() {
+            reconcile_once(
+                &mut registration,
+                &TimerIdentity::try_new("canic", "application", "initialize")
+                    .map_err(TimerError::from)?,
+                pending.then_some(TimerSchedule::After(Duration::ZERO)),
+                move |_| run(hook),
+            )
+            .map_err(TimerError::from)?;
+        } else if pending {
+            registration
+                .as_ref()
+                .ok_or(TimerError::MissingClaim)?
+                .ensure_scheduled(TimerSchedule::After(Duration::ZERO))
+                .map_err(TimerError::from)?;
+        }
+        Ok::<_, TimerError>(())
+    })?;
     Ok(())
 }
 

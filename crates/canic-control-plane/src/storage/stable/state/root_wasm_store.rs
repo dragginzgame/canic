@@ -16,10 +16,14 @@ use std::cell::RefCell;
 #[cfg(feature = "root-control-plane")]
 std::thread_local! {
     static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            canic_core::memory::open(crate::memory::keys::ROOT_WASM_STORE_STATE_V1),
-            RootWasmStoreStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::ROOT_WASM_STORE_STATE_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, RootWasmStoreStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 ///

@@ -1,3 +1,6 @@
+#[cfg(feature = "internal-test-fixtures")]
+#[doc(hidden)]
+pub mod call_fixture;
 pub mod install;
 pub mod root_funding;
 #[cfg(feature = "internal-test-fixtures")]

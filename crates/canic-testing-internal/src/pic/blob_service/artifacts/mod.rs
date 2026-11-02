@@ -19,17 +19,23 @@ pub(in crate::pic) enum Composition {
 
 impl Composition {
     pub(in crate::pic) fn paths(self) -> (PathBuf, PathBuf) {
-        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .unwrap();
-        let relative = match self {
-            Self::Dedicated => "integrations/blob-service/consumer",
-            Self::Embedded => "integrations/blob-service/embedded-consumer",
-        };
-        let consumer = workspace.join(relative);
+        let output = std::process::Command::new("perl")
+            .arg(source_root().join("scripts/dev/prepare-integration-workspace.pl"))
+            .arg("--path")
+            .output()
+            .expect("resolve disposable integration workspace");
+        assert!(output.status.success(), "resolve integration build path");
+        let workspace = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+        let consumer = workspace.join(self.relative());
         let config = consumer.join("canic.toml");
         (consumer, config)
+    }
+
+    const fn relative(self) -> &'static str {
+        match self {
+            Self::Dedicated => "integrations/blob-service/consumer",
+            Self::Embedded => "integrations/blob-service/embedded-consumer",
+        }
     }
 
     const fn app(self) -> &'static str {
@@ -47,9 +53,16 @@ impl Composition {
     }
 }
 
+fn source_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
+}
+
 /// Expected contract release from the independently locked consumer under test.
 pub(super) fn blob_contract_release(composition: Composition) -> String {
-    let (consumer, _) = composition.paths();
+    let consumer = source_root().join(composition.relative());
     let lock: toml::Value =
         toml::from_str(&std::fs::read_to_string(consumer.join("Cargo.lock")).unwrap()).unwrap();
     let mut contracts = lock["package"]
@@ -81,7 +94,10 @@ pub(in crate::pic) fn write_worker_result(composition: Composition) -> bool {
 pub(in crate::pic) fn release_build(rust_path: &str) -> ReleaseBuildId {
     let scratch = std::env::temp_dir().join(format!("blob-build-{}", std::process::id()));
     std::fs::create_dir(&scratch).expect("fresh build-worker result directory");
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
+    let status = std::process::Command::new("perl")
+        .arg(source_root().join("scripts/dev/prepare-integration-workspace.pl"))
+        .arg("--run")
+        .arg(std::env::current_exe().unwrap())
         .args(["--exact", rust_path, "--nocapture"])
         .current_dir(&scratch)
         .env(BUILD_WORKER, "1")

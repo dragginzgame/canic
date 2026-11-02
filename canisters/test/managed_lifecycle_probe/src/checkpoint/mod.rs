@@ -46,7 +46,16 @@ pub fn open() {
     let memory = canic::memory::open(KEY);
     let mut initial = Vec::new();
     serde_cbor::to_writer(&mut initial, &BusinessRecord::default()).unwrap();
-    STORAGE.with_borrow_mut(|storage| *storage = Some(Cell::init(memory, initial)));
+    STORAGE.with_borrow_mut(|storage| {
+        *storage = Some({
+            let allocation = memory;
+            if ic_memory::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, initial)
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        })
+    });
 }
 
 fn read() -> BusinessRecord {

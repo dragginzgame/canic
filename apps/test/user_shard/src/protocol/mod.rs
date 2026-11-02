@@ -27,6 +27,34 @@ pub const TOPUP_REQUEST: u64 = 0x5445_5354_0000_0505;
 pub const TOPUP_COLLISION: u64 = 0x5445_5354_0000_0506;
 pub const TOPUP_DEMAND: u64 = 0x5445_5354_0000_0507;
 pub const TOPUP_EXHAUSTION: u64 = 0x5445_5354_0000_0508;
+pub const TOPUP_CALLBACK_FAULT: u64 = 0x5445_5354_0000_0509;
+pub const TOPUP_CALLBACK_PROBE: u64 = 0x5445_5354_0000_050a;
+
+/// Selected boundary in the disposable production callback.
+#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
+pub enum CallbackFault {
+    None,
+    BeforeAwait,
+    AfterAwait,
+    HoldReply,
+}
+
+/// Observed native callback and its current durable lease.
+#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
+pub struct CallbackProbe {
+    pub entered: u64,
+    pub operation_id: Option<[u8; 32]>,
+    pub lease_deadline_ns: Option<u64>,
+    pub held: bool,
+}
 
 /// One retained parent request, optionally discarding only its reply.
 #[derive(serde::Deserialize, serde::Serialize)]

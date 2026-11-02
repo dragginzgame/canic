@@ -8,7 +8,7 @@ use canic_contracts::ids::{
     FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId,
 };
 #[cfg(feature = "fleet-coordinator-canister")]
-use canic_core::cdk::structures::{BoundedCell, DefaultMemoryImpl};
+use canic_core::cdk::structures::{DefaultMemoryImpl, StableCell};
 use canic_core::{
     impl_storable_bounded,
     shared_support::fleet_admission_authority::MAX_FLEET_ADMISSION_AUTHORITY_RECORD_BYTES,
@@ -21,8 +21,15 @@ use std::cell::RefCell;
 #[cfg(feature = "fleet-coordinator-canister")]
 std::thread_local! {
     static FLEET_ADMISSION: RefCell<
-        BoundedCell<Option<FleetAdmissionAuthorityRecord>, DefaultMemoryImpl>,
-    > = RefCell::new(BoundedCell::init(canic_core::memory::open(crate::memory::keys::FLEET_ADMISSION_V1), None));
+        StableCell<Option<FleetAdmissionAuthorityRecord>, DefaultMemoryImpl>,
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::FLEET_ADMISSION_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableCell::create(allocation, None)
+        } else {
+            StableCell::load(allocation).expect("retained stable cell")
+        }
+    });
 }
 
 /// Stable closed mutation action.

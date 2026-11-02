@@ -284,7 +284,7 @@ fn init_memory() {
 }
 
 fn init_timers() {
-    canic::__internal::core::api::timer::TimerApi::initialize_nonroot_runtime_required();
+    canic::__internal::core::api::timer::TimerApi::initialize_shared_runtime_required();
 }
 
 fn receipt_key(seed: u8) -> Result<IntentResourceKey, String> {

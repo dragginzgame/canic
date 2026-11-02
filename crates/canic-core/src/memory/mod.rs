@@ -51,11 +51,12 @@ pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDecl
 /// Open a key already committed by the host's explicit bootstrap.
 ///
 /// # Panics
-/// Panics if the host has not bootstrapped or omitted this key.
+/// Panics if the key is invalid, the host has not bootstrapped or omitted this key.
 #[must_use]
 pub fn open(key: &str) -> ic_memory::RuntimeMemory<ic_memory::DefaultMemoryImpl> {
-    runtime::assert_memory_bootstrap_ready(key);
-    runtime::with_runtime(|runtime| Ok(runtime.open_memory(key)))
+    let stable_key = ic_memory::StableKey::parse(key).expect("declared stable key");
+    runtime::assert_memory_bootstrap_ready(stable_key.as_str());
+    runtime::with_runtime(|runtime| Ok(runtime.open_memory(&stable_key)))
         .expect("initialized memory runtime")
         .expect("committed stable key")
 }
@@ -85,11 +86,17 @@ pub enum MemoryBootstrapError {
 }
 
 /// Bootstrap exactly the supplied host composition before any store opens.
+///
+/// # Panics
+/// Panics if the build script supplied a zero or malformed bucket size.
 pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
     let declarations = ic_memory::SealedDeclarationSnapshot::new(input.requests)
         .map_err(ic_memory::MemoryResolutionError::from)
         .map_err(ic_memory::RuntimeBootstrapError::from)?;
-    let config = ic_memory::MemoryManagerConfig::new(configured_bucket_pages())?;
+    let config = ic_memory::MemoryManagerConfig::new(
+        std::num::NonZeroU16::new(configured_bucket_pages())
+            .expect("build-validated memory bucket size"),
+    );
     let mut policy = policy::CanicMemoryManagerPolicy::new();
     if let Some(participant) = input.admission {
         policy = policy.with_admission(participant);

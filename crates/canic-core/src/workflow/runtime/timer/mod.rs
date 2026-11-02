@@ -14,11 +14,11 @@ use crate::{
     workflow::{placement::acknowledgement::PlacementAcknowledgementWorkflow, runtime},
 };
 use ic_timers::{
-    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, ScheduleError, TimerCadence,
-    TimerCompletion, TimerError as ProviderError, TimerIdentity, TimerIdentityError,
-    TimerRegistrationStatus, TimerSchedule, TimerSnapshot, TimerStart, WatchdogReconcileState,
-    WatchdogRegistration, WatchdogRunResult, initialize_runtime, reconcile_watchdog, register_once,
-    timer_inventory,
+    InactiveReason, OnceContext, OnceDecision, OnceRegistration, OnceRunResult, ScheduleError,
+    TimerCadence, TimerCompletion, TimerError as ProviderError, TimerIdentity, TimerIdentityError,
+    TimerRegistrationStatus, TimerRuntimeStateSnapshot, TimerSchedule, TimerSnapshot, TimerStart,
+    WatchdogReconcileState, WatchdogRegistration, WatchdogRunResult, initialize_runtime,
+    reconcile_watchdog, register_once, timer_inventory, timer_snapshot,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -67,8 +67,6 @@ pub enum TimerError {
     Suspended,
     #[error("authority snapshots do not support a timer outside Canic custody: {0}")]
     UnmanagedClaim(String),
-    #[error("Canic timer claim has the wrong scheduling policy")]
-    WrongPolicy,
 }
 
 impl From<TimerError> for InternalError {
@@ -81,20 +79,22 @@ impl From<TimerError> for InternalError {
 pub struct TimerAuthorityWorkflow;
 
 impl TimerAuthorityWorkflow {
+    /// Recover confirmed abandonment or expired demand only while native work is inactive.
+    pub fn registration_requires_recovery(
+        identity: &TimerIdentity,
+        expired_attempt: bool,
+    ) -> Result<bool, TimerError> {
+        require_active()?;
+        Ok(registration_recovery_required(
+            timer_snapshot(identity)?.map(|snapshot| snapshot.state()),
+            expired_attempt,
+        ))
+    }
+
     /// Initialize only the shared timer runtime for a canister with no declared jobs yet.
     pub(crate) fn initialize_shared_runtime() -> Result<(), TimerError> {
         initialize_runtime()?;
         Ok(())
-    }
-
-    /// Initialize the shared runtime; non-root claims remain lazy and domain-owned.
-    pub(crate) fn initialize_nonroot_runtime() -> Result<(), TimerError> {
-        Self::initialize_shared_runtime()
-    }
-
-    /// Initialize the shared runtime; the control plane declares Root-only claims later.
-    pub(crate) fn initialize_root_runtime() -> Result<(), TimerError> {
-        Self::initialize_shared_runtime()
     }
 
     /// Restore volatile suspension from the durable authority fence.
@@ -252,6 +252,26 @@ impl TimerAuthorityWorkflow {
     /// Return the shared canonical timer inventory in deterministic identity order.
     pub fn statuses() -> Result<Vec<TimerSnapshot>, TimerError> {
         Ok(timer_inventory()?.into_timers())
+    }
+}
+
+const fn registration_recovery_required(
+    state: Option<TimerRuntimeStateSnapshot>,
+    expired_attempt: bool,
+) -> bool {
+    match state {
+        Some(TimerRuntimeStateSnapshot::Inactive {
+            reason: InactiveReason::Abandoned,
+        }) => true,
+        None
+        | Some(TimerRuntimeStateSnapshot::Inactive {
+            reason: InactiveReason::NeverScheduled | InactiveReason::Stopped,
+        }) => expired_attempt,
+        Some(
+            TimerRuntimeStateSnapshot::Inactive { .. }
+            | TimerRuntimeStateSnapshot::Ordinary(_)
+            | TimerRuntimeStateSnapshot::Watchdog(_),
+        ) => false,
     }
 }
 
@@ -413,68 +433,6 @@ pub(in crate::workflow) fn cancel_owned_once(
     Ok(())
 }
 
-/// Lazily declare one inactive retained claim, rolling back provider registration
-/// if custody cannot be retained. Domain owners still admit activity and schedules.
-pub(in crate::workflow) fn ensure_owned_once<F, Fut>(
-    owner: &'static LocalKey<RefCell<Option<OnceRegistration>>>,
-    identity: impl FnOnce() -> Result<TimerIdentity, TimerError>,
-    callback: F,
-) -> Result<(), TimerError>
-where
-    F: FnMut(OnceContext) -> Fut + 'static,
-    Fut: Future<Output = OnceRunResult> + 'static,
-{
-    if with_owned_once(owner, |_| ())?.is_some() {
-        return Ok(());
-    }
-    let registration = register_once(
-        identity()?,
-        TimerStart::Retained { initial: None },
-        callback,
-    )?;
-    retain_owned_once(owner, registration)
-}
-
-/// Retain one exact domain owner's native once registration with rollback on rejection.
-pub fn retain_owned_once(
-    owner: &'static LocalKey<RefCell<Option<OnceRegistration>>>,
-    registration: OnceRegistration,
-) -> Result<(), TimerError> {
-    retain_with_rollback(
-        registration,
-        |registration| {
-            owner.with(|current| {
-                let Ok(mut current) = current.try_borrow_mut() else {
-                    return Err((TimerError::CustodyBusy, registration));
-                };
-                if current.is_some() {
-                    return Err((TimerError::WrongPolicy, registration));
-                }
-                *current = Some(registration);
-                Ok(())
-            })
-        },
-        |registration| registration.unregister().map_err(TimerError::from),
-    )
-}
-
-fn retain_with_rollback<T>(
-    claim: T,
-    retain: impl FnOnce(T) -> Result<(), (TimerError, T)>,
-    cleanup: impl FnOnce(T) -> Result<(), TimerError>,
-) -> Result<(), TimerError> {
-    match retain(claim) {
-        Ok(()) => Ok(()),
-        Err((primary, claim)) => match cleanup(claim) {
-            Ok(()) => Err(primary),
-            Err(cleanup) => Err(TimerError::RegistrationRollback {
-                primary: Box::new(primary),
-                cleanup: Box::new(cleanup),
-            }),
-        },
-    }
-}
-
 fn format_identity(identity: &TimerIdentity) -> String {
     format!(
         "{}/{}/{}",
@@ -503,7 +461,52 @@ fn require_observed_claims_resumable(
 mod tests {
     use super::*;
     use crate::ops::storage::async_job_recovery::AsyncJobClaim;
-    use std::{cell::Cell, collections::BTreeSet};
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn recovery_requires_native_abandonment_or_an_inactive_expired_attempt() {
+        use ic_timers::OrdinaryRuntimeStateSnapshot;
+        for expired in [false, true] {
+            assert!(registration_recovery_required(
+                Some(TimerRuntimeStateSnapshot::Inactive {
+                    reason: InactiveReason::Abandoned,
+                }),
+                expired
+            ));
+            assert_eq!(registration_recovery_required(None, expired), expired);
+            for reason in [InactiveReason::NeverScheduled, InactiveReason::Stopped] {
+                assert_eq!(
+                    registration_recovery_required(
+                        Some(TimerRuntimeStateSnapshot::Inactive { reason }),
+                        expired
+                    ),
+                    expired
+                );
+            }
+            for reason in [
+                InactiveReason::Cancelled,
+                InactiveReason::InvariantFailure,
+                InactiveReason::ControlFailure(ic_timers::TimerControlFailure::GenerationExhausted),
+            ] {
+                assert!(!registration_recovery_required(
+                    Some(TimerRuntimeStateSnapshot::Inactive { reason }),
+                    expired
+                ));
+            }
+            for state in [
+                OrdinaryRuntimeStateSnapshot::Scheduled {
+                    generation: 1,
+                    deadline_ns: 10,
+                },
+                OrdinaryRuntimeStateSnapshot::Running { generation: 1 },
+            ] {
+                assert!(!registration_recovery_required(
+                    Some(TimerRuntimeStateSnapshot::Ordinary(state)),
+                    expired
+                ));
+            }
+        }
+    }
 
     #[test]
     fn fixed_claim_identities_are_exact_and_unique() {
@@ -530,56 +533,6 @@ mod tests {
                 .iter()
                 .all(|identity| identity.owner() == "canic")
         );
-    }
-
-    thread_local! {
-        static TEST_ONCE_OWNER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
-    }
-
-    #[test]
-    fn retained_timer_helpers_admit_empty_custody_and_refuse_a_busy_owner() {
-        assert!(owned_once_identity(&TEST_ONCE_OWNER).unwrap().is_none());
-        cancel_owned_once(&TEST_ONCE_OWNER).unwrap();
-        TEST_ONCE_OWNER.with(|owner| {
-            let _borrow = owner.borrow_mut();
-            assert!(matches!(
-                owned_once_identity(&TEST_ONCE_OWNER),
-                Err(TimerError::CustodyBusy)
-            ));
-            assert!(matches!(
-                cancel_owned_once(&TEST_ONCE_OWNER),
-                Err(TimerError::CustodyBusy)
-            ));
-            assert!(matches!(
-                ensure_owned_once(
-                    &TEST_ONCE_OWNER,
-                    || panic!("busy custody must refuse before identity or provider admission"),
-                    |_context| async {
-                        OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop)
-                    },
-                ),
-                Err(TimerError::CustodyBusy)
-            ));
-        });
-        assert!(owned_once_identity(&TEST_ONCE_OWNER).unwrap().is_none());
-    }
-
-    #[test]
-    fn failed_custody_insertion_runs_registration_cleanup() {
-        let cleaned = Cell::new(false);
-        let error = retain_with_rollback(
-            17u8,
-            |claim| Err((TimerError::CustodyBusy, claim)),
-            |claim| {
-                assert_eq!(claim, 17);
-                cleaned.set(true);
-                Ok(())
-            },
-        )
-        .expect_err("custody rejection must propagate");
-
-        assert!(matches!(error, TimerError::CustodyBusy));
-        assert!(cleaned.get());
     }
 
     #[test]

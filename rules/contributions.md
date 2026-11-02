@@ -33,8 +33,9 @@ agreement does not establish acceptance or configure fleet-wide signing checks.
 
 ## Implementation and delivery authority
 
-Ordinary implementation includes pending changelog and canonical `VERSION`
-preparation under the [next-version rules](changelogs.md#automatic-next-version-selection).
+Ordinary implementation includes pending changelog preparation under the
+[next-version rules](changelogs.md#automatic-next-version-selection).
+Shared Tooling alone also prepares its local `VERSION` automatically.
 It does not automatically include staging, commits, package version changes,
 tags, pushes or release execution. A request to release, publish, ship or
 deploy delegates the corresponding delivery workflow under
@@ -59,8 +60,8 @@ During implementation, "keep going", "finish this", "prepare the release",
 "work on 0.4", "new changelog" and "ready to push?" do not newly delegate
 release operations. During an already delegated delivery workflow, continuation
 retains that authority; do not stop for permission at each group or command.
-A release number selects the work/notes and canonical pending `VERSION` where
-applicable; it is not permission to update application/workspace/package versions,
+A release number selects the work/notes and, in Shared Tooling only, pending
+`VERSION`; it is not permission to update application/workspace/package versions,
 matching release lock entries or generated release metadata. Explicit dependency
 updates remain separate from package release-version changes.
 

@@ -35,14 +35,16 @@ pub fn install() {
         canic::endpoint::read_initialization(LIMITS).expect("bounded init envelope");
     let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0);
-    EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, args.unwrap_or_default())));
+    EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::create(memory, args.unwrap_or_default())));
 }
 
 pub fn restore() {
     super::checkpoint::open();
     let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0);
-    EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, Vec::new())));
+    EVIDENCE.with_borrow_mut(|cell| {
+        *cell = Some(Cell::load(memory).expect("retained initialization evidence"));
+    });
 }
 
 pub fn bytes() -> Vec<u8> {

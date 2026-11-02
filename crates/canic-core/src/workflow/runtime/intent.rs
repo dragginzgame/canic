@@ -33,12 +33,12 @@ use crate::{
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
     workflow::runtime::timer::{
-        TimerError, cancel_owned_once, ensure_owned_once, owned_once_identity, require_active,
-        with_owned_once,
+        TimerError, cancel_owned_once, owned_once_identity, require_active, with_owned_once,
     },
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    reconcile_once,
 };
 use std::cell::RefCell;
 
@@ -531,11 +531,21 @@ impl IntentCleanupWorkflow {
     }
 
     fn ensure_declared() -> Result<(), TimerError> {
-        ensure_owned_once(
-            &INTENT_CLEANUP_TIMER,
-            Self::timer_identity,
-            |_context| async { Self::run_due_batch() },
-        )
+        require_active()?;
+        INTENT_CLEANUP_TIMER.with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            if registration.is_none() {
+                reconcile_once(
+                    &mut registration,
+                    &Self::timer_identity()?,
+                    None,
+                    |_context| async { Self::run_due_batch() },
+                )?;
+            }
+            Ok(())
+        })
     }
 
     fn next_directive(now_ns: u64) -> Result<OnceDecision, InternalError> {

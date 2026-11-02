@@ -18,14 +18,15 @@ use crate::{
         runtime::{
             async_job::AsyncJobWorkflow,
             timer::{
-                TimerAuthorityWorkflow, TimerError, cancel_owned_once, ensure_owned_once,
-                owned_once_identity, require_active, with_owned_once,
+                TimerAuthorityWorkflow, TimerError, cancel_owned_once, owned_once_identity,
+                require_active, with_owned_once,
             },
         },
     },
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    reconcile_once,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -79,25 +80,29 @@ impl PlacementAcknowledgementWorkflow {
         cancel_owned_once(&ACKNOWLEDGEMENT_TIMER)
     }
 
-    /// Recover one expired acknowledgement attempt from the durable receipt index.
+    /// Re-arm abandoned native acknowledgement work from the durable receipt index.
     pub(crate) fn recover_expired_timer(now_ns: u64) -> bool {
-        let owner = AsyncJobOwner::PlacementReceiptAcknowledgement;
-        if !AsyncJobWorkflow::has_expired_attempt(owner, now_ns) {
+        if require_active().is_err() {
             return false;
         }
+        let owner = AsyncJobOwner::PlacementReceiptAcknowledgement;
         match ReceiptBackedIntentOps::has_placement_acknowledgements() {
             Ok(true) => {}
             Ok(false) => return AsyncJobWorkflow::abandon_expired(owner, now_ns),
             Err(_) => return false,
         }
-        let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
+        let Ok(identity) = Self::timer_identity() else {
             return false;
         };
-        ic_platform::cdk::futures::spawn(async move {
-            let result = Self::run_scheduled().await;
-            let _ = AsyncJobWorkflow::finish(attempt, result);
-        });
-        true
+        if !TimerAuthorityWorkflow::registration_requires_recovery(
+            &identity,
+            AsyncJobWorkflow::has_expired_attempt(owner, now_ns),
+        )
+        .unwrap_or(false)
+        {
+            return false;
+        }
+        Self::schedule(Duration::ZERO).is_ok()
     }
 
     /// Reconstruct scheduling from the lifecycle-rebuilt durable index.
@@ -258,11 +263,20 @@ impl PlacementAcknowledgementWorkflow {
 
     fn declare_timer() -> Result<(), TimerError> {
         require_active()?;
-        ensure_owned_once(
-            &ACKNOWLEDGEMENT_TIMER,
-            Self::timer_identity,
-            |_context| async { Self::run_registered().await },
-        )
+        ACKNOWLEDGEMENT_TIMER.with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            if registration.is_none() {
+                reconcile_once(
+                    &mut registration,
+                    &Self::timer_identity()?,
+                    None,
+                    |_context| async { Self::run_registered().await },
+                )?;
+            }
+            Ok(())
+        })
     }
 }
 

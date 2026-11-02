@@ -16,10 +16,14 @@ pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 210;
 std::thread_local! {
     static ASYNC_JOB_RECOVERY: RefCell<
         Cell<AsyncJobRecoveryRecord, DefaultMemoryImpl>,
-    > = RefCell::new(Cell::init(
-        crate::memory::open(crate::memory::keys::ASYNC_JOB_RECOVERY_V1),
-        AsyncJobRecoveryRecord::default(),
-    ));
+    > = RefCell::new({
+        let allocation = crate::memory::open(crate::memory::keys::ASYNC_JOB_RECOVERY_V1);
+        if ic_memory::Memory::size(&allocation) == 0 {
+            Cell::create(allocation, AsyncJobRecoveryRecord::default())
+        } else {
+            Cell::load(allocation).expect("retained stable cell")
+        }
+    });
 }
 
 /// Exact durable ownership of one currently executing async attempt.

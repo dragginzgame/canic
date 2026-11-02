@@ -379,6 +379,7 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-pinned-ci-tools.sh
 	bash scripts/ci/test-build-environment.sh
 	bash scripts/ci/test-cargo-clean.sh
+	bash scripts/ci/test-integration-workspace.sh
 	bash scripts/ci/test-shared-release-adoption.sh
 	bash scripts/ci/test-canic-formatters.sh
 	bash scripts/ci/test-dependency-adoption.sh

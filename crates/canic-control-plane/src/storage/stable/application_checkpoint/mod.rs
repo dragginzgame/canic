@@ -22,10 +22,14 @@ impl_storable_bounded!(RootCheckpointStateRecord, 8_388_608, false);
 
 thread_local! {
     static STATE: RefCell<StableCell<RootCheckpointStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(StableCell::init(
-            canic_core::memory::open(crate::memory::keys::ROOT_APPLICATION_CHECKPOINT_V1),
-            RootCheckpointStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::ROOT_APPLICATION_CHECKPOINT_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                StableCell::create(allocation, RootCheckpointStateRecord::default())
+            } else {
+                StableCell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 /// One stable owner for the complete original unit and its acknowledgements.

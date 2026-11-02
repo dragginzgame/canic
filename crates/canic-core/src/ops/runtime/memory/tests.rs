@@ -45,7 +45,9 @@ fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
     });
     let after = MemoryRegistryOps::allocation_snapshot().unwrap();
     let bindings_id = memory::runtime::with_runtime(|runtime| {
-        Ok(runtime.memory_id("canic.core.runtime.bindings.v1").unwrap())
+        Ok(runtime
+            .memory_id(&ic_memory::StableKey::parse("canic.core.runtime.bindings.v1").unwrap())
+            .unwrap())
     })
     .unwrap();
     for entry in &after.memories {
@@ -341,7 +343,9 @@ fn early_access_preserves_configured_bootstrap_and_authority() {
         let declarations =
             ic_memory::SealedDeclarationSnapshot::new(memory::requests().unwrap()).unwrap();
         memory::runtime::with_runtime(|runtime| {
-            let id = runtime.memory_id("canic.core.runtime.bindings.v1").unwrap();
+            let id = runtime
+                .memory_id(&ic_memory::StableKey::parse("canic.core.runtime.bindings.v1").unwrap())
+                .unwrap();
             assert!(pool.contains(id));
             runtime
                 .verify_authority(&declarations, memory::CANIC_CORE_MEMORY_AUTHORITY)
@@ -374,7 +378,7 @@ fn ledger_growth_refusal_publishes_no_authority_and_retries_canic_bootstrap() {
     let backing = RefusableMemory::default();
     let mut runtime = ic_memory::MemoryRuntime::new_with_config(
         backing.clone(),
-        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     let declarations =
@@ -407,7 +411,7 @@ fn application_growth_refusal_preserves_extents_and_retry() {
     let backing = RefusableMemory::default();
     let mut runtime = ic_memory::MemoryRuntime::new_with_config(
         backing.clone(),
-        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
     runtime
@@ -418,7 +422,7 @@ fn application_growth_refusal_preserves_extents_and_retry() {
         )
         .unwrap();
     let rows = runtime
-        .open_memory("canic.core.runtime.bindings.v1")
+        .open_memory(&ic_memory::StableKey::parse("canic.core.runtime.bindings.v1").unwrap())
         .unwrap();
     let before = backing.bytes.borrow().clone();
     let summary = runtime.memory_allocation_summary().unwrap();
@@ -551,7 +555,9 @@ fn allocation_projection_uses_committed_bindings_and_current_pool() {
     runtime
         .bootstrap(&declarations, &pool, &ic_memory::GenericAllocationPolicy)
         .unwrap();
-    let id = runtime.memory_id("app.rows.v1").unwrap();
+    let id = runtime
+        .memory_id(&ic_memory::StableKey::parse("app.rows.v1").unwrap())
+        .unwrap();
     let report = memory_allocations_response(
         runtime.memory_allocations().unwrap(),
         runtime.committed_allocations().unwrap(),

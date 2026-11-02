@@ -7,8 +7,9 @@ use ic_query::{
         CatalogError, ClassificationSource, GeographicScope, RawSubnetCatalog, RoutingRange,
         SubnetCatalogHostError, SubnetCatalogRegistryRecordEvidence,
         SubnetCatalogRegistryRecordSubject, SubnetCatalogRegistryValueEncoding,
-        SubnetCatalogRoutingSource, SubnetCatalogSource, SubnetCatalogSourceFuture, SubnetInfo,
-        SubnetKind, SubnetSpecialization, UncertifiedCatalogCollection,
+        SubnetCatalogRoutingSource, SubnetCatalogSource, SubnetCatalogSourceFuture,
+        SubnetClassification, SubnetInfo, SubnetKind, SubnetSpecialization,
+        UncertifiedCatalogCollection,
     },
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -89,15 +90,17 @@ fn catalog(
         collection,
         vec![SubnetInfo {
             subnet_principal: subnet.to_text(),
-            registry_subnet_type: 1,
-            subnet_kind: SubnetKind::Application,
-            subnet_kind_source: ClassificationSource::Registry,
-            subnet_specialization: SubnetSpecialization::None,
-            subnet_specialization_source: ClassificationSource::Curated,
-            geographic_scope: GeographicScope::Global,
-            geographic_scope_source: ClassificationSource::Curated,
-            subnet_label: "synthetic".into(),
-            subnet_label_source: ClassificationSource::Curated,
+            classification: SubnetClassification {
+                registry_subnet_type: 1,
+                subnet_kind: SubnetKind::Application,
+                subnet_kind_source: ClassificationSource::Registry,
+                subnet_specialization: SubnetSpecialization::None,
+                subnet_specialization_source: ClassificationSource::Curated,
+                geographic_scope: GeographicScope::Global,
+                geographic_scope_source: ClassificationSource::Curated,
+                subnet_label: "synthetic".into(),
+                subnet_label_source: ClassificationSource::Curated,
+            },
             node_count: Some(
                 if different && matches!(source.reply, Reply::DifferentPayload) {
                     34

@@ -227,10 +227,19 @@ fn provisioning_operation_map_uses_small_pages_and_checks_oversize_before_writes
         "test",
         "test.",
         &["test.rows.v1"],
-        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
     )
     .unwrap();
-    let mut map = BTreeMap::init(runtime.open_memory("test.rows.v1").unwrap());
+    let mut map = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+            .unwrap();
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            BTreeMap::create(allocation)
+        } else {
+            BTreeMap::load(allocation)
+        }
+    };
     let key = RootComponentOperationKey::DirectorySynchronization(command.operation_id);
     let value = RootComponentOperationRecord::DirectorySynchronization(Box::new(record.clone()));
     map.insert(key, value.clone());
@@ -238,9 +247,18 @@ fn provisioning_operation_map_uses_small_pages_and_checks_oversize_before_writes
     map = retained;
     assert_eq!(pages, 1);
     drop(map);
-    let mut reopened = BTreeMap::<RootComponentOperationKey, RootComponentOperationRecord, _>::init(
-        runtime.open_memory("test.rows.v1").unwrap(),
-    );
+    let mut reopened = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+            .unwrap();
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            BTreeMap::<RootComponentOperationKey, RootComponentOperationRecord, _>::create(
+                allocation,
+            )
+        } else {
+            BTreeMap::<RootComponentOperationKey, RootComponentOperationRecord, _>::load(allocation)
+        }
+    };
     assert_eq!(reopened.get(&key), Some(value.clone()));
     let before = memory.borrow().clone();
     let mut oversized = record;

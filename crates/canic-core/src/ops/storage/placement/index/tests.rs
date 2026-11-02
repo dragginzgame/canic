@@ -263,7 +263,16 @@ fn pending_claim_cannot_be_stolen_after_ttl_without_explicit_recovery() {
 fn allocation_bound_index_record_survives_stable_reopen() {
     use crate::cdk::structures::StableBTreeMap as BTreeMap;
     let runtime = crate::memory::fixtures::runtime(&["test.index.v1"], 1);
-    let mut records = BTreeMap::init(runtime.open_memory("test.index.v1").unwrap());
+    let mut records = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.index.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            BTreeMap::create(allocation)
+        } else {
+            BTreeMap::load(allocation)
+        }
+    };
     let key = PlacementIndexKey::try_new("projects", "alpha").unwrap();
     let value = PlacementIndexEntryRecord::Bound {
         instance_pid: p(255),
@@ -272,8 +281,15 @@ fn allocation_bound_index_record_survives_stable_reopen() {
     };
     records.insert(key.clone(), value.clone());
     drop(records);
-    let records = BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::init(
-        runtime.open_memory("test.index.v1").unwrap(),
-    );
+    let records = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.index.v1").unwrap())
+            .unwrap();
+        if ic_memory::Memory::size(&allocation) == 0 {
+            BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::create(allocation)
+        } else {
+            BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::load(allocation)
+        }
+    };
     assert_eq!(records.get(&key), Some(value));
 }

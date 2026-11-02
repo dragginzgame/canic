@@ -18,10 +18,14 @@ use std::cell::RefCell;
 std::thread_local! {
     static ROOT_ADMISSION_STATE:
         RefCell<Cell<RootAdmissionStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            canic_core::memory::open(crate::memory::keys::ROOT_ADMISSION_V1),
-            RootAdmissionStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::ROOT_ADMISSION_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, RootAdmissionStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 /// Stable Root aggregate convergence phase.

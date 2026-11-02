@@ -22,9 +22,14 @@ thread_local! {
     // Root lifecycle restoration initializes this root-owned state explicitly.
     // Keeping it lazy prevents non-root canisters from opening root-only state.
     static ICP_REFILL_RECORDS: RefCell<IcpRefillRecords> =
-        RefCell::new(IcpRefillRecords::new(StableBtreeMap::init(
-            crate::memory::open(crate::memory::keys::CYCLES_ICP_REFILL_RECORDS_V1),
-        )));
+        RefCell::new(IcpRefillRecords::new({
+            let allocation = crate::memory::open(crate::memory::keys::CYCLES_ICP_REFILL_RECORDS_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        }));
 }
 
 ///

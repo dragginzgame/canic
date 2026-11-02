@@ -7,7 +7,7 @@ use canic_contracts::ids::{
     AppId, CanonicalNetworkId, FleetAdmissionRule, FleetBinding, FleetId, FleetKey, SubnetId,
 };
 use canic_core::{
-    cdk::structures::{BoundedCell, Memory, VectorMemory, storable::Storable},
+    cdk::structures::{Memory, StableCell, VectorMemory, storable::Storable},
     shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy,
 };
 
@@ -106,12 +106,25 @@ fn assert_cell_allocation(record: &FleetAdmissionAuthorityRecord, encoded_bytes:
         "test",
         "test.",
         &["test.admission.v1"],
-        ic_memory::MemoryManagerConfig::new(16).unwrap(),
+        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(16).unwrap()),
     )
     .unwrap();
-    let mut cell = BoundedCell::init(runtime.open_memory("test.admission.v1").unwrap(), None);
+    let mut cell = {
+        let allocation = runtime
+            .open_memory(&ic_memory::StableKey::parse("test.admission.v1").unwrap())
+            .unwrap();
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            StableCell::create(allocation, None)
+        } else {
+            StableCell::load(allocation).expect("retained stable cell")
+        }
+    };
     cell.set(Some(record.clone()));
-    let id = usize::from(runtime.memory_id("test.admission.v1").unwrap());
+    let id = usize::from(
+        runtime
+            .memory_id(&ic_memory::StableKey::parse("test.admission.v1").unwrap())
+            .unwrap(),
+    );
     let pages = runtime.memory_allocations().unwrap().memories[id]
         .virtual_extent
         .wasm_pages;
@@ -123,7 +136,17 @@ fn assert_cell_allocation(record: &FleetAdmissionAuthorityRecord, encoded_bytes:
     );
     drop(cell);
     assert_eq!(
-        BoundedCell::init(runtime.open_memory("test.admission.v1").unwrap(), None).get(),
+        {
+            let allocation = runtime
+                .open_memory(&ic_memory::StableKey::parse("test.admission.v1").unwrap())
+                .unwrap();
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                StableCell::create(allocation, None)
+            } else {
+                StableCell::load(allocation).expect("retained stable cell")
+            }
+        }
+        .get(),
         &Some(record.clone())
     );
 }

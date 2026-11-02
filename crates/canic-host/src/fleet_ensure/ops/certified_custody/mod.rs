@@ -10,8 +10,7 @@ use crate::fleet_ensure::view::certified_custody::CertifiedCanisterCustodyView;
 use canic_contracts::ids::SubnetId;
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_platform::{
-    agent::{Agent, AgentError},
-    certification::{Certificate, Label, LookupResult},
+    agent::{Agent, AgentError, ExternalCertificate},
     principal::ExternalPrincipal as Principal,
 };
 use std::{collections::BTreeSet, time::Duration};
@@ -39,37 +38,31 @@ pub(in crate::fleet_ensure) async fn observe_one(
     agent: &Agent,
     principal: Principal,
 ) -> Result<CertifiedCanisterCustodyView, CertifiedCustodyError> {
-    let certificate = tokio::time::timeout(
-        READ_TIMEOUT,
-        agent.read_state_raw(paths(principal), principal),
-    )
-    .await
-    .map_err(|_| CertifiedCustodyError::Deadline {
-        canister: principal,
-    })?
-    .map_err(|source| CertifiedCustodyError::Certificate {
-        canister: principal,
-        source: Box::new(source),
-    })?;
-    project(&certificate, &agent.read_root_key(), principal)
-}
-
-fn paths(principal: Principal) -> Vec<Vec<Label>> {
-    ["controllers", "module_hash"]
+    let paths = ["controllers", "module_hash"]
         .into_iter()
         .map(|field| {
             vec![
                 "canister".into(),
-                Label::from_bytes(principal.as_slice()),
+                principal.as_slice().to_vec().into(),
                 field.into(),
             ]
         })
-        .collect()
+        .collect();
+    let certificate = tokio::time::timeout(READ_TIMEOUT, agent.read_state_raw(paths, principal))
+        .await
+        .map_err(|_| CertifiedCustodyError::Deadline {
+            canister: principal,
+        })?
+        .map_err(|source| CertifiedCustodyError::Certificate {
+            canister: principal,
+            source: Box::new(source),
+        })?;
+    project(&certificate, &agent.read_root_key(), principal)
 }
 
 /// Decode only after Agent has verified the certificate and its delegation for this target.
 fn project(
-    certificate: &Certificate,
+    certificate: &ExternalCertificate,
     root_key: &[u8],
     principal: Principal,
 ) -> Result<CertifiedCanisterCustodyView, CertifiedCustodyError> {
@@ -90,9 +83,9 @@ fn project(
         return Err(invalid());
     }
     controllers.sort_unstable();
-    let module_sha256 = match certificate.tree.lookup_path(path(b"module_hash")) {
-        LookupResult::Found(bytes) if bytes.len() == 32 => Some(hex_bytes(bytes)),
-        LookupResult::Absent => None,
+    let module_sha256 = match ic_platform::agent::lookup_value(certificate, path(b"module_hash")) {
+        Ok(bytes) if bytes.len() == 32 => Some(hex_bytes(bytes)),
+        Err(AgentError::LookupPathAbsent(_)) => None,
         _ => return Err(invalid()),
     };
     let subnet = match certificate.delegation.as_ref() {

@@ -306,15 +306,15 @@ impl CascadeOps {
         request: &T,
     ) -> Result<R, InternalError> {
         let bytes = ic_wire::native::encode_request(id, request, protocol::REQUEST_LIMITS)
-            .map_err(|_| InternalError::invariant())?;
-        // Preserve the original cascade's unbounded wait and public error semantics.
+            .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_FAILED))?;
+        // Keep unbounded transport and preserve decoded remote application errors.
         let reply =
             execute_call(Call::new(pid.into(), method, WaitPolicy::Unbounded).take_raw_args(bytes))
                 .await?
                 .into_bytes();
         let result: Result<R, crate::dto::error::Error> =
             ic_wire::native::decode_response(id, &reply, protocol::RESPONSE_LIMITS)
-                .map_err(|_| InternalError::invariant())?;
+                .map_err(|_| InternalError::public(crate::diagnostics::codes::CODEC_INVALID))?;
         result.map_err(InternalError::observed_public)
     }
 }
@@ -322,6 +322,35 @@ impl CascadeOps {
 #[cfg(test)]
 mod tests {
     use super::{CascadeOps, TopologySnapshotValidationError};
+
+    #[test]
+    fn oversized_cascade_request_is_a_codec_refusal_before_transport() {
+        use crate::ops::runtime::metrics::inter_canister_call::InterCanisterCallMetrics;
+        use std::{
+            future::Future,
+            task::{Context, Poll, Waker},
+        };
+        InterCanisterCallMetrics::reset();
+        let bytes = vec![0_u8; crate::protocol::cascade::REQUEST_LIMITS.bytes + 1];
+        let mut future = std::pin::pin!(CascadeOps::call_native::<_, ()>(
+            crate::cdk::types::Principal::anonymous(),
+            "cascade",
+            0x1234,
+            &bytes,
+        ));
+        let Poll::Ready(Err(error)) = future
+            .as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+        else {
+            panic!("oversized codec input must refuse before an IC call");
+        };
+        assert_eq!(
+            error.public_code(),
+            Some(crate::diagnostics::codes::CODEC_FAILED)
+        );
+        assert!(InterCanisterCallMetrics::snapshot().entries.is_empty());
+    }
+
     use crate::{
         cdk::types::Principal,
         dto::cascade::{

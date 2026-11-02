@@ -1,13 +1,13 @@
 //! Certificate projection rejects incomplete controller, module and target evidence.
 
 use super::*;
-use ic_platform::certification::{HashTree, fork, labeled, leaf, pruned};
+use ic_platform::certification::{Certificate, HashTree, fork, labeled, leaf, pruned};
 
 fn certificate(
     principal: Principal,
     controllers: &[Principal],
     module: Option<HashTree>,
-) -> Certificate {
+) -> ExternalCertificate {
     let mut bytes = Vec::new();
     serde_cbor::to_writer(&mut bytes, &controllers).unwrap();
     let controllers = labeled(b"controllers", leaf(bytes));
@@ -20,6 +20,7 @@ fn certificate(
         signature: Vec::new(),
         delegation: None,
     }
+    .into()
 }
 
 #[test]

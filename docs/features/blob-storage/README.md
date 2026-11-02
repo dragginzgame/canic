@@ -82,17 +82,27 @@ and completed local qualification, rather than treating this scope as evidence.
 
 ## Current dependency selection
 
-The root and both private consumer catalogs select published Blob/contracts
-**0.59.1**, Tooling/Testkit **0.70.5**, Platform/Call **0.8.3**,
-Memory/Storage/Metrics Stable **0.56.4**, Auth **0.25.1**, Metrics **0.17.7**,
-Logging **0.18.1**, Timers **0.32.4** and Wire **0.7.25**. Each consumer graph
-has one Memory/Timers runtime. The [current handoff](../../status/current.md)
-names the exact local qualification and its remaining acceptance boundaries.
+The current locked adoption selects Blob/contracts **0.66.0**, Memory/Storage **0.62.1**,
+Metrics **0.25.1**, Metrics Stable **0.64.0**, Wire **0.14.2**, Platform
+**0.17.0**, Timers **0.36.0**, Host Tools **0.77.0** and Testkit **0.78.0**.
+The root selects Query **0.84.0**, and all three locks select Auth **0.30.0**.
+Registry resolution and dependency admission pass. Dedicated installation/recovery,
+all five embedded funding profiles and generated tenant clients against both
+installed shapes pass on this locked family in Linux/PocketIC. Actual deployed
+browser and provider acceptance remains separate. The
+[current handoff](../../status/current.md) records exact lock selections and proof.
 
-Blob 0.59 removes the upload-certificate assessment's blocker list and changes
-its Wire identity to `0x424c_4f42_0059_0009`. Regenerate callers from the selected
-artifact's current schema. Metrics stays on the compatible 0.17 runtime shared
-by Blob, Metrics Stable, Query and Timers until their 0.18 adoption is published.
+Upload-operation correlation shares the root-claims memory grant. Compose the
+upstream request factory. A fresh explicit gateway refresh supersedes
+the previous pending read; stale replies and cancellation tokens cannot replace
+the newer decision. Sync/cancellation use their new upstream Wire identities.
+Generate callers from the selected artifact's current schema.
+
+Blob passes checked `StableKey` values to the host's committed runtime.
+Memory uses nonzero bucket configuration. Fresh owning stores explicitly create;
+retained stores strictly load without replacing malformed contents. Canic keeps
+one lifecycle and memory owner. Cross-release transitions require clean reinstall;
+these changes add no migration, old codec or fallback allocation lane.
 
 ## Earlier selected framework evidence
 
@@ -126,10 +136,11 @@ mutations require authenticated recovery. Registration is inspected using the
 original identity and never authorizes a replacement certificate request.
 Public accounting, sampler restoration and embedded application state are covered.
 
-Canic-owned framework acceptance for
+The original Canic-owned framework implementation for
 [#620](https://github.com/dragginzgame/canic/issues/620) and
-[#621](https://github.com/dragginzgame/canic/issues/621) is locally qualified;
-default-branch delivery remains separate. Native strict Clippy covers the migrated
+[#621](https://github.com/dragginzgame/canic/issues/621) is delivered and those
+issues are closed. Current-family mounted/client qualification remains with #622.
+Native strict Clippy covers the migrated
 packages and both independent consumers, including isolated internal feature
 selection. Controlled fixture bytes do not establish provider availability.
 
@@ -173,7 +184,9 @@ End-to-end production readiness still needs upstream/provider evidence:
 [serving](https://github.com/dragginzgame/ic-blob-storage/issues/5),
 [reference/deletion](https://github.com/dragginzgame/ic-blob-storage/issues/6),
 [multi-user uploads](https://github.com/dragginzgame/ic-blob-storage/issues/31) and
-[GC callbacks](https://github.com/dragginzgame/ic-blob-storage/issues/32).
+[payer/funding evidence](https://github.com/dragginzgame/ic-blob-storage/issues/34).
+The GC callback implementation issue #32 is closed; its narrower acknowledgment
+contract does not establish deployed deletion or billing cessation.
 No native macOS, installed-IC, real-provider deletion or billing-cessation evidence
 is claimed by these Linux PocketIC tests. See the current handoff for exact logs.
 

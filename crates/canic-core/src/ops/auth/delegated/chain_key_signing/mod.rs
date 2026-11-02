@@ -332,7 +332,7 @@ mod tests {
         let signature: K256TestSignature = signing_key()
             .sign_prehash(&chain_key_batch_header_hash(header).unwrap())
             .expect("test prehash signature should sign");
-        if signature.normalize_s().is_some() {
+        if signature.normalize_s() != signature {
             return signature.to_bytes().to_vec();
         }
 
@@ -367,7 +367,7 @@ mod tests {
         config.chain_key_root_proof.derivation_path_hash_hex = Some(hex(&derivation_path_hash));
         config.chain_key_root_proof.public_key_hex = Some(hex(signing_key
             .verifying_key()
-            .to_encoded_point(true)
+            .to_sec1_point(true)
             .as_bytes()));
         config.chain_key_root_proof.key_version = Some(4);
         config.chain_key_root_proof.allow_test_key = true;
@@ -385,7 +385,7 @@ mod tests {
             derivation_path: derivation_path(),
             public_key: signing_key
                 .verifying_key()
-                .to_encoded_point(true)
+                .to_sec1_point(true)
                 .as_bytes()
                 .to_vec(),
             key_version: 4,
@@ -578,12 +578,11 @@ mod tests {
         let header = header(&policy);
         let mut signer = MockSigner::valid(&header);
         signer.signature = high_s_signature(&header);
-        assert!(
-            K256EcdsaSignature::from_slice(&signer.signature)
-                .unwrap()
-                .normalize_s()
-                .is_some(),
-            "test fixture must start in high-s form",
+        let parsed = K256EcdsaSignature::from_slice(&signer.signature).unwrap();
+        assert_ne!(
+            parsed.normalize_s(),
+            parsed,
+            "test fixture must start in high-s form"
         );
 
         let signature = block_on(sign_chain_key_batch_header(
@@ -595,12 +594,8 @@ mod tests {
         ))
         .expect("high-s management signature should normalize before proof storage");
 
-        assert!(
-            K256EcdsaSignature::from_slice(&signature.signature)
-                .unwrap()
-                .normalize_s()
-                .is_none()
-        );
+        let parsed = K256EcdsaSignature::from_slice(&signature.signature).unwrap();
+        assert_eq!(parsed.normalize_s(), parsed);
         assert_eq!(signer.sign_calls, 1);
     }
 }

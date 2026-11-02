@@ -638,6 +638,77 @@ fn native_schema_forwarding_preserves_runtime_feature_rejections() {
 }
 
 #[test]
+fn explicit_icrc_forwarding_preserves_role_feature_rejections() {
+    let mut package = package("role", "role@1", "/tmp/role/Cargo.toml");
+    package
+        .features
+        .insert("icrc".into(), vec!["canic/icrc".into()]);
+    package
+        .features
+        .insert("consent".into(), vec!["icrc".into()]);
+    reject_package_feature_forwarding(&package, "canic").unwrap();
+    for (feature, member) in [
+        ("icrc", "canic/sharding"),
+        ("icrc", "canic/auth-chain-key-root-sign"),
+        ("icrc", "canic?/icrc"),
+        ("icrc", "dep:canic"),
+        ("icrc", "canic/wire-schema"),
+        ("runtime", "canic/icrc"),
+    ] {
+        let mut changed = package.clone();
+        changed
+            .features
+            .entry(feature.into())
+            .or_default()
+            .push(member.into());
+        assert!(matches!(
+            reject_package_feature_forwarding(&changed, "canic"),
+            Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+        ));
+    }
+}
+
+#[test]
+fn selected_icrc_adapter_does_not_grant_runtime_role_features() {
+    let packages = [
+        package("role", "role@1", "/tmp/role/Cargo.toml"),
+        package(CANIC_PACKAGE, "canic@1", "/tmp/canic/Cargo.toml"),
+    ];
+    let nodes = [
+        node("role@1", vec![normal_edge("canic", "canic@1")]),
+        node("canic@1", Vec::new()),
+    ];
+    let mut graph = runtime_graph(&packages, &nodes);
+    graph
+        .packages
+        .get_mut("canic@1")
+        .unwrap()
+        .enabled_features
+        .insert("icrc".into());
+    let declared = BTreeSet::new();
+    validate_selected_canic_features(&graph, &graph.edges["role@1"][0], &packages[1], &declared)
+        .unwrap();
+    for extra in ["sharding", "auth-chain-key-root-sign", "unknown-feature"] {
+        let mut changed = graph.clone();
+        changed
+            .packages
+            .get_mut("canic@1")
+            .unwrap()
+            .enabled_features
+            .insert(extra.into());
+        assert!(matches!(
+            validate_selected_canic_features(
+                &changed,
+                &changed.edges["role@1"][0],
+                &packages[1],
+                &declared
+            ),
+            Err(RoleContractFinding::DependencyShapeUnsupported { .. })
+        ));
+    }
+}
+
+#[test]
 fn composition_library_shares_the_exact_selected_canic_facade() {
     let packages = [
         package("role", "role@1", "/tmp/role/Cargo.toml"),

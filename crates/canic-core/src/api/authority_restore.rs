@@ -5,12 +5,13 @@
 //! Boundary: converts internal workflow failures into the public Canic error contract.
 
 use crate::{
+    InternalError,
     cdk::types::Principal,
     dto::{
         authority_restore::{AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest},
         error::Error,
     },
-    workflow::runtime::authority_restore::AuthorityRestoreWorkflow,
+    workflow::runtime::{authority_restore::AuthorityRestoreWorkflow, timer::TimerError},
 };
 
 /// Public facade for controller-owned authority snapshot fencing.
@@ -36,8 +37,10 @@ impl AuthorityRestoreApi {
     #[doc(hidden)]
     pub async fn prepare_root_snapshot(
         request: AuthoritySnapshotRequest,
+        require_settled: impl Fn() -> Result<(), InternalError>,
+        suspend_role: impl FnOnce() -> Result<(), TimerError>,
     ) -> Result<AuthorityRestoreFenceStatusResponse, Error> {
-        AuthorityRestoreWorkflow::prepare_root_snapshot(request)
+        AuthorityRestoreWorkflow::prepare_root_snapshot(request, require_settled, suspend_role)
             .await
             .map_err(Into::into)
     }
@@ -54,8 +57,9 @@ impl AuthorityRestoreApi {
     #[doc(hidden)]
     pub async fn resume_root_snapshot(
         request: AuthoritySnapshotRequest,
+        resume_role: impl FnOnce() -> Result<(), TimerError>,
     ) -> Result<AuthorityRestoreFenceStatusResponse, Error> {
-        AuthorityRestoreWorkflow::resume_root_snapshot(request)
+        AuthorityRestoreWorkflow::resume_root_snapshot(request, resume_role)
             .await
             .map_err(Into::into)
     }

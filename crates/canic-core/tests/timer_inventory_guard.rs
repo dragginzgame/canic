@@ -12,8 +12,7 @@ use syn::{
 };
 
 const PRODUCTION_SOURCE_ROOTS: [&str; 4] = ["apps", "canisters", "crates", "integrations"];
-const NATIVE_REGISTRATION_CAPABILITIES: [&str; 6] = [
-    "ensure_owned_once",
+const NATIVE_REGISTRATION_CAPABILITIES: [&str; 5] = [
     "register_after_completion",
     "register_once",
     "reconcile_after_completion",
@@ -650,9 +649,11 @@ fn pool_and_snapshot_paths_use_exact_native_owners() {
         );
     }
     assert!(
-        lifecycle.contains("canister_pool::suspend_for_authority_snapshot()")
-            && lifecycle.contains("canister_pool::resume_after_authority_snapshot()")
-            && lifecycle.contains("AuthorityRestoreApi::prepare_root_snapshot(")
+        function_paths(&lifecycle, "prepare_authority_snapshot").contains(
+            &"crate::workflow::canister_pool::suspend_for_authority_snapshot".to_string()
+        ) && function_paths(&lifecycle, "resume_authority_snapshot").contains(
+            &"crate::workflow::canister_pool::resume_after_authority_snapshot".to_string()
+        ) && lifecycle.contains("AuthorityRestoreApi::prepare_root_snapshot(")
             && lifecycle.contains("AuthorityRestoreApi::resume_root_snapshot("),
         "Root snapshot lifecycle must invoke its exact timer owner"
     );
@@ -677,69 +678,87 @@ fn pool_and_snapshot_paths_use_exact_native_owners() {
 #[test]
 fn recovery_takeovers_recheck_each_owners_authoritative_domain_demand() {
     let root = workspace_root();
-    let cases = [
+    for (path, function, demand, rearm) in [
         (
-            "root issuer renewal",
             "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
-            [
-                "AsyncJobWorkflow::has_expired_attempt(owner, now_ns)",
-                "AuthOps::has_enabled_root_issuer_renewal_templates()",
-                "ConfigOps::delegated_tokens_config()",
-                "AsyncJobWorkflow::claim_expired(owner, now_ns)",
-                "Self::run_scheduled().await",
-            ],
+            "recover_expired",
+            "AuthOps::has_enabled_root_issuer_renewal_templates",
+            "Self::reconcile_deadline",
         ),
         (
-            "automatic cycle top-up",
             "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
-            [
-                "AsyncJobWorkflow::has_expired_attempt(owner, now_ns)",
-                "Self::automatic_topup_config()",
-                "AsyncJobWorkflow::claim_expired(owner, now_ns)",
-                "Self::run_attempt(attempt).await",
-                "attempt.operation_id(IcOps::canister_self())",
-            ],
+            "recover_expired_timer",
+            "Self::automatic_topup_config",
+            "Self::reconcile_timer",
         ),
         (
-            "placement receipt acknowledgement",
             "crates/canic-core/src/workflow/placement/acknowledgement.rs",
-            [
-                "AsyncJobWorkflow::has_expired_attempt(owner, now_ns)",
-                "ReceiptBackedIntentOps::has_placement_acknowledgements()",
-                "AsyncJobWorkflow::claim_expired(owner, now_ns)",
-                "Self::run_scheduled().await",
-                "let operation_id = intent.operation_id;",
-            ],
+            "recover_expired_timer",
+            "ReceiptBackedIntentOps::has_placement_acknowledgements",
+            "Self::schedule",
         ),
-    ];
-
-    for (owner, path, required) in cases {
-        let source = read_source(&root, path);
-        for fragment in required {
-            assert!(
-                source.contains(fragment),
-                "{owner} recovery lost authoritative binding `{fragment}`"
-            );
-        }
-    }
-
-    let pool = read_source(
-        &root,
-        "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
-    );
-    for required in [
-        "AsyncJobRecoveryOps::expired_deadline(AsyncJobOwner::CanisterPoolMaintenance, now_ns)",
-        "dispatch_async_job_recovery()",
-        "finish_maintenance_timer(attempt, maintain_once_inner().await)",
-        "CanisterPoolOps::pending_creation()",
-        "CanisterPoolOps::pending_reset_canisters()",
-        "CanisterPoolOps::ready_count()",
     ] {
+        let calls = function_paths(&read_source(&root, path), function);
+        let position = |name: &str| calls.iter().position(|call| call == name).expect(name);
+        assert!(position("require_active") < position(rearm));
+        assert!(position(demand) < position(rearm));
+        assert!(position("AsyncJobWorkflow::has_expired_attempt") < position(rearm));
         assert!(
-            pool.contains(required),
-            "pool recovery lost authoritative binding `{required}`"
+            position("TimerAuthorityWorkflow::registration_requires_recovery") < position(rearm)
         );
     }
+    let calls = function_paths(
+        &read_source(
+            &root,
+            "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+        ),
+        "dispatch_async_job_recovery",
+    );
+    let guard = calls
+        .iter()
+        .position(|name| name == "TimerApi::registration_requires_recovery")
+        .unwrap();
+    let request = calls
+        .iter()
+        .position(|name| name == "request_maintenance_now")
+        .unwrap();
+    assert!(guard < request);
+}
+
+fn function_paths(source: &str, function: &str) -> Vec<String> {
+    #[derive(Default)]
+    struct Calls(Vec<String>);
+    impl<'ast> Visit<'ast> for Calls {
+        fn visit_expr_path(&mut self, path: &'ast ExprPath) {
+            self.0.push(
+                path.path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::"),
+            );
+            visit::visit_expr_path(self, path);
+        }
+    }
+    let syntax = syn::parse_file(source).expect("owning Rust source must parse");
+    for item in syntax.items {
+        let body = match item {
+            syn::Item::Fn(item) if item.sig.ident == function => Some(*item.block),
+            syn::Item::Impl(item) => item.items.into_iter().find_map(|member| match member {
+                syn::ImplItem::Fn(member) if member.sig.ident == function => Some(member.block),
+                _ => None,
+            }),
+            _ => None,
+        };
+        if let Some(body) = body {
+            let mut calls = Calls::default();
+            calls.visit_block(&body);
+            assert!(!calls.0.is_empty());
+            return calls.0;
+        }
+    }
+    panic!("required owner function {function} is absent");
 }
 
 fn native_registration_owners() -> BTreeSet<String> {

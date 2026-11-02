@@ -20,10 +20,14 @@ const ROOT_FUNDING_STATE_MAX_BYTES: u32 = 32_768;
 std::thread_local! {
     static ROOT_FUNDING_STATE:
         RefCell<Cell<RootFundingStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            canic_core::memory::open(crate::memory::keys::ROOT_FUNDING_V1),
-            RootFundingStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::ROOT_FUNDING_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, RootFundingStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 /// Schema identity for the reinstall-only Root funding journal.

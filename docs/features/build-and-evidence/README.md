@@ -51,8 +51,19 @@ independent of App configuration. Cargo graphs are validated before artifact
 finalization. Canonical Coordinator/Store Candid ships in `canic/candid`; Root
 Candid follows its configured capabilities.
 
-Repository Cargo and Make use Cargo's default `target/`; independent nested
-workspaces keep their own defaults. Host's unset-output default remains
+Repository Cargo and Make use Cargo's default `target/`. The two private Blob
+fixtures direct native Cargo output into repository `target/integrations/native/`.
+Their governed builds run against a reusable source copy under
+`target/integrations/workspace/`, including fixture compiler caches, generated
+packages and release artifacts. Prepare and run a manual fixture command with
+`perl scripts/dev/prepare-integration-workspace.pl --run PROGRAM [ARGS ...]`;
+`--path` prints its workspace root without preparing it. The child retains the
+caller directory; select manifests/configuration beneath that printed root, or
+use the child's `CANIC_INTEGRATION_WORKSPACE` environment variable. Keep fixture source and
+independent lockfiles in `integrations/`. Root `make clean` removes all disposable
+fixture output along with ordinary build output; actual deployment journals and
+release-publication evidence retain their separate storage and cleanup scope.
+Other independent nested workspaces keep their own defaults. Host's unset-output default remains
 `target/canic-wasm/`. Generated source stays in the sibling `canic-packages/`
 tree, preserving inherited Cargo configuration. Selected generated source is
 admitted and fingerprinted normally; application source scans exclude their

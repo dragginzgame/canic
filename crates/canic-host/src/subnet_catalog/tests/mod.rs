@@ -206,17 +206,17 @@ fn cache_failure_reaches_canic_as_complete_typed_pre_effect_evidence() {
     assert_eq!(failure.request.network, MAINNET_NETWORK);
     assert_eq!(failure.request.source, None);
     assert_eq!(failure.stage, SubnetCatalogLoadStage::CacheAbsence);
-    assert_eq!(failure.registry_version, None);
-    assert_eq!(failure.returned_registry_value_version, None);
-    assert_eq!(failure.source_endpoint, None);
-    assert_eq!(failure.assurance, None);
-    assert!(failure.registry_records.is_empty());
+    assert_eq!(failure.evidence.registry_version, None);
+    assert_eq!(failure.evidence.returned_registry_value_version, None);
+    assert_eq!(failure.evidence.source_endpoint, None);
+    assert_eq!(failure.evidence.assurance, None);
+    assert!(failure.evidence.registry_records.is_empty());
     assert_eq!(
         failure.cache_disposition,
         SubnetCatalogFailureCacheDisposition::CacheMissing
     );
     assert!(matches!(
-        failure.subject,
+        failure.evidence.subject,
         Some(SubnetCatalogSubject::CachePath(_))
     ));
     assert!(matches!(

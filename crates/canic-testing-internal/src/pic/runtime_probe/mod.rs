@@ -21,6 +21,12 @@ const RESPONSE_LIMITS: Limits = Limits {
 /// Managed component adapter's bounded runtime-binding probe.
 pub const ADAPTER_BINDING: WireCallSpec = spec("adapter_runtime_binding", 0x5254_5052_0000_0016);
 
+/// Commit one installed reservation before its deadline.
+pub const COMMIT_INTENT: WireCallSpec = spec("commit_timer_probe_intent", 0x5254_5052_0000_0017);
+/// Roll back one installed reservation before its deadline.
+pub const ROLLBACK_INTENT: WireCallSpec =
+    spec("rollback_timer_probe_intent", 0x5254_5052_0000_0018);
+
 /// Native call contract for `begin_timer_probe_intent`.
 pub const BEGIN_INTENT: WireCallSpec = WireCallSpec {
     request_limits: Limits {

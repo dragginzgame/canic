@@ -10,10 +10,14 @@ use std::cell::RefCell;
 std::thread_local! {
     static WASM_STORE_GC_STATE: RefCell<
         Cell<WasmStoreGcStateRecord, DefaultMemoryImpl>
-    > = RefCell::new(Cell::init(
-        canic_core::memory::open(crate::memory::keys::WASM_STORE_GC_STATE_V1),
-        WasmStoreGcStateRecord::default(),
-    ));
+    > = RefCell::new({
+        let allocation = canic_core::memory::open(crate::memory::keys::WASM_STORE_GC_STATE_V1);
+        if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+            Cell::create(allocation, WasmStoreGcStateRecord::default())
+        } else {
+            Cell::load(allocation).expect("retained stable cell")
+        }
+    });
 }
 
 ///

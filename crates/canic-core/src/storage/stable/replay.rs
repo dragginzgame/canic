@@ -32,7 +32,14 @@ std::thread_local! {
     static REPLAY_RECEIPTS: RefCell<
         StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, DefaultMemoryImpl>
     > = RefCell::new(
-        StableBtreeMap::init(crate::memory::open(crate::memory::keys::REPLAY_RECEIPTS_V1)),
+        {
+            let allocation = crate::memory::open(crate::memory::keys::REPLAY_RECEIPTS_V1);
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        },
     );
 }
 
@@ -482,10 +489,19 @@ mod tests {
             "test",
             "test.",
             &["test.replay.v1"],
-            ic_memory::MemoryManagerConfig::new(1).unwrap(),
+            ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
         )
         .unwrap();
-        let mut map = StableBtreeMap::init(runtime.open_memory("test.replay.v1").unwrap());
+        let mut map = {
+            let allocation = runtime
+                .open_memory(&ic_memory::StableKey::parse("test.replay.v1").unwrap())
+                .unwrap();
+            if ic_memory::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation)
+            } else {
+                StableBtreeMap::load(allocation)
+            }
+        };
         let key = ReplayReceiptSlotKey([4; 32]);
         let record = receipt_record_fixture();
         map.insert(key, record.clone());

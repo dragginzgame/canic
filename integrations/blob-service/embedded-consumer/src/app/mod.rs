@@ -20,13 +20,15 @@ thread_local! {
 pub(super) fn install(initial: u64) {
     let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0, "fresh counter memory");
-    COUNTER.with_borrow_mut(|counter| *counter = Some(StableCell::init(memory, initial)));
+    COUNTER.with_borrow_mut(|counter| *counter = Some(StableCell::create(memory, initial)));
 }
 
 pub(super) fn restore() {
     let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0, "retained counter memory");
-    COUNTER.with_borrow_mut(|counter| *counter = Some(StableCell::init(memory, 0)));
+    COUNTER.with_borrow_mut(|counter| {
+        *counter = Some(StableCell::load(memory).expect("retained application counter"));
+    });
 }
 
 pub(super) fn count() -> u64 {

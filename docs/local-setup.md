@@ -1,5 +1,5 @@
 # Local developer setup
-<!-- Shared companions: scripts/ci/report-tool-versions.sh -->
+<!-- Shared companions: scripts/ci/report-tool-versions.sh docs/tool-store-maintenance.md -->
 
 ## Tool selection and diagnostics
 
@@ -64,7 +64,7 @@ System/native setup that changes Cargo build inputs must finish **before**
 setup, including the release metadata editor. This includes compiler/linker and
 SDK setup and the consumer's system packages. The
 [standard build identity](#standard-cargo-tool-build-environment) includes native
-compiler/linker digests and Linux package inventory or macOS/Xcode/SDK identity;
+compiler/linker digests and build-relevant Linux packages or macOS/Xcode/SDK identity;
 changing those after Cargo setup correctly invalidates the earlier selection.
 
 Keep an explicit sequence in the consumer's existing setup/release-preparation
@@ -90,7 +90,7 @@ aggregates, replace their recipes or invent another tool catalog. Use the
 If system packages, a compiler or an SDK change after preparation and offline
 admission reports “No prepared Cargo tool selection for the current compiler/build
 inputs”, finish native setup and explicitly rerun the affected common/selected
-Cargo setup before checking again. Preserve previous builds and diagnostic
+Cargo setup before checking again. Preserve selected deliverables and required diagnostic
 evidence; do not edit receipts, bypass fingerprints or make a checker install
 packages. `tools-check` admits only its declared common/local tool sets, not every
 native or product prerequisite of a release. The consumer must check those too.
@@ -289,9 +289,12 @@ archives those admitted shared bundles, not the entire machine's store. Deleting
 a checkout or a reference does not reclaim its stored payload; cleanup remains
 an explicitly authorized separate operation.
 
-Cargo tools and their build output also live in the shared store. Local
-`.tools/rust` contains selections and references; previous physical installations
-are retained. Reuse requires the exact compiler, native environment, published
+Cargo tools also live in the shared store. Local `.tools/rust` contains selections
+and references; successful compiler scratch is discarded after byte admission.
+Current declared requirements across checkouts protect their selections; obsolete
+managed Rust generations use [previewed reclamation](tool-store-maintenance.md).
+Legacy physical installations require explicit migration. Reuse requires the exact
+compiler, native environment, published
 source/lock, target and profile under the standard environment described below.
 The store's `cargo-cache` holds Cargo-managed registry sources separately from
 retained installation generations; preserve it for offline admission and reuse.
@@ -432,8 +435,10 @@ while formatting isolated index inputs. IC formatters select their prepared tool
 PATH explicitly; the hook exposes `SHARED_TOOLING_FORMAT_TOOLS_FROM` for product
 Make recipes that need the original checkout's tool root. The helper never prepares or upgrades a
 toolchain implicitly. Installation may fetch registry dependencies and compile;
-failed candidates, completed build output and install logs remain in shared
-`rust-<identity>/set.*` generations, referenced from the originating checkout.
+failed candidates and install logs remain in shared `rust-<identity>/set.*`
+generations, referenced from the originating checkout. Successful compiler scratch
+is removed under installation custody; failed scratch has a seven-day retention
+window, extendable with an explicit recovery pin. Receipts survive reclamation.
 If build identity changes during installation, activation refuses and reports the
 changed field names. The retained attempt contains the original `.build` identity
 in `inputs.json` and `native-environment.txt`, alongside the exact new observation
@@ -462,7 +467,8 @@ local installations are retained but never used as a fallback. Refresh the
 installers and evidence selector together, then run setup and offline checks.
 The evidence action retains the local `.tools/rust` tree without following its
 links and separately archives only its admitted shared generations, including
-successful builds and failed attempts. This Rust retention remains full even
+selected output and retained failed attempts. Already discarded successful
+compiler scratch is not evidence. This Rust evidence selection remains full even
 when host/IC compaction is enabled.
 Observed digests detect local changes; they are not publisher signatures or
 product/native qualification. Formatting still requires rustfmt and the
@@ -524,7 +530,8 @@ Cargo dispatch. It has no global installation lock; Cargo owns actual source
 download serialization. Old source-preparation slots remain untouched.
 The 0.26.8 build-helper change alters its policy digest: after adoption, rerun
 explicit Cargo-tool setup to select tools under that policy. Previous generations
-remain retained, and offline checks never repair selections.
+remain protected until explicitly migrated to the current maintenance policy,
+and offline checks never repair selections.
 
 Tool builds have a cleared environment, a fresh private HOME per attempt, the
 selected compiler's bin directory followed by system executable directories,
@@ -539,13 +546,25 @@ permission. Cargo's `config` takes precedence over `config.toml` when both exist
 No check downloads or repairs tools. Custom registries, extra native search paths and
 proxy/credential configuration are not supplied to these public crates.io builds.
 
-The key records the exact build-helper digest, Cargo/rustc verbose identities and executable digests, host,
-native compiler/linker digests, Linux package inventory or macOS/Xcode/SDK
+The key records the exact build-helper and native-classifier digests, Cargo/rustc
+verbose identities and executable digests, host, native compiler/linker digests,
+build-relevant Linux package identities or macOS/Xcode/SDK
 identity, package/version, executable kind/name, profile, published crate digest
 and packaged lock digest. Cargo owns registry downloads and `--locked` builds.
 Changing the build helper requires explicit setup to select builds under the new
-policy digest; previous builds remain retained and offline checks do not repair
+policy digest; earlier generations follow the maintenance policy and offline checks do not repair
 their selections.
+On Linux, the classifier admits packages owning system headers, public shared or
+static libraries/startup objects, pkg-config metadata, GCC/LLVM support files,
+native build generators and their support modules. Browser/editor executables,
+private application libraries and application data alone do not affect the key.
+Malformed or unavailable package inventories refuse admission. Compiler/linker
+bytes, kernel/architecture and macOS OS/Xcode/SDK observations remain unchanged.
+The whole helper/classifier digests intentionally remain conservative: even a
+comment edit requires setup, avoiding a manually maintained policy revision that
+could miss a semantic change. This is separate from unrelated OS application
+updates. When a role's selection changes, setup reports changed identity fields
+and the prior native/source receipt paths.
 Missing packaged locks and non-registry dependency sources refuse reuse/builds;
 unexpected Cargo configuration in the managed cache is rejected. This contract
 supports managed Debian/RPM Linux hosts and the qualified macOS toolchain; it
@@ -708,7 +727,9 @@ Setup reuses a matching verified generation or compiles through the same locked
 Cargo installation command into a fresh shared attempt. Only an admitted
 candidate is activated. Explicit setup can replace a corrupt selection with a
 new generation, preserving the old generation and other checkouts' references.
-Failed attempts retain logs/builds, and earlier version selections remain untouched.
+Failed attempts retain logs/builds for the recovery window; current requirements
+and expiring recovery pins govern subsequent reclamation. Setup does not reclaim
+old executable paths while they might be running.
 A directory lock rejects concurrent setup for the same selection; retry after
 its owner finishes. An abruptly killed process may leave a lock: inspect that
 owner and retained attempt before explicitly removing the empty lock. The tool
@@ -810,7 +831,8 @@ before computing Cargo build-cache identity or qualifying registry builds. The
 separate Rust 1.88.0 runtime-scanner qualification remains independent. This pin
 is Shared's local policy; adopting a snapshot does not change consumer compilers.
 After changing the pin or the shared build-helper policy, rerun explicit setup;
-prior tool generations and evidence remain retained.
+current requirements and required evidence remain protected under the
+[retention policy](tool-store-maintenance.md).
 
 ### Portable suite prerequisites
 

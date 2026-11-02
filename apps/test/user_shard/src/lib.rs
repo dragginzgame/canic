@@ -3,6 +3,7 @@
 mod fixture_importer;
 mod reinstall_fixture;
 
+mod ops;
 mod protocol;
 
 use canic::{Error, prelude::*};
@@ -98,6 +99,42 @@ async fn test_topup_exhaustion(
 async fn test_recovery_balance(retain: u128) -> Result<u128, Error> {
     let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
     Ok(ic_platform::cdk::api::cycles_burn(excess))
+}
+
+/// Configure a real production callback in this disposable local canister.
+#[update(requires(env::build_local_only(), caller::is_controller()), wire(id = protocol::TOPUP_CALLBACK_FAULT, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+async fn test_topup_callback_fault(fault: protocol::CallbackFault) -> Result<(), Error> {
+    ops::topup_callback::configure(fault);
+    Ok(())
+}
+
+/// Inspect the retained business lease and actual callback progress.
+#[query(requires(env::build_local_only(), caller::is_controller()), wire(id = protocol::TOPUP_CALLBACK_PROBE, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
+async fn test_topup_callback_probe() -> Result<protocol::CallbackProbe, Error> {
+    Ok(ops::topup_callback::probe())
+}
+
+/// Hold an actual IC self-call without replacing the timer or executor.
+#[update(public, wire(id = canic::__internal::core::api::runtime::topup_fixture::CALLBACK_GATE_ID, request = canic::__internal::core::api::runtime::topup_fixture::CALLBACK_GATE_LIMITS, response = canic::__internal::core::api::runtime::topup_fixture::CALLBACK_GATE_LIMITS))]
+async fn test_topup_callback_gate() -> Result<(), Error> {
+    if ic_platform::cdk::api::msg_caller() != ic_platform::cdk::api::canister_self() {
+        return Err(Error::from_registered(
+            canic::diagnostics::codes::AUTHORITY_UNAVAILABLE,
+        ));
+    }
+    canic::__internal::core::api::runtime::topup_fixture::hold_callback_reply().await;
+    Ok(())
+}
+
+/// Give the held self-call a real IC response boundary while the controller waits.
+#[update(public, wire(id = canic::__internal::core::api::runtime::topup_fixture::CALLBACK_ROUND_ID, request = canic::__internal::core::api::runtime::topup_fixture::CALLBACK_GATE_LIMITS, response = canic::__internal::core::api::runtime::topup_fixture::CALLBACK_GATE_LIMITS))]
+async fn test_topup_callback_round() -> Result<(), Error> {
+    if ic_platform::cdk::api::msg_caller() != ic_platform::cdk::api::canister_self() {
+        return Err(Error::from_registered(
+            canic::diagnostics::codes::AUTHORITY_UNAVAILABLE,
+        ));
+    }
+    Ok(())
 }
 
 canic::finish!();

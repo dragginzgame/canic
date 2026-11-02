@@ -1,5 +1,83 @@
 use super::*;
 
+#[cfg(unix)]
+use std::{cell::Cell, net::TcpListener, sync::mpsc, thread, time::Duration};
+
+#[cfg(unix)]
+#[test]
+fn transient_download_failure_retries_without_replacing_an_installation() {
+    const CHILD: &str = "CANIC_TEST_ARCHIVE_RETRY_CHILD";
+    if env::var_os(CHILD).is_none() {
+        let output = std::process::Command::new(env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tool_install::tests::transient_download_failure_retries_without_replacing_an_installation",
+            ])
+            .env(CHILD, "1")
+            .env("NO_PROXY", "127.0.0.1")
+            .env("no_proxy", "127.0.0.1")
+            .env_remove("HTTPS_PROXY")
+            .env_remove("https_proxy")
+            .env_remove("ALL_PROXY")
+            .env_remove("all_proxy")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+
+    let temp = TempDirectory::create("download-retry-test").unwrap();
+    let destination = temp.path.join("installed");
+    fs::write(&destination, b"previous executable").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("https://{}/tool.tar.gz", listener.local_addr().unwrap());
+    thread::scope(|scope| {
+        let (stop, stopped) = mpsc::channel::<()>();
+        let server = scope.spawn(move || {
+            let mut connections = 0;
+            while matches!(stopped.try_recv(), Err(mpsc::TryRecvError::Empty)) {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        connections += 1;
+                        // Refuse the TLS connection before any archive can be admitted.
+                        drop(stream);
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("accept local download connection: {error}"),
+                }
+            }
+            connections
+        });
+        let spec = InstallSpec {
+            tool: "retry-test",
+            archive_name: "tool.tar.gz",
+            archive_url: &url,
+            archive_sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            member: "tool",
+            runtime_library: None,
+            format: ArchiveFormat::Gzip,
+        };
+        let admitted = Cell::new(false);
+        let result = install(&spec, &destination, |_| {
+            admitted.set(true);
+            Ok::<_, InstallError>(())
+        });
+        drop(stop);
+        assert_eq!(server.join().unwrap(), 4);
+        std::assert_matches!(result, Err(InstallError::ArchiveDownload { .. }));
+        assert!(!admitted.get());
+        assert_eq!(fs::read(&destination).unwrap(), b"previous executable");
+    });
+}
+
 #[test]
 fn file_hash_preserves_pinned_identity_and_missing_file_error_kind() {
     let temp = TempDirectory::create("digest-test").unwrap();

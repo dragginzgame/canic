@@ -88,12 +88,26 @@ impl AuthorityRestoreWorkflow {
         )
     }
 
-    /// Seal Root mutation after suspending its exact native timer owners.
+    /// Observe history before atomically suspending the exact Root producers and sealing.
+    ///
+    /// # Panics
+    /// Traps on suspension or seal failure so their shared callback rolls back.
     pub async fn prepare_root_snapshot(
         request: AuthoritySnapshotRequest,
+        require_settled: impl Fn() -> Result<(), InternalError>,
+        suspend_role: impl FnOnce() -> Result<(), TimerError>,
     ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
         require_root_authority_runtime()?;
-        prepare_snapshot_with(request, TimerAuthorityWorkflow::suspend_root).await
+        prepare_snapshot_with(
+            request,
+            TimerAuthorityWorkflow::require_root_resumable,
+            require_settled,
+            || {
+                suspend_role()?;
+                TimerAuthorityWorkflow::suspend_root()
+            },
+        )
+        .await
     }
 
     /// Seal Coordinator mutation only when it has no private lifecycle work in flight.
@@ -101,18 +115,28 @@ impl AuthorityRestoreWorkflow {
         request: AuthoritySnapshotRequest,
     ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
         require_coordinator_authority_runtime()?;
-        prepare_snapshot_with(request, TimerAuthorityWorkflow::suspend_coordinator).await
+        prepare_snapshot_with(
+            request,
+            TimerAuthorityWorkflow::require_coordinator_resumable,
+            || Ok(()),
+            TimerAuthorityWorkflow::suspend_coordinator,
+        )
+        .await
     }
 
     /// Resume the live Root and reconstruct exact core-owned demand before opening mutation.
     pub async fn resume_root_snapshot(
         request: AuthoritySnapshotRequest,
+        resume_role: impl FnOnce() -> Result<(), TimerError>,
     ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
         require_root_authority_runtime()?;
         resume_snapshot_with(
             request,
             TimerAuthorityWorkflow::resume_root,
-            crate::workflow::runtime::RuntimeWorkflow::start_all_root,
+            || {
+                crate::workflow::runtime::RuntimeWorkflow::start_all_root()?;
+                resume_role().map_err(Into::into)
+            },
             "reconcile root timer owners while authority remains sealed",
         )
         .await
@@ -171,7 +195,7 @@ fn prepare_release_with(
     if AuthorityRestoreFenceOps::mutation_fence_for(authority)? == AuthorityMutationFence::Release {
         return AuthorityRestoreFenceOps::status();
     }
-    quiesce_release(preflight, require_settled, suspend)?;
+    quiesce_authority(preflight, require_settled, suspend)?;
     Ok(
         AuthorityRestoreFenceOps::seal_release(request, authority, IcOps::now_nanos())
             .unwrap_or_else(|error| {
@@ -182,10 +206,21 @@ fn prepare_release_with(
 
 // Both checks are read-only and synchronous. A busy refusal must leave every
 // producer intact; only a failure after cancellation starts requires rollback.
-fn quiesce_release(
+fn quiesce_authority(
     preflight: impl FnOnce() -> Result<(), TimerError>,
     require_settled: impl FnOnce() -> Result<(), InternalError>,
     suspend: impl FnOnce() -> Result<(), TimerError>,
+) -> Result<(), InternalError> {
+    require_quiescence(preflight, require_settled)?;
+    suspend().unwrap_or_else(|error| {
+        trap_timer_transition("suspend timers before sealing authority", error)
+    });
+    Ok(())
+}
+
+fn require_quiescence(
+    preflight: impl FnOnce() -> Result<(), TimerError>,
+    require_settled: impl FnOnce() -> Result<(), InternalError>,
 ) -> Result<(), InternalError> {
     preflight().map_err(|error| match error {
         TimerError::ActiveJob(_) | TimerError::RunningClaim(_) | TimerError::CustodyBusy => {
@@ -193,11 +228,7 @@ fn quiesce_release(
         }
         error => error.into(),
     })?;
-    require_settled()?;
-    suspend().unwrap_or_else(|error| {
-        trap_timer_transition("suspend timers before sealing Fleet release", error)
-    });
-    Ok(())
+    require_settled()
 }
 
 fn trap_timer_transition(context: &str, error: TimerError) -> ! {
@@ -214,15 +245,20 @@ fn trap_authority_transition(context: &str, error: InternalError) -> ! {
 
 async fn prepare_snapshot_with(
     request: AuthoritySnapshotRequest,
+    preflight: impl Fn() -> Result<(), TimerError>,
+    require_settled: impl Fn() -> Result<(), InternalError>,
     suspend: impl FnOnce() -> Result<(), TimerError>,
 ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
     let authority = IcOps::canister_self();
     AuthorityRestoreFenceOps::validate_prepare(request, authority)?;
+    if let Some(status) = AuthorityRestoreFenceOps::completed_prepare(request, authority)? {
+        quiesce_authority(preflight, require_settled, suspend)?;
+        return Ok(status);
+    }
+    require_quiescence(&preflight, &require_settled)?;
     let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
     AuthorityRestoreFenceOps::validate_prepare(request, authority)?;
-    suspend().unwrap_or_else(|error| {
-        trap_timer_transition("suspend timers before sealing authority", error)
-    });
+    quiesce_authority(preflight, require_settled, suspend)?;
     let status = AuthorityRestoreFenceOps::prepare(
         request,
         authority,
@@ -244,6 +280,9 @@ async fn resume_snapshot_with(
     let authority = IcOps::canister_self();
     if AuthorityRestoreFenceOps::mutation_fence_for(authority)? == AuthorityMutationFence::Release {
         return Err(InternalError::conflict());
+    }
+    if let Some(status) = AuthorityRestoreFenceOps::completed_resume(request, authority)? {
+        return Ok(status);
     }
     let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
     AuthorityRestoreFenceOps::validate_resume(request, authority, history_total_num_changes)?;

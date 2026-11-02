@@ -78,30 +78,30 @@ ctor = { version = "1.0", default-features = false, features = ["proc_macro"] }
 futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
-ic-auth = { version = "0.28.0", default-features = false }
-ic-auth-protocol-types = "0.28.0"
-ic-backup = { version = "0.53.1", default-features = false }
-ic-backup-agent = "0.53.1"
-ic-blob-storage = "0.61.0"
-ic-blob-storage-contracts = "0.61.0"
-ic-build = { version = "0.73.2" }
-ic-host-artifacts = { version = "0.73.2", default-features = false }
-ic-host-fs = { version = "0.73.2", default-features = false }
-ic-host-process = { version = "0.73.2", default-features = false }
-ic-host-text = "0.73.2"
-ic-host-tools = "0.75.1"
-ic-logging = "0.23.3"
-ic-memory = "0.60.3"
-ic-metrics = "0.24.1"
-ic-metrics-stable = "0.61.1"
-ic-platform = { version = "0.15.3", default-features = false }
-ic-query = { version = "0.79.0", default-features = false, features = [
+ic-auth = { version = "0.30.0", default-features = false }
+ic-auth-protocol-types = "0.30.0"
+ic-backup = { version = "0.53.6", default-features = false }
+ic-backup-agent = "0.53.6"
+ic-blob-storage = "0.66.0"
+ic-blob-storage-contracts = "0.66.0"
+ic-build = { version = "0.73.6" }
+ic-host-artifacts = { version = "0.73.6", default-features = false }
+ic-host-fs = { version = "0.73.6", default-features = false }
+ic-host-process = { version = "0.73.6", default-features = false }
+ic-host-text = "0.73.6"
+ic-host-tools = "0.77.0"
+ic-logging = "0.23.7"
+ic-memory = "0.62.1"
+ic-metrics = "0.25.1"
+ic-metrics-stable = "0.64.0"
+ic-platform = { version = "0.17.0", default-features = false }
+ic-query = { version = "0.84.0", default-features = false, features = [
     "subnet-catalog-host",
 ] }
-ic-storage = "0.60.3"
-ic-testkit = { version = "0.75.1" }
-ic-timers = "0.35.0"
-ic-wire = { version = "0.13.2", default-features = false, features = ["platform-types"] }
+ic-storage = "0.62.1"
+ic-testkit = { version = "0.78.0" }
+ic-timers = "0.36.0"
+ic-wire = { version = "0.14.2", default-features = false, features = ["platform-types"] }
 num-bigint = { version = "0.4", default-features = false }
 proc-macro2 = "1.0"
 quote = "1.0"

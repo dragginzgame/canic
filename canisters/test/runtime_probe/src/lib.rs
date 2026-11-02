@@ -3,6 +3,7 @@
 mod composition;
 mod history_cost;
 mod perf_context;
+mod platform_call;
 mod process_fixture;
 mod timer_wire;
 
@@ -205,6 +206,18 @@ async fn begin_timer_probe_intent(request: timer_wire::IntentRequest) -> Result<
         reservation_limit: Some(1),
     })
     .map(|intent_id| intent_id.0)
+}
+
+/// Commit a reservation before its deadline to qualify removal of cleanup demand.
+#[update(public, wire(id = crate::timer_wire::COMMIT_INTENT, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+fn commit_timer_probe_intent(intent_id: u64) -> Result<(), Error> {
+    LocalIntentApi::commit(canic::api::intent::IntentId(intent_id))
+}
+
+/// Roll back a reservation before its deadline without disabling future cleanup.
+#[update(public, wire(id = crate::timer_wire::ROLLBACK_INTENT, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+fn rollback_timer_probe_intent(intent_id: u64) -> Result<(), Error> {
+    LocalIntentApi::rollback(canic::api::intent::IntentId(intent_id))
 }
 
 /// Exercise distinct scheduler and work measurement envelopes in the existing timer fixture.

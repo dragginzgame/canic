@@ -157,11 +157,13 @@ pub fn rejected(
     canister_id: Principal,
     request: &CapacityImportHandoffRequestRecord,
 ) -> RetiredHandoff {
-    let certificate = ic_platform::certification::Certificate {
-        tree: ic_platform::certification::empty(),
-        signature: vec![1],
-        delegation: None,
-    };
+    let certificate: ic_platform::agent::ExternalCertificate =
+        ic_platform::certification::Certificate {
+            tree: ic_platform::certification::empty(),
+            signature: vec![1],
+            delegation: None,
+        }
+        .into();
     let status = RequestStatusResponse::Rejected(ic_platform::agent::RejectResponse {
         reject_code: ic_platform::agent::RejectCode::SysTransient,
         reject_message: "transient failure".into(),
@@ -194,7 +196,7 @@ pub fn retired(
     }
 }
 
-fn timed_certificate(mut time: u64) -> ic_platform::certification::Certificate {
+fn timed_certificate(mut time: u64) -> ic_platform::agent::ExternalCertificate {
     let mut bytes = Vec::new();
     loop {
         let byte = (time & 0x7f) as u8;
@@ -212,6 +214,7 @@ fn timed_certificate(mut time: u64) -> ic_platform::certification::Certificate {
         signature: vec![1],
         delegation: None,
     }
+    .into()
 }
 
 #[test]
@@ -285,7 +288,8 @@ fn capacity_import_retirement_requires_certified_absence_after_expiry() {
         certificate.tree = ic_platform::certification::labeled(
             b"time".to_vec(),
             ic_platform::certification::leaf(bytes),
-        );
+        )
+        .into();
         assert!(matches!(
             retirement::outcome(
                 &plan,
@@ -298,7 +302,7 @@ fn capacity_import_retirement_requires_certified_absence_after_expiry() {
         ));
     }
     let mut incomplete = timed_certificate(2);
-    incomplete.tree = ic_platform::certification::empty();
+    incomplete.tree = ic_platform::certification::empty().into();
     assert!(matches!(
         retirement::outcome(
             &plan,

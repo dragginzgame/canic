@@ -46,7 +46,7 @@ pub fn activate(fresh: bool) -> Result<(), ProviderMetricsError> {
                     return Err(ProviderMetricsError::Backing);
                 }
                 let map = if fresh {
-                    StableBTreeMap::new(memory)
+                    StableBTreeMap::create(memory)
                 } else {
                     StableBTreeMap::load(memory)
                 };

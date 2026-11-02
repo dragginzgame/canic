@@ -79,20 +79,28 @@ const FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES: u32 = 33_554_432;
 std::thread_local! {
     static FLEET_COORDINATOR_STATE:
         RefCell<Cell<FleetCoordinatorStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_REGISTRY_V1),
-            FleetCoordinatorStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_REGISTRY_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, FleetCoordinatorStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 #[cfg(feature = "fleet-coordinator-canister")]
 std::thread_local! {
     static FLEET_COORDINATOR_FUNDING_STATE:
         RefCell<Cell<FleetCoordinatorFundingStateRecord, DefaultMemoryImpl>> =
-        RefCell::new(Cell::init(
-            canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_FUNDING_V1),
-            FleetCoordinatorFundingStateRecord::default(),
-        ));
+        RefCell::new({
+            let allocation = canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_FUNDING_V1);
+            if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, FleetCoordinatorFundingStateRecord::default())
+            } else {
+                Cell::load(allocation).expect("retained stable cell")
+            }
+        });
 }
 
 /// Schema identity for the reinstall-only Coordinator funding ledger.

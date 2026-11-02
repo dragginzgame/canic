@@ -842,6 +842,9 @@ fn validate_resolved_package(
             default_features_enabled = true;
             continue;
         }
+        if is_icrc_adapter_feature(feature_name) {
+            continue;
+        }
         let Some(feature) = CanicFeatureKey::from_cargo_name(feature_name) else {
             return Err(RoleContractFinding::CargoCatalogDrift {
                 reason: format!(
@@ -880,6 +883,7 @@ fn validate_selected_canic_features(
     let actual = canic
         .enabled_features
         .iter()
+        .filter(|feature| !is_icrc_adapter_feature(feature))
         .map(|feature| {
             CanicFeatureKey::from_cargo_name(feature).ok_or_else(|| {
                 unsupported_finding(format!(
@@ -1024,6 +1028,7 @@ fn reject_package_feature_forwarding(
     let weak_prefix = format!("{dependency_key}?/");
     let optional_dependency = format!("dep:{dependency_key}");
     let schema_forward = format!("{dependency_key}/wire-schema");
+    let icrc_forward = format!("{dependency_key}/icrc");
     if package.features.iter().any(|(feature, members)| {
         members.iter().any(|member| {
             let forwards_canic = member.starts_with(&strong_prefix)
@@ -1031,14 +1036,21 @@ fn reject_package_feature_forwarding(
                 || member == &optional_dependency;
             // Native schema production adds no deployed role capability.
             let native_schema = feature == "wire-schema" && member == &schema_forward;
-            forwards_canic && !native_schema
+            let explicit_icrc = is_icrc_adapter_feature(feature) && member == &icrc_forward;
+            forwards_canic && !native_schema && !explicit_icrc
         })
     }) {
         return Err(unsupported_finding(
-            "package features may only forward wire-schema into the Canic dependency",
+            "package features may only forward matching wire-schema or icrc into the Canic dependency",
         ));
     }
     Ok(())
+}
+
+// ICRC endpoint selection adds no compiled framework role authority. Actual role
+// features still have to match the exact declared public implication closure.
+fn is_icrc_adapter_feature(feature: &str) -> bool {
+    feature == "icrc" && is_non_role_public_feature(feature)
 }
 
 fn validate_cargo_declarations(
