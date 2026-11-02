@@ -16,8 +16,14 @@ before versioning: retired storage init() calls, a lifecycle lint, then an
 unchecked-key test lookup. The four App callers now explicitly create fresh
 stores or strictly load retained stores. All three fixture packages and every
 canic-tests target pass scoped Clippy; the exact allocation-lookup byte-preservation
-regression passes. Retry the normal fresh release from the corrected committed
-source. Both failed attempts retained logs and no recoverable 0.114.1 plan.
+regression passes. The third attempt passed workspace Clippy and private consumers,
+then stopped at the older crypto-closure profile. Platform now owns certification/
+BLS internally and ECDSA uses newer digest/field APIs. The corrected guard admits
+only reviewed role-specific cohorts, rejecting duplicate identities within a
+cohort, unknown cohorts and extra signature providers. Negative fixtures, all 12
+real role graphs and 132 focused Auth cases pass. Crypto source paths and logs are
+retained in the release evidence directory. Commit the corrections and retry the
+normal fresh release; no version bump or recoverable 0.114.1 plan exists yet.
 
 ## Active upstream adoption
 

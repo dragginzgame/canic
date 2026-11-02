@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 🩹 Fixed
 
+- Align Wasm crypto admission with Platform-owned certification/BLS and the
+  reviewed signing-library generations, retaining role restrictions.
 - Allow native consumers to link multiple canister libraries with overlapping
   framework methods. Wasm export names and runtime behaviour are unchanged.
   See [detailed notes](docs/changelog/0.114.md).

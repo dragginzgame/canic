@@ -24,7 +24,7 @@ CANONICAL_PACKAGE_PROFILES=(
     canister_user_hub:none
     canister_user_shard:delegated-verify
 )
-CRYPTO_PACKAGES='^(base16ct|block-buffer|const-oid|crypto-bigint|crypto-common|der|digest|ecdsa|elliptic-curve|ff|group|hmac|ic-canister-sig-creation|ic-certification|ic-representation-independent-hash|ic-signature-verification|ic-verify-bls-signature|ic_bls12_381|k256|pairing|pkcs8|primeorder|rfc6979|sec1|sha2|signature|spki|subtle|zeroize)$'
+CRYPTO_PACKAGES='^(base16ct|block-buffer|const-oid|crypto-bigint|crypto-common|der|digest|ecdsa|elliptic-curve|ff|group|hmac|ic-canister-sig-creation|ic-certification|ic-representation-independent-hash|ic-signature-verification|ic-verify-bls-signature|ic_bls12_381|k256|pairing|pkcs8|primefield|primeorder|rfc6979|sec1|sha2|signature|spki|subtle|wnaf|zeroize)$'
 SIGNATURE_PACKAGES='^(crypto-bigint|ecdsa|elliptic-curve|hmac|ic-canister-sig-creation|ic-certification|ic-signature-verification|ic-verify-bls-signature|ic_bls12_381|k256|pairing|rfc6979|signature)$'
 
 package_tree() {
@@ -44,13 +44,52 @@ package_tree() {
 }
 
 crypto_identities() {
-    awk -v accepted="$CRYPTO_PACKAGES" '$1 ~ accepted { print $1, $2 }' | sort -u
+    awk -v accepted="$CRYPTO_PACKAGES" '$1 ~ accepted { sub(/ \(\*\)$/, ""); print }' | sort -u
 }
 
-duplicate_crypto_packages() {
-    awk '
-        previous_name == $1 && previous_version != $2 { print $1 }
-        { previous_name = $1; previous_version = $2 }
+expected_crypto_cohorts() {
+    # Platform's IC hashes/BLS retain their 0.10 digest and 0.13 field APIs;
+    # current ECDSA uses 0.11 digests and 0.14 fields. Admit these API cohorts
+    # only for the roles that need them, with one full identity per cohort.
+    case "$1" in
+        none) return 0 ;;
+        root-sign|delegated-verify)
+            printf '%s\n' \
+                'block-buffer v0.10' 'block-buffer v0.12' \
+                'crypto-common v0.1' 'crypto-common v0.2' \
+                'digest v0.10' 'digest v0.11' \
+                'sha2 v0.10' 'sha2 v0.11'
+            ;;
+        *) return 1 ;;
+    esac
+    if [[ "$1" == delegated-verify ]]; then
+        printf '%s\n' 'ff v0.13' 'ff v0.14' 'group v0.13' 'group v0.14'
+    fi
+}
+
+rejected_crypto_packages() {
+    local cohorts
+    cohorts="$(expected_crypto_cohorts "$1")" || return 1
+    awk -v cohorts="$cohorts" '
+        BEGIN {
+            count = split(cohorts, rows, "\n")
+            for (i = 1; i <= count; i++) {
+                if (split(rows[i], fields, " ") != 2) continue
+                reviewed[fields[1], fields[2]] = 1
+                restricted[fields[1]] = 1
+            }
+        }
+        {
+            name = $1
+            if (name in restricted) {
+                split($2, version, ".")
+                cohort = version[1] "." version[2]
+                if (!reviewed[name, cohort] || ++seen_cohort[name, cohort] > 1) rejected[name] = 1
+            } else if (++seen_name[name] > 1) {
+                rejected[name] = 1
+            }
+        }
+        END { for (name in rejected) print name }
     ' | sort -u
 }
 
@@ -64,9 +103,9 @@ signature_names() {
 }
 
 expected_signature_packages() {
-    # Platform 0.4 packages canister-signature creation/verification internally.
-    # Keep their former package names in detection above: a separate provider is
-    # still unexpected, even though those names no longer belong in these sets.
+    # Platform owns certification and BLS implementation inside its package.
+    # Separate IC signature/certification packages remain detected above and are
+    # unexpected in these normal Wasm profiles. Native Agent graphs are separate.
     case "$1" in
         none)
             ;;
@@ -77,7 +116,6 @@ expected_signature_packages() {
                 ecdsa \
                 elliptic-curve \
                 hmac \
-                ic-certification \
                 k256 \
                 rfc6979 \
                 signature
@@ -89,9 +127,6 @@ expected_signature_packages() {
                 ecdsa \
                 elliptic-curve \
                 hmac \
-                ic-certification \
-                ic-verify-bls-signature \
-                ic_bls12_381 \
                 k256 \
                 pairing \
                 rfc6979 \
@@ -111,10 +146,10 @@ for package_profile in "${CANONICAL_PACKAGE_PROFILES[@]}"; do
     profile="${package_profile#*:}"
     tree="$(package_tree "$package")"
     identities="$(printf '%s\n' "$tree" | crypto_identities)"
-    duplicates="$(printf '%s\n' "$identities" | duplicate_crypto_packages)"
-    if [[ -n "$duplicates" ]]; then
-        printf 'deployed Wasm package %s resolves duplicate crypto libraries: %s\n' \
-            "$package" "$(printf '%s' "$duplicates" | paste -sd, -)" >&2
+    rejected="$(printf '%s\n' "$identities" | rejected_crypto_packages "$profile")"
+    if [[ -n "$rejected" ]]; then
+        printf 'deployed Wasm package %s resolves crypto identities outside its reviewed cohorts: %s\n' \
+            "$package" "$(printf '%s' "$rejected" | paste -sd, -)" >&2
         failures=$((failures + 1))
     fi
     if ! printf '%s\n' "$identities" | contains_package sha2; then
@@ -141,5 +176,5 @@ if ((failures > 0)); then
     exit 1
 fi
 
-printf 'Wasm crypto closure passed: %d canonical roles; no duplicate crypto package versions; %d zero-auth roles contain no signature stack\n' \
+printf 'Wasm crypto closure passed: %d canonical roles; one identity per reviewed crypto cohort; %d zero-auth roles contain no signature stack\n' \
     "${#CANONICAL_PACKAGE_PROFILES[@]}" "$zero_auth_count"

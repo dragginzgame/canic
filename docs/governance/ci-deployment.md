@@ -101,6 +101,15 @@ execution owner and its guard: runtime-free Platform protocol facades may retain
 distinct package identities. This does not admit two runtimes, bridge checked
 handles or replace installed lifecycle/recovery qualification.
 
+Wasm crypto admission also checks each canonical role's signature libraries.
+Platform owns certification and BLS internally; additional external IC signature
+providers are refused. Its current IC hash/BLS and ECDSA implementations require
+distinct digest and field API cohorts. Only signing/verification roles admit
+the reviewed cohort pairs, with one full package identity per cohort; other
+crypto packages remain singletons. Zero-auth roles admit no signature stack.
+The selected lockfiles, Auth regressions and installed journeys qualify behavior;
+the graph check alone does not verify a cryptographic implementation.
+
 ## Command Authority
 
 An unambiguous maintainer instruction in the current conversation authorizes
