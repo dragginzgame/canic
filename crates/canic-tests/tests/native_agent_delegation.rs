@@ -310,7 +310,8 @@ fn allocation_lookup_preserves_stable_bytes() {
     runtime
         .bootstrap(&declarations, &pool, &ic_memory::GenericAllocationPolicy)
         .unwrap();
-    let slot = runtime.memory_id(key).unwrap();
+    let stable_key = ic_memory::StableKey::parse(key).expect("fixture stable key");
+    let slot = runtime.memory_id(&stable_key).unwrap();
     drop(runtime);
     let before = memory.borrow().clone();
     assert_eq!(allocated_memory_id(&memory, key), slot);

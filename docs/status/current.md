@@ -11,12 +11,13 @@ bump. Freeze the reviewed batch, integrate current origin/main, run
 make release-patch, then make publish. Recovery evidence is retained under
 .tmp/release-01141-20261102/. No application/Fleet deployment or minor closeout
 is selected; never compete for an active target/. Remote native-export/metrics
-fixes through 2c2272b5e are integrated. The first complete gate stopped in Clippy
-before versioning: four test-App storage callers still used retired init(), and
-the lifecycle probe missed a semicolon. Explicit fresh create/strict retained
-load and the lint correction pass targeted all-target/all-feature Clippy for the
-three owners. Commit these corrections, then retry the normal fresh release;
-no recoverable 0.114.1 release plan existed after that pre-version failure.
+fixes through 2c2272b5e are integrated. Two complete attempts stopped in Clippy
+before versioning: retired storage init() calls, a lifecycle lint, then an
+unchecked-key test lookup. The four App callers now explicitly create fresh
+stores or strictly load retained stores. All three fixture packages and every
+canic-tests target pass scoped Clippy; the exact allocation-lookup byte-preservation
+regression passes. Retry the normal fresh release from the corrected committed
+source. Both failed attempts retained logs and no recoverable 0.114.1 plan.
 
 ## Active upstream adoption
 
