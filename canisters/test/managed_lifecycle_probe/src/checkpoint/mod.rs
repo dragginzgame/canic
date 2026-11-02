@@ -54,7 +54,7 @@ pub fn open() {
             } else {
                 Cell::load(allocation).expect("retained stable cell")
             }
-        })
+        });
     });
 }
 

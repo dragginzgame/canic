@@ -2,7 +2,7 @@
 
 ## Baseline and authority
 
-Main/tag v0.114.0 remains e753785953e6805461ac337868c32163f65c3209; its full
+Published source baseline v0.114.0 is e753785953e6805461ac337868c32163f65c3209; its full
 local gate qualified b94a133339178a1fc8cc638d8f4fe40a18dfc416. Preserve
 .git/release-state/ and .tmp/release-0114-20261031/ for recovery, all dirty work,
 staging and retained artifacts. The maintainer requested release/publication of
@@ -10,7 +10,13 @@ staging and retained artifacts. The maintainer requested release/publication of
 bump. Freeze the reviewed batch, integrate current origin/main, run
 make release-patch, then make publish. Recovery evidence is retained under
 .tmp/release-01141-20261102/. No application/Fleet deployment or minor closeout
-is selected; never compete for an active target/.
+is selected; never compete for an active target/. Remote native-export/metrics
+fixes through 2c2272b5e are integrated. The first complete gate stopped in Clippy
+before versioning: four test-App storage callers still used retired init(), and
+the lifecycle probe missed a semicolon. Explicit fresh create/strict retained
+load and the lint correction pass targeted all-target/all-feature Clippy for the
+three owners. Commit these corrections, then retry the normal fresh release;
+no recoverable 0.114.1 release plan existed after that pre-version failure.
 
 ## Active upstream adoption
 
@@ -34,9 +40,10 @@ Core, Control Plane, Host, Blob adapter and internal qualification all-target,
 all-feature Clippy passes. The sole compile correction passes the held-reply
 fixture mutably to supersession qualification, as required by Testkit release().
 
-All 106 focused native cases pass on the final maintained root graph: 13 Auth,
+The earlier adoption passed 106 focused native cases: 13 Auth,
 53 memory/metrics/storage/allocation, 30 certified receipts and 10 Query catalog
-cases. Logs are target/upstream-adoption/20261102/native-*.log. Older candidate
+cases. Logs are target/upstream-adoption/20261102/native-*.log; their exact locks
+precede the later cc 1.11 lock selection and current release corrections. Older candidate
 proof in target/upstream-adoption/current/ retains its exact earlier scope.
 
 The refreshed source-bound allocation peer verifies and both private consumers
@@ -49,10 +56,11 @@ and the focused Clippy/rerun pass. All three lock hashes remain unchanged.
 Evidence: target/upstream-adoption/20261102/{dedicated-fixed,race-clippy,
 fixtures-clippy-peer}.log and target/integrations/checks/blob66-20261102/.
 
-The accepted dependency/Blob adoption batch is ready for review/push with its
-direct local proofs complete. The open 0.114.1 notes are current; own versions
-stay 0.114.0 pending the maintainer's governed version/release flow. No broad
-gate, hosted CI or registry publication is newly qualified by these local checks.
+The accepted dependency/Blob adoption retains its direct local proofs. The
+maintainer-selected complete release gate now owns whole-batch qualification.
+The open 0.114.1 notes are current; own versions stay 0.114.0 until that gate
+passes and the governed transaction bumps them. No successful complete gate,
+hosted CI or registry publication is newly claimed.
 
 ## Blob and provider boundary
 

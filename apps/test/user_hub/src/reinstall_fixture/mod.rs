@@ -38,9 +38,14 @@ pub struct UserRow {
 }
 
 thread_local! {
-    static ROWS: RefCell<BTreeMap<u64, u64, DefaultMemoryImpl>> = RefCell::new(
-        BTreeMap::init(canic::memory::open(ROWS_KEY))
-    );
+    static ROWS: RefCell<BTreeMap<u64, u64, DefaultMemoryImpl>> = RefCell::new({
+        let memory = canic::memory::open(ROWS_KEY);
+        if ic_memory::Memory::size(&memory) == 0 {
+            BTreeMap::create(memory)
+        } else {
+            BTreeMap::load(memory)
+        }
+    });
 }
 
 pub fn seed() {
