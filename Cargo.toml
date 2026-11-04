@@ -64,40 +64,40 @@ readme = "README.md"
 [workspace.dependencies]
 # Framework
 # Changelog : releases/framework/CHANGELOG.md
-canic = { version = "0.114.0", path = "crates/canic", default-features = false }
-canic-contracts = { version = "0.114.0", path = "crates/canic-contracts" }
-canic-control-plane = { version = "0.114.0", path = "crates/canic-control-plane", default-features = false }
-canic-core = { version = "0.114.0", path = "crates/canic-core" }
-canic-macros = { version = "0.114.0", path = "crates/canic-macros" }
-canic-tests = { version = "0.114.0", path = "crates/canic-tests" }
-canister_app = { version = "0.114.0", path = "apps/test/app" }
-canister_index_child = { version = "0.114.0", path = "apps/test/index_child" }
-canister_index_hub = { version = "0.114.0", path = "apps/test/index_hub" }
-canister_minimal = { version = "0.114.0", path = "canisters/audit/minimal" }
-canister_minimal_metrics = { version = "0.114.0", path = "canisters/audit/minimal_metrics" }
-canister_sandbox_blank = { version = "0.114.0", path = "canisters/sandbox/blank" }
-canister_scale = { version = "0.114.0", path = "apps/test/scale" }
-canister_scale_hub = { version = "0.114.0", path = "apps/test/scale_hub" }
-canister_test = { version = "0.114.0", path = "apps/test/test" }
-canister_user_hub = { version = "0.114.0", path = "apps/test/user_hub" }
-canister_user_shard = { version = "0.114.0", path = "apps/test/user_shard" }
-cycles_ledger_stub = { version = "0.114.0", path = "canisters/test/cycles_ledger_stub" }
-delegation_issuer_stub = { version = "0.114.0", path = "canisters/test/delegation_issuer_stub" }
-delegation_root_stub = { version = "0.114.0", path = "canisters/test/delegation_root_stub" }
-demo_fleet_app = { version = "0.114.0", path = "apps/demo/app" }
-demo_fleet_user_hub = { version = "0.114.0", path = "apps/demo/user_hub" }
-demo_fleet_user_shard = { version = "0.114.0", path = "apps/demo/user_shard" }
-icp_refill_stub = { version = "0.114.0", path = "canisters/test/icp_refill_stub" }
-intent_authority = { version = "0.114.0", path = "canisters/test/intent_authority" }
-leaf_probe = { version = "0.114.0", path = "canisters/audit/leaf_probe" }
-local_authorization_probe = { version = "0.114.0", path = "canisters/audit/local_authorization_probe" }
-managed_lifecycle_probe = { version = "0.114.0", path = "canisters/test/managed_lifecycle_probe" }
-payload_limit_probe = { version = "0.114.0", path = "canisters/test/payload_limit_probe" }
-root_funding_probe = { version = "0.114.0", path = "canisters/test/root_funding_probe" }
-root_probe = { version = "0.114.0", path = "canisters/audit/root_probe" }
-runtime_probe = { version = "0.114.0", path = "canisters/test/runtime_probe" }
-scaling_probe = { version = "0.114.0", path = "canisters/audit/scaling_probe" }
-sharding_root_stub = { version = "0.114.0", path = "canisters/test/sharding_root_stub" }
+canic = { version = "0.115.0", path = "crates/canic", default-features = false }
+canic-contracts = { version = "0.115.0", path = "crates/canic-contracts" }
+canic-control-plane = { version = "0.115.0", path = "crates/canic-control-plane", default-features = false }
+canic-core = { version = "0.115.0", path = "crates/canic-core" }
+canic-macros = { version = "0.115.0", path = "crates/canic-macros" }
+canic-tests = { version = "0.115.0", path = "crates/canic-tests" }
+canister_app = { version = "0.115.0", path = "apps/test/app" }
+canister_index_child = { version = "0.115.0", path = "apps/test/index_child" }
+canister_index_hub = { version = "0.115.0", path = "apps/test/index_hub" }
+canister_minimal = { version = "0.115.0", path = "canisters/audit/minimal" }
+canister_minimal_metrics = { version = "0.115.0", path = "canisters/audit/minimal_metrics" }
+canister_sandbox_blank = { version = "0.115.0", path = "canisters/sandbox/blank" }
+canister_scale = { version = "0.115.0", path = "apps/test/scale" }
+canister_scale_hub = { version = "0.115.0", path = "apps/test/scale_hub" }
+canister_test = { version = "0.115.0", path = "apps/test/test" }
+canister_user_hub = { version = "0.115.0", path = "apps/test/user_hub" }
+canister_user_shard = { version = "0.115.0", path = "apps/test/user_shard" }
+cycles_ledger_stub = { version = "0.115.0", path = "canisters/test/cycles_ledger_stub" }
+delegation_issuer_stub = { version = "0.115.0", path = "canisters/test/delegation_issuer_stub" }
+delegation_root_stub = { version = "0.115.0", path = "canisters/test/delegation_root_stub" }
+demo_fleet_app = { version = "0.115.0", path = "apps/demo/app" }
+demo_fleet_user_hub = { version = "0.115.0", path = "apps/demo/user_hub" }
+demo_fleet_user_shard = { version = "0.115.0", path = "apps/demo/user_shard" }
+icp_refill_stub = { version = "0.115.0", path = "canisters/test/icp_refill_stub" }
+intent_authority = { version = "0.115.0", path = "canisters/test/intent_authority" }
+leaf_probe = { version = "0.115.0", path = "canisters/audit/leaf_probe" }
+local_authorization_probe = { version = "0.115.0", path = "canisters/audit/local_authorization_probe" }
+managed_lifecycle_probe = { version = "0.115.0", path = "canisters/test/managed_lifecycle_probe" }
+payload_limit_probe = { version = "0.115.0", path = "canisters/test/payload_limit_probe" }
+root_funding_probe = { version = "0.115.0", path = "canisters/test/root_funding_probe" }
+root_probe = { version = "0.115.0", path = "canisters/audit/root_probe" }
+runtime_probe = { version = "0.115.0", path = "canisters/test/runtime_probe" }
+scaling_probe = { version = "0.115.0", path = "canisters/audit/scaling_probe" }
+sharding_root_stub = { version = "0.115.0", path = "canisters/test/sharding_root_stub" }
 
 # Host tooling
 # Changelog : releases/host/CHANGELOG.md

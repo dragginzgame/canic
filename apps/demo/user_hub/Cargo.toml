@@ -2,7 +2,7 @@
 name = "demo_fleet_user_hub"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = "0.114.0"
+version = "0.115.0"
 publish = false
 build = "../build.rs"
 

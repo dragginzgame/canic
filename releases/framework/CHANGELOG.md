@@ -7,7 +7,7 @@ continue after coordinated 0.114.0; earlier releases remain
 in [shared history](../history.md). Adapter changes have their own
 [IcyDB](../icydb/CHANGELOG.md) and [Blob](../blob-service/CHANGELOG.md) ledgers.
 
-## [0.115.0]
+## [0.115.0] - 2026-11-04
 
 ### ⚠️ Breaking
 

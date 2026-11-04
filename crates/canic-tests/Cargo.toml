@@ -2,7 +2,7 @@
 name = "canic-tests"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = "0.114.0"
+version = "0.115.0"
 license = { workspace = true }
 description = "Workspace-only Canic test harness and integration suites"
 readme = "README.md"

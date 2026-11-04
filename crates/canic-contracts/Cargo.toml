@@ -2,7 +2,7 @@
 name = "canic-contracts"
 edition.workspace = true
 rust-version.workspace = true
-version = "0.114.0"
+version = "0.115.0"
 license.workspace = true
 description = "Runtime-free Canic protocol contracts and identifiers"
 readme = "README.md"
