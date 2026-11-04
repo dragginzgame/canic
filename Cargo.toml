@@ -106,7 +106,7 @@ canic-host = { version = "0.115.0", path = "crates/canic-host" }
 
 # IcyDB adapter
 # Changelog : releases/icydb/CHANGELOG.md
-canic-icydb = { version = "0.114.0", path = "crates/canic-icydb" }
+canic-icydb = { version = "0.115.0", path = "crates/canic-icydb" }
 
 # Blob service adapter
 # Changelog : releases/blob-service/CHANGELOG.md

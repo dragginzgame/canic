@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "canic-icydb"
-version = "0.114.0"
+version = "0.115.0"
 dependencies = [
  "canic-macros",
  "ic-platform 0.22.0",

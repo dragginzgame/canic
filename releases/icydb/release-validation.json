@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "group": "icydb",
-  "version": "0.114.0",
-  "source": null,
-  "date": null,
-  "gate": null,
-  "policy": null
+  "version": "0.115.0",
+  "source": "3f7237449c1ab8e4417578f84eeb969049f7741a",
+  "policy": "dc79877e17088d0e73eb8066b65cc0debdcfced7",
+  "date": "2026-11-04",
+  "gate": "maintainer-waived"
 }
