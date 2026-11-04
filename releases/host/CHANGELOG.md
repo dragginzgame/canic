@@ -5,7 +5,7 @@ history in one independent release group; coordinated history remains once in
 [shared history](../history.md). Runtime changes belong in the
 [framework ledger](../framework/CHANGELOG.md).
 
-## [0.115.0]
+## [0.115.0] - 2026-11-04
 
 ### ⚠️ Breaking
 

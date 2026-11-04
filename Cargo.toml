@@ -101,8 +101,8 @@ sharding_root_stub = { version = "0.115.0", path = "canisters/test/sharding_root
 
 # Host tooling
 # Changelog : releases/host/CHANGELOG.md
-canic-cli = { version = "0.114.0", path = "crates/canic-cli" }
-canic-host = { version = "0.114.0", path = "crates/canic-host" }
+canic-cli = { version = "0.115.0", path = "crates/canic-cli" }
+canic-host = { version = "0.115.0", path = "crates/canic-host" }
 
 # IcyDB adapter
 # Changelog : releases/icydb/CHANGELOG.md

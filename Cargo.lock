@@ -489,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.114.0"
+version = "0.115.0"
 dependencies = [
  "canic-contracts",
  "canic-core",
@@ -580,7 +580,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.114.0"
+version = "0.115.0"
 dependencies = [
  "canic-contracts",
  "canic-control-plane",
