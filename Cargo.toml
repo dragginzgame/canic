@@ -148,7 +148,7 @@ ic-storage = "0.66.1"
 ic-testkit = { version = "0.85.1" }
 ic-timers = "0.40.3"
 ic-wire = { version = "0.16.1", default-features = false }
-num-bigint = { version = "0.4", default-features = false }
+num-bigint = { version = "0.5", default-features = false }
 proc-macro2 = "1.0"
 quote = "1.0"
 remain = "0.2"
