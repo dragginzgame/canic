@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "canic-blob-service"
-version = "0.114.0"
+version = "0.115.0"
 dependencies = [
  "canic",
  "ic-blob-storage",

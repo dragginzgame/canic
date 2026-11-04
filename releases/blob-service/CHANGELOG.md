@@ -3,7 +3,7 @@
 Covers `canic-blob-service`. Independent releases continue its existing 0.114.0
 package history; earlier coordinated releases remain in [shared history](../history.md).
 
-## [0.115.0]
+## [0.115.0] - 2026-11-04
 
 ### ⚠️ Breaking
 
