@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "version": "0.115.0",
+  "groups": ["framework", "host", "icydb", "blob-service"],
+  "gate": "maintainer-waived",
+  "authority": "Maintainer instruction on 2026-11-04: put 0.115 live regardless; do not run the full gate.",
+  "evidence": "docs/audits/working/0.112-push-readiness/upstream-adoption.json",
+  "limitations": "Focused evidence only. No complete release gate or hosted CI pass is asserted."
+}

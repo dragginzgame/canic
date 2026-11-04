@@ -1,8 +1,8 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `628ccc75d813bfd9bae777bfbaef55838d25b1b2`,
-with 164 selected files. Its committed `VERSION` is 0.29.4; the manifest retains
+committed revision `574dc765f711fbed23a663d74f9de285857e343d`,
+with 164 selected files. Its committed `VERSION` is 0.29.5; the manifest retains
 that canonical stamp and exact revision. Explicit entrypoints record the maintained selection;
 the exporter derives required companions and verifies ownership before retiring
 unused payloads. Refreshes reuse that selection without repeating file arguments.

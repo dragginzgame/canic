@@ -8,7 +8,7 @@ kind="${1:-patch}"
     echo 'Refusing to bump without fresh governed validation of this source' >&2; exit 1;
 }
 export CANIC_RELEASE_VALIDATION_KIND="${CANIC_RELEASE_VALIDATION_KIND:-complete}"
-case "$CANIC_RELEASE_VALIDATION_KIND/$kind" in complete/patch|complete/minor|complete/major|plan/patch|plan/minor|plan/major|fast/patch) ;; *) exit 2 ;; esac
+case "$CANIC_RELEASE_VALIDATION_KIND/$kind" in complete/patch|complete/minor|complete/major|plan/patch|plan/minor|plan/major|fast/patch|maintainer-waived/minor) ;; *) exit 2 ;; esac
 if [[ "$CANIC_RELEASE_VALIDATION_KIND" == plan ]]; then
     perl scripts/release/validation-evidence.pl verify \
         "target/release-validation/$RELEASE_GROUP/$CANIC_RELEASE_VALIDATED_HEAD.json"
@@ -24,6 +24,9 @@ if [[ -z "${RELEASE_VERSION:-}" ]]; then
     bash scripts/ci/check-release-remote-state.sh before-version "$planned"
 fi
 RELEASE_VERSION="$planned"
+if [[ "$CANIC_RELEASE_VALIDATION_KIND" == maintainer-waived ]]; then
+    bash scripts/release/check-maintainer-exception.sh "$CANIC_RELEASE_VALIDATED_HEAD" "$RELEASE_VERSION"
+fi
 RELEASE_DATE="${CANIC_RELEASE_DATE:-${RELEASE_DATE:-$(date -u +%F)}}"
 bash scripts/ci/check-release-draft-ready.sh "$kind"
 tag_status=0

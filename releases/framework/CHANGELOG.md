@@ -80,6 +80,10 @@ in [shared history](../history.md). Adapter changes have their own
 
 ### 🔧 Changed
 
+- Adopt Shared Tooling 0.29.5 so release admission preserves excluded upstream
+  development helpers. Record the maintainer's one-time 0.115.0 full-gate waiver;
+  focused evidence and package verification do not imply complete validation.
+
 - Keep non-root bootstrap retries on one native registration with the existing
   bounded retry window. Report Store GC callback failures truthfully while Root
   retains exact-operation retry authority.

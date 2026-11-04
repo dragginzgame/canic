@@ -13,10 +13,13 @@ admitted="$(jq -ser --arg version "$version" --arg group "$RELEASE_GROUP" --arg 
     select(.schema == 1 and .group == $group and .policy == $policy and .version == $version) |
     select(.source | type == "string" and test("^[0-9a-f]{40}$")) |
     select(.date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) |
-    select(.gate == "complete" or .gate == "fast" or (.gate == "plan" and
+    select(.gate == "complete" or .gate == "fast" or (.gate == "maintainer-waived" and .version == "0.115.0") or (.gate == "plan" and
         (.validation.plan.scope == "workspace" or .validation.plan.scope == "group"))) |
     [.source, (if .gate == "plan" then "plan-" + .validation.plan.scope else .gate end)] | @tsv
 ' <<<"$receipt")"
+if [[ "$(jq -r .gate <<<"$receipt")" == maintainer-waived ]]; then
+    bash "$root/scripts/release/check-maintainer-exception.sh" "$(jq -r .source <<<"$receipt")" "$version" >&2
+fi
 if [[ "$(jq -r .gate <<<"$receipt")" == plan ]]; then
     mkdir -p "$root/target/tmp"
     proof="$(mktemp "$root/target/tmp/canic-published-validation.XXXXXX")"

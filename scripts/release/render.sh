@@ -8,6 +8,9 @@ export PATH="$root/.tools/host/bin:$root/.tools/rust/common/bin:$PATH"
 bash "$root/scripts/release/selection.sh"
 [[ $# == 2 && "$1" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || exit 2
 source="$1" output="$2"
+if [[ "${CANIC_RELEASE_VALIDATION_KIND:-complete}" == maintainer-waived ]]; then
+    bash scripts/release/check-maintainer-exception.sh "$source" "${RELEASE_VERSION:?}"
+fi
 [[ -d "$output" && -z "$(ls -A "$output")" ]] || exit 2
 output="$(cd "$output" && pwd -P)"
 git -C "$root" archive "$source" | tar -xf - -C "$output"

@@ -539,9 +539,11 @@ release-version:
 release-preflight:
 	@bash scripts/release/adapter.sh preflight
 release-verify:
-	+CARGO_NET_OFFLINE=true $(RELEASE_VALIDATION_LANE) selected
+	+@if [ "$(CANIC_RELEASE_VALIDATION_KIND)" = maintainer-waived ]; then \
+		bash scripts/release/check-maintainer-exception.sh "$(RELEASE_SOURCE)" "$(RELEASE_VERSION)"; \
+	else CARGO_NET_OFFLINE=true $(RELEASE_VALIDATION_LANE) selected; fi
 release-prepare-version:
-	@CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$(RELEASE_SOURCE)" CANIC_RELEASE_VALIDATION_KIND=plan CANIC_RELEASE_DATE="$(RELEASE_DATE)" bash scripts/ci/bump-version.sh "$(RELEASE_KIND)"
+	@CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$(RELEASE_SOURCE)" CANIC_RELEASE_VALIDATION_KIND="$(if $(CANIC_RELEASE_VALIDATION_KIND),$(CANIC_RELEASE_VALIDATION_KIND),plan)" CANIC_RELEASE_DATE="$(RELEASE_DATE)" bash scripts/ci/bump-version.sh "$(RELEASE_KIND)"
 release-prepared-check:
 	@bash scripts/ci/check-release-candidate.sh
 release-committed-check:

@@ -105,7 +105,12 @@ run_publication_step() {
 run_publication_step release-candidate bash "$ROOT_DIR/scripts/ci/check-release-candidate.sh"
 run_publication_step release-tag bash "$ROOT_DIR/scripts/ci/check-release-tag.sh" "$(git rev-parse HEAD)" "$version" "$RELEASE_GROUP"
 run_publication_step manifest-boundary bash "$ROOT_DIR/scripts/ci/check-publish-manifest-boundary.sh"
-run_publication_step clippy make --no-print-directory clippy
+if [[ "$(jq -r .gate "releases/$RELEASE_GROUP/release-validation.json")" == maintainer-waived ]]; then
+    run_publication_step maintainer-exception bash scripts/release/check-maintainer-exception.sh \
+        "$(jq -r .source "releases/$RELEASE_GROUP/release-validation.json")" "$version"
+else
+    run_publication_step clippy make --no-print-directory clippy
+fi
 
 started=0
 if [ -z "$PUBLISH_FROM" ]; then

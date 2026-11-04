@@ -4,9 +4,9 @@
 
 The maintainer requested finishing timer cleanup, adopting the new upstream
 Backup/Blob/Host/Platform/Testkit/Shared Tooling family, then deploying Canic.
-Delivery authority is now present for the scoped work; earlier no-push requests
-are superseded. No staging, commits, version changes, push or publication occurred.
-Other sessions must hold dependency inputs while installed qualification finishes;
+Delivery authority includes the explicit 0.115 boundary exception and publication.
+The maintainer subsequently instructed skipping the full gate. Receipts must say
+`maintainer-waived`, never claim full validation. Other sessions must hold dependency inputs while installed qualification finishes;
 the maintainer confirmed that pause. The final six manifest/lock hashes stayed fixed.
 
 The maintainer explicitly authorized the 0.114 → 0.115 boundary exception and
@@ -15,7 +15,14 @@ governed full release gate, then publish Framework before Host/adapters. All 38
 members currently remain 0.114.0; four 0.115.0 drafts cover the breaking changes.
 Do not revive cancelled 0.114.1. Retain the Auth acceptance limits below in release
 reporting; publication does not turn controlled-local evidence into production proof.
-Current HEAD: 0509ec870. Recorded published 0.114.0:
+Source candidate committed as `4176ee974`. The Shared Tooling blocker is fixed
+and published as 0.29.5 (`574dc765f711fbed23a663d74f9de285857e343d`), then
+adopted through the exporter. Focused release-group regression passes, including
+an excluded helper retaining its own version across release rendering. Other
+Shared Tooling edits were preserved. No Canic version, tag or publication yet.
+The one-time `ci/release-exception-0.115.json` records the maintainer waiver;
+source, lockfile, exact transaction, tag and package admission remain enforced.
+Recorded published 0.114.0:
 `e753785953e6805461ac337868c32163f65c3209`. Preserve unrelated dirty/staged work,
 `.git/release-state/`, `.tmp/release-0114-20261031/`, and the candidate named by
 `.tmp/release-01141-20261102/candidate-path`. Check active target users before

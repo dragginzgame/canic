@@ -19,7 +19,7 @@ gate="$(jq -er --arg group "$RELEASE_GROUP" --arg source "$source" --arg policy 
     select((.gate == "plan" and keys == ["date","gate","group","policy","qualification","schema","source","validation","version"]) or
         (.gate != "plan" and keys == ["date","gate","group","policy","schema","source","version"])) |
     select(.schema == 1 and .group == $group and .source == $source and .policy == $policy and
-        .version == $version and .date == $date and (.gate == "complete" or .gate == "fast" or .gate == "plan")) | .gate
+        .version == $version and .date == $date and (.gate == "complete" or .gate == "fast" or .gate == "plan" or .gate == "maintainer-waived")) | .gate
 ' "$actual/$receipt")"
 mkdir "$scratch/source"
 git archive "$source" | tar -xf - -C "$scratch/source"
