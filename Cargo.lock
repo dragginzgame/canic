@@ -412,7 +412,7 @@ dependencies = [
  "hex",
  "ic_principal",
  "leb128",
- "num-bigint",
+ "num-bigint 0.4.8",
  "num-traits",
  "paste",
  "pretty",
@@ -449,7 +449,7 @@ dependencies = [
  "lalrpop",
  "lalrpop-util",
  "logos",
- "num-bigint",
+ "num-bigint 0.4.8",
  "pretty",
  "serde",
  "thiserror 1.0.69",
@@ -516,7 +516,7 @@ dependencies = [
  "ic-platform 0.22.0",
  "ic-platform-types",
  "ic-wire",
- "num-bigint",
+ "num-bigint 0.5.1",
  "remain",
  "serde",
  "serde_bytes",
@@ -564,7 +564,7 @@ dependencies = [
  "ic-storage",
  "ic-timers",
  "ic-wire",
- "num-bigint",
+ "num-bigint 0.5.1",
  "proc-macro2",
  "quote",
  "remain",
@@ -2436,7 +2436,7 @@ dependencies = [
  "ic-agent",
  "ic-certification",
  "ic-platform-types",
- "num-bigint",
+ "num-bigint 0.4.8",
  "num-traits",
  "serde",
  "serde_bytes",
@@ -2491,7 +2491,7 @@ dependencies = [
  "ic-verify-bls-signature",
  "ic_bls12_381",
  "k256 0.14.0",
- "num-bigint",
+ "num-bigint 0.4.8",
  "num-traits",
  "serde",
  "serde_bytes",
@@ -2574,7 +2574,7 @@ dependencies = [
  "hmac 0.12.1",
  "ic_principal",
  "k256 0.13.4",
- "num-bigint",
+ "num-bigint 0.4.8",
  "pem 1.1.1",
  "rand 0.8.8",
  "rand_chacha",
@@ -3308,6 +3308,17 @@ name = "num-bigint"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c89e69e7e0f03bea5ef08013795c25018e101932225a656383bd384495ecc367"
+dependencies = [
+ "num-integer",
+ "num-traits",
+ "serde",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93e7820bc0a80a0238e650327316f929ba18d5be054b647490a3a6a339f3e7c0"
 dependencies = [
  "num-integer",
  "num-traits",
@@ -4505,7 +4516,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d585997b0ac10be3c5ee635f1bab02d512760d14b7c468801ac8a01d9ae5f1d"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.8",
  "num-traits",
  "thiserror 2.0.21",
  "time",
