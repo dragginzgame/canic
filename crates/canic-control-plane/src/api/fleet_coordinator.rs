@@ -64,6 +64,27 @@ impl canic_core::access::expr::AccessCheck for FleetCoordinatorRegistryCallerPre
 }
 
 impl FleetCoordinatorApi {
+    /// Restore same-release authority and accepted work without rerunning genesis.
+    pub fn post_upgrade() {
+        canic_core::api::timer::TimerApi::initialize_shared_runtime_required();
+        canic_core::memory::bootstrap(crate::memory::framework())
+            .unwrap_or_else(|error| IcOps::trap(format!("memory bootstrap failed: {error}")));
+        EnvOps::initialize_fleet_coordinator_runtime();
+        let sealed =
+            canic_core::api::authority_restore::AuthorityRestoreApi::restore_timer_suspension()
+                .unwrap_or_else(|error| {
+                    IcOps::trap(format!("authority restore fence recovery failed: {error}"))
+                });
+        if !sealed {
+            FleetCoordinatorWorkflow::resume_after_restart().unwrap_or_else(|error| {
+                IcOps::trap(format!(
+                    "Fleet Coordinator continuation recovery failed: {error}"
+                ))
+            });
+        }
+        canic_core::api::ready::ReadyApi::mark_ready();
+    }
+
     /// Authorize an exact joining Root before command workflow dispatch.
     pub fn authorize_calling_root_snapshot() -> Result<(), Error> {
         FleetCoordinatorWorkflow::authorize_root_snapshot_caller(msg_caller().into())
@@ -182,12 +203,10 @@ impl FleetCoordinatorApi {
     }
 
     /// Accept the exact controller-reviewed removal without changing its durable reservation.
-    pub async fn remove_root(
+    pub fn remove_root(
         request: crate::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest,
     ) -> Result<crate::dto::role::OperationReceipt, Error> {
-        FleetCoordinatorWorkflow::accept_root_removal(request)
-            .await
-            .map_err(Into::into)
+        FleetCoordinatorWorkflow::accept_root_removal(request).map_err(Into::into)
     }
 
     /// Reconcile the original terminal Ledger transfer as the authenticated IC caller.
@@ -203,7 +222,7 @@ impl FleetCoordinatorApi {
         request: canic_contracts::dto::authority_restore::AuthoritySnapshotRequest,
     ) -> Result<canic_contracts::dto::authority_restore::AuthorityRestoreFenceStatusResponse, Error>
     {
-        FleetCoordinatorWorkflow::require_root_funding_snapshot_resumable().map_err(Error::from)?;
+        FleetCoordinatorWorkflow::prepare_snapshot_timers().map_err(Error::from)?;
         canic_core::api::authority_restore::AuthorityRestoreApi::prepare_coordinator_snapshot(
             request,
         )

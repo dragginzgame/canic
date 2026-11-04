@@ -27,9 +27,9 @@ std::thread_local! {
         {
             let allocation = canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_SETS_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+                StableBtreeMap::create(allocation).expect("Storage operation failed")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("Storage operation failed")
             }
         },
     );
@@ -46,9 +46,9 @@ std::thread_local! {
         {
             let allocation = canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_REFS_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+                StableBtreeMap::create(allocation).expect("Storage operation failed")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("Storage operation failed")
             }
         },
     );
@@ -141,34 +141,30 @@ impl Storable for TemplateChunkRefRecord {
         max_size: TEMPLATE_CHUNK_REF_RECORD_MAX_BYTES,
         is_fixed_size: true,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.clone().into_bytes())
-    }
-
-    fn into_bytes(self) -> Vec<u8> {
+    fn to_bytes(
+        &self,
+    ) -> Result<Cow<'_, [u8]>, canic_core::__reexports::ic_storage::storable::CodecError> {
         let mut bytes = Vec::with_capacity(TEMPLATE_CHUNK_REF_RECORD_BYTES);
         bytes.extend_from_slice(&self.slot.to_le_bytes());
         bytes.extend_from_slice(&self.payload_len.to_le_bytes());
-        bytes
+        Ok(Cow::Owned(bytes))
     }
-
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        let bytes = bytes.as_ref();
-        assert_eq!(
-            bytes.len(),
-            TEMPLATE_CHUNK_REF_RECORD_BYTES,
-            "template chunk ref record length mismatch"
-        );
-
-        let slot = u64::from_le_bytes(bytes[0..8].try_into().expect("template chunk ref slot"));
-        let payload_len = u32::from_le_bytes(
-            bytes[8..12]
-                .try_into()
-                .expect("template chunk ref payload len"),
-        );
-
-        Self { slot, payload_len }
+    fn from_bytes(
+        bytes: Cow<'_, [u8]>,
+    ) -> Result<Self, canic_core::__reexports::ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self {
+            slot: u64::from_le_bytes(
+                bytes[..8].try_into().map_err(|_| {
+                    canic_core::__reexports::ic_storage::storable::CodecError::Bounds
+                })?,
+            ),
+            payload_len: u32::from_le_bytes(
+                bytes[8..].try_into().map_err(|_| {
+                    canic_core::__reexports::ic_storage::storable::CodecError::Bounds
+                })?,
+            ),
+        })
     }
 }
 
@@ -192,19 +188,25 @@ impl Storable for TemplateChunkPayloadRecord {
         max_size: TEMPLATE_CHUNK_PAYLOAD_MAX_BYTES,
         is_fixed_size: false,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Borrowed(self.bytes.as_slice())
+    fn to_bytes(
+        &self,
+    ) -> Result<Cow<'_, [u8]>, canic_core::__reexports::ic_storage::storable::CodecError> {
+        Self::check_bounds(&self.bytes)?;
+        Ok(Cow::Borrowed(&self.bytes))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        self.bytes
+    fn into_bytes(
+        self,
+    ) -> Result<Vec<u8>, canic_core::__reexports::ic_storage::storable::CodecError> {
+        Self::check_bounds(&self.bytes)?;
+        Ok(self.bytes)
     }
-
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        Self {
+    fn from_bytes(
+        bytes: Cow<'_, [u8]>,
+    ) -> Result<Self, canic_core::__reexports::ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self {
             bytes: bytes.into_owned(),
-        }
+        })
     }
 }
 
@@ -277,7 +279,9 @@ impl TemplateChunkSetStateStore {
     // Insert or replace one template chunk-set metadata record.
     pub fn upsert(release: TemplateReleaseKey, record: TemplateChunkSetRecord) {
         TEMPLATE_CHUNK_SETS.with_borrow_mut(|map| {
-            let previous = map.insert(TemplateReleaseKeyRecord(release.clone()), record.clone());
+            let previous = map
+                .insert(TemplateReleaseKeyRecord(release.clone()), record.clone())
+                .expect("Storage operation failed");
             TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
                 if let Some(current) = occupied.as_mut() {
                     let previous_bytes = previous
@@ -295,7 +299,10 @@ impl TemplateChunkSetStateStore {
     // Fetch one template chunk-set metadata record, if present.
     #[must_use]
     pub fn get(release: &TemplateReleaseKey) -> Option<TemplateChunkSetRecord> {
-        TEMPLATE_CHUNK_SETS.with_borrow(|map| map.get(&TemplateReleaseKeyRecord(release.clone())))
+        TEMPLATE_CHUNK_SETS.with_borrow(|map| {
+            map.get(&TemplateReleaseKeyRecord(release.clone()))
+                .expect("Storage operation failed")
+        })
     }
 
     // Export the full chunk-set metadata snapshot for ops-owned accounting.
@@ -304,9 +311,10 @@ impl TemplateChunkSetStateStore {
         TemplateChunkSetsData {
             entries: TEMPLATE_CHUNK_SETS.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| TemplateChunkSetEntryRecord {
                         release: entry.key().0.clone(),
-                        record: entry.value(),
+                        record: entry.value().expect("Storage operation failed"),
                     })
                     .collect()
             }),
@@ -331,7 +339,13 @@ impl TemplateChunkSetStateStore {
 
         let bytes = TEMPLATE_CHUNK_SETS.with_borrow(|map| {
             map.iter()
-                .map(|entry| chunk_set_entry_size(&entry.key().0, &entry.value()))
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .map(|entry| {
+                    chunk_set_entry_size(
+                        &entry.key().0,
+                        &entry.value().expect("Storage operation failed"),
+                    )
+                })
                 .sum()
         });
         TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
@@ -343,7 +357,9 @@ impl TemplateChunkSetStateStore {
 
     // Clear the chunk-set metadata store.
     pub fn clear() {
-        TEMPLATE_CHUNK_SETS.with_borrow_mut(StableBtreeMap::clear);
+        TEMPLATE_CHUNK_SETS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
         });
@@ -373,8 +389,10 @@ impl TemplateChunkStore {
         let payload_record = TemplateChunkPayloadRecord {
             bytes: record.bytes,
         };
-        let previous = TEMPLATE_CHUNK_REFS
-            .with_borrow(|map| map.get(&TemplateChunkKeyRecord(chunk_key.clone())));
+        let previous = TEMPLATE_CHUNK_REFS.with_borrow(|map| {
+            map.get(&TemplateChunkKeyRecord(chunk_key.clone()))
+                .expect("Storage operation failed")
+        });
         let previous_bytes = previous.as_ref().map_or(0, |previous| {
             chunk_entry_size(&chunk_key, previous.payload_len)
         });
@@ -384,7 +402,9 @@ impl TemplateChunkStore {
                 let payloads = payloads
                     .as_ref()
                     .expect("chunk payload vector is installed");
-                payloads.set(previous.slot, &payload_record);
+                payloads
+                    .set(previous.slot, &payload_record)
+                    .expect("commit chunk payload");
             });
             previous.slot
         } else {
@@ -393,7 +413,9 @@ impl TemplateChunkStore {
                     .as_ref()
                     .expect("chunk payload vector is installed");
                 let slot = payloads.len();
-                payloads.push(&payload_record);
+                payloads
+                    .push(&payload_record)
+                    .expect("Storage operation failed");
                 slot
             })
         };
@@ -402,7 +424,8 @@ impl TemplateChunkStore {
             map.insert(
                 TemplateChunkKeyRecord(chunk_key),
                 TemplateChunkRefRecord { slot, payload_len },
-            );
+            )
+            .expect("Storage operation failed");
         });
         canic_core::perf!("chunk_store_insert");
 
@@ -421,6 +444,7 @@ impl TemplateChunkStore {
     pub fn get(chunk_key: &TemplateChunkKey) -> Option<TemplateChunkRecord> {
         TEMPLATE_CHUNK_REFS.with_borrow(|map| {
             map.get(&TemplateChunkKeyRecord(chunk_key.clone()))
+                .expect("Storage operation failed")
                 .and_then(|chunk_ref| {
                     TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
                         let payloads = payloads
@@ -428,6 +452,7 @@ impl TemplateChunkStore {
                             .expect("chunk payload vector is installed");
                         payloads
                             .get(chunk_ref.slot)
+                            .expect("Storage operation failed")
                             .map(|payload| TemplateChunkRecord {
                                 bytes: payload.bytes,
                             })
@@ -461,7 +486,13 @@ impl TemplateChunkStore {
         } else {
             let bytes = TEMPLATE_CHUNK_REFS.with_borrow(|map| {
                 map.iter()
-                    .map(|entry| chunk_entry_size(&entry.key().0, entry.value().payload_len))
+                    .map(|entry| entry.expect("Storage iteration failed"))
+                    .map(|entry| {
+                        chunk_entry_size(
+                            &entry.key().0,
+                            entry.value().expect("Storage operation failed").payload_len,
+                        )
+                    })
                     .sum()
             });
             TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
@@ -477,6 +508,7 @@ impl TemplateChunkStore {
     pub fn entry_bytes(chunk_key: &TemplateChunkKey) -> Option<u64> {
         TEMPLATE_CHUNK_REFS.with_borrow(|map| {
             map.get(&TemplateChunkKeyRecord(chunk_key.clone()))
+                .expect("Storage operation failed")
                 .map(|chunk_ref| chunk_entry_size(chunk_key, chunk_ref.payload_len))
         })
     }
@@ -484,12 +516,17 @@ impl TemplateChunkStore {
     // Clear the chunk store.
     #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn clear() {
-        TEMPLATE_CHUNK_REFS.with_borrow_mut(StableBtreeMap::clear);
+        TEMPLATE_CHUNK_REFS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         TEMPLATE_CHUNK_PAYLOADS.with_borrow_mut(|payloads| {
             drop(payloads.take().expect("chunk payload vector is installed"));
-            *payloads = Some(StableVec::reset(canic_core::memory::open(
-                crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1,
-            )));
+            *payloads = Some(
+                StableVec::reset(canic_core::memory::open(
+                    crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1,
+                ))
+                .expect("Storage operation failed"),
+            );
         });
         TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
@@ -507,14 +544,16 @@ impl TemplateChunkStore {
         TemplateChunkRefsData {
             entries: TEMPLATE_CHUNK_REFS.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| {
-                        let record = entry.value();
+                        let record = entry.value().expect("Storage operation failed");
                         TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
                             let payloads = payloads
                                 .as_ref()
                                 .expect("chunk payload vector is installed");
                             let payload = payloads
                                 .get(record.slot)
+                                .expect("Storage operation failed")
                                 .expect("chunk reference slot must resolve to a payload");
                             assert_eq!(
                                 usize::try_from(record.payload_len).unwrap_or(usize::MAX),
@@ -535,9 +574,10 @@ impl TemplateChunkStore {
     #[cfg(test)]
     fn import_refs(data: TemplateChunkRefsData) {
         TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
-            map.clear();
+            map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                map.insert(TemplateChunkKeyRecord(entry.chunk_key), entry.record);
+                map.insert(TemplateChunkKeyRecord(entry.chunk_key), entry.record)
+                    .expect("Storage operation failed");
             }
         });
         TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| *occupied = None);
@@ -555,6 +595,7 @@ impl TemplateChunkStore {
                         slot,
                         record: payloads
                             .get(slot)
+                            .expect("Storage operation failed")
                             .expect("chunk payload slot must exist within stable vector length"),
                     })
                     .collect()
@@ -566,9 +607,12 @@ impl TemplateChunkStore {
     fn import_payloads(data: TemplateChunkPayloadsData) {
         TEMPLATE_CHUNK_PAYLOADS.with_borrow_mut(|payloads| {
             drop(payloads.take().expect("chunk payload vector is installed"));
-            *payloads = Some(StableVec::reset(canic_core::memory::open(
-                crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1,
-            )));
+            *payloads = Some(
+                StableVec::reset(canic_core::memory::open(
+                    crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1,
+                ))
+                .expect("Storage operation failed"),
+            );
             let payloads = payloads
                 .as_ref()
                 .expect("chunk payload vector is installed");
@@ -578,7 +622,9 @@ impl TemplateChunkStore {
                     payloads.len(),
                     "chunk payload slots must be contiguous"
                 );
-                payloads.push(&entry.record);
+                payloads
+                    .push(&entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -593,7 +639,8 @@ fn count_resolving_chunks<R: Memory, P: Memory>(
 ) -> usize {
     let payload_slots = payloads.len();
     refs.iter()
-        .filter(|entry| entry.value().slot < payload_slots)
+        .map(|entry| entry.expect("Storage iteration failed"))
+        .filter(|entry| entry.value().expect("Storage operation failed").slot < payload_slots)
         .count()
 }
 
@@ -602,7 +649,7 @@ fn chunk_set_entry_size(release: &TemplateReleaseKey, record: &TemplateChunkSetR
     (canic_contracts::serialization::serialize(release)
         .expect("encode current template release key")
         .len()
-        + record.to_bytes().len()) as u64
+        + record.to_bytes().expect("encode admitted record").len()) as u64
 }
 
 #[cfg(any(test, feature = "wasm-store-canister"))]
@@ -610,16 +657,19 @@ fn init_chunk_payloads() -> TemplateChunkPayloadVec {
     {
         let allocation = canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableVec::create(allocation)
+            StableVec::create(allocation).expect("Storage operation failed")
         } else {
-            StableVec::load(allocation)
+            StableVec::load(allocation).expect("Storage operation failed")
         }
     }
 }
 
 #[cfg(any(test, feature = "wasm-store-canister"))]
 fn chunk_entry_size(chunk_key: &TemplateChunkKey, payload_len: u32) -> u64 {
-    (TemplateChunkKeyRecord(chunk_key.clone()).to_bytes().len()
+    (TemplateChunkKeyRecord(chunk_key.clone())
+        .to_bytes()
+        .expect("encode admitted record")
+        .len()
         + TEMPLATE_CHUNK_REF_RECORD_BYTES
         + payload_len as usize) as u64
 }
@@ -637,9 +687,9 @@ mod tests {
         bytes_read: Rc<Cell<usize>>,
     }
 
-    impl ic_memory::MemoryBacking for ObservedPayloadMemory {
-        fn backing_identity(&self) -> ic_memory::BackingIdentity {
-            ic_memory::MemoryBacking::backing_identity(&self.memory)
+    impl ic_storage::MemoryBacking for ObservedPayloadMemory {
+        fn backing_identity(&self) -> ic_storage::BackingIdentity {
+            ic_storage::MemoryBacking::backing_identity(&self.memory)
         }
     }
 
@@ -669,36 +719,35 @@ mod tests {
         )
     }
 
+    fn runtime<M: ic_storage::MemoryBacking>(memory: M) -> ic_storage::MemoryRuntime<M> {
+        ic_storage::testing::fixture_runtime(
+            memory,
+            "test",
+            "test.",
+            &["test.rows.v1"],
+            ic_storage::StorageConfig::default(),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn chunk_count_uses_metadata_and_preserves_slot_resolution_after_reopen() {
         let refs_memory = VectorMemory::default();
         let payload_memory = ObservedPayloadMemory::default();
-        let refs_runtime = ic_memory::testing::fixture_runtime(
-            refs_memory,
-            "test",
-            "test.",
-            &["test.rows.v1"],
-            ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
-        )
-        .unwrap();
+        let refs_runtime = runtime(refs_memory);
         let mut refs = StableBtreeMap::create(
             refs_runtime
-                .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
                 .unwrap(),
-        );
-        let payload_runtime = ic_memory::testing::fixture_runtime(
-            payload_memory.clone(),
-            "test",
-            "test.",
-            &["test.rows.v1"],
-            ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
         )
-        .unwrap();
+        .expect("Storage operation failed");
+        let payload_runtime = runtime(payload_memory.clone());
         let payloads = StableVec::create(
             payload_runtime
-                .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
                 .unwrap(),
-        );
+        )
+        .expect("Storage operation failed");
         assert_eq!(count_resolving_chunks(&refs, &payloads), 0);
 
         // Include an empty but valid payload: presence is determined by its slot.
@@ -707,9 +756,11 @@ mod tests {
             .enumerate()
         {
             let slot = payloads.len();
-            payloads.push(&TemplateChunkPayloadRecord {
-                bytes: vec![7; len],
-            });
+            payloads
+                .push(&TemplateChunkPayloadRecord {
+                    bytes: vec![7; len],
+                })
+                .expect("Storage operation failed");
             refs.insert(
                 TemplateChunkKeyRecord(TemplateChunkKey::new(
                     release(),
@@ -719,7 +770,8 @@ mod tests {
                     slot,
                     payload_len: u32::try_from(len).unwrap(),
                 },
-            );
+            )
+            .expect("Storage operation failed");
         }
         for (index, slot) in [(3, payloads.len()), (4, u64::MAX)] {
             refs.insert(
@@ -728,38 +780,49 @@ mod tests {
                     slot,
                     payload_len: 0,
                 },
-            );
+            )
+            .expect("Storage operation failed");
         }
         drop(refs);
         drop(payloads);
 
         let refs = {
             let allocation = refs_runtime
-                .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
                 .unwrap();
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
                 StableBtreeMap::<TemplateChunkKeyRecord, TemplateChunkRefRecord, _>::create(
                     allocation,
                 )
+                .expect("open fixture collection")
             } else {
                 StableBtreeMap::<TemplateChunkKeyRecord, TemplateChunkRefRecord, _>::load(
                     allocation,
                 )
+                .expect("open fixture collection")
             }
         };
         let payloads = {
             let allocation = payload_runtime
-                .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
                 .unwrap();
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
                 StableVec::<TemplateChunkPayloadRecord, _>::create(allocation)
+                    .expect("open fixture collection")
             } else {
                 StableVec::<TemplateChunkPayloadRecord, _>::load(allocation)
+                    .expect("open fixture collection")
             }
         };
         let previous_count = refs
             .iter()
-            .filter(|entry| payloads.get(entry.value().slot).is_some())
+            .map(|entry| entry.expect("Storage iteration failed"))
+            .filter(|entry| {
+                payloads
+                    .get(entry.value().expect("Storage operation failed").slot)
+                    .expect("Storage operation failed")
+                    .is_some()
+            })
             .count();
         assert_eq!(previous_count, 3);
         let payload_pages = payload_memory.size();

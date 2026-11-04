@@ -175,6 +175,12 @@ journal. Source and topic labels are each bounded to 256 UTF-8 bytes.
   are purged (omit for no age limit). An expiry beyond the IC clock's representable
   range schedules no age timer; count retention still applies.
 
+### `[auth]`
+
+`portable_enrollment_freshness_ns` optionally selects the Root enrollment snapshot
+lease, from 1 nanosecond through 1 hour. Without it the Root snapshot update is
+unavailable. This policy does not approve an issuer or install a registry.
+
 ### `[auth.delegated_tokens]`
 
 Root/issuer delegated token authentication
@@ -337,8 +343,22 @@ round, truncate, or saturate them.
 - `metrics.profile = "leaf" | "hub" | "storage" | "root" | "full"` – override
   the role-derived metrics profile.
 
-Portable Auth enrollment and endpoint integration are unfinished. These settings
-do not enable application credential issuance or session admission.
+An optional nested `auth.local_application_authorization.receiver` table selects
+the persistent receiver runtime for controlled local qualification. Every field is
+required: `clock_skew_ns`, `verification_burst`,
+`verification_refill_interval_ns`, `unknown_logout_burst`,
+`unknown_logout_refill_interval_ns`, `enrollment_refresh_interval_ns`,
+`enrollment_receipt_timeout_ns`, `max_login_ttl_ns`, `max_proof_ttl_ns` and
+`max_certificate_age_ns`. There are no implicit production limits.
+
+Work budgets and refill intervals must be positive. Refresh intervals are between
+1 second and 1 hour; receipt timeouts are positive and at most 1 hour. Login and
+proof TTL ceilings are positive and at most 24 hours and 60 seconds respectively;
+certificate age must be positive. The runtime retains checked reset floors and
+stays closed until it pulls fresh authenticated enrollment from its installed Root.
+Production (`build_network = "ic"`) receiver activation is refused while its
+clock-skew bound remains unqualified. These settings do not enable issuer
+registration, credential issuance or browser delivery.
 
 The same cycles, placement, auth, diagnostics, and metrics fields
 also apply directly to the Component Spec table. Placement pools refer to

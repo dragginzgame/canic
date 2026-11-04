@@ -9,6 +9,9 @@ kind = "canister"
 package = "../delegation_issuer_stub"
 fleet_admission = true
 
+[auth]
+portable_enrollment_freshness_ns = 3600000000000
+
 [auth.delegated_tokens]
 enabled = true
 build_network = "local"
@@ -76,3 +79,16 @@ component_spec = "issuer"
 mode = "active_pool"
 placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 1
+
+# Explicit native receiver qualification policy; no deployment default is inferred.
+[component_specs.issuer.auth.local_application_authorization.receiver]
+clock_skew_ns = 1000000000
+verification_burst = 8
+verification_refill_interval_ns = 1000000000
+unknown_logout_burst = 4
+unknown_logout_refill_interval_ns = 1000000000
+enrollment_refresh_interval_ns = 1000000000
+enrollment_receipt_timeout_ns = 10000000000
+max_login_ttl_ns = 3600000000000
+max_proof_ttl_ns = 6000000000
+max_certificate_age_ns = 60000000000

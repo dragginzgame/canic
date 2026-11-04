@@ -9,8 +9,10 @@ impl From<ResetRequest> for PoolAdminCommand {
     }
 }
 
-impl From<ic_platform::principal::ExternalPrincipal> for crate::dto::pool_retry::ResetResponse {
-    fn from(value: ic_platform::principal::ExternalPrincipal) -> Self {
+impl From<ic_platform_types::principal::ExternalPrincipal>
+    for crate::dto::pool_retry::ResetResponse
+{
+    fn from(value: ic_platform_types::principal::ExternalPrincipal) -> Self {
         Self {
             canister_id: value.into(),
         }

@@ -187,8 +187,8 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
             "the wasm runtime graph reaches multiple Canic packages: {}",
             packages.join(", ")
         ),
-        RoleContractFinding::MultipleMemoryRuntimes { packages } => format!(
-            "the selected Wasm role reaches multiple ic-memory package identities: {}. Align the application's framework and database dependencies to one ic-memory package identity before building; matching version labels from different sources is insufficient",
+        RoleContractFinding::MultipleStorageRuntimes { packages } => format!(
+            "the selected Wasm role reaches multiple ic-storage package identities: {}. Align the application's framework and database dependencies to one ic-storage package identity before building; matching version labels from different sources is insufficient",
             packages.join(", ")
         ),
         RoleContractFinding::MultipleTimerRuntimes { packages } => format!(

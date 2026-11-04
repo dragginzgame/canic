@@ -393,13 +393,28 @@ fn isolated_role_workspace_rejects_build_runtime_features() {
     let fixture = FixtureWorkspace::materialize("supported");
     fixture.rewrite(
         "role/Cargo.toml",
-        "[build-dependencies]\ncanic = { workspace = true, features = [] }",
-        "[build-dependencies]\ncanic = { workspace = true, features = [\"sharding\"] }",
+        "[build-dependencies]\ncanic = { workspace = true, features = [\"build-support\"] }",
+        "[build-dependencies]\ncanic = { workspace = true, features = [\"build-support\", \"sharding\"] }",
     );
 
     let reason = fixture.rejection_reason();
 
     assert!(reason.contains("build dependency must be canonical"));
+}
+
+#[test]
+fn compiled_config_role_requires_build_support() {
+    let fixture = FixtureWorkspace::materialize("supported");
+    fixture.rewrite(
+        "role/Cargo.toml",
+        "[build-dependencies]\ncanic = { workspace = true, features = [\"build-support\"] }",
+        "[build-dependencies]\ncanic = { workspace = true, features = [] }",
+    );
+    assert!(
+        fixture
+            .rejection_reason()
+            .contains("select only build-support")
+    );
 }
 
 #[test]
@@ -529,7 +544,7 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
         assert!(protected_canic_package(&package.name).is_none());
         assert!(!matches!(
             package.name.as_str(),
-            "ic-cdk" | "ic-memory" | "ic-timers"
+            "ic-cdk" | "ic-storage" | "ic-timers"
         ));
         for dependency in normal_dependencies(nodes[id]) {
             frontier.push(dependency.pkg.repr.as_str());
@@ -817,10 +832,7 @@ fn alternate_protected_package_path_names_the_target_and_dependency_alias() {
         panic!("protected control-plane path must be rejected");
     };
     assert!(reason.contains("protected package `canic-control-plane`"));
-    assert!(reason.contains(&format!(
-        "runtime_bridge (helper {})",
-        env!("CARGO_PKG_VERSION")
-    )));
+    assert!(reason.contains(&format!("runtime_bridge (helper {})", canic_core::VERSION)));
 }
 
 #[test]
@@ -945,7 +957,7 @@ fn memory_runtime_identity_rejects_distinct_versions_and_sources() {
     second.source = Some("git+https://example.invalid/memory".to_string());
     for version in ["0.13.3", "0.14.3"] {
         graph.packages.get_mut("memory@2").unwrap().version = version.to_string();
-        let Err(RoleContractFinding::MultipleMemoryRuntimes { packages }) =
+        let Err(RoleContractFinding::MultipleStorageRuntimes { packages }) =
             validate_runtime_identities(&graph)
         else {
             panic!("distinct runtime package identities must reject");
@@ -983,7 +995,7 @@ fn memory_runtime_identity_excludes_proc_macro_subtrees_but_keeps_runtime_paths(
     });
     assert!(matches!(
         validate_runtime_identities(&graph),
-        Err(RoleContractFinding::MultipleMemoryRuntimes { .. })
+        Err(RoleContractFinding::MultipleStorageRuntimes { .. })
     ));
 }
 
@@ -992,8 +1004,8 @@ fn composed_memory_graph() -> CargoGraphEvidence {
         package("role", "role@1", "/tmp/role/Cargo.toml"),
         package("canic", "canic@1", "/tmp/canic/Cargo.toml"),
         package("domain", "domain@1", "/tmp/domain/Cargo.toml"),
-        package("ic-memory", "memory@1", "/tmp/memory-a/Cargo.toml"),
-        package("ic-memory", "memory@2", "/tmp/memory-b/Cargo.toml"),
+        package("ic-storage", "memory@1", "/tmp/memory-a/Cargo.toml"),
+        package("ic-storage", "memory@2", "/tmp/memory-b/Cargo.toml"),
     ];
     runtime_graph(
         &packages,
@@ -1005,7 +1017,7 @@ fn composed_memory_graph() -> CargoGraphEvidence {
                     normal_edge("domain", "domain@1"),
                 ],
             ),
-            node("canic@1", vec![normal_edge("ic_memory", "memory@1")]),
+            node("canic@1", vec![normal_edge("ic_storage", "memory@1")]),
             node("domain@1", vec![normal_edge("renamed_memory", "memory@2")]),
         ],
     )
@@ -1016,8 +1028,9 @@ fn isolated_memory_runtime_check_uses_selected_wasm_graph_before_compilation() {
     let fixture = memory_runtime_fixture();
     let role_manifest = fixture.root.join("role/Cargo.toml");
     let original = fs::read_to_string(&role_manifest).unwrap();
-    let dependency = "secondary_memory = { package = \"ic-memory\", path = \"../other-memory\" }\n";
-    let optional = "secondary_memory = { package = \"ic-memory\", path = \"../other-memory\", optional = true }\n";
+    let dependency =
+        "secondary_memory = { package = \"ic-storage\", path = \"../other-memory\" }\n";
+    let optional = "secondary_memory = { package = \"ic-storage\", path = \"../other-memory\", optional = true }\n";
     for (name, declaration, reject) in [
         (
             "build",
@@ -1084,7 +1097,7 @@ fn isolated_memory_runtime_check_uses_selected_wasm_graph_before_compilation() {
         if reject {
             assert!(
                 matches!(validation, RolePackageValidation::Unsupported(
-                RoleContractFinding::MultipleMemoryRuntimes { ref packages }) if packages.len() == 2),
+                RoleContractFinding::MultipleStorageRuntimes { ref packages }) if packages.len() == 2),
                 "{name}: {validation:?}"
             );
         } else {
@@ -1106,11 +1119,11 @@ fn memory_runtime_fixture() -> FixtureWorkspace {
     for (directory, manifest) in [
         (
             "other-memory",
-            "[package]\nname = \"ic-memory\"\nversion = \"9.0.0\"\nedition = \"2024\"\n[lib]\npath = \"lib.rs\"\n",
+            "[package]\nname = \"ic-storage\"\nversion = \"9.0.0\"\nedition = \"2024\"\n[lib]\npath = \"lib.rs\"\n",
         ),
         (
             "host-macro",
-            "[package]\nname = \"host-macro\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[lib]\nproc-macro = true\npath = \"lib.rs\"\n[dependencies]\nic-memory = { path = \"../other-memory\" }\n",
+            "[package]\nname = \"host-macro\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[lib]\nproc-macro = true\npath = \"lib.rs\"\n[dependencies]\nic-storage = { path = \"../other-memory\" }\n",
         ),
     ] {
         let root = fixture.root.join(directory);
@@ -1280,7 +1293,7 @@ fn package(name: &str, id: &str, manifest_path: &str) -> Package {
     serde_json::from_value::<Package>(json!({
         "id": id.to_string(),
         "name": name.to_string(),
-        "version": env!("CARGO_PKG_VERSION").to_string(),
+        "version": canic_core::VERSION.to_string(),
         "source": null,
         "manifest_path": PathBuf::from(manifest_path),
         "metadata": Some(json!({})),

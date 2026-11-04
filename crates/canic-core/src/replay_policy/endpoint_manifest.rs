@@ -13,6 +13,15 @@ use crate::replay_policy::types::{
 /// Canonical replay-policy rows for ordinary, Coordinator and Root endpoint methods.
 pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     endpoint_policy(
+        crate::protocol::operation_retry::resume::METHOD,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: command_kind("operation.resume.v1"),
+        },
+        CostClass::None,
+        None,
+        None,
+    ),
+    endpoint_policy(
         crate::protocol::pool_control::import::METHOD,
         ReplayPolicy::SnapshotConvergent {
             command_kind: command_kind("canister_pool.import.v1"),

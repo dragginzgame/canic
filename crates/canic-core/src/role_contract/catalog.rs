@@ -96,6 +96,11 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
         CanicFeatureEffect::StateBearing,
     ),
     feature(
+        CanicFeatureKey::AuthPortableIssuer,
+        "auth-portable-issuer",
+        CanicFeatureEffect::StateBearing,
+    ),
+    feature(
         CanicFeatureKey::AuthRootCanisterSigCreate,
         "auth-root-canister-sig-create",
         CanicFeatureEffect::NoState,
@@ -135,7 +140,7 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
 // Public facade features that do not participate in a compiled canister role.
 // Keep adapter/tooling selection separate from compiled framework role authority,
 // while Cargo/catalog parity still detects an unclassified feature.
-const NON_ROLE_PUBLIC_FEATURES: &[&str] = &["icrc", "testing", "wire-schema"];
+const NON_ROLE_PUBLIC_FEATURES: &[&str] = &["build-support", "icrc", "testing", "wire-schema"];
 
 const DEFAULT_FEATURES: &[CanicFeatureKey] = &[];
 
@@ -386,6 +391,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
 
 const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     feature_allocation(
+        CanicFeatureKey::AuthPortableIssuer,
+        StateAllocationKey::CorePortableIssuerState,
+    ),
+    feature_allocation(
         CanicFeatureKey::WasmStoreCanister,
         StateAllocationKey::FixtureStore,
     ),
@@ -564,6 +573,7 @@ impl CanicFeatureKey {
         Self::AuthIssuerCanisterSigCreate,
         Self::AuthIssuerCanisterSigVerify,
         Self::AuthLocalApplicationAuthorization,
+        Self::AuthPortableIssuer,
         Self::AuthRootCanisterSigCreate,
         Self::AuthRootCanisterSigVerify,
         Self::ControlPlane,
@@ -583,6 +593,7 @@ impl CanicFeatureKey {
                 | Self::AuthDelegatedTokenVerify
                 | Self::AuthIssuerCanisterSigCreate
                 | Self::AuthIssuerCanisterSigVerify
+                | Self::AuthPortableIssuer
                 | Self::AuthRootCanisterSigCreate
                 | Self::AuthRootCanisterSigVerify
         )

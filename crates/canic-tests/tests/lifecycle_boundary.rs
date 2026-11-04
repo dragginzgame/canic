@@ -8,15 +8,15 @@ use canic::{
         role::OperationStatusRequest, runtime::ReadinessStatus,
     },
 };
-use canic_testing_internal::pic::{
+use canic_tests::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
     lifecycle_participant_trap_wasm, managed_test_init_identity, upgrade_args,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{any::Any, time::Duration};
 use {
-    ic_platform::pocket_ic::PocketIc,
     ic_testkit::pic::{CanisterInstallExt, RetryPolicy},
+    ic_testkit::pocket_ic::PocketIc,
 };
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
@@ -32,7 +32,8 @@ fn invalid_reinstall_arguments_report_init_phase_error() {
     let canic_id = install.expect("install must return the canister id");
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
 
     let reinstall_err = fixture
         .pic
@@ -55,7 +56,8 @@ fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
     assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
 
     for attempt in 1..=3 {
         fixture
@@ -73,7 +75,8 @@ fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
         assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
         fixture
             .pic
-            .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+            .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+            .expect("PocketIC wait_out_install_code_rate_limit");
     }
 }
 
@@ -94,7 +97,8 @@ fn managed_cross_release_upgrade_fails_before_runtime_can_reuse_the_initial_rele
     );
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
 
     fixture
         .pic
@@ -113,7 +117,8 @@ fn managed_cross_release_upgrade_fails_before_runtime_can_reuse_the_initial_rele
 
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
     fixture
         .pic
         .retry_install_code(install_retry_policy(), || {
@@ -137,7 +142,8 @@ fn lifecycle_participant_trap_rolls_back_before_corrected_retry() {
         .module_hash;
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
 
     let error = fixture
         .pic
@@ -162,7 +168,8 @@ fn lifecycle_participant_trap_rolls_back_before_corrected_retry() {
 
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
     fixture
         .pic
         .retry_install_code(install_retry_policy(), || {
@@ -181,12 +188,15 @@ fn init_participant_trap_leaves_empty_canister_before_corrected_retry() {
     let uninstalled = fixture.create_uninstalled_canic_canister();
 
     let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        fixture.pic.install_canister(
-            uninstalled.canister_id,
-            trap_wasm,
-            uninstalled.init_args.clone(),
-            None,
-        );
+        fixture
+            .pic
+            .install_canister(
+                uninstalled.canister_id,
+                trap_wasm,
+                uninstalled.init_args.clone(),
+                None,
+            )
+            .expect("PocketIC install_canister");
     }))
     .expect_err("the init lifecycle participant must trap");
     let failure = panic_message(failure.as_ref());
@@ -204,7 +214,7 @@ fn init_participant_trap_leaves_empty_canister_before_corrected_retry() {
         "failed init must leave the canister without a committed module"
     );
 
-    fixture.pic.tick();
+    fixture.pic.tick().expect("PocketIC tick");
     assert_eq!(
         fixture
             .pic
@@ -217,13 +227,17 @@ fn init_participant_trap_leaves_empty_canister_before_corrected_retry() {
 
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    fixture.pic.install_canister(
-        uninstalled.canister_id,
-        fixture.canic_wasm.clone(),
-        uninstalled.init_args,
-        None,
-    );
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
+    fixture
+        .pic
+        .install_canister(
+            uninstalled.canister_id,
+            fixture.canic_wasm.clone(),
+            uninstalled.init_args,
+            None,
+        )
+        .expect("PocketIC install_canister");
     assert_prepared_and_not_ready(&fixture.pic, uninstalled.canister_id, fixture.root);
 }
 
@@ -236,15 +250,19 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
             .expect("fixture init payload");
     assert!(payload.admission.take().is_some());
     let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        fixture.pic.install_canister(
-            uninstalled.canister_id,
-            fixture.canic_wasm.clone(),
-            canic_contracts::protocol::initialization::encode((payload, application_args)).unwrap(),
-            None,
-        );
+        fixture
+            .pic
+            .install_canister(
+                uninstalled.canister_id,
+                fixture.canic_wasm.clone(),
+                canic_contracts::protocol::initialization::encode((payload, application_args))
+                    .unwrap(),
+                None,
+            )
+            .expect("PocketIC install_canister");
     }));
     assert!(rejected.is_err());
-    fixture.pic.tick();
+    fixture.pic.tick().expect("PocketIC tick");
     assert_eq!(
         fixture
             .pic
@@ -255,17 +273,22 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
     );
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    fixture.pic.install_canister(
-        uninstalled.canister_id,
-        fixture.canic_wasm.clone(),
-        uninstalled.init_args,
-        None,
-    );
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
+    fixture
+        .pic
+        .install_canister(
+            uninstalled.canister_id,
+            fixture.canic_wasm.clone(),
+            uninstalled.init_args,
+            None,
+        )
+        .expect("PocketIC install_canister");
     assert_prepared_and_not_ready(&fixture.pic, uninstalled.canister_id, fixture.root);
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
     fixture
         .pic
         .upgrade_canister(
@@ -324,7 +347,8 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
     let authority_id = fixture.install_authority_canister();
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
 
     let upgrade_err = fixture
         .pic

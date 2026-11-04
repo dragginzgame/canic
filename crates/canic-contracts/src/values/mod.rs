@@ -3,7 +3,6 @@ pub mod canister;
 pub mod cycles;
 pub mod fixture_import;
 pub mod icp_refill;
-pub mod memory;
 pub mod metrics;
 pub mod provisioning_failure;
 pub mod public_metrics;

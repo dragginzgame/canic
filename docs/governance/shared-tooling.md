@@ -1,8 +1,8 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `619d194875369e0f72b45477b66adb430acbf6b7`,
-with 148 selected files. Its committed `VERSION` is 0.27.23; the manifest retains
+committed revision `628ccc75d813bfd9bae777bfbaef55838d25b1b2`,
+with 164 selected files. Its committed `VERSION` is 0.29.4; the manifest retains
 that canonical stamp and exact revision. Explicit entrypoints record the maintained selection;
 the exporter derives required companions and verifies ownership before retiring
 unused payloads. Refreshes reuse that selection without repeating file arguments.
@@ -18,6 +18,17 @@ export containing only those files. It enforces file/link closure, not prose.
 Exporter integration tests run in Shared Tooling. Canic does not vendor that
 upstream test roster; its adoption checks cover actual refresh, snapshot integrity,
 governance closure and affected local adapters.
+
+This selection includes Rust 1.99.1 support policy, owned compiler-cache
+maintenance and the companion Perl module required by tool-store maintenance.
+The shared read-only Rust-floor projection is selected explicitly. Canic's
+`make compiler-check` compares every member's floor, the pinned channel and both private
+consumer floors with the actual rustc/Cargo identities. Checks disable rustup
+auto-install; explicit setup retains tool installation ownership. An overridden
+`RUSTC` is checked directly. The MSRV job retains its default-feature graph;
+other jobs retain distinct feature, Wasm and native-host qualification. The
+MSRV job also checks the facade, Core and Control Plane's default Wasm graph
+against that same supported compiler, preserving #342's explicit target proof.
 
 The compact baseline delegates task-specific contracts to
 [engineering details](../../rules/engineering-details.md). Focused checks follow
@@ -35,18 +46,28 @@ adoption does not move packages or merge independently selected managed graphs;
 The shared core/integration rule requires evidence of the actual introducing
 dependencies before treating an integration stack as a core upgrade constraint.
 Canic retains its current approved workspace boundaries. Its framework runtime
-uses the upstream Memory, Metrics, Platform, Timers and Wire types directly;
+uses the upstream Storage, Metrics, Platform, Timers and Wire types directly;
 moving a test dependency alone cannot qualify mismatched runtime contracts.
 
-The snapshot includes opt-in independent release-group helpers and delegated
-delivery rules. Canic retains its coordinated publication family, existing
-package versions and local release authority; adoption selects no independent
-release groups or release execution. Complete member catalogs and inline
-group explanations apply to independently grouped workspaces; Canic keeps its
-existing dependency catalog because it remains one coordinated family. The new
-pending VERSION automation applies only where that file owns the repository
-version. Canic retains Cargo package versions, its current pending notes and
-maintainer-directed release preparation; it adds no second version owner.
+The maintainer selected the snapshot's independent release-group helpers for
+the [framework, Host and two adapters](../operations/adapter-release-groups.md).
+Every member has a literal group version and a complete root catalog entry.
+Each group owns its ledger and explicit publication selection; CLI/Host release
+together and retain exact linked framework admission. The adoption preserves numeric identities and executable
+snapshots. It authorizes no release execution and introduces no VERSION file.
+
+The refreshed snapshot supplies opt-in, source-bound
+[release-group validation plans](../release-group-validation.md). The runner
+requires an explicit decision for every configured stage and rejects stale
+source, policy, group or input identities. Canic's consumer-owned selector maps every stage and retains source-bound evidence.
+Workspace CI and uncertain or shared changes remain full; a confined group needs
+matching qualified evidence before excluding unrelated stages. The 0.29.3 refresh
+passes the consumer dispatcher/evidence regression for all four groups, including
+full fallback, failed stages and source/evidence drift. Its inert fixture gates
+qualify routing and refusal, not product test execution or release readiness.
+The linked [validation-runner guide](../validation-runner.md) is included in the
+snapshot's companion closure. The independently pinned IC Build metadata editor
+is 0.74.0; its four disposable release-group transactions and rollback checks pass.
 
 Cargo uses its built-in workspace `target/` default. General `make clean` selects
 that whole tree even with an inherited child-output setting; direct Cargo
@@ -214,7 +235,7 @@ No tag deletion is part of adoption qualification.
 
 ## Release recovery
 
-Standard `make release-patch`, `release-minor` and `release-major` use the
+Standard `make release-patch RELEASE_GROUP=framework`, `release-minor` and `release-major` use the
 [common release contract](../releases.md), with `RELEASE_REMOTE=origin` and
 `RELEASE_BRANCH=main`. They are maintainer-owned because they create commits.
 Every standard increment uses complete validation; package publication and
@@ -223,7 +244,7 @@ successful/failed logs and tested compiler-cache failure fallback.
 
 Normal increment targets start fresh from current clean, committed metadata.
 They do not scan old plans or replay their effects. Recovery of a particular
-attempt uses `make release-resume VERSION=X.Y.Z`, retaining its exact source,
+attempt uses `make release-resume RELEASE_GROUP=framework VERSION=X.Y.Z`, retaining its exact source,
 candidate, payload and destination. Current source, lock, candidate-ref and
 branch-protection conflicts still stop the operation. Canic retains validation
 logs attributable to each attempt. Atomic
@@ -234,14 +255,14 @@ Focused stub fixtures cover destination drift and lost-response recovery.
 Late Canic checks read archived metadata and structured validation evidence from
 `RELEASE_COMMIT`, which may precede HEAD. Prepared checks retain their current
 worktree/index boundary. The exact annotated tag must identify that selected
-commit. `make release-resume VERSION=X.Y.Z` remains an explicit recovery entry.
+commit. `make release-resume RELEASE_GROUP=framework VERSION=X.Y.Z` remains an explicit recovery entry.
 Cargo metadata selects Canic's owned package roster; the shared lock transformer
 rewrites only those local selections into a private candidate. Canic owns the
 transaction, source authority, validation receipt, publication boundary and
-rollback. Focused toy-workspace execution uses real Cargo and fake Git authority:
-receipt creation/replacement, retained undated history, failed synchronization,
-partial transformer output and exact rollback all pass. No adoption check creates
-real commits, tags, pushes or deployment effects.
+rollback. Focused toy workspaces use real Cargo and isolated local Git repositories
+to qualify selected-group changes, exact rollback, candidate/tag provenance and
+saved-plan recovery against a local bare remote. They create no product commits,
+tags, registry uploads or deployment effects.
 
 ## Hooks and audits
 

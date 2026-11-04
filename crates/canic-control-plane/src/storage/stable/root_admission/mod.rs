@@ -21,9 +21,9 @@ std::thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::ROOT_ADMISSION_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, RootAdmissionStateRecord::default())
+                Cell::create(allocation, RootAdmissionStateRecord::default()).expect("Storage operation failed")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -171,7 +171,8 @@ impl RootAdmissionStore {
         ROOT_ADMISSION_STATE.with_borrow_mut(|cell| {
             cell.set(RootAdmissionStateRecord {
                 current: data.current,
-            });
+            })
+            .expect("Storage operation failed");
         });
     }
 
@@ -183,7 +184,7 @@ impl RootAdmissionStore {
             match state.current.as_ref() {
                 None => {
                     state.current = Some(record);
-                    cell.set(state);
+                    cell.set(state).expect("Storage operation failed");
                     Ok(RootAdmissionCommitOutcome::Committed)
                 }
                 Some(existing) if existing == &record => Ok(RootAdmissionCommitOutcome::Existing),
@@ -206,7 +207,7 @@ impl RootAdmissionStore {
                 }
                 Some(_) => {
                     state.current = Some(next);
-                    cell.set(state);
+                    cell.set(state).expect("Storage operation failed");
                     Ok(RootAdmissionCommitOutcome::Committed)
                 }
             }
@@ -370,7 +371,7 @@ mod tests {
             }),
         };
 
-        let bytes = state.to_bytes();
+        let bytes = state.to_bytes().expect("encode current record");
         eprintln!(
             "maximum Root admission current-plus-last encoded bytes: {}",
             bytes.len()

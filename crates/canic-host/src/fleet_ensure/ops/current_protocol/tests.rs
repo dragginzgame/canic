@@ -1956,6 +1956,37 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
     );
     assert_ne!(compiled.bootstrap_request.operation_id, [0; 32]);
 
+    let payload_path = artifact_root.join("alpha.wasm.gz");
+    let original = fs::read(&payload_path).unwrap();
+    assert_eq!(
+        compiled.expected_bootstrap.catalog[0].payload_hash,
+        <[u8; 32]>::from(Sha256::digest(&original))
+    );
+    let Some(CurrentFleetProtocolAction::PublishStoreChunk { request }) = compiled.actions.first()
+    else {
+        panic!("manifest publication")
+    };
+    assert_eq!(
+        request.preparation.as_ref().unwrap().payload_hash,
+        authority.initial_release_set.manifest_digest.as_bytes()
+    );
+    let mut changed = original.clone();
+    changed[0] ^= 1;
+    for invalid in [changed, original[..original.len() - 1].to_vec()] {
+        fs::write(&payload_path, invalid).unwrap();
+        std::assert_matches!(
+            compile_current_store_sequence_from_union(
+                &root,
+                &topology,
+                &authority,
+                [42; 32],
+                &persisted.union,
+                &fixtures.manifest,
+            ),
+            Err(CurrentProtocolError::Configuration(_))
+        );
+    }
+
     fs::remove_dir_all(root).expect("remove test root");
 }
 
@@ -2341,12 +2372,13 @@ fn fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow()
 #[test]
 fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope() {
     let bytes = vec![9; canic_core::CANIC_WASM_CHUNK_BYTES + 1];
+    let payload = PreparedStorePayload::new(bytes.clone()).unwrap();
     let mut actions = Vec::new();
     append_chunk_actions(
         &mut actions,
         TemplateId::new("app"),
         TemplateVersion::new("current"),
-        &bytes,
+        &payload,
         None,
     )
     .unwrap();
@@ -2390,7 +2422,7 @@ fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope()
             &mut rejected,
             TemplateId::owned("a".repeat(100_000)),
             TemplateVersion::new("current"),
-            &bytes,
+            &payload,
             None
         ),
         Err(CurrentProtocolError::Configuration(_))
@@ -2399,31 +2431,24 @@ fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope()
 }
 
 #[test]
-fn store_chunk_compilation_rejects_empty_payload_without_actions() {
-    let mut actions = Vec::new();
+fn store_chunk_compilation_rejects_empty_payload() {
     std::assert_matches!(
-        append_chunk_actions(
-            &mut actions,
-            TemplateId::new("app"),
-            TemplateVersion::new("current"),
-            &[],
-            None,
-        ),
+        PreparedStorePayload::new(Vec::new()),
         Err(CurrentProtocolError::Configuration(_))
     );
-    assert!(actions.is_empty());
 }
 
 #[test]
 fn store_chunk_compilation_binds_the_upload_representation_not_the_raw_module() {
     let wasm = b"\0asm\x01\0\0\0";
     let compressed = gzip(wasm);
+    let payload = PreparedStorePayload::new(compressed.clone()).unwrap();
     let mut actions = Vec::new();
     append_chunk_actions(
         &mut actions,
         TemplateId::new("app"),
         TemplateVersion::new("current"),
-        &compressed,
+        &payload,
         None,
     )
     .unwrap();

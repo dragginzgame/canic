@@ -120,3 +120,30 @@ pub mod application_checkpoint_root {
         RootCheckpointPhase, RootCheckpointRecord,
     };
 }
+
+/// Internal persistent receiver component. Host workflow owns trusted enrollment,
+/// runtime caller/time acquisition and endpoint admission. No endpoint is installed.
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+pub mod application_receiver {
+    pub use crate::ops::storage::auth::application_sessions::{
+        ApplicationSessionCleanupResult, ApplicationSessionStore, PersistentReceiverError,
+        PersistentReceiverPolicy, PersistentReceiverState,
+    };
+}
+
+/// Enrollment composition; Root registration transport is selected by the Root capability.
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "auth-root-delegation-state"
+))]
+pub mod portable_enrollment {
+    pub use crate::ops::auth::enrollment::PortableEnrollmentError;
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
+    pub use crate::ops::auth::enrollment::RootPortableEnrollmentOps;
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    pub use crate::ops::auth::enrollment::{
+        AuthenticatedPortableEnrollment, PortableEnrollmentPull, ReceiverPortableEnrollment,
+    };
+    pub use canic_contracts::ops::portable_enrollment::registration_message;
+}

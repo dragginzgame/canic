@@ -239,7 +239,7 @@ fn root_request_acceptance_response_loss_and_successor_are_exact() {
 }
 
 #[test]
-fn root_acceptance_allows_subthreshold_refunds_but_rejects_relieved_balance() {
+fn root_acceptance_distinguishes_relieved_balance_without_mutating_authority() {
     RootFundingStore::import(RootFundingData::default());
     RootFundingOps::commit_genesis(RootFundingOps::compile_genesis()).expect("funding genesis");
     let authority = authority();
@@ -267,14 +267,15 @@ fn root_acceptance_allows_subthreshold_refunds_but_rejects_relieved_balance() {
         .expect("subthreshold in-flight refund must preserve low-balance demand"),
         RootFundingAcceptanceDisposition::Fresh
     );
-    assert!(
+    assert_eq!(
         RootFundingOps::prepare_acceptance(
             &authority,
             &acceptance,
             request.requested_cycles.to_u128(),
             authority.funding.root_funding.request_threshold.to_u128() + 1,
         )
-        .is_err()
+        .unwrap(),
+        RootFundingAcceptanceDisposition::BalanceRelieved
     );
     let mut wrong = acceptance;
     wrong.operation_id[0] ^= 1;
@@ -283,7 +284,7 @@ fn root_acceptance_allows_subthreshold_refunds_but_rejects_relieved_balance() {
             &authority,
             &wrong,
             wrong.granted_cycles.to_u128(),
-            wrong.observed_balance.to_u128(),
+            authority.funding.root_funding.request_threshold.to_u128() + 1,
         )
         .is_err()
     );

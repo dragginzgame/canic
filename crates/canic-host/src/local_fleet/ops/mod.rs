@@ -6,6 +6,8 @@ pub mod discovery;
 pub mod prepare;
 pub mod reset;
 pub mod runtime;
+#[cfg(test)]
+mod tests;
 
 use crate::local_fleet::{
     LocalFleetError,
@@ -20,14 +22,15 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::{
     collections::BTreeSet,
     fs::{self, File, OpenOptions},
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
-use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
+use ic_host_artifacts::artifact::{ArtifactError, BoundedWriter};
+use ic_host_fs::durable::{self, NamedWriteError, PublicationMode, WriteOptions};
 use ic_host_fs::read::hash_file_no_follow;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use {ic_platform::pocket_ic::PocketIc, ic_platform::pocket_ic::common::rest::Topology};
+use {ic_testkit::pocket_ic::PocketIc, ic_testkit::pocket_ic::common::rest::Topology};
 
 const MAX_BINARY_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -90,20 +93,29 @@ fn publish_record(
     record: &impl serde::Serialize,
     maximum_bytes: usize,
 ) -> Result<(), LocalFleetError> {
-    let bytes = serde_json::to_vec_pretty(record)?;
-    if bytes.len() > maximum_bytes {
-        return Err(LocalFleetError::Capacity);
-    }
-    durable::write_bytes(
+    let mut exceeded = false;
+    let result = durable::write_with(
         path,
         WriteOptions {
             mode: PublicationMode::Replace,
             permissions: 0o666,
         },
-        &bytes,
-    )
-    .map_err(crate::publication::ops::io_error)?;
-    Ok(())
+        |file| {
+            let mut writer = BoundedWriter::new(BufWriter::new(file), maximum_bytes as u64);
+            let result = serde_json::to_writer_pretty(&mut writer, record);
+            exceeded = writer.limit_exceeded();
+            result?;
+            writer.flush().map_err(serde_json::Error::io)
+        },
+    );
+    match result {
+        Ok(()) => Ok(()),
+        Err(NamedWriteError::Producer {
+            cleanup_error: None,
+            ..
+        }) if exceeded => Err(LocalFleetError::Capacity),
+        Err(source) => Err(crate::publication::ops::json_error(source).into()),
+    }
 }
 
 /// Bind the new or resumed instance to its exact configuration and trust bytes.
@@ -112,13 +124,13 @@ pub fn instance_record(
     previous: Option<LocalFleetRecord>,
     pic: &PocketIc,
 ) -> Result<LocalFleetRecord, LocalFleetError> {
-    let topology = pic.topology();
+    let topology = pic.topology()?;
     let subnets = topology.get_app_subnets();
     let root_key_der_hex =
-        canic_core::cdk::utils::hash::hex_bytes(pic.root_key().ok_or(LocalFleetError::Identity)?);
+        canic_core::cdk::utils::hash::hex_bytes(pic.root_key()?.ok_or(LocalFleetError::Identity)?);
     if let Some(record) = previous {
         let expected = InstanceAuthority {
-            version: env!("CARGO_PKG_VERSION"),
+            version: canic_core::VERSION,
             configuration: config,
             subnets: &subnets,
             root_key: &root_key_der_hex,
@@ -142,9 +154,12 @@ pub fn instance_record(
 }
 
 /// Observe only the process-owned allocation set; no live Toko or mainnet discovery occurs.
-#[must_use]
-pub fn status(record: &LocalFleetRecord, pic: &PocketIc, gateway: &str) -> LocalFleetView {
-    LocalFleetView {
+pub fn status(
+    record: &LocalFleetRecord,
+    pic: &PocketIc,
+    gateway: &str,
+) -> Result<LocalFleetView, LocalFleetError> {
+    Ok(LocalFleetView {
         schema_version: 1,
         session_id: record.session_id.clone(),
         name: record.configuration.name.clone(),
@@ -154,13 +169,17 @@ pub fn status(record: &LocalFleetRecord, pic: &PocketIc, gateway: &str) -> Local
         application_subnets: record.application_subnets.clone(),
         maximum_canisters: record.configuration.maximum_canisters,
         canister_memory_bytes: record.configuration.canister_memory_bytes,
-        simulated_time_ns: pic.get_time().as_nanos_since_unix_epoch().to_string(),
+        simulated_time_ns: pic.get_time()?.as_nanos_since_unix_epoch().to_string(),
         canisters: record
             .allocations
             .iter()
             .map(|entry| {
-                let exists = entry.canister_id.is_some_and(|id| pic.canister_exists(id));
-                LocalCanisterView {
+                let exists = entry
+                    .canister_id
+                    .map(|id| pic.canister_exists(id))
+                    .transpose()?
+                    .unwrap_or(false);
+                Ok::<_, LocalFleetError>(LocalCanisterView {
                     name: entry.input.name.clone(),
                     allocation_role: entry.input.role.clone(),
                     canister_id: entry.canister_id,
@@ -169,15 +188,16 @@ pub fn status(record: &LocalFleetRecord, pic: &PocketIc, gateway: &str) -> Local
                     native_cycles: if exists {
                         entry
                             .canister_id
-                            .map(|id| pic.cycle_balance(id).to_string())
+                            .map(|id| pic.cycle_balance(id).map(|cycles| cycles.to_string()))
+                            .transpose()?
                             .unwrap_or_default()
                     } else {
                         "0".into()
                     },
-                }
+                })
             })
-            .collect(),
-    }
+            .collect::<Result<Vec<_>, _>>()?,
+    })
 }
 
 /// Retain the complete idempotent Ledger request before its first submission.
@@ -341,7 +361,7 @@ pub fn initial_record(config: &LocalFleetConfig) -> Result<LocalFleetRecord, Loc
     getrandom::fill(&mut nonce).map_err(|error| LocalFleetError::Platform(error.to_string()))?;
     Ok(LocalFleetRecord {
         schema_version: 1,
-        canic_version: env!("CARGO_PKG_VERSION").into(),
+        canic_version: canic_core::VERSION.into(),
         session_id: canic_core::cdk::utils::hash::hex_bytes(nonce),
         configuration: config.clone(),
         application_subnets: Vec::new(),

@@ -45,3 +45,23 @@ runtime configuration. Neither edge is an application endpoint contract.
 The `canic` facade exposes these types to applications. Consumers regenerate
 bindings from the selected artifact's native schema when adopting the current
 contract.
+
+## Passive identities and external adapters
+
+Defaults are empty. Owned Principal identities and the DTO prelude's existing
+`ExternalPrincipal` alias come directly from `ic-platform-types` with
+`principal-external`. The minimum is 0.18.1, whose external identity capability
+explicitly enables Serde without depending on Candid feature unification.
+Explicit SHA-256 commitments remain part of this crate's passive contracts.
+
+Enable `external-candid` for Nat conversion, external management status/settings,
+inspection outcomes and Nat-bearing refill responses. This selects Platform's
+Candid boundary and num-bigint. Core and Host consumers opt in explicitly;
+`wire-schema` alone does not select these external adapters. Passive declarations
+in the same modules, including bounded Wire inspection/funding models, remain
+available without the feature. No fields, variants or encoded layouts change.
+
+The workspace Wire dependency enables no schema features. `wire-schema` selects
+`ic-wire/platform-types` explicitly for Principal metadata. Codec-only consumers
+retain only Wire's runtime codecs; published Wire 0.16.2 still includes an
+unconditional derive dependency, which requires a later upstream release to remove.

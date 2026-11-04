@@ -3,7 +3,7 @@
 use canic::{
     Error, dto::fleet_admission::FleetAdmissionProjectionPhase, testing::ManagedAppFixture,
 };
-use canic_testing_internal::pic::{
+use canic_tests::pic::{
     application_probe,
     icrc::{self, MountProfile},
 };
@@ -20,9 +20,9 @@ use ic_platform::{
             ConsentMessageSpec, DisplayMessageType, Icrc21Error,
         },
     },
-    pocket_ic::{ErrorCode, RejectResponse},
     principal::ExternalPrincipal as Principal,
 };
+use ic_testkit::pocket_ic::{ClientError, ErrorCode};
 use std::{collections::BTreeSet, time::Duration};
 
 const DISCOVERY: &str = "icrc10_supported_standards";
@@ -83,11 +83,11 @@ fn standards(fixture: &ManagedAppFixture, bytes: Vec<u8>) -> Vec<SupportedStanda
     .unwrap()
 }
 
-fn absent(result: Result<Vec<u8>, RejectResponse>) {
-    assert_eq!(
-        result.unwrap_err().error_code,
-        ErrorCode::CanisterMethodNotFound
-    );
+fn absent(result: Result<Vec<u8>, ClientError>) {
+    let ClientError::Canister(rejection) = result.unwrap_err() else {
+        panic!("expected a canister rejection");
+    };
+    assert_eq!(rejection.error_code, ErrorCode::CanisterMethodNotFound);
 }
 
 fn dispatches(fixture: &ManagedAppFixture) -> u32 {
@@ -307,6 +307,9 @@ fn malformed_and_oversized_consent_envelopes_are_rejected_before_policy() {
             .pic()
             .update_call(app.app(), Principal::anonymous(), CONSENT, bytes)
             .unwrap_err();
+        let ic_testkit::pocket_ic::ClientError::Canister(rejection) = rejection else {
+            panic!("expected a canister rejection");
+        };
         assert_eq!(rejection.error_code, expected);
     }
     assert_eq!(dispatches(app), 0);
@@ -345,6 +348,9 @@ fn mounted_discovery_enforces_platform_nesting_even_for_unused_header_types() {
             unused_header(17),
         )
         .unwrap_err();
+    let ic_testkit::pocket_ic::ClientError::Canister(error) = error else {
+        panic!("expected a canister rejection");
+    };
     assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
     assert_eq!(standards(app, encode_args(()).unwrap())[0].name, "ICRC-10");
 }

@@ -1,8 +1,8 @@
 //! Module: ops::auth::delegated
 //!
-//! Responsibility: group delegated auth canonicalization, proof, and token helpers.
+//! Responsibility: group Root delegation certificate projection, signing and proof helpers.
 //! Does not own: endpoint authorization, stable auth records, or runtime config.
-//! Boundary: private auth-ops support for delegated-token and delegation-proof flows.
+//! Boundary: private auth-ops support for Root delegation and issuer proof flows.
 
 pub(super) mod active_proof;
 pub(super) mod audience;

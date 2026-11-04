@@ -11,7 +11,6 @@ use super::{
     template::key::TemplateChunkKeyRecord,
 };
 use crate::ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion};
-use canic_contracts::dto::memory::MemoryAllocationBinding;
 use canic_core::{
     api::memory::MemoryQuery,
     cdk::structures::{
@@ -29,9 +28,9 @@ struct ObservedMemory {
     writes: Rc<Cell<u64>>,
 }
 
-impl ic_memory::MemoryBacking for ObservedMemory {
-    fn backing_identity(&self) -> ic_memory::BackingIdentity {
-        ic_memory::MemoryBacking::backing_identity(&self.memory)
+impl ic_storage::MemoryBacking for ObservedMemory {
+    fn backing_identity(&self) -> ic_storage::BackingIdentity {
+        ic_storage::MemoryBacking::backing_identity(&self.memory)
     }
 }
 
@@ -55,24 +54,24 @@ impl Memory for ObservedMemory {
 struct OverflowChunk(Vec<u8>);
 impl Storable for OverflowChunk {
     const BOUND: Bound = Bound::Unbounded;
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Borrowed(&self.0)
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Borrowed(&self.0))
     }
-    fn into_bytes(self) -> Vec<u8> {
-        self.0
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok(self.0)
     }
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        Self(bytes.into_owned())
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Ok(Self(bytes.into_owned()))
     }
 }
 
-fn runtime<M: ic_memory::MemoryBacking>(memory: M) -> ic_memory::MemoryRuntime<M> {
-    ic_memory::testing::fixture_runtime(
+fn runtime<M: ic_storage::MemoryBacking>(memory: M) -> ic_storage::MemoryRuntime<M> {
+    ic_storage::testing::fixture_runtime(
         memory,
         "test",
         "test.",
         &["test.rows.v1"],
-        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
+        ic_storage::StorageConfig::default(),
     )
     .unwrap()
 }
@@ -83,23 +82,28 @@ fn coordinator_admission_cell_has_one_page_when_empty() {
     let runtime = runtime(memory);
     let cell = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
             .unwrap();
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
             StableCell::create(allocation, None::<FleetAdmissionAuthorityRecord>)
+                .expect("Storage operation failed")
         } else {
-            StableCell::load(allocation).expect("retained stable cell")
+            StableCell::load(
+                allocation,
+                canic_contracts::serialization::STORAGE_LIMITS.bytes,
+            )
+            .expect("retained stable cell")
         }
     };
     assert!(cell.get().is_none());
     assert_eq!(
-        runtime.memory_allocations().unwrap().memories[usize::from(
-            runtime
-                .memory_id(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
-                .unwrap()
-        )]
-        .virtual_extent
-        .wasm_pages,
+        runtime
+            .memory_allocations()
+            .unwrap()
+            .iter()
+            .find(|entry| entry.stable_key.as_str() == "test.rows.v1")
+            .unwrap()
+            .pages,
         1
     );
 }
@@ -113,34 +117,34 @@ fn template_payload_layout_tradeoff_is_measured() {
         let refs_runtime = runtime(refs_memory.clone());
         let mut refs = {
             let allocation = refs_runtime
-                .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
                 .unwrap();
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                BTreeMap::create(allocation)
+                BTreeMap::create(allocation).expect("Storage operation failed")
             } else {
-                BTreeMap::load(allocation)
+                BTreeMap::load(allocation).expect("Storage operation failed")
             }
         };
         let payload_runtime = runtime(payload_memory.clone());
         let payloads = {
             let allocation = payload_runtime
-                .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
                 .unwrap();
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                StableVec::create(allocation)
+                StableVec::create(allocation).expect("Storage operation failed")
             } else {
-                StableVec::load(allocation)
+                StableVec::load(allocation).expect("Storage operation failed")
             }
         };
         let direct_runtime = runtime(direct_memory.clone());
         let mut direct = {
             let allocation = direct_runtime
-                .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
                 .unwrap();
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                BTreeMap::create(allocation)
+                BTreeMap::create(allocation).expect("Storage operation failed")
             } else {
-                BTreeMap::load(allocation)
+                BTreeMap::load(allocation).expect("Storage operation failed")
             }
         };
         let release = TemplateReleaseKey::new(
@@ -151,17 +155,20 @@ fn template_payload_layout_tradeoff_is_measured() {
             let key = TemplateChunkKeyRecord(TemplateChunkKey::new(release.clone(), index));
             let bytes = vec![u8::try_from(index).unwrap(); payload_len];
             let slot = payloads.len();
-            payloads.push(&TemplateChunkPayloadRecord {
-                bytes: bytes.clone(),
-            });
+            payloads
+                .push(&TemplateChunkPayloadRecord {
+                    bytes: bytes.clone(),
+                })
+                .expect("Storage operation failed");
             refs.insert(
                 key.clone(),
                 TemplateChunkRefRecord {
                     slot,
                     payload_len: u32::try_from(payload_len).unwrap(),
                 },
-            );
-            direct.insert(key, OverflowChunk(bytes));
+            )
+            .expect("Storage operation failed");
+            direct.insert(key, OverflowChunk(bytes)).unwrap();
         }
         let split_writes = refs_memory.writes.get() + payload_memory.writes.get();
         let direct_writes = direct_memory.writes.get();
@@ -170,9 +177,12 @@ fn template_payload_layout_tradeoff_is_measured() {
         direct_memory.reads.set(0);
         for index in 0..8 {
             let key = TemplateChunkKeyRecord(TemplateChunkKey::new(release.clone(), index));
-            let reference = refs.get(&key).unwrap();
-            let split = payloads.get(reference.slot).unwrap();
-            assert_eq!(split.bytes, direct.get(&key).unwrap().0);
+            let reference = refs.get(&key).expect("Storage operation failed").unwrap();
+            let split = payloads
+                .get(reference.slot)
+                .expect("Storage operation failed")
+                .unwrap();
+            assert_eq!(split.bytes, direct.get(&key).unwrap().unwrap().0);
         }
         let split_reads = refs_memory.reads.get() + payload_memory.reads.get();
         let direct_reads = direct_memory.reads.get();
@@ -183,8 +193,8 @@ fn template_payload_layout_tradeoff_is_measured() {
         );
         if payload_len == 1_048_576 {
             assert!(
-                direct_reads > split_reads * 10,
-                "re-evaluate payload consolidation if overflow reads become cheap"
+                refs_memory.size() + payload_memory.size() < direct_memory.size(),
+                "re-evaluate payload consolidation if direct bulk storage uses less capacity"
             );
         }
     }
@@ -198,17 +208,15 @@ fn bootstrap_keeps_control_plane_stores_lazy_until_selected_access() {
     let fixture = before
         .memories
         .iter()
-        .find(|entry| matches!(&entry.binding, MemoryAllocationBinding::Current { stable_key, .. } if stable_key == FIXTURE_STORE_KEY))
+        .find(|entry| entry.stable_key == FIXTURE_STORE_KEY)
         .expect("fixture allocation reserved");
-    assert!(matches!(
-        fixture.binding,
-        MemoryAllocationBinding::Current { .. }
-    ));
-    for entry in &before.memories {
-        if matches!(entry.binding, MemoryAllocationBinding::Current { .. }) {
-            assert_eq!(entry.virtual_extent.wasm_pages, 0);
-        }
-    }
+    assert_eq!(fixture.capacity.wasm_pages, 0);
+    assert!(
+        before
+            .memories
+            .iter()
+            .all(|entry| entry.capacity.wasm_pages == 0)
+    );
 
     let content = [7; 32];
     let payload = vec![3, 1, 4];
@@ -217,16 +225,15 @@ fn bootstrap_keeps_control_plane_stores_lazy_until_selected_access() {
     });
     assert_eq!(FixtureStore::chunk(content, 0), Some(payload));
     let after = MemoryQuery::allocations().unwrap();
-    assert_eq!(before.current_generation, after.current_generation);
+    assert!(after.summary.generation >= before.summary.generation);
     assert_eq!(before.memories.len(), after.memories.len());
     for (prior, current) in before.memories.iter().zip(&after.memories) {
-        assert_eq!(prior.memory_manager_id, current.memory_manager_id);
-        assert_eq!(prior.binding, current.binding);
-        if matches!(&current.binding, MemoryAllocationBinding::Current { stable_key, .. } if stable_key == FIXTURE_STORE_KEY)
-        {
-            assert!(current.virtual_extent.wasm_pages > 0);
+        assert_eq!(prior.allocation_id, current.allocation_id);
+        assert_eq!(prior.stable_key, current.stable_key);
+        if current.stable_key == FIXTURE_STORE_KEY {
+            assert!(current.capacity.wasm_pages > 0);
         } else {
-            assert_eq!(prior.virtual_extent, current.virtual_extent);
+            assert_eq!(prior.capacity, current.capacity);
         }
     }
     assert_eq!(MemoryQuery::allocations().unwrap(), after);

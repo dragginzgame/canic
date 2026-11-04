@@ -334,3 +334,29 @@ fn document_read_budget_rejects_oversize_without_replacing_source() {
     assert_eq!(fs::metadata(&path).unwrap().len(), size);
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn streamed_network_document_preserves_encoding_and_create_only_authority() {
+    let root = temp_dir("canic-streamed-network-authority");
+    let path = root.join("authority.json");
+    let value = (u64::MAX, "Unicode 🌍 and escaped \"\\\n");
+    let mut expected = serde_json::to_vec_pretty(&value).unwrap();
+    expected.push(b'\n');
+
+    create_new_json(&path, &value).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), expected);
+    let error = create_new_json(&path, &"different authority").unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+    assert!(matches!(
+        error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<ic_host_fs::durable::NamedWriteError<serde_json::Error>>(),
+        Some(ic_host_fs::durable::NamedWriteError::BeforePublication {
+            cleanup_error: None,
+            ..
+        })
+    ));
+    assert_eq!(fs::read(&path).unwrap(), expected);
+    fs::remove_dir_all(root).unwrap();
+}

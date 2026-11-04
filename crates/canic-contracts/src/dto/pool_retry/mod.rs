@@ -1,5 +1,5 @@
 //! Native pool retry boundary data; pool operation state remains in its original owner.
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact tracked canister selected for another reset attempt.

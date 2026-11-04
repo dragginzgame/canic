@@ -15,10 +15,10 @@ std::thread_local! {
     static FLEET_STATE: RefCell<Cell<FleetStateRecord, DefaultMemoryImpl>> =
         RefCell::new({
             let allocation = crate::memory::open(crate::memory::keys::FLEET_STATE_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, FleetStateRecord::default())
+            if ic_storage::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, FleetStateRecord::default()).expect("create admitted stable cell")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -83,7 +83,7 @@ impl FleetState {
         FLEET_STATE.with_borrow_mut(|cell| {
             let mut data = *cell.get();
             data.mode = mode;
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
         });
     }
 
@@ -96,12 +96,13 @@ impl FleetState {
         FLEET_STATE.with_borrow_mut(|cell| {
             let mut data = *cell.get();
             data.cycles_funding_enabled = enabled;
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
         });
     }
 
     pub(crate) fn import(data: FleetStateData) {
-        FLEET_STATE.with_borrow_mut(|cell| cell.set(data.record));
+        FLEET_STATE
+            .with_borrow_mut(|cell| cell.set(data.record).expect("Storage operation failed"));
     }
 
     #[must_use]
@@ -171,8 +172,8 @@ mod tests {
             cycles_funding_enabled: false,
         };
 
-        let bytes = data.to_bytes();
-        let decoded = FleetStateRecord::from_bytes(bytes);
+        let bytes = data.to_bytes().expect("encode stable fixture");
+        let decoded = FleetStateRecord::from_bytes(bytes).expect("decode stable fixture");
 
         assert_eq!(decoded, data);
     }

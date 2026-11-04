@@ -164,6 +164,10 @@ fn canonical_allocations_match_the_active_memory_map() {
         .collect::<BTreeMap<_, _>>();
     let expected = BTreeMap::from([
         (
+            StateAllocationKey::CorePortableIssuerState,
+            vec!["canic.core.auth.portable.issuer.v1".to_string()],
+        ),
+        (
             StateAllocationKey::CoreRuntimeChildren,
             vec!["canic.core.runtime.canister_children.v1".to_string()],
         ),
@@ -197,6 +201,7 @@ fn canonical_allocations_match_the_active_memory_map() {
                 "canic.core.auth.local_application_authorization.sessions.v1".to_string(),
                 "canic.core.auth.local_application_authorization.replays.v1".to_string(),
                 "canic.core.auth.local_application_authorization.logins.v1".to_string(),
+                "canic.core.auth.portable.receiver_enrollment.v1".to_string(),
             ],
         ),
         (
@@ -268,7 +273,10 @@ fn canonical_allocations_match_the_active_memory_map() {
         ),
         (
             StateAllocationKey::CoreRootDelegationState,
-            vec!["canic.core.auth.root_delegation.state.v1".to_string()],
+            vec![
+                "canic.core.auth.root_delegation.state.v1".to_string(),
+                "canic.core.auth.portable.root_enrollment.v1".to_string(),
+            ],
         ),
         (
             StateAllocationKey::FleetCoordinatorFunding,
@@ -635,6 +643,7 @@ fn child_provisioning_is_derived_only_for_roles_with_spawn_grants() {
 fn local_application_authorization_capability_is_exactly_role_pruned() {
     let mut enabled = ConfigTestBuilder::canister_config(CanisterKind::Service);
     enabled.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
+        receiver: None,
         allowed_scopes: vec!["app:read".to_string()],
         default_session_ttl_secs: 900,
         maximum_session_ttl_secs: 1_800,
@@ -670,6 +679,7 @@ fn auth_capabilities_select_only_their_owned_persistence() {
 
     let mut local = ConfigTestBuilder::canister_config(CanisterKind::Service);
     local.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
+        receiver: None,
         allowed_scopes: vec!["app:read".to_string()],
         default_session_ttl_secs: 900,
         maximum_session_ttl_secs: 1_800,
@@ -733,10 +743,56 @@ fn auth_capabilities_select_only_their_owned_persistence() {
 }
 
 #[test]
+fn portable_signer_is_explicit_and_cannot_be_selected_by_a_receiver() {
+    let role = CanisterRole::new("service");
+    for issuer in [false, true] {
+        let mut canister = ConfigTestBuilder::canister_config(CanisterKind::Service);
+        canister.auth.delegated_token_issuer = issuer;
+        let config = ConfigTestBuilder::new()
+            .with_default_canister(role.clone(), canister)
+            .build();
+        let mut declared_features = BTreeSet::from([CanicFeatureKey::AuthPortableIssuer]);
+        if issuer {
+            declared_features.extend([
+                CanicFeatureKey::AuthDelegatedTokenVerify,
+                CanicFeatureKey::AuthIssuerCanisterSigCreate,
+            ]);
+        }
+        let resolution = resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &role,
+            },
+            declared_features,
+            default_features_enabled: false,
+        });
+        if issuer {
+            let RoleContractResolution::Resolved { contract } = resolution else {
+                panic!("configured issuer should admit explicit custody: {resolution:?}");
+            };
+            assert!(contract.allocations.iter().any(|allocation| allocation.key == StateAllocationKey::CorePortableIssuerState));
+            assert!(
+                !contract
+                    .effective_features
+                    .contains(&CanicFeatureKey::AuthLocalApplicationAuthorization)
+            );
+        } else {
+            let RoleContractResolution::Rejected { errors } = resolution else {
+                panic!("receiver cannot acquire signing authority");
+            };
+            assert!(errors.contains(&RoleContractFinding::SurplusCryptoFeature {
+                feature: CanicFeatureKey::AuthPortableIssuer
+            }));
+        }
+    }
+}
+
+#[test]
 fn local_application_authorization_rejects_the_verifier_only_feature_set() {
     let mut canister = ConfigTestBuilder::canister_config(CanisterKind::Service);
     canister.auth.delegated_token_verifier = true;
     canister.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
+        receiver: None,
         allowed_scopes: vec!["app:read".to_string()],
         default_session_ttl_secs: 900,
         maximum_session_ttl_secs: 1_800,

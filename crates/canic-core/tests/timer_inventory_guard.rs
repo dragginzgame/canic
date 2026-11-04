@@ -12,9 +12,10 @@ use syn::{
 };
 
 const PRODUCTION_SOURCE_ROOTS: [&str; 4] = ["apps", "canisters", "crates", "integrations"];
-const NATIVE_REGISTRATION_CAPABILITIES: [&str; 5] = [
+const NATIVE_REGISTRATION_CAPABILITIES: [&str; 6] = [
     "register_after_completion",
     "register_once",
+    "register_watchdog",
     "reconcile_after_completion",
     "reconcile_once",
     "reconcile_watchdog",
@@ -400,6 +401,7 @@ fn timer_registration_custody_is_closed() {
                 syntax.violations
             );
             if !syntax.native_registration_calls.is_empty() {
+                assert_registration_owner(path);
                 observed_call_owners.insert(path.to_string());
             }
             if !syntax.native_registration_actions.is_empty() {
@@ -431,6 +433,8 @@ fn semantic_inventory_ignores_comments_and_string_literals() {
         "synthetic.rs",
         r#"
             const NOTE: &str = "ic_timers::register_once";
+            const WATCHDOG: &str = "ic_timers::register_watchdog";
+            // ic_timers::register_watchdog is only text here.
             // TimerApi::set was removed.
             fn ordinary_business_logic() {}
         "#,
@@ -439,42 +443,68 @@ fn semantic_inventory_ignores_comments_and_string_literals() {
     assert_eq!(syntax, TimerSyntax::default());
 }
 
+fn assert_registration_owner(path: &str) {
+    assert!(
+        native_registration_owners().contains(path),
+        "native timer registration outside custody: {path}"
+    );
+}
+
+#[test]
+fn watchdog_registration_requires_an_approved_owner() {
+    let source = "fn schedule() { ic_timers::register_watchdog(identity(), callback()); }";
+    for path in [
+        "crates/canic-core/src/workflow/runtime/timer/mod.rs",
+        "apps/unowned/src/lib.rs",
+    ] {
+        let syntax = analyze_timer_syntax(path, source);
+        assert_eq!(syntax.native_registration_calls["register_watchdog"], 1);
+        assert_eq!(
+            std::panic::catch_unwind(|| assert_registration_owner(path)).is_ok(),
+            native_registration_owners().contains(path)
+        );
+    }
+}
+
 #[test]
 fn semantic_inventory_rejects_aliased_provider_authority() {
-    let syntax = analyze_timer_syntax(
-        "synthetic.rs",
-        "use ic_timers::register_once as schedule_later;",
-    );
+    for capability in NATIVE_REGISTRATION_CAPABILITIES {
+        let syntax = analyze_timer_syntax(
+            "synthetic.rs",
+            &format!("use ic_timers::{capability} as schedule_later;"),
+        );
 
-    assert!(syntax.has_timer_semantics);
-    assert_eq!(syntax.violations.len(), 1);
+        assert!(syntax.has_timer_semantics);
+        assert_eq!(syntax.violations.len(), 1);
+    }
 }
 
 #[test]
 fn semantic_inventory_rejects_value_aliased_provider_authority() {
-    let syntax = analyze_timer_syntax(
-        "synthetic.rs",
-        "fn alias() { let schedule = ic_timers::register_once; schedule(); }",
-    );
+    for capability in NATIVE_REGISTRATION_CAPABILITIES {
+        let syntax = analyze_timer_syntax(
+            "synthetic.rs",
+            &format!("fn alias() {{ let schedule = ic_timers::{capability}; schedule(); }}"),
+        );
 
-    assert!(syntax.has_timer_semantics);
-    assert_eq!(syntax.violations.len(), 1);
+        assert!(syntax.has_timer_semantics);
+        assert_eq!(syntax.violations.len(), 1);
+    }
 }
 
 #[test]
 fn semantic_inventory_observes_unclassified_and_duplicate_native_calls() {
-    let syntax = analyze_timer_syntax(
-        "synthetic.rs",
-        r"
-            fn duplicate_custody() {
-                ic_timers::register_once(first());
-                ic_timers::register_once(second());
-            }
-        ",
-    );
+    for capability in NATIVE_REGISTRATION_CAPABILITIES {
+        let syntax = analyze_timer_syntax(
+            "synthetic.rs",
+            &format!(
+                "fn duplicate_custody() {{ ic_timers::{capability}(first()); ic_timers::{capability}(second()); }}"
+            ),
+        );
 
-    assert!(syntax.has_timer_semantics);
-    assert_eq!(syntax.native_registration_calls["register_once"], 2);
+        assert!(syntax.has_timer_semantics);
+        assert_eq!(syntax.native_registration_calls[capability], 2);
+    }
 }
 
 #[test]
@@ -515,17 +545,17 @@ fn semantic_inventory_rejects_aliased_native_registration_actions() {
 
 #[test]
 fn semantic_inventory_counts_macro_generated_native_calls() {
-    let syntax = analyze_timer_syntax(
-        "synthetic.rs",
-        r"
-            macro_rules! schedule {
-                () => { ic_timers::register_once(identity(), lifetime(), initial(), callback()) };
-            }
-        ",
-    );
+    for capability in NATIVE_REGISTRATION_CAPABILITIES {
+        let syntax = analyze_timer_syntax(
+            "synthetic.rs",
+            &format!(
+                "macro_rules! schedule {{ () => {{ ic_timers::{capability}(identity(), lifetime(), initial(), callback()) }}; }}"
+            ),
+        );
 
-    assert!(syntax.has_timer_semantics);
-    assert_eq!(syntax.native_registration_calls["register_once"], 1);
+        assert!(syntax.has_timer_semantics);
+        assert_eq!(syntax.native_registration_calls[capability], 1);
+    }
 }
 
 #[test]
@@ -678,29 +708,39 @@ fn pool_and_snapshot_paths_use_exact_native_owners() {
 #[test]
 fn recovery_takeovers_recheck_each_owners_authoritative_domain_demand() {
     let root = workspace_root();
-    for (path, function, demand, rearm) in [
+    for (path, function, active, demand, rearm) in [
+        (
+            "crates/canic-core/src/workflow/runtime/auth/portable/mod.rs",
+            "recover_expired",
+            "timer::require_active",
+            "runtime::profile",
+            "Self::schedule",
+        ),
         (
             "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
             "recover_expired",
+            "require_active",
             "AuthOps::has_enabled_root_issuer_renewal_templates",
             "Self::reconcile_deadline",
         ),
         (
             "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
             "recover_expired_timer",
+            "require_active",
             "Self::automatic_topup_config",
             "Self::reconcile_timer",
         ),
         (
             "crates/canic-core/src/workflow/placement/acknowledgement.rs",
             "recover_expired_timer",
+            "require_active",
             "ReceiptBackedIntentOps::has_placement_acknowledgements",
             "Self::schedule",
         ),
     ] {
         let calls = function_paths(&read_source(&root, path), function);
         let position = |name: &str| calls.iter().position(|call| call == name).expect(name);
-        assert!(position("require_active") < position(rearm));
+        assert!(position(active) < position(rearm));
         assert!(position(demand) < position(rearm));
         assert!(position("AsyncJobWorkflow::has_expired_attempt") < position(rearm));
         assert!(
@@ -765,10 +805,21 @@ fn native_registration_owners() -> BTreeSet<String> {
     [
         "canisters/test/runtime_probe/src/lib.rs",
         "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+        "crates/canic-control-plane/src/workflow/component_provisioning/timer/mod.rs",
+        "crates/canic-control-plane/src/workflow/component_registry/lifecycle_drivers/allocation_timer/mod.rs",
+        "crates/canic-control-plane/src/workflow/component_registry/lifecycle_drivers/child_timer/mod.rs",
+        "crates/canic-control-plane/src/workflow/component_registry/lifecycle_drivers/removal_timer/mod.rs",
+        "crates/canic-control-plane/src/workflow/fleet_coordinator/provisioning_timer/mod.rs",
+        "crates/canic-control-plane/src/workflow/fleet_coordinator/recovery/mod.rs",
+        "crates/canic-control-plane/src/workflow/fleet_coordinator/transition_timer/mod.rs",
+        "crates/canic-control-plane/src/workflow/fleet_subnet_root/timer/mod.rs",
+        "crates/canic-control-plane/src/workflow/root_transition_timer/mod.rs",
+        "crates/canic-core/src/workflow/bootstrap/timer/mod.rs",
         "crates/canic-core/src/workflow/fixture_provisioning/timer/mod.rs",
         "crates/canic-core/src/workflow/metrics/publication/timer/mod.rs",
         "crates/canic-core/src/workflow/placement/acknowledgement.rs",
         "crates/canic-core/src/workflow/runtime/application_startup/mod.rs",
+        "crates/canic-core/src/workflow/runtime/auth/portable/mod.rs",
         "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
         "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
         "crates/canic-core/src/workflow/runtime/intent.rs",
@@ -785,6 +836,7 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
     [
         "Cargo.toml",
         "apps/test/test/Cargo.toml",
+        "canisters/test/managed_lifecycle_probe/Cargo.toml",
         "canisters/test/runtime_probe/Cargo.toml",
         "crates/canic-control-plane/Cargo.toml",
         "crates/canic-core/Cargo.toml",
@@ -886,7 +938,7 @@ fn collect_named_files(
 }
 
 fn excluded_test_source(path: &str) -> bool {
-    path.starts_with("crates/canic-testing-internal/")
+    path.starts_with("crates/canic-tests/")
         || path.contains("/tests/")
         || path.ends_with("/tests.rs")
         || path.ends_with("/test_support.rs")

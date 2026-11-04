@@ -90,6 +90,45 @@ build evidence, source/lock identities, actual target/features and final artifac
 digest to any deployment. Native hosts and installed IC behavior retain separate
 qualification.
 
+## Platform owner graphs
+
+Apply the [owner declaration policy](../rules/cargo-dependencies.md#platform-package-owners)
+first. Then select each actual package's runtime graph separately. For the
+example policy's package names and the published Types/Runtime generation:
+
+```sh
+perl scripts/ci/check-cargo-graph.pl --consumer . --package identity-model \
+  --target wasm32-unknown-unknown --edges normal --no-default-features \
+  --require ic-platform-types=1 --forbid ic-platform --forbid ic-platform-runtime \
+  --forbid candid --forbid ic-platform-runtime-guard
+
+perl scripts/ci/check-cargo-graph.pl --consumer . --package ic0-adapter \
+  --target wasm32-unknown-unknown --edges normal --no-default-features \
+  --require ic-platform-runtime=1 --forbid ic-platform-types --forbid ic-platform \
+  --forbid candid --forbid ic-cdk --forbid ic-cdk-executor --forbid ic0 \
+  --forbid ic-platform-macros --forbid ic-platform-runtime-guard \
+  --observations --json
+```
+
+The member manifest selects Runtime's `ic0` feature; the second command records
+enabled features so the caller can check that only `ic0` is selected. Owned CDK
+is a Runtime feature, not a separately named registry package: an absence check
+for `ic-cdk` alone cannot prove CDK is disabled. For the IC0-only graph, the
+recorded package closure should contain only the selected root and Runtime.
+Types also needs its ordinary encoding, Serde and error dependencies; those are
+not an execution dependency or a reason to reject the identity-only graph.
+
+For actual executor users require one `ic-platform-runtime` and one
+`ic-platform-runtime-guard`; require Types only when the selected API needs it.
+For crypto/external-adapter packages admit the facade and its deliberately selected
+capabilities instead of applying the IC0-only exclusions. Check shared Types at
+the combined application boundary, including facade re-exports. Compile the
+actual public-value exchange before claiming interoperability. Independent
+host/dev graphs may have different legitimate selections and need their own
+policies; neither a whole-lock duplicate count nor these examples constitutes
+fleet-wide version lockstep. Preserve the qualified MSRV and installed/native
+acceptance separately from source-only graph admission.
+
 ## Coordinated release adoption
 
 A coordinated workspace version simplifies selection; it does not prove that
@@ -120,6 +159,15 @@ upgrade and required runtime/public-type/security/minimum-capability alignments
 from optional refreshes. Explain required extra selections with their introducing
 dependency path or contract; do not make every package track the latest release.
 
+Optional refreshes are deferred by default and batched with requested maintenance
+or a natural release boundary. Do not start an update-everything pass because a
+supplier published another version. Keep compatible minimum requirements where
+they still describe the supported contract; a newer tested lock selection does
+not itself require raising every manifest minimum or publishing the consumer.
+Required API/security/compatibility changes select the affected consumer-boundary
+checks once. Adoption alone does not justify replaying upstream generic fixtures
+or starting downstream release procedures.
+
 Admit the proposed combined graph cheaply in disposable preparation before
 expensive artifact work. Reuse the focused checks below and existing source/archive
 qualification for unpublished suppliers. Candidate source evidence is not registry
@@ -129,6 +177,10 @@ the affected consumer boundary before claiming compatibility. Keep failures tied
 to their actual graph and distinguish independent host/dev selections.
 
 Use the resulting dependency constraints to choose supplier-first delivery order.
+That order is advice, not authority to release other repositories. Each receiving
+owner performs its own adoption; do not open unsolicited version, lock or snapshot
+PRs or start sibling deployment procedures. Follow the
+[repository-scoped contribution rules](../rules/contributions.md#cross-repository-pull-requests).
 Do not weaken singleton checks, rewrite retained locks in a read-only check, or
 publish intermediate consumers merely to discover whether the final graph works.
 Optional refreshes may be batched when explicitly in scope; they must not obscure

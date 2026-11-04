@@ -14,9 +14,9 @@ use canic_contracts::{
 fn child_usage_requires_exact_participants_and_preserves_uncertain_reservations() {
     let parent = Principal::from_slice(&[1]);
     let child = Principal::from_slice(&[2]);
-    let mut value = canic_contracts::dto::observability::ChildFundingUsage {
-        parent,
-        child,
+    let mut value = canic_contracts::dto::child_funding::ChildFundingUsage {
+        parent: parent.into(),
+        child: child.into(),
         observed_at_ns: 10_000_000_000,
         accounted_cycles: 130.into(),
         last_accounted_at_secs: 9,

@@ -1,0 +1,299 @@
+--- a/crates/canic-core/src/model/auth/application_authorization/capacity/mod.rs
++++ b/crates/canic-core/src/model/auth/application_authorization/capacity/mod.rs
+@@ -1,7 +1,7 @@
+ //! Protected receiver capacity and checked, proportional retention budgets.
+ 
+ /// Default number of simultaneous browser sessions per receiving canister.
+-pub const DEFAULT_MAX_SESSIONS: u32 = 2_048;
++pub const DEFAULT_MAX_SESSIONS: u32 = 100_000;
+ 
+ /// Validated capacity profile. Byte limits include retention headroom; they are
+ /// ceilings rather than preallocated memory or throughput guarantees.
+@@ -21,7 +21,7 @@
+     /// The stable-byte ceiling stays below 2 GiB to leave address-space headroom.
+     #[must_use]
+     pub const fn new(max_sessions: u32) -> Option<Self> {
+-        if max_sessions == 0 || max_sessions > 2_048 {
++        if max_sessions == 0 || max_sessions > 250_000 {
+             return None;
+         }
+         let sessions = max_sessions as usize;
+--- a/crates/canic-core/src/ops/storage/auth/application_sessions/shared/tests/fixture/mod.rs
++++ b/crates/canic-core/src/ops/storage/auth/application_sessions/shared/tests/fixture/mod.rs
+@@ -35,9 +35,9 @@
+     MemoryLoginRevocations::new(audience(), 4096, 256, 1_000_000_000, 0).unwrap()
+ }
+ 
+-pub(super) fn browser(id: u16) -> Principal {
++pub(super) fn browser(id: u32) -> Principal {
+     let mut seed = [0; 32];
+-    seed[..2].copy_from_slice(&id.to_be_bytes());
++    seed[..4].copy_from_slice(&id.to_be_bytes());
+     browser_principal(&SigningKey::from_bytes(&seed).verifying_key().to_bytes()).into()
+ }
+ 
+@@ -47,14 +47,14 @@
+ 
+ pub(super) fn pair_for_browser(
+     second: bool,
+-    device: u16,
++    device: u32,
+ ) -> (Session, Replay, LoginRevocationChange) {
+     pair_for_account(second, device, Principal::from_slice(&[43]))
+ }
+ 
+ pub(super) fn pair_for_account(
+     second: bool,
+-    device: u16,
++    device: u32,
+     account_subject: Principal,
+ ) -> (Session, Replay, LoginRevocationChange) {
+     let mut memory = MemorySessionStore::new(0, SessionLimits::new(4, 8, 4, 16_384).unwrap());
+@@ -86,7 +86,7 @@
+     logins: &mut MemoryLoginRevocations,
+     budget: &mut SessionAdmissionBudget,
+     second: bool,
+-    device: u16,
++    device: u32,
+     account_subject: Principal,
+ ) -> Result<SessionEstablished, SessionError> {
+     establish_for_issuer(store, logins, budget, second, device, account_subject, 42)
+@@ -105,7 +105,7 @@
+     logins: &mut MemoryLoginRevocations,
+     budget: &mut SessionAdmissionBudget,
+     second: bool,
+-    device: u16,
++    device: u32,
+     account_subject: Principal,
+     issuer: u8,
+ ) -> Result<SessionEstablished, SessionError> {
+@@ -115,14 +115,14 @@
+ 
+ pub(super) fn issue(
+     second: bool,
+-    device: u16,
++    device: u32,
+     account_subject: Principal,
+     issuer: u8,
+ ) -> IssuedCredential {
+     let signer = SigningKey::from_bytes(&[issuer; 32]);
+     let role: AuthRole = "app_service".parse().unwrap();
+     let mut browser_seed = [0; 32];
+-    browser_seed[..2].copy_from_slice(&device.to_be_bytes());
++    browser_seed[..4].copy_from_slice(&device.to_be_bytes());
+     let claims = PortableClaims {
+         mechanism: PortableMechanism::Ed25519,
+         audience: audience(),
+--- a/crates/canic-core/src/ops/storage/auth/application_sessions/shared/tests/mod.rs
++++ b/crates/canic-core/src/ops/storage/auth/application_sessions/shared/tests/mod.rs
+@@ -25,16 +25,22 @@
+ 
+ fn restore_ledger() -> MemoryLoginRevocations {
+     let data = LocalApplicationAuthorizationState::export();
+-    MemoryLoginRevocations::new(fixture::audience(), 4096, 256, 1_000_000_000, NOW)
+-        .unwrap()
+-        .restore_records(
+-            NOW,
+-            (data.login_totals.admitted, data.login_totals.unknown),
+-            data.logins
+-                .iter()
+-                .map(|(_, record)| LoginRevocationChange::decode(&record.bytes).unwrap()),
+-        )
+-        .unwrap()
++    MemoryLoginRevocations::new(
++        fixture::audience(),
++        capacity().admitted_logins,
++        capacity().unknown_logouts,
++        1_000_000_000,
++        NOW,
++    )
++    .unwrap()
++    .restore_records(
++        NOW,
++        (data.login_totals.admitted, data.login_totals.unknown),
++        data.logins
++            .iter()
++            .map(|(_, record)| LoginRevocationChange::decode(&record.bytes).unwrap()),
++    )
++    .unwrap()
+ }
+ 
+ #[test]
+@@ -220,7 +226,7 @@
+                 &mut store,
+                 &mut ledger,
+                 &mut budget,
+-                browser(u16::try_from(id + 2).unwrap()).into(),
++                browser(u32::try_from(id + 2).unwrap()).into(),
+                 NOW
+             ),
+             LogoutResult::Revoked { .. }
+@@ -439,9 +445,9 @@
+     let _lock = seams::lock();
+     let _state = ApplicationSessionTestStateGuard::empty();
+     let mut data = LocalApplicationAuthorizationStateData::default();
+-    for id in 0..129_u16 {
++    for id in 0..129_u32 {
+         let mut fingerprint = [0; 32];
+-        fingerprint[..2].copy_from_slice(&id.to_be_bytes());
++        fingerprint[..4].copy_from_slice(&id.to_be_bytes());
+         data.replays.push(LocalApplicationReplayRecord {
+             proof_fingerprint: fingerprint,
+             transport_caller: browser(id),
+@@ -506,7 +512,7 @@
+     let _state = ApplicationSessionTestStateGuard::empty();
+     let mut store = store();
+     for id in 1..=MAX_ACTIVE_APPLICATION_SESSIONS {
+-        let device = u16::try_from(id).unwrap();
++        let device = u32::try_from(id).unwrap();
+         for second in [false, true] {
+             let (session, replay, login) = fixture::pair_for_browser(second, device);
+             store
+@@ -807,7 +813,7 @@
+     let mut store = store();
+     for device in 1..=2 {
+         let (session, replay, login) =
+-            fixture::pair_for_browser(false, u16::try_from(device).unwrap());
++            fixture::pair_for_browser(false, u32::try_from(device).unwrap());
+         store
+             .admit(session.clone(), replay.clone(), &login)
+             .unwrap();
+@@ -1006,7 +1012,7 @@
+                 &mut store,
+                 &mut ledger,
+                 &mut budget,
+-                browser(u16::try_from(id + 1).unwrap()).into(),
++                browser(u32::try_from(id + 1).unwrap()).into(),
+                 NOW,
+             ),
+             LogoutResult::Revoked { .. }
+--- a/crates/canic-core/src/ops/storage/auth/application_sessions/shared/tests/admission/mod.rs
++++ b/crates/canic-core/src/ops/storage/auth/application_sessions/shared/tests/admission/mod.rs
+@@ -9,13 +9,13 @@
+     let mut store = store();
+     for device in 1..=MAX_ACTIVE_APPLICATION_SESSIONS {
+         let (session, replay, login) =
+-            fixture::pair_for_browser(false, u16::try_from(device).unwrap());
++            fixture::pair_for_browser(false, u32::try_from(device).unwrap());
+         assert_eq!(store.admit(session, replay, &login), Ok(false));
+     }
+     let before = LocalApplicationAuthorizationState::export();
+     let (session, replay, login) = fixture::pair_for_browser(
+         false,
+-        u16::try_from(MAX_ACTIVE_APPLICATION_SESSIONS + 1).unwrap(),
++        u32::try_from(MAX_ACTIVE_APPLICATION_SESSIONS + 1).unwrap(),
+     );
+     assert_eq!(
+         store.admit(session, replay, &login),
+@@ -85,7 +85,7 @@
+         ))
+     );
+     assert_eq!(LocalApplicationAuthorizationState::export(), logged_out);
+-    let device = u16::try_from(MAX_ACTIVE_APPLICATION_SESSIONS + 1).unwrap();
++    let device = u32::try_from(MAX_ACTIVE_APPLICATION_SESSIONS + 1).unwrap();
+     let (session, replay, login) = fixture::pair_for_browser(false, device);
+     assert_eq!(owner.admit(session, replay, &login), Ok(false));
+     let admitted = LocalApplicationAuthorizationState::export();
+@@ -118,7 +118,7 @@
+             };
+             retained.replays.push(LocalApplicationReplayRecord {
+                 proof_fingerprint: fingerprint,
+-                transport_caller: browser(u16::try_from(device).unwrap()),
++                transport_caller: browser(u32::try_from(device).unwrap()),
+                 authority_generation: 0,
+                 remove_at_ns: NOW + 1,
+             });
+@@ -184,3 +184,93 @@
+         Err(SessionError::StorageFailure)
+     );
+ }
++
++#[test]
++fn hundred_thousand_sessions_restore_authorize_retry_and_logout() {
++    let _lock = seams::lock();
++    let _state = ApplicationSessionTestStateGuard::empty();
++    let selected = crate::model::auth::application_authorization::capacity::DEFAULT_MAX_SESSIONS;
++    assert_eq!(selected, 100_000);
++    LocalApplicationAuthorizationStateOps::configure_receiver_capacity(selected).unwrap();
++    LocalApplicationAuthorizationStateOps::restore_application_session_state(NOW).unwrap();
++    let mut owner = store();
++    for device in 1..=selected {
++        let (session, replay, login) = fixture::pair_for_browser(false, device);
++        assert_eq!(owner.admit(session, replay, &login), Ok(false));
++    }
++    let original = LocalApplicationAuthorizationState::export();
++    let (session, replay, login) = fixture::pair_for_browser(false, selected + 1);
++    assert_eq!(
++        owner.admit(session, replay, &login),
++        Err(SessionError::Capacity)
++    );
++    assert_eq!(LocalApplicationAuthorizationState::export(), original);
++    invalidate_indexes();
++    let stats =
++        LocalApplicationAuthorizationStateOps::restore_application_session_state(NOW).unwrap();
++    assert_eq!(
++        (stats.sessions, stats.replays),
++        (selected as usize, selected as usize)
++    );
++    assert!(stats.stable_bytes < capacity().stable_bytes);
++    assert!(stats.estimated_index_bytes < capacity().index_bytes);
++    let mut ledger = restore_ledger();
++    let mut budget = SessionAdmissionBudget::new(4, 1, 0).unwrap();
++    for device in [1, selected] {
++        let authorized = fixture::authorize(
++            &mut owner,
++            &mut ledger,
++            NOW,
++            0,
++            &["read".into()],
++            |authority| {
++                authority.caller = browser(device).into();
++            },
++        )
++        .unwrap();
++        let issued = fixture::issue(false, device, Principal::from_slice(&[43]), 42);
++        assert_eq!(
++            fixture::establish_issued(
++                &mut owner,
++                &mut ledger,
++                &mut budget,
++                &issued,
++                browser(device),
++                NOW
++            ),
++            Ok(ic_auth::session::SessionEstablished::ExactRetry(
++                ic_auth::session::SessionReceipt::from(&authorized)
++            ))
++        );
++    }
++    assert!(matches!(
++        ic_auth::session::logout_session(
++            &mut owner,
++            &mut ledger,
++            &mut budget,
++            browser(1).into(),
++            NOW
++        ),
++        LogoutResult::Revoked { .. }
++    ));
++    invalidate_indexes();
++    LocalApplicationAuthorizationStateOps::restore_application_session_state(NOW).unwrap();
++    let mut ledger = restore_ledger();
++    assert_eq!(
++        fixture::authorize(&mut owner, &mut ledger, NOW, 0, &["read".into()], |_| {}),
++        Err(SessionError::Revocation(
++            ic_auth::portable::LoginRevocationError::Revoked
++        ))
++    );
++    let (session, replay, login) = fixture::pair_for_browser(false, selected + 1);
++    assert_eq!(owner.admit(session, replay, &login), Ok(false));
++    owner
++        .read(|reader| {
++            assert_eq!(
++                reader.occupancy(browser(selected + 1).into())?.sessions,
++                selected as usize
++            );
++            Ok(())
++        })
++        .unwrap();
++}

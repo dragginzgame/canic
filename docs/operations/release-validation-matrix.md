@@ -69,6 +69,15 @@ ordinary suites finish first and any ordinary failure skips the governed
 PocketIC suites. The primitive targets remain independently runnable and do
 not invoke unrelated validation operations.
 
+Selected-group release hooks use the reviewed
+[group plan mapping](adapter-release-groups.md#release-validation-selection).
+An unqualified mapping or shared/uncertain change runs the complete roster.
+Qualified confined changes retain workspace lint/check/tests, installed proofs
+and required native hosts; only explicitly unrelated stages may be omitted.
+The source/group/configuration-bound plan proof is re-admitted at preparation
+and recovery. This is separate from the fast patch lane below and does not
+change repository-wide CI.
+
 An eligible non-runtime patch may instead use:
 
 ```text
@@ -83,7 +92,7 @@ PocketIC and records `gate=fast` in the release marker.
 ## Required Local RC Gates
 
 Before RC promotion, the maintainer selects or explicitly assigns the complete
-gate, unless the patch satisfies the fast non-runtime boundary above:
+gate, its qualified selected-group plan, or the fast non-runtime boundary above:
 
 ```text
 make validate

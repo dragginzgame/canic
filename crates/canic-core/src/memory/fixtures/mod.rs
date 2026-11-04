@@ -1,28 +1,14 @@
-//! Explicit governed runtime setup and pinned unmanaged backing images for tests.
+//! Explicit host fixtures using Storage's production namespace/bootstrap boundary.
 
-use ic_memory::{MemoryManagerConfig, MemoryRuntime, VectorMemory};
+use ic_storage::{MemoryRuntime, StorageConfig, VectorMemory};
 
-pub fn runtime(keys: &[&str], bucket_pages: u16) -> MemoryRuntime<VectorMemory> {
-    ic_memory::testing::fixture_runtime(
+pub fn runtime(keys: &[&str]) -> MemoryRuntime<VectorMemory> {
+    ic_storage::testing::fixture_runtime(
         VectorMemory::default(),
         "test",
         "test.",
         keys,
-        MemoryManagerConfig::new(std::num::NonZeroU16::new(bucket_pages).unwrap()),
+        StorageConfig::default(),
     )
     .unwrap()
-}
-
-pub fn unmanaged(bucket_pages: u16) -> VectorMemory {
-    let (pages, runs): (u64, &[(u64, String)]) = match bucket_pages {
-        1 => include!("unmanaged-one.inc"),
-        16 => include!("unmanaged-sixteen.inc"),
-        _ => panic!("no unmanaged fixture for this geometry"),
-    };
-    ic_memory::testing::memory_from_sparse_hex(pages, runs, 17).unwrap()
-}
-
-pub fn all_slots() -> VectorMemory {
-    let (pages, runs): (u64, &[(u64, String)]) = include!("all-slots.inc");
-    ic_memory::testing::memory_from_sparse_hex(pages, runs, 255).unwrap()
 }

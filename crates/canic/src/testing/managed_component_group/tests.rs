@@ -213,10 +213,7 @@ fn child_binding_validation_is_placement_strategy_neutral() {
 fn app_failure_projection_retains_decoder_limits_and_transport_classification() {
     use super::super::managed_app::ManagedAppQualificationError as App;
     use ic_platform::candid::DecodeError;
-    use {
-        ic_platform::pocket_ic::{ErrorCode, RejectCode, RejectResponse},
-        ic_testkit::pic::PocketIcOperationError,
-    };
+    use ic_testkit::pocket_ic::{ErrorCode, RejectCode, RejectResponse, RequestContext};
 
     let error =
         ManagedComponentGroupQualificationError::from(App::Decode(DecodeError::ReplyTooLarge {
@@ -237,24 +234,36 @@ fn app_failure_projection_retains_decoder_limits_and_transport_classification() 
         certified: false,
     };
     let error = ManagedComponentGroupQualificationError::from(App::Transport(
-        PocketIcCallFailure::Rejected(response.clone()),
+        ClientError::Canister(response.clone()),
     ));
-    let ManagedComponentGroupQualificationError::Transport(PocketIcCallFailure::Rejected(actual)) =
-        error
+    let ManagedComponentGroupQualificationError::Transport(ClientError::Canister(actual)) = error
     else {
         panic!("rejection must remain distinguishable from transport failure");
     };
     assert_eq!(actual, response);
-    let source = PocketIcOperationError::new("fixture transport failure");
-    let error = ManagedComponentGroupQualificationError::from(App::Transport(
-        PocketIcCallFailure::Operation(source.clone()),
-    ));
-    let ManagedComponentGroupQualificationError::Transport(PocketIcCallFailure::Operation(actual)) =
+    let source = ClientError::Timeout {
+        context: Box::new(RequestContext {
+            url: "http://localhost/test".into(),
+            operation: None,
+            ingress: None,
+            may_have_executed: true,
+            status: None,
+        }),
+    };
+    let app_error = App::Transport(source);
+    assert!(
+        matches!(std::error::Error::source(&app_error).and_then(|source| source.downcast_ref::<ClientError>()), Some(ClientError::Timeout { context }) if context.may_have_executed)
+    );
+    let error = ManagedComponentGroupQualificationError::from(app_error);
+    assert!(
+        matches!(std::error::Error::source(&error).and_then(|source| source.downcast_ref::<ClientError>()), Some(ClientError::Timeout { context }) if context.may_have_executed)
+    );
+    let ManagedComponentGroupQualificationError::Transport(ClientError::Timeout { context }) =
         error
     else {
         panic!("operation failure must retain its typed source");
     };
-    assert_eq!(actual, source);
+    assert!(context.may_have_executed);
 }
 
 #[test]

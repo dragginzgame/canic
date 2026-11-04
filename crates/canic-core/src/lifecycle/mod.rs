@@ -34,7 +34,7 @@ pub fn lifecycle_trap(phase: LifecyclePhase, err: impl fmt::Display) -> ! {
     ic_platform::cdk::api::trap(format!("{phase}: {err}"))
 }
 
-fn retryable_nonroot_bootstrap_error(error: &crate::InternalError) -> bool {
+pub fn retryable_nonroot_bootstrap_error(error: &crate::InternalError) -> bool {
     let code = error.public_error().code();
     [
         crate::diagnostics::codes::LIFECYCLE_INACTIVE,

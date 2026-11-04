@@ -4,7 +4,7 @@
 //! Does not own: authentication, replay decisions, accounting or settlement.
 //! Boundary: metadata preserves original identities without returning cached application replies.
 
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Authentication class retained by the original operation, independent of the current observer.

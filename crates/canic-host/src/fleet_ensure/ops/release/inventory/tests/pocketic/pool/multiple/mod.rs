@@ -77,8 +77,12 @@ fn add_root(
     FleetRegistry,
     RootPoolReleaseResponse,
 ) {
-    let root = pic.create_canister_with_settings(Some(review.authority.operator), None);
-    let store = pic.create_canister_with_settings(Some(review.authority.operator), None);
+    let root = pic
+        .create_canister_with_settings(Some(review.authority.operator), None)
+        .expect("PocketIC create_canister_with_settings");
+    let store = pic
+        .create_canister_with_settings(Some(review.authority.operator), None)
+        .expect("PocketIC create_canister_with_settings");
     let second = RootPoolReleaseResponse {
         root,
         bootstrap: None,
@@ -97,10 +101,12 @@ fn add_root(
             wasm.clone(),
             pool::tests::wire(second.clone()),
             Some(review.authority.operator),
-        );
+        )
+        .expect("PocketIC install_canister");
         let mut source = template.clone();
         source.binding.canister_id = id;
-        source.binding.subnet = SubnetId::from_principal(pic.get_subnet(id).unwrap());
+        source.binding.subnet =
+            SubnetId::from_principal(pic.get_subnet(id).expect("PocketIC get_subnet").unwrap());
         source.binding.module_sha256 = Some(Sha256::digest(&wasm).into());
         source.role = role;
         expanded.sources.push(source);
@@ -108,7 +114,8 @@ fn add_root(
     let mut expanded_registry = registry.clone();
     let mut entry = registry.fleet_subnet_roots[0].clone();
     entry.fleet_subnet_root = root;
-    entry.placement_subnet = SubnetId::from_principal(pic.get_subnet(root).unwrap());
+    entry.placement_subnet =
+        SubnetId::from_principal(pic.get_subnet(root).expect("PocketIC get_subnet").unwrap());
     expanded_registry.fleet_subnet_roots.push(entry);
     (expanded, expanded_registry, second)
 }

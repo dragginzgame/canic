@@ -27,12 +27,12 @@ fn generated_wasm_store_wrapper_satisfies_role_package_contract() {
             .unwrap()
             .ends_with("canic/candid/wasm_store.did")
     );
-    assert_eq!(source.package_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(source.package_version, canic_core::VERSION);
     let manifest: toml::Value =
         toml::from_str(&fs::read_to_string(&source.manifest_path).unwrap()).unwrap();
     assert_eq!(
         manifest["package"]["version"].as_str(),
-        Some(env!("CARGO_PKG_VERSION"))
+        Some(canic_core::VERSION)
     );
     assert_eq!(manifest["package"]["publish"].as_bool(), Some(false));
     assert_eq!(

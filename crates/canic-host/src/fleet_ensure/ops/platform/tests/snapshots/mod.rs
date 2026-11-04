@@ -6,7 +6,7 @@ use crate::{
     test_support::{start_pocket_ic, synthetic_identity_pem},
 };
 use ic_platform::agent::{BasicIdentity, Identity};
-use ic_platform::pocket_ic::{CanisterSettings, PocketIcBuilder};
+use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use std::{fs, sync::Mutex};
 
 #[test]
@@ -41,21 +41,28 @@ esac
             .with_nns_subnet()
             .with_application_subnet(),
     );
-    pic.set_time(SystemTime::now().into());
-    let canister = pic.create_canister_with_settings(Some(operator), None);
+    pic.set_time(SystemTime::now().into())
+        .expect("PocketIC set_time");
+    let canister = pic
+        .create_canister_with_settings(Some(operator), None)
+        .expect("PocketIC create_canister_with_settings");
     pic.install_canister(
         canister,
         b"\0asm\x01\0\0\0".to_vec(),
         vec![],
         Some(operator),
-    );
+    )
+    .expect("PocketIC install_canister");
     pic.stop_canister(canister, Some(operator)).unwrap();
     let snapshot = pic
         .take_canister_snapshot(canister, Some(operator), None)
         .unwrap();
     let before = pic.canister_status(canister, Some(operator)).unwrap();
-    let subnet = pic.get_subnet(canister).unwrap();
-    let url = pic.make_live(None);
+    let subnet = pic
+        .get_subnet(canister)
+        .expect("PocketIC get_subnet")
+        .unwrap();
+    let url = pic.make_live(None).expect("PocketIC make_live");
     let requests = Arc::new(Mutex::new(Vec::new()));
     let captured = Arc::clone(&requests);
     fixture.platform.desired.operator = operator.to_text();
@@ -64,7 +71,7 @@ esac
         .with_identity(Some("snapshot-fixture"))
         .with_local_replica(LocalReplicaTarget {
             environment: "local".into(),
-            root_key: hex_bytes(pic.root_key().unwrap()),
+            root_key: hex_bytes(pic.root_key().expect("PocketIC root_key").unwrap()),
             url: url.to_string(),
         })
         .with_request_timing_handler(move |request| {
@@ -187,7 +194,10 @@ esac
     let after = pic.canister_status(canister, Some(operator)).unwrap();
     assert_eq!(after.module_hash, before.module_hash);
     assert_eq!(after.settings.controllers, [operator]);
-    assert_eq!(pic.get_subnet(canister), Some(subnet));
+    assert_eq!(
+        pic.get_subnet(canister).expect("PocketIC get_subnet"),
+        Some(subnet)
+    );
     assert!(after.cycles.0 <= before.cycles.0);
     assert!(
         before.cycles.0 - after.cycles.0

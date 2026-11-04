@@ -6,7 +6,7 @@ use crate::{
         pool_import::{PoolImportPhase, PoolImportRootReceipt},
     },
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 /// Complete RootPoolReleaseResponse evidence.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

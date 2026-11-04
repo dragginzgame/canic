@@ -4,6 +4,7 @@
 //! Does not own: billing policy, cycle transfer workflows, or ledger calls.
 //! Boundary: provides stable serialization and display behavior for cycle values.
 
+#[cfg(feature = "external-candid")]
 use ic_platform::candid::contract::Nat;
 use serde::{
     Deserialize, Serialize,
@@ -210,11 +211,13 @@ impl Display for Cycles {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, ThisError)]
+#[cfg(feature = "external-candid")]
 pub enum CyclesConversionError {
     #[error("cycle amount does not fit in u128: {value}")]
     NatOverflow { value: Nat },
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<Nat> for Cycles {
     type Error = CyclesConversionError;
 
@@ -496,6 +499,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "external-candid")]
     #[test]
     fn converts_wire_nat_only_when_it_fits() {
         assert_eq!(
@@ -504,10 +508,10 @@ mod tests {
         );
         let too_large = Nat::parse(b"340282366920938463463374607431768211456")
             .expect("u128 max plus one is valid Nat");
-        assert!(matches!(
-            Cycles::try_from(too_large),
-            Err(CyclesConversionError::NatOverflow { .. })
-        ));
+        assert_eq!(
+            Cycles::try_from(too_large.clone()),
+            Err(CyclesConversionError::NatOverflow { value: too_large })
+        );
     }
 
     #[test]

@@ -25,6 +25,27 @@ use std::time::SystemTime;
 pub struct IcOps;
 
 impl IcOps {
+    /// Query execution cannot mutate retained diagnostics or schedule retention.
+    /// Native callers have no IC query context and keep ordinary diagnostics.
+    #[must_use]
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(
+            clippy::missing_const_for_fn,
+            reason = "the Wasm execution-context syscall is not const"
+        )
+    )]
+    pub(crate) fn in_replicated_execution() -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            ic_platform::cdk::api::in_replicated_execution()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            true
+        }
+    }
+
     /// Return the current canister principal.
     #[must_use]
     pub fn canister_self() -> Principal {

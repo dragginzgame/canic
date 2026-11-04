@@ -18,7 +18,47 @@ use ic_auth::canonical::chain_key_derivation_path_hash;
 impl Validate for AuthConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         self.delegated_tokens.validate()?;
+        if self.portable_enrollment_freshness_ns.is_some_and(|ns| {
+            ns == 0 || ns > canic_contracts::protocol::portable_enrollment::MAX_FRESHNESS_NS
+        }) {
+            return Err(ConfigSchemaError::ValidationError(
+                "auth.portable_enrollment_freshness_ns is outside the bounded enrollment lease"
+                    .into(),
+            ));
+        }
         self.role_attestation.validate()
+    }
+}
+
+impl Validate for crate::config::schema::PortableReceiverConfig {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
+        let invalid_capacity =
+            crate::model::auth::application_authorization::capacity::ReceiverCapacity::new(
+                self.max_sessions,
+            )
+            .is_none();
+        let invalid_budget = self.verification_burst == 0
+            || self.verification_refill_interval_ns == 0
+            || self.unknown_logout_burst == 0
+            || self.unknown_logout_refill_interval_ns == 0;
+        let invalid_refresh = self.enrollment_refresh_interval_ns < 1_000_000_000
+            || self.enrollment_refresh_interval_ns
+                > canic_contracts::protocol::portable_enrollment::MAX_FRESHNESS_NS
+            || self.enrollment_receipt_timeout_ns == 0
+            || self.enrollment_receipt_timeout_ns
+                > canic_contracts::protocol::portable_enrollment::MAX_FRESHNESS_NS;
+        let invalid_proof = self.max_login_ttl_ns == 0
+            || self.max_login_ttl_ns > 86_400_000_000_000
+            || self.max_proof_ttl_ns == 0
+            || self.max_proof_ttl_ns > 60_000_000_000
+            || self.max_certificate_age_ns == 0;
+        if invalid_capacity || invalid_budget || invalid_refresh || invalid_proof {
+            return Err(ConfigSchemaError::ValidationError(
+                "portable receiver requires positive bounded proof, refresh and work policies"
+                    .into(),
+            ));
+        }
+        Ok(())
     }
 }
 

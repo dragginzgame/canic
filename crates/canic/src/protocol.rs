@@ -1,6 +1,13 @@
 /// Managed initialization encoding and its shared resource allowance.
 pub use canic_contracts::protocol::initialization;
 
+/// Exact controller observation and resumption of retained business retry windows.
+pub use canic_contracts::protocol::operation_retry;
+
+/// Authenticated receiver-bound Root enrollment exchange.
+pub use canic_contracts::protocol::portable_enrollment;
+pub use canic_contracts::protocol::portable_issuance;
+
 /// Public wire-level endpoint names for Canic canisters.
 ///
 /// `canic_contracts::protocol` owns names used by runtime inter-canister calls. This
@@ -184,3 +191,5 @@ pub use canic_contracts::protocol::funding_read;
 pub use canic_contracts::protocol::component_read;
 
 pub use canic_contracts::protocol::{component_removal_read, root_removal_read, subtree_read};
+
+pub use canic_contracts::protocol::portable_inspection;

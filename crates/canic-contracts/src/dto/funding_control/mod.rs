@@ -10,7 +10,7 @@ use crate::{
     },
     ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingPolicy},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// FleetFundingPolicyRotationPlacementEvidence transported with native identities.
@@ -179,6 +179,17 @@ pub struct AcceptanceReceipt {
     pub accepted_at_ns: u64,
 }
 
+/// Typed grant acceptance or zero-transfer relieved-demand reply.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
+pub enum AcceptanceOutcome {
+    Accepted(Box<AcceptanceReceipt>),
+    BalanceRelieved,
+}
+
 /// FleetRootFundingNoGrantReceipt transported with native identities.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
@@ -200,4 +211,30 @@ pub struct NoGrantReceipt {
 pub enum Response {
     Granted(AcceptanceReceipt),
     NoGrant(NoGrantReceipt),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::funding_control as wire;
+
+    #[test]
+    fn relieved_acceptance_has_a_distinct_native_response() {
+        let response: Result<AcceptanceOutcome, crate::dto::error::Error> =
+            Ok(AcceptanceOutcome::BalanceRelieved);
+        let bytes = ic_wire::native::encode_response(
+            wire::root_accept::METHOD_ID,
+            &response,
+            wire::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        let decoded: Result<AcceptanceOutcome, crate::dto::error::Error> =
+            ic_wire::native::decode_response(
+                wire::root_accept::METHOD_ID,
+                &bytes,
+                wire::RESPONSE_LIMITS,
+            )
+            .unwrap();
+        assert_eq!(decoded, response);
+    }
 }

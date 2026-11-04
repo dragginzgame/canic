@@ -6,6 +6,7 @@
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod authority;
+pub mod capacity;
 mod scope;
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
@@ -16,23 +17,19 @@ pub use scope::{
     ApplicationScope, ApplicationScopeError, ApplicationScopeRef, CanonicalApplicationScopes,
 };
 
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(test)]
 pub const MAX_ACTIVE_APPLICATION_SESSIONS: usize = 2_048;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(test)]
 pub const MAX_APPLICATION_REPLAY_RECORDS: usize = 4_096;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(test)]
 pub const MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER: usize = 256;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
-pub const MAX_APPLICATION_ADMITTED_LOGINS: usize = 4_096;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(test)]
 pub const MAX_APPLICATION_UNKNOWN_LOGOUTS: usize = 256;
-pub const MAX_APPLICATION_SESSION_SCOPE_BYTES: usize = 1_024;
-pub const MAX_APPLICATION_SESSION_SCOPES: usize = 16;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub const MAX_APPLICATION_SESSION_RECORD_BYTES: usize = 4_096;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(test)]
 pub const MAX_APPLICATION_SESSION_STABLE_BYTES: usize = 8 * 1024 * 1024;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(test)]
 pub const MAX_APPLICATION_SESSION_INDEX_BYTES: usize = 4 * 1024 * 1024;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub const MAX_APPLICATION_SESSION_CLEANUP_REMOVALS: usize = 128;

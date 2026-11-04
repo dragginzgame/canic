@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  CANIC_MSRV: 1.91.0
+  CANIC_MSRV: 1.99.1
   CANIC_INTERNAL_TOOLCHAIN: 1.99.1
   CARGO_INCREMENTAL: 0
 
@@ -213,17 +213,26 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: ${{ env.CANIC_MSRV }}
+          targets: wasm32-unknown-unknown
       - name: Select MSRV toolchain
         shell: bash
         run: echo "RUSTUP_TOOLCHAIN=$CANIC_MSRV" >> "$GITHUB_ENV"
+      - name: Prepare compiler policy readers
+        run: make install-host-tools
       - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
         with:
           cache-targets: false
       - name: Check runner disk before MSRV
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV before check" --min-free-mib 3072 --path "$GITHUB_WORKSPACE"
+      - name: Prepare locked compiler graphs
+        run: make prepare-locked-dependencies
       - name: Check workspace MSRV
-        run: bash scripts/ci/run-workspace-cargo.sh check --keep-going
+        run: |
+          make compiler-check
+          bash scripts/ci/run-workspace-cargo.sh check --keep-going
+      - name: Check canister libraries at the supported minimum
+        run: cargo check --locked --target wasm32-unknown-unknown -p canic -p canic-core -p canic-control-plane --lib
       - name: Report runner disk after MSRV failure
         if: ${{ failure() }}
         shell: bash

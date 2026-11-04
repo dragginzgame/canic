@@ -10,8 +10,8 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use {
-    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
     ic_testkit::pic::PocketIcStartupConfig,
+    ic_testkit::pocket_ic::{PocketIc, PocketIcBuilder},
 };
 
 const POCKET_IC_SERVER_URL_ENV: &str = "IC_TESTKIT_POCKET_IC_URL";
@@ -244,7 +244,11 @@ pub fn pool_reply(
 
 pub use crate::release_set::test_artifact::{WIRE_SCHEMA, wire_wasm};
 
-/// Use the production artifact encoder and compression policy for test bytes.
+/// Encode ordinary valid-gzip fixtures with the canonical encoder's fastest level.
+/// Exact production-byte and compression-limit tests use the artifact adapter directly.
 pub fn gzip(bytes: &[u8]) -> Vec<u8> {
-    crate::artifact_io::deterministic_gzip_bytes(bytes).expect("encode gzip fixture")
+    let mut output = Vec::new();
+    ic_host_artifacts::artifact::encode_gzip(bytes, &mut output, 1, u64::MAX)
+        .expect("encode gzip fixture");
+    output
 }

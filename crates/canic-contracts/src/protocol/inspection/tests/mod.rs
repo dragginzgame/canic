@@ -8,7 +8,7 @@ use crate::dto::{
 
 #[test]
 fn target_and_typed_refusal_round_trip_under_inspection_identity() {
-    let target = ic_platform::Principal::from_slice(&[7; 29]);
+    let target = ic_platform_types::Principal::from_slice(&[7; 29]);
     let request = Request {
         canister_id: target,
     };
@@ -27,7 +27,7 @@ fn target_and_typed_refusal_round_trip_under_inspection_identity() {
     ));
     let response: Result<Response, Error> =
         Ok(Response::InspectionReserveRequired(InspectionReserve {
-            caller: ic_platform::Principal::from_slice(&[8; 29]),
+            caller: ic_platform_types::Principal::from_slice(&[8; 29]),
             canister_id: target,
             native_cycles: u128::MAX,
             available_liquid_cycles: 7,

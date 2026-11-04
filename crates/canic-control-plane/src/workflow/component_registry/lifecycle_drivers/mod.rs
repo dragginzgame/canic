@@ -4,47 +4,19 @@
 //! Does not own: durable records, endpoint authorization, policy, or platform effects.
 //! Boundary: observes one retained operation and schedules only its next existing workflow step.
 
+pub(super) mod allocation_timer;
+pub(super) mod child_timer;
+pub(super) mod removal_timer;
+
 use super::*;
-use std::{cell::RefCell, collections::BTreeSet};
-
-thread_local! {
-    static SCHEDULED_COMPONENT_ALLOCATIONS: RefCell<BTreeSet<[u8; 32]>> =
-        const { RefCell::new(BTreeSet::new()) };
-    static SCHEDULED_COMPONENT_CHILD_ALLOCATIONS: RefCell<BTreeSet<(ComponentInstanceId, [u8; 32])>> =
-        const { RefCell::new(BTreeSet::new()) };
-}
-
 const MAX_COMPONENT_CHILD_ALLOCATION_PHASES_PER_INVOCATION: usize = 16;
 const MAX_AUTOMATIC_CHILD_FAILURES: u32 = 16;
 
 /// Privately advance one accepted ordinary or peer top-level allocation.
-pub fn schedule_component_allocation(operation_id: [u8; 32]) {
-    let inserted = SCHEDULED_COMPONENT_ALLOCATIONS
-        .with(|scheduled| scheduled.borrow_mut().insert(operation_id));
-    if !inserted {
-        return;
-    }
-    schedule_component_allocation_after(operation_id, Duration::ZERO);
-}
-
-fn schedule_component_allocation_after(operation_id: [u8; 32], delay: Duration) {
-    TimerApi::defer_lifecycle_required(
-        delay,
-        "Fleet Subnet Root Component allocation",
-        async move {
-            match Box::pin(advance_component_allocation_once(operation_id)).await {
-                Ok(true) => {
-                    SCHEDULED_COMPONENT_ALLOCATIONS.with(|scheduled| {
-                        scheduled.borrow_mut().remove(&operation_id);
-                    });
-                }
-                Ok(false) => schedule_component_allocation_after(operation_id, Duration::ZERO),
-                Err(_) => {
-                    schedule_component_allocation_after(operation_id, Duration::from_secs(1));
-                }
-            }
-        },
-    );
+pub fn schedule_component_allocation(operation_id: [u8; 32]) -> Result<(), InternalError> {
+    TimerApi::require_active()?;
+    ComponentRegistryOps::request_allocation_continuation(operation_id)?;
+    allocation_timer::schedule()
 }
 
 async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
@@ -109,7 +81,9 @@ async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<boo
             Ok(false)
         }
         RootComponentAllocationProgressView::Committed { commitment, .. } => {
-            let plan = prepared_component_runtime_plan_for_reconciliation(operation_id).await?;
+            let plan = prepared_component_runtime_plan_for_reconciliation(operation_id)
+                .await
+                .map_err(|error| component_membership_failure("runtime_plan", error))?;
             if !commitment.directory_prepared {
                 Box::pin(prepare_component_directories_with_plan(
                     RootComponentDirectoryPreparationRequest { operation_id },
@@ -123,7 +97,8 @@ async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<boo
                     RootComponentRuntimeActivationRequest { operation_id },
                     plan,
                 ))
-                .await?;
+                .await
+                .map_err(|error| component_membership_failure("runtime_activation", error))?;
                 return Ok(false);
             }
             if commitment
@@ -138,136 +113,22 @@ async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<boo
                 .await?;
                 return Ok(false);
             }
-            Ok(component_allocation_reconciliation_complete(&allocation))
+            Ok(ComponentRegistryOps::allocation_reconciliation_complete(
+                &allocation,
+            ))
         }
         RootComponentAllocationProgressView::Removed { .. } => Ok(true),
     }
 }
 
-pub(super) fn component_allocation_reconciliation_complete(
-    allocation: &RootComponentAllocationView,
-) -> bool {
-    match &allocation.progress {
-        RootComponentAllocationProgressView::Committed { commitment, .. } => {
-            commitment.directory_prepared
-                && commitment.runtime_activated
-                && commitment
-                    .membership
-                    .as_ref()
-                    .is_some_and(|membership| membership.directory_synchronized)
-        }
-        RootComponentAllocationProgressView::Removed { .. } => true,
-        _ => false,
-    }
-}
-
 /// Privately advance one accepted direct-child allocation for its retained parent authority.
-pub fn schedule_component_child_allocation(component: ComponentInstanceId, operation_id: [u8; 32]) {
-    let inserted = SCHEDULED_COMPONENT_CHILD_ALLOCATIONS
-        .with(|scheduled| scheduled.borrow_mut().insert((component, operation_id)));
-    if !inserted {
-        return;
-    }
-    // Observe the failure only after this invocation has retained its outcome.
-    TimerApi::defer_lifecycle_required(
-        Duration::ZERO,
-        "Fleet Subnet Root Component child continuation",
-        async move {
-            let may_continue = ComponentRegistryOps::child_allocation(component, operation_id)
-                .ok()
-                .flatten()
-                .is_some_and(|allocation| {
-                    allocation.last_failure.is_none_or(|failure| {
-                        child_failure_can_continue(
-                            failure.diagnostic_code,
-                            failure.consecutive_failures,
-                        )
-                    })
-                });
-            if !may_continue {
-                SCHEDULED_COMPONENT_CHILD_ALLOCATIONS.with(|scheduled| {
-                    scheduled.borrow_mut().remove(&(component, operation_id));
-                });
-                return;
-            }
-            schedule_component_child_allocation_after(
-                component,
-                operation_id,
-                child_allocation_retry_delay(component, operation_id, Duration::ZERO),
-            );
-        },
-    );
-}
-
-fn child_allocation_retry_delay(
+pub fn schedule_component_child_allocation(
     component: ComponentInstanceId,
     operation_id: [u8; 32],
-    fallback: Duration,
-) -> Duration {
-    ComponentRegistryOps::child_allocation(component, operation_id)
-        .ok()
-        .flatten()
-        .and_then(|allocation| allocation.last_failure)
-        .map_or(fallback, |failure| {
-            Duration::from_nanos(failure.retry_at_ns.saturating_sub(IcOps::now_nanos()))
-        })
-}
-
-fn schedule_component_child_allocation_after(
-    component: ComponentInstanceId,
-    operation_id: [u8; 32],
-    delay: Duration,
-) {
-    TimerApi::defer_lifecycle_required(
-        delay,
-        "Fleet Subnet Root Component child allocation",
-        async move {
-            match Box::pin(advance_component_child_allocation_once(
-                component,
-                operation_id,
-            ))
-            .await
-            {
-                Ok(true) => {
-                    SCHEDULED_COMPONENT_CHILD_ALLOCATIONS.with(|scheduled| {
-                        scheduled.borrow_mut().remove(&(component, operation_id));
-                    });
-                }
-                Ok(false) => schedule_component_child_allocation_after(
-                    component,
-                    operation_id,
-                    Duration::ZERO,
-                ),
-                Err(error) => {
-                    canic_core::log!(
-                        canic_core::log::Topic::Fleet,
-                        Warn,
-                        "child allocation attempt failed operation_id={operation_id:?} diagnostic={}",
-                        error.code()
-                    );
-                    let failures = ComponentRegistryOps::child_allocation(component, operation_id)
-                        .ok()
-                        .flatten()
-                        .and_then(|allocation| allocation.last_failure)
-                        .map_or(MAX_AUTOMATIC_CHILD_FAILURES, |failure| {
-                            failure.consecutive_failures
-                        });
-                    if !child_failure_can_continue(error.public_error().raw_code(), failures) {
-                        SCHEDULED_COMPONENT_CHILD_ALLOCATIONS.with(|scheduled| {
-                            scheduled.borrow_mut().remove(&(component, operation_id));
-                        });
-                        return;
-                    }
-                    let delay = child_allocation_retry_delay(
-                        component,
-                        operation_id,
-                        Duration::from_secs(60),
-                    );
-                    schedule_component_child_allocation_after(component, operation_id, delay);
-                }
-            }
-        },
-    );
+) -> Result<(), InternalError> {
+    TimerApi::require_active()?;
+    ComponentRegistryOps::request_child_continuation(component, operation_id)?;
+    child_timer::schedule()
 }
 
 fn child_failure_can_continue(code: u16, failures: u32) -> bool {
@@ -418,26 +279,13 @@ pub(in crate::workflow) async fn complete_component_child_allocation(
 }
 
 /// Privately advance one accepted top-level Component removal.
-pub fn schedule_component_removal(component: ComponentInstanceId, operation_id: [u8; 32]) {
-    schedule_component_removal_after(component, operation_id, Duration::ZERO);
-}
-
-fn schedule_component_removal_after(
+pub fn schedule_component_removal(
     component: ComponentInstanceId,
     operation_id: [u8; 32],
-    delay: Duration,
-) {
-    TimerApi::defer_lifecycle_required(delay, "Fleet Subnet Root Component removal", async move {
-        match Box::pin(advance_component_removal_once(component, operation_id)).await {
-            Ok(true) => {}
-            Ok(false) => {
-                schedule_component_removal_after(component, operation_id, Duration::ZERO);
-            }
-            Err(_) => {
-                schedule_component_removal_after(component, operation_id, Duration::from_secs(1));
-            }
-        }
-    });
+) -> Result<(), InternalError> {
+    TimerApi::require_active()?;
+    ComponentRegistryOps::request_component_removal_continuation(component, operation_id)?;
+    removal_timer::schedule()
 }
 
 pub(in crate::workflow) async fn advance_component_removal_once(
@@ -743,36 +591,13 @@ pub(super) fn component_draining_advance_removal_response(
 }
 
 /// Privately advance one accepted subtree removal through its durable phase journal.
-pub fn schedule_subtree_removal(component: ComponentInstanceId, operation_id: [u8; 32]) {
-    schedule_subtree_removal_after(component, operation_id, Duration::ZERO);
-}
-
-fn schedule_subtree_removal_after(
+pub fn schedule_subtree_removal(
     component: ComponentInstanceId,
     operation_id: [u8; 32],
-    delay: Duration,
-) {
-    TimerApi::defer_lifecycle_required(
-        delay,
-        "Fleet Subnet Root Component subtree removal",
-        async move {
-            let request = RootComponentSubtreeRemovalStatusRequest {
-                operation_id,
-                component,
-            };
-            match advance_existing_subtree_removal(request).await {
-                Ok(response)
-                    if matches!(
-                        response.phase,
-                        RootComponentSubtreeRemovalPhase::Completed(_)
-                    ) => {}
-                Ok(_) => schedule_subtree_removal_after(component, operation_id, Duration::ZERO),
-                Err(_) => {
-                    schedule_subtree_removal_after(component, operation_id, Duration::from_secs(1));
-                }
-            }
-        },
-    );
+) -> Result<(), InternalError> {
+    TimerApi::require_active()?;
+    ComponentRegistryOps::request_subtree_removal_continuation(component, operation_id)?;
+    removal_timer::schedule()
 }
 
 /// Read one durable removal when present, preserving absence for nested lifecycle admission.

@@ -1,6 +1,6 @@
 // Category C - Artifact test (built wasm; no runtime config).
 
-use canic_testing_internal::pic::{
+use canic_tests::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
 use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
@@ -11,9 +11,9 @@ use std::{
     time::Duration,
 };
 use {
-    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
     ic_testkit::pic::prelude::*,
     ic_testkit::pic::{InstallSpec, RetryPolicy},
+    ic_testkit::pocket_ic::{PocketIc, PocketIcBuilder},
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
@@ -171,7 +171,11 @@ fn assert_receipt_backed_adapter_conformance(
     evidence_source: Principal,
     authority_wasm: &[u8],
 ) {
-    let replay_deadline_ns = pic.get_time().as_nanos_since_unix_epoch() + NANOS_PER_HOUR;
+    let replay_deadline_ns = pic
+        .get_time()
+        .expect("PocketIC get_time")
+        .as_nanos_since_unix_epoch()
+        + NANOS_PER_HOUR;
     let pending = assert_pending_begin_decisions(pic, authority_id, replay_deadline_ns);
     assert_pending_settlement_decisions(pic, authority_id, evidence_source, &pending);
     upgrade_authority(pic, authority_id, authority_wasm);
@@ -244,7 +248,10 @@ fn assert_pending_begin_decisions(
         }
     );
 
-    let now_ns = pic.get_time().as_nanos_since_unix_epoch();
+    let now_ns = pic
+        .get_time()
+        .expect("PocketIC get_time")
+        .as_nanos_since_unix_epoch();
     assert_eq!(
         begin_receipt(pic, authority_id, 51, 52, 1, 1, now_ns),
         ReceiptBeginView {
@@ -257,8 +264,12 @@ fn assert_pending_begin_decisions(
     assert_eq!(load_receipt(pic, authority_id, 51), None);
 
     let maximum_ns = MAX_REPLAY_WINDOW_NS;
-    let overlong_deadline_ns =
-        pic.get_time().as_nanos_since_unix_epoch() + maximum_ns + NANOS_PER_HOUR;
+    let overlong_deadline_ns = pic
+        .get_time()
+        .expect("PocketIC get_time")
+        .as_nanos_since_unix_epoch()
+        + maximum_ns
+        + NANOS_PER_HOUR;
     let overlong = begin_receipt(pic, authority_id, 53, 54, 1, 1, overlong_deadline_ns);
     let ReceiptBeginStatus::ReplayWindowTooLong {
         remaining_ns,
@@ -348,7 +359,8 @@ fn assert_pending_settlement_decisions(
 }
 
 fn upgrade_authority(pic: &PocketIc, authority_id: Principal, authority_wasm: &[u8]) {
-    pic.wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    pic.wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
     pic.retry_install_code(install_retry_policy(), || {
         pic.upgrade_canister(
             authority_id,
@@ -535,9 +547,10 @@ fn assert_rolled_back_decisions(
 }
 
 fn assert_terminal_reclamation(pic: &PocketIc, authority_id: Principal, replay_deadline_ns: u64) {
-    pic.advance_time(Duration::from_mins(61));
-    pic.tick();
-    pic.tick();
+    pic.advance_time(Duration::from_mins(61))
+        .expect("PocketIC advance_time");
+    pic.tick().expect("PocketIC tick");
+    pic.tick().expect("PocketIC tick");
 
     assert_eq!(load_receipt(pic, authority_id, 11), None);
     assert_eq!(load_receipt(pic, authority_id, 31), None);
@@ -563,7 +576,10 @@ fn assert_terminal_reclamation(pic: &PocketIc, authority_id: Principal, replay_d
             22,
             1,
             1,
-            pic.get_time().as_nanos_since_unix_epoch() + NANOS_PER_HOUR,
+            pic.get_time()
+                .expect("PocketIC get_time")
+                .as_nanos_since_unix_epoch()
+                + NANOS_PER_HOUR,
         ),
         ReceiptBeginView {
             status: ReceiptBeginStatus::CapacityExceeded {
@@ -667,6 +683,5 @@ fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
 }
 
 fn workspace_root() -> PathBuf {
-    canic_testing_internal::workspace::discover()
-        .expect("discover Canic test workspace through Cargo")
+    canic_tests::workspace::discover().expect("discover Canic test workspace through Cargo")
 }

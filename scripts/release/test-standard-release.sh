@@ -9,11 +9,16 @@ cp "$root/ci/tool-versions.env" "$root/ci/ic-tools.tsv" "$fixture/ci/"
 cp "$root/make/tools.mk" "$root/make/execution.mk" "$root/make/release.mk" "$root/make/consumer.mk" "$root/make/rust-format.mk" "$fixture/make/"
 cp "$root/scripts/ci/check-make-execution.sh" "$fixture/scripts/ci/"
 cp "$root/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
+mkdir -p "$fixture/scripts/release"
+cp "$root/scripts/release/selection.sh" "$fixture/scripts/release/"
+cp "$root/ci/cargo-release-groups.json" "$fixture/ci/"
+export RELEASE_GROUP=framework
 real_bash="$(command -v bash)"
 printf '#!%s\n' "$real_bash" > "$fixture/bin/bash"
 cat >> "$fixture/bin/bash" <<'STUB'
 set -euo pipefail
 if [[ "$1" == */check-make-execution.sh ]]; then exec "$CANIC_RECIPE_TEST_BASH" "$@"; fi
+if [[ "$1" == scripts/release/selection.sh ]]; then exec "$CANIC_RECIPE_TEST_BASH" "$@"; fi
 printf '%s\n' "$*" >> "$EVENTS"
 [[ "${FAIL_RUNNER:-0}" == 0 ]]
 STUB

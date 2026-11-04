@@ -1,5 +1,5 @@
 //! Physical pool handoff boundary; the existing pool owner performs the transfer.
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 /// Exact canister and recipient selected by its Root controller.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

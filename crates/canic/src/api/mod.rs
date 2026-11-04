@@ -23,6 +23,8 @@ pub mod auth {
         feature = "auth-issuer-canister-sig-create"
     ))]
     pub use crate::__internal::core::api::auth::SignatureSibling;
+    #[cfg(feature = "auth-portable-issuer")]
+    pub use crate::__internal::core::api::auth::portable_issuer;
 }
 
 /// Local and receipt-backed reservation helpers.

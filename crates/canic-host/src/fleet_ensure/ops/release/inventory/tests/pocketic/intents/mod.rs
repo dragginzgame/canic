@@ -5,7 +5,7 @@ use crate::fleet_ensure::ops::release::{
     intents::{self, ReleaseIntentsError as Failure, ReleaseIntentsStage as Stage},
     observation::ReleaseObservationError,
 };
-use ic_platform::pocket_ic::PocketIc;
+use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
     pic: &PocketIc,
@@ -37,7 +37,11 @@ pub(super) fn assert_census(
     replace(root_page.clone());
     let collect =
         |review, registry| runtime.block_on(intents::collect_with_agent(agent, review, registry));
-    let balances = [pic.cycle_balance(coordinator), pic.cycle_balance(root)];
+    let balances = [
+        pic.cycle_balance(coordinator)
+            .expect("PocketIC cycle_balance"),
+        pic.cycle_balance(root).expect("PocketIC cycle_balance"),
+    ];
     let observed = collect(review, registry).unwrap();
     assert_eq!(
         observed.owners,
@@ -49,7 +53,11 @@ pub(super) fn assert_census(
     );
     assert_eq!(collect(review, registry).unwrap(), observed);
     assert_eq!(
-        [pic.cycle_balance(coordinator), pic.cycle_balance(root)],
+        [
+            pic.cycle_balance(coordinator)
+                .expect("PocketIC cycle_balance"),
+            pic.cycle_balance(root).expect("PocketIC cycle_balance")
+        ],
         balances
     );
     let mut wrong = review.clone();

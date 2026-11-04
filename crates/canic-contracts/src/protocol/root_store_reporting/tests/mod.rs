@@ -16,7 +16,7 @@ use crate::{
 fn store() -> Store {
     Store {
         binding: "binding".into(),
-        pid: ic_platform::Principal::from_slice(&[7]),
+        pid: ic_platform_types::Principal::from_slice(&[7]),
         created_at: 123,
         publication_slot: Some(WasmStorePublicationSlotResponse::Detached),
         gc: WasmStoreGcStatusResponse {

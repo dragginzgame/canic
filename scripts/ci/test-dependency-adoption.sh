@@ -24,17 +24,19 @@ printf '%s\n' "$*" >> "$TRACE"
 if [[ "${FAIL_STAGE:-}" == "$1" ]]; then exit 17; fi
 case "$1" in
     tree)
-        echo 'ic-memory v0.62.1'
-        echo 'ic-memory v0.62.1 (*)'
+        [[ "${MISSING:-}" == ic-storage ]] || echo 'ic-storage v0.65.1'
+        [[ "${MISSING:-}" == ic-storage ]] || echo 'ic-storage v0.65.1 (*)'
         echo 'ic-platform v0.16.0'
         echo 'ic-platform v0.17.0'
-        [[ "${MISSING:-}" == ic-platform-runtime ]] || echo 'ic-platform-runtime v0.17.1'
-        [[ "${MISSING:-}" == ic-platform-runtime-guard ]] || echo 'ic-platform-runtime-guard v0.17.1'
-        echo 'ic-storage v0.62.1'
+        [[ "${MISSING:-}" == ic-platform-runtime ]] || echo 'ic-platform-runtime v0.18.1'
+        [[ "${MISSING:-}" == ic-platform-runtime-guard ]] || echo 'ic-platform-runtime-guard v0.18.1'
+        [[ "${MISSING:-}" == ic-timers ]] || echo 'ic-timers v0.39.0'
+        [[ "${MISSING:-}" == ic-timers ]] || echo 'ic-timers v0.39.0 (*)'
         case "${DUPLICATE:-}" in
-            yes) echo 'ic-memory v0.61.0' ;;
+            yes|ic-storage) echo 'ic-storage v0.64.0' ;;
             ic-platform-runtime) echo 'ic-platform-runtime v0.16.0' ;;
             ic-platform-runtime-guard) echo 'ic-platform-runtime-guard v0.16.0' ;;
+            ic-timers) echo 'ic-timers v0.38.1' ;;
         esac
         ;;
 esac
@@ -76,9 +78,9 @@ for stage in metadata boundary tree clippy run; do
 done
 : > "$TRACE"
 if DUPLICATE=yes bash "$script" canic-host > "$fixture/duplicate.log" 2>&1; then exit 1; fi
-grep -q 'ic-memory v0.61.0' "$fixture/duplicate.log"
+grep -q 'ic-storage v0.64.0' "$fixture/duplicate.log"
 if grep -q '^clippy ' "$TRACE"; then exit 1; fi
-for owner in ic-platform-runtime ic-platform-runtime-guard; do
+for owner in ic-storage ic-platform-runtime ic-platform-runtime-guard ic-timers; do
     for condition in duplicate missing; do
         : > "$TRACE"
         if [[ "$condition" == duplicate ]]; then

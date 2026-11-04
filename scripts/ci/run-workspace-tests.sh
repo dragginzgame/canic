@@ -245,13 +245,13 @@ verify_embedded_root_before_suites() {
     [[ "$MODE" == full || "$MODE" == pocketic ]] || return 0
     local label="embedded allocation peer qualification"
     if [[ "$PLAN_ONLY" -eq 1 ]]; then
-        echo '==> plan: cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root'
+        echo '==> plan: cargo run --locked --offline -p canic-tests --example verify_embedded_root'
         record_summary "$label" "0s" "preflight" "PLAN"
         return
     fi
     local started_at="$SECONDS" status=0 elapsed
     echo "==> $label"
-    run_test_command 0 cargo run --locked --offline -p canic-testing-internal \
+    run_test_command 0 cargo run --locked --offline -p canic-tests \
         --example verify_embedded_root || status=$?
     elapsed="$(elapsed_seconds "$started_at")"
     if [[ "$status" -eq 0 ]]; then
@@ -529,7 +529,7 @@ run_ordinary_tests() {
         fi
     done
     run_test native-selected "internal feature-gated native tests" \
-        -p canic-testing-internal --features governed-pocketic-tests --lib -- "${native_selectors[@]}"
+        -p canic-tests --features governed-pocketic-tests --lib -- "${native_selectors[@]}"
     run_test native-selected "Host local-Fleet native tests" \
         -p canic-host --features local-fleet --lib local_fleet::tests::
     run_test parallel "workspace documentation tests" "${WORKSPACE_ARGS[@]}" --doc
@@ -611,8 +611,8 @@ run_pocketic_suites() {
     # Use the same selectors and feature graphs for preparation and execution.
     # The internal harness owns the recovery barrier and ordered worker groups.
     run_serial_pocketic_test \
-        "canic-testing-internal governed PocketIC suite" \
-        -p canic-testing-internal \
+        "canic-tests governed PocketIC suite" \
+        -p canic-tests \
         --features governed-pocketic-tests \
         --lib \
         pic::governed_suite::governed_internal_pocketic_suite \
@@ -695,7 +695,7 @@ elif [[ "$TARGETED_POCKETIC_TEST" == pic::* ]]; then
     # would fail the release run. This native check reuses the same test binary
     # and completes before any server or Wasm fixture work starts.
     run_test parallel "internal PocketIC inventory preflight" \
-        -p canic-testing-internal --features governed-pocketic-tests --lib \
+        -p canic-tests --features governed-pocketic-tests --lib \
         pic::governed_suite::governed_pocketic_inventory_preserves_recovery_prefix_and_journey_suffix \
         -- --exact
     if [[ ${#FAILED_LABELS[@]} -ne 0 ]]; then
@@ -726,8 +726,8 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
             --test "$TARGETED_POCKETIC_TEST"
     elif [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_internal_pocketic_suite" ]]; then
         run_serial_pocketic_test \
-            "targeted governed canic-testing-internal PocketIC suite" \
-            -p canic-testing-internal \
+            "targeted governed canic-tests PocketIC suite" \
+            -p canic-tests \
             --features governed-pocketic-tests \
             --lib \
             "$TARGETED_POCKETIC_TEST" \
@@ -745,8 +745,8 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
             --ignored
     elif [[ "$TARGETED_POCKETIC_TEST" == *::* ]]; then
         run_serial_pocketic_test \
-            "targeted canic-testing-internal PocketIC proof" \
-            -p canic-testing-internal \
+            "targeted canic-tests PocketIC proof" \
+            -p canic-tests \
             --features governed-pocketic-tests \
             --lib \
             "$TARGETED_POCKETIC_TEST" \

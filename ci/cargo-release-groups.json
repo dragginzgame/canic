@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "shared_metadata_files": [
+    "integrations/blob-service/consumer/Cargo.lock",
+    "integrations/blob-service/embedded-consumer/Cargo.lock"
+  ],
+  "groups": [
+    {
+      "name": "framework",
+      "primary": "canic",
+      "members": [
+        "canic",
+        "canic-contracts",
+        "canic-control-plane",
+        "canic-core",
+        "canic-macros",
+        "canic-tests",
+        "canister_app",
+        "canister_index_child",
+        "canister_index_hub",
+        "canister_minimal",
+        "canister_minimal_metrics",
+        "canister_sandbox_blank",
+        "canister_scale",
+        "canister_scale_hub",
+        "canister_test",
+        "canister_user_hub",
+        "canister_user_shard",
+        "cycles_ledger_stub",
+        "delegation_issuer_stub",
+        "delegation_root_stub",
+        "demo_fleet_app",
+        "demo_fleet_user_hub",
+        "demo_fleet_user_shard",
+        "icp_refill_stub",
+        "intent_authority",
+        "leaf_probe",
+        "local_authorization_probe",
+        "managed_lifecycle_probe",
+        "payload_limit_probe",
+        "root_funding_probe",
+        "root_probe",
+        "runtime_probe",
+        "scaling_probe",
+        "sharding_root_stub"
+      ],
+      "metadata_files": [
+        "releases/framework/release-validation.json"
+      ],
+      "version": "package",
+      "changelog": "releases/framework/CHANGELOG.md",
+      "dependencies": [
+        "canic",
+        "canic-contracts",
+        "canic-control-plane",
+        "canic-core",
+        "canic-macros",
+        "canic-tests",
+        "canister_app",
+        "canister_index_child",
+        "canister_index_hub",
+        "canister_minimal",
+        "canister_minimal_metrics",
+        "canister_sandbox_blank",
+        "canister_scale",
+        "canister_scale_hub",
+        "canister_test",
+        "canister_user_hub",
+        "canister_user_shard",
+        "cycles_ledger_stub",
+        "delegation_issuer_stub",
+        "delegation_root_stub",
+        "demo_fleet_app",
+        "demo_fleet_user_hub",
+        "demo_fleet_user_shard",
+        "icp_refill_stub",
+        "intent_authority",
+        "leaf_probe",
+        "local_authorization_probe",
+        "managed_lifecycle_probe",
+        "payload_limit_probe",
+        "root_funding_probe",
+        "root_probe",
+        "runtime_probe",
+        "scaling_probe",
+        "sharding_root_stub"
+      ]
+    },
+    {
+      "name": "host",
+      "primary": "canic-cli",
+      "members": [
+        "canic-host",
+        "canic-cli"
+      ],
+      "metadata_files": [
+        "scripts/dev/install_dev.sh",
+        "releases/host/release-validation.json"
+      ],
+      "version": "package",
+      "changelog": "releases/host/CHANGELOG.md",
+      "dependencies": [
+        "canic-host",
+        "canic-cli"
+      ]
+    },
+    {
+      "name": "icydb",
+      "primary": "canic-icydb",
+      "members": [
+        "canic-icydb"
+      ],
+      "metadata_files": [
+        "releases/icydb/release-validation.json"
+      ],
+      "version": "package",
+      "changelog": "releases/icydb/CHANGELOG.md",
+      "dependencies": [
+        "canic-icydb"
+      ]
+    },
+    {
+      "name": "blob-service",
+      "primary": "canic-blob-service",
+      "members": [
+        "canic-blob-service"
+      ],
+      "metadata_files": [
+        "releases/blob-service/release-validation.json"
+      ],
+      "version": "package",
+      "changelog": "releases/blob-service/CHANGELOG.md",
+      "dependencies": [
+        "canic-blob-service"
+      ]
+    }
+  ]
+}

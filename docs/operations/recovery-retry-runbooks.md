@@ -244,7 +244,7 @@ Each runbook uses the same fields:
 | Unsafe operator action | Re-publishing with a fresh operation ID to force the desired state without checking current durable binding. |
 | Diagnostic, log, or public error to check | Durable-publish replay policy entries, exact Store attestation state, and prepared-root Store verification tests. |
 | Retry/idempotency rule | If durable state already reflects the intended publication, treat it as converged. If receipt state is recovery-required, reconcile before retry. |
-| Relevant validation command | `cargo test --locked -p canic-testing-internal prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture` |
+| Relevant validation command | `cargo test --locked -p canic-tests prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture` |
 | Escalation criteria | Escalate if durable state and replay receipt state disagree and no existing test explains the case. |
 
 ### Same-Release Restart Or Upgrade Near Replay-Sensitive Operation
@@ -309,10 +309,10 @@ cargo test --locked -p canic-cli cycles::convert --lib -- --nocapture
 cargo test --locked -p canic-core workflow::ic::icp_refill --lib -- --nocapture
 cargo test --locked -p canic-tests --test timer_authority -- --nocapture
 cargo test --locked -p canic-tests --test lifecycle_boundary -- --test-threads=1 --nocapture
-cargo test --locked -p canic-testing-internal prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture
+cargo test --locked -p canic-tests prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture
 ```
 
-The `canic-tests` and `canic-testing-internal` gates are PocketIC-backed and may
+The `canic-tests` and `canic-tests` gates are PocketIC-backed and may
 be assigned to CI or an RC validation environment when too expensive for an
 ordinary docs slice.
 

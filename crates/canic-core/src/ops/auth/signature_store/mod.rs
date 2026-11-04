@@ -149,6 +149,7 @@ pub(super) fn map_error(error: SignatureStoreError) -> AuthSignatureError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ic_auth::signature_store::SignatureInputs;
     use ic_platform::certification::{Certificate, labeled, leaf};
 
     fn certificate(canister: Principal, root: [u8; 32]) -> Vec<u8> {

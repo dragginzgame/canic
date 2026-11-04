@@ -136,6 +136,14 @@ Child top-up instead uses the component's `topup` threshold and amount to reques
 parent funding. See the [cycle workflow](../../../crates/canic-core/src/workflow/runtime/cycles/mod.rs)
 and [capability derivation](../../../crates/canic-core/src/role_contract/policy.rs).
 
+If external credit relieves Root demand before grant acceptance, Root accepts no
+attached cycles. Coordinator retains a distinct no-grant receipt, and the existing
+timer resumes balance observations so renewed demand can request funding. Explicit
+temporary availability refusals retain the same reserved operation and retry with
+backoff, including after a lost acceptance reply; invalid authority and invariant
+refusals remain terminal. Neither expected refusal enables automatic ICP fallback
+or consumes an automatic grant allowance.
+
 One retained `canic/async_job_recovery/watchdog` is pre-armed before it
 dispatches fallible work and advances every 30 seconds independently of the
 worker continuation. The four recovery-critical owners share a private bounded

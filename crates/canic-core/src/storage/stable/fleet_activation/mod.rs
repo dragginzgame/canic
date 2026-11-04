@@ -32,10 +32,10 @@ std::thread_local! {
         StableCell<Option<FleetActivationRecord>, DefaultMemoryImpl>,
     > = RefCell::new({
         let allocation = crate::memory::open(crate::memory::keys::FLEET_ACTIVATION_V1);
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableCell::create(allocation, None)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableCell::create(allocation, None).expect("create admitted stable cell")
         } else {
-            StableCell::load(allocation).expect("retained stable cell")
+            StableCell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -496,16 +496,19 @@ impl crate::cdk::structures::storable::Storable for FleetActivationRecord {
             max_size: MAX_FLEET_ACTIVATION_RECORD_BYTES,
             is_fixed_size: false,
         };
-    fn to_bytes(&self) -> std::borrow::Cow<'_, [u8]> {
-        std::borrow::Cow::Borrowed(&self.bytes)
+    fn to_bytes(&self) -> Result<std::borrow::Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(std::borrow::Cow::Borrowed(&self.bytes))
     }
-    fn into_bytes(self) -> Vec<u8> {
-        self.bytes
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok(self.bytes)
     }
-    fn from_bytes(bytes: std::borrow::Cow<'_, [u8]>) -> Self {
-        Self {
+    fn from_bytes(
+        bytes: std::borrow::Cow<'_, [u8]>,
+    ) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self {
             bytes: bytes.into_owned(),
-        }
+        })
     }
 }
 
@@ -539,7 +542,7 @@ impl FleetActivation {
             if store.get().is_some() {
                 return false;
             }
-            store.set(Some(record));
+            store.set(Some(record)).expect("Storage operation failed");
             true
         })
     }
@@ -548,14 +551,14 @@ impl FleetActivation {
             if store.get().is_none() {
                 return false;
             }
-            store.set(Some(record));
+            store.set(Some(record)).expect("Storage operation failed");
             true
         })
     }
     #[cfg(test)]
     pub(crate) fn import(data: FleetActivationData) {
         FLEET_ACTIVATION.with_borrow_mut(|store| {
-            store.set(data.record);
+            store.set(data.record).expect("Storage operation failed");
         });
     }
 }

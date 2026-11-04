@@ -1,7 +1,7 @@
 //! Native public status keeps original authority identities and proof deadlines.
 use super::*;
 use crate::{dto::auth as stored, protocol::issuer_proof::status as wire};
-use ic_platform::principal::ExternalPrincipal;
+use ic_platform_types::principal::ExternalPrincipal;
 
 #[test]
 fn status_frames_preserve_all_states_and_optional_evidence() {

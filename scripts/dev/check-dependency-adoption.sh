@@ -37,7 +37,7 @@ if [[ "$mode" != fixtures-only ]]; then
             --edges normal --prefix none --format '{p}')"
         # Platform's facade can also supply runtime-free protocol identities.
         # Runtime owns execution; its exact guard must remain unique as well.
-        for owner in ic-memory ic-platform-runtime ic-platform-runtime-guard ic-storage; do
+        for owner in ic-platform-runtime ic-platform-runtime-guard ic-storage ic-timers; do
             identities="$(printf '%s\n' "$tree" | awk -v owner="$owner" \
                 '$1 == owner { sub(/ \(\*\)$/, ""); print }' | LC_ALL=C sort -u)"
             count="$(printf '%s\n' "$identities" | awk 'NF { count++ } END { print count+0 }')"
@@ -64,5 +64,5 @@ for manifest in "${manifests[@]:1}"; do
         --all-targets --all-features -- -D warnings
 done
 echo '==> embedded allocation peer qualification (read-only)'
-cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root
+cargo run --locked --offline -p canic-tests --example verify_embedded_root
 echo 'Dependency adoption checks passed; managed Wasm/install proofs and release validation remain separate.'

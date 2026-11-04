@@ -247,6 +247,8 @@ impl ComponentRegistryOps {
         }
 
         let record = RootComponentSubtreeRemovalRecord {
+            retry: crate::storage::stable::continuation_retry::ContinuationRetryRecord::default(),
+            continuation_requested: false,
             operation_id,
             component,
             target,

@@ -11,17 +11,17 @@ use crate::{
 use std::cell::RefCell;
 
 /// Exact maximum encoded bytes for the complete async-job recovery record.
-pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 210;
+pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 285;
 
 std::thread_local! {
     static ASYNC_JOB_RECOVERY: RefCell<
         Cell<AsyncJobRecoveryRecord, DefaultMemoryImpl>,
     > = RefCell::new({
         let allocation = crate::memory::open(crate::memory::keys::ASYNC_JOB_RECOVERY_V1);
-        if ic_memory::Memory::size(&allocation) == 0 {
-            Cell::create(allocation, AsyncJobRecoveryRecord::default())
+        if ic_storage::Memory::size(&allocation) == 0 {
+            Cell::create(allocation, AsyncJobRecoveryRecord::default()).expect("create admitted stable cell")
         } else {
-            Cell::load(allocation).expect("retained stable cell")
+            Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -64,14 +64,24 @@ pub struct FixtureImportRetryRecord {
     pub not_before_ns: u64,
 }
 
+/// Retry custody, keyed to exact installed authority and last committed progress.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FixtureImportRecoveryRecord {
+    pub assignment_hash: [u8; 32],
+    pub next_chunk: Option<u32>,
+    pub unfinished_attempts: u8,
+}
+
 /// Complete fixed-shape recovery state for recovery-critical domain jobs.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AsyncJobRecoveryRecord {
     pub auth_renewal: AsyncAttemptFenceRecord,
+    pub portable_enrollment: AsyncAttemptFenceRecord,
     pub canister_pool_maintenance: AsyncAttemptFenceRecord,
     pub cycle_topup: ReplaySafeAsyncAttemptFenceRecord,
     pub fixture_import: AsyncAttemptFenceRecord,
     pub fixture_import_retry: FixtureImportRetryRecord,
+    pub fixture_import_recovery: Option<FixtureImportRecoveryRecord>,
     pub fixture_import_failure: Option<crate::domain::fixture_import::FixtureImportFailure>,
     pub placement_receipt_acknowledgement: AsyncAttemptFenceRecord,
 }
@@ -106,7 +116,8 @@ impl AsyncJobRecoveryStore {
     }
 
     pub(crate) fn replace(record: AsyncJobRecoveryRecord) {
-        ASYNC_JOB_RECOVERY.with_borrow_mut(|cell| cell.set(record));
+        ASYNC_JOB_RECOVERY
+            .with_borrow_mut(|cell| cell.set(record).expect("Storage operation failed"));
     }
 
     #[cfg(test)]
@@ -139,6 +150,7 @@ mod tests {
         };
         let record = AsyncJobRecoveryRecord {
             auth_renewal: attempt.clone(),
+            portable_enrollment: attempt.clone(),
             canister_pool_maintenance: attempt.clone(),
             cycle_topup: ReplaySafeAsyncAttemptFenceRecord {
                 last_attempt_generation: u64::MAX,
@@ -156,20 +168,29 @@ mod tests {
                 not_before_ns: u64::MAX,
             },
             fixture_import_failure: Some(
-                crate::domain::fixture_import::FixtureImportFailure::SourceRejected {
-                    code: u16::MAX,
+                crate::domain::fixture_import::FixtureImportFailure::Interrupted {
+                    next_chunk: Some(u32::MAX),
+                    attempts: u8::MAX,
                 },
             ),
+            fixture_import_recovery: Some(FixtureImportRecoveryRecord {
+                assignment_hash: [u8::MAX; 32],
+                next_chunk: Some(u32::MAX),
+                unfinished_attempts: u8::MAX,
+            }),
             placement_receipt_acknowledgement: attempt,
         };
 
-        let bytes = record.to_bytes();
+        let bytes = record.to_bytes().expect("encode stable fixture");
         assert_eq!(
             bytes.len(),
             MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES as usize,
             "the stable bound must equal the measured worst-case encoding"
         );
-        assert_eq!(AsyncJobRecoveryRecord::from_bytes(bytes), record);
+        assert_eq!(
+            AsyncJobRecoveryRecord::from_bytes(bytes).expect("decode stable fixture"),
+            record
+        );
     }
 
     #[test]

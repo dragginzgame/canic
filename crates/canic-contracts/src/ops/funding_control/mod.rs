@@ -259,6 +259,17 @@ impl From<stored::FleetRootFundingAcceptanceReceipt> for wire::AcceptanceReceipt
         }
     }
 }
+
+impl From<stored::FleetRootFundingAcceptanceOutcome> for wire::AcceptanceOutcome {
+    fn from(value: stored::FleetRootFundingAcceptanceOutcome) -> Self {
+        match value {
+            stored::FleetRootFundingAcceptanceOutcome::Accepted(receipt) => {
+                Self::Accepted(Box::new((*receipt).into()))
+            }
+            stored::FleetRootFundingAcceptanceOutcome::BalanceRelieved => Self::BalanceRelieved,
+        }
+    }
+}
 impl From<wire::AcceptanceReceipt> for stored::FleetRootFundingAcceptanceReceipt {
     fn from(value: wire::AcceptanceReceipt) -> Self {
         Self {

@@ -4,7 +4,8 @@
 use canic::{
     Error,
     dto::{
-        metrics::{MetricEntry, MetricValue, MetricsKind},
+        metric_page::MetricEntry,
+        metrics::{MetricValue, MetricsKind},
         page::PageRequest,
         public_status::{PublicHistoryRequest, PublicMetricFamily, PublicSnapshotState},
         role::MetricsStatusRequest,
@@ -15,7 +16,7 @@ use canic::{
     },
     protocol,
 };
-use canic_testing_internal::pic::{
+use canic_tests::pic::{
     CanicPicExt, install_lifecycle_boundary_fixture, runtime_probe as timer_probe, upgrade_args,
 };
 use ic_host_artifacts::wasm::{ExportKind, InspectionLimits};
@@ -23,8 +24,8 @@ use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 use std::time::Duration;
 use {
-    ic_platform::pocket_ic::{ErrorCode, PocketIc},
     ic_testkit::pic::{CanisterInstallExt, RetryPolicy},
+    ic_testkit::pocket_ic::{ErrorCode, PocketIc},
 };
 
 const READY_TICK_LIMIT: usize = 120;
@@ -69,7 +70,10 @@ fn public_snapshots_preserve_observer_authority()
         query(published, PublicMetricFamily::Application).state,
         PublicSnapshotState::Unavailable
     );
-    fixture.pic.advance_time(Duration::from_secs(11));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(11))
+        .expect("PocketIC advance_time");
     let scheduled: Result<(), Error> = ic_testkit::pic::update_wire(
         &fixture.pic,
         published,
@@ -80,7 +84,7 @@ fn public_snapshots_preserve_observer_authority()
     .unwrap();
     scheduled.unwrap();
     for _ in 0..20 {
-        fixture.pic.tick();
+        fixture.pic.tick().expect("PocketIC tick");
     }
     let sampled: Result<(), Error> = ic_testkit::pic::update_wire(
         &fixture.pic,
@@ -136,8 +140,11 @@ fn public_snapshots_preserve_observer_authority()
         matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
     );
 
-    fixture.pic.advance_time(Duration::from_secs(361));
-    fixture.pic.tick();
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(361))
+        .expect("PocketIC advance_time");
+    fixture.pic.tick().expect("PocketIC tick");
     let stale = query(published, PublicMetricFamily::Application);
     assert_eq!(stale.state, PublicSnapshotState::Stale);
     assert_eq!(stale.sampled_at_ns, snapshot.sampled_at_ns);
@@ -253,7 +260,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
     .unwrap();
     reply.unwrap();
     for _ in 0..10 {
-        pic.tick();
+        pic.tick().expect("PocketIC tick");
     }
     let interrupted = sample();
     assert_eq!(interrupted.kind, before.kind);
@@ -271,7 +278,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
         .unwrap();
         reply.unwrap();
         for _ in 0..10 {
-            pic.tick();
+            pic.tick().expect("PocketIC tick");
         }
     }
     let replaced = sample();
@@ -307,11 +314,27 @@ struct PublicSamplingProbe {
 fn public_memory_sampling_retains_bounded_history_at_the_source_ceiling() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister = fixture.install_runtime_probe_canister();
+    let allocations: Result<canic::dto::memory::MemoryAllocationsResponse, Error> =
+        ic_testkit::pic::query_wire(
+            &fixture.pic,
+            canister,
+            Principal::anonymous(),
+            timer_probe::MEMORY,
+            &(),
+        )
+        .expect("query committed Storage directory");
+    let allocations = allocations.expect("admitted Storage directory");
+    assert!(!allocations.memories.is_empty());
+    let allocation_count = allocations.summary.allocations;
+    assert_eq!(allocation_count, allocations.memories.len() as u64);
     let mut maximum = 0;
     let mut first_sample = None;
     // Cross the complete retained window and exercise ring replacement.
     for period in 0..300 {
-        fixture.pic.advance_time(Duration::from_secs(301));
+        fixture
+            .pic
+            .advance_time(Duration::from_secs(301))
+            .expect("PocketIC advance_time");
         let response: Result<PublicSamplingProbe, Error> = ic_testkit::pic::update_wire(
             &fixture.pic,
             canister,
@@ -327,7 +350,7 @@ fn public_memory_sampling_retains_bounded_history_at_the_source_ceiling() {
         response.sample.unwrap();
         response.cycle_tracking.unwrap();
         assert!(response.allocation_unchanged);
-        assert_eq!(response.allocation_ids_measured, 255);
+        assert_eq!(response.allocation_ids_measured, allocation_count);
         maximum = maximum.max(response.sample_instructions);
         let history: canic::dto::public_status::PublicHistorySnapshot =
             ic_testkit::pic::query_wire(
@@ -406,7 +429,10 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     assert_public_process_projection(&operations, &performance);
     assert!(performance.truncated);
     assert_eq!(performance.metrics.entries.len(), 256);
-    fixture.pic.advance_time(Duration::from_secs(361));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(361))
+        .expect("PocketIC advance_time");
     let rejected = sample(0, true);
     let rejected = rejected.expect("authorized fixture sampling");
     assert!(
@@ -620,7 +646,8 @@ fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
 
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
     fixture
         .pic
         .retry_install_code(install_retry_policy(), || {
@@ -690,7 +717,7 @@ fn assert_adapter_startup_progress(pic: &PocketIc, canister: Principal) {
             assert_eq!(timer.next_due_at_ns, None);
             return;
         }
-        pic.tick();
+        pic.tick().expect("PocketIC tick");
     }
     panic!("the composed adapter's native startup callback did not complete");
 }
@@ -715,8 +742,11 @@ fn watchdog_traps_preserve_the_successor_and_explicit_cancellation() {
         }
         // Synchronous work traps roll back their observations. The next
         // committed cadence scheduler records the unacknowledged attempt.
-        fixture.pic.advance_time(Duration::from_secs(1));
-        fixture.pic.tick();
+        fixture
+            .pic
+            .advance_time(Duration::from_secs(1))
+            .expect("PocketIC advance_time");
+        fixture.pic.tick().expect("PocketIC tick");
     }
     let trapped = watchdog_status(&fixture.pic, canister);
     assert_eq!(
@@ -729,7 +759,10 @@ fn watchdog_traps_preserve_the_successor_and_explicit_cancellation() {
     let cancelled = watchdog_status(&fixture.pic, canister);
     assert_eq!(cancelled.condition, TimerProcessCondition::Disabled);
     assert_eq!(cancelled.next_due_at_ns, None);
-    fixture.pic.advance_time(Duration::from_secs(61));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(61))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 12);
     assert_eq!(
         watchdog_status(&fixture.pic, canister).successes_since_runtime_start,
@@ -748,7 +781,10 @@ fn watchdog_traps_preserve_the_successor_and_explicit_cancellation() {
     assert_eq!(completed.condition, TimerProcessCondition::Idle);
     assert_eq!(completed.next_due_at_ns, None);
     assert!(completed.schedules_since_runtime_start > trapped.schedules_since_runtime_start);
-    fixture.pic.advance_time(Duration::from_secs(61));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(61))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 12);
     assert_eq!(
         watchdog_status(&fixture.pic, canister).successes_since_runtime_start,
@@ -821,23 +857,36 @@ fn assert_component_binding(pic: &PocketIc, canister_id: Principal, stranger: Pr
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep the installed fixture setup and ordered effect assertions together"
+)]
 fn application_timers_cancel_and_recur_only_after_completion() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();
     wait_for_fixture_ready(&fixture.pic, canister_id, "install");
 
-    fixture.pic.advance_time(Duration::from_secs(6));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(6))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 4);
     let first = counts(&fixture.pic, canister_id);
     assert_eq!(first.0, 1, "one-shot should execute exactly once");
     assert_eq!(first.2, 0, "cancelled one-shot must not execute");
 
-    fixture.pic.advance_time(Duration::from_secs(10));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(10))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 4);
     let second = counts(&fixture.pic, canister_id);
     assert_eq!(second.1, first.1.saturating_add(1));
 
-    fixture.pic.advance_time(Duration::from_secs(30));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(30))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 4);
     let third = counts(&fixture.pic, canister_id);
     assert_eq!(
@@ -1020,13 +1069,13 @@ fn malformed_timer_frames_cannot_register_work() {
         truncated,
         oversized,
     ] {
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            fixture
-                .pic
-                .update_call(canister, Principal::anonymous(), spec.method, frame)
-        })
-        .expect("malformed timer ingress transport");
-        assert!(reply.is_err());
+        let reply = fixture
+            .pic
+            .update_call(canister, Principal::anonymous(), spec.method, frame);
+        assert!(matches!(
+            reply,
+            Err(ic_testkit::pocket_ic::ClientError::Canister(_))
+        ));
         assert_eq!(identities(), before);
     }
 }
@@ -1036,13 +1085,24 @@ fn assert_private_dispatch_admission(pic: &PocketIc, canister: Principal, strang
     assert_adapter_startup_progress(pic, canister);
     let before = runtime_status(pic, canister).timers;
     for caller in [Principal::anonymous(), stranger] {
+        let cycles_before = pic.cycle_balance(canister).expect("read cycle balance");
         let error = pic
             .update_call(canister, caller, DISPATCH, 0_u64.to_le_bytes().to_vec())
             .expect_err("controller and non-controller ingress must not claim native work");
-        assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
+        let ic_testkit::pocket_ic::ClientError::Canister(error) = error else {
+            panic!("expected a canister rejection");
+        };
+        assert_eq!(error.error_code, ErrorCode::CanisterRejectedMessage);
+        assert_eq!(
+            pic.cycle_balance(canister).expect("read cycle balance"),
+            cycles_before
+        );
         let error = pic
             .query_call(canister, caller, DISPATCH, 0_u64.to_le_bytes().to_vec())
             .expect_err("the private dispatch is not a query surface");
+        let ic_testkit::pocket_ic::ClientError::Canister(error) = error else {
+            panic!("expected a canister rejection");
+        };
         assert_eq!(error.error_code, ErrorCode::CanisterMethodNotFound);
     }
     assert_eq!(runtime_status(pic, canister).timers, before);
@@ -1053,6 +1113,7 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();
     wait_for_fixture_ready(&fixture.pic, canister_id, "install");
+    wait_for_lifecycle_timers_to_settle(&fixture.pic, canister_id);
 
     let before_invalid = runtime_status(&fixture.pic, canister_id).timers.len();
     let invalid: Result<bool, Error> = ic_testkit::pic::update_wire(
@@ -1091,6 +1152,109 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
 }
 
 #[test]
+fn timer_suspension_refusal_leaves_local_and_cost_reservations_unchanged() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let blocked = fixture.install_runtime_probe_canister();
+    let control = fixture.install_runtime_probe_canister();
+    let pic = &fixture.pic;
+    for canister in [blocked, control] {
+        wait_for_fixture_ready(pic, canister, "reservation atomicity fixture");
+        wait_for_lifecycle_timers_to_settle(pic, canister);
+    }
+    let fill: Result<(u64, bool), Error> = ic_testkit::pic::update_wire(
+        pic,
+        blocked,
+        Principal::anonymous(),
+        timer_probe::FILL_REGISTRY,
+        &(),
+    )
+    .unwrap();
+    assert!(fill.unwrap().1);
+    let set_suspension = |sealed| {
+        let result: Result<(), Error> = ic_testkit::pic::update_wire(
+            pic,
+            blocked,
+            Principal::anonymous(),
+            timer_probe::SET_INTENT_SUSPENSION,
+            &sealed,
+        )
+        .unwrap();
+        result.unwrap();
+    };
+    set_suspension(true);
+    let reserve_cost = |canister| -> Result<(u64, u64), Error> {
+        ic_testkit::pic::update_wire(
+            pic,
+            canister,
+            Principal::anonymous(),
+            timer_probe::RESERVE_COST,
+            &(),
+        )
+        .unwrap()
+    };
+    for _ in 0..3 {
+        assert_eq!(
+            begin_intent(pic, blocked, 46, Some(600))
+                .unwrap_err()
+                .code(),
+            canic::diagnostics::codes::STATE_INVALID.raw_code()
+        );
+        assert_eq!(
+            reserve_cost(blocked).unwrap_err().code(),
+            canic::diagnostics::codes::STATE_INVALID.raw_code()
+        );
+    }
+    assert_eq!(
+        begin_intent(pic, blocked, 46, Some(u64::MAX))
+            .unwrap_err()
+            .code(),
+        canic::diagnostics::codes::TIME_CAPACITY.raw_code(),
+    );
+    // TTL-free work needs no scheduler admission. Matching the untouched control
+    // also proves the refused paths did not consume IDs or reserve this resource.
+    assert_eq!(
+        begin_intent(pic, blocked, 46, None).unwrap(),
+        begin_intent(pic, control, 46, None).unwrap()
+    );
+    set_suspension(false);
+    // The existing cleanup declaration retains custody even at full capacity.
+    assert_eq!(
+        runtime_status(pic, blocked).timers.len(),
+        ic_timers::MAX_TIMER_REGISTRATIONS
+    );
+    assert_eq!(
+        reserve_cost(blocked).unwrap(),
+        reserve_cost(control).unwrap()
+    );
+    assert_eq!(
+        reserve_cost(blocked).unwrap_err().code(),
+        canic::diagnostics::codes::CAPACITY_LIMIT.raw_code(),
+    );
+    assert_eq!(
+        begin_intent(pic, blocked, 47, Some(600)).unwrap(),
+        begin_intent(pic, control, 47, Some(600)).unwrap()
+    );
+    let status = runtime_status(pic, blocked);
+    assert_eq!(
+        status
+            .timers
+            .iter()
+            .filter(|timer| timer.owner == "canic" && timer.subsystem == "intent_cleanup")
+            .count(),
+        1
+    );
+    let clear: Result<(), Error> = ic_testkit::pic::update_wire(
+        pic,
+        blocked,
+        Principal::anonymous(),
+        timer_probe::CLEAR_CAPACITY,
+        &(),
+    )
+    .unwrap();
+    clear.unwrap();
+}
+
+#[test]
 fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();
@@ -1116,7 +1280,8 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
 
     fixture
         .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN)
+        .expect("PocketIC wait_out_install_code_rate_limit");
     fixture
         .pic
         .retry_install_code(install_retry_policy(), || {
@@ -1135,11 +1300,17 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
     assert_eq!(rebuilt.condition, TimerProcessCondition::Active);
     assert_eq!(rebuilt.scheduling_mode, TimerSchedulingMode::Deadline);
 
-    fixture.pic.advance_time(Duration::from_secs(302));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(302))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     begin_intent(&fixture.pic, canister_id, 1, Some(600))
         .expect("expired reservation should release capacity after lifecycle rebuild");
-    fixture.pic.advance_time(Duration::from_secs(602));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(602))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     let idle = intent_cleanup_status(&fixture.pic, canister_id);
     assert_eq!(idle.registration, TimerRegistrationStatus::Unregistered);
@@ -1147,7 +1318,10 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
 
     begin_intent(&fixture.pic, canister_id, 2, None).expect("TTL-free reservation should succeed");
     let idle_timer_metrics = timer_metrics(&fixture.pic, canister_id);
-    fixture.pic.advance_time(Duration::from_hours(24));
+    fixture
+        .pic
+        .advance_time(Duration::from_hours(24))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     assert!(
         begin_intent(&fixture.pic, canister_id, 2, None).is_err(),
@@ -1220,7 +1394,10 @@ fn terminal_intents_clear_cleanup_demand_without_disabling_the_retained_owner() 
     }
     begin_intent(&fixture.pic, canister, 12, None).unwrap();
     let idle = intent_cleanup_status(&fixture.pic, canister);
-    fixture.pic.advance_time(Duration::from_secs(601));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(601))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 12);
     let later = intent_cleanup_status(&fixture.pic, canister);
     assert!(later.enabled);
@@ -1259,6 +1436,21 @@ fn intent_cleanup_status(
         .into_iter()
         .find(|timer| timer.subsystem == "intent_cleanup" && timer.name == "run")
         .expect("intent cleanup runtime status")
+}
+
+fn wait_for_lifecycle_timers_to_settle(pic: &PocketIc, canister: Principal) {
+    for _ in 0..READY_TICK_LIMIT {
+        pic.tick()
+            .expect("finish deferred user lifecycle callbacks");
+        if runtime_status(pic, canister)
+            .timers
+            .iter()
+            .all(|timer| !timer.subsystem.starts_with("lifecycle-"))
+        {
+            return;
+        }
+    }
+    panic!("fixture lifecycle callbacks must settle before filling timer capacity");
 }
 
 fn begin_intent(
@@ -1331,9 +1523,6 @@ fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     response
         .expect("controller metrics application result")
         .entries
-        .into_iter()
-        .map(Into::into)
-        .collect()
 }
 
 fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
@@ -1366,7 +1555,7 @@ fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
 
 fn tick(pic: &PocketIc, count: usize) {
     for _ in 0..count {
-        pic.tick();
+        pic.tick().expect("PocketIC tick");
     }
 }
 
@@ -1411,7 +1600,10 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     configure_public_sampler(&fixture.pic, canister, false);
     let application = || cached_application_metrics(&fixture.pic, canister, fixture.root);
     let before = history();
-    fixture.pic.advance_time(Duration::from_secs(301));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(301))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     let first = history();
     assert_eq!(first.state, PublicSnapshotState::Fresh);
@@ -1425,7 +1617,10 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     assert_eq!(first.points.entries, repeated.points.entries);
     assert_eq!(first.reserved_bytes, repeated.reserved_bytes);
     // Several missed slots produce one new observation, without a catch-up backlog.
-    fixture.pic.advance_time(Duration::from_mins(25));
+    fixture
+        .pic
+        .advance_time(Duration::from_mins(25))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     let delayed = history();
     assert_eq!(delayed.points.entries.len(), first.points.entries.len() + 1);
@@ -1448,7 +1643,10 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     )
     .unwrap()
     .unwrap();
-    fixture.pic.advance_time(Duration::from_secs(601));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(601))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     let suspended = history();
     assert_eq!(suspended.points.entries, recovered_history.points.entries);
@@ -1470,7 +1668,10 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     assert_eq!(restored.state, PublicSnapshotState::Unavailable);
     assert!(restored.points.entries.is_empty());
     wait_for_fixture_ready(&fixture.pic, canister, "post_upgrade");
-    fixture.pic.advance_time(Duration::from_secs(301));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(301))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     let resumed = history();
     assert_eq!(resumed.points.entries.len(), 1);
@@ -1479,14 +1680,17 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
 }
 
 fn assert_sampling_recovers_after_rejection(
-    fixture: &canic_testing_internal::pic::LifecycleBoundaryFixture,
+    fixture: &canic_tests::pic::LifecycleBoundaryFixture,
     canister: Principal,
     supplied: &canic::dto::public_status::PublicMetricsSnapshot,
     delayed: &canic::dto::public_status::PublicHistorySnapshot,
 ) -> canic::dto::public_status::PublicHistorySnapshot {
     use canic::dto::public_status::PublicSnapshotState;
     // Repeated provider failures retain the prior sample without stopping other families.
-    fixture.pic.advance_time(Duration::from_secs(301));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(301))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     let isolated = cached_cycle_history(&fixture.pic, canister, fixture.root);
     assert_eq!(isolated.state, PublicSnapshotState::Fresh);
@@ -1499,7 +1703,10 @@ fn assert_sampling_recovers_after_rejection(
         supplied.sampled_at_ns
     );
     configure_public_sampler(&fixture.pic, canister, false);
-    fixture.pic.advance_time(Duration::from_secs(301));
+    fixture
+        .pic
+        .advance_time(Duration::from_secs(301))
+        .expect("PocketIC advance_time");
     tick(&fixture.pic, 8);
     let recovered = cached_application_metrics(&fixture.pic, canister, fixture.root);
     assert_eq!(recovered.state, PublicSnapshotState::Fresh);
@@ -1572,7 +1779,8 @@ fn cached_application_metrics(
 }
 
 fn assert_periodic_sampling_cost(pic: &PocketIc, canister: Principal) {
-    pic.advance_time(Duration::from_secs(301));
+    pic.advance_time(Duration::from_secs(301))
+        .expect("PocketIC advance_time");
     tick(pic, 8);
     let status = runtime_status(pic, canister);
     let sampler = status
@@ -1714,21 +1922,13 @@ fn assert_public_process_projection(
             .value
     };
     assert_eq!(allocation("state"), 1);
-    assert_eq!(allocation("ids_measured"), allocation("ids_total"));
-    assert_eq!(allocation("payload_available"), 0);
+    assert!(allocation("allocations") > 0);
     assert_eq!(
         allocation("physical_extent"),
-        allocation("manager_metadata")
-            + allocation("allocated_bucket_bytes")
-            + allocation("unmanaged")
-    );
-    assert_eq!(
-        allocation("allocated_bucket_bytes"),
-        allocation("virtual_extent") + allocation("bucket_slack")
-    );
-    assert_eq!(
-        allocation("allocated_bucket_bytes"),
-        allocation("known_binding") + allocation("unknown_binding")
+        allocation("data_capacity")
+            + allocation("directory_capacity")
+            + allocation("unassigned_capacity")
+            + 65_536
     );
 }
 
@@ -1748,7 +1948,10 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
         let canister = fixture.install_runtime_probe_canister();
         let mut maximum = 0;
         for period in 0..300 {
-            fixture.pic.advance_time(Duration::from_secs(301));
+            fixture
+                .pic
+                .advance_time(Duration::from_secs(301))
+                .expect("PocketIC advance_time");
             let sampled: Result<u64, Error> = ic_testkit::pic::update_wire(
                 &fixture.pic,
                 canister,
@@ -1790,7 +1993,10 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
         // initialisation; the final jump exercises complete expiry and reuse.
         let sparse = fixture.install_runtime_probe_canister();
         for (gap, expected_points) in [(0_u64, 1), (200, 2), (0, 2), (1000, 1)] {
-            fixture.pic.advance_time(Duration::from_secs(gap * 300));
+            fixture
+                .pic
+                .advance_time(Duration::from_secs(gap * 300))
+                .expect("PocketIC advance_time");
             let sampled: Result<u64, Error> = ic_testkit::pic::update_wire(
                 &fixture.pic,
                 sparse,

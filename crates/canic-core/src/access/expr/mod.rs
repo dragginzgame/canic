@@ -691,11 +691,12 @@ mod tests {
             )
             .unwrap();
         }
-        let page = crate::dto::page::PageRequest {
+        let page = crate::dto::log::LogPageRequest {
             limit: 10,
-            offset: 0,
+            before: None,
         };
         let retained = LogOps::page_filtered(None, None, None, page)
+            .unwrap()
             .entries
             .into_iter()
             .map(|entry| entry.message)
@@ -720,6 +721,7 @@ mod tests {
         }
         assert_eq!(
             LogOps::page_filtered(None, None, None, page)
+                .unwrap()
                 .entries
                 .into_iter()
                 .map(|entry| entry.message)
@@ -743,7 +745,7 @@ mod tests {
             1_024,
         )
         .unwrap();
-        let logs = LogOps::page_filtered(None, None, None, page);
+        let logs = LogOps::page_filtered(None, None, None, page).unwrap();
         assert_eq!(logs.entries.len(), 2);
         assert_eq!(logs.entries[0].message, "ordinary operator log");
         LogOps::reset_for_tests();

@@ -14,9 +14,9 @@ struct InstallationInput {
     blob: Vec<u8>,
 }
 
-// The artifact grants both namespaces in one shared physical allocation pool.
-canic::memory::memory_allocation_pool!(
-    provider = memory_pool,
+// The artifact grants both namespaces through one Storage owner.
+canic::memory::memory_allocation_grants!(
+    provider = memory_grants,
     authorities = [
         ("embedded-app", "embedded_app."),
         (
@@ -24,7 +24,6 @@ canic::memory::memory_allocation_pool!(
             canic_blob_service::MEMORY_KEY_PREFIX
         ),
     ],
-    exclusions = [],
 );
 canic_blob_service::mount!();
 
@@ -36,7 +35,7 @@ canic::start!(
 
 fn memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
-    input.pool = memory_pool().unwrap();
+    input.grants = memory_grants().unwrap();
     input
         .requests
         .extend(canic_blob_service::memory_requests().unwrap());

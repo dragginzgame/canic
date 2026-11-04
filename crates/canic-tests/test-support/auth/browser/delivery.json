@@ -1,0 +1,20 @@
+{
+  "package": "@dragginzgame/ic-auth-client",
+  "version": "0.0.0",
+  "source": {
+    "revision": "fa6823a25cedb04f55f91301efcf261ab4109b1f",
+    "dirty": false,
+    "inputs": "inputs.tsv0"
+  },
+  "tools": {
+    "node": "24.21.0",
+    "npm": "12.2.0",
+    "typescript": "7.0.2"
+  },
+  "archive": {
+    "filename": "dragginzgame-ic-auth-client-0.0.0.tgz",
+    "integrity": "sha512-dOI+INTCvcA5l3BPw0u28NS6DVIlHOIsi9nu2Lv+ogYkp4VUAhUlvxxpx088Fj3HtcHh+g7BeDPMn/KIwfoYCA==",
+    "shasum": "c8f98157ceab0953585157a37753828b47fa9e87"
+  },
+  "qualification": "packed-consumer"
+}

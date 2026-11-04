@@ -1,6 +1,6 @@
 //! Module: memory
 //!
-//! Responsibility: adapt Canic stable-memory declarations to `ic-memory` bootstrap.
+//! Responsibility: adapt Canic stable-memory declarations to `ic-storage` bootstrap.
 //! Also owns physical stable-memory extent observation for runtime metrics.
 //! Does not own: stable data schemas, ops storage APIs, or lifecycle orchestration.
 //! Boundary: lifecycle initializes this before stable structures are accessed.
@@ -9,15 +9,14 @@
 pub(crate) mod fixtures;
 
 pub mod admission;
+pub mod grants;
 pub(crate) mod keys;
-pub(crate) mod ledger;
 mod policy;
-pub mod pool;
 pub mod registry;
 pub mod runtime;
 
-pub use crate::memory_allocation_pool;
-pub use policy::CanicMemoryManagerPolicy;
+pub use crate::memory_allocation_grants;
+pub use policy::CanicStoragePolicy;
 
 /// Stable allocation-policy authority for Canic core memory declarations.
 pub const CANIC_CORE_MEMORY_AUTHORITY: &str = "canic-core";
@@ -26,17 +25,6 @@ pub const CANIC_CONTROL_PLANE_MEMORY_AUTHORITY: &str = "canic-control-plane";
 
 const MEMORY_AUTHORITY: &str = CANIC_CORE_MEMORY_AUTHORITY;
 
-/// Bucket size compiled into this artifact, in 64 KiB Wasm pages.
-///
-/// # Panics
-/// Panics if the build script supplies an invalid value; normal builds validate it first.
-#[must_use]
-pub fn configured_bucket_pages() -> u16 {
-    env!("CANIC_MEMORY_BUCKET_PAGES")
-        .parse()
-        .expect("build-validated memory bucket size")
-}
-
 /// Observe the current physical stable-memory extent without allocating or reading data.
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn stable_extent_bytes() -> u64 {
@@ -44,7 +32,7 @@ pub(crate) fn stable_extent_bytes() -> u64 {
 }
 
 /// Complete framework requests, including stores whose lazy initializers have not run.
-pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
+pub fn requests() -> Result<Vec<ic_storage::MemoryRequest>, ic_storage::AdmissionError> {
     keys::requests()
 }
 
@@ -53,8 +41,8 @@ pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDecl
 /// # Panics
 /// Panics if the key is invalid, the host has not bootstrapped or omitted this key.
 #[must_use]
-pub fn open(key: &str) -> ic_memory::RuntimeMemory<ic_memory::DefaultMemoryImpl> {
-    let stable_key = ic_memory::StableKey::parse(key).expect("declared stable key");
+pub fn open(key: &str) -> ic_storage::RuntimeMemory<ic_storage::DefaultMemoryImpl> {
+    let stable_key = ic_storage::StableKey::parse(key).expect("declared stable key");
     runtime::assert_memory_bootstrap_ready(stable_key.as_str());
     runtime::with_runtime(|runtime| Ok(runtime.open_memory(&stable_key)))
         .expect("initialized memory runtime")
@@ -64,9 +52,9 @@ pub fn open(key: &str) -> ic_memory::RuntimeMemory<ic_memory::DefaultMemoryImpl>
 /// Host-owned component requests, grants and optional pre-commit admission.
 pub struct MemoryBootstrap {
     /// Complete component requests, including the selected framework.
-    pub requests: Vec<ic_memory::MemoryRequest>,
-    /// Exact namespace grants and unmanaged physical exclusions.
-    pub pool: ic_memory::MemoryAllocationPool,
+    pub requests: Vec<ic_storage::MemoryRequest>,
+    /// Complete non-overlapping host namespace grants.
+    pub grants: ic_storage::AllocationGrants,
     /// One composed pre-commit callback with a stable semantic identity.
     pub admission: Option<admission::MemoryBootstrapAdmission>,
 }
@@ -74,53 +62,48 @@ pub struct MemoryBootstrap {
 /// Failure to construct, borrow or bootstrap the Canic-owned memory runtime.
 #[derive(Debug, thiserror::Error)]
 pub enum MemoryBootstrapError {
-    /// Backing memory or configured geometry could not be admitted.
+    /// Backing memory or resource limits could not be admitted.
     #[error(transparent)]
-    Construction(#[from] ic_memory::RuntimeConstructionError),
+    Construction(#[from] ic_storage::RuntimeConstructionError),
     /// The runtime is already borrowed by a synchronous participant.
     #[error(transparent)]
-    Access(#[from] ic_memory::RuntimeDiagnosticError),
+    Access(#[from] runtime::MemoryRuntimeAccessError),
     /// The complete host composition could not be committed.
     #[error(transparent)]
-    Bootstrap(#[from] ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>),
+    Bootstrap(#[from] ic_storage::RuntimeBootstrapError<registry::MemoryRegistryError>),
 }
 
 /// Bootstrap exactly the supplied host composition before any store opens.
-///
-/// # Panics
-/// Panics if the build script supplied a zero or malformed bucket size.
 pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
-    let declarations = ic_memory::SealedDeclarationSnapshot::new(input.requests)
-        .map_err(ic_memory::MemoryResolutionError::from)
-        .map_err(ic_memory::RuntimeBootstrapError::from)?;
-    let config = ic_memory::MemoryManagerConfig::new(
-        std::num::NonZeroU16::new(configured_bucket_pages())
-            .expect("build-validated memory bucket size"),
-    );
-    let mut policy = policy::CanicMemoryManagerPolicy::new();
+    let declarations = ic_storage::SealedDeclarationSnapshot::new(input.requests)
+        .map_err(ic_storage::RuntimeBootstrapError::from)?;
+    let config = ic_storage::StorageConfig::default();
+    let mut policy = policy::CanicStoragePolicy::new();
     if let Some(participant) = input.admission {
         policy = policy.with_admission(participant);
     }
     runtime::RUNTIME.with(|cell| -> Result<(), MemoryBootstrapError> {
         let mut owner = cell
             .try_borrow_mut()
-            .map_err(|_| ic_memory::RuntimeDiagnosticError::ReentrantAccess)?;
+            .map_err(|_| runtime::MemoryRuntimeAccessError::ReentrantAccess)?;
         if owner.is_none() {
-            *owner = Some(std::rc::Rc::new(ic_memory::MemoryRuntime::new_with_config(
-                ic_memory::DefaultMemoryImpl::default(),
-                config,
-            )?));
+            *owner = Some(std::rc::Rc::new(
+                ic_storage::MemoryRuntime::new_with_config(
+                    ic_storage::DefaultMemoryImpl::default(),
+                    config,
+                )?,
+            ));
         }
         let runtime = owner
             .as_mut()
-            .ok_or(ic_memory::RuntimeDiagnosticError::NotBootstrapped)?;
+            .ok_or(runtime::MemoryRuntimeAccessError::NotBootstrapped)?;
         if runtime.is_bootstrapped() {
-            runtime.verify_bootstrap(&declarations, &input.pool, &policy)?;
+            runtime.verify_bootstrap(&declarations, &input.grants, &policy)?;
         } else {
             // Only committed runtimes escape through shared_runtime().
             std::rc::Rc::get_mut(runtime)
-                .ok_or(ic_memory::RuntimeDiagnosticError::ReentrantAccess)?
-                .bootstrap(&declarations, &input.pool, &policy)?;
+                .ok_or(runtime::MemoryRuntimeAccessError::ReentrantAccess)?
+                .bootstrap(&declarations, &input.grants, &policy)?;
         }
         Ok(())
     })?;
@@ -132,12 +115,9 @@ pub(crate) fn bootstrap_framework() -> Result<(), MemoryBootstrapError> {
         return Ok(());
     }
     bootstrap(MemoryBootstrap {
-        requests: requests()
-            .map_err(ic_memory::MemoryResolutionError::from)
-            .map_err(ic_memory::RuntimeBootstrapError::from)?,
-        pool: pool::framework_pool(Vec::new(), Vec::new())
-            .map_err(registry::MemoryRegistryError::from)
-            .map_err(ic_memory::RuntimeBootstrapError::AdmissionPolicy)?,
+        requests: requests().map_err(ic_storage::RuntimeBootstrapError::from)?,
+        grants: grants::framework_grants(Vec::new())
+            .map_err(ic_storage::RuntimeBootstrapError::from)?,
         admission: None,
     })
 }

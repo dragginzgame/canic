@@ -1,13 +1,11 @@
 //! Module: workflow::memory::query
 //!
-//! Responsibility: expose memory ledger workflow snapshots.
+//! Responsibility: expose Storage directory workflow snapshots.
 //! Does not own: memory registry mutation, endpoint authorization, or DTO schemas.
 //! Boundary: workflow query facade over runtime memory ops.
 
 use crate::{
-    InternalError,
-    dto::memory::{MemoryAllocationsResponse, MemoryLedgerResponse},
-    ops::runtime::memory::MemoryRegistryOps,
+    InternalError, dto::memory::MemoryAllocationsResponse, ops::runtime::memory::MemoryRegistryOps,
 };
 
 ///
@@ -19,9 +17,5 @@ pub struct MemoryQuery;
 impl MemoryQuery {
     pub fn allocations() -> Result<MemoryAllocationsResponse, InternalError> {
         MemoryRegistryOps::allocation_snapshot()
-    }
-
-    pub fn ledger() -> Result<MemoryLedgerResponse, InternalError> {
-        MemoryRegistryOps::ledger_snapshot()
     }
 }

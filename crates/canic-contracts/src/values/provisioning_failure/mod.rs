@@ -13,7 +13,7 @@ pub const MAX_PROVISIONING_REJECTION_BYTES: usize = 1024;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningDependencyFailure {
-    pub target: ic_platform::principal::ExternalPrincipal,
+    pub target: ic_platform_types::principal::ExternalPrincipal,
     pub method: String,
     pub step: String,
     #[serde(deserialize_with = "crate::serialization::required_option")]

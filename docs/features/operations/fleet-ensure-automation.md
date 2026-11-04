@@ -197,9 +197,10 @@ for measured costs and coverage limits.
 Before compiling or qualifying a release, or attempting recovery with a newly
 installed CLI, run `canic medic --ci` from the application workspace. Its locked,
 offline package checks compare each resolved application Canic dependency with
-the running CLI's exact version. A mismatch requires a matching CLI or a jointly
-updated and requalified application; a host-only update does not bypass the
-runtime contract. If Cargo evidence is unavailable, resolve that finding before
+the exact framework version compiled into the running CLI. Host/CLI have their
+own release version; a host-only update can keep the same supported framework.
+A mismatch requires a CLI built for the application's framework or an explicitly
+updated and requalified application. If Cargo evidence is unavailable, resolve that finding before
 treating the preflight as passed. This check does not rebuild artifacts or prove
 live deployment readiness.
 

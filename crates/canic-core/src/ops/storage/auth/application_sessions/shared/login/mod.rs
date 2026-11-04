@@ -1,11 +1,8 @@
 //! Prepare one canonical login row and protected occupancy before any stable write.
 
 use super::*;
-use crate::{
-    model::auth::application_authorization::{
-        MAX_APPLICATION_ADMITTED_LOGINS, MAX_APPLICATION_UNKNOWN_LOGOUTS,
-    },
-    storage::stable::auth::{LocalApplicationLoginRecord, LocalApplicationLoginTotalsRecord},
+use crate::storage::stable::auth::{
+    LocalApplicationLoginRecord, LocalApplicationLoginTotalsRecord,
 };
 use ic_auth_protocol_types::{AudienceId, CanonicalId};
 
@@ -37,30 +34,30 @@ pub(super) fn prepare_login(
             encoded_len(&(change.caller(), &previous)).map_err(|_| SessionError::StorageFailure)?;
         let retained = LoginRevocationChange::decode(&previous.bytes)
             .map_err(|_| SessionError::StorageFailure)?;
-        let binding = |state| match state {
-            LoginRecordState::Reserved(binding) => Some(binding),
-            LoginRecordState::Revoked(binding) => binding,
-        };
-        let same_authority = retained.audience() == change.audience()
-            && retained.caller() == change.caller()
-            && binding(retained.state()).is_some() == binding(change.state()).is_some();
-        let preserves_denial = !matches!(retained.state(), LoginRecordState::Revoked(_))
-            || matches!(change.state(), LoginRecordState::Revoked(_));
-        let preserves_binding = binding(retained.state()) == binding(change.state());
-        if !same_authority
-            || !preserves_denial
-            || !preserves_binding
-            || change.until_ns() < retained.until_ns()
-        {
-            return Err(SessionError::InvalidPolicyOrRecord);
-        }
-        let count = if matches!(change.state(), LoginRecordState::Revoked(None)) {
-            totals.unknown
+        change
+            .check_replacement(
+                &retained,
+                LocalApplicationAuthorizationState::application_observed_at_ns(),
+            )
+            .map_err(|_| SessionError::InvalidPolicyOrRecord)?;
+        let previous_unknown = matches!(retained.state(), LoginRecordState::Revoked(None));
+        let next_unknown = matches!(change.state(), LoginRecordState::Revoked(None));
+        let previous_count = if previous_unknown {
+            &mut totals.unknown
         } else {
-            totals.admitted
+            &mut totals.admitted
         };
-        if count == 0 {
+        if *previous_count == 0 {
             return Err(SessionError::StorageFailure);
+        }
+        if previous_unknown != next_unknown {
+            *previous_count -= 1;
+            let next_count = if next_unknown {
+                &mut totals.unknown
+            } else {
+                &mut totals.admitted
+            };
+            *next_count = next_count.checked_add(1).ok_or(SessionError::Capacity)?;
         }
     } else {
         let count = if matches!(change.state(), LoginRecordState::Revoked(None)) {
@@ -70,9 +67,7 @@ pub(super) fn prepare_login(
         };
         *count = count.checked_add(1).ok_or(SessionError::Capacity)?;
     }
-    if totals.admitted > MAX_APPLICATION_ADMITTED_LOGINS
-        || totals.unknown > MAX_APPLICATION_UNKNOWN_LOGOUTS
-    {
+    if totals.admitted > capacity().admitted_logins || totals.unknown > capacity().unknown_logouts {
         return Err(SessionError::Capacity);
     }
     let record = LocalApplicationLoginRecord {

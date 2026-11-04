@@ -1,9 +1,6 @@
 //! Check canonical login rows and protected physical occupancy during restoration.
 
 use super::*;
-use crate::model::auth::application_authorization::{
-    MAX_APPLICATION_ADMITTED_LOGINS, MAX_APPLICATION_UNKNOWN_LOGOUTS,
-};
 use ic_auth::{
     portable::{LoginRecordState, LoginRevocationChange},
     session::Session,
@@ -14,8 +11,8 @@ pub(super) fn validate_login_records(
     state: &LocalApplicationAuthorizationStateData,
 ) -> Result<(), ApplicationSessionStateError> {
     let invalid = ApplicationSessionStateError::InvalidLoginRecord;
-    if state.login_totals.admitted > MAX_APPLICATION_ADMITTED_LOGINS
-        || state.login_totals.unknown > MAX_APPLICATION_UNKNOWN_LOGOUTS
+    if state.login_totals.admitted > capacity().admitted_logins
+        || state.login_totals.unknown > capacity().unknown_logouts
     {
         return Err(invalid);
     }

@@ -19,6 +19,7 @@ pub(super) const DIRTY_SUMMARY_ALGORITHM: &str = "git-status-porcelain-v1-z-sha2
 pub struct BuildProvenanceV1 {
     pub schema_version: u8,
     pub generated_at: String,
+    /// Producer's Host/CLI release version, independent of the built framework.
     pub canic_version: String,
     pub command: CommandProvenanceV1,
     pub build_status: BuildProvenanceStatusV1,
@@ -213,5 +214,6 @@ pub struct BuildProvenanceRequest {
     pub output: CanisterArtifactBuildOutput,
     pub command: CommandProvenanceV1,
     pub generated_at: String,
+    /// CLI producer's release version for the envelope and build provenance.
     pub canic_version: String,
 }

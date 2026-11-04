@@ -76,7 +76,7 @@ fn history_selector_uses_native_principal_and_bounded_frames() {
     let request = PublicHistoryRequest {
         family: PublicMetricFamily::Performance,
         name: "x".repeat(128),
-        canister_id: Some(ic_platform::Principal::from_slice(&[42; 29])),
+        canister_id: Some(ic_platform_types::Principal::from_slice(&[42; 29])),
         page: PageRequest {
             offset: u64::MAX,
             limit: u64::MAX,
@@ -92,6 +92,6 @@ fn history_selector_uses_native_principal_and_bounded_frames() {
     let schema = ic_wire::typescript::native_schema::<PublicHistoryRequest>().unwrap();
     assert_eq!(
         schema["fields"][2]["value"],
-        ic_wire::typescript::native_schema::<Option<ic_platform::Principal>>().unwrap()
+        ic_wire::typescript::native_schema::<Option<ic_platform_types::Principal>>().unwrap()
     );
 }

@@ -10,7 +10,7 @@
   &nbsp;&middot;&nbsp;
   <a href="https://github.com/dragginzgame/ic-scheduling"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-timers.svg" width="18" height="18" alt=""> <strong>ic-timers</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/ic-memory"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-memory.svg" width="18" height="18" alt=""> <strong>ic-memory</strong></a>
+  <a href="https://github.com/dragginzgame/ic-storage"><strong>ic-storage</strong></a>
   &nbsp;&middot;&nbsp;
   <a href="https://github.com/dragginzgame/ic-query"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-query.svg" width="18" height="18" alt=""> <strong>ic-query</strong></a>
   &nbsp;&middot;&nbsp;
@@ -27,7 +27,7 @@
 [![Crates.io](https://img.shields.io/crates/v/canic.svg)](https://crates.io/crates/canic)
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
+[![MSRV](https://img.shields.io/badge/MSRV-1.99.1-blue.svg)](Cargo.toml)
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.1-orange.svg)](rust-toolchain.toml)
 
 Canic is an application framework and orchestration system for Rust applications
@@ -86,12 +86,16 @@ Wasm Store for qualified installation artifacts.
 | Configure canisters and their layout | [Canic configuration](CONFIG.md) |
 | Explore all documentation | [Documentation index](docs/README.md) |
 
-Install the published CLI at the same version as the `canic` Rust crate used by
-your canisters:
+Install a published Host/CLI release built for the framework used by your
+canisters. The tool and framework have independent versions:
 
 ```bash
-cargo install --locked canic-cli --version <version>
+cargo install --locked canic-cli --version <host-version>
+canic medic --ci
 ```
+
+Medic compares the application's resolved Canic version with the exact framework
+compiled into the tool. See [release groups](docs/operations/adapter-release-groups.md).
 
 ## Pick The Parts You Need
 

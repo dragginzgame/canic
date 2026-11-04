@@ -105,8 +105,8 @@ pub fn apply<T: ComponentTransport>(
             return Err(ComponentOperationError::Capacity);
         }
     }
-    // The durable allocation survives a Root restart; its heap timer does not.
-    // Replaying the same command resumes that allocation without reserving another.
+    // Root reconstructs its native owner from durable continuation demand.
+    // Exact replay also re-arms that owner without reserving another allocation.
     ops::reserve(&path, &mut record)?;
     transport.submit(&record.plan)?;
     Ok(record)

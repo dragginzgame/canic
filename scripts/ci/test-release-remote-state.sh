@@ -16,6 +16,10 @@ LOCAL="$FIXTURE/local"
 OTHER="$FIXTURE/other"
 git init --quiet --bare "$REMOTE"
 git init --quiet --initial-branch=main "$LOCAL"
+mkdir -p "$LOCAL/scripts/release" "$LOCAL/ci"
+cp "$ROOT/scripts/release/selection.sh" "$LOCAL/scripts/release/"
+cp "$ROOT/ci/cargo-release-groups.json" "$LOCAL/ci/"
+export RELEASE_GROUP=framework
 git -C "$LOCAL" config user.email release-test@example.invalid
 git -C "$LOCAL" config user.name "Release Test"
 printf 'base\n' >"$LOCAL/state"
@@ -44,8 +48,8 @@ if (
 fi
 
 git -C "$LOCAL" merge --quiet --ff-only origin/main
-git -C "$OTHER" tag -a v1.2.4 -m "occupied release tag"
-git -C "$OTHER" push --quiet origin refs/tags/v1.2.4
+git -C "$OTHER" tag -a framework-v1.2.4 -m "occupied release tag"
+git -C "$OTHER" push --quiet origin refs/tags/framework-v1.2.4
 if (
     cd "$LOCAL"
     bash "$CHECK" before-version 1.2.4 >/dev/null 2>&1
@@ -53,20 +57,20 @@ if (
     fail "occupied remote tag was accepted before version mutation"
 fi
 
-git -C "$LOCAL" tag -a v1.2.5 -m "Release 1.2.5"
+git -C "$LOCAL" tag -a framework-v1.2.5 -m "Release 1.2.5"
 (
     cd "$LOCAL"
     bash "$CHECK" before-push 1.2.5 >/dev/null
 ) || fail "absent remote release tag was rejected before push"
-git -C "$LOCAL" push --quiet origin refs/tags/v1.2.5
+git -C "$LOCAL" push --quiet origin refs/tags/framework-v1.2.5
 (
     cd "$LOCAL"
     bash "$CHECK" before-push 1.2.5 >/dev/null
 ) || fail "matching remote release tag was rejected on push retry"
 
-git -C "$LOCAL" tag -a v1.2.6 -m "local tag object"
-git -C "$OTHER" tag -a v1.2.6 -m "conflicting remote tag object"
-git -C "$OTHER" push --quiet origin refs/tags/v1.2.6
+git -C "$LOCAL" tag -a framework-v1.2.6 -m "local tag object"
+git -C "$OTHER" tag -a framework-v1.2.6 -m "conflicting remote tag object"
+git -C "$OTHER" push --quiet origin refs/tags/framework-v1.2.6
 if (
     cd "$LOCAL"
     bash "$CHECK" before-push 1.2.6 >/dev/null 2>&1

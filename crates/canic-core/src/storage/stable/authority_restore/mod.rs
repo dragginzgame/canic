@@ -21,10 +21,10 @@ std::thread_local! {
         StableCell<Option<AuthorityRestoreFenceRecord>, DefaultMemoryImpl>,
     > = RefCell::new({
         let allocation = crate::memory::open(crate::memory::keys::AUTHORITY_RESTORE_FENCE_V1);
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableCell::create(allocation, None)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableCell::create(allocation, None).expect("create admitted stable cell")
         } else {
-            StableCell::load(allocation).expect("retained stable cell")
+            StableCell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -97,7 +97,7 @@ impl AuthorityRestoreFenceStore {
             if store.get().is_some() {
                 return false;
             }
-            let previous = store.set(Some(record));
+            let previous = store.set(Some(record)).expect("Storage operation failed");
             debug_assert!(previous.is_none());
             true
         })
@@ -108,7 +108,7 @@ impl AuthorityRestoreFenceStore {
             if store.get().is_none() {
                 return false;
             }
-            store.set(Some(record));
+            store.set(Some(record)).expect("Storage operation failed");
             true
         })
     }
@@ -124,9 +124,9 @@ impl AuthorityRestoreFenceStore {
     #[cfg(test)]
     pub(crate) fn import(data: AuthorityRestoreFenceData) {
         AUTHORITY_RESTORE_FENCE.with_borrow_mut(|store| {
-            store.set(None);
+            store.set(None).expect("Storage operation failed");
             if let Some(record) = data.record {
-                store.set(Some(record));
+                store.set(Some(record)).expect("Storage operation failed");
             }
         });
     }
@@ -148,9 +148,12 @@ mod tests {
                 sealed_at_ns: u64::MAX,
             },
         };
-        let bytes = record.to_bytes();
+        let bytes = record.to_bytes().expect("encode stable fixture");
         assert!(bytes.len() <= MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES as usize);
-        assert_eq!(AuthorityRestoreFenceRecord::from_bytes(bytes), record);
+        assert_eq!(
+            AuthorityRestoreFenceRecord::from_bytes(bytes).expect("decode stable fixture"),
+            record
+        );
     }
 
     #[test]
@@ -164,9 +167,12 @@ mod tests {
             },
         };
 
-        let bytes = record.to_bytes();
+        let bytes = record.to_bytes().expect("encode stable fixture");
         assert!(bytes.len() <= MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES as usize);
-        assert_eq!(AuthorityRestoreFenceRecord::from_bytes(bytes), record);
+        assert_eq!(
+            AuthorityRestoreFenceRecord::from_bytes(bytes).expect("decode stable fixture"),
+            record
+        );
     }
 
     #[test]

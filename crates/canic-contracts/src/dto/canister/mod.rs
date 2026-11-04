@@ -14,6 +14,7 @@ pub struct CanisterInspectionReserveResponse {
 }
 
 /// Protected inspection result; a reserve failure never implies that the target is absent.
+#[cfg(feature = "external-candid")]
 pub enum CanisterInspectionOutcome {
     Status(Box<CanisterStatusResponse>),
     ReserveRequired(CanisterInspectionReserveResponse),
@@ -26,7 +27,7 @@ pub enum CanisterInspectionOutcome {
     derive(ic_wire::Wire)
 )]
 pub struct CanisterHistoryResponse {
-    pub canister_id: ic_platform::Principal,
+    pub canister_id: ic_platform_types::Principal,
     pub history_candid: Vec<u8>,
 }
 
@@ -40,9 +41,9 @@ pub struct CanisterHistoryResponse {
     derive(ic_wire::Wire)
 )]
 pub struct CanisterInfo {
-    pub pid: ic_platform::Principal,
+    pub pid: ic_platform_types::Principal,
     pub role: CanisterRole,
-    pub parent_pid: Option<ic_platform::Principal>,
+    pub parent_pid: Option<ic_platform_types::Principal>,
     pub module_hash: Option<Vec<u8>>,
     pub created_at: u64,
 }
@@ -52,6 +53,7 @@ pub struct CanisterInfo {
 //
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct CanisterStatusResponse {
     pub version: u64,
     pub status: CanisterStatusType,
@@ -70,6 +72,7 @@ pub struct CanisterStatusResponse {
 //
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct CanisterSettings {
     pub controllers: Vec<Principal>,
     pub compute_allocation: Nat,
@@ -102,6 +105,7 @@ pub struct EnvironmentVariable {
 //
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct MemoryMetrics {
     pub wasm_memory_size: Nat,
     pub stable_memory_size: Nat,
@@ -118,6 +122,7 @@ pub struct MemoryMetrics {
 //
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct QueryStats {
     pub num_calls_total: Nat,
     pub num_instructions_total: Nat,

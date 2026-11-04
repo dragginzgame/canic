@@ -6,10 +6,12 @@ use crate::{dto::auth, protocol::role_attestation as wire};
 fn signed_attestation_roundtrip_preserves_canonical_payload_and_certificate_bytes() {
     let original = auth::SignedRoleAttestation {
         payload: auth::RoleAttestation {
-            subject: ic_platform::principal::ExternalPrincipal::from_slice(&[1]),
+            subject: ic_platform_types::principal::ExternalPrincipal::from_slice(&[1]),
             role: crate::ids::CanisterRole::owned("worker".to_owned()),
-            subnet_id: Some(ic_platform::principal::ExternalPrincipal::from_slice(&[2])),
-            audience: ic_platform::principal::ExternalPrincipal::from_slice(&[3]),
+            subnet_id: Some(ic_platform_types::principal::ExternalPrincipal::from_slice(
+                &[2],
+            )),
+            audience: ic_platform_types::principal::ExternalPrincipal::from_slice(&[3]),
             issued_at_ns: 4,
             expires_at_ns: 5,
             epoch: 6,

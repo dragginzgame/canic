@@ -14,7 +14,7 @@ use crate::fleet_ensure::{
     workflow::release::assess_provisioning_evidence,
 };
 use canic_contracts::dto::root::{RootProvisioningReleasePhase, RootProvisioningReleaseResponse};
-use ic_platform::pocket_ic::PocketIc;
+use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
     pic: &PocketIc,
@@ -38,7 +38,10 @@ pub(super) fn assert_census(
     let balances = review
         .sources
         .iter()
-        .map(|source| pic.cycle_balance(source.binding.canister_id))
+        .map(|source| {
+            pic.cycle_balance(source.binding.canister_id)
+                .expect("PocketIC cycle_balance")
+        })
         .collect::<Vec<_>>();
     let observed = collect(review, registry).unwrap();
     assert_assessment(&observed, &page);
@@ -47,7 +50,9 @@ pub(super) fn assert_census(
         review
             .sources
             .iter()
-            .map(|source| pic.cycle_balance(source.binding.canister_id))
+            .map(|source| pic
+                .cycle_balance(source.binding.canister_id)
+                .expect("PocketIC cycle_balance"))
             .collect::<Vec<_>>(),
         balances
     );

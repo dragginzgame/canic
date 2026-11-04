@@ -12,7 +12,7 @@ use crate::{
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
     },
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Native projection of the maintained FleetRegistry contract.

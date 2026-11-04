@@ -90,7 +90,7 @@ trap cleanup EXIT
 
 # Exercise the report writer with controlled analysis output and real digest backends.
 mkdir "$FIXTURE/common-bin"
-for tool in bash dirname mktemp rm wc tr head basename mv; do
+for tool in bash cat dirname mktemp rm wc tr head basename mv; do
     ln -s "$(command -v "$tool")" "$FIXTURE/common-bin/$tool"
 done
 cat >"$FIXTURE/common-bin/twiggy" <<'EOF'
@@ -99,7 +99,11 @@ set -euo pipefail
 if [[ "$1" == --version ]]; then
     printf 'twiggy test fixture\n'
 else
-    printf '[{"name":"data[0]","shallow_size":3}]\n'
+    if [[ -n "${TWIGGY_ITEMS_FIXTURE:-}" ]]; then
+        cat "$TWIGGY_ITEMS_FIXTURE"
+    else
+        printf '[{"name":"data[0]","shallow_size":3}]\n'
+    fi
 fi
 EOF
 chmod +x "$FIXTURE/common-bin/twiggy"
@@ -126,6 +130,47 @@ for backend in sha256sum shasum; do
     done
 done
 [[ "$backend_count" -gt 0 ]]
+
+# Twiggy 0.8.0 output from a 119-byte module with one named function,
+# a named data segment, function/data names, and a producers custom section.
+cat >"$FIXTURE/producer-items.json" <<'EOF'
+[
+  {"name":"\"function names\" subsection","shallow_size":30},
+  {"name":"\"data names\" subsection","shallow_size":14},
+  {"name":"custom section 'producers' headers","shallow_size":12},
+  {"name":"wasm magic bytes","shallow_size":8},
+  {"name":"data segment \".rodata.0\"","shallow_size":8},
+  {"name":"custom section 'name' headers","shallow_size":7},
+  {"name":"custom section 'producers'","shallow_size":7},
+  {"name":"export \"run\"","shallow_size":6},
+  {"name":"code section headers","shallow_size":6},
+  {"name":"canic_core::workflow::run","shallow_size":4},
+  {"name":"type[0]: () -> nil","shallow_size":3},
+  {"name":"type section headers","shallow_size":3},
+  {"name":"memory section headers","shallow_size":3},
+  {"name":"export section headers","shallow_size":3},
+  {"name":"data section headers","shallow_size":3},
+  {"name":"memory[0]","shallow_size":2}
+]
+EOF
+printf '%119s' '' >"$FIXTURE/producer.wasm"
+PATH="$report_backend_path" TWIGGY_ITEMS_FIXTURE="$FIXTURE/producer-items.json" \
+    "$BASH" "$ROOT/scripts/ci/wasm-capability-size-report.sh" \
+    --wasm "$FIXTURE/producer.wasm" --output "$FIXTURE/producer-report.json" \
+    --role component --build-profile debug --build-network local \
+    --producer-identity fixture --capabilities Runtime \
+    >"$FIXTURE/producer-report.log" 2>&1
+"$JQ_BIN" -e '
+  .analysis.classification_revision == 3
+  and .analysis.artifact_bytes_match == true
+  and .analysis.named_code_bytes == 4
+  and .analysis.unattributed_code_bytes == 0
+  and .analysis.symbol_attribution == "complete"
+  and ([.categories[] | select(.shallow_bytes > 0) |
+        {key: .category, value: .shallow_bytes}] | from_entries) == {
+    canic_runtime: 4, wasm_structural_and_abi: 115
+  }
+' "$FIXTURE/producer-report.json" >/dev/null
 
 mkdir "$FIXTURE/failing-bin"
 cat >"$FIXTURE/failing-bin/sha256sum" <<'EOF'

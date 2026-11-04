@@ -361,7 +361,9 @@ fn reload_root_admission() {
     let state = RootAdmissionStateRecord {
         current: RootAdmissionStore::export().current,
     };
-    let restored = RootAdmissionStateRecord::from_bytes(state.to_bytes());
+    let restored =
+        RootAdmissionStateRecord::from_bytes(state.to_bytes().expect("encode current record"))
+            .expect("decode current record");
     RootAdmissionStore::import(RootAdmissionData {
         current: restored.current,
     });

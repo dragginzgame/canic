@@ -5,6 +5,7 @@
 //! Boundary: parses auth CLI commands and renders root canister-call actions.
 
 mod codec;
+mod inspection;
 mod render;
 #[cfg(test)]
 mod tests;
@@ -54,8 +55,9 @@ const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 1;
 
 const HELP_AFTER: &str = "\
 Examples:
+  canic auth policy local --canister rrkah-fqaaa-aaaaa-aaaaq-cai
   canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai
-  canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai --json";
+  canic auth sessions local --canister rrkah-fqaaa-aaaaa-aaaaq-cai --json";
 
 ///
 /// AuthCommandError
@@ -63,6 +65,9 @@ Examples:
 
 #[derive(Debug, ThisError)]
 pub enum AuthCommandError {
+    #[error(transparent)]
+    Inspection(#[from] inspection::InspectionError),
+
     #[error("{0}")]
     Usage(String),
 
@@ -106,6 +111,7 @@ pub enum AuthCommandError {
 impl AuthCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
+            Self::Inspection(error) => error.exit_code(),
             Self::Icp(IcpCommandError::Io(_))
             | Self::RootQuery(
                 canic_host::icp::IcpWireQueryError::Icp(IcpCommandError::Io(_))
@@ -192,6 +198,11 @@ where
         return Ok(());
     }
 
+    let matches = parse_matches(auth_command(), args.clone())
+        .map_err(|_| AuthCommandError::Usage(usage()))?;
+    if let Some((name @ ("policy" | "sessions"), matches)) = matches.subcommand() {
+        return inspection::run(name, matches).map_err(Into::into);
+    }
     let options = AuthOptions::parse(args)?;
     run_renewal_status(&options)
 }
@@ -211,9 +222,11 @@ fn auth_command() -> ClapCommand {
     ClapCommand::new(COMMAND_NAME)
         .bin_name("canic auth")
         .disable_help_flag(true)
-        .about("Run delegated-auth operator workflows")
+        .about("Inspect portable authentication and delegated-auth renewal")
         .subcommand_required(true)
+        .subcommand(inspection::policy_command())
         .subcommand(renewal_command())
+        .subcommand(inspection::sessions_command())
         .after_help(HELP_AFTER)
 }
 

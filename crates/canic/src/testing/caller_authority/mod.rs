@@ -13,8 +13,8 @@ use canic_core::{
     api::caller_authority::CallerAuthorityApi, bootstrap::compiled::CompiledCallerPolicy,
     control_plane_support::policy::caller_authority::matches_permission,
 };
-use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn publish(
     pic: &PocketIc,

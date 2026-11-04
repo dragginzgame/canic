@@ -4,7 +4,7 @@ use crate::{
     dto::{admission_control as native, error::Error, fleet_admission as stored},
     ids::*,
 };
-use ic_platform::principal::ExternalPrincipal;
+use ic_platform_types::principal::ExternalPrincipal;
 
 fn request() -> stored::FleetAdmissionMutationRequest {
     let principal = ExternalPrincipal::from_slice(&[7; 29]);

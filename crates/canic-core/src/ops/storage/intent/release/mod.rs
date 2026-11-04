@@ -5,8 +5,8 @@
 //! Boundary: retain terminal/expired records and validate exact primary identities.
 
 use super::{
-    ensure_receipt_backed_record_schema, ensure_schema, validate_payload_binding,
-    validate_terminal_evidence,
+    IntentStoreOpsError, ensure_receipt_backed_record_schema, ensure_schema,
+    validate_payload_binding, validate_terminal_evidence,
 };
 use crate::{
     InternalError,
@@ -28,9 +28,14 @@ pub fn page(cursor: Option<IntentReleaseCursor>) -> Result<IntentReleasePage, In
         };
         let local = IntentStore::with_records(|records| {
             let mut rows = records.range((local_cursor.map_or(Unbounded, Excluded), Unbounded));
-            let entry = rows.next().map(|row| (*row.key(), row.value()));
-            (entry, rows.next().is_some())
-        });
+            let entry = rows
+                .next()
+                .transpose()?
+                .map(|row| Ok::<_, IntentStoreOpsError>((*row.key(), row.value()?)))
+                .transpose()?;
+            let has_more = rows.next().transpose()?.is_some();
+            Ok::<_, IntentStoreOpsError>((entry, has_more))
+        })?;
         if let (Some((key, record)), has_more) = local {
             if key != record.id {
                 return Err(InternalError::conflict());
@@ -46,8 +51,10 @@ pub fn page(cursor: Option<IntentReleaseCursor>) -> Result<IntentReleasePage, In
         let mut rows = records.range((receipt_cursor.map_or(Unbounded, Excluded), Unbounded));
         let entry = rows
             .next()
+            .transpose()
+            .map_err(IntentStoreOpsError::from)?
             .map(|row| {
-                let record = row.value();
+                let record = row.value().map_err(IntentStoreOpsError::from)?;
                 if *row.key() != record.operation_id {
                     return Err(InternalError::conflict());
                 }
@@ -73,7 +80,11 @@ pub fn page(cursor: Option<IntentReleaseCursor>) -> Result<IntentReleasePage, In
             .transpose()?;
         Ok(IntentReleasePage {
             entry,
-            has_more: rows.next().is_some(),
+            has_more: rows
+                .next()
+                .transpose()
+                .map_err(IntentStoreOpsError::from)?
+                .is_some(),
         })
     })
 }

@@ -194,6 +194,11 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
             Vec::new(),
         ),
         descriptor(
+            StateAllocationKey::CorePortableIssuerState,
+            portable_issuer_state_domains(),
+            Vec::new(),
+        ),
+        descriptor(
             StateAllocationKey::CoreRootDelegationState,
             root_delegation_state_domains(),
             Vec::new(),
@@ -363,9 +368,18 @@ fn local_application_authorization_state_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::auth::{
         LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
         LocalApplicationLoginRecord, LocalApplicationReplayRecord, LocalApplicationSessionRecord,
+        PortableEnrollmentData, PortableEnrollmentRecord,
     };
 
     vec![
+        state_domain(
+            "portable_receiver_enrollment",
+            crate::role_contract::allocation::memory::auth::PORTABLE_RECEIVER_ENROLLMENT_KEY,
+            PortableEnrollmentRecord::STATE_CONTRACT_NAME,
+            PortableEnrollmentData::STATE_CONTRACT_NAME,
+            66,
+            "restored_enrollment_stays_closed_until_fresh_authenticated_root_pull",
+        ),
         state_domain(
             "local_application_authorization",
             LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY,
@@ -416,17 +430,43 @@ fn delegated_token_issuer_state_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
-fn root_delegation_state_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::auth::{RootDelegationStateData, RootDelegationStateRecord};
+fn portable_issuer_state_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::auth::{PortableEnrollmentData, PortableEnrollmentRecord};
 
     vec![state_domain(
-        "root_delegation",
-        ROOT_DELEGATION_STATE_KEY,
-        RootDelegationStateRecord::STATE_CONTRACT_NAME,
-        RootDelegationStateData::STATE_CONTRACT_NAME,
-        62,
-        "root_delegation_policy_epochs_and_batches_are_monotonic",
+        "portable_issuer",
+        crate::role_contract::allocation::memory::auth::PORTABLE_ISSUER_KEY,
+        PortableEnrollmentRecord::STATE_CONTRACT_NAME,
+        PortableEnrollmentData::STATE_CONTRACT_NAME,
+        68,
+        "public_key_history_restores_but_signing_authority_is_cleared_before_hooks",
     )]
+}
+
+fn root_delegation_state_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::auth::{
+        PortableEnrollmentData, PortableEnrollmentRecord, RootDelegationStateData,
+        RootDelegationStateRecord,
+    };
+
+    vec![
+        state_domain(
+            "portable_root_enrollment",
+            crate::role_contract::allocation::memory::auth::PORTABLE_ROOT_ENROLLMENT_KEY,
+            PortableEnrollmentRecord::STATE_CONTRACT_NAME,
+            PortableEnrollmentData::STATE_CONTRACT_NAME,
+            67,
+            "root_enrollment_revisions_and_terminal_retirements_are_monotonic",
+        ),
+        state_domain(
+            "root_delegation",
+            ROOT_DELEGATION_STATE_KEY,
+            RootDelegationStateRecord::STATE_CONTRACT_NAME,
+            RootDelegationStateData::STATE_CONTRACT_NAME,
+            62,
+            "root_delegation_policy_epochs_and_batches_are_monotonic",
+        ),
+    ]
 }
 
 fn replay_receipt_domains() -> Vec<StateDomainManifest> {

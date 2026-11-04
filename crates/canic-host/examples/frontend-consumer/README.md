@@ -70,6 +70,51 @@ all declarations, each hashed under the manifest. `client.call(method, request)`
 uses authenticated IC query/update transport and the selected generated codec.
 External IC/provider Candid protocols are not part of this owned binding export.
 
+## Auth HTTP acceptance
+
+The lockfile also selects the retained Auth 0.33 browser archive by its npm
+integrity. After preparing this consumer with `npm ci`, run
+`bash scripts/dev/qualify-auth-browser.sh` from the repository root. It selects
+one explicit PocketIC test, using the existing prepared Testkit and ICP tools.
+
+`auth-transport.mjs` uses Auth's public package exports and actual Ed25519-signed
+HTTP calls. The installed proof admits two browser identities on two receivers,
+logs out one identity on both and verifies the other remains admitted. The local
+root key comes from the test's NNS topology; certificate verification stays on.
+The fixture waits for receiver enrollment before requesting short-lived proofs.
+It also drops accepted ingress responses, observes the actual receiver effects,
+and retries from fresh Node processes. Admission retry preserves complete session
+records and expiry; logout retry preserves the other device's sessions. Each lost
+attempt dispatches once, and its client result remains an unknown effect.
+
+This is Node-based transport qualification. Issuance still uses the Rust fixture;
+it does not qualify browser IndexedDB, account-login UI, issuer HTTP transport,
+or durable client journal/logout/reopen recovery. The deterministic keys have
+authority only inside this disposable test Fleet.
+
+A separate real-browser case now qualifies that journal/logout/reopen boundary:
+
+```sh
+CANIC_AUTH_BROWSER_EXECUTABLE=/absolute/path/to/chrome bash scripts/dev/qualify-auth-browser.sh durable
+```
+
+Prepare the locked esbuild/Playwright dependencies and Chromium separately; the
+command never downloads a browser or opens a personal profile. The tested browser
+is Chromium 156.0.8078.4. A fresh context uses actual IndexedDB, commits destinations
+before admission, commits logout before page closure, then reopens and resumes
+upstream cleanup through lost responses from both installed receivers. It preserves
+the original deadline, signing refusal and the other device's active login. A
+second reopen retains completion. Key reconstruction and disposal are fixture
+controls; production key custody and account-login UI remain open.
+
+The `issuer` mode extends this through account-signed issuer HTTP and upstream
+admission orchestration. Rust Wire schemas generate the issuer codecs. It retains
+exact request intent in localStorage before dispatch, discards completed issuance
+replies, then reopens the page and reconciles once per device without reissuing.
+Both receivers admit the original credentials before the durable logout case runs.
+Use the same command with `issuer` instead of `durable`. These deterministic
+fixture keys and controlled-local issuance do not qualify production activation.
+
 ## Continue From Here
 
 - [Read the frontend handoff guide](../../../../docs/features/operations/frontend-handoff.md)

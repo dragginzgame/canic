@@ -13,10 +13,10 @@ std::thread_local! {
     static ENV: RefCell<Cell<EnvRecord, DefaultMemoryImpl>> =
         RefCell::new({
             let allocation = crate::memory::open(crate::memory::keys::RUNTIME_BINDINGS_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, EnvRecord::default())
+            if ic_storage::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, EnvRecord::default()).expect("create admitted stable cell")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -107,7 +107,7 @@ impl Env {
             }
             let mut updated = data.clone();
             updated.subnet_pid = Some(pid);
-            cell.set(updated);
+            cell.set(updated).expect("Storage operation failed");
         });
     }
 
@@ -130,7 +130,7 @@ impl Env {
             }
             let mut updated = data.clone();
             updated.canister_role = Some(role);
-            cell.set(updated);
+            cell.set(updated).expect("Storage operation failed");
         });
     }
 
@@ -144,7 +144,7 @@ impl Env {
     /// Import a complete environment snapshot, replacing any existing state.
     pub(crate) fn import(data: EnvData) {
         ENV.with_borrow_mut(|cell| {
-            cell.set(data.record);
+            cell.set(data.record).expect("Storage operation failed");
         });
     }
 

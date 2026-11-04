@@ -1,7 +1,11 @@
 //! Durable admission/logout transactions using current, cryptographically issued sessions.
 //! Native storage proofs; installed lifecycle qualification remains separate.
 
+mod admission;
+mod conformance;
 mod fixture;
+mod inspection;
+mod persistent;
 
 use super::*;
 use crate::{
@@ -122,10 +126,22 @@ fn stale_generation_and_exhausted_byte_budget_commit_neither_record() {
     )
     .unwrap();
     let before = LocalApplicationAuthorizationState::export();
+    let (session, _, login) = pair(false);
+    let (_, other_replay, _) = pair(true);
+    let (_, _, other_login) = fixture::pair_for_browser(false, 2);
+    assert_eq!(
+        store.admit(session.clone(), other_replay, &login),
+        Err(SessionError::InvalidPolicyOrRecord)
+    );
+    let (_, replay, _) = pair(false);
+    assert_eq!(
+        store.admit(session, replay, &other_login),
+        Err(SessionError::InvalidPolicyOrRecord)
+    );
     let (session, replay, login) = pair(false);
     assert_eq!(
         store.admit(session, replay, &login),
-        Err(SessionError::InvalidPolicyOrRecord)
+        Err(SessionError::StaleAuthority)
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), before);
     let mut state = before;
@@ -1375,4 +1391,59 @@ fn maintenance_clock_refusal_fences_authorization_until_valid_restore() {
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), checkpoint);
     assert_eq!(ledger.occupancy(), (1, 0));
+}
+
+#[test]
+fn expired_reservation_logout_transfers_pool_without_cleanup() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut store = store();
+    let (session, replay, login) = pair(false);
+    store.admit(session.clone(), replay, &login).unwrap();
+    let mut ledger = restore_ledger();
+    let expires = login.until_ns();
+    LocalApplicationAuthorizationStateOps::restore_application_session_state(expires).unwrap();
+    let before = LocalApplicationAuthorizationState::export();
+    let mut budget = SessionAdmissionBudget::new(32, 1, 0).unwrap();
+    assert!(matches!(
+        ic_auth::session::logout_session(
+            &mut store,
+            &mut ledger,
+            &mut budget,
+            session.caller(),
+            expires,
+        ),
+        LogoutResult::Revoked { .. }
+    ));
+    let after = LocalApplicationAuthorizationState::export();
+    assert!(after.sessions.is_empty());
+    assert_eq!(after.replays, before.replays);
+    assert_eq!(
+        (after.login_totals.admitted, after.login_totals.unknown),
+        (0, 1)
+    );
+    assert_eq!(ledger.occupancy(), (0, 1));
+    let bytes = with_indexes(|i| i.encoded_bytes).unwrap();
+    invalidate_indexes();
+    let restored =
+        LocalApplicationAuthorizationStateOps::restore_application_session_state(expires).unwrap();
+    assert_eq!((restored.sessions, restored.replays), (0, 1));
+    assert_eq!(restored.stable_bytes, bytes);
+    let mut restored_ledger =
+        MemoryLoginRevocations::new(fixture::audience(), 4096, 256, 1_000_000_000, expires)
+            .unwrap()
+            .restore_records(
+                expires,
+                (0, 1),
+                after
+                    .logins
+                    .iter()
+                    .map(|(_, row)| LoginRevocationChange::decode(&row.bytes).unwrap()),
+            )
+            .unwrap();
+    assert!(
+        restored_ledger
+            .is_revoked(session.caller(), expires)
+            .unwrap()
+    );
 }

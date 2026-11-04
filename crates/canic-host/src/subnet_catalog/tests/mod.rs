@@ -7,7 +7,7 @@ use ic_query::subnet_catalog::{
     CacheDisposition, CatalogReadPolicy, SubnetCatalogFailureCacheDisposition,
     SubnetCatalogHostError, SubnetCatalogLoadStage, SubnetCatalogRefreshTrigger,
     SubnetCatalogRetryability, SubnetCatalogSource, SubnetCatalogSubject,
-    load_subnet_catalog_detailed_with_source,
+    load_subnet_catalog_with_source,
 };
 use source::{Reply, Source};
 use std::{fs, sync::atomic::Ordering, time::Duration};
@@ -20,7 +20,7 @@ async fn freshness_boundary_refreshes_only_expired_catalog_and_preserves_snapsho
     let root = temp_dir("canic-catalog-expiry");
     let source = Source::new(Reply::Matching, 10);
     let mut request = mainnet_subnet_catalog_load_request(&root, NOW);
-    let first = load_subnet_catalog_detailed_with_source(&request, &source)
+    let first = load_subnet_catalog_with_source(&request, &source)
         .await
         .unwrap();
     assert_eq!(first.disposition, CacheDisposition::RefreshedMissing);
@@ -33,7 +33,7 @@ async fn freshness_boundary_refreshes_only_expired_catalog_and_preserves_snapsho
         CatalogAssurance::MultiEndpointAgreement
     );
     request.now_unix_secs += MAINNET_CATALOG_MAX_AGE_SECONDS;
-    let hit = load_subnet_catalog_detailed_with_source(&request, &source)
+    let hit = load_subnet_catalog_with_source(&request, &source)
         .await
         .unwrap();
     assert_eq!(hit.disposition, CacheDisposition::CacheHit);
@@ -50,10 +50,9 @@ async fn freshness_boundary_refreshes_only_expired_catalog_and_preserves_snapsho
         first.snapshot_authority().catalog_digest
     );
     request.now_unix_secs += 1;
-    let refreshed =
-        load_subnet_catalog_detailed_with_source(&request, &Source::new(Reply::Matching, 11))
-            .await
-            .unwrap();
+    let refreshed = load_subnet_catalog_with_source(&request, &Source::new(Reply::Matching, 11))
+        .await
+        .unwrap();
     assert_eq!(refreshed.disposition, CacheDisposition::RefreshedStale);
     assert_ne!(first.snapshot_authority(), refreshed.snapshot_authority());
     assert_eq!(first.snapshot_authority().registry_version, 10);
@@ -74,13 +73,12 @@ async fn agreement_failure_preserves_cache_and_retry_recovers_without_weaker_fal
     ] {
         let root = temp_dir("canic-catalog-agreement-failure");
         let mut request = mainnet_subnet_catalog_load_request(&root, NOW);
-        let initial =
-            load_subnet_catalog_detailed_with_source(&request, &Source::new(Reply::Matching, 10))
-                .await
-                .unwrap();
+        let initial = load_subnet_catalog_with_source(&request, &Source::new(Reply::Matching, 10))
+            .await
+            .unwrap();
         let bytes = fs::read(&initial.path).unwrap();
         request.now_unix_secs += MAINNET_CATALOG_MAX_AGE_SECONDS + 1;
-        let failure = load_subnet_catalog_detailed_with_source(&request, &Source::new(reply, 11))
+        let failure = load_subnet_catalog_with_source(&request, &Source::new(reply, 11))
             .await
             .unwrap_err();
         match reply {
@@ -105,7 +103,7 @@ async fn agreement_failure_preserves_cache_and_retry_recovers_without_weaker_fal
             SubnetCatalogFailureCacheDisposition::RefreshFailed(SubnetCatalogRefreshTrigger::Stale)
         );
         let recovered =
-            load_subnet_catalog_detailed_with_source(&request, &Source::new(Reply::Matching, 11))
+            load_subnet_catalog_with_source(&request, &Source::new(Reply::Matching, 11))
                 .await
                 .unwrap();
         assert_eq!(recovered.disposition, CacheDisposition::RefreshedStale);
@@ -122,10 +120,9 @@ async fn insufficient_assurance_cache_is_rejected_and_new_generation_refreshes_i
         CatalogSourceSelection::uncertified_query(MAINNET_CATALOG_ENDPOINTS[0]),
         NOW,
     );
-    let initial =
-        load_subnet_catalog_detailed_with_source(&weak, &Source::new(Reply::Matching, 10))
-            .await
-            .unwrap();
+    let initial = load_subnet_catalog_with_source(&weak, &Source::new(Reply::Matching, 10))
+        .await
+        .unwrap();
     let bytes = fs::read(&initial.path).unwrap();
     let failure = load_cached_mainnet_subnet_catalog(&root, NOW).unwrap_err();
     assert_eq!(

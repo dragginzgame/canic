@@ -1,6 +1,6 @@
 //! Passive authority and progress contracts for reviewed Root capacity import.
 
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Initialization hold for supplied capacity awaiting reviewed clearing and publication.

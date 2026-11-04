@@ -20,12 +20,13 @@ use crate::fleet_ensure::{
         lock_capacity_import_operation,
     },
 };
-use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
+use ic_host_artifacts::artifact::BoundedWriter;
+use ic_host_fs::durable::{NamedWriteError, PublicationMode, WriteOptions, write_with};
 use ic_host_fs::read::read_file_no_follow;
 
 use std::{
     fs::File,
-    io,
+    io::{self, BufWriter, Write},
     path::{Path, PathBuf},
 };
 
@@ -185,20 +186,30 @@ impl CapacityImportJournalStore {
         &self,
         record: &CapacityImportJournalRecord,
     ) -> Result<(), CapacityImportJournalError> {
-        let bytes = serde_json::to_vec_pretty(record)?;
-        if bytes.len() > MAXIMUM_JOURNAL_BYTES {
-            return Err(CapacityImportJournalError::Integrity);
-        }
-        write_bytes(
+        let mut exceeded = false;
+        let result = write_with(
             &self.path,
             WriteOptions {
                 mode: PublicationMode::Replace,
                 permissions: 0o666,
             },
-            &bytes,
-        )
-        .map_err(crate::publication::ops::io_error)?;
-        Ok(())
+            |file| {
+                let mut writer =
+                    BoundedWriter::new(BufWriter::new(file), MAXIMUM_JOURNAL_BYTES as u64);
+                let result = serde_json::to_writer_pretty(&mut writer, record);
+                exceeded = writer.limit_exceeded();
+                result?;
+                writer.flush().map_err(serde_json::Error::io)
+            },
+        );
+        match result {
+            Ok(()) => Ok(()),
+            Err(NamedWriteError::Producer {
+                cleanup_error: None,
+                ..
+            }) if exceeded => Err(CapacityImportJournalError::Integrity),
+            Err(source) => Err(crate::publication::ops::json_error(source).into()),
+        }
     }
 }
 
@@ -280,9 +291,12 @@ pub(in crate::fleet_ensure) fn require_completion_fits(
         operation.settled_status_wire_hex = Some(status.clone());
         operation.released_status_wire_hex = Some(status);
     }
-    if serde_json::to_vec_pretty(&largest)?.len() > MAXIMUM_JOURNAL_BYTES {
+    let mut writer = BoundedWriter::new(io::sink(), MAXIMUM_JOURNAL_BYTES as u64);
+    let result = serde_json::to_writer_pretty(&mut writer, &largest);
+    if writer.limit_exceeded() {
         return Err(CapacityImportJournalError::Integrity);
     }
+    result?;
     Ok(())
 }
 

@@ -1,9 +1,11 @@
 #!/usr/bin/env perl
+# Shared companions: scripts/dev/OwnedTree.pm
 use strict;
 use warnings;
 use Digest::SHA qw(sha256_hex);
-use File::Find qw(find);
-use File::Path qw(remove_tree);
+use FindBin;
+use lib $FindBin::Bin;
+use OwnedTree qw(directory route inventory remove_owned);
 use Fcntl qw(:DEFAULT :mode);
 use JSON::PP;
 
@@ -16,17 +18,6 @@ my $json=JSON::PP->new->canonical;
 my @receipt_names=qw(inputs.json selection.json native-environment.txt install.log Cargo.lock .crates2.json
     build-identity.observed.json native-environment.observed.txt recovery-pin.json managed.json);
 my %receipt_names=map { $_=>1 } @receipt_names;
-sub directory {
-    my ($p,$consumer_owned)=@_; my @s=lstat($p);
-    @s && S_ISDIR($s[2]) && !S_ISLNK($s[2]) && $s[4]==$< && ($consumer_owned || !($s[2]&0022))
-        or die "unsafe maintenance directory: $p\n";
-}
-sub route {
-    my ($p)=@_;
-    $p =~ m{\A/} && $p !~ m{[\0\r\n]|(?:^|/)\.{1,2}(?:/|$)|//} or die "unsafe maintenance path\n";
-    my $cursor='';
-    for my $part (split '/', $p) { next unless length $part; $cursor.="/$part"; -l $cursor and die "redirected maintenance path: $cursor\n"; }
-}
 route($store); directory($store);
 sub read_json {
     my ($p)=@_; route($p); my @s=lstat($p);
@@ -61,23 +52,6 @@ sub marker {
     !exists($v->{complete}) || JSON::PP::is_bool($v->{complete})
         or die "invalid completion marker: $p\n";
     return $v;
-}
-sub inventory {
-    my ($p,$scratch_links)=@_; my %files;
-    find({no_chdir=>1,follow=>0,wanted=>sub {
-        my @s=lstat($File::Find::name); @s or die "stat $File::Find::name: $!\n";
-        $s[4]==$< && (S_ISREG($s[2]) || S_ISDIR($s[2]) || ($scratch_links && S_ISLNK($s[2])))
-            or die "unowned or redirected maintenance tree: $File::Find::name\n";
-        $files{$File::Find::name}=[$s[0],$s[1],$s[2],$s[3],$s[7],$s[9],$s[10],$s[12]];
-        push @{$files{$File::Find::name}},readlink($File::Find::name) if S_ISLNK($s[2]);
-    }},$p);
-    return \%files;
-}
-sub remove_owned {
-    my ($p,$before,$scratch_links)=@_;
-    $json->encode(inventory($p,$scratch_links)) eq $json->encode($before) or die "maintenance tree changed: $p\n";
-    remove_tree($p,{safe=>1,error=>\my $errors});
-    @$errors && die "maintenance removal failed: ".$json->encode($errors)."\n";
 }
 if ($operation eq 'explain') {
     @args==3 or die "explain requires consumer, key and expected inputs JSON\n";

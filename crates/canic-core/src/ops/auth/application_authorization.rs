@@ -116,6 +116,7 @@ mod tests {
         let _guard = seams::lock();
         let mut canister = ConfigTestBuilder::canister_config(CanisterKind::Service);
         canister.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
+            receiver: None,
             allowed_scopes: vec!["app:read".to_owned()],
             default_session_ttl_secs: 60,
             maximum_session_ttl_secs: 120,

@@ -340,7 +340,7 @@ fn maximum_admission_publication_history_fits_coordinator_registry_cell() {
     let state = FleetCoordinatorStateRecord {
         current: Some(current),
     };
-    let encoded = state.to_bytes();
+    let encoded = state.to_bytes().expect("encode current record");
 
     eprintln!(
         "maximum admission publication history encoded bytes: {}",
@@ -475,6 +475,11 @@ fn completed_admission_command_replays_before_cross_domain_collision_checks() {
     assert_eq!(replay.outcome, FleetAdmissionMutationOutcome::Converged);
     assert_eq!(replay.generation, added_policy.generation);
     assert_eq!(replay.policy_digest, added_policy.policy_digest);
+    assert!(
+        FleetAdmissionOps::pending_operation(&FleetCoordinatorWorkflow::registry().unwrap())
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -1537,6 +1542,7 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
     assert_eq!(failure.diagnostic_code, diagnostic_code);
     assert_eq!(failure.failed_at_ns, 162);
     assert_eq!(failure.origin, None);
+    assert_fresh_local_failure_is_retained(status_request, diagnostic_code, 163);
 
     let root_failure = canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure {
         dependency: None,
@@ -1576,14 +1582,14 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
         assert_eq!(origin.failed_at_ns, root_failure.failed_at_ns);
         assert_eq!(origin.target, root_failure.target);
         assert_eq!(origin.operation_id, root_failure.operation_id);
+        assert_root_failure_replay_is_read_only(status_request, &observed, &status);
         let snapshot = FleetCoordinatorRegistryStore::export();
         FleetCoordinatorRegistryStore::import(snapshot);
-        assert_eq!(
+        let restored =
             FleetCoordinatorOps::component_provisioning_status_for_test(&config, status_request)
-                .unwrap()
-                .pending_root_failure,
-            status.pending_root_failure,
-        );
+                .unwrap();
+        assert_eq!(restored.pending_root_failure, status.pending_root_failure);
+        assert_retained_retry_deadline(&restored, retry_at_ns);
     }
     let failure =
         FleetCoordinatorOps::component_provisioning_status_for_test(&config, status_request)
@@ -1600,6 +1606,68 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
         )
         .expect("restore pending Root retry diagnostic");
     assert_eq!(restored.pending_root_failure, Some(failure));
+}
+
+fn assert_fresh_local_failure_is_retained(
+    request: FleetComponentProvisioningStatusRequest,
+    diagnostic_code: u16,
+    failed_at_ns: u64,
+) {
+    let fresh = FleetCoordinatorOps::record_component_provisioning_root_failure(
+        request,
+        diagnostic_code,
+        None,
+        failed_at_ns,
+    )
+    .unwrap();
+    assert_eq!(
+        fresh.pending_root_failure.unwrap().failed_at_ns,
+        failed_at_ns
+    );
+}
+
+fn assert_root_failure_replay_is_read_only(
+    request: FleetComponentProvisioningStatusRequest,
+    observed: &InternalError,
+    status: &FleetComponentProvisioningStatusResponse,
+) {
+    let before = FleetCoordinatorRegistryStore::export();
+    let previous = status.pending_root_failure.as_ref().unwrap();
+    let replay = FleetCoordinatorOps::record_component_provisioning_root_failure(
+        request,
+        previous.diagnostic_code,
+        observed.provisioning_failure(),
+        previous.failed_at_ns + 1,
+    )
+    .unwrap();
+    assert_eq!(&replay, status);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before);
+}
+
+fn assert_retained_retry_deadline(
+    status: &FleetComponentProvisioningStatusResponse,
+    retry_at_ns: Option<u64>,
+) {
+    let before = FleetCoordinatorRegistryStore::export();
+    assert_eq!(
+        component_provisioning_pending_delay(status, 163),
+        Duration::from_nanos(retry_at_ns.unwrap_or(163).saturating_sub(163)),
+    );
+    if let Some(deadline) = retry_at_ns {
+        assert_eq!(
+            component_provisioning_pending_delay(status, deadline - 1),
+            Duration::from_nanos(1),
+        );
+        assert_eq!(
+            component_provisioning_pending_delay(status, deadline),
+            Duration::ZERO
+        );
+        assert_eq!(
+            component_provisioning_retry_delay(status, status, deadline + 1),
+            Duration::from_secs(1),
+        );
+    }
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 }
 
 fn assert_service_publication_cursor(
@@ -2873,6 +2941,60 @@ fn drive_runtime_activation(
         else {
             panic!("runtime activation must invoke the next root");
         };
+        let issued = FleetCoordinatorRegistryStore::export();
+        let current = issued.current.as_ref().unwrap();
+        let record = current
+            .component_scale_out
+            .as_ref()
+            .filter(|record| record.operation_id == request.operation_id)
+            .or(current.component_provisioning.as_ref())
+            .filter(|record| record.operation_id == request.operation_id)
+            .unwrap();
+        let waiting_context = runtime_activation_test_context(record, now);
+        let mut waiting = waiting_context.publication;
+        waiting.activated_component_count = waiting_context.activated_component_count;
+        if waiting_context.activated_component_count == 0 {
+            let before_start = FleetCoordinatorOps::record_component_runtime_activation(
+                &request,
+                &waiting,
+                now + 1,
+            )
+            .expect("exact publication waits before Root activation starts");
+            assert!(before_start.pending_root_failure.is_none());
+            assert_eq!(FleetCoordinatorRegistryStore::export(), issued);
+            let mut invalid = waiting.clone();
+            invalid.plan_hash[0] ^= 1;
+            assert_eq!(
+                FleetCoordinatorOps::record_component_runtime_activation(
+                    &request,
+                    &invalid,
+                    now + 1,
+                )
+                .unwrap_err()
+                .public_error()
+                .code(),
+                canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
+            );
+            assert_eq!(FleetCoordinatorRegistryStore::export(), issued);
+        }
+        waiting.activation_started_at_ns = Some(waiting_context.activation_started_at_ns);
+        let pending =
+            FleetCoordinatorOps::record_component_runtime_activation(&request, &waiting, now + 1)
+                .expect("unchanged runtime activation remains pending");
+        assert_eq!(FleetCoordinatorRegistryStore::export(), issued);
+        assert!(pending.pending_root_failure.is_none());
+        let FleetComponentRuntimeActivationDisposition::Reconcile(retry) =
+            FleetCoordinatorOps::advance_component_runtime_activation(
+                &root_provision_advance_request(&pending),
+                now + 1,
+            )
+            .unwrap()
+        else {
+            panic!("unchanged activation must retain its original issued intent");
+        };
+        assert_eq!(retry.request, call.request);
+        assert_eq!(retry.fleet_subnet_root, call.fleet_subnet_root);
+        assert_eq!(FleetCoordinatorRegistryStore::export(), issued);
         let response = next_runtime_activation_response(call.fleet_subnet_root, now, now + 1);
         let advanced = crate::ops::fleet_coordinator::FleetCoordinatorOps::
             record_component_runtime_activation(&request, &response, now + 2)
@@ -2915,6 +3037,7 @@ fn coordinator_accepts_terminal_directory_publication_after_missing_every_compon
         panic!("first Directory publication observation must query its Root")
     };
     let durable_intent = FleetCoordinatorRegistryStore::export();
+    assert_pending_directory_confirmation(&request, &durable_intent);
     let response = terminal_directory_response(fleet_subnet_root, 211);
 
     let mut invalid_responses = Vec::new();
@@ -3610,6 +3733,18 @@ fn coordinator_retains_typed_estate_funding_pause_without_advancing_root_progres
     );
     assert_eq!(paused.pending_root_failure, None);
     assert_eq!(paused.provisioning_in_flight_root, None);
+    assert_eq!(
+        component_provisioning_pending_delay(&paused, 122),
+        Duration::from_nanos(58)
+    );
+    assert_eq!(
+        component_provisioning_pending_delay(&paused, 180),
+        Duration::ZERO
+    );
+    assert_eq!(
+        component_provisioning_retry_delay(&paused, &paused, 181),
+        Duration::from_secs(1),
+    );
 
     let retained_pause = FleetCoordinatorRegistryStore::export();
     let mut wrong_root = response;
@@ -6226,6 +6361,11 @@ fn coordinator_policy_rotation_converges_once_and_preserves_application_registry
     assert_eq!(FleetCoordinatorFundingStore::export(), before);
 
     FleetCoordinatorOps::begin_funding_policy_rotation(begin.clone(), 11).expect("begin rotation");
+    assert!(
+        FleetCoordinatorOps::pending_funding_rotation()
+            .unwrap()
+            .is_none()
+    );
     let after_begin = FleetCoordinatorFundingStore::export();
     FleetCoordinatorOps::begin_funding_policy_rotation(begin.clone(), 99)
         .expect("begin response-loss replay");
@@ -6282,6 +6422,10 @@ fn coordinator_policy_rotation_converges_once_and_preserves_application_registry
     };
     FleetCoordinatorOps::apply_funding_policy_rotation(apply.clone(), 13)
         .expect("apply fully staged plan");
+    assert_eq!(
+        FleetCoordinatorOps::pending_funding_rotation().unwrap(),
+        Some(operation_id)
+    );
     let applying = FleetCoordinatorFundingStore::export();
     FleetCoordinatorOps::apply_funding_policy_rotation(apply.clone(), 97)
         .expect("apply response-loss replay");
@@ -6347,6 +6491,11 @@ fn coordinator_policy_rotation_converges_once_and_preserves_application_registry
     assert_eq!(terminal.operation_id, operation_id);
     assert_eq!(terminal.apply_operator_debit.to_u128(), 0);
 
+    assert!(
+        FleetCoordinatorOps::pending_funding_rotation()
+            .unwrap()
+            .is_none()
+    );
     let completed = FleetCoordinatorFundingStore::export();
     FleetCoordinatorOps::apply_funding_policy_rotation(apply.clone(), 96)
         .expect("terminal apply replay");
@@ -7000,6 +7149,7 @@ fn coordinator_root_funding_denials_and_rejections_are_terminal_without_spend() 
     let rejected = FleetCoordinatorOps::record_root_funding_rejection(
         root.fleet_subnet_root,
         &call.request,
+        FleetRootFundingNoGrantReason::RootRejected,
         now_ns + 4,
     )
     .expect("record definite rejection");
@@ -7028,6 +7178,108 @@ fn coordinator_root_funding_denials_and_rejections_are_terminal_without_spend() 
     assert!(FleetCoordinatorOps::authorize_root_funding_caller(Principal::anonymous()).is_err());
     assert!(FleetCoordinatorOps::authorize_root_funding_caller(principal(99)).is_err());
     assert!(FleetCoordinatorOps::authorize_root_funding_caller(coordinator).is_err());
+}
+
+#[test]
+fn coordinator_expected_funding_refusals_replay_without_spend_and_allow_new_demand() {
+    let reason = FleetRootFundingNoGrantReason::RootBalanceRelieved;
+    {
+        FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+        let coordinator = principal(71);
+        let (root, _, registry) = activate_two_roots(coordinator);
+        let now = 3_700_000_000_000;
+        let balance = 2_000_000_000_000_000;
+        let request = root_funding_request(coordinator, &root, registry.clone(), 1, 42_200_000_000);
+        let FleetRootFundingDisposition::Invoke(call) = FleetCoordinatorOps::prepare_root_funding(
+            root.fleet_subnet_root,
+            request.clone(),
+            balance,
+            now,
+        )
+        .unwrap() else {
+            panic!("fresh demand");
+        };
+        let response = FleetCoordinatorOps::record_root_funding_rejection(
+            root.fleet_subnet_root,
+            &call.request,
+            reason,
+            now + 1,
+        )
+        .unwrap();
+        assert!(
+            matches!(&response, FleetRootFundingResponse::NoGrant(receipt) if receipt.reason == reason)
+        );
+        let retained = FleetCoordinatorFundingStore::export();
+        let current = retained.current.as_ref().unwrap();
+        assert!(current.fleet_window.is_none());
+        assert!(current.roots[0].window.is_none());
+        assert!(current.roots[0].current.is_none());
+        assert!(
+            matches!(FleetCoordinatorOps::prepare_root_funding(root.fleet_subnet_root, request, balance, now + 2).unwrap(), FleetRootFundingDisposition::Current(replay) if replay == response)
+        );
+        assert_eq!(FleetCoordinatorFundingStore::export(), retained);
+        let renewed = root_funding_request(coordinator, &root, registry, 2, 42_200_000_000);
+        assert!(matches!(
+            FleetCoordinatorOps::prepare_root_funding(
+                root.fleet_subnet_root,
+                renewed,
+                balance,
+                now + 3
+            )
+            .unwrap(),
+            FleetRootFundingDisposition::Invoke(_)
+        ));
+    }
+}
+
+#[test]
+fn temporary_funding_refusal_preserves_exact_reserved_operation() {
+    for code in [
+        canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE,
+        canic_contracts::diagnostics::codes::CAPACITY_UNAVAILABLE,
+    ] {
+        FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+        let coordinator = principal(71);
+        let (root, _, registry) = activate_two_roots(coordinator);
+        let now = 3_700_000_000_000;
+        let balance = 2_000_000_000_000_000;
+        let request = root_funding_request(coordinator, &root, registry, 1, 42_200_000_000);
+        let FleetRootFundingDisposition::Invoke(call) = FleetCoordinatorOps::prepare_root_funding(
+            root.fleet_subnet_root,
+            request.clone(),
+            balance,
+            now,
+        )
+        .unwrap() else {
+            panic!("fresh demand");
+        };
+        let retained = FleetCoordinatorFundingStore::export();
+        let outcome =
+            classify_root_funding_response(Err(InternalError::public(code).public_error()));
+        let error = FleetCoordinatorWorkflow::finish_root_funding_call(
+            root.fleet_subnet_root,
+            &call.request,
+            outcome,
+            now + 1,
+        )
+        .unwrap_err();
+        assert_eq!(error.public_error().code(), code.raw_code());
+        assert_eq!(FleetCoordinatorFundingStore::export(), retained);
+        let FleetRootFundingDisposition::Reconcile(retry) =
+            FleetCoordinatorOps::prepare_root_funding(
+                root.fleet_subnet_root,
+                request,
+                balance,
+                now + 2,
+            )
+            .unwrap()
+        else {
+            panic!("retain the uncertain operation");
+        };
+        assert_eq!(retry.request, call.request);
+        assert_eq!(FleetCoordinatorFundingStore::export(), retained);
+    }
 }
 
 fn root_funding_request(
@@ -7060,6 +7312,76 @@ fn root_funding_request(
         observed_balance: Cycles::new(observed_balance),
         requested_cycles: Cycles::new(requested_cycles),
         policy_hash,
+    }
+}
+
+#[test]
+fn unchanged_root_observations_reconcile_the_issued_intent_without_failure() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+    accept_every_planned_root(&config, plan_hash);
+    let accepted = FleetCoordinatorRegistryStore::export();
+    let record = accepted
+        .current
+        .as_ref()
+        .unwrap()
+        .component_provisioning
+        .as_ref()
+        .unwrap();
+    let response = provisioning_acceptances(&record.state)[0].response.clone();
+    let mut status = component_provisioning_status(&config, plan_hash);
+    for (index, now) in [120, 123, 126].into_iter().enumerate() {
+        let request = root_provision_advance_request(&status);
+        let call = expect_root_provision_call(
+            FleetCoordinatorOps::advance_component_provisioning_root_for_test(
+                &config, &request, now,
+            )
+            .unwrap(),
+            index != 0,
+        );
+        let issued = FleetCoordinatorRegistryStore::export();
+        let pending = FleetCoordinatorOps::record_component_provisioning_root_for_test(
+            &config,
+            &request,
+            response.clone(),
+            now + 1,
+        )
+        .unwrap();
+        assert_eq!(FleetCoordinatorRegistryStore::export(), issued);
+        assert!(pending.pending_root_failure.is_none());
+        assert_eq!(
+            component_provisioning_retry_delay(&pending, &pending, now),
+            Duration::from_secs(1)
+        );
+        let mut substituted = response.clone();
+        substituted.operation_id[0] ^= 1;
+        let error = FleetCoordinatorOps::record_component_provisioning_root_for_test(
+            &config,
+            &request,
+            substituted,
+            now + 1,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.code(),
+            canic_contracts::diagnostics::codes::STATE_CONFLICT
+        );
+        assert_eq!(FleetCoordinatorRegistryStore::export(), issued);
+        if index == 2 {
+            let advanced_response = next_root_provision_response(&config, &call, now + 1);
+            let advanced = FleetCoordinatorOps::record_component_provisioning_root_for_test(
+                &config,
+                &request,
+                advanced_response,
+                now + 2,
+            )
+            .unwrap();
+            assert_ne!(advanced.current_root, pending.current_root);
+            assert_eq!(
+                component_provisioning_retry_delay(&pending, &advanced, now),
+                Duration::ZERO
+            );
+        }
+        status = pending;
     }
 }
 
@@ -7149,4 +7471,201 @@ fn typed_operation_reads_reject_zero_ids_before_domain_lookup() {
             canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
     }
+}
+
+#[test]
+fn native_provisioning_demand_survives_restart_and_excludes_terminal_work() {
+    let config = ordinary_coordinator_config();
+    let plan_hash = prepare_two_root_acceptance_plan_with(&config);
+    let pending = FleetCoordinatorOps::pending_component_provisioning()
+        .unwrap()
+        .unwrap();
+    assert_eq!(pending.plan_hash, plan_hash);
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_eq!(
+        FleetCoordinatorOps::pending_component_provisioning().unwrap(),
+        Some(pending)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+    drive_terminal_fresh_install(&scale_out_coordinator_config());
+    assert!(
+        FleetCoordinatorOps::pending_component_provisioning()
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn coordinator_provisioning_retry_budget_preserves_intent_across_restart() {
+    use crate::ops::continuation_retry::{self as retry, Selection};
+    use canic_contracts::dto::operation_retry::{Operation, ResumeRequest, State};
+    let config = ordinary_coordinator_config();
+    prepare_two_root_acceptance_plan_with(&config);
+    let pending = FleetCoordinatorOps::pending_component_provisioning()
+        .unwrap()
+        .unwrap();
+    let operation = Operation::CoordinatorProvisioning {
+        operation_id: pending.operation_id,
+    };
+    let original = FleetCoordinatorRegistryStore::export();
+    for _ in 0..retry::status(operation)
+        .unwrap()
+        .maximum_attempts_without_progress
+    {
+        let attempt =
+            retry::begin(operation, retry::status(operation).unwrap().retry_at_ns).unwrap();
+        assert!(!retry::finish(attempt, None).unwrap());
+        let retained = FleetCoordinatorRegistryStore::export();
+        FleetCoordinatorRegistryStore::import(retained.clone());
+        assert_eq!(FleetCoordinatorRegistryStore::export(), retained);
+    }
+    assert_eq!(
+        retry::status(operation).unwrap().state,
+        State::BudgetExhausted
+    );
+    assert!(retry::status(operation).unwrap().diagnostic_code.is_none());
+    assert!(matches!(
+        retry::select(vec![operation], None, u64::MAX).unwrap(),
+        Selection::Idle
+    ));
+    let mut effects = FleetCoordinatorRegistryStore::export();
+    effects
+        .current
+        .as_mut()
+        .unwrap()
+        .continuation_retries
+        .clear();
+    assert_eq!(effects, original);
+    let request = ResumeRequest {
+        operation,
+        expected_generation: 0,
+    };
+    retry::resume_operation(request).unwrap();
+    let attempt = retry::begin(operation, 0).unwrap();
+    retry::finish(attempt, Some(&InternalError::unavailable())).unwrap();
+    let retained = FleetCoordinatorRegistryStore::export();
+    retry::resume_operation(request).unwrap();
+    assert_eq!(FleetCoordinatorRegistryStore::export(), retained);
+}
+
+#[test]
+fn coordinator_root_removal_retry_budget_does_not_reissue_reservation_authority() {
+    use crate::ops::continuation_retry as retry;
+    use canic_contracts::dto::operation_retry::{Operation, ResumeRequest, State};
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (root, _, version) = activate_two_roots(principal(102));
+    FleetCoordinatorOps::prepare_root_draining_reservation(
+        root_draining_reservation_request(&root, &version, [103; 32]),
+        10,
+    )
+    .unwrap();
+    FleetCoordinatorOps::request_root_removal_continuation([103; 32]).unwrap();
+    let operation = Operation::CoordinatorRootRemoval {
+        operation_id: [103; 32],
+    };
+    let original = FleetCoordinatorOps::root_removal_operation_status([103; 32]).unwrap();
+    let attempt = retry::begin(operation, 0).unwrap();
+    retry::finish(attempt, Some(&InternalError::conflict())).unwrap();
+    assert_eq!(
+        retry::status(operation).unwrap().state,
+        State::ReviewRequired
+    );
+    let retained = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(retained);
+    FleetCoordinatorOps::request_root_removal_continuation([103; 32]).unwrap();
+    assert_eq!(
+        retry::status(operation).unwrap().state,
+        State::ReviewRequired
+    );
+    assert_eq!(
+        super::recovery::release_idle().unwrap_err().code(),
+        InternalError::unavailable().code()
+    );
+    retry::resume_operation(ResumeRequest {
+        operation,
+        expected_generation: 0,
+    })
+    .unwrap();
+    assert_eq!(
+        FleetCoordinatorOps::root_removal_operation_status([103; 32]).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn root_removal_continuation_requires_explicit_demand_and_survives_restart() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (root, _, version) = activate_two_roots(principal(102));
+    let request = root_draining_reservation_request(&root, &version, [103; 32]);
+    let reservation = FleetCoordinatorOps::prepare_root_draining_reservation(request, 10).unwrap();
+    assert!(
+        FleetCoordinatorOps::pending_root_removals()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(super::recovery::release_idle().is_ok());
+    let prepared = FleetCoordinatorRegistryStore::export();
+    assert_eq!(
+        FleetCoordinatorOps::request_root_removal_continuation([104; 32])
+            .unwrap_err()
+            .code(),
+        InternalError::unavailable().code()
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), prepared);
+    FleetCoordinatorOps::request_root_removal_continuation([103; 32]).unwrap();
+    assert_eq!(
+        super::recovery::release_idle().unwrap_err().code(),
+        InternalError::unavailable().code()
+    );
+    let retained = FleetCoordinatorRegistryStore::export();
+    assert_eq!(
+        retained
+            .current
+            .as_ref()
+            .unwrap()
+            .root_draining_reservations[0]
+            .response,
+        reservation
+    );
+    FleetCoordinatorRegistryStore::import(retained.clone());
+    assert_eq!(
+        FleetCoordinatorOps::pending_root_removals().unwrap(),
+        vec![[103; 32]]
+    );
+    FleetCoordinatorOps::request_root_removal_continuation([103; 32]).unwrap();
+    assert_eq!(FleetCoordinatorRegistryStore::export(), retained);
+}
+
+fn assert_pending_directory_confirmation(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    durable_intent: &FleetCoordinatorRegistryData,
+) {
+    let record = durable_intent
+        .current
+        .as_ref()
+        .unwrap()
+        .component_provisioning
+        .as_ref()
+        .unwrap();
+    let waiting = directory_publication_context(record).previous;
+    assert!(waiting.publication.is_none());
+    let pending =
+        FleetCoordinatorOps::record_component_directory_confirmation(request, waiting.clone(), 211)
+            .expect_err("unchanged provisioned authority waits for Root publication");
+    assert_eq!(
+        pending.public_error().code(),
+        canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), *durable_intent);
+    let mut changed_waiting = waiting;
+    changed_waiting.receipt_content_hash[0] ^= 1;
+    let conflict =
+        FleetCoordinatorOps::record_component_directory_confirmation(request, changed_waiting, 211)
+            .expect_err("changed provisioned receipt cannot pass as pending publication");
+    assert_eq!(
+        conflict.public_error().code(),
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), *durable_intent);
 }

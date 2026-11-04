@@ -10,17 +10,15 @@ mod tests;
 use crate::{
     InternalError,
     diagnostics::codes,
-    dto::{
-        log::LogEntry,
-        page::{Page, PageRequest},
-    },
+    dto::log::{LogEntry, LogPage, LogPageRequest},
     log::{Level, Topic},
 };
 use std::{cell::RefCell, num::NonZeroUsize};
 
 const LOG_LABEL_MAX_BYTES: usize = 256;
 const LOG_PAGE_MAX_LIMIT: usize = 1_000;
-const LOG_SCAN_BATCH: NonZeroUsize = NonZeroUsize::new(256).unwrap();
+const LOG_SCAN_MAX: u32 = 1024;
+const LOG_PAGE_TEXT_MAX_BYTES: usize = 1024 * 1024;
 
 thread_local! {
     static LOG: RefCell<Option<ic_logging::Log>> = const { RefCell::new(None) };
@@ -88,15 +86,16 @@ impl LogOps {
         LOG.with_borrow(|selected| selected.as_ref()?.next_expiry_secs(max_age_secs))
     }
 
-    /// Convert upstream cursor scans into Canic's offset/total query envelope.
-    /// Exact totals scan retained history; only selected reply rows copy text.
-    #[must_use]
+    /// Project one upstream bounded scan without counting or copying complete history.
     pub fn page_filtered(
         crate_name: Option<&str>,
         topic: Option<&str>,
         min_level: Option<Level>,
-        page: PageRequest,
-    ) -> Page<LogEntry> {
+        page: LogPageRequest,
+    ) -> Result<LogPage, InternalError> {
+        if page.limit == 0 {
+            return Err(InternalError::invalid_input());
+        }
         let filter = ic_logging::Filter {
             source: crate_name,
             topic: topic.map_or(ic_logging::TopicMatch::Any, ic_logging::TopicMatch::Exact),
@@ -104,10 +103,11 @@ impl LogOps {
         };
         LOG.with_borrow(|selected| match selected {
             Some(selected) => project_page(selected, filter, page),
-            None => Page {
+            None => Ok(LogPage {
                 entries: Vec::new(),
-                total: 0,
-            },
+                scanned: 0,
+                next_before: None,
+            }),
         })
     }
 
@@ -167,35 +167,52 @@ fn append(
 fn project_page(
     log: &ic_logging::Log,
     filter: ic_logging::Filter<'_>,
-    request: PageRequest,
-) -> Page<LogEntry> {
-    let limit = usize::try_from(request.limit)
-        .unwrap_or(usize::MAX)
-        .min(LOG_PAGE_MAX_LIMIT);
+    request: LogPageRequest,
+) -> Result<LogPage, InternalError> {
+    let limit = NonZeroUsize::new(usize::from(request.limit).min(LOG_PAGE_MAX_LIMIT))
+        .ok_or_else(InternalError::invalid_input)?;
+    let scan = log.page(
+        filter,
+        ic_logging::PageRequest {
+            before: request.before,
+            max_results: limit,
+            max_scanned: NonZeroUsize::new(LOG_SCAN_MAX as usize).expect("nonzero scan bound"),
+        },
+    );
     let mut entries = Vec::new();
-    let mut total = 0u64;
-    let mut before = None;
-    loop {
-        let page = log.page(
-            filter,
-            ic_logging::PageRequest {
-                before,
-                max_results: LOG_SCAN_BATCH,
-                max_scanned: LOG_SCAN_BATCH,
-            },
-        );
-        for entry in page.entries {
-            if total >= request.offset && entries.len() < limit {
-                entries.push(project_entry(entry));
+    let mut text_bytes = 0usize;
+    let mut last_returned = None;
+    let mut next_before = scan.next_before;
+    for entry in scan.entries {
+        let row_bytes = entry
+            .source
+            .len()
+            .saturating_add(entry.topic.as_ref().map_or(0, String::len))
+            .saturating_add(entry.message.len());
+        if row_bytes > LOG_PAGE_TEXT_MAX_BYTES.saturating_sub(text_bytes) {
+            if entries.is_empty() {
+                return Err(InternalError::public(codes::CAPACITY_LIMIT));
             }
-            total = total.saturating_add(1);
-        }
-        let Some(cursor) = page.next_before else {
+            // Resume before the last returned row so this unreturned row is retried.
+            next_before = last_returned;
             break;
-        };
-        before = Some(cursor);
+        }
+        text_bytes += row_bytes;
+        last_returned = Some(entry.sequence);
+        entries.push(project_entry(entry));
     }
-    Page { entries, total }
+    let page = LogPage {
+        entries,
+        scanned: u32::try_from(scan.scanned).expect("bounded upstream scan"),
+        next_before,
+    };
+    // Check the actual maintained result frame once, after bounded scan/copy work.
+    ic_wire::native::encoded_frame_len(
+        &Ok::<_, canic_contracts::dto::error::Error>(&page),
+        canic_contracts::protocol::protected_logs::RESPONSE_LIMITS,
+    )
+    .map_err(|_| InternalError::public(codes::CAPACITY_LIMIT))?;
+    Ok(page)
 }
 
 fn project_entry(entry: &ic_logging::Entry) -> LogEntry {

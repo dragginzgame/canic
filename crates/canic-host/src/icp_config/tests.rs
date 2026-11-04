@@ -614,5 +614,19 @@ fn local_projection_preserves_quoted_names_and_ordinary_aliases() {
     .unwrap();
     assert!(manifest.has_canister("123"));
     assert!(manifest.has_canister("true"));
-    assert!(IcpManifest::parse("").unwrap().has_environment("local"));
+    for empty in ["", "null", "~", "---\n"] {
+        assert!(IcpManifest::parse(empty).unwrap().has_environment("local"));
+    }
+}
+
+#[test]
+fn local_projection_admits_the_exact_byte_limit_before_schema_projection() {
+    let mut source = String::from("canisters: [{name: root}]\n#");
+    source.push_str(&"x".repeat(MAX_ICP_CONFIG_BYTES - source.len()));
+    assert!(IcpManifest::parse(&source).unwrap().has_canister("root"));
+    source.push('x');
+    assert!(matches!(
+        IcpManifest::parse(&source),
+        Err(IcpManifestError::TooLarge)
+    ));
 }

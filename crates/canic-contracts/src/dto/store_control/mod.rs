@@ -18,7 +18,7 @@ pub struct FixtureGrantRequest {
     derive(ic_wire::Wire)
 )]
 pub struct ReclamationResponse {
-    pub destination: ic_platform::Principal,
+    pub destination: ic_platform_types::Principal,
     pub cycles_before: u128,
     pub retained_cycles_target: u128,
     pub cycles_transferred: u128,

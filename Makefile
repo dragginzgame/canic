@@ -171,7 +171,7 @@ help:
 	@echo "Examples:"
 	@echo "  make validate    # Run the complete local validation workflow"
 	@echo "  make test        # Run workspace tests"
-	@echo "  make release-patch # Validate, bump, commit, tag, and push a patch release"
+	@echo "  make release-patch RELEASE_GROUP=framework # Validate and deliver one group"
 
 #
 # Installing
@@ -219,6 +219,15 @@ update-dev:
 # Version management (validate the source candidate before mutation)
 #
 
+# Group selection happens before prerequisites can install tools or compile.
+CANIC_GROUP_COMMANDS := version patch patch-fast minor major publish release-cadence release-stage release-candidate release-commit release-push release-patch-fast release-patch release-minor release-major release-resume release-version release-preflight release-verify release-prepare-version release-prepared-check release-files release-commit-check release-committed-check release-tagged-check release-push-check
+ifneq ($(filter $(CANIC_GROUP_COMMANDS),$(MAKECMDGOALS)),)
+ifneq ($(shell RELEASE_GROUP='$(subst ','"'"',$(RELEASE_GROUP))' bash scripts/release/selection.sh && printf admitted),admitted)
+$(error Select a valid explicit RELEASE_GROUP; see ci/cargo-release-groups.json)
+endif
+endif
+export RELEASE_GROUP
+
 version:
 	@bash scripts/ci/read-workspace-version.sh
 
@@ -227,17 +236,17 @@ tags:
 
 patch:
 	@$(MAKE) --no-print-directory release-cadence
-	+@$(RELEASE_VALIDATION_LANE) complete patch
+	+@$(RELEASE_VALIDATION_LANE) selected patch
 
 patch-fast:
 	@$(MAKE) --no-print-directory release-cadence
 	+@$(RELEASE_VALIDATION_LANE) fast patch
 
 minor:
-	+@$(RELEASE_VALIDATION_LANE) complete minor
+	+@$(RELEASE_VALIDATION_LANE) selected minor
 
 major:
-	+@$(RELEASE_VALIDATION_LANE) complete major
+	+@$(RELEASE_VALIDATION_LANE) selected major
 
 release-patch-fast:
 	@$(MAKE) patch-fast
@@ -299,11 +308,26 @@ test-wasm: test-unit-fast
 # differ deliberately: local Clippy first; hosted cheap jobs gate expensive jobs.
 CANIC_QUALIFICATION_LINT := clippy
 CANIC_QUALIFICATION_FORMAT := fmt-check
-CANIC_QUALIFICATION_POLICY := check-invariants shellcheck
+CANIC_QUALIFICATION_POLICY := compiler-check check-invariants shellcheck
 CANIC_QUALIFICATION_SECURITY := dependency-risk-gate dependency-risk-inventory-test
 CANIC_QUALIFICATION_FEATURES := control-plane-feature-gate
 
-.PHONY: prepare-locked-dependencies prepare-validation
+# This roster mirrors the barriers below; the consumer fixture compares it with
+# actual Make dispatch, including ordering, rather than explanatory prose.
+CANIC_RELEASE_STAGES := tools-check dependency-adoption-admission \
+	$(CANIC_QUALIFICATION_LINT) dependency-adoption-fixtures \
+	$(CANIC_QUALIFICATION_FORMAT) $(CANIC_QUALIFICATION_POLICY) $(CANIC_QUALIFICATION_SECURITY) \
+	check $(CANIC_QUALIFICATION_FEATURES) test
+.PHONY: release-validation-roster release-group-validation-gate
+release-validation-roster:
+	@printf '%s\n' $(CANIC_RELEASE_STAGES)
+release-group-validation-gate:
+	@bash scripts/release/test-validation-groups.sh
+
+.PHONY: compiler-check prepare-locked-dependencies prepare-validation
+compiler-check:
+	@bash scripts/ci/check-rust-toolchain.sh
+
 prepare-locked-dependencies:
 	@for manifest in Cargo.toml $(addsuffix /Cargo.toml,$(CANIC_BLOB_WORKSPACES)); do \
 		cargo fetch --locked --manifest-path "$$manifest" || exit "$$?"; done
@@ -330,6 +354,7 @@ CANIC_INVARIANT_TARGETS := \
 		layering-gate \
 		current-document-semantics-gate \
 		release-validation-matrix-gate \
+		release-group-validation-gate \
 		release-integrity-contract-gate \
 		recovery-runbooks-gate \
 		validation-runner-gate \
@@ -378,16 +403,13 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-pinned-ci-tools.sh
 	bash scripts/ci/test-build-environment.sh
+	bash scripts/ci/test-rust-toolchain.sh
 	bash scripts/ci/test-cargo-clean.sh
 	bash scripts/ci/test-integration-workspace.sh
-	bash scripts/ci/test-shared-release-adoption.sh
 	bash scripts/ci/test-canic-formatters.sh
 	bash scripts/ci/test-dependency-adoption.sh
-	bash scripts/ci/test-release-commit-view.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh
-	bash scripts/release/test-stage.sh
-	MAKEFLAGS='-- RELEASE_PREVIOUS=9.9.9 RELEASE_KIND=minor RELEASE_VERSION=9.10.0' bash scripts/release/test-preflight.sh
 	bash scripts/ci/test-release-validation-lane.sh
 	bash scripts/ci/check-publish-manifest-boundary.sh
 	bash scripts/ci/test-publish-manifest-boundary.sh
@@ -517,9 +539,9 @@ release-version:
 release-preflight:
 	@bash scripts/release/adapter.sh preflight
 release-verify:
-	+CARGO_NET_OFFLINE=true $(RELEASE_VALIDATION_LANE) complete
+	+CARGO_NET_OFFLINE=true $(RELEASE_VALIDATION_LANE) selected
 release-prepare-version:
-	@CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$(RELEASE_SOURCE)" CANIC_RELEASE_VALIDATION_KIND=complete CANIC_RELEASE_DATE="$(RELEASE_DATE)" bash scripts/ci/bump-version.sh "$(RELEASE_KIND)"
+	@CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$(RELEASE_SOURCE)" CANIC_RELEASE_VALIDATION_KIND=plan CANIC_RELEASE_DATE="$(RELEASE_DATE)" bash scripts/ci/bump-version.sh "$(RELEASE_KIND)"
 release-prepared-check:
 	@bash scripts/ci/check-release-candidate.sh
 release-committed-check:
@@ -546,8 +568,10 @@ runtime-dependency-graph-gate:
 	@perl scripts/ci/check-cargo-graph.pl --consumer "$(CURDIR)" \
 		--package canic --package canic-core --package canic-control-plane --package canic-macros \
 		--target wasm32-unknown-unknown --all-features \
-		--require ic-memory=1 --require ic-timers=1 --forbid ic-cdk-timers \
-		--forbid canic-blob-service --forbid canic-cli --forbid canic-testing-internal \
+		--require ic-storage=1 --require ic-timers=1 \
+		--require ic-platform-runtime=1 --require ic-platform-runtime-guard=1 \
+		--forbid ic-cdk-timers \
+		--forbid canic-blob-service --forbid canic-cli --forbid canic-tests \
 		--forbid ic-testkit
 
 # Release validation reuses adoption phases without repeating workspace Clippy.

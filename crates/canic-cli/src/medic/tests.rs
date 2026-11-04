@@ -510,7 +510,7 @@ maximum_instances = 1
 "#,
     );
     write_medic_package(&root, "app", "demo", "app");
-    let expected = env!("CARGO_PKG_VERSION").to_owned();
+    let expected = canic_core::VERSION.to_owned();
     let actual = format!("{expected}-preflight");
     let finding = canic_core::role_contract::RoleContractFinding::CanicVersionMismatch {
         expected,
@@ -1152,7 +1152,7 @@ internal-test-fixtures = ["canic-core/internal-test-fixtures"]
 [dependencies]
 canic-core = {{ path = "../canic-core" }}
 "#,
-            env!("CARGO_PKG_VERSION")
+            canic_core::VERSION
         ),
     )
     .expect("write fake Canic manifest");
@@ -1177,7 +1177,7 @@ auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig
 auth-local-application-authorization = ["auth-delegated-token-verify"]
 internal-test-fixtures = []
 "#,
-            env!("CARGO_PKG_VERSION")
+            canic_core::VERSION
         ),
     )
     .expect("write fake Canic core manifest");

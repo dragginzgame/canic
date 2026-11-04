@@ -168,8 +168,7 @@ use component_installation::{
 use ic_platform::call::{Call, WaitPolicy};
 use lifecycle_drivers::{
     advance_component_draining_boundary, advance_subtree_removal_phase,
-    component_allocation_reconciliation_complete, component_draining_advance_removal_response,
-    prepared_component_draining_boundary,
+    component_draining_advance_removal_response, prepared_component_draining_boundary,
 };
 use registry_response::{
     allocation_response, child_allocation_response, child_commit_response,
@@ -178,7 +177,6 @@ use registry_response::{
 };
 use retirement_response::*;
 use serde::Deserialize;
-use std::time::Duration;
 
 pub(super) use authority_validation::validate_allocation_record;
 
@@ -191,6 +189,45 @@ pub use lifecycle_drivers::{
     schedule_subtree_removal,
 };
 pub(super) use registry_response::component_directory_head;
+
+/// Reconstruct only explicitly requested Component and subtree retirement work.
+pub fn resume_removal_continuations() -> Result<(), InternalError> {
+    if TimerApi::require_active().is_err() {
+        return Ok(());
+    }
+    lifecycle_drivers::removal_timer::schedule()
+}
+
+/// Recover retirement demand only after the provider releases running authority.
+pub(in crate::workflow) fn recover_removal_continuations() -> bool {
+    lifecycle_drivers::removal_timer::recover()
+}
+
+/// Reconstruct requested ordinary and peer allocations after synchronous restoration.
+pub fn resume_allocation_continuations() -> Result<(), InternalError> {
+    if TimerApi::require_active().is_err() {
+        return Ok(());
+    }
+    lifecycle_drivers::allocation_timer::schedule()
+}
+
+/// Recover the ordinary allocation owner without replacing a live callback.
+pub(in crate::workflow) fn recover_allocation_continuations() -> bool {
+    lifecycle_drivers::allocation_timer::recover()
+}
+
+/// Reconstruct accepted child continuation demand after synchronous restoration.
+pub fn resume_child_continuations() -> Result<(), InternalError> {
+    if TimerApi::require_active().is_err() {
+        return Ok(());
+    }
+    lifecycle_drivers::child_timer::schedule()
+}
+
+/// Recover only when the provider no longer has a live callback for this owner.
+pub(in crate::workflow) fn recover_child_continuations() -> bool {
+    lifecycle_drivers::child_timer::recover()
+}
 
 const MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES: u16 = 100;
 const MAX_COMPONENT_DIRECTORY_CURSOR_BYTES: usize = 2_048;
@@ -677,6 +714,16 @@ fn prepared_status(
     response(root, prepared)
 }
 
+/// Suspended automatic attempts retain unresolved business demand and cannot be sealed.
+pub fn require_continuations_settled() -> Result<(), InternalError> {
+    if !ComponentRegistryOps::allocation_continuation_operations()?.is_empty()
+        || !ComponentRegistryOps::removal_continuation_operations()?.is_empty()
+    {
+        return Err(InternalError::unavailable());
+    }
+    Ok(())
+}
+
 /// Durably reserve one admitted top-level Component identity and root-local capacity.
 pub async fn reserve_allocation(
     request: RootComponentAllocationRequest,
@@ -687,7 +734,6 @@ pub async fn reserve_allocation(
         store_bootstrap: prepared.store_bootstrap.clone(),
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
-    root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let provisioning_origin = ComponentProvisioningOrigin::FleetAdministrator {
@@ -710,6 +756,8 @@ pub async fn reserve_allocation(
         return allocation_response(existing);
     }
 
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     crate::ops::component_provisioning::RootComponentProvisioningOps::
         require_ordinary_allocation_open()?;
@@ -747,7 +795,6 @@ pub async fn reserve_peer_allocation(
         store_bootstrap: prepared.store_bootstrap.clone(),
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
-    root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
@@ -768,6 +815,8 @@ pub async fn reserve_peer_allocation(
         );
     }
 
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     let requester = peer_requester_authority(
         &authority,
@@ -1038,7 +1087,7 @@ pub fn allocation_operation_status(
         }
     }
 
-    let complete = component_allocation_reconciliation_complete(&allocation);
+    let complete = ComponentRegistryOps::allocation_reconciliation_complete(&allocation);
     Ok(Some(RootComponentOperationStatus {
         allocation: allocation_response(allocation)?,
         complete,
@@ -1260,6 +1309,13 @@ pub async fn begin_component_draining(
 ) -> Result<RootComponentDrainingResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    if let Some(completed) = ComponentRegistryOps::completed_component_draining(
+        request.component,
+        request.operation_id,
+        &request.expected_registry,
+    )? {
+        return Ok(component_draining_response(completed));
+    }
     let preparation_request = RootComponentRegistryPreparationRequest {
         store_bootstrap: prepared.store_bootstrap.clone(),
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
@@ -1336,6 +1392,12 @@ pub fn component_draining_status(
         .ok_or_else(InternalError::unavailable)?;
     if draining.operation_id != request.operation_id {
         return Err(InternalError::conflict());
+    }
+    if matches!(
+        draining.deletion,
+        Some(RootComponentDeletionProgressView::MembershipRemoved(_))
+    ) {
+        return Ok(component_draining_response(draining));
     }
     let partition =
         ComponentRegistryOps::partition(request.component)?.ok_or_else(InternalError::invariant)?;
@@ -2732,7 +2794,7 @@ async fn release_child_application_startup(
         .await
         .map_err(|error| child_membership_failure("release_startup", error))?;
     if startup == caller_authority::ApplicationStartupProgress::Pending {
-        schedule_component_child_allocation(request.component, request.operation_id);
+        schedule_component_child_allocation(request.component, request.operation_id)?;
         return Err(child_membership_failure(
             "startup_pending",
             InternalError::unavailable(),
@@ -3139,7 +3201,8 @@ async fn activate_component_membership_with_plan(
     }
     let observed =
         query_component_runtime_status(plan.target_canister, plan.directory_request.operation_id)
-            .await?;
+            .await
+            .map_err(|error| component_membership_failure("query_runtime", error))?;
     validate_active_target_runtime_status_for_deployment(
         &observed,
         &plan.target_binding,
@@ -3155,7 +3218,8 @@ async fn activate_component_membership_with_plan(
         request.operation_id,
         request.operation_id,
     )
-    .await?;
+    .await
+    .map_err(|error| component_membership_failure("framework_ready", error))?;
     caller_authority::prepare_activation(
         canic_contracts::ids::CallerInstallation {
             binding: plan.target_binding.clone(),
@@ -3164,7 +3228,8 @@ async fn activate_component_membership_with_plan(
         },
         true,
     )
-    .await?;
+    .await
+    .map_err(|error| component_membership_failure("prepare_callers", error))?;
 
     let fleet_directory = plan.directory_request.authority.fleet.clone();
     let activated = match &plan.directory_request.authority.component_group {
@@ -3183,7 +3248,9 @@ async fn activate_component_membership_with_plan(
         ),
     }?;
     let (activated_allocation, active_partition) = activated;
-    caller_authority::publish_activation(request.operation_id).await?;
+    caller_authority::publish_activation(request.operation_id)
+        .await
+        .map_err(|error| component_membership_failure("publish_callers", error))?;
 
     validate_partition(
         &plan.root_binding,
@@ -3220,6 +3287,18 @@ async fn activate_component_membership_with_plan(
         active_authority_hash,
     )
     .await
+    .map_err(|error| component_membership_failure("synchronize_membership", error))
+}
+
+fn component_membership_failure(stage: &'static str, error: InternalError) -> InternalError {
+    canic_core::log!(
+        Topic::Rpc,
+        Error,
+        "Component membership failed stage={stage} diagnostic={} public_code={}",
+        error.code(),
+        error.public_error().raw_code()
+    );
+    error
 }
 
 /// Activate one peer Component's membership for its exact active requester caller.
@@ -3880,7 +3959,7 @@ async fn prepared_component_runtime_plan_with_authority(
     if committed_directory_hash != directory_authority_hash
         && !ComponentRegistryOps::prepared_initial_descendants_are_terminal(allocation.component)?
     {
-        return Err(InternalError::invariant());
+        return Err(InternalError::unavailable());
     }
     // A committed membership reconstructs the immutable pre-child Directory.
     // Its live successor is read independently when validating active membership.
@@ -3896,7 +3975,9 @@ async fn prepared_component_runtime_plan_with_authority(
         fixture: install.payload.fixture,
         root_binding: root_authority.binding,
         allocation,
-        partition,
+        // Response receipts retain the original commit while the directory plan
+        // above follows validated initial-child progress in the live partition.
+        partition: ComponentRegistryOps::allocation_commit_partition(operation_id)?,
         target_canister: install.canister,
         target_binding: ManagedCanisterBinding::Component(install.durable.binding),
         deployment: install.deployment,

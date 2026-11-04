@@ -1,412 +1,46 @@
-# Canic Changelog Governance
+# Canic changelog governance
 
-This document defines the authoritative rules for maintaining
-`CHANGELOG.md`, minor-line changelog archives, and unreleased development
-notes.
+Apply the reviewed [shared changelog rules](../../rules/changelogs.md), including
+release-group ledgers, retained coordinated history and impact classification.
+[Delivery cadence](delivery-cadence.md) owns coherent batches and maintainer-owned
+minor boundaries; [CI/deployment policy](ci-deployment.md) owns execution authority.
 
-These rules are intended to be followed by automated agents.
+Canic has four explicit groups: `framework`, `host`, `icydb` and `blob-service`, declared
+in [the release policy](../../ci/cargo-release-groups.json). Each owns one
+`releases/<group>/CHANGELOG.md`. The root [changelog](../../CHANGELOG.md) is an
+index. Earlier coordinated releases live once in
+[shared history](../../releases/history.md), with their original scope and linked
+historical detailed notes. The historical ledger receives no new releases.
 
-Release-batch scope and push cadence are governed by
-[delivery cadence governance](delivery-cadence.md). This document records
-those batches; it does not turn each implementation slice into a release.
+Maintain one pending numbered entry for each affected group. Extend its existing
+open entry until tagged; do not allocate a version per implementation slice.
+An adapter change belongs in its adapter ledger. Host/CLI changes belong in the
+Host ledger; framework changes and qualification belong in the framework ledger.
+Dependent notes explain required
+adoption and link to the supplying ledger instead of duplicating implementation
+history. Current group versions come from member manifests and the root catalog;
+status documents record evidence and remaining work without granting authority.
 
----
+Each ledger identifies its group and covered packages. Keep root emoji sections
+and concise outcome notes. New detailed notes, when useful, belong under
+`releases/<group>/<major>.<minor>.md`. Existing linked historical detail paths
+retain their original scope. A pending numbered heading may be undated or marked
+`Unreleased`; the governed transaction seals the selected ledger with its date.
+The native `changelog_governance` cases admit each declared ledger independently
+and refuse ambiguous pending selections.
 
-# 1. Purpose
+A group release changes only that group's notes and versions. It cannot finalize
+another group's pending entry or the historical ledger. The adoption itself keeps
+all numeric package identities unchanged; boundary approval is not permission to
+bump, tag, push or publish. An authorized release explicitly selects its group:
 
-The root `CHANGELOG.md` file is the canonical release ledger for Canic.
-
-It records high-level architectural and behavioral changes per release.
-
-It must remain concise and structured.
-
-It is maintained by default when a meaningful code or behavior batch is
-complete. A versioned entry may remain an open draft and accumulate compatible
-work until that version is tagged.
-
-Detailed change breakdowns belong in:
-
-`docs/changelog/<major>.<minor>.md`
-
-For example: [docs/changelog/0.33.md](../changelog/0.33.md)
-
-Every versioned patch draft and finalized patch entry must have both views:
-
-- a concise outcome overview in the root `CHANGELOG.md`;
-- one detailed patch section in the matching
-  `docs/changelog/<major>.<minor>.md` file.
-
-The root ledger is for scanning release history. The detailed file is where
-agents record the implementation breakdown, tests, notes, CLI surfaces, JSON
-shape changes, and operational nuance.
-
----
-
-# 2. File Structure
-
-## 2.1 Canonical Ledger
-
-- Root: `CHANGELOG.md`
-- Must contain:
-  - Version headers
-  - Date
-  - High-level summary sections
-  - Links to detailed notes
-- Root minor-line entries use one short bullet for a small patch and separate
-  outcome and upgrade bullets or relevant sections for a broad release. Follow
-  the readable-layout rules in [the common policy](../../rules/changelogs.md#readable-release-layout).
-- Within each minor-line section, patch entries must be ordered chronologically newest first (`x.y.9` before `x.y.8` before `x.y.7`).
-- Each root minor-line section must link to its detailed
-  `docs/changelog/<major>.<minor>.md` file when that file exists.
-- Root patch summaries and detailed change narratives describe behavior, not
-  release readiness. Do not duplicate draft/published or pending-validation
-  claims there. The detailed patch heading owns the draft/date field updated by
-  the version transaction; the generated structured release receipt owns validated-source
-  evidence. Remote tags and package registries separately establish publication.
-  Development readiness belongs in the current handoff. This ownership rule is
-  editorial guidance, not authority for a phrase-based release guard.
-- A completed meaningful code or behavior batch must update the root changelog
-  by default. Small incomplete slices may wait until they form a coherent
-  batch, and governance-only, formatting-only, or routine test-only work is
-  omitted unless it changes a maintained surface.
-
-## 2.2 Detailed Minor Notes
-
-- Location: `docs/changelog/<major>.<minor>.md`
-- Contains:
-  - Deep architectural explanation
-  - Internal module movements
-  - Test matrix expansions
-  - Execution-shape changes
-  - Validation and invariant notes
-  - Migration commentary
-- This is the preferred place for code examples, LoC snapshots, and fenced blocks (` ``` `) that improve scanability.
-- Detailed minor notes may be substantially more verbose than root changelog entries.
-- Every patch listed in a root minor-line section must have a matching
-  versioned section in the detailed minor notes. If the patch is intentionally
-  small, the detailed section can be short, but it must still exist.
-- When a patch adds or changes a CLI query, command result, JSON shape, or
-  visible output column, record that operator-facing surface under that patch
-  section in the detailed minor notes. Keep implementation cleanup separate from
-  those CLI surface bullets so readers can quickly find new automation inputs
-  and outputs.
-
-All patch releases in the same minor line share one detailed notes file.
-Example: `0.33.0`, `0.33.1`, and `0.33.2` all map to [docs/changelog/0.33.md](../changelog/0.33.md).
-
-Within a detailed minor notes file, patch sections must also be ordered chronologically newest first.
-
-The root changelog must link to the detailed file when present.
-
-## 2.3 Pending Release Notes
-
-Follow the [common changelog rules](../../rules/changelogs.md): keep one numbered,
-undated pending release at the top of the root ledger, with matching detailed
-minor-line notes. Compatible work extends that entry until release preparation
-finalizes it. The native `changelog_governance` check validates the structured
-pending version and its detailed-note presence; it does not freeze narrative.
-
-Rules:
-
-- Do not create a patch-numbered section for every small code slice. Complete a
-  coherent batch first.
-- Group related slices into coherent bullets in the current pending entry.
-- Keep notes concise as the release batch grows.
-- Omit formatting-only churn, transient debugging notes,
-  or validation command inventories unless the validation surface itself
-  changed.
-- When a coherent batch completes, update its detailed patch section and the
-  concise root summary together.
-
-Terminology:
-
-- Code slice: a small focused change suitable for review and targeted
-  validation. It does not imply a version.
-- Release batch: one substantive end-to-end outcome containing its compatible
-  implementation slices, direct evidence, propagation and cleanup.
-- Open patch draft: the newest versioned changelog entry with no matching
-  immutable `v<version>` tag. Its numbered heading remains undated until release
-  preparation; the tag, not heading prose, closes the draft. Compatible
-  work for the complete release batch is added to this entry until the tag
-  exists.
-- Published patch release: a versioned release prepared by the human-owned
-  release flow.
-
----
-
-# 3. Version Entry Rules (Root CHANGELOG.md)
-
-Each version entry must follow:
-
-## [<version>] – <YYYY-MM-DD> – <Short Title>
-
-### Added
-- High-level new capabilities
-
-### Changed
-- Architectural or behavioral changes
-
-### Removed
-- Removed APIs, contracts, or behaviors
-
-Rules:
-
-1. Keep the existing changelog structure and header format.
-2. Smaller entries may omit the title segment and use:
-   `## [<version>] - <YYYY-MM-DD>`.
-3. Changelog subsections are optional; include only sections relevant to that release.
-4. If an entry reaches 4 lines or more of changelog content, split it into subsection headers.
-5. For small cleanup releases, prefer no subsection headers; use a short plain-language summary with concise bullets.
-6. For structural cleanup/audit passes, use subsection headers and include an explicit `Audit` subsection with footprint stats.
-7. If a section like `Changed` becomes large, split into topic-based subheaders (for example `Changed - Aggregate Execution`, `Changed - Structure`).
-8. Do not include file paths.
-9. Do not include test names.
-10. Do not include internal refactor noise.
-11. Keep root entries easy to scan; move supporting detail to the minor notes.
-12. If a section exceeds ~4 lines of explanation, move detail to `docs/changelog/<major>.<minor>.md`.
-13. For a root minor-line entry (`<major>.<minor>.x`), keep each patch overview concise; broad patches may use separate outcome and upgrade bullets.
-14. Give each bullet one coherent outcome, normally in one or two short sentences.
-15. Split independent outcomes and keep issue links beside their changes; move supporting detail to `docs/changelog/<major>.<minor>.md` instead of appending an issue inventory.
-16. Root minor-line patch bullets must be listed in descending patch order, with the newest patch first and the oldest patch last.
-17. Create or update a versioned root entry when a coherent meaningful batch
-    completes. The entry remains an open draft until its matching tag exists.
-18. Never create a second patch draft merely because another compatible slice
-    completed; extend the existing untagged draft instead.
-
-## 3.1 Section Header Emoji Mapping
-
-When section headers are used in `CHANGELOG.md` or `docs/changelog/*.md`,
-emoji-prefixed headers are the default and must use this fixed mapping:
-
-- `Added=➕`
-- `Changed=🔧`
-- `Fixed=🩹`
-- `Removed=🗑️`
-- `Breaking=⚠️`
-- `Migration Notes=🧭`
-- `Summary=📝`
-- `Cleanup=🧹`
-- `Audit=📊`
-- `Testing=🧪`
-- `Governance=🥾`
-- `Documentation=📚`
-
-Keep emoji usage consistent across releases.
-
-## 3.2 Link Formatting
-
-For root changelog references to detailed notes, links must be clickable Markdown links.
-
-Use this source text in the root `CHANGELOG.md`:
-
-```markdown
-[docs/changelog/0.33.md](../changelog/0.33.md)
+```sh
+make release-patch RELEASE_GROUP=icydb
+make publish RELEASE_GROUP=icydb
 ```
 
-Do not use plain backticked path text for detailed-breakdown links.
-
----
-
-# 4. Automation Rules for Agents
-
-During ordinary development:
-
-1. Keep code slices focused and reviewable.
-2. Group compatible slices into the current planned release batch; do not
-   create a patch entry or recommend a release for each focused proof,
-   mechanical edit or CI repair.
-3. When a meaningful code or behavior batch is complete, update its changelog
-   by default without waiting for a separate maintainer request.
-4. Treat the newest versioned entry without a matching immutable `v<version>`
-   tag as the open patch draft. Keep its heading undated until release
-   preparation. Update both its root summary and detailed section when
-   more compatible work is added.
-5. If no open draft exists, use the current workspace version when it is not
-   tagged; otherwise open the next patch version in the active minor line.
-   An explicitly requested minor, major, or exact target takes precedence.
-6. Do not advance to another patch number while an open draft exists. The tag,
-   not the number of completed slices or commits, closes the draft.
-7. Keep one numbered pending release in both views instead of a separate notes queue.
-8. Do not change Cargo versions, release-script defaults, install URLs, or lock
-   file package versions while maintaining changelog drafts.
-9. If the work is changelog-policy/governance-only, do not add or update
-   release notes in either root or detailed changelog files unless explicitly
-   requested as a release artifact.
-
-When preparing a release:
-
-1. Identify all changes since last version tag.
-2. Group changes into:
-   - Added
-   - Changed
-   - Removed
-3. Extract only architectural or behavioral changes.
-4. Ignore:
-   - Formatting-only changes
-   - Test-only changes (unless behaviorally significant)
-   - Internal renames without surface impact
-5. Confirm the open patch draft covers every relevant completed change and
-   include any remaining in-scope changes.
-6. Update its concise root summary to describe the complete release batch.
-7. Generate or update `docs/changelog/<major>.<minor>.md` with full detail.
-8. Insert clickable Markdown link from root file to detailed file.
-9. Confirm the target patch appears in both files before declaring the
-   changelog ready.
-10. Use the existing open draft version unless the maintainer explicitly
-    changes the release target.
-11. Do not create a new version header if the newest entry already exists for the target version.
-12. If a change set is changelog-policy/governance-only, do not add or update release notes in `CHANGELOG.md` or `docs/changelog/<major>.<minor>.md`.
-13. When updating an existing minor line, keep the patch bullet/section in chronological order. In normal patch releases this means adding the new patch at the beginning of the existing minor-line list.
-
-Agents must never:
-
-- Delete historical version entries.
-- Rewrite previous release summaries.
-- Reorder version history.
-- Collapse multiple minor lines into one detailed file.
-- Add release notes for changelog-policy/governance-only edits (for example updates to `docs/governance/changelog.md`, `AGENTS.md`, or changelog formatting policy), unless explicitly requested as a documented release artifact.
-- Open a second patch draft while the newest versioned entry remains untagged.
-- Treat a changelog draft version as authorization to change package or release
-  version files.
-
----
-
-# 5. Breaking Changes
-
-If a change alters:
-
-- Public API
-- Response types
-- Cursor format
-- Execution semantics
-- Error taxonomy
-- Persistence format
-
-The root entry must:
-
-- Include a clear note under "Changed" or "Removed".
-- Mention migration implications.
-- Be explicitly marked as potentially breaking.
-
----
-
-# 6. Archival Policy
-
-Older detailed entries may be moved from root CHANGELOG.md
-into docs/changelog/<major>.<minor>.md if the root file grows large.
-
-When archiving:
-
-- Leave version header in root.
-- Replace detailed content with a summary.
-- Insert link to detailed file.
-
-Historical content must never be discarded.
-
----
-
-# 7. SemVer Enforcement
-
-- MAJOR: incompatible surface or behavioral changes.
-- MINOR: additive capability.
-- PATCH: internal fixes without surface change.
-
-Agents must not bump version without checking semantic impact.
-During ordinary development, a versioned changelog draft may target the
-upcoming release even while `Cargo.toml` still has the previous published
-version. This documentation target does not authorize a package-version bump.
-If the requested semantic boundary conflicts with an existing open draft,
-report the conflict instead of silently allocating another release.
-
----
-
-# 8. Writing Style, Verbosity, and Jargon
-
-Use plain, industry-friendly language.
-
-Required writing style:
-
-- Lead with outcome and user impact.
-- Keep wording concise and junior-friendly.
-- Avoid jargon unless the technical term materially improves clarity.
-- Keep entries intentionally brief and non-technical by default.
-- Include deep internal names only when required for migration or debugging.
-- Prefer a small number of consolidated bullets over long fragmented lists.
-- Explain why a change matters, not only what changed.
-
-Bullet and detail rules:
-
-- Prefer short bullets (1-2 sentences), with inline code formatting for API/type names when relevant.
-- Bullets do not need to be single-line if additional sentence context is needed.
-- In root minor-line summaries, prefer short outcome bullets; split independent
-  changes rather than compressing a broad patch into one paragraph.
-- Avoid deep implementation detail (module paths, helper names, routing internals) unless required for migration/debugging.
-- Root minor-line patch bullets should stay concise and readable. Detailed
-  changelog prose may wrap naturally where it is clearest.
-- In root `CHANGELOG.md`, avoid code examples/LoC dumps unless strictly necessary.
-- Prefer placing code examples, LoC snapshots, and fenced blocks in `docs/changelog/<major>.<minor>.md`.
-- Inline fenced examples are optional, not mandatory.
-- In root `CHANGELOG.md`, include at most one inline fenced example per minor version (`0.x.x` line), and only when it materially improves clarity.
-- In `docs/changelog/<major>.<minor>.md`, include at most one inline fenced example per patch entry (`## 0.x.y`), and only when it materially improves clarity.
-- Use inline fenced examples only for meaningful code, config, or flow snapshots that explain behavior better than prose; if no good example exists, skip it.
-
-Testing section rules:
-
-- Do not add a `Testing` section for routine validation runs (`make check`, `make test`, `cargo test`).
-- Add `Testing` only when the release adds or changes tests, coverage, or test tooling.
-- For pending notes, omit routine validation command lists. Validation
-  commands belong in agent handoff/final responses, not in changelog notes,
-  unless the validation tooling or coverage changed.
-
----
-
-# 9. Release Flow
-
-For each release:
-
-1. Keep the open versioned changelog draft current as meaningful batches
-   complete.
-2. Before release, compare the draft with all changes since the previous tag
-  and include any remaining in-scope changes.
-3. Confirm the root bullet and detailed minor-line section agree.
-4. The maintainer commits the completed implementation and changelog batch.
-5. The maintainer runs the governed version target, which performs the explicit
-   open-draft and clean-source preflight before the explicit `make validate`
-   workflow, then updates package and release version files. A missing or
-   malformed draft therefore fails before compilation or PocketIC begins.
-   Immediately before that mutation, it refreshes the current `origin` branch
-   and rejects non-fast-forward ancestry or an occupied target release tag.
-   The same transaction adds the release date to the exact pending patch
-   heading and writes the structured validation receipt for that
-   exact source commit, without editing the current handoff. The bump transaction repeats the cheap draft preflight before
-   version mutation so direct or changed invocation paths retain the same
-   boundary. A fresh release always runs qualification. After a later release-only
-   failure, inspect the saved phase and use the governed exact-attempt recovery
-   path; a source-only local receipt cannot skip qualification.
-6. The maintainer reviews, stages, commits, tags, and pushes through the
-   governed release targets. The candidate guard rejects a still-open target
-   changelog or any production change made after the recorded validation.
-
-Order must be preserved.
-The normal human patch flow is `make patch`, review, `make release-stage`,
-`make release-commit`, and `make release-push`; `make release-patch` is the
-one-shot equivalent from a clean release-ready commit. `make release-push`
-rechecks remote ancestry and exact tag state before its atomic update and
-performs no hidden formatting, compilation, testing, validation, or cleanup.
-
----
-
-# 10. Ownership
-
-Changelog governance is architectural, not cosmetic.
-
-It documents system evolution and must reflect real semantic shifts.
-
-It is part of Canic's correctness discipline.
-
-## Continue From Here
-
-- [Review delivery cadence](delivery-cadence.md)
-- [Review CI and deployment governance](ci-deployment.md)
-- [Browse all documentation](../README.md)
-- [Back to the main README](../../README.md)
+The complete applicable release gate still applies, using the admitted group
+plan or its full-roster fallback. See
+[adapter release groups](../operations/adapter-release-groups.md) for exact source,
+lock, receipt and supplier requirements. Changelog prose is descriptive: guards
+must not make publication depend on explanatory wording or a heading inventory.

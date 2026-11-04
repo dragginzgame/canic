@@ -12,8 +12,20 @@ mod chain_key_config;
 mod crypto;
 mod delegated;
 mod delegation;
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "auth-portable-issuer",
+    feature = "auth-root-delegation-state"
+))]
+pub mod enrollment;
 mod error;
 mod issuer_canister_sig;
+#[cfg(feature = "auth-local-application-authorization")]
+pub mod portable;
+#[cfg(any(test, feature = "auth-portable-issuer"))]
+pub mod portable_issuer;
+mod proof_verifier;
 mod public_key;
 mod root_canister_sig;
 #[cfg(any(
@@ -21,7 +33,6 @@ mod root_canister_sig;
     feature = "auth-issuer-canister-sig-create"
 ))]
 pub mod signature_store;
-mod token;
 mod types;
 mod verify;
 #[cfg(test)]

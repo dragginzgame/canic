@@ -388,13 +388,13 @@ impl CycleWorkflow {
                 Self::finish_automatic_refill(config, before, after, Ok(response))
             }
             Ok(ParentFundingOutcome::Transferred) => {
-                Self::finish_transferred_topup(config, before, after)
+                Self::finish_topup_observation(config, before, after, TimerCompletion::success(1))
             }
             Ok(ParentFundingOutcome::PreflightRejected(preflight)) => {
                 Self::finish_preflight_rejection(preflight)
             }
             Ok(ParentFundingOutcome::RootNoGrant(receipt)) => {
-                Self::finish_root_no_grant(config, receipt.reason)
+                Self::finish_root_no_grant(config, before, after, receipt.reason)
             }
             Err(failure) => Self::finish_funding_failure(&failure),
         }
@@ -415,7 +415,7 @@ impl CycleWorkflow {
                     OperationId::from_bytes(response.operation_id),
                     response.cycles_sent
                 );
-                Self::finish_transferred_topup(config, before, after)
+                Self::finish_topup_observation(config, before, after, TimerCompletion::success(1))
             }
             Ok(response)
                 if icp_refill_outcome_is_resumable(
@@ -465,14 +465,15 @@ impl CycleWorkflow {
         Self::finish_funding_failure(&failure)
     }
 
-    fn finish_transferred_topup(
+    fn finish_topup_observation(
         config: &AutomaticTopupConfig,
         before: &CycleBalanceSample,
         after: &CycleBalanceSample,
+        completion: TimerCompletion,
     ) -> OnceRunResult {
         reset_resource_exhaustion_recovery();
         if !config.new_requests_enabled {
-            return OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop);
+            return OnceRunResult::new(completion, OnceDecision::Stop);
         }
         let timing = policy::cycles::cycle_topup_timing(
             after.timestamp_secs,
@@ -490,14 +491,13 @@ impl CycleWorkflow {
             Self::directive(IcOps::now_nanos(), timing)
         };
         match directive {
-            Ok(directive) => OnceRunResult::new(TimerCompletion::success(1), directive),
+            Ok(directive) => OnceRunResult::new(completion, directive),
             Err(err) => {
                 log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
                 OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop)
             }
         }
     }
-
     fn finish_preflight_rejection(preflight: CyclesFundingPreflightResponse) -> OnceRunResult {
         match preflight {
             CyclesFundingPreflightResponse::CooldownActive { retry_after_secs } => {
@@ -533,12 +533,17 @@ impl CycleWorkflow {
 
     fn finish_root_no_grant(
         config: &AutomaticTopupConfig,
+        before: &CycleBalanceSample,
+        after: &CycleBalanceSample,
         reason: FleetRootFundingNoGrantReason,
     ) -> OnceRunResult {
         if !config.new_requests_enabled {
             return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
         }
         match classify_root_no_grant(reason) {
+            RootNoGrantDisposition::Observe => {
+                Self::finish_topup_observation(config, before, after, TimerCompletion::no_work())
+            }
             RootNoGrantDisposition::Wait => {
                 log!(
                     Topic::Cycles,
@@ -886,6 +891,7 @@ fn select_root_topup_config(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RootNoGrantDisposition {
+    Observe,
     Stop,
     Wait,
 }
@@ -923,6 +929,7 @@ const fn select_topup_demand(
 
 const fn classify_root_no_grant(reason: FleetRootFundingNoGrantReason) -> RootNoGrantDisposition {
     match reason {
+        FleetRootFundingNoGrantReason::RootBalanceRelieved => RootNoGrantDisposition::Observe,
         FleetRootFundingNoGrantReason::CooldownActive
         | FleetRootFundingNoGrantReason::CoordinatorReserveUnavailable
         | FleetRootFundingNoGrantReason::FleetWindowExhausted
@@ -960,6 +967,7 @@ const fn permits_automatic_refill(reason: FleetRootFundingNoGrantReason) -> bool
             Some(policy::fleet_funding::FleetRootGrantNoGrantReason::RootWindowExhausted)
         }
         FleetRootFundingNoGrantReason::CooldownActive
+        | FleetRootFundingNoGrantReason::RootBalanceRelieved
         | FleetRootFundingNoGrantReason::FleetAutomaticCapExhausted
         | FleetRootFundingNoGrantReason::FundingDisabled
         | FleetRootFundingNoGrantReason::InvalidRequest
@@ -1025,6 +1033,18 @@ mod tests {
 
     #[test]
     fn only_transport_and_in_flight_funding_failures_retry() {
+        for code in [
+            codes::STATE_UNAVAILABLE,
+            codes::AUTHORITY_UNAVAILABLE,
+            codes::CAPACITY_UNAVAILABLE,
+        ] {
+            let failure =
+                InternalError::observed_public(InternalError::public(code).public_error());
+            let retry = CycleWorkflow::finish_funding_failure(&failure);
+            assert!(
+                matches!(retry.decision(), OnceDecision::RetryAfter(delay) if delay <= RETRY_MAX)
+            );
+        }
         let rejection =
             ic_platform::cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
         let failure = InternalError::from(crate::infra::ic::IcInfraError::from(
@@ -1153,6 +1173,10 @@ mod tests {
 
     #[test]
     fn root_no_grant_policy_separates_waits_from_invariant_rejections() {
+        assert_eq!(
+            classify_root_no_grant(FleetRootFundingNoGrantReason::RootBalanceRelieved),
+            RootNoGrantDisposition::Observe
+        );
         for reason in [
             FleetRootFundingNoGrantReason::CooldownActive,
             FleetRootFundingNoGrantReason::CoordinatorReserveUnavailable,
@@ -1194,6 +1218,7 @@ mod tests {
             FleetRootFundingNoGrantReason::RootAutomaticCapExhausted,
             FleetRootFundingNoGrantReason::RootIneligible,
             FleetRootFundingNoGrantReason::RootRejected,
+            FleetRootFundingNoGrantReason::RootBalanceRelieved,
         ] {
             assert!(!permits_automatic_refill(reason));
         }

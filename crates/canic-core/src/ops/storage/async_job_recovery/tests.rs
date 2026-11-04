@@ -168,6 +168,10 @@ fn every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover() {
     let journeys = [
         (AsyncJobOwner::AuthRenewal, "issuer-template-and-proof"),
         (
+            AsyncJobOwner::PortableEnrollment,
+            "portable-receiver-enrollment",
+        ),
+        (
             AsyncJobOwner::CanisterPoolMaintenance,
             "pool-record-and-maintenance-journal",
         ),

@@ -3,7 +3,7 @@ use crate::{
     dto::{fleet_snapshot, funding_control},
     values::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 /// External unsigned values use Wire's bounded minimal-magnitude convention.
 pub const MAGNITUDE_BYTES: usize = 256 * 1024;
 

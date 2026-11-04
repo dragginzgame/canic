@@ -262,15 +262,15 @@ fn pending_claim_cannot_be_stolen_after_ttl_without_explicit_recovery() {
 #[test]
 fn allocation_bound_index_record_survives_stable_reopen() {
     use crate::cdk::structures::StableBTreeMap as BTreeMap;
-    let runtime = crate::memory::fixtures::runtime(&["test.index.v1"], 1);
+    let runtime = crate::memory::fixtures::runtime(&["test.index.v1"]);
     let mut records = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.index.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.index.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            BTreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            BTreeMap::create(allocation).expect("open fixture collection")
         } else {
-            BTreeMap::load(allocation)
+            BTreeMap::load(allocation).expect("open fixture collection")
         }
     };
     let key = PlacementIndexKey::try_new("projects", "alpha").unwrap();
@@ -279,17 +279,19 @@ fn allocation_bound_index_record_survives_stable_reopen() {
         bound_at: u64::MAX,
         allocation_operation_id: [255; 32],
     };
-    records.insert(key.clone(), value.clone());
+    records.insert(key.clone(), value.clone()).unwrap();
     drop(records);
     let records = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.index.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.index.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
+        if ic_storage::Memory::size(&allocation) == 0 {
             BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::create(allocation)
+                .expect("open fixture collection")
         } else {
             BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::load(allocation)
+                .expect("open fixture collection")
         }
     };
-    assert_eq!(records.get(&key), Some(value));
+    assert_eq!(records.get(&key).unwrap(), Some(value));
 }

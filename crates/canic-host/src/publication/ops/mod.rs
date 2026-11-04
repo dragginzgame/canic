@@ -9,16 +9,31 @@ use std::io;
 /// Retain publication phase and cleanup evidence at Canic I/O boundaries.
 #[must_use]
 pub fn io_error(error: NamedWriteError<io::Error>) -> io::Error {
+    publication_error(error, io::Error::kind)
+}
+
+/// Preserve streamed JSON production and cleanup evidence at an I/O boundary.
+#[must_use]
+pub fn json_error(error: NamedWriteError<serde_json::Error>) -> io::Error {
+    publication_error(error, |source| {
+        source.io_error_kind().unwrap_or(io::ErrorKind::InvalidData)
+    })
+}
+
+fn publication_error<E>(
+    error: NamedWriteError<E>,
+    producer_kind: impl FnOnce(&E) -> io::ErrorKind,
+) -> io::Error
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
     let kind = match &error {
         NamedWriteError::BeforePublication { source, .. } => source.kind(),
-        NamedWriteError::Producer { source, .. }
-            if source.kind() != io::ErrorKind::AlreadyExists =>
-        {
-            source.kind()
-        }
-        NamedWriteError::Producer { .. } | NamedWriteError::AfterPublication { .. } => {
-            io::ErrorKind::Other
-        }
+        NamedWriteError::Producer { source, .. } => match producer_kind(source) {
+            io::ErrorKind::AlreadyExists => io::ErrorKind::Other,
+            kind => kind,
+        },
+        NamedWriteError::AfterPublication { .. } => io::ErrorKind::Other,
     };
     io::Error::new(kind, error)
 }

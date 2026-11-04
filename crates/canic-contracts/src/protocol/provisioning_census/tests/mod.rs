@@ -14,7 +14,7 @@ use crate::{
 
 #[test]
 fn census_preserves_both_owners_and_complete_protected_failure() {
-    let principal = ic_platform::Principal::from_slice(&[7]);
+    let principal = ic_platform_types::Principal::from_slice(&[7]);
     for (key, phase) in [
         (Key::Provisioning([1; 32]), Phase::Publishing),
         (

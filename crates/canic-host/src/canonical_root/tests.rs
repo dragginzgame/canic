@@ -74,7 +74,7 @@ fn standalone_consumer_build_resolves_root_without_an_existing_lockfile() {
         "dependencies": {"canic": {"path": canic_manifest.parent().unwrap(), "default-features": false}},
     });
     let mut manifest = toml::to_string(&toml::Value::try_from(document).unwrap()).unwrap();
-    manifest.push_str(&dependency_patch_table(&canic_manifest, env!("CARGO_PKG_VERSION")).unwrap());
+    manifest.push_str(&dependency_patch_table(&canic_manifest, canic_core::VERSION).unwrap());
     fs::write(scratch.join("Cargo.toml"), manifest).unwrap();
     let source = "[app]\nname = 'consumer'\n[roles.root]\nkind = 'root'\n[auth.delegated_tokens]\nenabled = false\n";
     let config_path = scratch.join("canic.toml");
@@ -133,7 +133,7 @@ fn canonical_root_build_selects_exact_configuration_capabilities() {
             resolve_declared_role_package_contract(&config, &evidence),
             RoleContractResolution::Resolved { .. }
         ));
-        assert_eq!(evidence.canic_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(evidence.canic_version, canic_core::VERSION);
         assert_eq!(
             entrypoint_calls(
                 &fs::read_to_string(

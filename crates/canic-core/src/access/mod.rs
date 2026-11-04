@@ -62,6 +62,9 @@ pub enum AccessError {
     #[error("access denied: a configured parent is required")]
     ParentRequired,
 
+    #[error("access denied: a controller-approved portable issuer is required")]
+    PortableIssuerRequired,
+
     #[error("access denied: a configured access expression rule is required")]
     ExpressionRuleRequired,
 
@@ -116,6 +119,7 @@ impl AccessError {
             | Self::DirectChildRequired
             | Self::FleetSubnetRootRequired
             | Self::ParentRequired
+            | Self::PortableIssuerRequired
             | Self::RootOrActiveComponentRequired
             | Self::RootRequired
             | Self::SelfRequired
@@ -207,6 +211,10 @@ mod tests {
                 codes::AUTHORITY_UNAVAILABLE,
             ),
             (AccessError::ParentRequired, codes::AUTHORITY_UNAVAILABLE),
+            (
+                AccessError::PortableIssuerRequired,
+                codes::AUTHORITY_UNAVAILABLE,
+            ),
             (
                 AccessError::NegatedPredicateMatched,
                 codes::CONFIGURATION_INVALID_STATE,

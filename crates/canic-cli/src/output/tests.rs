@@ -31,6 +31,19 @@ fn operator_output_resolves_linked_parents_before_creating_missing_directories()
         io::ErrorKind::InvalidInput
     );
     assert_eq!(fs::read_to_string(target).unwrap(), "replacement");
+
+    let normalized = linked.join("missing/../normalized/report.txt");
+    write_text::<io::Error>(Some(&normalized), "normalized report").unwrap();
+    assert_eq!(
+        fs::read_to_string(real.join("normalized/report.txt")).unwrap(),
+        "normalized report"
+    );
+    assert!(!real.join("missing").exists());
+    let not_directory = linked.join("report.txt/child.json");
+    assert_eq!(
+        resolve_operator_path(&not_directory).unwrap_err().kind(),
+        io::ErrorKind::NotADirectory
+    );
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -56,14 +69,14 @@ fn shared_file_helpers_publish_complete_bytes() {
     let json_path = root.join("json/report.json");
     let text_path = root.join("text/report.txt");
 
-    write_pretty_json_file::<_, Box<dyn std::error::Error>>(&json_path, &json!({"ok": true}))
+    let value = json!({"ok": true, "wide": u64::MAX, "text": "界\n\"\\"});
+    write_pretty_json_file::<_, Box<dyn std::error::Error>>(&json_path, &value)
         .expect("write json file");
     write_text::<io::Error>(Some(&text_path), "complete text").expect("write text file");
 
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&fs::read(&json_path).expect("read json file"))
-            .expect("parse json file")["ok"],
-        true
+        fs::read(&json_path).unwrap(),
+        serde_json::to_vec_pretty(&value).unwrap()
     );
     assert_eq!(
         fs::read_to_string(&text_path).expect("read text file"),
@@ -73,7 +86,7 @@ fn shared_file_helpers_publish_complete_bytes() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure partial serializer output never reaches the destination or creates its parent.
+// Partial serializer output must never become the selected report.
 #[test]
 fn serialization_failure_does_not_touch_the_destination() {
     let root = temp_dir("canic-cli-output-serialization-failure");
@@ -83,8 +96,15 @@ fn serialization_failure_does_not_touch_the_destination() {
     let missing = missing_parent.join("report.json");
     fs::write(&existing, b"old complete bytes").expect("write existing output");
 
-    write_pretty_json::<_, Box<dyn std::error::Error>>(Some(&existing), &PartialThenFailure)
-        .expect_err("serialization failure must reject existing output");
+    let error =
+        write_pretty_json::<_, Box<dyn std::error::Error>>(Some(&existing), &PartialThenFailure)
+            .expect_err("serialization failure must reject existing output");
+    let source = error.downcast_ref::<io::Error>().unwrap();
+    assert!(matches!(
+        source.get_ref().unwrap().downcast_ref::<ic_host_fs::durable::NamedWriteError<serde_json::Error>>(),
+        Some(ic_host_fs::durable::NamedWriteError::Producer { source, cleanup_error: None })
+            if source.is_data()
+    ));
     write_pretty_json::<_, Box<dyn std::error::Error>>(Some(&missing), &PartialThenFailure)
         .expect_err("serialization failure must reject missing output");
 
@@ -92,7 +112,8 @@ fn serialization_failure_does_not_touch_the_destination() {
         fs::read(&existing).expect("read existing output"),
         b"old complete bytes"
     );
-    assert!(!missing_parent.exists());
+    assert!(!missing.exists());
+    assert_eq!(fs::read_dir(missing_parent).unwrap().count(), 0);
 
     fs::remove_dir_all(root).expect("remove temp root");
 }

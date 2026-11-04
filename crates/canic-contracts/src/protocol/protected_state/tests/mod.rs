@@ -5,7 +5,7 @@ use crate::dto::{
     authority_restore_status::{Phase, Status},
     state::{FleetMode, FleetStateResponse},
 };
-use ic_platform::{Principal, principal::ExternalPrincipal};
+use ic_platform_types::{Principal, principal::ExternalPrincipal};
 use ic_wire::{Error, native};
 
 #[test]

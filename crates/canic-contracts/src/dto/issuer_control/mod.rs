@@ -4,7 +4,7 @@ use crate::dto::{
     issuer_proof::DelegationProof,
     issuer_renewal::RootIssuerRenewalTemplateView,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Native RootIssuerConfigureRequest boundary.

@@ -11,7 +11,7 @@ use canic::{
     Error,
     api::env::EnvQuery,
     api::metrics::MetricsQuery,
-    dto::{log::LogEntry, metrics::QueryPerfSample, page::Page},
+    dto::{log::LogPage, metrics::QueryPerfSample, page::Page},
     prelude::*,
 };
 use ic_platform::cdk::api::time;
@@ -61,16 +61,14 @@ async fn audit_env_probe() -> Result<QueryPerfSample<protocol::Environment>, Err
     Ok(MetricsQuery::sample_query(EnvQuery::snapshot().into()))
 }
 
-#[query(requires(env::build_local_only()), wire(id = protocol::LOG, request = protocol::REQUEST_LIMITS, response = protocol::RESPONSE_LIMITS))]
-async fn audit_log_probe(
-    request: protocol::LogRequest,
-) -> Result<QueryPerfSample<Page<LogEntry>>, Error> {
+#[query(requires(env::build_local_only()), wire(id = protocol::LOG, request = protocol::REQUEST_LIMITS, response = protocol::LOG_RESPONSE_LIMITS))]
+async fn audit_log_probe(request: protocol::LogRequest) -> Result<QueryPerfSample<LogPage>, Error> {
     Ok(MetricsQuery::sample_query(LogQuery::page(
         request.crate_name,
         request.topic,
         request.min_level,
         request.page,
-    )))
+    )?))
 }
 
 // This fixed endpoint is a B1 attribution fixture. Its five slots mirror the

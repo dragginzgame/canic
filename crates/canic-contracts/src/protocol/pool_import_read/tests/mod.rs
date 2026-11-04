@@ -45,10 +45,10 @@ fn status_preserves_exact_sequence_and_plan_and_refuses_other_methods() {
 fn bootstrap_preserves_every_source_and_the_original_review() {
     let expected = PoolImportBootstrap {
         review_sha256: [8; 32],
-        operator: ic_platform::principal::ExternalPrincipal::from_slice(&[1]),
+        operator: ic_platform_types::principal::ExternalPrincipal::from_slice(&[1]),
         sources: vec![
-            ic_platform::principal::ExternalPrincipal::from_slice(&[2]),
-            ic_platform::principal::ExternalPrincipal::from_slice(&[3]),
+            ic_platform_types::principal::ExternalPrincipal::from_slice(&[2]),
+            ic_platform_types::principal::ExternalPrincipal::from_slice(&[3]),
         ],
     };
     let native = Bootstrap::from(expected.clone());

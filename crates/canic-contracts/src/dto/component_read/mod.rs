@@ -9,7 +9,7 @@ pub struct ChildAllocation {
     pub last_failure: Option<ChildFailure>,
     pub operation_id: [u8; 32],
     pub component: crate::ids::ComponentInstanceId,
-    pub parent_canister_id: ic_platform::Principal,
+    pub parent_canister_id: ic_platform_types::Principal,
     pub parent_role: crate::ids::CanisterRole,
     pub child_role: crate::ids::CanisterRole,
     pub child_kind: crate::deployment::ComponentChildKind,
@@ -30,12 +30,12 @@ pub struct ChildAllocation {
     derive(ic_wire::Wire)
 )]
 pub struct Creation {
-    pub wasm_store: ic_platform::Principal,
+    pub wasm_store: ic_platform_types::Principal,
     pub payload_hash: [u8; 32],
     pub payload_size_bytes: u64,
     pub initial_cycles: crate::cycles::Cycles,
-    pub controller: ic_platform::Principal,
-    pub canister: Option<ic_platform::Principal>,
+    pub controller: ic_platform_types::Principal,
+    pub canister: Option<ic_platform_types::Principal>,
 }
 
 /// Complete native RootComponentChildInstallEvidence evidence.
@@ -76,7 +76,7 @@ pub struct Provisioning {
     pub plan_hash: [u8; 32],
     pub fleet_registry: crate::dto::registry_discovery::RegistryVersion,
     pub configuration_digest: crate::ids::ComponentDeploymentConfigurationDigest,
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub estate_funding_required: Option<EstateFunding>,
     pub phase: crate::dto::component_provisioning::RootComponentProvisioningPhase,
     pub placement_count: u32,
@@ -163,7 +163,7 @@ pub struct EstateFunding {
     pub available: crate::cycles::Cycles,
     pub attempt_count: u32,
     pub creation_amount: crate::cycles::Cycles,
-    pub cycles_ledger: ic_platform::Principal,
+    pub cycles_ledger: ic_platform_types::Principal,
     pub execution_margin: crate::cycles::Cycles,
     pub last_attempt_at_ns: Option<u64>,
     pub ledger_fee: crate::cycles::Cycles,
@@ -172,7 +172,7 @@ pub struct EstateFunding {
     pub readiness_floor: crate::cycles::Cycles,
     pub required: crate::cycles::Cycles,
     pub retry_at_ns: u64,
-    pub root: ic_platform::Principal,
+    pub root: ic_platform_types::Principal,
     pub shortfall: crate::cycles::Cycles,
 }
 
@@ -183,7 +183,7 @@ pub struct EstateFunding {
     derive(ic_wire::Wire)
 )]
 pub struct CoordinatorRootProgress {
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub component_count: u32,
     pub reserved_component_count: u32,
     pub claimed_component_count: u32,
@@ -198,7 +198,7 @@ pub struct CoordinatorRootProgress {
     derive(ic_wire::Wire)
 )]
 pub struct CoordinatorPublicationProgress {
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub component_count: u32,
     pub published_component_count: u32,
 }
@@ -210,7 +210,7 @@ pub struct CoordinatorPublicationProgress {
     derive(ic_wire::Wire)
 )]
 pub struct CoordinatorSynchronizationProgress {
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub affected_component_count: u32,
     pub synchronized_component_count: u32,
     pub complete: bool,
@@ -223,7 +223,7 @@ pub struct CoordinatorSynchronizationProgress {
     derive(ic_wire::Wire)
 )]
 pub struct CoordinatorActivationProgress {
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub component_count: u32,
     pub activated_component_count: u32,
     pub root_runtime_active: bool,
@@ -237,7 +237,7 @@ pub struct CoordinatorActivationProgress {
 )]
 pub struct CoordinatorFailure {
     pub origin: Option<FailureOrigin>,
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub stage: crate::dto::component_provisioning::FleetComponentProvisioningRetryStage,
     pub diagnostic_code: u16,
     pub failed_at_ns: u64,
@@ -259,17 +259,17 @@ pub struct CoordinatorProvisioning {
     pub directory_confirmation_root_count: u32,
     pub root_batch_count: u32,
     pub accepted_root_count: u32,
-    pub acceptance_in_flight_root: Option<ic_platform::Principal>,
+    pub acceptance_in_flight_root: Option<ic_platform_types::Principal>,
     pub provisioned_root_count: u32,
     pub current_root: Option<CoordinatorRootProgress>,
-    pub provisioning_in_flight_root: Option<ic_platform::Principal>,
+    pub provisioning_in_flight_root: Option<ic_platform_types::Principal>,
     pub directory_confirmed_root_count: u32,
     pub current_synchronization: Option<CoordinatorSynchronizationProgress>,
     pub current_publication: Option<CoordinatorPublicationProgress>,
-    pub publication_in_flight_root: Option<ic_platform::Principal>,
+    pub publication_in_flight_root: Option<ic_platform_types::Principal>,
     pub runtime_activated_root_count: u32,
     pub current_activation: Option<CoordinatorActivationProgress>,
-    pub activation_in_flight_root: Option<ic_platform::Principal>,
+    pub activation_in_flight_root: Option<ic_platform_types::Principal>,
     pub pending_root_failure: Option<CoordinatorFailure>,
     pub estate_funding_required: Option<EstateFunding>,
     pub group_placement_count: u32,
@@ -294,7 +294,7 @@ pub struct FailureOrigin {
     pub failed_at_ns: u64,
     pub retry_at_ns: Option<u64>,
     pub stage: crate::values::provisioning_failure::ProvisioningFailureStage,
-    pub target: ic_platform::Principal,
+    pub target: ic_platform_types::Principal,
     pub operation_id: [u8; 32],
     pub diagnostic_code: u16,
     pub retry_category: crate::values::provisioning_failure::ProvisioningRetryCategory,

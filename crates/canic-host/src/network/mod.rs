@@ -12,14 +12,14 @@ use crate::{
     icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
 };
 use canic_contracts::ids::{BuildNetwork, CanonicalNetworkId};
-use ic_host_artifacts::artifact::{ArtifactError, Sha256Digest};
+use ic_host_artifacts::artifact::{ArtifactError, BoundedWriter, Sha256Digest};
 use ic_host_fs::{
-    durable::{PublicationMode, WriteOptions, write_bytes},
+    durable::{PublicationMode, WriteOptions, write_bytes, write_with},
     read::read_optional_file_no_follow,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{
-    io,
+    io::{self, BufWriter, Write},
     path::{Path, PathBuf},
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
 };
@@ -454,17 +454,7 @@ fn create_new_enrollment(
     enrollment: &NetworkEnrollmentRecord,
 ) -> Result<(), NetworkIdentityError> {
     let path = &paths.enrollment;
-    let bytes = encode_json(enrollment)?;
-    match write_bytes(
-        path,
-        WriteOptions {
-            mode: PublicationMode::CreateNew,
-            permissions: 0o666,
-        },
-        &bytes,
-    )
-    .map_err(crate::publication::ops::io_error)
-    {
+    match create_new_json(path, enrollment) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_json::<NetworkEnrollmentRecord>(path)?;
@@ -489,17 +479,7 @@ fn create_new_profile(paths: &NetworkPaths, environment: &str) -> Result<(), Net
     let profile = EnvironmentNetworkProfile {
         canonical_network_id: paths.canonical_network_id,
     };
-    let bytes = encode_json(&profile)?;
-    match write_bytes(
-        path,
-        WriteOptions {
-            mode: PublicationMode::CreateNew,
-            permissions: 0o666,
-        },
-        &bytes,
-    )
-    .map_err(crate::publication::ops::io_error)
-    {
+    match create_new_json(path, &profile) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_profile(path)?;
@@ -520,10 +500,22 @@ fn create_new_profile(paths: &NetworkPaths, environment: &str) -> Result<(), Net
     }
 }
 
-fn encode_json<T: Serialize>(value: &T) -> Result<Vec<u8>, NetworkIdentityError> {
-    let mut bytes = serde_json::to_vec_pretty(value)?;
-    bytes.push(b'\n');
-    Ok(bytes)
+fn create_new_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
+    write_with(
+        path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        |file| {
+            let mut writer =
+                BoundedWriter::new(BufWriter::new(file), MAX_DOCUMENT_READ_BYTES as u64);
+            serde_json::to_writer_pretty(&mut writer, value)?;
+            writer.write_all(b"\n").map_err(serde_json::Error::io)?;
+            writer.flush().map_err(serde_json::Error::io)
+        },
+    )
+    .map_err(crate::publication::ops::json_error)
 }
 
 fn read_required_json<T: for<'de> Deserialize<'de>>(

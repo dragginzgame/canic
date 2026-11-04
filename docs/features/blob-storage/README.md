@@ -5,7 +5,8 @@ It owns content, tenant authority, provider access, references and accounting.
 Canic owns Fleet lifecycle and deployment of ordinary application Components.
 
 The Canic-owned adapter lives at `crates/canic-blob-service` in the main Canic
-workspace, sharing its dependency catalog, lockfile and release version. The upstream library has
+workspace, sharing its dependency catalog and lockfile while owning an independent
+`blob-service` release version. The upstream library has
 no Canic dependency. See the [extraction design](../../design/0.112-standalone-blob-service-extraction/0.112-design.md)
 and [current handoff](../../status/current.md) for implementation evidence.
 The shared [package-adapter boundary](../../architecture/independent-package-adapters.md)
@@ -25,10 +26,10 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The root dependency catalog selects the published Blob Storage/contracts and Memory families.
+The root dependency catalog selects the published Blob Storage/contracts and Storage families.
 Timers and arithmetic-only Metrics follow the selected Canic runtime in the root
 and independent consumer lockfiles.
-Each complete managed artifact must share one Memory and Timers runtime.
+Each complete managed artifact must share one Storage and Timers runtime.
 See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
 [current handoff](../../status/current.md) for scoped qualification. Building
 the shell does not establish live provider behavior. Upload capacity replies expose
@@ -46,21 +47,18 @@ frontend delivery must not replace them with its own dependency versions.
 Multiple browser-adapter registrations are refused; composition is not inferred.
 
 The dedicated managed proof checks exact source retention. The
-[retained-codec check](../../../crates/canic-testing-internal/examples/wire_composition/retained.mjs)
-exercises compiled generated bindings and both owners' validators. This is local
-codec qualification. Normal frontend export now compiles these retained sources
-with pinned tools and binds all emitted modules to its manifest. Installed-client
-qualification of the shared delivery path passes on the selected Blob 0.45 graph:
-the installed Fleet SDK query/update proof exercises admitted calls and caller
-denials (451s; `/tmp/canic-blob-browser-current/`). That case calls a framework
-application probe, not Blob methods. Blob-specific browser upload/download and
-live provider access remain unqualified.
+[retained-codec check](../../../crates/canic-tests/examples/wire_composition/retained.mjs)
+exercises compiled generated bindings and both owners' validators. Normal
+frontend export compiles the retained sources with pinned tools and binds every
+emitted module to its manifest.
 
-The opt-in `pic::blob_service::tests::managed_browser_compositions` now qualifies
-generated Blob tenant query/update codecs against actual installed dedicated and
-embedded endpoints on Blob 0.46/Wire 0.7.3. It checks exact scope, caller denial
-and unchanged mutation replay, using the normal compiler on retained supplier
-modules. PocketIC supplies transport; this is not an HTTP/browser UI proof.
+The opt-in `pic::blob_service::tests::managed_browser_compositions` passes on
+Blob Engine 0.68.0/Contracts 0.68.1 and Wire 0.15.1 for both dedicated and embedded endpoints. It checks tenant
+query/update codecs, exact scope, caller/binding denial, malformed frames and
+unchanged mutation replay. Current composition/client qualification covers both installation shapes and
+recovery. The earlier five-profile funding matrix retains its original graph. See the [acceptance audit](../../audits/working/blob-0411-adoption.md)
+for exact scope and retained evidence. PocketIC supplies transport; deployed
+browser login, upload/download and live Caffeine acceptance remain separate.
 
 ## Framework completion boundary
 
@@ -82,15 +80,20 @@ and completed local qualification, rather than treating this scope as evidence.
 
 ## Current dependency selection
 
-The current locked adoption selects Blob/contracts **0.66.0**, Memory/Storage **0.62.1**,
-Metrics **0.25.1**, Metrics Stable **0.64.0**, Wire **0.14.2**, Platform
-**0.17.0**, Timers **0.36.0**, Host Tools **0.77.0** and Testkit **0.78.0**.
-The root selects Query **0.84.0**, and all three locks select Auth **0.30.0**.
-Registry resolution and dependency admission pass. Dedicated installation/recovery,
-all five embedded funding profiles and generated tenant clients against both
-installed shapes pass on this locked family in Linux/PocketIC. Actual deployed
-browser and provider acceptance remains separate. The
-[current handoff](../../status/current.md) records exact lock selections and proof.
+The current family selects Blob Engine **0.68.0** and Contracts **0.68.1**,
+Storage **0.65.4**, Metrics **0.27.2**, Metrics Storage **0.66.0**, Wire
+**0.15.1**, Platform **0.18.0** with Runtime/Guard **0.18.1**, Timers
+**0.38.1**, Auth/protocol **0.32.0**, Host Tools **0.78.1**, Query **0.87.0**
+and Testkit **0.80.2**. Runtime and Contracts release independently; their
+patch versions need not match. Both private consumer locks select the same
+current storage/runtime family. Canic composes the sole Storage owner and uses
+`ic-metrics-storage` for metric persistence.
+
+The [current handoff](../../status/current.md) and
+[acceptance audit](../../audits/working/blob-0411-adoption.md) record exact
+qualification. Current generated clients qualify dedicated and embedded
+installation/recovery. Earlier five-profile funding evidence keeps its original
+inputs. Deployed Caffeine and application acceptance remain separate.
 
 Upload-operation correlation shares the root-claims memory grant. Compose the
 upstream request factory. A fresh explicit gateway refresh supersedes
@@ -99,7 +102,7 @@ the newer decision. Sync/cancellation use their new upstream Wire identities.
 Generate callers from the selected artifact's current schema.
 
 Blob passes checked `StableKey` values to the host's committed runtime.
-Memory uses nonzero bucket configuration. Fresh owning stores explicitly create;
+Storage owns the allocation directory and resource budgets. Fresh stores explicitly create;
 retained stores strictly load without replacing malformed contents. Canic keeps
 one lifecycle and memory owner. Cross-release transitions require clean reinstall;
 these changes add no migration, old codec or fallback allocation lane.
@@ -204,7 +207,7 @@ An embedded application owns its outer configuration envelope and decoder limits
 that application envelope is not a second Blob installation protocol.
 
 Locked builds select the exact service protocol and lifecycle composition with
-the single Memory runtime. Adopting another service release requires renewed
+the single Storage runtime. Adopting another service release requires renewed
 managed composition qualification.
 
 `canic.toml` configures Apps, roles, topology and runtime policy; it does not select
@@ -213,12 +216,11 @@ the root and both consumer lockfiles when adopting a published release.
 
 ## Rust toolchain
 
-The adapter and both independent consumer workspaces support Rust 1.91.0.
-This matches Canic's package floor; the checkout's pinned Rust 1.99 toolchain
-remains the maintenance default. Install the minimum-version Wasm target with
-`rustup target add --toolchain 1.91.0 wasm32-unknown-unknown`. Use
-`RUSTUP_TOOLCHAIN=1.91.0 canic build ...` to qualify a managed consumer with
-that compiler. Direct Cargo Wasm builds do not supply managed App/role authority.
+The adapter and both independent consumer workspaces require Rust 1.99.1,
+matching Canic's pinned development and release compiler. Install its Wasm target
+with `rustup target add --toolchain 1.99.1 wasm32-unknown-unknown`. Use
+`RUSTUP_TOOLCHAIN=1.99.1 canic build ...` to qualify a managed consumer with that
+compiler. Direct Cargo Wasm builds do not supply managed App/role authority.
 
 The complete managed minimum-version builds include the current Coordinator
 descriptor-gating correction. Adapter package verification alone does not qualify
@@ -242,23 +244,22 @@ terabyte capacity or provider qualification.
 Invoke `canic_blob_service::mount!();` once at the application's crate root.
 It mounts endpoints. Add the seventeen permanent requests returned by
 `canic_blob_service::memory_requests()` to the host composition. The
-artifact owns one pool with the service namespace and every other application's
+artifact owns one set of namespace grants with the service namespace and every other application's
 namespace explicitly granted, for example:
 
 ```rust
-canic::memory::memory_allocation_pool!(
-    provider = application_memory_pool,
+canic::memory::memory_allocation_grants!(
+    provider = application_memory_grants,
     authorities = [
         ("embedded-app", "embedded_app."),
         (canic_blob_service::MEMORY_AUTHORITY, canic_blob_service::MEMORY_KEY_PREFIX),
     ],
-    exclusions = [],
 );
 canic_blob_service::mount!();
 
 fn application_memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
-    input.pool = application_memory_pool().expect("host grants");
+    input.grants = application_memory_grants().expect("host grants");
     input.requests.extend(canic_blob_service::memory_requests().expect("Blob requests"));
     // Extend with the application's complete request factory too.
     input
@@ -266,8 +267,7 @@ fn application_memory() -> canic::memory::MemoryBootstrap {
 // Pass memory = application_memory(), first in canic::start!(...).
 ```
 
-Core and Control Plane grants are included by Canic. All owners share eligible
-physical IDs; there are no numeric component partitions. Exclusions protect
+Core and Control Plane grants are included by Canic. All owners use opaque IDs assigned by the single Storage directory.
 actual unmanaged physical memories only. The adapter owns service keys and
 authority; one service instance is supported per canister.
 
@@ -310,7 +310,7 @@ Wire; lifecycle arguments retain their declared installation encoding.
 The complete [embedded example](../../../integrations/blob-service/embedded-consumer/src/lib.rs)
 has its own persistent counter, endpoints, combined installation input and metrics
 sampler. Its counter owns `embedded_app.counter.v1`; application and service
-keys receive physical memories from the same checked allocation pool. It has a
+keys receive physical memories from the same checked Storage grants. It has a
 separate workspace and can be built explicitly with:
 
 ```sh
@@ -335,12 +335,13 @@ canic_blob_service::canister!();
 ```
 
 The shell depends on `canic-blob-service`, `canic` and `ic-platform`.
-The adapter inherits Canic's package version and registry requirement from the
+The adapter owns its `blob-service` package version and inherits its registry
+requirements from the
 main workspace, with the published Blob selection from the root catalog. Cargo's package manifest
 removes the development Canic path and excludes these private consumer fixtures.
-Canic and `canic-blob-service` are published together at 0.111.0, including the
-selected Memory runtime. Consumers can select both from crates.io; the coherent
-family is tracked under [Canic #33](https://github.com/dragginzgame/canic/issues/33).
+Canic and `canic-blob-service` have independent release versions. Select the
+adapter's declared framework dependency and one matching runtime graph; see
+[adapter release groups](../../operations/adapter-release-groups.md).
 A compilable package archive cannot substitute for exact managed runtime admission.
 Checked-in qualification uses the matching local facade. A disposable package
 candidate can instead select registry Canic and the extracted normalized adapter,
@@ -351,7 +352,7 @@ See the [consumer manifest](../../../integrations/blob-service/consumer/Cargo.to
 and [canister shell](../../../integrations/blob-service/consumer/src/lib.rs).
 It does not declare an `ic-blob-storage` dependency. The adapter selects that
 upstream library transitively and re-exports its typed boundary contracts as
-`canic_blob_service::dto`; no duplicate DTO schema is introduced. This convenience macro grants the service namespace in one host pool, calls
+`canic_blob_service::dto`; no duplicate DTO schema is introduced. This convenience macro grants the service namespace in one Storage owner, calls
 `mount!()`, and owns
 Canic start/finish, bounded endpoints, lifecycle participation and a blob-only
 metrics sampler. Do not add a
@@ -419,7 +420,7 @@ submitted operator, payer and limits. This is separate from the dedicated and
 embedded composition fixtures and from browser/provider or downstream application
 acceptance.
 
-Each complete managed Wasm graph must contain one Memory and Timers identity.
+Each complete managed Wasm graph must contain one Storage and Timers identity.
 Canic owns the runtime and lifecycle;
 the service participant restores synchronously before deferred work. These
 configuration, wire and persisted record changes are a pre-1.0 hard cut requiring

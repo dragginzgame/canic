@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
 cd "$ROOT_DIR"
+bash scripts/release/selection.sh
 
 fail() {
     echo "release push readiness check failed: $1" >&2
@@ -16,10 +17,10 @@ version="$(bash "$VERSION_READER" --committed)" ||
 branch="$(git symbolic-ref --quiet --short HEAD)" ||
     fail "HEAD is detached"
 subject="$(git log -1 --format=%s HEAD)"
-[ "$subject" = "Release $version" ] ||
-    fail "HEAD is not the Release $version commit"
+[ "$subject" = "Release $RELEASE_GROUP $version" ] ||
+    fail "HEAD is not the Release $RELEASE_GROUP $version commit"
 
-tag="v$version"
+tag="$RELEASE_GROUP-v$version"
 tag_type="$(git cat-file -t "refs/tags/$tag" 2>/dev/null)" ||
     fail "annotated tag $tag is missing"
 [ "$tag_type" = "tag" ] || fail "$tag is not an annotated tag"

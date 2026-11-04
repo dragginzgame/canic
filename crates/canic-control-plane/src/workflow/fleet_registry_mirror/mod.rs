@@ -25,14 +25,12 @@ use canic_contracts::dto::{
     role::OperationReceipt,
 };
 use canic_core::{
-    api::timer::TimerApi,
     control_plane_support::{
         error::InternalError,
         ops::{config::ConfigOps, fleet_registry::FleetRegistryOps},
     },
     shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
-use std::time::Duration;
 
 /// Validated source and target authority retained before one mirror commit.
 
@@ -115,7 +113,7 @@ pub async fn accept_synchronization(
     } else {
         synchronize(request.clone()).await?;
     }
-    schedule_registry_synchronization(request.operation_id);
+    super::root_transition_timer::schedule()?;
     Ok(OperationReceipt {
         operation_id: request.operation_id,
     })
@@ -154,30 +152,7 @@ pub fn synchronization_operation_status(
     }))
 }
 
-/// Privately wait for and activate the Coordinator's all-Active Registry.
-pub fn schedule_registry_synchronization(operation_id: [u8; 32]) {
-    schedule_registry_synchronization_after(operation_id, Duration::ZERO);
-}
-
-fn schedule_registry_synchronization_after(operation_id: [u8; 32], delay: Duration) {
-    TimerApi::defer_lifecycle_required(
-        delay,
-        "Fleet Subnet Root Registry synchronization",
-        async move {
-            match advance_registry_synchronization_once(operation_id).await {
-                Ok(true) => {}
-                Ok(false) => {
-                    schedule_registry_synchronization_after(operation_id, Duration::ZERO);
-                }
-                Err(_) => {
-                    schedule_registry_synchronization_after(operation_id, Duration::from_secs(1));
-                }
-            }
-        },
-    );
-}
-
-async fn advance_registry_synchronization_once(
+pub(super) async fn advance_registry_synchronization_once(
     operation_id: [u8; 32],
 ) -> Result<bool, InternalError> {
     let mirror = FleetRegistryMirrorOps::current();

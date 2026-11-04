@@ -6,18 +6,17 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "1.99.1"
 license = "MIT"
 
 [workspace.dependencies]
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = "../../../crates/canic-blob-service" }
-ic-blob-storage = "0.66.0"
-ic-memory = "0.62.1"
+ic-blob-storage = "0.71.1"
 # Tests and tooling only
-ic-platform = { version = "0.17.0", default-features = false }
-ic-storage = "0.62.1"
-ic-wire = { version = "0.14.2", default-features = false }
+ic-platform = { version = "0.22.0", default-features = false }
+ic-storage = "0.66.1"
+ic-wire = { version = "0.16.1", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 
 [package]
@@ -41,14 +40,13 @@ doctest = false
 canic = { workspace = true, features = [] }
 canic-blob-service.workspace = true
 ic-blob-storage.workspace = true
-ic-memory.workspace = true
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-storage.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }
 
 [profile.release]
 opt-level = "z"

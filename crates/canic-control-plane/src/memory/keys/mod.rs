@@ -1,11 +1,11 @@
 //! Stable keys shared by store opens and the complete component request factory.
-use canic_core::__reexports::ic_memory;
+use canic_core::__reexports::ic_storage;
 
 macro_rules! keys {
     ($( $(#[$attr:meta])* $name:ident = $key:literal; )*) => {
         $( $(#[$attr])* pub const $name: &str = $key; )*
-        pub(super) fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
-            Ok(vec![$( $(#[$attr])* ic_memory::MemoryRequest::new(super::MEMORY_AUTHORITY, $name)?, )*])
+        pub(super) fn requests() -> Result<Vec<ic_storage::MemoryRequest>, ic_storage::AdmissionError> {
+            Ok(vec![$( $(#[$attr])* ic_storage::MemoryRequest::new(super::MEMORY_AUTHORITY, $name)?, )*])
         }
     };
 }

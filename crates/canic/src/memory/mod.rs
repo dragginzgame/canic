@@ -3,8 +3,8 @@ pub use canic_core::memory::*;
 
 /// Complete requests for the selected framework role and features.
 pub fn requests() -> Result<
-    Vec<canic_core::__reexports::ic_memory::MemoryRequest>,
-    canic_core::__reexports::ic_memory::MemoryDeclarationError,
+    Vec<canic_core::__reexports::ic_storage::MemoryRequest>,
+    canic_core::__reexports::ic_storage::AdmissionError,
 > {
     let requests = canic_core::memory::requests()?;
     #[cfg(any(
@@ -27,7 +27,7 @@ pub fn requests() -> Result<
 pub fn framework() -> MemoryBootstrap {
     MemoryBootstrap {
         requests: requests().expect("framework memory requests"),
-        pool: pool::framework_pool(Vec::new(), Vec::new()).expect("framework memory grants"),
+        grants: grants::framework_grants(Vec::new()).expect("framework memory grants"),
         admission: None,
     }
 }

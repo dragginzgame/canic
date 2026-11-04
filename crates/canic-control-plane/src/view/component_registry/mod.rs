@@ -1072,3 +1072,26 @@ pub struct ComponentRegistryPartitionView {
     pub committed_descendants: u32,
     pub encoded_bytes: u64,
 }
+
+/// Durable demand projected for the single child continuation owner.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentChildContinuationView {
+    pub component: ComponentInstanceId,
+    pub operation_id: [u8; 32],
+    pub last_failure: Option<RootComponentChildAllocationFailureView>,
+}
+
+/// Exact pending retirement selected by the Component Registry domain owner.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct RootComponentRemovalContinuationView {
+    pub component: ComponentInstanceId,
+    pub operation_id: [u8; 32],
+    pub kind: RootComponentRemovalKind,
+}
+
+/// Distinguishes standalone Component draining from standalone subtree retirement.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum RootComponentRemovalKind {
+    Component,
+    Subtree,
+}

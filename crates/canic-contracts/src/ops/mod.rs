@@ -1,12 +1,6 @@
 //! Deterministic boundary conversions shared by host and canister consumers.
 
 pub mod component_directory;
-pub mod cycle_topups;
-
-pub mod metric_page;
-
-pub mod child_funding;
-
 pub mod runtime_observation;
 
 pub mod caller_authority_status;
@@ -38,6 +32,7 @@ pub mod runtime_configuration;
 pub mod runtime_reporting;
 
 pub mod issuer_proof;
+pub mod portable_enrollment;
 
 pub mod root_capability;
 
@@ -82,6 +77,7 @@ pub mod retirement_control;
 pub mod batch_control;
 
 pub mod inspection;
+#[cfg(feature = "external-candid")]
 pub mod unsigned_magnitude;
 
 pub mod funding_read;

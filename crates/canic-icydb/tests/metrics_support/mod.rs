@@ -58,8 +58,25 @@ pub mod metrics {
     /// Deliberately a fixture shape, not a copy of IcyDB's report schema.
     #[derive(Debug, Deserialize, Eq, PartialEq, Serialize, ic_wire::Wire)]
     pub struct MetricsReport {
-        pub observation: ic_metrics::MeasurementCounter,
-        pub instructions: ic_metrics::MeasurementAggregate,
+        pub observation: CounterReport,
+        pub instructions: InstructionReport,
+    }
+
+    /// Consumer-owned report values, independent of recording implementation.
+    #[derive(Debug, Deserialize, Eq, PartialEq, Serialize, ic_wire::Wire)]
+    pub struct CounterReport {
+        pub total: u128,
+        pub total_overflowed: bool,
+    }
+
+    /// The fixture preserves wide values and independent quality flags on Wire.
+    #[derive(Debug, Deserialize, Eq, PartialEq, Serialize, ic_wire::Wire)]
+    pub struct InstructionReport {
+        pub samples: u64,
+        pub total: u128,
+        pub maximum: Option<u64>,
+        pub samples_overflowed: bool,
+        pub total_overflowed: bool,
     }
 }
 
@@ -67,23 +84,28 @@ pub mod generated {
     pub const __ICYDB_START_BINDING: () = ();
 
     pub mod endpoint_handlers {
-        use super::super::{Error, metrics::MetricsReport};
+        use super::super::{
+            Error,
+            metrics::{CounterReport, InstructionReport, MetricsReport},
+        };
 
         #[expect(
             clippy::unnecessary_wraps,
             reason = "consumer handler has a fallible contract"
         )]
-        pub fn metrics() -> Result<MetricsReport, Error> {
+        pub const fn metrics() -> Result<MetricsReport, Error> {
             Ok(MetricsReport {
-                observation: ic_metrics::MeasurementCounter::from_parts(u128::MAX, false).unwrap(),
-                instructions: ic_metrics::MeasurementAggregate::from_parts(
-                    u64::MAX,
-                    u128::MAX,
-                    Some(u64::MAX),
-                    true,
-                    true,
-                )
-                .unwrap(),
+                observation: CounterReport {
+                    total: u128::MAX,
+                    total_overflowed: false,
+                },
+                instructions: InstructionReport {
+                    samples: u64::MAX,
+                    total: u128::MAX,
+                    maximum: Some(u64::MAX),
+                    samples_overflowed: true,
+                    total_overflowed: true,
+                },
             })
         }
 

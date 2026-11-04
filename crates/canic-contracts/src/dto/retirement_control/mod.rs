@@ -1,6 +1,6 @@
 //! Native removal and retirement intents; canonical cycle conservation and receipt ownership stay unchanged.
 use crate::dto::{fleet_snapshot::FleetSubnetRootEntry, registry_discovery::RegistryVersion};
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Native FleetSubnetRootDrainingReservationRequest boundary.
@@ -99,8 +99,8 @@ pub struct RootRemovalRequest {
 )]
 pub struct Draining {
     pub operation_id: [u8; 32],
-    pub fleet_subnet_root: ic_platform::Principal,
-    pub placement_subnet: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
+    pub placement_subnet: ic_platform_types::Principal,
     pub active_registry: crate::dto::registry_discovery::RegistryVersion,
     pub reservation_hash: [u8; 32],
     pub component_topology_digest: crate::ids::ComponentTopologyDigest,
@@ -122,8 +122,8 @@ pub struct Draining {
 )]
 pub struct FinalInventory {
     pub operation_id: [u8; 32],
-    pub fleet_subnet_root: ic_platform::Principal,
-    pub placement_subnet: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
+    pub placement_subnet: ic_platform_types::Principal,
     pub registry: crate::dto::registry_discovery::RegistryVersion,
     pub component_topology_digest: crate::ids::ComponentTopologyDigest,
     pub active_release_set: crate::ids::FleetSubnetRootReleaseSet,
@@ -131,7 +131,7 @@ pub struct FinalInventory {
     pub removed_component_instances: u32,
     pub terminal_component_history_hash: [u8; 32],
     pub root_registry_encoded_bytes: u64,
-    pub wasm_store: ic_platform::Principal,
+    pub wasm_store: ic_platform_types::Principal,
     pub wasm_store_catalog_hash: [u8; 32],
     pub wasm_store_catalog_entries: u32,
     pub wasm_store_occupied_bytes: u64,
@@ -174,7 +174,7 @@ pub struct RemovalPublication {
 )]
 pub struct ReadinessIntentRequest {
     pub operation_id: [u8; 32],
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub final_inventory_hash: [u8; 32],
     pub store_deletion_hash: [u8; 32],
     pub observed_cycles_before_reclamation: u128,
@@ -193,7 +193,7 @@ pub struct ReadinessIntentRequest {
 )]
 pub struct ReadinessIntent {
     pub request: ReadinessIntentRequest,
-    pub coordinator: ic_platform::Principal,
+    pub coordinator: ic_platform_types::Principal,
     pub recorded_at_ns: u64,
     pub intent_hash: [u8; 32],
 }
@@ -207,7 +207,7 @@ pub struct ReadinessIntent {
 pub struct ReadinessRequest {
     pub ledger_receipt: LedgerTransferReceipt,
     pub operation_id: [u8; 32],
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub expected_intent_hash: [u8; 32],
     pub observed_cycles_after_reclamation: u128,
     pub cycles_reclaimed_at_ns: u64,
@@ -221,7 +221,7 @@ pub struct ReadinessRequest {
 )]
 pub struct Readiness {
     pub request: ReadinessRequest,
-    pub coordinator: ic_platform::Principal,
+    pub coordinator: ic_platform_types::Principal,
     pub final_inventory_hash: [u8; 32],
     pub store_deletion_hash: [u8; 32],
     pub observed_cycles_before_reclamation: u128,

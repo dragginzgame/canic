@@ -8,8 +8,12 @@ use canic_contracts::dto::{
     fleet_coordinator::CoordinatorFundingStatusResponse, root::RootFundingReleaseResponse,
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
-use ic_platform::pocket_ic::PocketIc;
+use ic_testkit::pocket_ic::PocketIc;
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep complete installed funding census assertions together"
+)]
 pub(super) fn assert_census(
     pic: &PocketIc,
     agent: &Agent,
@@ -38,8 +42,10 @@ pub(super) fn assert_census(
             .unwrap();
     };
     replace(encode(page.clone()));
-    let balance = pic.cycle_balance(root);
-    let coordinator_balance = pic.cycle_balance(review.authority.coordinator);
+    let balance = pic.cycle_balance(root).expect("PocketIC cycle_balance");
+    let coordinator_balance = pic
+        .cycle_balance(review.authority.coordinator)
+        .expect("PocketIC cycle_balance");
     let collect =
         |review, registry| runtime.block_on(funding::collect_with_agent(agent, review, registry));
     let result = collect(review, registry).unwrap();
@@ -57,9 +63,13 @@ pub(super) fn assert_census(
         encode(repeated.roots[0].pages[0].clone()),
         encode(page.clone())
     );
-    assert_eq!(pic.cycle_balance(root), balance);
     assert_eq!(
-        pic.cycle_balance(review.authority.coordinator),
+        pic.cycle_balance(root).expect("PocketIC cycle_balance"),
+        balance
+    );
+    assert_eq!(
+        pic.cycle_balance(review.authority.coordinator)
+            .expect("PocketIC cycle_balance"),
         coordinator_balance
     );
     assessment::assert_assessment(pic, agent, runtime, review, registry, page.clone());

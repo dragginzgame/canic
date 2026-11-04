@@ -26,7 +26,7 @@ macro_rules! __canic_emit_observation_updates {
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::observability_relay::child_funding::METHOD_ID, request = ::canic::protocol::observability_relay::child_funding::REQUEST_LIMITS, response = ::canic::protocol::observability_relay::child_funding::RESPONSE_LIMITS))]
         fn canic_observe_child_funding(child: $crate::__internal::ic_platform::Principal) -> Result<::canic::dto::child_funding::ChildFundingUsage, ::canic::Error> {
 
-            $crate::__internal::core::api::observability::ObservabilityApi::child_funding(child.into()).map(Into::into)
+            $crate::__internal::core::api::observability::ObservabilityApi::child_funding(child.into())
         }
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::observability_relay::cycle_balance::METHOD_ID, request = ::canic::protocol::observability_relay::cycle_balance::REQUEST_LIMITS, response = ::canic::protocol::observability_relay::cycle_balance::RESPONSE_LIMITS))]
         fn canic_observe_cycle_balance() -> Result<::canic::dto::role::CycleBalanceStatusResponse, ::canic::Error> {
@@ -41,7 +41,7 @@ macro_rules! __canic_emit_observation_updates {
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::observability_relay::cycle_topups::METHOD_ID, request = ::canic::protocol::observability_relay::cycle_topups::REQUEST_LIMITS, response = ::canic::protocol::observability_relay::cycle_topups::RESPONSE_LIMITS))]
         fn canic_observe_cycle_topups(page: ::canic::dto::page::PageRequest) -> Result<::canic::dto::page::Page<::canic::dto::cycle_topups::CycleTopupEvent>, ::canic::Error> {
             let _ = &page;
-            $crate::__canic_optional_observation!(all(canic_capability_observability_history, canic_capability_automatic_topup), Ok($crate::__internal::core::api::cycles::CycleTrackerQuery::topups(page).into()))
+            $crate::__canic_optional_observation!(all(canic_capability_observability_history, canic_capability_automatic_topup), Ok($crate::__internal::core::api::cycles::CycleTrackerQuery::topups(page)))
         }
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::observability_relay::memory_allocations::METHOD_ID, request = ::canic::protocol::observability_relay::memory_allocations::REQUEST_LIMITS, response = ::canic::protocol::observability_relay::memory_allocations::RESPONSE_LIMITS))]
         fn canic_observe_memory_allocations() -> Result<::canic::dto::memory::MemoryAllocationsResponse, ::canic::Error> {
@@ -51,7 +51,7 @@ macro_rules! __canic_emit_observation_updates {
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::observability_relay::metrics::METHOD_ID, request = ::canic::protocol::observability_relay::metrics::REQUEST_LIMITS, response = ::canic::protocol::observability_relay::metrics::RESPONSE_LIMITS))]
         fn canic_observe_metrics(request: ::canic::dto::role::MetricsStatusRequest) -> Result<::canic::dto::page::Page<::canic::dto::metric_page::MetricEntry>, ::canic::Error> {
             let _ = &request;
-            $crate::__canic_optional_observation!(canic_capability_observability_metrics, $crate::__canic_role_metrics_status!(request).map(Into::into))
+            $crate::__canic_optional_observation!(canic_capability_observability_metrics, $crate::__canic_role_metrics_status!(request))
         }
     };
 }

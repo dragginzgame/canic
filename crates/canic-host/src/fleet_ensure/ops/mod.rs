@@ -35,6 +35,8 @@ pub mod release;
 pub mod retained_contract;
 pub(super) mod startup_funding;
 pub(super) mod terminal;
+#[cfg(test)]
+mod tests;
 
 use crate::{
     MAX_DOCUMENT_READ_BYTES,
@@ -45,13 +47,17 @@ use crate::{
         RootManagementObservation, RootOwnedCanisterLifecycle,
     },
 };
-use canic_contracts::{cycles::Cycles, dto::pool::CanisterPoolAssetStatus};
+use canic_contracts::{
+    cycles::Cycles,
+    dto::pool::CanisterPoolAssetStatus,
+    protocol::{cycle_drain as drain_wire, wire_declaration::MethodKind},
+};
 use canic_core::cdk::utils::hash::sha256_hex;
-use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_artifacts::artifact::{ArtifactError, BoundedWriter};
 use ic_host_fs::{
     durable::{
         PublicationMode, RegularFileLockError, WriteOptions, lock_exclusive,
-        open_regular_lock_file_with_parents, write_bytes,
+        open_regular_lock_file_with_parents, write_with,
     },
     read::read_optional_file_no_follow,
 };
@@ -59,7 +65,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
-    io,
+    io::{self, BufWriter, Write},
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -542,6 +548,12 @@ impl EnsurePaths {
 
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
+    #[error("invalid drain Wire contract for {canister}: {source}")]
+    DrainContract {
+        canister: String,
+        #[source]
+        source: Box<current_protocol::CurrentProtocolError>,
+    },
     #[error("reset requires reconciliation of the uncertain paid effect at {} ({effect}); preserve its request and receipt evidence before replacing this installation", path.display())]
     ResetUncertainEffect { path: PathBuf, effect: String },
     #[error("unfinished Fleet release at {} retains this operation; resume it before Ensure or import", path.display())]
@@ -847,12 +859,41 @@ pub fn resolve_desired_artifacts(
                 .insert(canister.name.clone(), artifact_sha256(root, init_candid)?);
         }
         if let Some(drain) = &canister.drain {
+            let path = root.join(&drain.wire_schema);
+            let bytes = current_protocol::read_schema(&path).map_err(|source| {
+                EnsureStateError::DrainContract {
+                    canister: canister.name.clone(),
+                    source: Box::new(source),
+                }
+            })?;
+            admit_drain_schema(&bytes, &drain.method).map_err(|source| {
+                EnsureStateError::DrainContract {
+                    canister: canister.name.clone(),
+                    source: Box::new(source),
+                }
+            })?;
             artifacts
-                .drain_candid_sha256_by_canister
-                .insert(canister.name.clone(), artifact_sha256(root, &drain.candid)?);
+                .drain_wire_schema_sha256_by_canister
+                .insert(canister.name.clone(), sha256_hex(&bytes));
         }
     }
     Ok(artifacts)
+}
+
+/// Bind the selected method to the compiled current drain identity and allowances.
+fn admit_drain_schema(
+    bytes: &[u8],
+    method: &str,
+) -> Result<(), current_protocol::CurrentProtocolError> {
+    crate::artifact_io::require_wire_method(
+        bytes,
+        method,
+        drain_wire::METHOD_ID,
+        MethodKind::Update,
+        drain_wire::REQUEST_LIMITS,
+        drain_wire::RESPONSE_LIMITS,
+    )?;
+    Ok(())
 }
 
 fn artifact_sha256(root: &Path, configured: &str) -> Result<String, EnsureStateError> {
@@ -913,24 +954,7 @@ pub fn write_plan(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), Ens
         source,
     })?;
     plan_content::remove_inline_bytes(&mut projection)?;
-    let bytes =
-        serde_json::to_vec_pretty(&projection).map_err(|source| EnsureStateError::Decode {
-            path: paths.plan.clone(),
-            source,
-        })?;
-    write_bytes(
-        &paths.plan,
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o666,
-        },
-        &bytes,
-    )
-    .map_err(crate::publication::ops::io_error)
-    .map_err(|source| EnsureStateError::Io {
-        path: paths.plan.clone(),
-        source,
-    })
+    write_current(&paths.plan, &projection)
 }
 
 /// Atomically retain one complete generator-owned Root-start authority.
@@ -1022,19 +1046,20 @@ fn read_document_bytes(path: &Path) -> Result<Option<Vec<u8>>, EnsureStateError>
 }
 
 fn write_current(path: &Path, value: &impl Serialize) -> Result<(), EnsureStateError> {
-    let bytes = serde_json::to_vec_pretty(value).map_err(|source| EnsureStateError::Decode {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    write_bytes(
+    write_with(
         path,
         WriteOptions {
             mode: PublicationMode::Replace,
             permissions: 0o666,
         },
-        &bytes,
+        |file| {
+            let mut writer =
+                BoundedWriter::new(BufWriter::new(file), MAX_DOCUMENT_READ_BYTES as u64);
+            serde_json::to_writer_pretty(&mut writer, value)?;
+            writer.flush().map_err(serde_json::Error::io)
+        },
     )
-    .map_err(crate::publication::ops::io_error)
+    .map_err(crate::publication::ops::json_error)
     .map_err(|source| EnsureStateError::Io {
         path: path.to_path_buf(),
         source,

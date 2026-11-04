@@ -15,15 +15,17 @@ pub use ic_auth::signature_store::SignatureSibling;
 // Internal auth pipeline:
 // - `attestation` owns role-attestation endpoint adapters.
 // - `root` owns root-only issuer policy, renewal, and chain-key proof adapters.
-// - `token` owns issuer-local delegated-token endpoint adapters.
+// - `issuer_proof` owns issuer-local Root proof installation and reporting.
 mod attestation;
+mod issuer_proof;
+#[cfg(feature = "auth-portable-issuer")]
+pub mod portable_issuer;
 mod root;
-mod token;
 
 ///
 /// AuthApi
 ///
-/// Owns delegated-token helpers and root-signed role-attestation helpers.
+/// Owns Root proof support, role attestation and selected portable receiver adapters.
 /// Owned by the API layer and called by generated endpoint wrappers.
 ///
 
@@ -46,7 +48,7 @@ impl AuthApi {
         Error::from(err)
     }
 
-    fn require_delegated_token_issuer_enabled() -> Result<(), Error> {
+    fn require_issuer_proof_support() -> Result<(), Error> {
         let delegated_tokens_cfg =
             ConfigOps::delegated_tokens_config().map_err(Self::map_auth_error)?;
         if !delegated_tokens_cfg.enabled {
@@ -65,3 +67,5 @@ impl AuthApi {
         Ok(())
     }
 }
+#[cfg(feature = "auth-local-application-authorization")]
+pub mod portable;

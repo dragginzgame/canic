@@ -271,7 +271,7 @@ pub struct RuntimeStateDomainSummary {
     pub domain: String,
     pub version: u32,
     pub storage: String,
-    pub memory_id: Option<u8>,
+    pub memory_id: Option<u64>,
     pub status: RuntimeStateDomainStatus,
 }
 

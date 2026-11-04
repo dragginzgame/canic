@@ -1,0 +1,19 @@
+# Tests and tooling packages
+[package]
+name = "ic-auth-backend-conformance"
+version = "0.33.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+readme = "README.md"
+description = "Portable Auth backend contract scenarios for native qualification"
+
+[dependencies]
+ic-auth = { workspace = true, features = ["session-restore", "portable-signature-verification"] }
+ic-auth-protocol-types.workspace = true
+ic-platform = { workspace = true, features = ["ed25519"] }
+
+[lints]
+workspace = true

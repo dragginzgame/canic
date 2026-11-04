@@ -237,7 +237,7 @@ fn generated_packages_are_resolved_before_complete_build_inputs_are_frozen() {
     });
     let mut manifest = toml::to_string(&toml::Value::try_from(document).unwrap()).unwrap();
     manifest.push_str(
-        &crate::fleet_package::dependency_patch_table(&canic, env!("CARGO_PKG_VERSION")).unwrap(),
+        &crate::fleet_package::dependency_patch_table(&canic, canic_core::VERSION).unwrap(),
     );
     fs::write(root.join("Cargo.toml"), manifest).unwrap();
     cargo_metadata_catalog_for_manifest(

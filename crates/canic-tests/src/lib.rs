@@ -1,6 +1,12 @@
-//! Workspace-only integration test package for Canic.
+//! Private Canic test harness and separately selectable integration suites.
 //!
-//! This crate hosts the repo's heavier integration suites and shared test
-//! harness modules without widening the reusable `ic-testkit` surface.
+//! The library owns Canic-specific fixtures, Root baselines and test seams.
+//! Reusable IC testing mechanics remain with `ic-testkit`.
 
+pub mod canister;
+pub mod embedded_root;
+pub mod payload_contract;
+pub mod pic;
+#[cfg(any(not(test), feature = "governed-pocketic-tests"))]
 pub mod root;
+pub mod workspace;

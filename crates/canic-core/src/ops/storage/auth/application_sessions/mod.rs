@@ -5,14 +5,17 @@
 //! Boundary: workflow supplies invariant-bearing model values; stable storage commits one current record set.
 
 use super::LocalApplicationAuthorizationStateOps;
+#[cfg(test)]
+use crate::model::auth::application_authorization::{
+    MAX_ACTIVE_APPLICATION_SESSIONS, MAX_APPLICATION_REPLAY_RECORDS,
+    MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER, MAX_APPLICATION_SESSION_INDEX_BYTES,
+    MAX_APPLICATION_SESSION_STABLE_BYTES,
+};
 use crate::{
     cdk::types::Principal,
     model::auth::application_authorization::{
         ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
-        MAX_ACTIVE_APPLICATION_SESSIONS, MAX_APPLICATION_REPLAY_RECORDS,
-        MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER, MAX_APPLICATION_SESSION_INDEX_BYTES,
-        MAX_APPLICATION_SESSION_RECORD_BYTES, MAX_APPLICATION_SESSION_STABLE_BYTES,
-        MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
+        MAX_APPLICATION_SESSION_RECORD_BYTES, MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
     },
     storage::stable::auth::{
         LocalApplicationAuthorityBindingRecord, LocalApplicationAuthorizationState,
@@ -25,6 +28,7 @@ use crate::{
     model::auth::application_authorization::MAX_APPLICATION_SESSION_CLEANUP_REMOVALS,
     ops::runtime::metrics::auth::record_application_session_generation_invalidation,
 };
+use capacity::capacity;
 use ic_auth::session::Session;
 use std::{
     cell::RefCell,
@@ -37,12 +41,17 @@ thread_local! {
         const { RefCell::new(None) };
 }
 
+mod capacity;
+mod inspection;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod login_restore;
-#[cfg(test)]
+mod receiver;
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod shared;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 use login_restore::validate_login_records;
+pub use receiver::{PersistentReceiverError, PersistentReceiverPolicy, PersistentReceiverState};
+pub use shared::ApplicationSessionStore;
 
 #[derive(Clone, Debug, Default)]
 struct ApplicationSessionIndexes {
@@ -82,7 +91,6 @@ pub struct ApplicationSessionRestoreStats {
 /// Current physical occupancy projected from the reconstructed storage indexes.
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg(test)]
 pub struct ApplicationSessionOccupancy {
     pub active_global: usize,
     pub replay_global: usize,
@@ -92,11 +100,14 @@ pub struct ApplicationSessionOccupancy {
 /// Closed corruption, capacity and atomic-commit failures for application-session state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum ApplicationSessionStateError {
+    #[error("invalid receiver capacity")]
+    InvalidCapacity,
+    #[error("persistent receiver reset metadata is invalid or missing for retained records")]
+    ReceiverResetMetadata,
     #[error("application-session trusted clock moved backwards")]
     ClockRollback,
 
     #[error("application-session derived indexes are unavailable")]
-    #[cfg(test)]
     IndexesUnavailable,
 
     #[error("application-session state exceeds the active global bound")]
@@ -151,17 +162,85 @@ pub enum ApplicationSessionStateError {
 }
 
 impl LocalApplicationAuthorizationStateOps {
+    /// Persist trusted time and keep any live encoded-byte index consistent.
+    /// Startup may observe time before indexes exist; observation never opens them.
+    pub(crate) fn observe_application_time(
+        now_ns: u64,
+    ) -> Result<(), ApplicationSessionStateError> {
+        let previous = LocalApplicationAuthorizationState::application_observed_at_ns();
+        if !LocalApplicationAuthorizationState::observe_application_time(now_ns) {
+            invalidate_indexes();
+            return Err(ApplicationSessionStateError::ClockRollback);
+        }
+        let account = || -> Result<(), ApplicationSessionStateError> {
+            let before = encoded_len(&previous)?;
+            let after = encoded_len(&now_ns)?;
+            APPLICATION_SESSION_INDEXES.with_borrow_mut(|slot| {
+                let Some(indexes) = slot.as_mut() else {
+                    return Ok(());
+                };
+                let bytes = indexes
+                    .encoded_bytes
+                    .checked_sub(before)
+                    .and_then(|bytes| bytes.checked_add(after))
+                    .ok_or(ApplicationSessionStateError::StableStateTooLarge)?;
+                if bytes > capacity().stable_bytes {
+                    return Err(ApplicationSessionStateError::StableStateTooLarge);
+                }
+                indexes.encoded_bytes = bytes;
+                Ok(())
+            })
+        };
+        if let Err(error) = account() {
+            invalidate_indexes();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "auth-local-application-authorization")]
+    pub(crate) fn initialize_receiver_floors(
+        now_ns: u64,
+        clock_skew_ns: u64,
+    ) -> Result<
+        crate::storage::stable::auth::PortableReceiverFloorsRecord,
+        ApplicationSessionStateError,
+    > {
+        if let Some(floors) = LocalApplicationAuthorizationState::receiver_floors() {
+            return Ok(floors);
+        }
+        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
+        if now_ns < state.observed_at_ns {
+            return Err(ApplicationSessionStateError::ClockRollback);
+        }
+        if !state.sessions.is_empty() || !state.replays.is_empty() || !state.logins.is_empty() {
+            return Err(ApplicationSessionStateError::ReceiverResetMetadata);
+        }
+        let proof = now_ns
+            .checked_add(1)
+            .ok_or(ApplicationSessionStateError::ClockRollback)?;
+        let login = proof
+            .checked_add(clock_skew_ns)
+            .ok_or(ApplicationSessionStateError::ClockRollback)?;
+        let floors = crate::storage::stable::auth::PortableReceiverFloorsRecord {
+            min_proof_issued_at_ns: proof,
+            min_login_started_at_ns: login,
+        };
+        state.receiver_floors = Some(floors);
+        commit_validated_state(state)?;
+        Ok(floors)
+    }
     /// Validate canonical records and synchronously reconstruct every derived index.
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn restore_application_session_state(
         now_ns: u64,
     ) -> Result<ApplicationSessionRestoreStats, ApplicationSessionStateError> {
+        crate::ops::auth::enrollment::invalidate_receiver_boot();
         prepare_maintenance_state(now_ns).map(|(_, report)| report)
     }
 
     /// Return the current target-local application authority generation.
     #[must_use]
-    #[cfg(test)]
     pub fn application_authority_generation() -> u64 {
         LocalApplicationAuthorizationState::application_authority_generation()
     }
@@ -199,12 +278,12 @@ impl LocalApplicationAuthorizationStateOps {
             .ok_or(ApplicationSessionStateError::AuthorityGenerationExhausted)?;
         state.authority_binding = Some(authority_binding_to_record(&current));
         commit_validated_state(state)?;
+        crate::ops::auth::enrollment::invalidate_receiver_boot();
         record_application_session_generation_invalidation();
         Ok(())
     }
 
     /// Return current physical occupancy used by target-local admission policy.
-    #[cfg(test)]
     pub fn application_session_occupancy(
         caller: Principal,
     ) -> Result<ApplicationSessionOccupancy, ApplicationSessionStateError> {
@@ -290,9 +369,7 @@ fn prepare_maintenance_state(
 > {
     // Startup and maintenance both close derived access before any refusal.
     invalidate_indexes();
-    if !LocalApplicationAuthorizationState::observe_application_time(now_ns) {
-        return Err(ApplicationSessionStateError::ClockRollback);
-    }
+    LocalApplicationAuthorizationStateOps::observe_application_time(now_ns)?;
     let state = LocalApplicationAuthorizationState::application_authorization_state();
     let (indexes, report) = build_indexes(&state)?;
     install_indexes(indexes);
@@ -312,7 +389,6 @@ fn install_indexes(indexes: ApplicationSessionIndexes) {
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|current| *current = Some(indexes));
 }
 
-#[cfg(test)]
 fn with_indexes<T>(
     read: impl FnOnce(&ApplicationSessionIndexes) -> T,
 ) -> Result<T, ApplicationSessionStateError> {
@@ -328,16 +404,22 @@ fn build_indexes(
     state: &LocalApplicationAuthorizationStateData,
 ) -> Result<(ApplicationSessionIndexes, ApplicationSessionRestoreStats), ApplicationSessionStateError>
 {
+    if state.receiver_floors.is_some_and(|floors| {
+        floors.min_proof_issued_at_ns == 0
+            || floors.min_login_started_at_ns < floors.min_proof_issued_at_ns
+    }) {
+        return Err(ApplicationSessionStateError::ReceiverResetMetadata);
+    }
     if let Some(binding) = &state.authority_binding {
         authority_binding_from_record(binding)?;
     }
-    if state.sessions.len() > MAX_ACTIVE_APPLICATION_SESSIONS {
+    if state.sessions.len() > capacity().sessions {
         return Err(ApplicationSessionStateError::ActiveGlobalCapacity);
     }
-    if state.replays.len() > MAX_APPLICATION_REPLAY_RECORDS {
+    if state.replays.len() > capacity().replays {
         return Err(ApplicationSessionStateError::ReplayGlobalCapacity);
     }
-    if encoded_state_len(state)? > MAX_APPLICATION_SESSION_STABLE_BYTES {
+    if encoded_state_len(state)? > capacity().stable_bytes {
         return Err(ApplicationSessionStateError::StableStateTooLarge);
     }
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
@@ -350,7 +432,7 @@ fn build_indexes(
 
     indexes.estimated_bytes = estimate_index_bytes(&indexes);
     indexes.encoded_bytes = encoded_state_len(state)?;
-    if indexes.estimated_bytes > MAX_APPLICATION_SESSION_INDEX_BYTES {
+    if indexes.estimated_bytes > capacity().index_bytes {
         return Err(ApplicationSessionStateError::IndexStateTooLarge);
     }
     let restore_report = ApplicationSessionRestoreStats {
@@ -411,7 +493,7 @@ fn index_replay_records(
             .entry(replay.transport_caller)
             .or_default();
         *count += 1;
-        if *count > MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER {
+        if *count > capacity().replays_per_caller {
             return Err(ApplicationSessionStateError::ReplayCallerCapacity);
         }
     }
@@ -460,7 +542,6 @@ fn session_from_record(
         .map_err(|_| ApplicationSessionStateError::InvalidSessionRecord)
 }
 
-#[cfg(test)]
 fn session_to_record(
     session: &Session,
 ) -> Result<LocalApplicationSessionRecord, ApplicationSessionStateError> {
@@ -562,6 +643,7 @@ fn encoded_state_len(
     state: &LocalApplicationAuthorizationStateData,
 ) -> Result<usize, ApplicationSessionStateError> {
     let header = encoded_len(&(
+        state.receiver_floors,
         state.authority_generation,
         &state.authority_binding,
         state.login_totals,
@@ -604,12 +686,15 @@ const fn index_bytes_for_counts(sessions: usize, replays: usize, replay_callers:
 #[cfg(test)]
 pub struct ApplicationSessionTestStateGuard(
     crate::storage::stable::auth::LocalApplicationAuthorizationStateData,
+    crate::model::auth::application_authorization::capacity::ReceiverCapacity,
 );
 
 #[cfg(test)]
 impl ApplicationSessionTestStateGuard {
     /// Replace application authorization state with one empty current-format value.
     pub fn empty() -> Self {
+        let previous_capacity = capacity();
+        capacity::select(2048).unwrap();
         let original = LocalApplicationAuthorizationState::export();
         LocalApplicationAuthorizationState::import(
             crate::storage::stable::auth::LocalApplicationAuthorizationStateData::default(),
@@ -619,42 +704,14 @@ impl ApplicationSessionTestStateGuard {
             LocalApplicationAuthorizationState::export().observed_at_ns,
         )
         .unwrap();
-        Self(original)
-    }
-
-    /// Install one replay record for a workflow test without exposing stable records upward.
-    #[expect(
-        clippy::unused_self,
-        reason = "the receiver proves the scoped state-restoration guard is held"
-    )]
-    pub fn install_replay(
-        &self,
-        proof_fingerprint: [u8; 32],
-        caller: Principal,
-        remove_at_ns: u64,
-    ) {
-        LocalApplicationAuthorizationState::replace_application_authorization_state(
-            LocalApplicationAuthorizationStateData {
-                replays: vec![LocalApplicationReplayRecord {
-                    proof_fingerprint,
-                    transport_caller: caller,
-                    authority_generation: 0,
-                    remove_at_ns,
-                }],
-                ..LocalApplicationAuthorizationStateData::default()
-            },
-        );
-        invalidate_indexes();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state(
-            LocalApplicationAuthorizationState::export().observed_at_ns,
-        )
-        .unwrap();
+        Self(original, previous_capacity)
     }
 }
 
 #[cfg(test)]
 impl Drop for ApplicationSessionTestStateGuard {
     fn drop(&mut self) {
+        capacity::restore_selection(self.1);
         LocalApplicationAuthorizationState::import(self.0.clone());
         invalidate_indexes();
         LocalApplicationAuthorizationStateOps::restore_application_session_state(
@@ -666,6 +723,7 @@ impl Drop for ApplicationSessionTestStateGuard {
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub fn invalidate_indexes() {
+    receiver::invalidate_runtime();
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|indexes| *indexes = None);
 }
 
@@ -763,6 +821,53 @@ mod tests {
         assert_eq!(
             retained.authority_binding,
             Some(authority_binding_to_record(&original))
+        );
+    }
+
+    #[test]
+    fn protected_clock_observation_accounts_live_indexes_without_opening_closed_state() {
+        let _lock = seams::lock();
+        let _state = ApplicationSessionTestStateGuard::empty();
+        LocalApplicationAuthorizationStateOps::observe_application_time(10_000_000_000).unwrap();
+        let indexed = with_indexes(|indexes| indexes.encoded_bytes).unwrap();
+        let actual = encoded_state_len(&LocalApplicationAuthorizationState::export()).unwrap();
+        assert_eq!(indexed, actual);
+        LocalApplicationAuthorizationStateOps::observe_application_time(10_000_000_000).unwrap();
+        assert_eq!(
+            with_indexes(|indexes| indexes.encoded_bytes).unwrap(),
+            actual
+        );
+        invalidate_indexes();
+        LocalApplicationAuthorizationStateOps::observe_application_time(100_000_000_000).unwrap();
+        assert_eq!(
+            with_indexes(|_| ()),
+            Err(ApplicationSessionStateError::IndexesUnavailable)
+        );
+        assert_eq!(
+            LocalApplicationAuthorizationState::application_observed_at_ns(),
+            100_000_000_000
+        );
+    }
+
+    #[test]
+    fn protected_clock_rollback_preserves_state_and_closes_access() {
+        let _lock = seams::lock();
+        let _state = ApplicationSessionTestStateGuard::empty();
+        LocalApplicationAuthorizationStateOps::observe_application_time(100).unwrap();
+        let before = LocalApplicationAuthorizationState::export();
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::observe_application_time(99),
+            Err(ApplicationSessionStateError::ClockRollback)
+        );
+        assert_eq!(LocalApplicationAuthorizationState::export(), before);
+        assert_eq!(
+            with_indexes(|_| ()),
+            Err(ApplicationSessionStateError::IndexesUnavailable)
+        );
+        LocalApplicationAuthorizationStateOps::observe_application_time(101).unwrap();
+        assert_eq!(
+            with_indexes(|_| ()),
+            Err(ApplicationSessionStateError::IndexesUnavailable)
         );
     }
 }

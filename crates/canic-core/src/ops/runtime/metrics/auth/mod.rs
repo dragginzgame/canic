@@ -12,10 +12,10 @@ use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
+#[cfg(feature = "auth-local-application-authorization")]
+pub use sessions::record_application_session_cleanup;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
-pub use sessions::{
-    record_application_session_cleanup, record_application_session_generation_invalidation,
-};
+pub use sessions::record_application_session_generation_invalidation;
 
 thread_local! {
     static AUTH_METRICS: RefCell<HashMap<AuthMetricKey, MeasurementCounter>> = RefCell::new(HashMap::new());
@@ -244,7 +244,7 @@ mod tests {
         AUTH_METRICS.with_borrow_mut(|counts| {
             counts.insert(
                 key,
-                MeasurementCounter::from_parts(u128::MAX - 1, false).unwrap(),
+                ic_metrics::persistence::restore_counter(u128::MAX - 1, false).unwrap(),
             );
         });
         record_attestation_verify_failed();

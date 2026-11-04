@@ -1,7 +1,7 @@
 //! Native transport for retained Coordinator acknowledgement evidence.
 
 use crate::dto::registry_discovery::RegistryVersion;
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// One Root's acknowledgement of an exact durably staged registry snapshot.

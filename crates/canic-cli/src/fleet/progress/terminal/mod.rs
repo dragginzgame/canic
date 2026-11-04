@@ -4,6 +4,7 @@
 //! Does not own: progress, cancellation, deployment or animation state.
 //! Boundary: signals retain default termination after terminal cleanup.
 
+use ic_host_text::width::fit_line;
 use std::{
     io::{self, Write},
     os::fd::BorrowedFd,
@@ -107,28 +108,9 @@ impl Painter {
             if index != 0 {
                 writer.write_all(b"\r\n")?;
             }
-            let line = bounded_line(line, width);
+            let line = fit_line(line, width);
             writer.write_all(line.as_bytes())?;
         }
         writer.flush()
     }
-}
-
-fn bounded_line(value: &str, width: usize) -> String {
-    let mut text = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii() && !ch.is_control() {
-                ch
-            } else {
-                '?'
-            }
-        })
-        .take(width)
-        .collect::<String>();
-    if value.chars().count() > width && width >= 3 {
-        text.truncate(width - 3);
-        text.push_str("...");
-    }
-    text
 }

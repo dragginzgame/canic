@@ -255,6 +255,8 @@ fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(),
     let canister_cfg = ConfigOps::current_canister()?;
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(canister_role, &canister_cfg)?;
     RuntimeAuthWorkflow::reconcile_local_application_authority()?;
+    #[cfg(feature = "auth-portable-issuer")]
+    crate::ops::auth::portable_issuer::restore().map_err(|_| InternalError::invariant())?;
     Ok(())
 }
 
@@ -415,6 +417,8 @@ fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), Inte
     }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
     RuntimeAuthWorkflow::reconcile_local_application_authority()?;
+    #[cfg(feature = "auth-portable-issuer")]
+    crate::ops::auth::portable_issuer::restore().map_err(|_| InternalError::invariant())?;
 
     Ok(())
 }

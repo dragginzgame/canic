@@ -64,7 +64,7 @@ pub(super) fn declaration_limits() -> Vec<super::payload_contract::UpdatePayload
     result
 }
 
-/// Inspect the current ingress update and accept it only when within limit.
+/// Refuse private timer ingress, then accept public updates only within their limit.
 ///
 /// # Panics
 ///
@@ -72,6 +72,9 @@ pub(super) fn declaration_limits() -> Vec<super::payload_contract::UpdatePayload
 /// mutex.
 pub fn inspect_update_message() {
     let method = current_method_name();
+    if ic_timers::is_timer_dispatch_method(&method) {
+        return;
+    }
     let payload_len = current_payload_bytes().len();
     let Ok(max_bytes) = update_limit_for(&method) else {
         return;

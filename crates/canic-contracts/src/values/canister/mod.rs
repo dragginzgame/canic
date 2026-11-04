@@ -7,7 +7,7 @@
 //! Boundary: ops and DTO modules re-export these values to preserve public API
 //! paths while conversion from foreign infra payloads remains explicit.
 
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 ///

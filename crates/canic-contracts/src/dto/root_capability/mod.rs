@@ -6,7 +6,7 @@ use crate::{
     },
     ids::CanisterRole,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Structural authority and original replay metadata carried with one typed operation.

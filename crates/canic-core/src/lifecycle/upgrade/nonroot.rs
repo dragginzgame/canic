@@ -4,9 +4,7 @@ use crate::{
     },
     bootstrap,
     config::RoleRuntimeAuthority,
-    lifecycle::{LifecyclePhase, lifecycle_trap, retryable_nonroot_bootstrap_error},
-    log,
-    log::Topic,
+    lifecycle::{LifecyclePhase, lifecycle_trap},
     ops::runtime::{
         bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
         env::EnvOps,
@@ -14,9 +12,6 @@ use crate::{
     workflow,
 };
 use canic_contracts::ids::CanisterRole;
-use std::time::Duration;
-
-const MAX_NONROOT_BOOTSTRAP_ATTEMPTS: u32 = 64;
 
 pub fn post_upgrade_wasm_store_before_bootstrap(
     embedded_release_build_id: Option<&str>,
@@ -176,66 +171,6 @@ pub fn schedule_post_upgrade_nonroot_bootstrap() {
     );
     BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_UPGRADE_SCHEDULED);
 
-    schedule_post_upgrade_nonroot_bootstrap_after(0, Duration::ZERO);
-}
-
-fn schedule_post_upgrade_nonroot_bootstrap_after(attempt: u32, delay: Duration) {
-    crate::api::timer::TimerApi::defer_lifecycle_required(
-        delay,
-        "canic:bootstrap:post_upgrade_nonroot_canister",
-        async move {
-            BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_UPGRADE);
-            LifecycleMetricsApi::record_bootstrap(
-                LifecycleMetricPhase::PostUpgrade,
-                LifecycleMetricRole::Nonroot,
-                LifecycleMetricOutcome::Started,
-            );
-            if let Err(err) =
-                workflow::bootstrap::nonroot::bootstrap_post_upgrade_nonroot_canister().await
-            {
-                let next_attempt = attempt.saturating_add(1);
-                if retryable_nonroot_bootstrap_error(&err)
-                    && next_attempt < MAX_NONROOT_BOOTSTRAP_ATTEMPTS
-                {
-                    BootstrapStatusOps::set_phase(
-                        BootstrapPhaseLabel::NONROOT_UPGRADE_WAITING_AUTHORITY,
-                    );
-                    log!(
-                        Topic::Init,
-                        Warn,
-                        "non-root post-upgrade bootstrap waiting for managed authority (attempt {next_attempt}/{MAX_NONROOT_BOOTSTRAP_ATTEMPTS}): {err}"
-                    );
-                    schedule_post_upgrade_nonroot_bootstrap_after(
-                        next_attempt,
-                        bootstrap_retry_delay(next_attempt),
-                    );
-                    return;
-                }
-                LifecycleMetricsApi::record_bootstrap(
-                    LifecycleMetricPhase::PostUpgrade,
-                    LifecycleMetricRole::Nonroot,
-                    LifecycleMetricOutcome::Failed,
-                );
-                BootstrapStatusOps::mark_failed(format!(
-                    "non-root bootstrap failed (post-upgrade): {err}"
-                ));
-                log!(
-                    Topic::Init,
-                    Error,
-                    "non-root bootstrap failed (post-upgrade): {err}"
-                );
-                return;
-            }
-            LifecycleMetricsApi::record_bootstrap(
-                LifecycleMetricPhase::PostUpgrade,
-                LifecycleMetricRole::Nonroot,
-                LifecycleMetricOutcome::Completed,
-            );
-        },
-    );
-}
-
-const fn bootstrap_retry_delay(attempt: u32) -> Duration {
-    let exponent = if attempt > 4 { 4 } else { attempt };
-    Duration::from_millis(250_u64.saturating_mul(1_u64 << exponent))
+    workflow::bootstrap::timer::schedule(LifecyclePhase::PostUpgrade)
+        .unwrap_or_else(|error| lifecycle_trap(LifecyclePhase::PostUpgrade, error));
 }

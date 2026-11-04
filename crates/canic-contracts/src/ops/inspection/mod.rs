@@ -1,8 +1,13 @@
 //! Exact native/external observation conversion; no controller, balance or recovery policy.
+#[cfg(feature = "external-candid")]
 use super::unsigned_magnitude::{from_nat, to_nat};
-use crate::dto::{canister as external, inspection as wire};
+#[cfg(feature = "external-candid")]
+use crate::dto::canister as external;
+use crate::dto::inspection as wire;
+#[cfg(feature = "external-candid")]
 use ic_wire::Error;
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<external::CanisterStatusResponse> for wire::Status {
     type Error = Error;
     fn try_from(value: external::CanisterStatusResponse) -> Result<Self, Error> {
@@ -21,6 +26,7 @@ impl TryFrom<external::CanisterStatusResponse> for wire::Status {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::Status> for external::CanisterStatusResponse {
     type Error = Error;
     fn try_from(value: wire::Status) -> Result<Self, Error> {
@@ -39,6 +45,7 @@ impl TryFrom<wire::Status> for external::CanisterStatusResponse {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<external::CanisterSettings> for wire::Settings {
     type Error = Error;
     fn try_from(value: external::CanisterSettings) -> Result<Self, Error> {
@@ -57,6 +64,7 @@ impl TryFrom<external::CanisterSettings> for wire::Settings {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::Settings> for external::CanisterSettings {
     type Error = Error;
     fn try_from(value: wire::Settings) -> Result<Self, Error> {
@@ -75,6 +83,7 @@ impl TryFrom<wire::Settings> for external::CanisterSettings {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<external::MemoryMetrics> for wire::MemoryMetrics {
     type Error = Error;
     fn try_from(value: external::MemoryMetrics) -> Result<Self, Error> {
@@ -91,6 +100,7 @@ impl TryFrom<external::MemoryMetrics> for wire::MemoryMetrics {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::MemoryMetrics> for external::MemoryMetrics {
     type Error = Error;
     fn try_from(value: wire::MemoryMetrics) -> Result<Self, Error> {
@@ -107,6 +117,7 @@ impl TryFrom<wire::MemoryMetrics> for external::MemoryMetrics {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<external::QueryStats> for wire::QueryStats {
     type Error = Error;
     fn try_from(value: external::QueryStats) -> Result<Self, Error> {
@@ -119,6 +130,7 @@ impl TryFrom<external::QueryStats> for wire::QueryStats {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::QueryStats> for external::QueryStats {
     type Error = Error;
     fn try_from(value: wire::QueryStats) -> Result<Self, Error> {
@@ -154,6 +166,7 @@ impl From<wire::LogVisibility> for crate::values::canister::LogVisibility {
         }
     }
 }
+#[cfg(feature = "external-candid")]
 impl TryFrom<external::CanisterInspectionOutcome> for wire::Response {
     type Error = Error;
     fn try_from(value: external::CanisterInspectionOutcome) -> Result<Self, Error> {
@@ -167,6 +180,7 @@ impl TryFrom<external::CanisterInspectionOutcome> for wire::Response {
         }
     }
 }
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::Response> for external::CanisterInspectionOutcome {
     type Error = Error;
     fn try_from(value: wire::Response) -> Result<Self, Error> {
@@ -181,5 +195,5 @@ impl TryFrom<wire::Response> for external::CanisterInspectionOutcome {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "external-candid"))]
 mod tests;

@@ -3,7 +3,7 @@
 use super::*;
 use canic_contracts::ids::CanonicalNetworkId;
 use ic_platform::agent::BasicIdentity;
-use ic_platform::pocket_ic::PocketIcBuilder;
+use ic_testkit::pocket_ic::PocketIcBuilder;
 use sha2_host::{Digest, Sha256};
 use std::{fs, process::Command, time::SystemTime};
 
@@ -62,16 +62,19 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
             .with_nns_subnet()
             .with_application_subnet(),
     );
-    pic.set_time(SystemTime::now().into());
+    pic.set_time(SystemTime::now().into())
+        .expect("PocketIC set_time");
     let agent = Agent::builder()
-        .with_url(pic.make_live(None))
+        .with_url(pic.make_live(None).expect("PocketIC make_live"))
         .with_identity(BasicIdentity::from_raw_key(&[29; 32]))
         .with_max_response_body_size(RESPONSE_BYTES)
         .build()
         .unwrap();
-    agent.set_root_key(pic.root_key().unwrap());
+    agent.set_root_key(pic.root_key().expect("PocketIC root_key").unwrap());
     let operator = agent.get_principal().unwrap();
-    let ledger = pic.create_canister_with_settings(Some(operator), None);
+    let ledger = pic
+        .create_canister_with_settings(Some(operator), None)
+        .expect("PocketIC create_canister_with_settings");
     let (mut review, _) = fixture();
     // A single known owner keeps the exact-account fixture intentionally small.
     review.sources.truncate(1);
@@ -91,7 +94,8 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
             ic_platform::candid::contract::encode_one(Nat::from(0_u8)).unwrap(),
         ),
         Some(operator),
-    );
+    )
+    .expect("PocketIC install_canister");
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -155,7 +159,9 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
         })
     ));
     // The same owner can also hold an explicitly selected nondefault account on another Ledger.
-    let other = pic.create_canister_with_settings(Some(operator), None);
+    let other = pic
+        .create_canister_with_settings(Some(operator), None)
+        .expect("PocketIC create_canister_with_settings");
     changed.accounts[1].ledger = other;
     pic.install_canister(
         other,
@@ -165,7 +171,8 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
             ic_platform::candid::contract::encode_one(Nat::from(42_u8)).unwrap(),
         ),
         Some(operator),
-    );
+    )
+    .expect("PocketIC install_canister");
     let result = collect(&changed).unwrap();
     assert_eq!(result[1].observed_balance, 42);
     assert_eq!(result[1].subaccount, Some([7; 32]));

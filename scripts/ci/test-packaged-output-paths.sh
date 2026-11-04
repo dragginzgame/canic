@@ -18,7 +18,7 @@ cat > "$FIXTURE/Cargo.toml" <<'TOML'
 members = ["crates/canic", "crates/canic-contracts"]
 resolver = "3"
 [workspace.package]
-rust-version = "1.90"
+rust-version = "1.99.1"
 TOML
 for package in canic canic-contracts; do
     mkdir -p "$FIXTURE/crates/$package/src"

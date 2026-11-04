@@ -5,3 +5,4 @@
 //! Boundary: lifecycle adapters schedule bootstrap work after runtime invariants hold.
 
 pub mod nonroot;
+pub mod timer;

@@ -1,6 +1,7 @@
 use crate::{
     dto::{
-        cycles::{CycleTopupEvent, CycleTrackerEntry},
+        cycle_topups::CycleTopupEvent,
+        cycles::CycleTrackerEntry,
         page::{Page, PageRequest},
     },
     ops::storage::cycles::{CycleTopupEventOps, CycleTrackerOps},

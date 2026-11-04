@@ -8,7 +8,7 @@ runtime because the complete testing module is disabled for `wasm32` targets.
 Refresh it and its structured provenance from the workspace root with:
 
 ```text
-cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root
+cargo run --locked --offline -p canic-tests --example refresh_embedded_root
 ```
 
 Run this only while other repository validation is idle. The refresh records the
@@ -42,7 +42,7 @@ includes this comparison, allowing diagnosis against the exact refused build.
 The explicit cross-directory/version regression can be run with:
 
 ```text
-cargo test --locked --offline -p canic-testing-internal --lib embedded_root::tests::embedded_peer_reproduces_across_paths_and_release_versions -- --exact --ignored
+cargo test --locked --offline -p canic-tests --lib embedded_root::tests::embedded_peer_reproduces_across_paths_and_release_versions -- --exact --ignored
 ```
 
 It performs real Wasm builds, changes only private snapshot versions, and checks

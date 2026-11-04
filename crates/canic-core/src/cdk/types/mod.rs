@@ -4,9 +4,11 @@
 //! Does not own: CDK API wrappers, stable structures, or serialization policy.
 //! Boundary: centralizes internal named value types and semantic DTO inputs.
 
+pub mod principal_key;
 pub mod string;
 
 pub(crate) use canic_contracts::cycles::*;
+pub use principal_key::PrincipalKeyRecord;
 pub use string::*;
 
 pub use ic_platform::{

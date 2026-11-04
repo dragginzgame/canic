@@ -25,9 +25,9 @@ thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::ROOT_APPLICATION_CHECKPOINT_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                StableCell::create(allocation, RootCheckpointStateRecord::default())
+                StableCell::create(allocation, RootCheckpointStateRecord::default()).expect("Storage operation failed")
             } else {
-                StableCell::load(allocation).expect("retained stable cell")
+                StableCell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -54,7 +54,7 @@ impl RootCheckpointStore {
             );
         }
         let state_record = state;
-        STATE.with_borrow_mut(|state| state.set(state_record));
+        STATE.with_borrow_mut(|state| state.set(state_record).expect("commit checkpoint state"));
         Ok(())
     }
 }

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
+bash scripts/release/selection.sh
 
 fail() {
     echo "release remote-state check failed: $1" >&2
@@ -21,7 +22,7 @@ esac
 BRANCH="$(git symbolic-ref --quiet --short HEAD)" || fail "HEAD is detached"
 REMOTE=origin
 REMOTE_BRANCH="refs/remotes/$REMOTE/$BRANCH"
-TAG="v$VERSION"
+TAG="$RELEASE_GROUP-v$VERSION"
 
 git fetch --quiet --no-tags "$REMOTE" \
     "+refs/heads/$BRANCH:$REMOTE_BRANCH" ||

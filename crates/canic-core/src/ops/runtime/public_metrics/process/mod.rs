@@ -86,11 +86,13 @@ fn timer_rows(
     let mut counts = BTreeMap::new();
     // The timer owner admits at most 64 declarations, independently of topology size.
     for timer in timers {
+        let mut state_count = MeasurementCounter::ZERO;
+        state_count.add(1);
         add_counter(
             &mut counts,
             "state",
             crate::ops::runtime::timer_status::condition(timer).label(),
-            MeasurementCounter::from_parts(1, false).expect("exact state count"),
+            state_count,
         );
         let counters = timer.observability().counters();
         for (name, value) in [
@@ -168,7 +170,7 @@ mod tests {
             &mut counts,
             "intent",
             "completed",
-            MeasurementCounter::from_parts(u128::MAX - 1, false).unwrap(),
+            ic_metrics::persistence::restore_counter(u128::MAX - 1, false).unwrap(),
         );
         let mut one = MeasurementCounter::ZERO;
         one.add(1);
@@ -183,7 +185,7 @@ mod tests {
             &mut counts,
             "intent",
             "failed",
-            MeasurementCounter::from_parts(u128::MAX, true).unwrap(),
+            ic_metrics::persistence::restore_counter(u128::MAX, true).unwrap(),
         );
         assert!(counts[&("intent", "failed")].total_overflowed());
     }

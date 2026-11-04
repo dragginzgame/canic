@@ -3,7 +3,7 @@
 Canic selects published **ic-platform 0.1.12**, verified with the crates.io registry
 and its downloaded archive on 2026-10-18. The three Cargo lockfiles retain the
 registry checksum. No sibling checkout, path override or unpublished API is used.
-The published crate requires Rust 1.88; Canic's maintained MSRV remains 1.91.
+Canic's minimum and pinned development/release compiler are Rust 1.99.1.
 
 ## Supported ownership
 

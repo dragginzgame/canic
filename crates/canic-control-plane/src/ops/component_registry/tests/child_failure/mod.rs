@@ -39,11 +39,17 @@ pub(super) fn assert_terminal_origin_excluded(data: &RootComponentRegistryData) 
     let mut prepared = data.clone();
     let child = prepared.child_allocations.first_mut().unwrap();
     assert!(child_allocation_is_terminal(child));
+    child.continuation_requested = true;
     child.initial_bootstrap = true;
     let component = child.component;
     let operation_id = child.operation_id;
     set_partition_status(&mut prepared, ComponentLifecycleStatus::Prepared);
     RootComponentRegistryStore::import(prepared);
+    assert!(
+        ComponentRegistryOps::child_continuations()
+            .unwrap()
+            .is_empty()
+    );
     ComponentRegistryOps::record_child_failure(
         component,
         operation_id,
@@ -250,6 +256,48 @@ fn retained_child_failure_does_not_change_work_or_capacity() {
 }
 
 #[test]
+fn changing_diagnostics_do_not_renew_the_child_retry_budget() {
+    let (fixture, allocation) = reserve();
+    let before = RootComponentRegistryStore::export();
+    let mut now = 100;
+    for failures in 1..=18 {
+        let error = if failures % 2 == 0 {
+            InternalError::resource_exhausted()
+        } else {
+            InternalError::public(codes::PLATFORM_UNAVAILABLE)
+        };
+        let failure = ComponentRegistryOps::record_child_failure(
+            fixture.component,
+            allocation.operation_id,
+            &error,
+            now,
+        )
+        .unwrap();
+        assert_eq!(failure.consecutive_failures, failures);
+        assert_eq!(failure.diagnostic_code, error.public_error().raw_code());
+        let delay = (1_u64 << (failures - 1).min(6)).min(60);
+        assert_eq!(failure.retry_at_ns - now, delay * 1_000_000_000);
+        let restored = restart_component_registry();
+        assert_eq!(
+            restored.child_allocations[0]
+                .last_failure
+                .as_ref()
+                .unwrap()
+                .consecutive_failures,
+            failures
+        );
+        ComponentRegistryOps::clear_child_failure_after_progress(&allocation, false).unwrap();
+        assert_eq!(RootComponentRegistryStore::export(), restored);
+        now = failure.retry_at_ns;
+    }
+    let mut retained = RootComponentRegistryStore::export();
+    for record in &mut retained.child_allocations {
+        record.last_failure = None;
+    }
+    assert_eq!(retained, before);
+}
+
+#[test]
 fn retained_child_failure_clears_after_progress_and_preserves_effects() {
     let (fixture, allocation) = reserve();
     ComponentRegistryOps::record_child_failure(
@@ -284,6 +332,15 @@ fn retained_child_failure_clears_after_progress_and_preserves_effects() {
         view.progress,
         RootComponentChildAllocationProgressView::CreationIntent(_)
     ));
+    let next = ComponentRegistryOps::record_child_failure(
+        fixture.component,
+        allocation.operation_id,
+        &InternalError::unavailable(),
+        200,
+    )
+    .unwrap();
+    assert_eq!(next.consecutive_failures, 1);
+    assert_eq!(next.retry_at_ns, 1_000_000_200);
 }
 
 #[test]
@@ -309,4 +366,40 @@ fn retained_child_failure_rejects_wrong_identity_and_time_without_mutation() {
         );
         assert_eq!(RootComponentRegistryStore::export(), before);
     }
+}
+
+#[test]
+fn child_continuation_demand_survives_restart_and_preserves_reservation() {
+    let (fixture, allocation) = reserve();
+    assert!(
+        ComponentRegistryOps::child_continuations()
+            .unwrap()
+            .is_empty()
+    );
+    let before = RootComponentRegistryStore::export();
+    ComponentRegistryOps::request_child_continuation(fixture.component, allocation.operation_id)
+        .unwrap();
+    let retained = restart_component_registry();
+    let mut expected = before;
+    expected
+        .child_allocations
+        .iter_mut()
+        .find(|child| child.operation_id == allocation.operation_id)
+        .unwrap()
+        .continuation_requested = true;
+    assert_eq!(retained, expected);
+    ComponentRegistryOps::request_child_continuation(fixture.component, allocation.operation_id)
+        .unwrap();
+    assert_eq!(RootComponentRegistryStore::export(), retained);
+    let pending = ComponentRegistryOps::child_continuations().unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].component, fixture.component);
+    assert_eq!(pending[0].operation_id, allocation.operation_id);
+    assert_eq!(
+        ComponentRegistryOps::request_child_continuation(fixture.component, [0xff; 32])
+            .unwrap_err()
+            .public_code(),
+        Some(codes::STATE_UNAVAILABLE)
+    );
+    assert_eq!(RootComponentRegistryStore::export(), retained);
 }

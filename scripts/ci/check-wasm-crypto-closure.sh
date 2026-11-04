@@ -48,12 +48,11 @@ crypto_identities() {
 }
 
 expected_crypto_cohorts() {
-    # Platform's IC hashes/BLS retain their 0.10 digest and 0.13 field APIs;
-    # current ECDSA uses 0.11 digests and 0.14 fields. Admit these API cohorts
-    # only for the roles that need them, with one full identity per cohort.
+    # Platform's IC hashes retain digest 0.10; canonical self-authenticating
+    # principals use digest 0.11 even without a signature verifier. Admit one
+    # full identity per hash cohort; signature packages remain role-bound below.
     case "$1" in
-        none) return 0 ;;
-        root-sign|delegated-verify)
+        none|root-sign|delegated-verify)
             printf '%s\n' \
                 'block-buffer v0.10' 'block-buffer v0.12' \
                 'crypto-common v0.1' 'crypto-common v0.2' \

@@ -20,8 +20,8 @@ fn every_subtree_boundary_round_trips_complete_evidence() {
         content_hash: [2; 32],
     };
     let node = Node {
-        canister_id: ic_platform::Principal::from_slice(&[3]),
-        parent_canister_id: ic_platform::Principal::from_slice(&[4]),
+        canister_id: ic_platform_types::Principal::from_slice(&[3]),
+        parent_canister_id: ic_platform_types::Principal::from_slice(&[4]),
         role: "child".into(),
         kind: crate::deployment::ComponentChildKind::Shard,
         installed_artifact_hash: [5; 32],
@@ -29,7 +29,7 @@ fn every_subtree_boundary_round_trips_complete_evidence() {
     };
     let stop = StopIntent {
         leaf: node.clone(),
-        controller: ic_platform::Principal::from_slice(&[6]),
+        controller: ic_platform_types::Principal::from_slice(&[6]),
     };
     let stopped = Stopped {
         stop: stop.clone(),

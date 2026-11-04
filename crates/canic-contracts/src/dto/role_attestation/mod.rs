@@ -3,7 +3,7 @@ use crate::{
     dto::{auth::RoleAttestationRootProof, rpc::RootRequestMetadata},
     ids::CanisterRole,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Native RoleAttestationRequest boundary.

@@ -8,6 +8,10 @@ complete gates keep their current behavior. A consumer must explicitly select
 and qualify a bounded stage before using this interface in its release gate.
 Cargo version projection is not implemented or enabled.
 
+[Group validation plans](release-group-validation.md) separately decide which
+obligations apply. An applicable stage may reuse evidence only through this
+exact-input contract; a not-applicable stage is neither executed nor reused.
+
 ## Executable interface
 
 The caller supplies an executable observer, an explicit bounded environment as

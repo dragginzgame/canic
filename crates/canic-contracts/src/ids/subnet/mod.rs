@@ -4,7 +4,7 @@
 //! Does not own: placement selection, trusted-network metadata, or Subnet eligibility.
 //! Boundary: preserves the principal wire shape while preventing Canister/Subnet confusion.
 
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

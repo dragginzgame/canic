@@ -183,10 +183,10 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
             if __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true) {
                 return;
             }
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:prepared_activation_block",
                 {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
                         ::core::time::Duration::ZERO,
                         "canic:user:init",
@@ -234,10 +234,10 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
             $crate::__internal::core::api::metrics::MetricProviderApi::activate(false).expect("metric provider restoration");
 
             if active {
+                $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
                 $crate::__canic_after_optional_start_init_hook!(
                     "canic:user:post_upgrade_block",
                     {
-                        $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
                         $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
                             ::core::time::Duration::ZERO,
                             "canic:user:post_upgrade",
@@ -330,10 +330,10 @@ macro_rules! __canic_start_local_lifecycle_core {
             $(($lifecycle_init)();)?
             $crate::__internal::core::api::metrics::MetricProviderApi::activate(true).expect("metric provider installation");
 
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:init_block",
                 {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
                         ::std::time::Duration::ZERO,
                         "canic:user:init",
@@ -368,10 +368,10 @@ macro_rules! __canic_start_local_lifecycle_core {
             $(($lifecycle_post_upgrade)();)?
             $crate::__internal::core::api::metrics::MetricProviderApi::activate(false).expect("metric provider restoration");
 
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:post_upgrade_block",
                 {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
                         ::core::time::Duration::ZERO,
                         "canic:user:post_upgrade",
@@ -742,6 +742,17 @@ macro_rules! start_fleet_coordinator {
             $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::init(
                 args,
             );
+        }
+
+        #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
+        fn post_upgrade() {
+            #[cfg(any(
+                canic_capability_observability_metrics,
+                canic_capability_observability_history
+            ))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
+            let _ = __CANIC_RELEASE_BUILD_ID.read();
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::post_upgrade();
         }
 
         $crate::__canic_start_ingress_payload_inspect!(fleet_coordinator);

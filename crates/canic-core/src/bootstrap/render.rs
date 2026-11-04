@@ -955,11 +955,15 @@ fn render_log_config(config: &LogConfig) -> TokenStream {
 
 // Render the authentication configuration bundle.
 fn render_auth_config(config: &AuthConfig) -> TokenStream {
+    let freshness = render_option(config.portable_enrollment_freshness_ns.as_ref(), |value| {
+        render_u64_literal(*value)
+    });
     let delegated_tokens = render_delegated_token_config(&config.delegated_tokens);
     let role_attestation = render_role_attestation_config(&config.role_attestation);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::AuthConfig {
+            portable_enrollment_freshness_ns: #freshness,
             delegated_tokens: #delegated_tokens,
             role_attestation: #role_attestation,
         }
@@ -1425,12 +1429,47 @@ fn render_local_application_authorization_config(
     let allowed_scopes = &config.allowed_scopes;
     let default_session_ttl_secs = config.default_session_ttl_secs;
     let maximum_session_ttl_secs = config.maximum_session_ttl_secs;
+    let receiver = render_option(config.receiver.as_ref(), render_portable_receiver_config);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::LocalApplicationAuthorizationConfig {
+            receiver: #receiver,
             allowed_scopes: ::std::vec![#(#allowed_scopes.to_string()),*],
             default_session_ttl_secs: #default_session_ttl_secs,
             maximum_session_ttl_secs: #maximum_session_ttl_secs,
+        }
+    }
+}
+
+fn render_portable_receiver_config(
+    config: &crate::config::schema::PortableReceiverConfig,
+) -> TokenStream {
+    let max_sessions = render_u32_literal(config.max_sessions);
+    let clock_skew_ns = render_u64_literal(config.clock_skew_ns);
+    let verification_burst = render_u32_literal(config.verification_burst);
+    let verification_refill_interval_ns =
+        render_u64_literal(config.verification_refill_interval_ns);
+    let unknown_logout_burst = render_u32_literal(config.unknown_logout_burst);
+    let unknown_logout_refill_interval_ns =
+        render_u64_literal(config.unknown_logout_refill_interval_ns);
+    let enrollment_refresh_interval_ns = render_u64_literal(config.enrollment_refresh_interval_ns);
+    let enrollment_receipt_timeout_ns = render_u64_literal(config.enrollment_receipt_timeout_ns);
+    let max_login_ttl_ns = render_u64_literal(config.max_login_ttl_ns);
+    let max_proof_ttl_ns = render_u64_literal(config.max_proof_ttl_ns);
+    let max_certificate_age_ns = render_u64_literal(config.max_certificate_age_ns);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::PortableReceiverConfig {
+            max_sessions: #max_sessions,
+            clock_skew_ns: #clock_skew_ns,
+            verification_burst: #verification_burst,
+            verification_refill_interval_ns: #verification_refill_interval_ns,
+            unknown_logout_burst: #unknown_logout_burst,
+            unknown_logout_refill_interval_ns: #unknown_logout_refill_interval_ns,
+            enrollment_refresh_interval_ns: #enrollment_refresh_interval_ns,
+            enrollment_receipt_timeout_ns: #enrollment_receipt_timeout_ns,
+            max_login_ttl_ns: #max_login_ttl_ns,
+            max_proof_ttl_ns: #max_proof_ttl_ns,
+            max_certificate_age_ns: #max_certificate_age_ns,
         }
     }
 }

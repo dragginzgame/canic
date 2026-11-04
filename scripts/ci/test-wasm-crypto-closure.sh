@@ -34,16 +34,12 @@ fi
 if [[ "$CRYPTO_TEST_CASE" == duplicate-version ]]; then
     printf 'sha2 v0.11.0\n'
 fi
-case "$package/$features" in
-    delegation_root_stub/|canister_test/|canister_user_shard/)
-        printf '%s\n' 'block-buffer v0.10.4' 'block-buffer v0.12.1' \
-            'crypto-common v0.1.6' 'crypto-common v0.2.2' \
-            'digest v0.10.7' 'digest v0.11.3'
-        if [[ "$CRYPTO_TEST_CASE" != missing-sha256 ]]; then
-            printf 'sha2 v0.11.1\n'
-        fi
-        ;;
-esac
+printf '%s\n' 'block-buffer v0.10.4' 'block-buffer v0.12.1' \
+    'crypto-common v0.1.6' 'crypto-common v0.2.2' \
+    'digest v0.10.7' 'digest v0.11.3'
+if [[ "$CRYPTO_TEST_CASE" != missing-sha256 ]]; then
+    printf 'sha2 v0.11.1\n'
+fi
 case "$package/$features" in
     delegation_root_stub/)
         printf '%s v0.1.0\n' signature rfc6979 hmac elliptic-curve ecdsa crypto-bigint signature

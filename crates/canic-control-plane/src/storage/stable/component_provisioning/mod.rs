@@ -53,9 +53,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_OPERATIONS_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -70,9 +70,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_PLACEMENTS_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -83,9 +83,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_STATE_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            Cell::create(allocation, RootComponentProvisioningStateRecord::default())
+            Cell::create(allocation, RootComponentProvisioningStateRecord::default()).expect("Storage operation failed")
         } else {
-            Cell::load(allocation).expect("retained stable cell")
+            Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -118,27 +118,24 @@ impl RootComponentOperationRecord {
 // remains bounded: encoding is checked before the B-tree can write any bytes.
 impl Storable for RootComponentOperationRecord {
     const BOUND: Bound = Bound::Unbounded;
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        let bytes =
-            canic_core::cdk::serialize::serialize(self).expect("encode provisioning operation");
-        assert!(
-            bytes.len() <= ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES as usize,
-            "provisioning operation exceeds its encoded record limit"
-        );
-        Cow::Owned(bytes)
+    fn to_bytes(
+        &self,
+    ) -> Result<Cow<'_, [u8]>, canic_core::__reexports::ic_storage::storable::CodecError> {
+        let bytes = canic_core::cdk::serialize::serialize(self)
+            .map_err(canic_core::cdk::serialize::storable_error)?;
+        if bytes.len() > ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES as usize {
+            return Err(canic_core::__reexports::ic_storage::storable::CodecError::Bounds);
+        }
+        Ok(Cow::Owned(bytes))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        self.to_bytes().into_owned()
-    }
-
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        assert!(
-            bytes.len() <= ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES as usize,
-            "provisioning operation exceeds its encoded record limit"
-        );
-        canic_core::cdk::serialize::deserialize(&bytes).expect("decode provisioning operation")
+    fn from_bytes(
+        bytes: Cow<'_, [u8]>,
+    ) -> Result<Self, canic_core::__reexports::ic_storage::storable::CodecError> {
+        if bytes.len() > ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES as usize {
+            return Err(canic_core::__reexports::ic_storage::storable::CodecError::Bounds);
+        }
+        canic_core::cdk::serialize::deserialize(&bytes)
+            .map_err(canic_core::cdk::serialize::storable_error)
     }
 }
 
@@ -508,6 +505,7 @@ impl RootComponentProvisioningStore {
                         operation_key,
                         RootComponentOperationRecord::Provisioning(Box::new(record.clone())),
                     )
+                    .expect("Storage operation failed")
                     .is_none()
             );
         });
@@ -517,7 +515,12 @@ impl RootComponentProvisioningStore {
         };
         ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow_mut(|placements| {
             for placement in placement_keys {
-                assert!(placements.insert(placement, placement_record).is_none());
+                assert!(
+                    placements
+                        .insert(placement, placement_record)
+                        .expect("Storage operation failed")
+                        .is_none()
+                );
             }
         });
         ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| {
@@ -526,7 +529,8 @@ impl RootComponentProvisioningStore {
                 active_operation_id: Some(record.operation_id),
                 active_directory_synchronization_operation_id: state
                     .active_directory_synchronization_operation_id,
-            });
+            })
+            .expect("Storage operation failed");
         });
         Ok(RootComponentProvisioningCommitOutcome::Committed)
     }
@@ -536,6 +540,7 @@ impl RootComponentProvisioningStore {
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| {
             operations
                 .get(&RootComponentOperationKey::Provisioning(operation_id))
+                .expect("Storage operation failed")
                 .and_then(|record| match record {
                     RootComponentOperationRecord::Provisioning(record) => Some(*record),
                     RootComponentOperationRecord::DirectorySynchronization(_) => None,
@@ -551,17 +556,19 @@ impl RootComponentProvisioningStore {
         let expected = RootComponentOperationRecord::Provisioning(Box::new(current.clone()));
         if next.operation_id != current.operation_id
             || ROOT_COMPONENT_PROVISIONING_OPERATIONS
-                .with_borrow(|operations| operations.get(&key))
+                .with_borrow(|operations| operations.get(&key).expect("Storage operation failed"))
                 .as_ref()
                 != Some(&expected)
         {
             return Err(RootComponentProvisioningCommitError::OperationChanged);
         }
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
-            operations.insert(
-                key,
-                RootComponentOperationRecord::Provisioning(Box::new(next)),
-            );
+            operations
+                .insert(
+                    key,
+                    RootComponentOperationRecord::Provisioning(Box::new(next)),
+                )
+                .expect("Storage operation failed");
         });
         Ok(())
     }
@@ -572,8 +579,8 @@ impl RootComponentProvisioningStore {
     ) -> Result<(), RootComponentProvisioningCommitError> {
         let key = RootComponentOperationKey::Provisioning(current.operation_id);
         let expected = RootComponentOperationRecord::Provisioning(Box::new(current.clone()));
-        let stored =
-            ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| operations.get(&key));
+        let stored = ROOT_COMPONENT_PROVISIONING_OPERATIONS
+            .with_borrow(|operations| operations.get(&key).expect("Storage operation failed"));
         let state = Self::state();
         if next.operation_id != current.operation_id
             || stored.as_ref() != Some(&expected)
@@ -582,10 +589,12 @@ impl RootComponentProvisioningStore {
             return Err(RootComponentProvisioningCommitError::OperationChanged);
         }
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
-            operations.insert(
-                key,
-                RootComponentOperationRecord::Provisioning(Box::new(next)),
-            );
+            operations
+                .insert(
+                    key,
+                    RootComponentOperationRecord::Provisioning(Box::new(next)),
+                )
+                .expect("Storage operation failed");
         });
         ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| {
             cell.set(RootComponentProvisioningStateRecord {
@@ -593,7 +602,8 @@ impl RootComponentProvisioningStore {
                 active_operation_id: None,
                 active_directory_synchronization_operation_id: state
                     .active_directory_synchronization_operation_id,
-            });
+            })
+            .expect("Storage operation failed");
         });
         Ok(())
     }
@@ -625,6 +635,7 @@ impl RootComponentProvisioningStore {
                             record.clone(),
                         )),
                     )
+                    .expect("Storage operation failed")
                     .is_none()
             );
         });
@@ -632,7 +643,8 @@ impl RootComponentProvisioningStore {
             cell.set(RootComponentProvisioningStateRecord {
                 active_directory_synchronization_operation_id: Some(record.operation_id),
                 ..state
-            });
+            })
+            .expect("Storage operation failed");
         });
         Ok(RootComponentProvisioningCommitOutcome::Committed)
     }
@@ -646,6 +658,7 @@ impl RootComponentProvisioningStore {
                 .get(&RootComponentOperationKey::DirectorySynchronization(
                     operation_id,
                 ))
+                .expect("Storage operation failed")
                 .and_then(|record| match record {
                     RootComponentOperationRecord::DirectorySynchronization(record) => Some(*record),
                     RootComponentOperationRecord::Provisioning(_) => None,
@@ -661,8 +674,8 @@ impl RootComponentProvisioningStore {
         let key = RootComponentOperationKey::DirectorySynchronization(current.operation_id);
         let expected =
             RootComponentOperationRecord::DirectorySynchronization(Box::new(current.clone()));
-        let stored =
-            ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| operations.get(&key));
+        let stored = ROOT_COMPONENT_PROVISIONING_OPERATIONS
+            .with_borrow(|operations| operations.get(&key).expect("Storage operation failed"));
         let state = Self::state();
         if next.operation_id != current.operation_id
             || stored.as_ref() != Some(&expected)
@@ -671,17 +684,20 @@ impl RootComponentProvisioningStore {
             return Err(RootComponentProvisioningCommitError::OperationChanged);
         }
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
-            operations.insert(
-                key,
-                RootComponentOperationRecord::DirectorySynchronization(Box::new(next)),
-            );
+            operations
+                .insert(
+                    key,
+                    RootComponentOperationRecord::DirectorySynchronization(Box::new(next)),
+                )
+                .expect("Storage operation failed");
         });
         if complete {
             ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| {
                 cell.set(RootComponentProvisioningStateRecord {
                     active_directory_synchronization_operation_id: None,
                     ..state
-                });
+                })
+                .expect("Storage operation failed");
             });
         }
         Ok(())
@@ -691,7 +707,8 @@ impl RootComponentProvisioningStore {
     pub(crate) fn placement(
         key: &RootComponentProvisioningPlacementKey,
     ) -> Option<RootComponentProvisioningPlacementRecord> {
-        ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow(|placements| placements.get(key))
+        ROOT_COMPONENT_PROVISIONING_PLACEMENTS
+            .with_borrow(|placements| placements.get(key).expect("Storage operation failed"))
     }
 
     #[must_use]
@@ -699,9 +716,11 @@ impl RootComponentProvisioningStore {
         start_after: Option<RootComponentOperationKey>,
     ) -> RootComponentOperationReleasePageView {
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|map| {
-            let mut rows = map.range((start_after.map_or(Unbounded, Excluded), Unbounded));
+            let mut rows = map
+                .range((start_after.map_or(Unbounded, Excluded), Unbounded))
+                .map(|entry| entry.expect("Storage iteration failed"));
             let entry = rows.next().map(|row| RootComponentOperationEntryView {
-                record: row.value(),
+                record: row.value().expect("Storage operation failed"),
                 key: *row.key(),
             });
             RootComponentOperationReleasePageView {
@@ -729,21 +748,27 @@ impl RootComponentProvisioningStore {
             operations: ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| {
                 operations
                     .iter()
-                    .filter_map(|entry| match entry.value() {
-                        RootComponentOperationRecord::Provisioning(record) => Some(*record),
-                        RootComponentOperationRecord::DirectorySynchronization(_) => None,
-                    })
+                    .map(|entry| entry.expect("Storage iteration failed"))
+                    .filter_map(
+                        |entry| match entry.value().expect("Storage operation failed") {
+                            RootComponentOperationRecord::Provisioning(record) => Some(*record),
+                            RootComponentOperationRecord::DirectorySynchronization(_) => None,
+                        },
+                    )
                     .collect()
             }),
             directory_synchronizations: ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(
                 |operations| {
                     operations
                         .iter()
-                        .filter_map(|entry| match entry.value() {
-                            RootComponentOperationRecord::DirectorySynchronization(record) => {
-                                Some(*record)
+                        .map(|entry| entry.expect("Storage iteration failed"))
+                        .filter_map(|entry| {
+                            match entry.value().expect("Storage operation failed") {
+                                RootComponentOperationRecord::DirectorySynchronization(record) => {
+                                    Some(*record)
+                                }
+                                RootComponentOperationRecord::Provisioning(_) => None,
                             }
-                            RootComponentOperationRecord::Provisioning(_) => None,
                         })
                         .collect()
                 },
@@ -751,7 +776,13 @@ impl RootComponentProvisioningStore {
             placements: ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow(|placements| {
                 placements
                     .iter()
-                    .map(|entry| (entry.key().clone(), entry.value()))
+                    .map(|entry| entry.expect("Storage iteration failed"))
+                    .map(|entry| {
+                        (
+                            entry.key().clone(),
+                            entry.value().expect("Storage operation failed"),
+                        )
+                    })
                     .collect()
             }),
         }
@@ -759,27 +790,38 @@ impl RootComponentProvisioningStore {
 
     #[cfg(test)]
     pub(crate) fn import(data: RootComponentProvisioningData) {
-        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(StableBtreeMap::clear);
-        ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow_mut(StableBtreeMap::clear);
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        ROOT_COMPONENT_PROVISIONING_PLACEMENTS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
             for record in data.operations {
-                operations.insert(
-                    RootComponentOperationKey::Provisioning(record.operation_id),
-                    RootComponentOperationRecord::Provisioning(Box::new(record)),
-                );
+                operations
+                    .insert(
+                        RootComponentOperationKey::Provisioning(record.operation_id),
+                        RootComponentOperationRecord::Provisioning(Box::new(record)),
+                    )
+                    .expect("Storage operation failed");
             }
             for record in data.directory_synchronizations {
-                operations.insert(
-                    RootComponentOperationKey::DirectorySynchronization(record.operation_id),
-                    RootComponentOperationRecord::DirectorySynchronization(Box::new(record)),
-                );
+                operations
+                    .insert(
+                        RootComponentOperationKey::DirectorySynchronization(record.operation_id),
+                        RootComponentOperationRecord::DirectorySynchronization(Box::new(record)),
+                    )
+                    .expect("Storage operation failed");
             }
         });
         ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow_mut(|placements| {
             for (key, record) in data.placements {
-                placements.insert(key, record);
+                placements
+                    .insert(key, record)
+                    .expect("Storage operation failed");
             }
         });
-        ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| cell.set(data.state));
+        ROOT_COMPONENT_PROVISIONING_STATE
+            .with_borrow_mut(|cell| cell.set(data.state).expect("Storage operation failed"));
     }
 }

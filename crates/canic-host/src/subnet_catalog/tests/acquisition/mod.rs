@@ -14,7 +14,7 @@ use crate::test_support::temp_dir;
 use ic_query::{
     report::CollectionSourceRequest,
     subnet_catalog::{
-        SubnetCatalogSource, SubnetCatalogSourceFuture, load_subnet_catalog_detailed_with_source,
+        SubnetCatalogSource, SubnetCatalogSourceFuture, load_subnet_catalog_with_source,
     },
 };
 use std::{
@@ -90,10 +90,9 @@ impl SubnetCatalogSource for PendingSource {
 async fn timeout_drops_collection_preserves_cache_releases_lock_and_allows_exact_retry() {
     let root = temp_dir("canic-catalog-timeout");
     let mut request = mainnet_subnet_catalog_load_request(&root, NOW);
-    let first =
-        load_subnet_catalog_detailed_with_source(&request, &Source::new(Reply::Matching, 10))
-            .await
-            .unwrap();
+    let first = load_subnet_catalog_with_source(&request, &Source::new(Reply::Matching, 10))
+        .await
+        .unwrap();
     let bytes = fs::read(&first.path).unwrap();
     request.now_unix_secs += MAINNET_CATALOG_MAX_AGE_SECONDS + 1;
     let source = PendingSource {
@@ -154,7 +153,7 @@ fn cache_hit_reports_completion_without_source_calls_inside_an_existing_runtime(
         .build()
         .unwrap();
     let first = runtime
-        .block_on(load_subnet_catalog_detailed_with_source(
+        .block_on(load_subnet_catalog_with_source(
             &request,
             &Source::new(Reply::Matching, 10),
         ))

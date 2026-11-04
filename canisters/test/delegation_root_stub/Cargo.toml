@@ -1,7 +1,8 @@
 [package]
 name = "delegation_root_stub"
 edition = { workspace = true }
-version = { workspace = true }
+rust-version.workspace = true
+version = "0.114.0"
 publish = false
 
 [package.metadata.canic]
@@ -20,7 +21,7 @@ ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-wire = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }
 
 [[example]]
 name = "wire_schema"

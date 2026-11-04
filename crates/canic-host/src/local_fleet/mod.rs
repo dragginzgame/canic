@@ -32,6 +32,8 @@ pub enum LocalFleetError {
     UnsafePath,
     #[error("PocketIC local operation failed: {0}")]
     Platform(String),
+    #[error(transparent)]
+    Client(#[from] ic_testkit::pocket_ic::ClientError),
     #[error("local Root rejected authority observation: {0}")]
     Root(canic_contracts::dto::error::Error),
     #[error(transparent)]

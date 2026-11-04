@@ -32,6 +32,12 @@ profile and network, Twiggy version, role capabilities, metrics tiers,
 endpoint-export count, classification revision, symbol coverage, and explicit
 interpretation limits.
 
+Classification revision 3 recognizes Twiggy's named data segments, quoted names
+subsections and custom sections as `wasm_structural_and_abi`, alongside indexed
+data and other structural items. Earlier revisions counted these producer forms
+as named code. Artifact-byte agreement checks accounting completeness; it does
+not establish correct code classification.
+
 This is an attribution aid, not a deployment gate or proof of causal marginal
 cost. Rust generic instantiations and dependency code are deliberately grouped
 with application/upstream code unless a symbol has an unambiguous Canic owner.

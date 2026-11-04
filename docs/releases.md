@@ -1,5 +1,5 @@
 # Common release commands
-<!-- Shared companions: docs/cargo-publication.md docs/release-validation-reuse.md -->
+<!-- Shared companions: docs/cargo-publication.md docs/release-validation-reuse.md docs/release-group-validation.md -->
 
 Every `dragginzgame` repository, including Shared Tooling and repositories without
 a publishable package, must provide these Make targets:
@@ -17,11 +17,17 @@ select affected approved groups, semantic-version increments and dependency orde
 and execute necessary preparation and delivery without per-command confirmation.
 Preparing code/notes, asking how to deploy or checking readiness does not itself
 authorize execution. Preserve explicit target restrictions and required protections.
+Before execution, disclose the working checkout and branch, remote destination
+and release effects. Direct integration-branch pushes and alternate delivery
+checkouts need explicit authorization under the linked contribution rules; a
+generic deployment request does not silently select either. Preserve unique edits
+under the [durable work contract](../rules/contributions.md#durable-work-and-checkout-location).
 
 The names, version arithmetic and recovery contract are shared across repositories.
 Each repository supplies its canonical version source, metadata file set,
-validation gate, branch, remote and explicit delivery policy. Direct delivery is
-the default; [PR delivery](#pr-delivery) adds review and fresh merged-commit
+validation gate, branch, remote and explicit delivery policy. The runner defaults
+to direct delivery; this is executable behavior, not agent authorization to push.
+[PR delivery](#pr-delivery) adds review and fresh merged-commit
 validation before tagging. A repository
 without package metadata may use a dedicated version file; otherwise it uses
 its latest finalized changelog version. Shared Tooling owns its current local
@@ -56,6 +62,11 @@ Content-bound reuse across independent groups has an
 [opt-in exact-input stage interface](release-validation-reuse.md). Consumers must
 qualify their selected stages and fresh group admission before integrating it.
 Existing complete gates and retained receipts keep their current meaning.
+Independent groups may adopt [group-scoped qualification](release-group-validation.md)
+after qualifying their complete stage mapping. “Complete gate” below then means
+every obligation in that admitted plan, equally for patch, minor and major.
+The default remains the existing full workspace gate; group selection alone
+does not change it. Repository-wide CI and enforced protections remain intact.
 
 The default `RELEASE_DELIVERY=direct` workflow is:
 
@@ -123,6 +134,24 @@ An upstream tooling hard cut does not by itself select `release-minor` for a
 consumer library; compatible internal tooling adoption uses patch notes.
 
 ## Artifact retention and exact push scope
+
+The shared release runner checks retained state before starting and before/after
+each adapter hook with `scripts/ci/check-retained-state.pl`. It checks the selected
+Git `release-state` plus adjacent `publication-state` and `retired-checkouts`:
+512 MiB aggregate logical file bytes, 32 MiB per file, and a 30-day maximum age
+for bulk files of at least 1 MiB. Small recovery plans and receipts do not expire.
+Hardlinked files count once. Symlinks and nested `target`, `.tools`, `node_modules`
+or `.git` directories are refused. Git objects, refs and reflogs are not scanned.
+
+Refusal preserves all evidence and stops further release steps. Review active
+recovery and unique evidence before explicitly reclaiming reproducible data,
+then resume the saved attempt. These are boundary checks, not a live disk quota:
+one running adapter can still exceed the budget before it returns. Custom writers
+must adopt the same helper around their work, passing only their retained-state
+roots with repeated `--root` arguments, never an ordinary build-output directory.
+The helper accepts explicit byte/age limits for approved local retention policies;
+the shared runner uses the defaults above. Existing large archives or old bulk
+logs require review before adoption, not automatic removal.
 
 Successful push does not authorize cleanup. Retain consumer-owned build outputs,
 validation logs, release receipts and recovery plans on success, failure and
@@ -984,7 +1013,9 @@ shared lockfile and source. Group journals record the group explicitly, and
 validation receipts bind the group and policy blob as well as source/destination.
 Resume requires the same group, version and delivery identity. The runner admits
 the adapter's version and exact release-file list against the declared group;
-selecting a group must never narrow its full workspace/release validation gate.
+selecting a group alone must never narrow its validation gate. An explicitly
+qualified [group validation plan](release-group-validation.md) may select the
+complete applicable obligations while preserving repository-wide CI.
 
 `cargo-release-metadata.sh prepare|check|check-graph PRIMARY` delegates group
 selection when `RELEASE_GROUP` is set and rejects a different primary. Both
@@ -1006,13 +1037,18 @@ Cargo output/statuses, policy/root inputs and preparation evidence. Source, inde
 receipt custody and the complete gate remain consumer-owned.
 
 The root dependency catalog also provides readable version information. Every
-workspace member must have a `[workspace.dependencies]` entry with its local path
-and full current package version, optionally prefixed by `=`, `^` or `~`. Include
-private members and unused aliases, and register every alias in its owning
-group's `dependencies` roster. Unused catalog entries add no dependency edges.
+workspace member must have a `[workspace.dependencies]` entry with its local path.
+Publishable members require their full current package version, optionally
+prefixed by `=`, `^` or `~`. Private members (`publish = false`) may use path-only
+entries; their package versions still advance with their group. Include unused
+aliases and register every alias in its owning group's `dependencies` roster.
+Path-only entries need no dependency-version edit. Unused catalog entries add no
+dependency edges. Publishable members may depend on private workspace members
+only through path-only dev-dependencies, which Cargo omits from published
+manifests. Versioned private dependencies and normal/build edges are rejected.
 Admission checks all groups, even when releasing only one; the existing
 `check-dependency-pins.sh --cargo-inheritance` path uses this same admission.
-It rejects missing catalog entries, missing paths/versions, paths pointing at
+It rejects missing catalog entries, missing paths or required versions, paths pointing at
 other packages and incomplete group alias rosters, including unused entries that
 Cargo itself does not resolve.
 For example, `0.73` and `0.73.0` both fail for a local package at `0.73.1`, even
@@ -1036,6 +1072,10 @@ do not patch vendored scripts or silently use an unrelated executable. The
 Shared's selected IC Build 0.73.0 editor with its explicit `cli` feature. Direct
 producer integration qualification may select a compiled candidate explicitly;
 that evidence is not registry delivery or installed-tool admission.
+
+For manifest-order status propagation and selected-commit checks, run
+`bash scripts/ci/test-cargo-release-groups.sh --case ordering`. This focused case
+needs no compiled editor; the full entrypoint retains the integration matrix.
 
 Publication remains separate. Use the consumer's explicit selected package batch
 with the existing publication adapter; it admits each package's own version and

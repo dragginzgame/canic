@@ -1,5 +1,8 @@
 def item_kind($name):
   if ($name | test("^(data|elem|global|memory|table|type)\\[[0-9]+\\]"))
+      or ($name | test("^data segment "))
+      or ($name | test("^\".*\" subsection$"))
+      or ($name | test("^custom section "))
       or ($name | test(" section headers$"))
       or ($name | test("^(export|import) "))
       or ($name == "memory")
@@ -80,7 +83,7 @@ def category_record($items; $name; $artifact_bytes):
     context: $input.context,
     analysis: {
       method: "twiggy_shallow_symbol_attribution",
-      classification_revision: 2,
+      classification_revision: 3,
       tool: $input.tool,
       measured_bytes: $measured_bytes,
       artifact_bytes_match: ($measured_bytes == $input.artifact.bytes),

@@ -7,7 +7,8 @@
 use crate::{
     domain::metrics::MetricsKind,
     dto::{
-        metrics::{MetricEntry, QueryPerfSample},
+        metric_page::MetricEntry,
+        metrics::QueryPerfSample,
         page::{Page, PageRequest},
     },
     ops::runtime::metrics,

@@ -9,7 +9,7 @@ use crate::{
     },
     ids::{ComponentDeploymentConfigurationDigest, FleetBinding, FleetSubnetRootReleaseSet},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Native FleetComponentProvisioningPlan boundary.

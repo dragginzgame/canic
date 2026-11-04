@@ -2,7 +2,7 @@
 name = "canic-control-plane"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 license = { workspace = true }
 description = { workspace = true }
 readme = "README.md"
@@ -21,7 +21,7 @@ wasm-store-canister = []
 
 [dependencies]
 async-trait = { workspace = true }
-canic-contracts.workspace = true
+canic-contracts = { workspace = true, features = ["external-candid"] }
 canic-core = { workspace = true }
 ic-platform = { workspace = true, features = ["cdk", "candid", "management-canister-types", "cycles-ledger-types"] }
 ic-timers = { workspace = true }
@@ -32,7 +32,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-ic-memory = { workspace = true, features = ["test-support"] }
+ic-storage = { workspace = true, features = ["test-support"] }
 toml = { workspace = true }
 
 [lints]

@@ -34,7 +34,7 @@ impl ObservabilityApi {
     /// Return child funding usage without changing grants, reservations or replay state.
     pub fn child_funding(
         child: Principal,
-    ) -> Result<crate::dto::observability::ChildFundingUsage, Error> {
+    ) -> Result<crate::dto::child_funding::ChildFundingUsage, Error> {
         observability::child_funding(child).map_err(Into::into)
     }
 

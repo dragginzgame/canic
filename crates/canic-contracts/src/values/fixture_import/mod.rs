@@ -14,13 +14,23 @@ use serde::{Deserialize, Serialize};
     derive(ic_wire::Wire)
 )]
 pub enum FixtureImportFailure {
-    Application { code: u32 },
+    Interrupted {
+        next_chunk: Option<u32>,
+        attempts: u8,
+    },
+    Application {
+        code: u32,
+    },
     Authority,
-    Codec { code: u16 },
+    Codec {
+        code: u16,
+    },
     Progress,
     Receipt,
     Registration,
-    Runtime { code: u16 },
+    Runtime {
+        code: u16,
+    },
     SourceAuthority,
     SourceBounds,
     SourceCapacity,
@@ -28,5 +38,21 @@ pub enum FixtureImportFailure {
     SourceContent,
     SourceNotFound,
     SourceSequence,
-    SourceRejected { code: u16 },
+    SourceRejected {
+        code: u16,
+    },
+}
+
+/// Read-only evidence for the bounded attempt at one installed import position.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    all(feature = "wire-schema", not(target_arch = "wasm32")),
+    derive(ic_wire::Wire)
+)]
+pub struct FixtureImportRecoveryStatus {
+    pub assignment_hash: [u8; 32],
+    pub next_chunk: Option<u32>,
+    pub unfinished_attempts: u8,
+    pub attempt_limit: u8,
+    pub active: bool,
 }

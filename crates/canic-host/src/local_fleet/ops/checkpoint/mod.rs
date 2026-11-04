@@ -1,8 +1,8 @@
 //! Bounded checkpoint acknowledgement and exact owned-child cleanup.
 
-use crate::local_fleet::{LocalFleetError, ops::runtime::guarded};
+use crate::local_fleet::LocalFleetError;
 use std::{sync::mpsc, time::Duration};
-use {ic_platform::pocket_ic::PocketIc, ic_testkit::pic::PocketIcManagedServer};
+use {ic_testkit::pic::PocketIcManagedServer, ic_testkit::pocket_ic::PocketIc};
 
 /// Save the instance and confirm its terminal server status before recording success.
 pub fn save(
@@ -12,8 +12,8 @@ pub fn save(
 ) -> Result<(), LocalFleetError> {
     let (sender, receiver) = mpsc::sync_channel(1);
     let worker = std::thread::spawn(move || {
-        let result = guarded(|| {
-            pic.stop_live();
+        let result = (|| {
+            pic.stop_live()?;
             let id = pic.instance_id();
             let url = pic.get_server_url();
             // The upstream destructor issues DELETE without validating its response.
@@ -55,8 +55,7 @@ pub fn save(
                 return Err(LocalFleetError::UncleanCheckpoint);
             }
             Ok(())
-        })
-        .and_then(std::convert::identity);
+        })();
         let _ = sender.send(result);
     });
     if let Ok(result) = receiver.recv_timeout(timeout) {

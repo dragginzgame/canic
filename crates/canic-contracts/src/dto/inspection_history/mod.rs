@@ -7,5 +7,5 @@ use serde::{Deserialize, Serialize};
     derive(ic_wire::Wire)
 )]
 pub struct Request {
-    pub canister_id: ic_platform::Principal,
+    pub canister_id: ic_platform_types::Principal,
 }

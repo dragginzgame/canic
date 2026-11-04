@@ -16,13 +16,11 @@ pub struct CostGuardWorkflow;
 
 impl CostGuardWorkflow {
     pub fn reserve(request: CostGuardRequest) -> Result<CostGuardPermit, CostGuardReserveError> {
-        let permit = CostGuardOps::reserve(request)?;
-        let settlement = permit.replay_settlement();
-        IntentCleanupWorkflow::schedule_intent(settlement.quota_intent_id)
-            .map_err(CostGuardReserveError::Store)?;
-        IntentCleanupWorkflow::schedule_intent(settlement.reservation_intent_id)
-            .map_err(CostGuardReserveError::Store)?;
-        Ok(permit)
+        let deadline = CostGuardOps::cleanup_due_at_secs(&request)?;
+        // The pair shares one deadline and one native owner. Admit that owner
+        // before either reservation; there is no second fallible scheduling point.
+        IntentCleanupWorkflow::schedule_at(deadline).map_err(CostGuardReserveError::Store)?;
+        CostGuardOps::reserve(request)
     }
 
     pub fn complete(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {

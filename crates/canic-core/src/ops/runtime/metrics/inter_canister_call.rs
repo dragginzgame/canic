@@ -257,8 +257,8 @@ mod tests {
         InterCanisterCallMetrics::increment(target, "retained");
         INTER_CANISTER_CALL_METRICS.with_borrow_mut(|table| {
             *table.entries.values_mut().next().unwrap() =
-                MeasurementCounter::from_parts(u128::MAX, false).unwrap();
-            table.overflow = MeasurementCounter::from_parts(u128::MAX, false).unwrap();
+                ic_metrics::persistence::restore_counter(u128::MAX, false).unwrap();
+            table.overflow = ic_metrics::persistence::restore_counter(u128::MAX, false).unwrap();
         });
         InterCanisterCallMetrics::increment(target, "retained");
         InterCanisterCallMetrics::increment(target, &"x".repeat(MAX_METHOD_BYTES + 1));

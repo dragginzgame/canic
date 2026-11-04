@@ -17,10 +17,10 @@ use crate::fleet_ensure::{
 use ic_host_tools::icp_ledger::{IcpBlockError, IcpTransferFields, decode_transfer};
 use ic_platform::{
     agent::{Agent, AgentError, RequestId, SignedUpdate},
-    certification::LookupResult,
     icp_ledger_types::{GetBlocksArgs, QueryEncodedBlocksResponse},
     principal::ExternalPrincipal as Principal,
 };
+use ic_platform_host::certification::LookupResult;
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 

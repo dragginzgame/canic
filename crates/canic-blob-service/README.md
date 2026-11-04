@@ -4,8 +4,8 @@ Endpoint, lifecycle and metrics composition for the independent IC Blob service.
 Applications own their Canic App configuration and canister artifacts. IC Blob
 owns storage, tenant policy, accounting and provider behavior.
 
-This package belongs to the main Canic workspace and inherits its package
-version, Canic dependency and published Blob runtime/contracts requirement from
+This package belongs to the main Canic workspace and owns its independent
+Blob service release version. It inherits its Canic dependency and published Blob runtime/contracts requirement from
 the [root catalog](../../Cargo.toml). See the [current handoff](../../docs/status/current.md)
 for qualified versions; pending checkout changes do not describe older published adapters.
 The upstream contracts macro owns service method signatures; the adapter supplies
@@ -14,11 +14,11 @@ Local paths support qualification in this checkout; Cargo removes them from the
 packaged manifest. Application installation and provider acceptance remain tracked
 under [#444](https://github.com/dragginzgame/canic/issues/444).
 
-The workspace publisher publishes and observes the matching Canic dependency
-before publishing the adapter in the same family:
+The supplying Canic dependency must already be published. Publish the adapter
+through its explicit release group after its governed source release:
 
 ```sh
-make publish
+make publish RELEASE_GROUP=blob-service
 ```
 
 Run this from the Canic repository root after the governed release checks.
@@ -26,14 +26,11 @@ Cargo's normal package verification must remain enabled.
 Consumers can select the published adapter and matching Canic family from
 crates.io. Application acceptance follows in the consuming repository.
 
-The minimum supported Rust version is 1.91.0, including the checked-in dedicated
-and embedded managed consumers. Checkout maintenance uses the pinned Rust 1.99
-toolchain. Minimum-version qualification also needs the
-`wasm32-unknown-unknown` target for 1.91.0 and Canic's managed build tools; build
-consumer canister artifacts through `canic build`. The complete managed 1.91
-qualification includes Canic's current role-specific descriptor-gating fix
-([#495](https://github.com/dragginzgame/canic/issues/495)); older published
-generated tooling is not retroactively qualified by it.
+The minimum supported, development and release compiler is Rust 1.99.1, including
+the checked-in dedicated and embedded managed consumers. Install its
+`wasm32-unknown-unknown` target and Canic's managed tools; build artifacts through
+`canic build`. Package verification and managed installation qualify distinct
+boundaries. Earlier published tools retain their original qualification.
 
 For a dedicated canister, a consumer-owned `cdylib` shell declares its own
 `package.metadata.canic` App and role and invokes:
@@ -96,7 +93,7 @@ adapter, which preserves Blob's supplied checks and adds Canic's identity checks
 Attempts to replace the Canic checks refuse. Both use the same published Wire
 runtime; neither adapter performs transport or authorization.
 
-The `canic-testing-internal` example `wire_composition` qualifies a combined
+The `canic-tests` example `wire_composition` qualifies a combined
 catalog using actual Canic and Blob types, Rust frame vectors, strict generated
 TypeScript and Node checks. It is native codec/client qualification tooling.
 The managed build separately produces and release-binds the schema from the

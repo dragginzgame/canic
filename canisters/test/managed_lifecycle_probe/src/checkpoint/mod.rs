@@ -4,6 +4,9 @@
 mod ops;
 mod protocol;
 
+#[cfg(test)]
+mod tests;
+
 use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::api::application_checkpoint::{
     ApplicationCheckpointPhase as Phase, ApplicationCheckpointRecord as Record,
@@ -14,11 +17,13 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 pub const KEY: &str = "managed_probe.checkpoint.v1";
-type Storage = Cell<Vec<u8>, DefaultMemoryImpl>;
+type Storage = Cell<BusinessRecord, DefaultMemoryImpl>;
 
 /// Business state and its freeze record are committed in one application-owned cell.
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 struct BusinessRecord {
+    #[serde(deserialize_with = "canic::__internal::contracts::serialization::required_option")]
     checkpoint: Option<Record>,
     counter: u64,
     prepare_runs: u64,
@@ -44,38 +49,34 @@ thread_local! {
 
 pub fn open() {
     let memory = canic::memory::open(KEY);
-    let mut initial = Vec::new();
-    serde_cbor::to_writer(&mut initial, &BusinessRecord::default()).unwrap();
     STORAGE.with_borrow_mut(|storage| {
         *storage = Some({
             let allocation = memory;
-            if ic_memory::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, initial)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, BusinessRecord::default())
+                    .expect("open fixture collection")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(
+                    allocation,
+                    canic::__internal::contracts::serialization::STORAGE_LIMITS.bytes,
+                )
+                .expect("retained stable cell")
             }
         });
     });
 }
 
 fn read() -> BusinessRecord {
-    STORAGE.with_borrow(|storage| {
-        serde_cbor::from_reader(
-            storage
-                .as_ref()
-                .expect("restored checkpoint")
-                .get()
-                .as_slice(),
-        )
-        .expect("valid business record")
-    })
+    STORAGE.with_borrow(|storage| storage.as_ref().expect("restored checkpoint").get().clone())
 }
 
 fn commit(record: &BusinessRecord) {
-    let mut bytes = Vec::new();
-    serde_cbor::to_writer(&mut bytes, record).unwrap();
     STORAGE.with_borrow_mut(|storage| {
-        storage.as_mut().expect("restored checkpoint").set(bytes);
+        storage
+            .as_mut()
+            .expect("restored checkpoint")
+            .set(record.clone())
+            .expect("commit checkpoint business state");
     });
 }
 

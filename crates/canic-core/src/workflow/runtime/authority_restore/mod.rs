@@ -33,6 +33,14 @@ use canic_contracts::ids::{EndpointCall, EndpointCallKind};
 pub struct AuthorityRestoreWorkflow;
 
 impl AuthorityRestoreWorkflow {
+    /// Restore volatile timer suspension from the current authority's validated fence.
+    pub fn restore_timer_suspension() -> Result<bool, InternalError> {
+        require_authority_runtime()?;
+        let sealed = AuthorityRestoreFenceOps::is_sealed_for(IcOps::canister_self())?;
+        TimerAuthorityWorkflow::restore_snapshot_suspension(sealed);
+        Ok(sealed)
+    }
+
     /// Initialize the durable fence for one freshly installed authority Canister.
     pub fn initialize(
         authority_canister: crate::cdk::types::Principal,

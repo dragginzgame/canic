@@ -195,9 +195,10 @@ mod store {
         pub(crate) fn caller_rows() -> Vec<(CallerJournalKey, CallerJournalRowRecord)> {
             COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
                 map.range(key(CallerJournalKey::Operation([0; 32]))..)
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .take_while(|entry| entry.key().component == [0; 32])
                     .filter_map(|entry| {
-                        let (key, row) = entry.into_pair();
+                        let (key, row) = entry.into_pair().expect("Storage operation failed");
                         match (key.index, row) {
                             (
                                 ComponentRegistryEntryIndexKey::CallerAuthority(key),
@@ -219,9 +220,11 @@ mod store {
         }
 
         pub(crate) fn caller_get(index: CallerJournalKey) -> Option<CallerJournalRowRecord> {
-            COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| match map.get(&key(index)) {
-                Some(ComponentRegistryEntryRecord::CallerAuthority(row)) => Some(*row),
-                _ => None,
+            COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                match map.get(&key(index)).expect("Storage operation failed") {
+                    Some(ComponentRegistryEntryRecord::CallerAuthority(row)) => Some(*row),
+                    _ => None,
+                }
             })
         }
 
@@ -279,11 +282,11 @@ mod store {
                 let mut state = cell.get().clone();
                 state.caller_pending = Some(operation);
                 state.caller_rows = next_count;
-                cell.set(state);
+                cell.set(state).expect("Storage operation failed");
             });
             for index in removed {
                 COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
-                    map.remove(&key(index));
+                    map.remove(&key(index)).expect("Storage operation failed");
                 });
             }
             for (index, row) in rows {
@@ -314,11 +317,11 @@ mod store {
                     .caller_rows
                     .checked_sub(1)
                     .ok_or_else(InternalError::invariant)?;
-                cell.set(state);
+                cell.set(state).expect("Storage operation failed");
                 Ok(())
             })?;
             COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
-                map.remove(&key(index));
+                map.remove(&key(index)).expect("Storage operation failed");
             });
             Ok(())
         }
@@ -330,7 +333,7 @@ mod store {
                     return Err(InternalError::conflict());
                 }
                 state.caller_pending = None;
-                cell.set(state);
+                cell.set(state).expect("Storage operation failed");
                 Ok(())
             })
         }
@@ -341,7 +344,7 @@ mod store {
                 receiver: Principal::management_canister(),
             });
             COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.range(start..).map(|entry| entry.key().clone()).take_while(|entry| matches!(&entry.index, ComponentRegistryEntryIndexKey::CallerAuthority(CallerJournalKey::ReceiverRole { role: found, .. }) if found == role))
+                map.range(start..).map(|entry| entry.expect("Storage iteration failed")).map(|entry| entry.key().clone()).take_while(|entry| matches!(&entry.index, ComponentRegistryEntryIndexKey::CallerAuthority(CallerJournalKey::ReceiverRole { role: found, .. }) if found == role))
                     .filter_map(|entry| match entry.index { ComponentRegistryEntryIndexKey::CallerAuthority(CallerJournalKey::ReceiverRole { receiver, .. }) => Some(receiver), _ => None }).collect()
             })
         }
@@ -356,7 +359,7 @@ mod store {
                 receiver_installation: [0; 32],
             });
             COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.range(start..).map(|entry| entry.key().clone())
+                map.range(start..).map(|entry| entry.expect("Storage iteration failed")).map(|entry| entry.key().clone())
                     .take_while(|entry| matches!(&entry.index, ComponentRegistryEntryIndexKey::CallerAuthority(CallerJournalKey::SourceReceiver { source: found, installation, .. }) if *found == source.canister() && *installation == source.install_id))
                     .filter_map(|entry| match entry.index { ComponentRegistryEntryIndexKey::CallerAuthority(index) => Some(index), _ => None }).collect()
             })
@@ -378,7 +381,8 @@ mod store {
                 map.insert(
                     key(index),
                     ComponentRegistryEntryRecord::CallerAuthority(Box::new(row)),
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
     }

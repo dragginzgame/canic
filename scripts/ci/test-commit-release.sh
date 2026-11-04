@@ -4,7 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-commit.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
-mkdir -p "$fixture/bin" "$fixture/scripts/ci"
+mkdir -p "$fixture/bin" "$fixture/scripts/ci" "$fixture/scripts/release" "$fixture/ci"
+cp "$ROOT/scripts/release/selection.sh" "$fixture/scripts/release/"
+cp "$ROOT/ci/cargo-release-groups.json" "$fixture/ci/"
+export RELEASE_GROUP=framework
 cp "$ROOT/scripts/ci/commit-release.sh" "$fixture/scripts/ci/"
 printf '#!/usr/bin/env bash\necho 1.2.3\n' >"$fixture/scripts/ci/read-workspace-version.sh"
 cat >"$fixture/bin/git" <<'SH'
@@ -12,15 +15,15 @@ cat >"$fixture/bin/git" <<'SH'
 set -euo pipefail
 printf '%s\n' "$*" >>"$EVENTS"
 case "$*" in
-    'rev-parse --verify refs/tags/v1.2.3') exit "${TAG_STATUS:-1}" ;;
+    'rev-parse --verify refs/tags/framework-v1.2.3') exit "${TAG_STATUS:-1}" ;;
     'rev-parse HEAD')
         if [[ -f "$CREATED" ]]; then echo release; else echo source; fi ;;
     'rev-parse HEAD^') echo "${PARENT:-source}" ;;
-    'log -1 --format=%s HEAD') echo "${SUBJECT:-Release 1.2.3}" ;;
-    'commit -m Release 1.2.3')
+    'log -1 --format=%s HEAD') echo "${SUBJECT:-Release framework 1.2.3}" ;;
+    'commit -m Release framework 1.2.3')
         [[ "${COMMIT_STATUS:-0}" == 0 ]] || exit "$COMMIT_STATUS"
         [[ "${NO_SUCCESSOR:-0}" == 1 ]] || touch "$CREATED" ;;
-    'tag -a v1.2.3 release -m Release 1.2.3') exit "${TAG_CREATE_STATUS:-0}" ;;
+    'tag -a framework-v1.2.3 release -m Release framework 1.2.3') exit "${TAG_CREATE_STATUS:-0}" ;;
     *) exit 99 ;;
 esac
 SH
@@ -50,6 +53,6 @@ TAG_STATUS=0 run_case 1
 assert_no_tag
 if rg -q '^commit ' "$EVENTS"; then exit 1; fi
 run_case 0
-[[ "$(tail -1 "$EVENTS")" == 'tag -a v1.2.3 release -m Release 1.2.3' ]]
+[[ "$(tail -1 "$EVENTS")" == 'tag -a framework-v1.2.3 release -m Release framework 1.2.3' ]]
 TAG_CREATE_STATUS=31 run_case 31
 echo 'release commit fixtures passed (fake Git only)'

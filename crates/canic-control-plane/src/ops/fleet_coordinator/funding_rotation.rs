@@ -42,6 +42,21 @@ use canic_core::{
 };
 
 impl FleetCoordinatorOps {
+    /// Only an applied rotation is autonomous; staged plans retain operator custody.
+    pub(crate) fn pending_funding_rotation() -> Result<Option<[u8; 32]>, InternalError> {
+        let registry = Self::current()?;
+        let funding = super::root_funding::validate_funding_record(&registry, raw_funding()?)?;
+        Ok(funding
+            .rotation_current
+            .filter(|rotation| {
+                !matches!(
+                    rotation.phase,
+                    FleetFundingPolicyRotationPhaseRecord::Staging
+                )
+            })
+            .map(|rotation| rotation.operation_id))
+    }
+
     pub(crate) fn funding_policy_rotation_status(
         operation_id: [u8; 32],
     ) -> Result<Option<FleetFundingPolicyRotationStatusResponse>, InternalError> {

@@ -4,6 +4,7 @@
 //! Does not own: timer registration, provider state or domain work.
 //! Boundary: workflows provide observed time and lease deadlines; ops commits exact fences.
 
+mod fixture_import;
 #[cfg(test)]
 mod tests;
 
@@ -28,6 +29,7 @@ const ASYNC_JOB_RECOVERY_OPERATION_ID_DOMAIN: &[u8] = b"canic-async-job-recovery
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AsyncJobOwner {
     AuthRenewal,
+    PortableEnrollment,
     CanisterPoolMaintenance,
     CycleTopup,
     FixtureImport,
@@ -38,6 +40,7 @@ impl AsyncJobOwner {
     /// Complete set of durable job owners inspected before authority suspension.
     pub const ALL: &'static [Self] = &[
         Self::AuthRenewal,
+        Self::PortableEnrollment,
         Self::CanisterPoolMaintenance,
         Self::CycleTopup,
         Self::FixtureImport,
@@ -121,6 +124,12 @@ impl AsyncJobRecoveryOps {
                 now_ns,
                 lease_expires_at_ns,
             ),
+            AsyncJobOwner::PortableEnrollment => claim_attempt(
+                &mut state.portable_enrollment,
+                owner,
+                now_ns,
+                lease_expires_at_ns,
+            ),
             AsyncJobOwner::AuthRenewal => {
                 claim_attempt(&mut state.auth_renewal, owner, now_ns, lease_expires_at_ns)
             }
@@ -159,6 +168,9 @@ impl AsyncJobRecoveryOps {
         let exact = match attempt.owner {
             AsyncJobOwner::FixtureImport => finish_attempt(&mut state.fixture_import, attempt),
             AsyncJobOwner::AuthRenewal => finish_attempt(&mut state.auth_renewal, attempt),
+            AsyncJobOwner::PortableEnrollment => {
+                finish_attempt(&mut state.portable_enrollment, attempt)
+            }
             AsyncJobOwner::CanisterPoolMaintenance => {
                 finish_attempt(&mut state.canister_pool_maintenance, attempt)
             }
@@ -171,6 +183,16 @@ impl AsyncJobRecoveryOps {
         };
         if exact {
             if attempt.owner == AsyncJobOwner::FixtureImport {
+                if let Some(recovery) = state.fixture_import_recovery.as_mut() {
+                    match completion {
+                        AsyncJobCompletion::Success => recovery.unfinished_attempts = 0,
+                        AsyncJobCompletion::RetryableFailure => {
+                            recovery.unfinished_attempts =
+                                recovery.unfinished_attempts.saturating_sub(1);
+                        }
+                        AsyncJobCompletion::InvariantFailure => {}
+                    }
+                }
                 update_fixture_retry(&mut state.fixture_import_retry, completion, now_ns);
             }
             AsyncJobRecoveryStore::replace(state);
@@ -185,6 +207,7 @@ impl AsyncJobRecoveryOps {
         match owner {
             AsyncJobOwner::FixtureImport => lease_deadline(&state.fixture_import),
             AsyncJobOwner::AuthRenewal => lease_deadline(&state.auth_renewal),
+            AsyncJobOwner::PortableEnrollment => lease_deadline(&state.portable_enrollment),
             AsyncJobOwner::CanisterPoolMaintenance => {
                 lease_deadline(&state.canister_pool_maintenance)
             }
@@ -211,6 +234,7 @@ impl AsyncJobRecoveryOps {
         match owner {
             AsyncJobOwner::FixtureImport => state.fixture_import.active = None,
             AsyncJobOwner::AuthRenewal => state.auth_renewal.active = None,
+            AsyncJobOwner::PortableEnrollment => state.portable_enrollment.active = None,
             AsyncJobOwner::CanisterPoolMaintenance => {
                 state.canister_pool_maintenance.active = None;
             }

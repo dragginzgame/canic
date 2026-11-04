@@ -14,7 +14,7 @@ use crate::{
 )]
 pub struct Store {
     pub binding: WasmStoreBinding,
-    pub pid: ic_platform::Principal,
+    pub pid: ic_platform_types::Principal,
     /// Whole seconds since the Unix epoch, matching publication and GC timestamps.
     pub created_at: u64,
     pub publication_slot: Option<WasmStorePublicationSlotResponse>,

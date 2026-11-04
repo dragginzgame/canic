@@ -27,10 +27,10 @@ struct ImportRecord {
 thread_local! {
     static IMPORT: RefCell<Cell<Vec<u8>, DefaultMemoryImpl>> = RefCell::new({
         let memory = canic::memory::open(MEMORY_KEY);
-        if ic_memory::Memory::size(&memory) == 0 {
-            Cell::create(memory, Vec::new())
+        if ic_storage::Memory::size(&memory) == 0 {
+            Cell::create(memory, Vec::new()).expect("open fixture collection")
         } else {
-            Cell::load(memory).expect("retained fixture import cell")
+            Cell::load(memory, canic::__internal::contracts::serialization::STORAGE_LIMITS.bytes).expect("retained fixture import cell")
         }
     });
 }
@@ -66,7 +66,8 @@ fn persist(record: &ImportRecord) {
         cell.set(
             canic::__internal::contracts::serialization::serialize(record)
                 .expect("encode application import record"),
-        );
+        )
+        .expect("persist application import record");
     });
 }
 

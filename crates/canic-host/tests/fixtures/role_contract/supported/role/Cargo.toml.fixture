@@ -21,4 +21,4 @@ canic = { workspace = true, features = [] }
 fixture_supported_domain = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }

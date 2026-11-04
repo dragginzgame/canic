@@ -21,24 +21,19 @@ use std::borrow::Cow;
 
 /// Target-bound durable backend; no asynchronous work may enter its transaction.
 pub struct ApplicationSessionStore {
-    pub fleet: canic_contracts::ids::FleetKey,
+    pub(crate) fleet: canic_contracts::ids::FleetKey,
 }
 
 impl ApplicationSessionStore {
-    pub fn new(
+    #[cfg(test)]
+    #[must_use]
+    pub const fn new(
         authority: &crate::model::auth::application_authorization::LocalApplicationAuthoritySnapshot,
     ) -> Self {
         Self {
             fleet: authority.fleet(),
         }
     }
-}
-
-#[derive(Eq, PartialEq)]
-struct PairAuthority {
-    generation: u64,
-    caller: Principal,
-    fingerprint: [u8; 32],
 }
 
 struct Reader {
@@ -61,14 +56,10 @@ impl SessionStore for ApplicationSessionStore {
         replay: Replay,
         change: &LoginRevocationChange,
     ) -> Result<bool, SessionError> {
-        if !matches!(change.state(), LoginRecordState::Reserved(_)) {
-            return Err(SessionError::InvalidPolicyOrRecord);
-        }
-        session.check_login_change(change)?;
         let reader = Reader {
             generation: LocalApplicationAuthorizationStateOps::application_authority_generation(),
         };
-        let (record, replay_record) = reader.prepare_pair(&session, &replay)?;
+        let (record, replay_record) = reader.prepare_pair(&session, &replay, change)?;
         let replacing = reader.session(session.caller())?.is_some();
         let login = prepare_login(self, change)?;
         commit_pair(record, replay_record, reader.generation, login)?;
@@ -96,10 +87,10 @@ impl SessionReader for Reader {
     }
     fn limits(&self) -> SessionLimits {
         SessionLimits::new(
-            MAX_ACTIVE_APPLICATION_SESSIONS,
-            MAX_APPLICATION_REPLAY_RECORDS,
-            MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER,
-            MAX_APPLICATION_SESSION_STABLE_BYTES,
+            capacity().sessions,
+            capacity().replays,
+            capacity().replays_per_caller,
+            capacity().stable_bytes,
         )
         .expect("Canic session limits must satisfy IC Auth admission")
     }
@@ -146,20 +137,9 @@ impl Reader {
         &self,
         session: &Session,
         replay: &Replay,
+        login: &LoginRevocationChange,
     ) -> Result<(LocalApplicationSessionRecord, LocalApplicationReplayRecord), SessionError> {
-        let session_binding = PairAuthority {
-            generation: session.generation(),
-            caller: session.caller().into(),
-            fingerprint: session.fingerprint(),
-        };
-        let replay_binding = PairAuthority {
-            generation: replay.generation(),
-            caller: replay.caller().into(),
-            fingerprint: replay.fingerprint(),
-        };
-        if session_binding != replay_binding || session.generation() != self.generation {
-            return Err(SessionError::InvalidPolicyOrRecord);
-        }
+        session.check_admission_pair(replay, login, self.generation)?;
         if self.replay_exists(replay.fingerprint())? {
             return Err(SessionError::ReplayConflict);
         }
@@ -210,12 +190,14 @@ fn commit_pair(
         canonical.caller().into(),
     )
     .map_err(|_| SessionError::StorageFailure)?;
-    if (session_index.is_none() && counts.active_global >= MAX_ACTIVE_APPLICATION_SESSIONS)
-        || counts.replay_global >= MAX_APPLICATION_REPLAY_RECORDS
-        || counts.replay_for_caller >= MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER
-    {
-        return Err(SessionError::Capacity);
-    }
+    Reader { generation }.limits().check_capacity(
+        SessionOccupancy {
+            sessions: counts.active_global,
+            replays: counts.replay_global,
+            replays_for_caller: counts.replay_for_caller,
+        },
+        session_index.is_some(),
+    )?;
     let previous_bytes = previous_session_bytes(session_index)?;
     let added_bytes = encoded_len(&session).map_err(|_| SessionError::StorageFailure)?
         + encoded_len(&replay).map_err(|_| SessionError::StorageFailure)?
@@ -241,9 +223,7 @@ fn commit_pair(
     })
     .map_err(|_| SessionError::StorageFailure)?;
     let encoded_bytes = encoded_bytes.ok_or(SessionError::StorageFailure)?;
-    if encoded_bytes > MAX_APPLICATION_SESSION_STABLE_BYTES
-        || index_bytes > MAX_APPLICATION_SESSION_INDEX_BYTES
-    {
+    if encoded_bytes > capacity().stable_bytes || index_bytes > capacity().index_bytes {
         return Err(SessionError::ByteCapacity);
     }
     let session_index = session_index.unwrap_or(counts.active_global);

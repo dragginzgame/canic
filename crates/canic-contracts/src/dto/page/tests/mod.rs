@@ -80,7 +80,7 @@ fn native_pagination_frames_enforce_identity_direction_and_limits() {
 
 #[test]
 fn native_principal_pages_match_metadata_and_reject_oversized_identities() {
-    use ic_platform::Principal;
+    use ic_platform_types::Principal;
 
     let schema = native_schema::<Page<Principal>>().unwrap();
     assert_eq!(

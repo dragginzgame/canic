@@ -17,10 +17,10 @@ std::thread_local! {
         StableCell<Option<FleetAdmissionProjectionRecord>, DefaultMemoryImpl>,
     > = RefCell::new({
         let allocation = crate::memory::open(crate::memory::keys::FLEET_ADMISSION_PROJECTION_V1);
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableCell::create(allocation, None)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableCell::create(allocation, None).expect("create admitted stable cell")
         } else {
-            StableCell::load(allocation).expect("retained stable cell")
+            StableCell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -113,7 +113,7 @@ impl FleetAdmissionProjectionStore {
             if let Some(existing) = store.get().clone() {
                 return existing == record;
             }
-            store.set(Some(record));
+            store.set(Some(record)).expect("Storage operation failed");
             true
         })
     }
@@ -123,7 +123,7 @@ impl FleetAdmissionProjectionStore {
             if store.get().is_none() {
                 return false;
             }
-            store.set(Some(record));
+            store.set(Some(record)).expect("Storage operation failed");
             true
         })
     }

@@ -34,18 +34,18 @@ std::thread_local! {
         ShardingCore::new(
             {
                 let allocation = crate::memory::open(crate::memory::keys::SHARDING_REGISTRY_V1);
-                if ic_memory::Memory::size(&allocation) == 0 {
-                    StableBtreeMap::create(allocation)
+                if ic_storage::Memory::size(&allocation) == 0 {
+                    StableBtreeMap::create(allocation).expect("open admitted stable collection")
                 } else {
-                    StableBtreeMap::load(allocation)
+                    StableBtreeMap::load(allocation).expect("open admitted stable collection")
                 }
             },
             {
                 let allocation = crate::memory::open(crate::memory::keys::SHARDING_ASSIGNMENTS_V1);
-                if ic_memory::Memory::size(&allocation) == 0 {
-                    StableBtreeMap::create(allocation)
+                if ic_storage::Memory::size(&allocation) == 0 {
+                    StableBtreeMap::create(allocation).expect("open admitted stable collection")
                 } else {
-                    StableBtreeMap::load(allocation)
+                    StableBtreeMap::load(allocation).expect("open admitted stable collection")
                 }
             },
         )
@@ -209,14 +209,14 @@ impl ShardingAssignmentsData {
 
 #[cfg(feature = "sharding")]
 pub struct ShardingCore<M: Memory> {
-    registry: StableBtreeMap<Principal, ShardEntryRecord, M>,
+    registry: StableBtreeMap<crate::cdk::types::PrincipalKeyRecord, ShardEntryRecord, M>,
     assignments: StableBtreeMap<ShardKey, ShardAssignmentTargetRecord, M>,
 }
 
 #[cfg(feature = "sharding")]
 impl<M: Memory> ShardingCore<M> {
     pub const fn new(
-        registry: StableBtreeMap<Principal, ShardEntryRecord, M>,
+        registry: StableBtreeMap<crate::cdk::types::PrincipalKeyRecord, ShardEntryRecord, M>,
         assignments: StableBtreeMap<ShardKey, ShardAssignmentTargetRecord, M>,
     ) -> Self {
         Self {
@@ -230,19 +230,24 @@ impl<M: Memory> ShardingCore<M> {
     // ---------------------------
 
     pub fn insert_entry(&mut self, pid: Principal, entry: ShardEntryRecord) {
-        self.registry.insert(pid, entry);
+        self.registry
+            .insert(pid.into(), entry)
+            .expect("Storage operation failed");
     }
 
     pub fn get_entry(&self, pid: &Principal) -> Option<ShardEntryRecord> {
-        self.registry.get(pid)
+        self.registry
+            .get(&(*pid).into())
+            .expect("Storage operation failed")
     }
 
     pub fn all_entries(&self) -> Vec<ShardingRegistryEntryRecord> {
         self.registry
             .iter()
+            .map(|entry| entry.expect("Storage iteration failed"))
             .map(|entry| ShardingRegistryEntryRecord {
-                pid: *entry.key(),
-                entry: entry.value(),
+                pid: entry.key().principal(),
+                entry: entry.value().expect("decode Storage entry"),
             })
             .collect()
     }
@@ -257,30 +262,38 @@ impl<M: Memory> ShardingCore<M> {
         shard: Principal,
         allocation_operation_id: [u8; 32],
     ) {
-        self.assignments.insert(
-            key,
-            ShardAssignmentTargetRecord {
-                shard,
-                allocation_operation_id,
-            },
-        );
+        self.assignments
+            .insert(
+                key,
+                ShardAssignmentTargetRecord {
+                    shard,
+                    allocation_operation_id,
+                },
+            )
+            .expect("Storage operation failed");
     }
 
     pub fn remove_assignment(&mut self, key: &ShardKey) -> Option<ShardAssignmentTargetRecord> {
-        self.assignments.remove(key)
+        self.assignments
+            .remove(key)
+            .expect("Storage operation failed")
     }
 
     pub fn get_assignment(&self, key: &ShardKey) -> Option<ShardAssignmentTargetRecord> {
-        self.assignments.get(key)
+        self.assignments.get(key).expect("Storage operation failed")
     }
 
     pub fn all_assignments(&self) -> Vec<ShardingAssignmentRecord> {
         self.assignments
             .iter()
+            .map(|entry| entry.expect("Storage iteration failed"))
             .map(|entry| ShardingAssignmentRecord {
                 key: entry.key().clone(),
-                shard: entry.value().shard,
-                allocation_operation_id: entry.value().allocation_operation_id,
+                shard: entry.value().expect("decode Storage entry").shard,
+                allocation_operation_id: entry
+                    .value()
+                    .expect("decode Storage entry")
+                    .allocation_operation_id,
             })
             .collect()
     }

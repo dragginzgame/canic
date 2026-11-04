@@ -827,9 +827,10 @@ fn validate_resolved_package(
     }
 
     validate_runtime_graph(graph, direct_edge)?;
-    if canic_package.version.to_string() != env!("CARGO_PKG_VERSION") {
+    // Admission follows the framework compiled into this tool's producers and callers.
+    if canic_package.version.to_string() != canic_core::VERSION {
         return Err(RoleContractFinding::CanicVersionMismatch {
-            expected: env!("CARGO_PKG_VERSION").to_string(),
+            expected: canic_core::VERSION.to_string(),
             actual: canic_package.version.to_string(),
         });
     }
@@ -884,6 +885,9 @@ fn validate_selected_canic_features(
         .enabled_features
         .iter()
         .filter(|feature| !is_icrc_adapter_feature(feature))
+        // Resolver 1 unifies the separately validated build edge. Its native-only
+        // renderer grants no runtime role capability; direct selection still refuses.
+        .filter(|feature| feature.as_str() != "build-support")
         .map(|feature| {
             CanicFeatureKey::from_cargo_name(feature).ok_or_else(|| {
                 unsupported_finding(format!(
@@ -1131,10 +1135,10 @@ fn validate_compiled_config_build_contract(
     if build_dependency.rename.is_some()
         || build_dependency.optional
         || build_dependency.target.is_some()
-        || !build_dependency.features.is_empty()
+        || build_dependency.features != ["build-support"]
     {
         return Err(unsupported_finding(
-            "the Canic build dependency must be canonical, unconditional, non-optional, and feature-empty",
+            "the Canic build dependency must be canonical, unconditional, non-optional, and select only build-support",
         ));
     }
     let build_value = cargo_dependency_value(role_document, "build-dependencies", CANIC_PACKAGE)
@@ -1144,9 +1148,9 @@ fn validate_compiled_config_build_contract(
         let features = features.as_array().ok_or_else(|| {
             unsupported_finding("the Canic build dependency features must be an array")
         })?;
-        if !features.is_empty() {
+        if features.len() != 1 || features[0].as_str() != Some("build-support") {
             return Err(unsupported_finding(
-                "the Canic build dependency must not select runtime features",
+                "the Canic build dependency must select only build-support",
             ));
         }
     }
@@ -1432,7 +1436,7 @@ fn validate_runtime_identities(graph: &CargoGraphEvidence) -> Result<(), RoleCon
         if package.is_proc_macro {
             continue;
         }
-        if package.name == "ic-memory" {
+        if package.name == "ic-storage" {
             memories.insert(id);
         }
         if package.name == "ic-timers" {
@@ -1453,7 +1457,7 @@ fn validate_runtime_identities(graph: &CargoGraphEvidence) -> Result<(), RoleCon
             .map(|id| normalized_package_description(graph, &graph.packages[id]))
             .collect::<Vec<_>>();
         packages.sort();
-        return Err(RoleContractFinding::MultipleMemoryRuntimes { packages });
+        return Err(RoleContractFinding::MultipleStorageRuntimes { packages });
     }
     if timers.len() > 1 {
         let mut packages = timers

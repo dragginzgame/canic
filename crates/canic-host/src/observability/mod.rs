@@ -27,6 +27,12 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum FleetObservabilityError {
+    #[error(transparent)]
+    ProtocolMethod(#[from] crate::protocol_binding::WireArtifactError),
+
+    #[error("portable Auth inspection requires a receiver Component")]
+    PortableReceiverUnsupported,
+
     #[error("Canister {canister} has no owning Fleet Subnet Root in current topology")]
     MissingRoot { canister: String },
 
@@ -114,6 +120,31 @@ pub fn observe_fleet_canister(
     if entry.role.as_deref() == Some(CanisterRole::WASM_STORE.as_str()) {
         return observe_store(icp, entry, request);
     }
+    let auth_contract = match &request {
+        CanisterObservabilityRequest::PortablePolicy => Some((
+            protocol::root_observation::portable_policy::METHOD,
+            protocol::root_observation::portable_policy::METHOD_ID,
+            protocol::root_observation::portable_policy::REQUEST_LIMITS,
+            protocol::root_observation::portable_policy::RESPONSE_LIMITS,
+        )),
+        CanisterObservabilityRequest::PortableSessions(_) => Some((
+            protocol::root_observation::portable_sessions::METHOD,
+            protocol::root_observation::portable_sessions::METHOD_ID,
+            protocol::root_observation::portable_sessions::REQUEST_LIMITS,
+            protocol::root_observation::portable_sessions::RESPONSE_LIMITS,
+        )),
+        _ => None,
+    };
+    if let Some((method, id, request_limits, response_limits)) = auth_contract {
+        crate::protocol_binding::require_wire_method(
+            &schema.schema,
+            method,
+            id,
+            protocol::wire_declaration::MethodKind::Update,
+            request_limits,
+            response_limits,
+        )?;
+    }
     let expected_child = child_funding_target(&request);
     let response = relay::observe(icp, &schema, root_canister, target, request)?;
     verify_child_funding_response(response, target, expected_child)
@@ -125,6 +156,10 @@ fn observe_store(
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
     match request {
+        CanisterObservabilityRequest::PortablePolicy
+        | CanisterObservabilityRequest::PortableSessions(_) => {
+            Err(FleetObservabilityError::PortableReceiverUnsupported)
+        }
         CanisterObservabilityRequest::CycleHistory(page) => {
             observe_cycle_history(icp, parse_principal("Wasm Store", &store.pid)?, page)
         }
@@ -169,6 +204,10 @@ fn observe_root(
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
     match request {
+        CanisterObservabilityRequest::PortablePolicy
+        | CanisterObservabilityRequest::PortableSessions(_) => {
+            Err(FleetObservabilityError::PortableReceiverUnsupported)
+        }
         CanisterObservabilityRequest::ChildFunding(child) => {
             let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
             let response: canic_contracts::dto::child_funding::ChildFundingUsage =
@@ -182,7 +221,7 @@ fn observe_root(
                     protocol::child_funding::RESPONSE_LIMITS,
                 )?;
             verify_child_funding_response(
-                CanisterObservabilityResponse::ChildFunding(response.into()),
+                CanisterObservabilityResponse::ChildFunding(response),
                 root_canister,
                 Some(child),
             )
@@ -218,7 +257,7 @@ fn observe_root(
                 protocol::protected_metrics::REQUEST_LIMITS,
                 protocol::protected_metrics::RESPONSE_LIMITS,
             )?;
-            Ok(CanisterObservabilityResponse::Metrics(response.into()))
+            Ok(CanisterObservabilityResponse::Metrics(response))
         }
         CanisterObservabilityRequest::MemoryAllocations => {
             let response = crate::canister_protocol::query_wire(
@@ -251,7 +290,7 @@ fn verify_child_funding_response(
         let CanisterObservabilityResponse::ChildFunding(value) = &response else {
             return Err(FleetObservabilityError::UnexpectedRootResponse);
         };
-        if (value.parent, value.child) != (parent, child) {
+        if (value.parent, value.child) != (parent.into(), child.into()) {
             return Err(FleetObservabilityError::UnexpectedRootResponse);
         }
     }
@@ -308,9 +347,9 @@ mod tests {
     fn child_funding_response_binds_parent_and_child_for_direct_and_relayed_reads() {
         let parent = Principal::from_slice(&[1]);
         let child = Principal::from_slice(&[2]);
-        let usage = canic_contracts::dto::observability::ChildFundingUsage {
-            parent,
-            child,
+        let usage = canic_contracts::dto::child_funding::ChildFundingUsage {
+            parent: parent.into(),
+            child: child.into(),
             observed_at_ns: 10,
             accounted_cycles: 0.into(),
             last_accounted_at_secs: 0,
@@ -333,6 +372,31 @@ mod tests {
                     Some(wrong_child)
                 ),
                 Err(FleetObservabilityError::UnexpectedRootResponse)
+            ));
+        }
+    }
+
+    #[test]
+    fn auth_inspection_never_uses_root_or_store_direct_query_fallbacks() {
+        let icp = IcpCli::new("/unused-icp", Some("local".into()));
+        let root = entry("aaaaa-aa", "root", None);
+        let store = entry("aaaaa-aa", "wasm_store", Some("root"));
+        for request in [
+            CanisterObservabilityRequest::PortablePolicy,
+            CanisterObservabilityRequest::PortableSessions(
+                canic_contracts::dto::portable_inspection::Request {
+                    after: None,
+                    limit: 1,
+                },
+            ),
+        ] {
+            assert!(matches!(
+                observe_root(&icp, &root, request.clone()),
+                Err(FleetObservabilityError::PortableReceiverUnsupported)
+            ));
+            assert!(matches!(
+                observe_store(&icp, &store, request),
+                Err(FleetObservabilityError::PortableReceiverUnsupported)
             ));
         }
     }

@@ -41,7 +41,7 @@ mod tests {
             module_hash: Some(vec![0u8; 32]),
             created_at: u64::MAX,
         };
-        let bytes = record.to_bytes();
+        let bytes = record.to_bytes().expect("encode stable fixture");
 
         assert!(
             bytes.len() <= CanisterRecord::STORABLE_MAX_SIZE as usize,

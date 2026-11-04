@@ -6,7 +6,7 @@ use crate::{
     ids::{CanisterRole, ComponentInstanceId, ComponentSpecId, FleetBinding},
     protocol::profile::ProtocolProfileDigest,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Complete FleetCoordinatorBinding transported without changing stored authority.

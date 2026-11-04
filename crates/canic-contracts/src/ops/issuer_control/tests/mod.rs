@@ -4,7 +4,7 @@ use super::*;
 #[test]
 fn configure_roundtrip_preserves_current_authority_policy() {
     let original = stored::RootIssuerConfigureRequest {
-        issuer_pid: ic_platform::principal::ExternalPrincipal::from_slice(&[7]),
+        issuer_pid: ic_platform_types::principal::ExternalPrincipal::from_slice(&[7]),
         enabled: true,
         aud: stored::DelegationAudience::Fleet(crate::ids::FleetKey {
             canonical_network_id: crate::ids::CanonicalNetworkId::ic_mainnet(),

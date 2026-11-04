@@ -8,7 +8,7 @@ use super::{
     ComponentInstanceId, ComponentSpecId, FleetBinding, FleetCoordinatorBinding,
     ManagedCanisterBinding, SubnetId,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Maintained generation and wire schema for Fleet admission authority.

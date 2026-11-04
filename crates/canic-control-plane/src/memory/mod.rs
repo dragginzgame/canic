@@ -1,6 +1,6 @@
 //! Explicit requests for the selected control-plane roles.
 pub(crate) mod keys;
-use canic_core::__reexports::ic_memory;
+use canic_core::__reexports::ic_storage;
 #[cfg(any(
     feature = "fleet-coordinator-canister",
     feature = "root-control-plane",
@@ -8,7 +8,7 @@ use canic_core::__reexports::ic_memory;
 ))]
 const MEMORY_AUTHORITY: &str = canic_core::memory::CANIC_CONTROL_PLANE_MEMORY_AUTHORITY;
 /// Complete selected control-plane store requests.
-pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
+pub fn requests() -> Result<Vec<ic_storage::MemoryRequest>, ic_storage::AdmissionError> {
     keys::requests()
 }
 
@@ -24,8 +24,7 @@ pub fn framework() -> canic_core::memory::MemoryBootstrap {
             .into_iter()
             .chain(requests().expect("Control Plane requests"))
             .collect(),
-        pool: canic_core::memory::pool::framework_pool(Vec::new(), Vec::new())
-            .expect("framework grants"),
+        grants: canic_core::memory::grants::framework_grants(Vec::new()).expect("framework grants"),
         admission: None,
     }
 }

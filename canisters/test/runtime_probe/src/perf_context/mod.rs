@@ -59,7 +59,8 @@ fn work(iterations: u32) {
     std::hint::black_box(value);
 }
 
-async fn await_controlled_response(which: u8) {
+/// Hold a real IC await until the owning simulator supplies a response.
+pub async fn await_controlled_response(which: u8) {
     let args = HttpRequestArgs {
         url: format!("https://perf-context.invalid/{which}"),
         max_response_bytes: Some(256),

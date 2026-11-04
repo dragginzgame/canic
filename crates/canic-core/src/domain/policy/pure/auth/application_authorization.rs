@@ -101,7 +101,6 @@ pub enum LocalApplicationAuthorizationDecision {
 pub enum LocalApplicationAuthorizationDenial {
     Anonymous,
     CallerMismatch,
-    Disabled,
     AuthorityUnavailable,
     MissingSession,
     Expired,
@@ -127,7 +126,7 @@ mod tests {
     }
 
     fn scopes(values: &[&str]) -> CanonicalApplicationScopes {
-        CanonicalApplicationScopes::for_session(
+        CanonicalApplicationScopes::for_verified_grant(
             values
                 .iter()
                 .map(|value| ApplicationScope::parse(*value).unwrap())

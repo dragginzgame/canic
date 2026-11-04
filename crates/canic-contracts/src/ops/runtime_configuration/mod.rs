@@ -293,7 +293,7 @@ impl From<native::ComponentGroupDirectoryMember>
 mod tests {
     use super::*;
     use crate::{dto::fleet_registry, ids::SubnetId};
-    use ic_platform::principal::ExternalPrincipal;
+    use ic_platform_types::principal::ExternalPrincipal;
 
     #[test]
     fn root_directory_wire_round_trip_preserves_distinct_subnet_and_canister() {

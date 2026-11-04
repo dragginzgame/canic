@@ -9,11 +9,14 @@ mod tests;
 
 use std::{
     fs,
-    io::{self, Write},
+    io::{self, BufWriter, Write},
     path::{Path, PathBuf},
 };
 
-use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes, write_with},
+    path::canonicalize_allow_missing,
+};
 use ic_host_text::escape::terminal_text;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -35,31 +38,11 @@ pub fn resolve_operator_path(path: &Path) -> io::Result<PathBuf> {
             "output target has no file name",
         )
     })?;
-    let parent_of = |path: &Path| {
-        path.parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf()
-    };
-    let mut parent = parent_of(path);
-    let mut missing = Vec::new();
-    let mut resolved = loop {
-        match fs::canonicalize(&parent) {
-            Ok(directory) if directory.is_dir() => break directory,
-            Ok(_) => return Err(io::Error::from(io::ErrorKind::NotADirectory)),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                let Some(name) = parent.file_name() else {
-                    return Err(error);
-                };
-                missing.push(name.to_owned());
-                parent = parent_of(&parent);
-            }
-            Err(error) => return Err(error),
-        }
-    };
-    for directory in missing.into_iter().rev() {
-        resolved.push(directory);
-    }
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut resolved = canonicalize_allow_missing(parent, &std::env::current_dir()?, usize::MAX)?;
     resolved.push(file_name);
     match fs::symlink_metadata(&resolved) {
         Ok(metadata) if !metadata.is_file() => {
@@ -82,17 +65,7 @@ where
     E: From<io::Error> + From<serde_json::Error>,
 {
     if let Some(path) = out {
-        let data = serde_json::to_vec_pretty(value)?;
-        write_bytes(
-            &resolve_operator_path(path)?,
-            WriteOptions {
-                mode: PublicationMode::Replace,
-                permissions: 0o666,
-            },
-            &data,
-        )
-        .map_err(canic_host::publication::ops::io_error)?;
-        return Ok(());
+        return write_pretty_json_file(path, value);
     }
 
     let stdout = io::stdout();
@@ -108,16 +81,19 @@ where
     T: Serialize,
     E: From<io::Error> + From<serde_json::Error>,
 {
-    let data = serde_json::to_vec_pretty(value)?;
-    write_bytes(
+    write_with(
         &resolve_operator_path(path)?,
         WriteOptions {
             mode: PublicationMode::Replace,
             permissions: 0o666,
         },
-        &data,
+        |file| {
+            let mut writer = BufWriter::new(file);
+            serde_json::to_writer_pretty(&mut writer, value)?;
+            writer.flush().map_err(serde_json::Error::io)
+        },
     )
-    .map_err(canic_host::publication::ops::io_error)?;
+    .map_err(canic_host::publication::ops::json_error)?;
     Ok(())
 }
 

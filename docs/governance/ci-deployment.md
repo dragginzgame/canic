@@ -64,7 +64,7 @@ The security and Wasm crypto-closure checkers do not fetch Cargo dependencies.
 Direct crypto-closure checks require `make prepare-locked-dependencies` first. Advisory-database
 acquisition remains its explicit security operation, separate from Cargo setup.
 The normal non-publishing sequence is `make prepare-validation SCOPE=release`,
-maintainer review/commit of the intended tree, then `make release-verify`. No manual
+maintainer review/commit of the intended tree, then `make release-verify RELEASE_GROUP=framework`. No manual
 build-environment exports are required. Preparation preserves explicit Cargo
 offline policy; with offline enabled it cannot fetch missing dependencies. The
 Make verification entrypoint enforces Cargo offline; direct `validate` and the
@@ -94,8 +94,21 @@ audit failures retain a bounded JSON phase/status summary in
 `target/dependency-audits/`; raw tool stderr and database scratch remain private
 and are not uploaded. These diagnostics do not establish hosted-runner success.
 
+Selected release groups use the source-bound plan and receipt mapping in
+[independent releases](../operations/adapter-release-groups.md#release-validation-selection).
+The structured stage roster must match actual complete-gate dispatch. Confined
+group changes may omit only reviewed stages after the exact mapping has full
+same-source qualification; shared or uncertain inputs require the full roster.
+The first qualifying confined release still runs the full gate. Root workspace
+lint/check/tests and required native/installed/hosted proofs remain applicable.
+This routing changes the release gate only: repository-wide CI, `make validate`
+and the separate eligible fast-patch contract retain their own scopes. Version
+preparation owns the plan receipt; status prose grants no validation authority.
+Plan mode stops at the first failed stage; `make validate` retains its existing
+barrier-level collection of independent failures.
+
 Post-update dependency admission checks the root Blob adapter and both private
-consumers' normal Wasm graphs. Each requires one `ic-memory`, `ic-storage`,
+consumers' normal Wasm graphs. Each requires one `ic-storage`, `ic-timers`,
 `ic-platform-runtime` and `ic-platform-runtime-guard` identity. Count the actual
 execution owner and its guard: runtime-free Platform protocol facades may retain
 distinct package identities. This does not admit two runtimes, bridge checked
@@ -105,7 +118,9 @@ Wasm crypto admission also checks each canonical role's signature libraries.
 Platform owns certification and BLS internally; additional external IC signature
 providers are refused. Its current IC hash/BLS and ECDSA implementations require
 distinct digest and field API cohorts. Only signing/verification roles admit
-the reviewed cohort pairs, with one full package identity per cohort; other
+the reviewed field API cohort pairs, with one full package identity per cohort. All
+roles admit the reviewed digest/hash cohorts needed by canonical self-authenticating
+principals and external IC hashing; this does not admit a signature stack. Other
 crypto packages remain singletons. Zero-auth roles admit no signature stack.
 The selected lockfiles, Auth regressions and installed journeys qualify behavior;
 the graph check alone does not verify a cryptographic implementation.
@@ -523,13 +538,13 @@ that target's tests; an internal Rust path selects one exact test. The exact-pat
 selector verifies its registered test identity before execution and rejects a
 zero-test match. An omitted
 selector fails before creating scratch or starting Cargo. Use these focused
-commands while fixing failures; `make patch` and `make release-patch` remain
+commands while fixing failures; `make patch` and `make release-patch RELEASE_GROUP=framework` remain
 complete release validation, not the default development feedback loop.
 
 ## Explicit Cargo Cleanup
 
 Release and push targets retain Cargo artifacts. This lets a following
-`make publish` reuse the exact build cache populated by validation instead of
+`make publish RELEASE_GROUP=framework` reuse the exact build cache populated by validation instead of
 performing a clean package compilation immediately after the release push.
 Failed validation, version, stage, commit, tag, push or package publication
 also retains those artifacts for diagnosis and retry.
@@ -631,6 +646,12 @@ requested.
 
 ## Versioning and Release
 
+Rust 1.99.1 is the minimum and pinned development/release compiler. Run
+`make compiler-check` after explicit host-tool and locked-dependency preparation to verify the root and
+managed-consumer floors, pinned channel and actual Cargo/rustc selections.
+The CI preflight/MSRV and release-validation callers require this read-only
+admission. Compiler selection does not replace native, Wasm or installed tests.
+
 Version mutation, tagging, publication and push require an explicit maintainer
 instruction, but an automated agent may execute them once instructed. A direct
 request such as “publish 0.109.15” is sufficient authority for the normal
@@ -640,7 +661,7 @@ by hand. Do not infer the same authority from “continue,” “finish,” “r
 push,” an audit request or a request to prepare a candidate.
 
 The canonical normal path is to review the complete batch, stage and commit it,
-then explicitly select `make release-minor` (or the appropriate patch/major
+then explicitly select `make release-minor RELEASE_GROUP=framework` (or the appropriate patch/major
 increment). The pre-commit hook may format selected files. Start from a clean
 checkout, with the intended branch/upstream, release notes, exact prepared tools,
 registry dependencies and authenticated Git access. Release preflight prepares
@@ -667,15 +688,15 @@ validation marker supplied by the qualification owner.
 
 Stop on failed prerequisites, gates, source drift, remote conflicts or uncertain
 network outcomes. Preserve logs, artifacts and recovery state. If an attempt
-has a saved release plan, use `make release-resume VERSION=X.Y.Z` to reconcile
+has a saved release plan, use `make release-resume RELEASE_GROUP=framework VERSION=X.Y.Z` to reconcile
 that exact attempt with its original source, payload and destination checks.
 Inspect the saved phase and remote refs first; do not remove a release lock merely
 because its PID is absent from a restricted process view. A failure before a saved
 recoverable state requires diagnosis and a fresh authorized release, not an
 invented receipt. Do not manually bump again to recover a prepared release.
 
-`make release-minor` releases source: its success establishes the exact source
-release commit/tag and atomic branch/tag delivery. `make publish` separately
+`make release-minor RELEASE_GROUP=framework` releases source: its success establishes the exact source
+release commit/tag and atomic branch/tag delivery. `make publish RELEASE_GROUP=framework` separately
 publishes the governed package family; registry visibility is its completion
 boundary. In `make release-minor && make publish`, the shell only starts publication
 if the synchronous source-release command succeeds. It does not wait for the
@@ -688,36 +709,28 @@ clean reinstall with controller checks, bounded spending, cycle conservation and
 same-operation recovery; this source-release procedure does not imply rollback
 or cross-release migration.
 
-The root `Cargo.toml` is the sole live workspace package-version authority;
-ordinary status and planning prose must not act as a parallel package-version
-source. Current and committed version queries select their source through the
-Canic adapter and use Shared Tooling’s structural workspace-version reader;
-release scripts must not maintain parallel manifest parsers. The governed bump is the one exception: after validating one exact
-clean source commit, it seals the numbered pending detailed changelog entry with the
-release date or preserves its existing valid ISO date, then writes one generated
-`release-validation.json` containing schema `1`, exact release version, validated
-source commit, release date and `complete` or `fast` gate. The transaction restores
-both receipt contents and prior absence if any later bump step fails. Status and
-planning documents are ordinary descriptive handoffs; release scripts do not
-parse, mutate or stage them. The receipt records validation, not successful
-tagging or package publication.
-Immediately before changing version
-files, the bump transaction fetches the current `origin` branch, requires it
-to remain an ancestor of the validated local source, and requires the exact
-planned release tag to be absent remotely. The release commit may then
-differ from the validated source only in the enumerated version, lock,
-installer, changelog and structured receipt surfaces. The cheap current-document
-semantics gate still rejects volatile
-"latest published" and manual release-truth prose elsewhere. After staging,
-`make release-commit` runs the fast
-post-bump `make release-candidate` guard before committing or tagging. That
-guard verifies the sealed changelog, rejects non-release changes in the
-release transaction, and checks locked offline Cargo
-metadata, uniform workspace package versions and the installed-CLI default
-without repeating the already completed full source validation. Current status
-text is informational and never gates candidate admission or package publication.
-The release lane owns validation; the publication guard does not infer validation
-from an editable handoff.
+Each explicit release group owns its primary package version and canonical ledger.
+The root catalog lists all member versions; it has no workspace package version.
+Current and committed queries use the admitted Shared release-group projection.
+See [adapter release groups](../operations/adapter-release-groups.md) for the
+maintainer-selected boundary. Every release, resume and publication selects
+`RELEASE_GROUP` explicitly; invalid selection refuses before setup or mutation.
+
+After fresh complete qualification of one clean source, the selected transaction
+changes only that group's literal member versions, root requirements, exact local
+lock records, canonical ledger and declared metadata. Both private consumer locks
+retain all unselected records. Only Host releases update the CLI default.
+`releases/<group>/release-validation.json` binds schema, group, policy blob,
+version, validated source, date and gate. A failed transaction restores all
+selected originals; status documents are neither parsed nor staged. The old root
+receipt remains historical evidence. No receipt establishes registry publication.
+
+The source transaction checks remote ancestry and absence of the selected
+`<group>-vX.Y.Z` tag. The candidate guard reproduces the exact transaction from
+its immutable source and compares every Cargo manifest and lock, the CLI default
+and receipt. Other groups' identities and declarations remain intact. A selected
+commit can be checked independently of later working-copy edits. The configured
+complete release gate remains workspace-wide; group selection does not narrow it.
 
 ### Fast non-runtime patch lane
 
@@ -726,7 +739,7 @@ version has an exact immutable published tag and every attributable change
 after that tag is confined to documentation/governance or the
 release tooling that owns this lane. Runtime, build, package, protocol,
 generated, Candid, configuration and product-fixture changes reject before
-version mutation. `make release-patch-fast` performs the same eligible gate and
+version mutation. `make release-patch-fast RELEASE_GROUP=framework` performs the same eligible gate and
 then uses the normal stage, candidate, commit, tag and atomic push path.
 
 The fast lane verifies the immutable tag's structured validation receipt,
@@ -784,11 +797,11 @@ not format, compile, test, validate, or clean. A successful parent one-shot
 release also retains the validated Cargo artifacts for subsequent packaging or
 publication. Local
 staged, unstaged and untracked changes neither block the push nor join it; they
-remain local. The release version is read from `HEAD`'s committed `Cargo.toml`,
+remain local. The group's version is read from its committed primary manifest,
 so a later local manifest edit cannot redirect tag selection. Test scratch has
 already been removed by the test invocation that owned it. Release push
 explicitly disables implicit followed-tag publication and sends both the
-current branch ref and the exact workspace-version tag ref in one atomic push,
+current branch ref and the exact group-prefixed tag ref in one atomic push,
 so the tag is still sent
 when the branch commit is already present remotely. No fallible local cleanup
 step can change or revoke a successful push, and atomic push prevents a branch-
@@ -807,15 +820,16 @@ MSRV, Rust checks, ordinary tests, serial PocketIC tests and the conditional
 release-profile workspace build. A green tag must never coexist with a red CI
 result for the same source merely because the tag ran a weaker job graph.
 For one-shot releases, the maintainer or an explicitly authorized agent may run
-`make release-patch`, `make release-patch-fast`, `make release-minor`, or
-`make release-major`, which perform those steps in order.
+`make release-patch RELEASE_GROUP=framework`, `make release-patch-fast RELEASE_GROUP=framework`, `make release-minor RELEASE_GROUP=framework`, or
+`make release-major RELEASE_GROUP=framework`, which perform those steps in order.
 Minor and major release commands do not add an interactive confirmation after
 the maintainer has already issued the explicit command.
 
-Publishing first re-runs the release-candidate guard, then verifies that every
-crate in the governed publish order exposes the same workspace version before
-declaring the package set available. A successful subset or library/CLI split
-is never reported as a complete Canic release.
+Publishing re-runs candidate and annotated group-tag admission, then selects only
+the public packages of the explicit group in dependency order. It observes that
+group's complete versioned package set before declaring publication complete.
+A successful subset never establishes the whole selected group. Framework,
+IcyDB adapter and Blob adapter publication are independent operations.
 
 The publication manifest boundary is shared with the cheap release-integrity
 gate and reads locked offline Cargo metadata without compiling a Rust test.

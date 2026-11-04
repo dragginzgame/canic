@@ -9,7 +9,7 @@ mod tests;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::observability::ChildFundingUsage,
+    dto::child_funding::ChildFundingUsage,
     model::{
         cycles_funding::CHILD_FUNDING_COMMAND_KIND,
         replay::{CommandKind, ExternalEffectDescriptor, ReplayActor},
@@ -50,8 +50,8 @@ fn snapshot(
         .map(Cycles::new);
     let ledger = CyclesFundingLedgerOps::snapshot(child);
     Ok(ChildFundingUsage {
-        parent,
-        child,
+        parent: parent.into(),
+        child: child.into(),
         observed_at_ns: now_ns,
         accounted_cycles: Cycles::new(ledger.granted_total),
         last_accounted_at_secs: ledger.last_granted_at,

@@ -121,7 +121,8 @@ the bootstrap `gzip` executable; it never extracts archives.
 Follow the derive sorter's documented
 [macro qualification and pin adoption](../rules/git-hooks.md#derive-macros-and-dollar-prefixed-paths)
 before removing corruption-workaround markers. The selected 0.14.1 formatter
-requires Rust 1.88 or newer to build; consumer library MSRVs stay independently owned.
+requires Rust 1.88 or newer to build; our selected compiler is 1.99.1 under the
+[compiler support policy](../rules/cargo-dependencies.md#minimum-supported-rust-version-msrv).
 Tool availability and version checks do not establish semantic preservation.
 
 `make install-tools` and `make tools-check` cover the common host/Cargo executables,
@@ -208,8 +209,10 @@ catalog as installation. The failure-evidence action defaults to the catalogs
 beside its own snapshot; set `host-versions`/`ic-pins` explicitly when using an
 exception so successful-tool compaction checks the intended selection.
 
-Common catalogs do not own consumer compiler/MSRV choices, application
-dependencies, Testkit/PocketIC selections or product tool adapters. Workflow-only
+Common tool catalogs do not own compiler selection; the
+[compiler support policy](../rules/cargo-dependencies.md#minimum-supported-rust-version-msrv)
+does. Application dependencies, Testkit/PocketIC selections and product tool
+adapters remain consumer-owned. Workflow-only
 tools may retain consumer selections; merely adopting a catalog does not install
 tools outside the common inventory or change a workflow's declared support.
 
@@ -828,8 +831,10 @@ bash scripts/dev/prepare-rust-toolchain.sh --toolchain-file rust-toolchain.toml
 
 Then run `make install-tools` and `make tools-check`. CI prepares this same file
 before computing Cargo build-cache identity or qualifying registry builds. The
-separate Rust 1.88.0 runtime-scanner qualification remains independent. This pin
-is Shared's local policy; adopting a snapshot does not change consumer compilers.
+runtime scanner uses that same prepared compiler; it needs no older-toolchain
+installation. Consumers adopt the Rust 1.99.1 support policy explicitly in their
+manifests, compiler selection and validation; exporting a snapshot alone does
+not edit those files or qualify their builds.
 After changing the pin or the shared build-helper policy, rerun explicit setup;
 current requirements and required evidence remain protected under the
 [retention policy](tool-store-maintenance.md).

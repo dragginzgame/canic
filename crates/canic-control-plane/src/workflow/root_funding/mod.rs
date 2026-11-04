@@ -19,7 +19,7 @@ use crate::{
 };
 use canic_contracts::dto::fleet_funding::{
     FleetFundingPolicyRotationRootActivateRequest, FleetFundingPolicyRotationRootPrepareRequest,
-    FleetFundingPolicyRotationRootReceipt, FleetRootFundingAcceptanceReceipt,
+    FleetFundingPolicyRotationRootReceipt, FleetRootFundingAcceptanceOutcome,
     FleetRootFundingAcceptanceRequest, FleetRootFundingRequest, FleetRootFundingResponse,
 };
 use canic_core::{
@@ -195,7 +195,7 @@ pub async fn request_coordinator(
 /// Atomically accept one exact attached grant or replay its receipt while accepting zero.
 pub fn accept(
     request: FleetRootFundingAcceptanceRequest,
-) -> Result<FleetRootFundingAcceptanceReceipt, InternalError> {
+) -> Result<FleetRootFundingAcceptanceOutcome, InternalError> {
     let authority = funding_authority()?;
     let incoming_cycles = IcOps::msg_cycles_available();
     let current_balance = IcOps::canister_cycle_balance().to_u128();
@@ -205,20 +205,25 @@ pub fn accept(
         incoming_cycles,
         current_balance,
     )? {
-        RootFundingAcceptanceDisposition::Replay(receipt) => Ok(*receipt),
+        RootFundingAcceptanceDisposition::Replay(receipt) => {
+            Ok(FleetRootFundingAcceptanceOutcome::Accepted(receipt))
+        }
+        RootFundingAcceptanceDisposition::BalanceRelieved => {
+            Ok(FleetRootFundingAcceptanceOutcome::BalanceRelieved)
+        }
         RootFundingAcceptanceDisposition::Fresh => {
             let accepted = IcOps::msg_cycles_accept(request.granted_cycles.to_u128());
             if accepted != request.granted_cycles.to_u128() {
                 IcOps::trap("Root funding acceptance did not accept the exact validated grant");
             }
-            Ok(
+            Ok(FleetRootFundingAcceptanceOutcome::Accepted(Box::new(
                 RootFundingOps::record_acceptance(&authority, &request, IcOps::now_nanos())
                     .unwrap_or_else(|error| {
                         IcOps::trap(format!(
                             "Root funding receipt commitment failed after cycle acceptance: {error}"
                         ))
                     }),
-            )
+            )))
         }
     }
 }

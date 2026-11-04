@@ -17,26 +17,26 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static CANISTER_POOL: RefCell<
-        StableBtreeMap<Principal, CanisterPoolAssetRecord, DefaultMemoryImpl>
+        StableBtreeMap<canic_core::cdk::types::PrincipalKeyRecord, CanisterPoolAssetRecord, DefaultMemoryImpl>
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_INVENTORY_ASSETS_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
 
 std::thread_local! {
     static CANISTER_POOL_HANDOFF_RECEIPTS: RefCell<
-        StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, DefaultMemoryImpl>
+        StableBtreeMap<canic_core::cdk::types::PrincipalKeyRecord, CanisterPoolHandoffReceiptRecord, DefaultMemoryImpl>
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -47,9 +47,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_STATE_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            Cell::create(allocation, CanisterPoolStateRecord::default())
+            Cell::create(allocation, CanisterPoolStateRecord::default()).expect("Storage operation failed")
         } else {
-            Cell::load(allocation).expect("retained stable cell")
+            Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -258,18 +258,27 @@ pub struct CanisterPoolStore;
 impl CanisterPoolStore {
     #[must_use]
     pub fn get(canister_id: &Principal) -> Option<CanisterPoolAssetRecord> {
-        CANISTER_POOL.with_borrow(|pool| pool.get(canister_id))
+        CANISTER_POOL.with_borrow(|pool| {
+            pool.get(&(*canister_id).into())
+                .expect("Storage operation failed")
+        })
     }
 
     pub fn insert(
         canister_id: Principal,
         asset: CanisterPoolAssetRecord,
     ) -> Option<CanisterPoolAssetRecord> {
-        CANISTER_POOL.with_borrow_mut(|pool| pool.insert(canister_id, asset))
+        CANISTER_POOL.with_borrow_mut(|pool| {
+            pool.insert(canister_id.into(), asset)
+                .expect("Storage operation failed")
+        })
     }
 
     pub fn remove(canister_id: &Principal) -> Option<CanisterPoolAssetRecord> {
-        CANISTER_POOL.with_borrow_mut(|pool| pool.remove(canister_id))
+        CANISTER_POOL.with_borrow_mut(|pool| {
+            pool.remove(&(*canister_id).into())
+                .expect("Storage operation failed")
+        })
     }
 
     #[must_use]
@@ -277,9 +286,10 @@ impl CanisterPoolStore {
         CanisterPoolData {
             entries: CANISTER_POOL.with_borrow(|pool| {
                 pool.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| CanisterPoolEntryRecord {
-                        canister_id: *entry.key(),
-                        asset: entry.value(),
+                        canister_id: entry.key().principal(),
+                        asset: entry.value().expect("Storage operation failed"),
                     })
                     .collect()
             }),
@@ -294,21 +304,28 @@ impl CanisterPoolStore {
 
     pub fn set_state(state: CanisterPoolStateRecord) {
         CANISTER_POOL_STATE.with_borrow_mut(|current| {
-            current.set(state);
+            current.set(state).expect("commit pool state");
         });
     }
 
     #[must_use]
     pub fn handoff_receipt(canister_id: &Principal) -> Option<CanisterPoolHandoffReceiptRecord> {
-        CANISTER_POOL_HANDOFF_RECEIPTS.with_borrow(|receipts| receipts.get(canister_id))
+        CANISTER_POOL_HANDOFF_RECEIPTS.with_borrow(|receipts| {
+            receipts
+                .get(&(*canister_id).into())
+                .expect("Storage operation failed")
+        })
     }
 
     pub fn insert_handoff_receipt(
         canister_id: Principal,
         receipt: CanisterPoolHandoffReceiptRecord,
     ) -> Option<CanisterPoolHandoffReceiptRecord> {
-        CANISTER_POOL_HANDOFF_RECEIPTS
-            .with_borrow_mut(|receipts| receipts.insert(canister_id, receipt))
+        CANISTER_POOL_HANDOFF_RECEIPTS.with_borrow_mut(|receipts| {
+            receipts
+                .insert(canister_id.into(), receipt)
+                .expect("Storage operation failed")
+        })
     }
 
     #[must_use]
@@ -318,8 +335,12 @@ impl CanisterPoolStore {
 
     #[cfg(test)]
     pub fn clear() {
-        CANISTER_POOL.with_borrow_mut(StableBtreeMap::clear);
-        CANISTER_POOL_HANDOFF_RECEIPTS.with_borrow_mut(StableBtreeMap::clear);
+        CANISTER_POOL
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        CANISTER_POOL_HANDOFF_RECEIPTS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         Self::set_state(CanisterPoolStateRecord::default());
     }
 }
@@ -337,7 +358,10 @@ mod tests {
         for (name, status) in finite_asset_statuses() {
             let record = maximum_asset(status);
             assert_eq!(
-                CanisterPoolAssetRecord::from_bytes(record.to_bytes()),
+                CanisterPoolAssetRecord::from_bytes(
+                    record.to_bytes().expect("encode current record")
+                )
+                .expect("decode current record"),
                 record,
                 "{name}"
             );
@@ -367,9 +391,12 @@ mod tests {
                 failure: CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow,
             }),
         ] {
-            let bytes = state.to_bytes();
+            let bytes = state.to_bytes().expect("encode current record");
             assert!(bytes.len() <= max_size as usize);
-            assert_eq!(CanisterPoolStateRecord::from_bytes(bytes), state);
+            assert_eq!(
+                CanisterPoolStateRecord::from_bytes(bytes).expect("decode current record"),
+                state
+            );
         }
         let receipt = CanisterPoolHandoffReceiptRecord {
             recipient: maximum_principal(),
@@ -378,9 +405,12 @@ mod tests {
         let Bound::Bounded { max_size, .. } = CanisterPoolHandoffReceiptRecord::BOUND else {
             panic!("handoff receipt must remain bounded");
         };
-        let bytes = receipt.to_bytes();
+        let bytes = receipt.to_bytes().expect("encode current record");
         assert!(bytes.len() <= max_size as usize);
-        assert_eq!(CanisterPoolHandoffReceiptRecord::from_bytes(bytes), receipt);
+        assert_eq!(
+            CanisterPoolHandoffReceiptRecord::from_bytes(bytes).expect("decode current record"),
+            receipt
+        );
     }
 
     #[test]
@@ -390,27 +420,36 @@ mod tests {
             completed_at_ns: u64::MAX,
         };
 
-        let runtime = ic_memory::testing::fixture_runtime(
+        let runtime = ic_storage::testing::fixture_runtime(
             DefaultMemoryImpl::default(),
             "test",
             "test.",
             &["test.receipts.v1"],
-            ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
+            ic_storage::StorageConfig::default(),
         )
         .unwrap();
         let mut receipts = {
             let allocation = runtime
-                .open_memory(&ic_memory::StableKey::parse("test.receipts.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.receipts.v1").unwrap())
                 .unwrap();
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+                StableBtreeMap::create(allocation).expect("Storage operation failed")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("Storage operation failed")
             }
         };
-        receipts.insert(maximum_principal(), structurally_maximal);
+        receipts
+            .insert(
+                canic_core::cdk::types::PrincipalKeyRecord::from(maximum_principal()),
+                structurally_maximal,
+            )
+            .expect("Storage operation failed");
         assert_eq!(
-            receipts.get(&maximum_principal()),
+            receipts
+                .get(&canic_core::cdk::types::PrincipalKeyRecord::from(
+                    maximum_principal()
+                ))
+                .expect("Storage operation failed"),
             Some(structurally_maximal)
         );
         assert!(matches!(
@@ -434,7 +473,10 @@ mod tests {
             ] {
                 let record = maximum_asset(status);
                 assert_eq!(
-                    CanisterPoolAssetRecord::from_bytes(record.to_bytes()),
+                    CanisterPoolAssetRecord::from_bytes(
+                        record.to_bytes().expect("encode current record")
+                    )
+                    .expect("decode current record"),
                     record
                 );
             }

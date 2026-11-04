@@ -17,7 +17,7 @@ Canic has two pieces that work together:
   <tbody>
     <tr>
       <td>Use a published Canic release</td>
-      <td>Published CLI, governed Wasm tools, compatible <code>icp</code>, and the matching Rust crate</td>
+      <td>Published CLI built for the selected framework, governed Wasm tools, and compatible <code>icp</code></td>
     </tr>
     <tr>
       <td>Work on this repository</td>

@@ -3,8 +3,9 @@
 //! Reads inline membership and network declarations without resolving recipes,
 //! fetching dependencies, or executing build/sync instructions.
 
-use crate::icp_config::DEFAULT_LOCAL_GATEWAY_PORT;
+use crate::icp_config::{DEFAULT_LOCAL_GATEWAY_PORT, MAX_ICP_CONFIG_BYTES};
 use canic_contracts::ids::BuildNetwork;
+use ic_host_text::yaml::{self, DecodeError, DecodePolicy};
 use serde::{Deserialize, de::IgnoredAny};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -20,7 +21,7 @@ pub enum IcpManifestError {
     TooLarge,
 
     #[error("invalid ICP YAML: {0}")]
-    Yaml(#[source] Box<serde_yaml_ng::Error>),
+    Yaml(#[source] Box<DecodeError>),
 
     #[error("Canic's local ICP inspection does not resolve project dependencies")]
     Dependencies,
@@ -116,14 +117,16 @@ pub(super) struct IcpManifest {
 
 impl IcpManifest {
     pub(super) fn parse(source: &str) -> Result<Self, IcpManifestError> {
-        if source.len() > 1024 * 1024 {
-            return Err(IcpManifestError::TooLarge);
-        }
-        let document =
-            parse_yaml_document(source).map_err(|error| IcpManifestError::Yaml(Box::new(error)))?;
-        let raw = serde_yaml_ng::from_value::<Option<RawManifest>>(document)
-            .map_err(|error| IcpManifestError::Yaml(Box::new(error)))?
-            .unwrap_or_default();
+        let raw = yaml::from_slice::<Option<RawManifest>>(
+            source.as_bytes(),
+            MAX_ICP_CONFIG_BYTES,
+            DecodePolicy::default(),
+        )
+        .map_err(|error| match error {
+            DecodeError::InputTooLarge { .. } => IcpManifestError::TooLarge,
+            error => IcpManifestError::Yaml(Box::new(error)),
+        })?
+        .unwrap_or_default();
         if !raw.dependencies.is_empty() {
             return Err(IcpManifestError::Dependencies);
         }
@@ -247,38 +250,4 @@ fn named_items<T>(
         }
     }
     Ok(result)
-}
-
-// Inspect the entire document before schema projection: ignored ICP fields must
-// not hide duplicate keys, merge keys or unsupported tags. The same parsed value
-// supplies the typed projection; untagged manifest entries retain strict field types.
-// Reserve the << key even when quoted: the parsed tree does not retain scalar style.
-fn parse_yaml_document(source: &str) -> Result<serde_yaml_ng::Value, serde_yaml_ng::Error> {
-    use serde::de::Error as _;
-    use serde_yaml_ng::Value;
-
-    // Value deserialization rejects duplicate mapping keys, including ignored fields.
-    let document: Value = serde_yaml_ng::from_str(source)?;
-    let mut pending = vec![&document];
-    while let Some(value) = pending.pop() {
-        match value {
-            Value::Tagged(_) => {
-                return Err(serde_yaml_ng::Error::custom("unsupported ICP YAML tag"));
-            }
-            Value::Mapping(mapping) => {
-                for (key, value) in mapping {
-                    if key.as_str() == Some("<<") {
-                        return Err(serde_yaml_ng::Error::custom(
-                            "ICP YAML merge keys are unsupported",
-                        ));
-                    }
-                    pending.push(key);
-                    pending.push(value);
-                }
-            }
-            Value::Sequence(sequence) => pending.extend(sequence),
-            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
-        }
-    }
-    Ok(document)
 }

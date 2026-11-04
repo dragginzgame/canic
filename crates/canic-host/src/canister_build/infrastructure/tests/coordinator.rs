@@ -96,7 +96,7 @@ fn generated_fleet_coordinator_wrapper_satisfies_its_runtime_only_contract() {
             .unwrap()
             .ends_with("canic/candid/fleet_coordinator.did")
     );
-    assert_eq!(source.package_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(source.package_version, canic_core::VERSION);
     let manifest_path = source.manifest_path;
     let manifest = fs::read_to_string(&manifest_path).expect("read generated manifest");
     let runtime = fs::read_to_string(

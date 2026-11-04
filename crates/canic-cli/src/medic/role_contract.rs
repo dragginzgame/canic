@@ -297,7 +297,7 @@ fn check_role_package_contract(
 
     let next = match finding {
         RoleContractFinding::CanicVersionMismatch { .. } => {
-            "install the CLI matching the application's resolved Canic version, or update the application and CLI together and requalify before recovery; a host-only update cannot bypass exact runtime matching"
+            "install a CLI built for the application's resolved framework version, or update its framework dependency and requalify before recovery; the expected framework version is shown in this finding"
         }
         RoleContractFinding::CargoEvidenceUnavailable { .. } => {
             "resolve the reported Cargo dependency/cache failure; run cargo fetch --locked for this workspace, then rerun canic medic (metadata checks are locked and offline)"

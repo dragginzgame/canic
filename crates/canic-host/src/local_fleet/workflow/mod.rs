@@ -14,7 +14,7 @@ use std::{
     fs::File,
     path::{Path, PathBuf},
 };
-use {ic_platform::pocket_ic::PocketIc, ic_testkit::pic::PocketIcManagedServer};
+use {ic_testkit::pic::PocketIcManagedServer, ic_testkit::pocket_ic::PocketIc};
 
 /// Exclusive public developer harness. Drop flushes the instance before terminating its server.
 pub struct LocalFleetSession {
@@ -36,7 +36,7 @@ impl LocalFleetSession {
         ops::reset::require_complete(&directory)?;
         let previous = ops::read_record(&directory)?;
         if previous.as_ref().is_some_and(|record| {
-            record.configuration != *config || record.canic_version != env!("CARGO_PKG_VERSION")
+            record.configuration != *config || record.canic_version != canic_core::VERSION
         }) {
             return Err(LocalFleetError::Identity);
         }
@@ -85,13 +85,11 @@ impl LocalFleetSession {
         )?;
         session.pic = Some(pic);
         let pic = session.pic.as_ref().ok_or(LocalFleetError::Session)?;
-        session.record = runtime::guarded(|| {
-            if initial {
-                ops::admit_initial_instance(&session.record, pic)
-            } else {
-                ops::instance_record(config, Some(session.record.clone()), pic)
-            }
-        })??;
+        session.record = if initial {
+            ops::admit_initial_instance(&session.record, pic)
+        } else {
+            ops::instance_record(config, Some(session.record.clone()), pic)
+        }?;
         session.record = ops::checkpoint(
             &session.directory,
             &session.record,
@@ -123,7 +121,7 @@ impl LocalFleetSession {
         self.require_active()?;
         policy::validate_allocation(input, &self.record.configuration)?;
         let pic = self.pic.as_ref().ok_or(LocalFleetError::Session)?;
-        let now = runtime::guarded(|| pic.get_time().as_nanos_since_unix_epoch())?;
+        let now = pic.get_time()?.as_nanos_since_unix_epoch();
         let (next, intent) = ops::reserve(&self.directory, &self.record, input, now)?;
         self.record = next;
         let id = runtime::create(pic, &intent, &self.record.configuration)?;
@@ -210,12 +208,12 @@ impl LocalFleetSession {
             workspace,
         )
         .with_local_replica(self.replica_target());
-        let now = runtime::guarded(|| {
-            self.pic
-                .as_ref()
-                .ok_or(LocalFleetError::Session)
-                .map(|pic| pic.get_time().as_nanos_since_unix_epoch())
-        })??;
+        let now = self
+            .pic
+            .as_ref()
+            .ok_or(LocalFleetError::Session)?
+            .get_time()?
+            .as_nanos_since_unix_epoch();
         let report = crate::fleet_ensure::plan(
             workspace,
             &loaded.desired,
@@ -250,7 +248,7 @@ impl LocalFleetSession {
     pub fn status(&self) -> Result<LocalFleetView, LocalFleetError> {
         self.require_active()?;
         let pic = self.pic.as_ref().ok_or(LocalFleetError::Session)?;
-        runtime::guarded(|| ops::status(&self.record, pic, &self.gateway))
+        ops::status(&self.record, pic, &self.gateway)
     }
 
     /// Resolve current Fleet roles through the maintained terminal inventory and observed subnets.
@@ -282,9 +280,8 @@ impl LocalFleetSession {
             server,
         )?);
         let pic = self.pic.as_ref().ok_or(LocalFleetError::Session)?;
-        self.record = runtime::guarded(|| {
-            ops::instance_record(&self.record.configuration, Some(self.record.clone()), pic)
-        })??;
+        self.record =
+            ops::instance_record(&self.record.configuration, Some(self.record.clone()), pic)?;
         self.record = ops::checkpoint(&self.directory, &self.record, LocalCheckpoint::Running)?;
         self.gateway = runtime::gateway(
             self.pic.as_mut().ok_or(LocalFleetError::Session)?,

@@ -361,15 +361,15 @@ mod tests {
 
     #[test]
     fn activation_is_owned_by_the_registry_row_and_survives_reopen() {
-        let runtime = crate::memory::fixtures::runtime(&["test.shards.v1"], 1);
-        let mut records = {
+        let runtime = crate::memory::fixtures::runtime(&["test.shards.v1"]);
+        let mut records: BTreeMap<crate::cdk::types::PrincipalKeyRecord, ShardEntryRecord, _> = {
             let allocation = runtime
-                .open_memory(&ic_memory::StableKey::parse("test.shards.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.shards.v1").unwrap())
                 .unwrap();
-            if ic_memory::Memory::size(&allocation) == 0 {
-                BTreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                BTreeMap::create(allocation).expect("open fixture collection")
             } else {
-                BTreeMap::load(allocation)
+                BTreeMap::load(allocation).expect("open fixture collection")
             }
         };
         let active =
@@ -378,25 +378,32 @@ mod tests {
         assert!(active.active);
         let mut inactive = active.clone();
         inactive.active = false;
-        records.insert(p(1), active.clone());
-        records.insert(p(2), inactive.clone());
+        records.insert(p(1).into(), active.clone()).unwrap();
+        records.insert(p(2).into(), inactive.clone()).unwrap();
         drop(records);
         let reopened = {
             let allocation = runtime
-                .open_memory(&ic_memory::StableKey::parse("test.shards.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.shards.v1").unwrap())
                 .unwrap();
-            if ic_memory::Memory::size(&allocation) == 0 {
-                BTreeMap::<Principal, ShardEntryRecord, _>::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                BTreeMap::<crate::cdk::types::PrincipalKeyRecord, ShardEntryRecord, _>::create(
+                    allocation,
+                )
+                .expect("open fixture collection")
             } else {
-                BTreeMap::<Principal, ShardEntryRecord, _>::load(allocation)
+                BTreeMap::<crate::cdk::types::PrincipalKeyRecord, ShardEntryRecord, _>::load(
+                    allocation,
+                )
+                .expect("open fixture collection")
             }
         };
-        assert_eq!(reopened.get(&p(1)), Some(active));
-        assert_eq!(reopened.get(&p(2)), Some(inactive));
+        assert_eq!(reopened.get(&p(1).into()).unwrap(), Some(active));
+        assert_eq!(reopened.get(&p(2).into()).unwrap(), Some(inactive));
         ShardingRegistryOps::clear_for_test();
         ShardingRegistry::with_mut(|core| {
             for entry in &reopened {
-                core.insert_entry(*entry.key(), entry.value());
+                let entry = entry.unwrap();
+                core.insert_entry(entry.key().principal(), entry.value().unwrap());
             }
         });
         assert_eq!(ShardingRegistryOps::active_shards(), vec![p(1)]);

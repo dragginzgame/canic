@@ -90,7 +90,7 @@ fn every_operation_has_native_request_and_response_metadata() {
 
 #[test]
 fn provision_and_recycle_frames_preserve_original_payloads() {
-    let pid = ic_platform::Principal::from_slice(&[1, 2, 3]);
+    let pid = ic_platform_types::Principal::from_slice(&[1, 2, 3]);
     let metadata = Some(stored::RootRequestMetadata {
         request_id: [9; 32],
         ttl_ns: 123,

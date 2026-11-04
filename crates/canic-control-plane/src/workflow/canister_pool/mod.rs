@@ -329,8 +329,25 @@ pub fn dispatch_async_job_recovery() -> bool {
 }
 
 fn run_recovery_watchdog() -> WatchdogRunResult {
+    let root_transition_recovered = crate::workflow::root_transition_timer::recover();
     let now_ns = IcOps::now_nanos();
-    let mut recovered = TimerApi::recover_expired_root_async_jobs(now_ns);
+    let mut recovered =
+        TimerApi::recover_expired_root_async_jobs(now_ns) + u64::from(root_transition_recovered);
+    if crate::workflow::component_provisioning::recover_scheduled_work() {
+        recovered = recovered.saturating_add(1);
+    }
+    if crate::workflow::fleet_subnet_root::recover_scheduled_work() {
+        recovered = recovered.saturating_add(1);
+    }
+    if crate::workflow::component_registry::recover_removal_continuations() {
+        recovered = recovered.saturating_add(1);
+    }
+    if crate::workflow::component_registry::recover_allocation_continuations() {
+        recovered = recovered.saturating_add(1);
+    }
+    if crate::workflow::component_registry::recover_child_continuations() {
+        recovered = recovered.saturating_add(1);
+    }
     if dispatch_async_job_recovery() {
         recovered = recovered.saturating_add(1);
     }
@@ -340,6 +357,12 @@ fn run_recovery_watchdog() -> WatchdogRunResult {
         TimerCompletion::success(recovered)
     };
     WatchdogRunResult::new(completion, WatchdogDecision::Continue)
+}
+
+/// Keep Root's sole recovery owner armed while provisioning or removal has durable demand.
+pub(in crate::workflow) fn ensure_recovery_watchdog() -> Result<(), InternalError> {
+    TimerApi::require_active()?;
+    reconcile_recovery_watchdog(WatchdogReconcileState::Scheduled).map_err(Into::into)
 }
 
 fn reconcile_native_timers(

@@ -1,5 +1,5 @@
 //! Native reserve evidence; no funding authority or management effects.
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 /// Indicative reserve bound to one Root and one management-call target.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

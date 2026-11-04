@@ -8,6 +8,7 @@ pub mod canister_pool;
 pub mod component_provisioning;
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub mod component_registry;
+pub mod continuation_retry;
 #[cfg(feature = "wasm-store-canister")]
 pub mod fixture_store;
 pub mod fleet_admission;

@@ -1,33 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-BUMP_TYPE="${1:-patch}"
-CHECK_REMOTE="${2:-}"
-
-if [[ $# -gt 2 || ( -n "$CHECK_REMOTE" && "$CHECK_REMOTE" != --check-remote ) ]]; then
-    echo "usage: $0 [patch|minor|major] [--check-remote]" >&2
-    exit 2
-fi
-
-cd "$ROOT"
+root="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$root"
+bash scripts/release/selection.sh
+[[ $# -le 2 && ( -z "${2:-}" || "$2" == --check-remote ) ]] || exit 2
 current="$(bash scripts/ci/read-workspace-version.sh)"
-planned="$(bash scripts/ci/next-release-version.sh "$current" "$BUMP_TYPE")"
-
-detailed_changelog="docs/changelog/${planned%.*}.md"
-if [[ ! -f "$detailed_changelog" ]]; then
-    echo "release-notes preflight requires $detailed_changelog" >&2
-    exit 1
-fi
+planned="$(bash scripts/ci/next-release-version.sh "$current" "${1:-patch}")"
+changelog="$(bash scripts/release/selection.sh changelog)"
+[[ -f "$changelog" ]] || { echo "Missing selected group ledger: $changelog" >&2; exit 1; }
 scratch="$(mktemp "${TMPDIR:-/tmp}/canic-release-notes.XXXXXX")"
-trap 'rm -f "$scratch"' EXIT
+trap 'rm -f -- "$scratch"' EXIT
 awk -v version="$planned" -v previous="$current" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
-    -f scripts/ci/finalize-release-changelog.awk "$detailed_changelog" > "$scratch"
-awk -v version="$planned" -v previous="$current" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
-  -f scripts/ci/finalize-release-changelog.awk CHANGELOG.md > "$scratch"
-
-if [[ "$CHECK_REMOTE" == --check-remote ]]; then
+    -f scripts/ci/finalize-release-changelog.awk "$changelog" > "$scratch"
+if [[ "${2:-}" == --check-remote ]]; then
     bash scripts/ci/check-release-remote-state.sh before-version "$planned"
 fi
-
-echo "✅ Release-notes preflight passed for $planned"
+printf 'Release notes admitted: %s %s\n' "$RELEASE_GROUP" "$planned"

@@ -12,7 +12,8 @@ use crate::cycles::{
 use canic_contracts::{
     cycles::Cycles,
     dto::{
-        cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
+        cycle_topups::CycleTopupEvent,
+        cycles::{CycleTopupEventStatus, CycleTrackerEntry},
         page::Page,
     },
 };

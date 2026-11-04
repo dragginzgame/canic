@@ -53,7 +53,7 @@ pub struct ServiceRequester {
 )]
 pub enum ProvisioningOrigin {
     FleetAdministrator {
-        caller: ic_platform::Principal,
+        caller: ic_platform_types::Principal,
     },
     Component {
         requester: Box<crate::dto::component_directory::ComponentBinding>,

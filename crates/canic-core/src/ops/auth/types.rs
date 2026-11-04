@@ -104,15 +104,6 @@ pub struct PreparedRootRoleAttestation {
 
 #[derive(Debug)]
 pub struct AuthProofVerifierConfig {
-    #[cfg_attr(
-        not(any(test, feature = "auth-delegated-token-verify")),
-        expect(
-            dead_code,
-            reason = "network binding is consumed by the enabled verifier"
-        )
-    )]
-    #[cfg(test)]
-    pub build_network: BuildNetwork,
     pub root_canister_id: Principal,
     pub ic_root_public_key_raw: Vec<u8>,
     pub chain_key_root: Option<AuthChainKeyRootVerifierConfig>,

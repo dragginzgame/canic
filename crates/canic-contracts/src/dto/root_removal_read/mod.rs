@@ -3,7 +3,7 @@ use crate::dto::retirement_control::{
     Draining, FinalInventory, LedgerTransferReceipt, ReadinessIntentRequest, ReadinessRequest,
     RemovalPublication,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 /// Complete RootRemovalOperationStatus evidence.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

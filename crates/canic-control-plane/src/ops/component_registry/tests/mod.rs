@@ -2,9 +2,11 @@
 //!
 //! Production operations remain in the parent and focused responsibility modules.
 
+mod allocation_continuation;
 mod caller_authority;
 mod child_failure;
 mod initialization;
+mod removal_continuation;
 
 use super::*;
 use crate::{
@@ -1469,6 +1471,11 @@ fn component_deletion_is_prepared_durable_and_absence_idempotent() {
 )]
 fn component_membership_removal_is_atomic_settled_and_response_idempotent() {
     let (partition, draining, fleet) = import_empty_quiescent_component();
+    ComponentRegistryOps::request_component_removal_continuation(
+        partition.binding.component,
+        draining.operation_id,
+    )
+    .unwrap();
     let inventory = ComponentRegistryOps::finalize_component_inventory(
         partition.binding.component,
         draining.operation_id,
@@ -1563,6 +1570,11 @@ fn component_membership_removal_is_atomic_settled_and_response_idempotent() {
         }
     );
 
+    assert!(
+        ComponentRegistryOps::next_removal_continuation(None)
+            .unwrap()
+            .is_none()
+    );
     let terminal = restart_component_registry();
     let current = ComponentRegistryOps::current().expect("settled Registry status");
     assert_eq!(current.committed_component_instances, 0);
@@ -1606,6 +1618,34 @@ fn component_membership_removal_is_atomic_settled_and_response_idempotent() {
         .expect("exact membership-removal retry"),
         removed
     );
+    assert_eq!(RootComponentRegistryStore::export(), evolved);
+
+    assert_eq!(
+        ComponentRegistryOps::completed_component_draining(
+            partition.binding.component,
+            draining.operation_id,
+            &draining.previous_registry,
+        )
+        .unwrap(),
+        Some(removed)
+    );
+    let mut wrong_registry = draining.previous_registry.clone();
+    wrong_registry.content_hash = [0; 32];
+    for (operation_id, expected_registry) in [
+        ([1; 32], &draining.previous_registry),
+        (draining.operation_id, &wrong_registry),
+    ] {
+        assert_eq!(
+            ComponentRegistryOps::completed_component_draining(
+                partition.binding.component,
+                operation_id,
+                expected_registry,
+            )
+            .unwrap_err()
+            .code(),
+            InternalError::conflict().code()
+        );
+    }
     assert_eq!(RootComponentRegistryStore::export(), evolved);
 
     let mut corrupted = evolved;
@@ -3068,6 +3108,19 @@ fn subtree_removal_target_finalization_is_terminal_and_releases_the_live_fence()
         SubtreeRemovalOrigin::DrainingDriver,
     )
     .expect("fence a direct leaf through the draining removal primitive");
+    let retained = RootComponentRegistryStore::export();
+    assert_eq!(
+        ComponentRegistryOps::request_subtree_removal_continuation(fixture.component, operation_id)
+            .unwrap_err()
+            .public_code(),
+        Some(canic_contracts::diagnostics::codes::STATE_CONFLICT)
+    );
+    assert_eq!(RootComponentRegistryStore::export(), retained);
+    assert!(
+        ComponentRegistryOps::next_removal_continuation(None)
+            .unwrap()
+            .is_none()
+    );
     let selected = ComponentRegistryOps::advance_subtree_removal(
         fixture.component,
         operation_id,
@@ -4505,6 +4558,7 @@ fn assert_directory_preparation_receipt(
     directory: FleetDirectorySnapshot,
     maximum_component_registry_bytes: u64,
 ) {
+    assert_initial_child_preserves_commit_receipt(committed, prepared_partition);
     let RootComponentAllocationProgressView::Committed { commitment, .. } = &committed.progress
     else {
         panic!("committed allocation progress");
@@ -4570,6 +4624,58 @@ fn assert_directory_preparation_receipt(
         directory,
         maximum_component_registry_bytes,
     );
+}
+
+fn assert_initial_child_preserves_commit_receipt(
+    committed: &RootComponentAllocationView,
+    prepared: &ComponentRegistryPartitionView,
+) {
+    use canic_core::control_plane_support::policy::component_child_allocation::ComponentChildAllocationMode;
+
+    let original = RootComponentRegistryStore::export();
+    let partition = RootComponentRegistryStore::partition(committed.component).unwrap();
+    let mut decision = child_allocation_decision(&partition, "project_instance");
+    decision.mode = ComponentChildAllocationMode::InitialBootstrap;
+    ComponentRegistryOps::reserve_child_allocation(
+        decision,
+        [91; 32],
+        None,
+        component_registry_head(&partition),
+    )
+    .unwrap();
+    let pending = RootComponentRegistryStore::export();
+    assert!(
+        ComponentRegistryOps::prepared_partition(committed.operation_id)
+            .unwrap()
+            .encoded_bytes
+            > prepared.encoded_bytes
+    );
+    assert_eq!(
+        ComponentRegistryOps::allocation_commit_partition(committed.operation_id).unwrap(),
+        *prepared
+    );
+    assert!(
+        !ComponentRegistryOps::prepared_initial_descendants_are_terminal(committed.component)
+            .unwrap()
+    );
+    RootComponentRegistryStore::import(pending.clone());
+    assert_eq!(
+        ComponentRegistryOps::allocation_commit_partition(committed.operation_id).unwrap(),
+        *prepared
+    );
+    let mut invalid = pending;
+    invalid.child_allocations[0].initial_bootstrap = false;
+    RootComponentRegistryStore::import(invalid);
+    assert_eq!(
+        ComponentRegistryOps::prepared_initial_descendants_are_terminal(committed.component)
+            .unwrap_err()
+            .public_error()
+            .raw_code(),
+        canic_contracts::diagnostics::codes::STATE_INVALID
+            .raw_code()
+            .raw()
+    );
+    RootComponentRegistryStore::import(original);
 }
 
 fn assert_membership_receipt(
@@ -5764,6 +5870,8 @@ fn active_component_allocation(
         charged_entry_bytes: 16_777_216,
     };
     RootComponentAllocationRecord {
+        retry: crate::storage::stable::continuation_retry::ContinuationRetryRecord::default(),
+        continuation_requested: false,
         application_initialization: None,
         operation_id: [12; 32],
         allocation_sequence: 1,

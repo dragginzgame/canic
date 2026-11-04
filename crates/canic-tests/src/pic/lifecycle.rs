@@ -1,0 +1,2535 @@
+use super::{
+    artifacts::{
+        CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters,
+        build_internal_test_wasm_canisters_with_env,
+    },
+    canic::managed_test_init_identity,
+    startup::start_pocket_ic,
+};
+use crate::canister::TEST;
+use canic::{
+    dto::{
+        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
+        component_deployment::ProtectedComponentDeployment,
+        component_registry::{
+            ComponentDirectoryHead, ComponentDirectoryProvenance,
+            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
+        },
+        fleet_registry::{
+            FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
+            FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+        },
+    },
+    ids::{
+        ComponentBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
+        CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority,
+        FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits, SubnetId,
+    },
+};
+use canic_contracts::cycles::Cycles;
+use canic_contracts::protocol::initialization::encode;
+use canic_core::shared_support::fleet_admission_policy::{
+    compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
+};
+use canic_host::release_set::AppConfigSnapshot;
+use ic_platform::principal::ExternalPrincipal as Principal;
+use std::{
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
+use {
+    ic_testkit::fake_principal,
+    ic_testkit::pocket_ic::{PocketIc, PocketIcBuilder},
+};
+
+const INSTALL_CYCLES: u128 = 1_000_000_000_000;
+const CANISTERS: [&str; 3] = ["canister_test", "intent_authority", "runtime_probe"];
+const LIFECYCLE_CANISTER_CONFIG_PATH: &str = "apps/test/test-configs/root-sharding.toml";
+const AUTOMATIC_TOPUP_CONFIG_PATH: &str = "apps/test/canic.toml";
+const MANAGED_LIFECYCLE_CONFIG_PATH: &str = "canisters/test/managed_lifecycle_probe/canic.toml";
+static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
+static AUTOMATIC_TOPUP_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
+static MANAGED_LIFECYCLE_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+static MANAGED_COMPONENT_GROUP_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+const MANAGED_COMPONENT_GROUP_CONFIG_PATH: &str =
+    "apps/test/test-configs/managed-component-group.toml";
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+const MANAGED_COMPONENT_GROUP_PACKAGES: [&str; 6] = [
+    "canister_index_child",
+    "canister_index_hub",
+    "canister_scale",
+    "canister_scale_hub",
+    "canister_user_hub",
+    "canister_user_shard",
+];
+const LIFECYCLE_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_LIFECYCLE_PARTICIPANT_TRAP", "1");
+const LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV: (&str, &str) =
+    ("CANIC_TEST_LIFECYCLE_PARTICIPANT_INIT_TRAP", "1");
+
+/// Build only the canonical Store for the retained fixture transport proof.
+///
+/// # Panics
+/// Panics if the canonical local Store artifact cannot be built or read.
+#[must_use]
+fn retained_fixture_store_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let workspace_root = workspace_root();
+        let context = canic_host::canister_build::WorkspaceBuildContext {
+            role: "wasm_store".to_string(),
+            profile: canic_host::canister_build::CanisterBuildProfile::Fast,
+            environment: "local".to_string(),
+            build_network: canic_host::icp_config::resolve_icp_build_network_from_root(
+                &workspace_root,
+                "local",
+            )
+            .expect("local Store build network"),
+            config_path: workspace_root.join(MANAGED_LIFECYCLE_CONFIG_PATH),
+            icp_root: workspace_root.clone(),
+            workspace_root,
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: Some(
+                super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID
+                    .1
+                    .parse()
+                    .expect("test release build"),
+            ),
+        };
+        let output = canic_host::canister_build::build_workspace_canister_artifact(&context)
+            .expect("build canonical retained fixture Store");
+        std::fs::read(output.wasm_path).expect("read canonical retained fixture Store")
+    })
+    .clone()
+}
+
+/// Build the host-generated Store with controller-only response barriers.
+///
+/// Uses canonical Store endpoints/storage with test scheduling enabled; this is
+/// not a production-finalized or byte-identical Store artifact.
+///
+/// # Panics
+/// Panics if the canonical package or its instrumented Wasm cannot be built.
+#[must_use]
+pub fn held_fixture_store_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| build_instrumented_store(None)).clone()
+}
+
+/// Build the canonical Store adapter with a controlled asynchronous user hook.
+///
+/// # Panics
+/// Panics if generating, instrumenting or compiling the test artifact fails.
+#[must_use]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub fn held_initialization_store_wasm() -> Vec<u8> {
+    build_instrumented_store(Some(include_str!(
+        "../../test-support/store_initialization.rs"
+    )))
+}
+
+/// Build the Store without an optional hook, adding only its readiness observation.
+///
+/// # Panics
+/// Panics if generating, instrumenting or compiling the test artifact fails.
+#[must_use]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub fn observed_initialization_store_wasm() -> Vec<u8> {
+    build_instrumented_store(Some(
+        "canic::start_wasm_store!();\ncanic::finish!();\ncanic::__canic_emit_protected_readiness_endpoint!(before = []);\n",
+    ))
+}
+
+fn build_instrumented_store(entrypoint: Option<&str>) -> Vec<u8> {
+    // Materialize and qualify the ordinary host-owned package first.
+    let _ = retained_fixture_store_wasm();
+    let workspace = workspace_root();
+    let config = workspace.join(MANAGED_LIFECYCLE_CONFIG_PATH);
+    let manifest = canic_host::canister_build::generated_package_manifest(
+        &workspace,
+        &config,
+        "canic-fleet-wasm-store",
+    );
+    let target = workspace.join("target/pic-wasm");
+    let mut command = std::process::Command::new("cargo");
+    command
+        .current_dir(&workspace)
+        .args([
+            "build",
+            "--locked",
+            "--manifest-path",
+            manifest.to_str().unwrap(),
+            "--target",
+            "wasm32-unknown-unknown",
+            "--profile",
+            "fast",
+            "--features",
+            "canic/internal-test-fixtures,ic-platform/management-canister-types,ic-platform/candid",
+            "--target-dir",
+            target.to_str().unwrap(),
+        ])
+        .env("ICP_ENVIRONMENT", "local")
+        .env("CARGO_INCREMENTAL", "0")
+        .env(
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+        )
+        .env(
+            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+            &config,
+        )
+        .env(
+            canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV,
+            &workspace,
+        )
+        .env(
+            super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.0,
+            super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
+        )
+        .env(
+            super::artifacts::INTERNAL_TEST_PROTOCOL_PROFILE_DIGEST.0,
+            super::artifacts::INTERNAL_TEST_PROTOCOL_PROFILE_DIGEST.1,
+        );
+    // Only the generated test package is instrumented. Restore its exact
+    // source before propagating a compiler or process failure.
+    let source = manifest.parent().unwrap().join("src/lib.rs");
+    let original = std::fs::read(&source).expect("read generated Store entrypoint");
+    if let Some(entrypoint) = entrypoint {
+        std::fs::write(&source, entrypoint).expect("instrument generated Store entrypoint");
+    }
+    let status = command.status();
+    std::fs::write(&source, original).expect("restore generated Store entrypoint");
+    let status = status.expect("build response-barrier Store");
+    assert!(status.success(), "response-barrier Store build");
+    std::fs::read(target.join("wasm32-unknown-unknown/fast/canister_wasm_store.wasm"))
+        .expect("read response-barrier Store")
+}
+
+///
+/// LifecycleBoundaryFixture
+///
+
+pub struct LifecycleBoundaryFixture {
+    pub pic: PocketIc,
+    pub root: Principal,
+    pub canic_wasm: Vec<u8>,
+    pub runtime_probe_wasm: Vec<u8>,
+    pub authority_wasm: Vec<u8>,
+}
+
+/// A funded empty canister and the identity-bound arguments for its Canic install.
+pub struct UninstalledCanicFixture {
+    pub canister_id: Principal,
+    pub init_args: Vec<u8>,
+    pub directory_request: ComponentRuntimeDirectoryPreparationRequest,
+}
+
+///
+/// ManagedLifecycleFixture
+///
+
+pub struct ManagedLifecycleFixture {
+    pub pic: PocketIc,
+    pub root: Principal,
+    pub wasm: Vec<u8>,
+}
+
+impl ManagedLifecycleFixture {
+    /// Install the managed lifecycle probe while it remains Prepared.
+    #[must_use]
+    ///
+    /// # Panics
+    /// Panics if PocketIC cannot create, fund or install the fixture.
+    pub fn install_managed_canister(
+        &self,
+    ) -> (Principal, ComponentRuntimeDirectoryPreparationRequest) {
+        let canister_id = self
+            .pic
+            .create_canister()
+            .expect("PocketIC create_canister");
+        self.pic
+            .add_cycles(canister_id, INSTALL_CYCLES)
+            .expect("PocketIC add_cycles");
+        let payload =
+            init_payload_for_config(canister_id, self.root, MANAGED_LIFECYCLE_CONFIG_PATH);
+        let directory_request = directory_request(&payload);
+        self.pic
+            .install_canister(
+                canister_id,
+                self.wasm.clone(),
+                encode_init_args(payload),
+                None,
+            )
+            .expect("PocketIC install_canister");
+        (canister_id, directory_request)
+    }
+}
+
+impl LifecycleBoundaryFixture {
+    /// Create one funded but uninstalled canister with its valid Canic init arguments.
+    #[must_use]
+    ///
+    /// # Panics
+    /// Panics if PocketIC cannot create, fund or install the fixture.
+    pub fn create_uninstalled_canic_canister(&self) -> UninstalledCanicFixture {
+        let canister_id = self
+            .pic
+            .create_canister()
+            .expect("PocketIC create_canister");
+        self.pic
+            .add_cycles(canister_id, INSTALL_CYCLES)
+            .expect("PocketIC add_cycles");
+        let payload = init_payload(canister_id, self.root);
+        let directory_request = directory_request(&payload);
+        UninstalledCanicFixture {
+            canister_id,
+            init_args: encode_init_args(payload),
+            directory_request,
+        }
+    }
+
+    /// Install one fresh non-root Canic test canister with the standard valid init payload.
+    #[must_use]
+    pub fn install_canic_canister(&self) -> Principal {
+        self.install_canic_canister_with_directory().0
+    }
+
+    /// Install one fresh managed canister and retain its exact activation request.
+    #[must_use]
+    pub fn install_canic_canister_with_directory(
+        &self,
+    ) -> (Principal, ComponentRuntimeDirectoryPreparationRequest) {
+        self.install_canic_canister_with_directory_for_root(self.root)
+    }
+
+    /// Install one fresh managed canister for an exact Fleet Root binding.
+    #[must_use]
+    ///
+    /// # Panics
+    /// Panics if PocketIC cannot create, fund or install the fixture.
+    pub fn install_canic_canister_with_directory_for_root(
+        &self,
+        root: Principal,
+    ) -> (Principal, ComponentRuntimeDirectoryPreparationRequest) {
+        let canister_id = self
+            .pic
+            .create_canister()
+            .expect("PocketIC create_canister");
+        self.pic
+            .add_cycles(canister_id, INSTALL_CYCLES)
+            .expect("PocketIC add_cycles");
+        let payload = init_payload(canister_id, root);
+        let directory_request = directory_request(&payload);
+        let init_args = encode_init_args(payload);
+        self.pic
+            .install_canister(canister_id, self.canic_wasm.clone(), init_args, None)
+            .expect("PocketIC install_canister");
+        (canister_id, directory_request)
+    }
+
+    /// Install the standalone-local runtime probe used by timer behavior tests.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the fixed standalone-local init argument cannot be encoded.
+    #[must_use]
+    pub fn install_runtime_probe_canister(&self) -> Principal {
+        let canister_id = self
+            .pic
+            .create_canister()
+            .expect("PocketIC create_canister");
+        self.pic
+            .add_cycles(canister_id, INSTALL_CYCLES)
+            .expect("PocketIC add_cycles");
+        self.pic
+            .install_canister(
+                canister_id,
+                self.runtime_probe_wasm.clone(),
+                encode(None::<Vec<u8>>).expect("encode standalone-local init"),
+                None,
+            )
+            .expect("PocketIC install_canister");
+        canister_id
+    }
+
+    /// Install one managed canister whose compiled status protocol includes automatic top-ups.
+    #[must_use]
+    ///
+    /// # Panics
+    /// Panics if PocketIC cannot create, fund or install the fixture.
+    pub fn install_automatic_topup_canister(&self) -> Principal {
+        let workspace_root = workspace_root();
+
+        let wasms = build_automatic_topup_canister_once(&workspace_root);
+        let wasm = wasms.wasm("canister_test");
+        let canister_id = self
+            .pic
+            .create_canister()
+            .expect("PocketIC create_canister");
+        self.pic
+            .add_cycles(canister_id, INSTALL_CYCLES)
+            .expect("PocketIC add_cycles");
+        let payload = init_payload_for_config(canister_id, self.root, AUTOMATIC_TOPUP_CONFIG_PATH);
+        self.pic
+            .install_canister(canister_id, wasm, encode_init_args(payload), None)
+            .expect("PocketIC install_canister");
+        canister_id
+    }
+
+    /// Install one fresh non-Canic authority canister for negative upgrade cases.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the authority init argument cannot be encoded.
+    #[must_use]
+    pub fn install_authority_canister(&self) -> Principal {
+        let canister_id = self
+            .pic
+            .create_canister()
+            .expect("PocketIC create_canister");
+        self.pic
+            .add_cycles(canister_id, INSTALL_CYCLES)
+            .expect("PocketIC add_cycles");
+        self.pic
+            .install_canister(
+                canister_id,
+                self.authority_wasm.clone(),
+                ic_platform::candid::contract::encode_one(()).expect("encode authority init"),
+                None,
+            )
+            .expect("PocketIC install_canister");
+        canister_id
+    }
+}
+
+/// Build the lifecycle-boundary canister pair once and install them into one fresh PocketIC.
+#[must_use]
+pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
+    let workspace_root = workspace_root();
+
+    let wasms = build_canisters_once(&workspace_root);
+
+    LifecycleBoundaryFixture {
+        root: fake_principal(1),
+        canic_wasm: wasms.wasm("canister_test"),
+        runtime_probe_wasm: wasms.wasm("runtime_probe"),
+        authority_wasm: wasms.wasm("intent_authority"),
+        pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
+    }
+}
+
+/// Build the Canic-owned managed lifecycle probe and start one fresh PocketIC.
+///
+/// # Panics
+/// Panics if the probe cannot be built or PocketIC cannot start.
+#[must_use]
+pub fn install_managed_lifecycle_fixture() -> ManagedLifecycleFixture {
+    let workspace_root = workspace_root();
+
+    let wasms = build_managed_lifecycle_canister_once(&workspace_root);
+
+    ManagedLifecycleFixture {
+        root: fake_principal(1),
+        wasm: wasms.wasm("managed_lifecycle_probe"),
+        pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
+    }
+}
+
+/// Encode the intentionally invalid init payload used by lifecycle boundary checks.
+#[must_use]
+pub fn invalid_init_args() -> Vec<u8> {
+    encode_init_args(init_payload(fake_principal(9), fake_principal(1)))
+}
+
+/// Encode the empty tuple argument used for no-payload upgrades.
+///
+/// # Panics
+///
+/// Panics if the empty tuple upgrade argument cannot be encoded.
+#[must_use]
+pub fn upgrade_args() -> Vec<u8> {
+    encode(()).expect("encode upgrade")
+}
+
+/// Build the managed lifecycle fixture whose post-upgrade participant traps.
+#[must_use]
+pub fn lifecycle_participant_trap_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let workspace_root = workspace_root();
+        let target_dir = workspace_root
+            .join("target")
+            .join("pic-lifecycle-participant-trap-wasm");
+        let config_path = workspace_root.join(LIFECYCLE_CANISTER_CONFIG_PATH);
+        let config_path = config_path.to_string_lossy();
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[
+                LIFECYCLE_PARTICIPANT_TRAP_ENV,
+                (
+                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                    config_path.as_ref(),
+                ),
+            ],
+        )
+        .wasm("canister_test")
+    })
+    .clone()
+}
+
+/// Build the managed lifecycle fixture whose init participant traps.
+#[must_use]
+pub fn lifecycle_participant_init_trap_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let workspace_root = workspace_root();
+        let target_dir = workspace_root
+            .join("target")
+            .join("pic-lifecycle-participant-init-trap-wasm");
+        let config_path = workspace_root.join(LIFECYCLE_CANISTER_CONFIG_PATH);
+        let config_path = config_path.to_string_lossy();
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[
+                LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV,
+                (
+                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                    config_path.as_ref(),
+                ),
+            ],
+        )
+        .wasm("canister_test")
+    })
+    .clone()
+}
+
+// Build the dedicated lifecycle-boundary canisters once into the shared test target dir.
+fn build_canisters_once(workspace_root: &Path) -> &'static InternalTestWasms {
+    BUILD_ONCE.get_or_init(|| {
+        let target_dir = workspace_root.join("target").join("pic-runtime-wasm");
+        let config_path = workspace_root.join(LIFECYCLE_CANISTER_CONFIG_PATH);
+        let config_path = config_path
+            .to_str()
+            .expect("lifecycle canister config path is UTF-8");
+        let mut wasms = build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                config_path,
+            )],
+        );
+        wasms.extend(build_internal_test_wasm_canisters(
+            workspace_root,
+            &target_dir,
+            &CANISTERS[1..],
+            CanicWasmBuildProfile::Fast,
+        ));
+        wasms
+    })
+}
+
+// Build one capability-accurate automatic-topup fixture in an isolated Wasm target.
+fn build_automatic_topup_canister_once(workspace_root: &Path) -> &'static InternalTestWasms {
+    AUTOMATIC_TOPUP_BUILD_ONCE.get_or_init(|| {
+        let target_dir = workspace_root
+            .join("target")
+            .join("pic-runtime-automatic-topup-wasm");
+        let config_path = workspace_root.join(AUTOMATIC_TOPUP_CONFIG_PATH);
+        let config_path = config_path
+            .to_str()
+            .expect("automatic-topup config path is UTF-8");
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                config_path,
+            )],
+        )
+    })
+}
+
+// Build the managed lifecycle probe once into its dedicated test target dir.
+fn build_managed_lifecycle_canister_once(workspace_root: &Path) -> &'static InternalTestWasms {
+    MANAGED_LIFECYCLE_BUILD_ONCE.get_or_init(|| {
+        let target_dir = workspace_root
+            .join("target")
+            .join("pic-managed-lifecycle-wasm");
+        build_internal_test_wasm_canisters(
+            workspace_root,
+            &target_dir,
+            &["managed_lifecycle_probe"],
+            CanicWasmBuildProfile::Fast,
+        )
+    })
+}
+
+// Build the public multi-role fixture Wasms once against their exact shared config.
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+fn build_managed_component_group_canisters_once(
+    workspace_root: &Path,
+) -> &'static InternalTestWasms {
+    MANAGED_COMPONENT_GROUP_BUILD_ONCE.get_or_init(|| {
+        let target_dir = workspace_root
+            .join("target")
+            .join("pic-managed-component-group-wasm");
+        let config_path = workspace_root.join(MANAGED_COMPONENT_GROUP_CONFIG_PATH);
+        let config_path = config_path
+            .to_str()
+            .expect("managed Component Group config path is UTF-8");
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &MANAGED_COMPONENT_GROUP_PACKAGES,
+            CanicWasmBuildProfile::Fast,
+            &[(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                config_path,
+            )],
+        )
+    })
+}
+
+// Encode the standard valid non-root init payload for the lifecycle-boundary test canister.
+fn init_payload(canister_id: Principal, root_pid: Principal) -> CanisterInitPayload {
+    init_payload_for_config(canister_id, root_pid, LIFECYCLE_CANISTER_CONFIG_PATH)
+}
+
+// Construct one exact managed init payload from the fixture's embedded Canic config.
+fn init_payload_for_config(
+    canister_id: Principal,
+    root_pid: Principal,
+    config_path: &str,
+) -> CanisterInitPayload {
+    let identity = managed_test_init_identity();
+    let component_spec =
+        ComponentSpecId::try_from(String::from("test")).expect("test Component Spec ID");
+    let config = AppConfigSnapshot::load(&workspace_root().join(config_path))
+        .expect("load lifecycle fixture config");
+    let spec = config
+        .component_topology()
+        .get(&component_spec)
+        .expect("test Component Spec");
+    let admission = ComponentSpecAdmission {
+        component_spec: component_spec.clone(),
+        spec_hash: spec.spec_hash,
+        maximum_root_instances: 1,
+    };
+    let admissions = vec![admission];
+    let component_topology_digest = config
+        .component_topology()
+        .project_for_admissions(&admissions)
+        .and_then(|topology| topology.digest())
+        .expect("lifecycle Component topology projection");
+    let placement_subnet = SubnetId::from_principal(fake_principal(2));
+    let authority = FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: identity.fleet.clone(),
+            coordinator_subnet: SubnetId::from_principal(fake_principal(3)),
+            coordinator: fake_principal(4),
+            recovery_controllers: Vec::new(),
+        },
+        epoch: 1,
+    };
+    let root = FleetSubnetRootBinding {
+        authority: authority.clone(),
+        placement_subnet,
+        fleet_subnet_root: root_pid,
+        component_admissions: admissions,
+        component_topology_digest,
+        funding: super::root_funding_authority(),
+        limits: FleetSubnetRootLimits {
+            maximum_component_instances: 1,
+            maximum_registry_bytes: 1_048_576,
+            maximum_wasm_store_bytes: 1_048_576,
+            maximum_group_placements: 16,
+            canister_pool: FleetSubnetCanisterPoolConfig {
+                minimum_size: 1,
+                maximum_size: 1,
+                canister_cycles: Cycles::new(1),
+                creation_execution_margin: Cycles::new(1),
+            },
+            cycles_funding: CyclesFundingBudget {
+                window_secs: 3_600,
+                maximum_cycles: Cycles::new(1_000_000_000_000),
+            },
+        },
+    };
+    let binding = ComponentBinding {
+        authority,
+        component: ComponentInstanceId::from_generated_bytes([5; 32]),
+        component_spec,
+        spec_hash: spec.spec_hash,
+        role: TEST,
+        placement_subnet,
+        fleet_subnet_root: root_pid,
+        canister_id,
+    };
+    let target = canic::ids::ManagedCanisterBinding::Component(binding.clone());
+    let policy = compile_installed_fleet_admission_policy(
+        identity.fleet,
+        1,
+        vec![fake_principal(15)],
+        Vec::new(),
+    )
+    .expect("lifecycle Fleet admission policy");
+    let fleet_admission = compile_fleet_admission_projection(&policy, target)
+        .expect("lifecycle Fleet admission projection");
+
+    CanisterInitPayload {
+        root_install_id: [1; 32],
+        component_install_id: identity.install_id,
+        fixture: None,
+        install_id: identity.install_id,
+        release_build_id: identity.release_build_id,
+        component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: binding.clone(),
+        }),
+        authority: CanisterInitAuthority::Component { root, binding },
+        admission: Some(fleet_admission),
+    }
+}
+
+// Derive the exact root-issued Directory authority for the just-installed managed binding.
+fn directory_request(payload: &CanisterInitPayload) -> ComponentRuntimeDirectoryPreparationRequest {
+    let CanisterInitAuthority::Component { root, binding } = &payload.authority else {
+        panic!("combined lifecycle fixture requires Component authority");
+    };
+    ComponentRuntimeDirectoryPreparationRequest {
+        operation_id: payload.install_id,
+        authority: ComponentRuntimeDirectoryAuthority {
+            fleet: FleetDirectorySnapshot {
+                provenance: FleetDirectoryProvenance {
+                    registry: FleetRegistryVersion {
+                        authority: root.authority.clone(),
+                        revision: 1,
+                        content_hash: [0x71; 32],
+                    },
+                    source_fleet_subnet_root: root.fleet_subnet_root,
+                },
+                fleet_subnet_roots: vec![FleetSubnetRootDirectoryEntry {
+                    placement_subnet: root.placement_subnet,
+                    fleet_subnet_root: root.fleet_subnet_root,
+                    status: FleetSubnetRootStatus::Active,
+                }],
+                services: Vec::new(),
+            },
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: binding.clone(),
+                    source_fleet_subnet_root: root.fleet_subnet_root,
+                    component_registry_revision: 1,
+                    component_registry_content_hash: [0x72; 32],
+                    synchronized_at_ns: 1,
+                },
+                descendant_count: 0,
+            },
+            component_group: None,
+        },
+        direct_children: Vec::new(),
+    }
+}
+
+// Encode one init payload through the standard tuple boundary expected by Canic canisters.
+fn encode_init_args(payload: CanisterInitPayload) -> Vec<u8> {
+    encode::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None)).expect("encode init args")
+}
+
+fn workspace_root() -> PathBuf {
+    crate::workspace::discover().expect("discover Canic test workspace through Cargo")
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) use tests::{governed_runtime_cases, governed_support_cases};
+
+#[cfg(test)]
+mod fast_tests {
+    use super::*;
+    use canic_core::bootstrap::{compiled::ComponentTopology, parse_config_model};
+
+    const LIFECYCLE_CANISTER_CONFIG: &str =
+        include_str!("../../../../apps/test/test-configs/root-sharding.toml");
+
+    #[test]
+    fn init_payload_component_spec_matches_embedded_canister_config() {
+        let payload = init_payload(fake_principal(3), fake_principal(1));
+        let CanisterInitAuthority::Component { root, binding } = payload.authority else {
+            panic!("managed lifecycle Component authority");
+        };
+        let config =
+            parse_config_model(LIFECYCLE_CANISTER_CONFIG).expect("lifecycle canister config");
+        let topology =
+            ComponentTopology::compile(&config).expect("compile lifecycle Component Topology");
+        let configured_spec = topology
+            .get(&binding.component_spec)
+            .expect("lifecycle Component Spec must be declared");
+
+        assert_eq!(configured_spec.component_role, binding.role);
+        assert_eq!(configured_spec.spec_hash, binding.spec_hash);
+        let admission = root
+            .component_admissions
+            .iter()
+            .find(|admission| admission.component_spec == binding.component_spec)
+            .expect("lifecycle Component Spec admission");
+        assert_eq!(admission.spec_hash, configured_spec.spec_hash);
+        assert_eq!(
+            root.component_topology_digest,
+            topology
+                .project_for_admissions(&root.component_admissions)
+                .and_then(|projection| projection.digest())
+                .expect("lifecycle Component topology projection")
+        );
+    }
+}
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod tests {
+    use super::*;
+    use crate::pic::CanicPicExt;
+    use canic::{
+        Error,
+        dto::{
+            fleet_admission::{
+                FleetAdmissionActivateTargetRequest, FleetAdmissionOpenTargetRequest,
+                FleetAdmissionPrepareTargetRequest, FleetAdmissionProjectionPhase,
+                FleetAdmissionProjectionStatusResponse, FleetAdmissionTargetTransitionPhase,
+            },
+            page::PageRequest,
+            role::OperationReceipt,
+        },
+    };
+    use ic_testkit::pic::CanisterInstallExt;
+    use ic_testkit::pocket_ic::common::rest::{
+        CanisterHttpReject, CanisterHttpReply, CanisterHttpResponse, MockCanisterHttpResponse,
+    };
+    use std::time::Duration;
+
+    #[test]
+    fn standalone_bootstrap_progresses_while_user_initialization_is_held_or_traps() {
+        let workspace = workspace_root();
+        let wasm = build_internal_test_wasm_canisters_with_env(
+            &workspace,
+            &workspace.join("target/pic-held-user-init-wasm"),
+            &["runtime_probe"],
+            CanicWasmBuildProfile::Fast,
+            &[("CANIC_TEST_HELD_USER_INIT", "1")],
+        )
+        .wasm("runtime_probe");
+        let fixture = canic::testing::install_standalone_app(wasm, INSTALL_CYCLES);
+        for upgrading in [false, true] {
+            if upgrading {
+                fixture
+                    .upgrade_same_release(Duration::from_mins(5))
+                    .expect("same-release upgrade with optional initialization");
+            }
+            let pic = fixture.pic();
+            let mut held = Vec::new();
+            for _ in 0..120 {
+                pic.tick().expect("PocketIC tick");
+                held = pic.get_canister_http().expect("pending user HTTP call");
+                if !held.is_empty() {
+                    break;
+                }
+            }
+            assert_eq!(held.len(), 1);
+            assert_eq!(held[0].url, "https://perf-context.invalid/94");
+            pic.wait_for_ready(
+                fixture.app(),
+                Principal::anonymous(),
+                120,
+                "framework progresses without completing user initialization",
+            );
+            // No response is supplied while framework readiness is established.
+            for _ in 0..20 {
+                pic.tick().expect("held initialization tick");
+            }
+            assert_eq!(pic.get_canister_http().expect("still held").len(), 1);
+            let response = if upgrading {
+                // The fixture traps at its await's expect on this rejected reply.
+                CanisterHttpResponse::CanisterHttpReject(CanisterHttpReject {
+                    reject_code: 5,
+                    message: "controlled user initialization failure".to_string(),
+                })
+            } else {
+                CanisterHttpResponse::CanisterHttpReply(CanisterHttpReply {
+                    status: 200,
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                })
+            };
+            pic.mock_canister_http_response(MockCanisterHttpResponse {
+                subnet_id: held[0].subnet_id,
+                request_id: held[0].request_id,
+                response,
+                additional_responses: Vec::new(),
+            })
+            .expect("complete or trap user initialization");
+            for _ in 0..20 {
+                pic.tick().expect("user callback tick");
+            }
+            pic.wait_for_ready(
+                fixture.app(),
+                Principal::anonymous(),
+                120,
+                "after user callback",
+            );
+        }
+    }
+
+    fn standalone_memory_allocations(
+        pic: &PocketIc,
+        canister: Principal,
+    ) -> canic::dto::memory::MemoryAllocationsResponse {
+        let result: Result<canic::dto::memory::MemoryAllocationsResponse, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                canister,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::runtime_probe::MEMORY,
+                &(),
+            )
+            .expect("query Candid harness call");
+        result.expect("admitted memory observation")
+    }
+
+    /// Counter brackets decoded independently from the fixture's real IC reads.
+    #[derive(serde::Deserialize)]
+    struct PerfProbeObservation {
+        before_enter: u64,
+        after_enter: u64,
+        before_first: u64,
+        after_first: u64,
+        before_resumed: u64,
+        after_resumed: u64,
+        before_exit: u64,
+        after_exit: u64,
+    }
+
+    /// Production sample projection, including measured-zero versus absent evidence.
+    #[derive(serde::Deserialize)]
+    struct PerfProbeMetric {
+        name: String,
+        count: u64,
+        instructions: u64,
+    }
+
+    fn assert_perf_interval(sample: &PerfProbeMetric, lower: u64, upper: u64) {
+        assert_eq!(sample.count, 1);
+        assert!(lower > 0);
+        assert!(
+            (lower..=upper).contains(&sample.instructions),
+            "{} observed {}, independently bracketed {}..={}",
+            sample.name,
+            sample.instructions,
+            lower,
+            upper
+        );
+    }
+
+    fn assert_perf_observation(
+        metrics: &[PerfProbeMetric],
+        which: u8,
+        observed: &PerfProbeObservation,
+    ) {
+        let sample = |name: &str| {
+            metrics
+                .iter()
+                .find(|row| row.name == name)
+                .expect("exact sample")
+        };
+        assert_perf_interval(
+            sample(if which == 0 {
+                "perf_context_a"
+            } else {
+                "perf_context_b"
+            }),
+            observed.before_exit - observed.after_enter,
+            observed.after_exit - observed.before_enter,
+        );
+        assert_perf_interval(
+            sample(&format!("first_{which}")),
+            observed.before_first - observed.after_enter,
+            observed.after_first - observed.before_enter,
+        );
+        assert_perf_interval(
+            sample(&format!("resumed_{which}")),
+            observed.before_resumed - observed.after_first,
+            observed.after_resumed - observed.before_first,
+        );
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "keep the ordered PocketIC scenario and its authority assertions together"
+    )]
+    fn interleaved_endpoint_and_checkpoint_metrics_preserve_call_contexts() {
+        let fixture = install_lifecycle_boundary_fixture();
+        for order in [[0_u8, 1_u8], [1_u8, 0_u8]] {
+            let canister = fixture.install_runtime_probe_canister();
+            fixture.pic.wait_for_ready(
+                canister,
+                Principal::anonymous(),
+                120,
+                "perf context install",
+            );
+            let requests: Vec<_> = (0_u8..2)
+                .map(|which| {
+                    fixture
+                        .pic
+                        .submit_call(
+                            canister,
+                            Principal::anonymous(),
+                            "perf_context_probe",
+                            ic_wire::native::encode_request(
+                                crate::pic::runtime_probe::PERF_PROBE.method_id,
+                                &which,
+                                crate::pic::runtime_probe::PERF_PROBE.request_limits,
+                            )
+                            .expect("probe arguments"),
+                        )
+                        .expect("submit probe")
+                })
+                .collect();
+            let mut held = Vec::new();
+            for _ in 0..60 {
+                fixture.pic.tick().expect("PocketIC tick");
+                held = fixture
+                    .pic
+                    .get_canister_http()
+                    .expect("PocketIC get_canister_http");
+                if held.len() == 2 {
+                    break;
+                }
+            }
+            assert_eq!(held.len(), 2);
+            let entered: Vec<bool> = ic_testkit::pic::query_wire(
+                &fixture.pic,
+                canister,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::runtime_probe::PERF_ENTERED,
+                &(),
+            )
+            .expect("query Candid harness call");
+            assert_eq!(entered, [true, true]);
+            let completed: Vec<u8> = ic_testkit::pic::query_wire(
+                &fixture.pic,
+                canister,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::runtime_probe::PERF_COMPLETED,
+                &(),
+            )
+            .expect("query Candid harness call");
+            assert!(
+                completed.is_empty(),
+                "both updates must overlap at their awaits"
+            );
+            for (position, which) in order.into_iter().enumerate() {
+                let pending = held
+                    .iter()
+                    .find(|request| request.url == format!("https://perf-context.invalid/{which}"))
+                    .expect("exact held request");
+                fixture
+                    .pic
+                    .mock_canister_http_response(MockCanisterHttpResponse {
+                        subnet_id: pending.subnet_id,
+                        request_id: pending.request_id,
+                        response: CanisterHttpResponse::CanisterHttpReply(CanisterHttpReply {
+                            status: 200,
+                            headers: Vec::new(),
+                            body: Vec::new(),
+                        }),
+                        additional_responses: Vec::new(),
+                    })
+                    .expect("PocketIC mock_canister_http_response");
+                let reply = fixture
+                    .pic
+                    .await_call(requests[usize::from(which)].clone())
+                    .expect("probe reply");
+                let observed: Result<PerfProbeObservation, Error> =
+                    ic_wire::native::decode_response(
+                        crate::pic::runtime_probe::PERF_PROBE.method_id,
+                        &reply,
+                        crate::pic::runtime_probe::PERF_PROBE.response_limits,
+                    )
+                    .expect("probe observation");
+                let observed = observed.expect("admitted generated endpoint");
+                let metrics: Vec<PerfProbeMetric> = ic_testkit::pic::query_wire(
+                    &fixture.pic,
+                    canister,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    crate::pic::runtime_probe::PERF_METRICS,
+                    &(),
+                )
+                .expect("query Candid harness call");
+                assert_perf_observation(&metrics, which, &observed);
+                let completed: Vec<u8> = ic_testkit::pic::query_wire(
+                    &fixture.pic,
+                    canister,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    crate::pic::runtime_probe::PERF_COMPLETED,
+                    &(),
+                )
+                .expect("query Candid harness call");
+                assert_eq!(completed, order[..=position]);
+            }
+            let metrics: Vec<PerfProbeMetric> = ic_testkit::pic::query_wire(
+                &fixture.pic,
+                canister,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                crate::pic::runtime_probe::PERF_METRICS,
+                &(),
+            )
+            .expect("query Candid harness call");
+            assert_eq!(
+                metrics
+                    .iter()
+                    .find(|row| row.name == "perf_context_probe")
+                    .expect("generated wrapper sample")
+                    .count,
+                2
+            );
+        }
+    }
+
+    #[test]
+    fn standalone_memory_registry_survives_two_identical_wasm_upgrades() {
+        let fixture = install_lifecycle_boundary_fixture();
+        let canister = fixture.install_runtime_probe_canister();
+        fixture
+            .pic
+            .wait_for_ready(canister, Principal::anonymous(), 120, "standalone install");
+        let begin_intent = |seed: u8| -> Result<u64, Error> {
+            ic_testkit::pic::update_wire(
+                &fixture.pic,
+                canister,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                super::super::runtime_probe::BEGIN_INTENT,
+                &super::super::runtime_probe::IntentRequest {
+                    resource_seed: seed,
+                    ttl_secs: None::<u64>,
+                },
+            )
+            .expect("timer intent Wire update")
+        };
+        let first: Result<u64, Error> = begin_intent(211);
+        let first = first.expect("initial retained TTL-free reservation");
+        let baseline = standalone_memory_allocations(&fixture.pic, canister);
+        assert!(baseline.summary.generation > 0);
+        let original_bindings: Vec<_> = baseline
+            .memories
+            .iter()
+            .map(|memory| (memory.allocation_id, memory.stable_key.clone()))
+            .collect();
+        let mut previous_generation = baseline.summary.generation;
+        for attempt in 1..=2_u8 {
+            fixture
+                .pic
+                .wait_out_install_code_rate_limit(Duration::from_mins(5))
+                .expect("PocketIC wait_out_install_code_rate_limit");
+            fixture
+                .pic
+                .upgrade_canister(
+                    canister,
+                    fixture.runtime_probe_wasm.clone(),
+                    upgrade_args(),
+                    None,
+                )
+                .expect("identical-Wasm standalone upgrade");
+            fixture
+                .pic
+                .wait_for_ready(canister, Principal::anonymous(), 120, "standalone upgrade");
+            let duplicate: Result<u64, Error> = begin_intent(211);
+            assert_eq!(
+                duplicate
+                    .expect_err("original reservation remains held")
+                    .code(),
+                canic::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+            );
+            let next: Result<u64, Error> = begin_intent(211 + attempt);
+            assert_eq!(
+                next.expect("new reservation after cold restoration"),
+                first + u64::from(attempt)
+            );
+            let reopened = standalone_memory_allocations(&fixture.pic, canister);
+            assert!(reopened.summary.generation >= previous_generation);
+            previous_generation = reopened.summary.generation;
+            let bindings: Vec<_> = reopened
+                .memories
+                .iter()
+                .map(|memory| (memory.allocation_id, memory.stable_key.clone()))
+                .collect();
+            assert_eq!(bindings, original_bindings);
+        }
+    }
+
+    #[derive(Debug, serde::Deserialize, Eq, PartialEq)]
+    struct ManagedGuardReceipt {
+        caller: ic_platform::Principal,
+        workflow_runs: u32,
+    }
+
+    #[test]
+    fn managed_projection_fences_then_opens_and_restores() {
+        let fixture = install_lifecycle_boundary_fixture();
+        let (canister, directory) = fixture.install_canic_canister_with_directory();
+        let second_root = fake_principal(2);
+        let (second_canister, second_directory) =
+            fixture.install_canic_canister_with_directory_for_root(second_root);
+        let admitted = fake_principal(15);
+
+        let prepared = admission_status(&fixture.pic, canister, fixture.root);
+        let second_prepared = admission_status(&fixture.pic, second_canister, second_root);
+        assert_eq!(prepared.phase, FleetAdmissionProjectionPhase::Fenced);
+        assert_eq!(second_prepared.phase, FleetAdmissionProjectionPhase::Fenced);
+        assert_eq!(prepared.principals.entries, vec![admitted]);
+        assert_eq!(second_prepared.principals.entries, vec![admitted]);
+        assert_eq!(prepared.policy_digest, second_prepared.policy_digest);
+        assert_ne!(prepared.target, second_prepared.target);
+        assert_ne!(
+            prepared.projection_digest,
+            second_prepared.projection_digest
+        );
+        let denied: Result<Result<(), Error>, _> = ic_testkit::pic::query_wire(
+            &fixture.pic,
+            canister,
+            admitted,
+            crate::pic::application_probe::ADMISSION_UNIT,
+            &(),
+        );
+        assert!(denied.is_err());
+
+        activate_projection(&fixture.pic, canister, fixture.root, &directory);
+        activate_projection(
+            &fixture.pic,
+            second_canister,
+            second_root,
+            &second_directory,
+        );
+
+        let open = admission_status(&fixture.pic, canister, fixture.root);
+        let second_open = admission_status(&fixture.pic, second_canister, second_root);
+        assert_eq!(open.phase, FleetAdmissionProjectionPhase::Open);
+        assert_eq!(second_open.phase, FleetAdmissionProjectionPhase::Open);
+        assert_eq!(admission_probe(&fixture.pic, canister, admitted), Ok(()));
+        assert_eq!(
+            admission_probe(&fixture.pic, second_canister, admitted),
+            Ok(())
+        );
+        assert!(admission_probe(&fixture.pic, canister, fake_principal(16)).is_err());
+
+        fixture
+            .pic
+            .wait_out_install_code_rate_limit(Duration::from_mins(5))
+            .expect("PocketIC wait_out_install_code_rate_limit");
+        fixture
+            .pic
+            .upgrade_canister(canister, fixture.canic_wasm.clone(), upgrade_args(), None)
+            .expect("same-release projection restore");
+
+        let restored = admission_status(&fixture.pic, canister, fixture.root);
+        assert_eq!(restored.phase, FleetAdmissionProjectionPhase::Open);
+        assert_eq!(restored.generation, open.generation);
+        assert_eq!(restored.policy_digest, open.policy_digest);
+        assert_eq!(restored.projection_digest, open.projection_digest);
+        assert_eq!(admission_probe(&fixture.pic, canister, admitted), Ok(()));
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "keep the ordered PocketIC scenario and its authority assertions together"
+    )]
+    fn explicit_guard_matches_canic_endpoint_on_direct_ingress() {
+        let fixture = install_managed_lifecycle_fixture();
+        let (canister, directory) = fixture.install_managed_canister();
+        let admitted = fake_principal(15);
+        let unlisted = fake_principal(16);
+
+        let prepared_call: Result<Result<ManagedGuardReceipt, Error>, _> =
+            ic_testkit::pic::update_wire(
+                &fixture.pic,
+                canister,
+                admitted,
+                crate::pic::application_probe::MANAGED_GUARD,
+                &(),
+            );
+        assert!(prepared_call.is_err());
+        activate_projection(&fixture.pic, canister, fixture.root, &directory);
+
+        let public_caller: Result<Principal, Error> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                &fixture.pic,
+                canister,
+                unlisted,
+                crate::pic::application_probe::MANAGED_PUBLIC,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into))
+            .expect("query Wire transport");
+        assert_eq!(public_caller, Ok(unlisted));
+
+        let guarded: Result<ManagedGuardReceipt, Error> = ic_testkit::pic::update_wire(
+            &fixture.pic,
+            canister,
+            admitted,
+            crate::pic::application_probe::MANAGED_GUARD,
+            &(),
+        )
+        .expect("update Wire transport");
+        assert_eq!(
+            guarded.expect("admitted explicit admission guard caller"),
+            ManagedGuardReceipt {
+                caller: admitted.into(),
+                workflow_runs: 1,
+            }
+        );
+        assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
+
+        let canic: Result<Principal, Error> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                &fixture.pic,
+                canister,
+                admitted,
+                crate::pic::application_probe::MANAGED_PARITY,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into))
+            .expect("query Wire transport");
+        assert_eq!(canic.expect("admitted Canic endpoint caller"), admitted);
+
+        let application_owned: Result<Principal, Error> =
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                &fixture.pic,
+                canister,
+                admitted,
+                crate::pic::application_probe::MANAGED_OWNED,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into))
+            .expect("update Wire transport");
+        assert_eq!(
+            application_owned
+                .expect_err("Fleet admission must not imply application ownership")
+                .code(),
+            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        );
+
+        let denied: Result<ManagedGuardReceipt, Error> = ic_testkit::pic::update_wire(
+            &fixture.pic,
+            canister,
+            unlisted,
+            crate::pic::application_probe::MANAGED_GUARD,
+            &(),
+        )
+        .expect("update Wire transport");
+        assert!(denied.is_err());
+        assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
+
+        let canic_denied: Result<Result<Principal, Error>, _> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                &fixture.pic,
+                canister,
+                unlisted,
+                crate::pic::application_probe::MANAGED_PARITY,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into));
+        assert!(matches!(canic_denied, Ok(Err(_))));
+
+        let initial = admission_status(&fixture.pic, canister, fixture.root);
+        let successor_policy = compile_installed_fleet_admission_policy(
+            initial.authority.fleet.clone(),
+            initial.generation + 1,
+            vec![admitted],
+            Vec::new(),
+        )
+        .expect("successor admission policy");
+        let successor =
+            compile_fleet_admission_projection(&successor_policy, initial.target.clone())
+                .expect("successor target projection");
+        transition_target(
+            &fixture.pic,
+            canister,
+            fixture.root,
+            canic_contracts::protocol::admission_control::target_prepare::METHOD,
+            canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+            &canic_contracts::dto::admission_control::PrepareTargetRequest::from(
+                FleetAdmissionPrepareTargetRequest {
+                    operation_id: [0x90; 32],
+                    expected_generation: initial.generation,
+                    expected_policy_digest: initial.policy_digest,
+                    successor,
+                },
+            ),
+        );
+        let fenced_public: Result<Principal, Error> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                &fixture.pic,
+                canister,
+                unlisted,
+                crate::pic::application_probe::MANAGED_PUBLIC,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into))
+            .expect("query Wire transport");
+        assert_eq!(fenced_public, Ok(unlisted));
+        let fenced: Result<ManagedGuardReceipt, Error> = ic_testkit::pic::update_wire(
+            &fixture.pic,
+            canister,
+            admitted,
+            crate::pic::application_probe::MANAGED_GUARD,
+            &(),
+        )
+        .expect("update Wire transport");
+        assert!(fenced.is_err());
+        assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "target transition replay exercises every durable phase"
+    )]
+    fn managed_admission_target_transition_replays_and_recovers_forward() {
+        let fixture = install_managed_lifecycle_fixture();
+        let (canister, directory) = fixture.install_managed_canister();
+        activate_projection(&fixture.pic, canister, fixture.root, &directory);
+
+        let initial = admission_status(&fixture.pic, canister, fixture.root);
+        let successor_policy = compile_installed_fleet_admission_policy(
+            initial.authority.fleet.clone(),
+            initial.generation + 1,
+            vec![fake_principal(15), fake_principal(16)],
+            Vec::new(),
+        )
+        .expect("successor admission policy");
+        let successor =
+            compile_fleet_admission_projection(&successor_policy, initial.target.clone())
+                .expect("successor target projection");
+        let operation_id = [0x91; 32];
+
+        let assert_unchanged = || {
+            let status = admission_status(&fixture.pic, canister, fixture.root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, initial.generation);
+            assert_eq!(status.policy_digest, initial.policy_digest);
+            assert_eq!(status.projection_digest, initial.projection_digest);
+            assert!(status.prepared.is_none());
+        };
+        let valid_prepare = || FleetAdmissionPrepareTargetRequest {
+            operation_id,
+            expected_generation: initial.generation,
+            expected_policy_digest: initial.policy_digest,
+            successor: successor.clone(),
+        };
+
+        assert!(
+            try_transition_target(
+                &fixture.pic,
+                canister,
+                fake_principal(99),
+                canic_contracts::protocol::admission_control::target_prepare::METHOD,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &canic_contracts::dto::admission_control::PrepareTargetRequest::from(
+                    valid_prepare()
+                ),
+            )
+            .is_err()
+        );
+        assert_unchanged();
+
+        let mut wrong_coordinator = valid_prepare();
+        wrong_coordinator.successor.authority.coordinator = fake_principal(98);
+        assert!(
+            try_transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &canic_contracts::dto::admission_control::PrepareTargetRequest::from(
+                    wrong_coordinator
+                ),
+            )
+            .is_err()
+        );
+        assert_unchanged();
+
+        let mut wrong_fleet = valid_prepare();
+        wrong_fleet.successor.authority.fleet.app = canic_contracts::ids::AppId::from("foreign");
+        assert!(
+            try_transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &canic_contracts::dto::admission_control::PrepareTargetRequest::from(wrong_fleet),
+            )
+            .is_err()
+        );
+        assert_unchanged();
+
+        let mut wrong_target = valid_prepare();
+        match &mut wrong_target.successor.target {
+            canic::ids::ManagedCanisterBinding::Component(binding) => {
+                binding.canister_id = fake_principal(97);
+            }
+            canic::ids::ManagedCanisterBinding::ComponentChild(binding) => {
+                binding.canister_id = fake_principal(97);
+            }
+        }
+        assert!(
+            try_transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &canic_contracts::dto::admission_control::PrepareTargetRequest::from(wrong_target),
+            )
+            .is_err()
+        );
+        assert_unchanged();
+
+        let mut wrong_generation = valid_prepare();
+        wrong_generation.expected_generation = initial.generation + 1;
+        assert!(
+            try_transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &canic_contracts::dto::admission_control::PrepareTargetRequest::from(
+                    wrong_generation
+                ),
+            )
+            .is_err()
+        );
+        assert_unchanged();
+
+        let mut wrong_digest = valid_prepare();
+        wrong_digest.expected_policy_digest = [0x92; 32];
+        assert!(
+            try_transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &canic_contracts::dto::admission_control::PrepareTargetRequest::from(wrong_digest),
+            )
+            .is_err()
+        );
+        assert_unchanged();
+
+        let prepare = valid_prepare();
+        let prepared = transition_target(
+            &fixture.pic,
+            canister,
+            fixture.root,
+            canic_contracts::protocol::admission_control::target_prepare::METHOD,
+            canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+            &canic_contracts::dto::admission_control::PrepareTargetRequest::from(prepare.clone()),
+        );
+        let prepare_receipt = prepared;
+        assert_eq!(
+            prepare_receipt.phase,
+            FleetAdmissionTargetTransitionPhase::Prepare
+        );
+        fixture
+            .pic
+            .stop_canister(canister, None)
+            .expect("stop target after retained prepare receipt");
+        fixture
+            .pic
+            .start_canister(canister, None)
+            .expect("restart target after retained prepare receipt");
+        assert_eq!(
+            transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD,
+                canic_contracts::protocol::admission_control::target_prepare::METHOD_ID,
+                &canic_contracts::dto::admission_control::PrepareTargetRequest::from(prepare),
+            ),
+            prepare_receipt
+        );
+        let fenced = admission_status(&fixture.pic, canister, fixture.root);
+        assert_eq!(fenced.phase, FleetAdmissionProjectionPhase::Fenced);
+        assert!(fenced.prepared.is_some());
+        assert!(managed_admission_probe(&fixture.pic, canister, fake_principal(15)).is_err());
+
+        let activate = FleetAdmissionActivateTargetRequest {
+            operation_id,
+            expected_generation: initial.generation,
+            expected_policy_digest: initial.policy_digest,
+            successor_generation: successor.generation,
+            successor_policy_digest: successor.policy_digest,
+            successor_projection_digest: successor.projection_digest,
+        };
+        let activated = transition_target(
+            &fixture.pic,
+            canister,
+            fixture.root,
+            canic_contracts::protocol::admission_control::target_activate::METHOD,
+            canic_contracts::protocol::admission_control::target_activate::METHOD_ID,
+            &activate,
+        );
+        let activate_receipt = activated;
+        assert_eq!(
+            activate_receipt.phase,
+            FleetAdmissionTargetTransitionPhase::Activate
+        );
+        fixture
+            .pic
+            .stop_canister(canister, None)
+            .expect("stop target after retained activate receipt");
+        fixture
+            .pic
+            .start_canister(canister, None)
+            .expect("restart target after retained activate receipt");
+        assert_eq!(
+            transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_activate::METHOD,
+                canic_contracts::protocol::admission_control::target_activate::METHOD_ID,
+                &activate,
+            ),
+            activate_receipt
+        );
+        let activated_status = admission_status(&fixture.pic, canister, fixture.root);
+        assert_eq!(
+            activated_status.phase,
+            FleetAdmissionProjectionPhase::Fenced
+        );
+        assert_eq!(activated_status.generation, successor.generation);
+        assert!(activated_status.prepared.is_none());
+
+        let open = FleetAdmissionOpenTargetRequest {
+            operation_id,
+            generation: successor.generation,
+            policy_digest: successor.policy_digest,
+            projection_digest: successor.projection_digest,
+        };
+        let opened = transition_target(
+            &fixture.pic,
+            canister,
+            fixture.root,
+            canic_contracts::protocol::admission_control::target_open::METHOD,
+            canic_contracts::protocol::admission_control::target_open::METHOD_ID,
+            &open,
+        );
+        let open_receipt = opened;
+        assert_eq!(
+            open_receipt.phase,
+            FleetAdmissionTargetTransitionPhase::Open
+        );
+        assert_eq!(
+            transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_open::METHOD,
+                canic_contracts::protocol::admission_control::target_open::METHOD_ID,
+                &open,
+            ),
+            open_receipt
+        );
+        assert_eq!(
+            managed_admission_probe(&fixture.pic, canister, fake_principal(16)),
+            Ok(fake_principal(16))
+        );
+
+        fixture
+            .pic
+            .wait_out_install_code_rate_limit(Duration::from_mins(5))
+            .expect("PocketIC wait_out_install_code_rate_limit");
+        fixture
+            .pic
+            .upgrade_canister(canister, fixture.wasm.clone(), upgrade_args(), None)
+            .expect("same-release target transition restore");
+        assert_eq!(
+            transition_target(
+                &fixture.pic,
+                canister,
+                fixture.root,
+                canic_contracts::protocol::admission_control::target_open::METHOD,
+                canic_contracts::protocol::admission_control::target_open::METHOD_ID,
+                &open,
+            ),
+            open_receipt
+        );
+    }
+
+    #[test]
+    fn published_managed_app_support_drives_managed_lifecycle() {
+        let workspace_root = workspace_root();
+
+        let wasms = build_managed_lifecycle_canister_once(&workspace_root);
+        let wasm = wasms.wasm("managed_lifecycle_probe");
+        let admitted = fake_principal(15);
+        let input = canic::testing::ManagedAppQualificationInput::new(
+            include_str!("../../../../canisters/test/managed_lifecycle_probe/canic.toml"),
+            "test",
+            "test",
+            super::super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            vec![admitted],
+            wasm,
+        );
+        let fixture = canic::testing::install_managed_app(input)
+            .expect("install through published managed-App support");
+
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("prepared admission status")
+                .phase,
+            FleetAdmissionProjectionPhase::Fenced
+        );
+        let prepared: Result<Result<ManagedGuardReceipt, Error>, _> = ic_testkit::pic::update_wire(
+            fixture.pic(),
+            fixture.app(),
+            admitted,
+            crate::pic::application_probe::MANAGED_GUARD,
+            &(),
+        );
+        assert!(prepared.is_err());
+
+        fixture
+            .configure_and_wait_until_active(30)
+            .expect("activate through published managed-App support");
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("open admission status")
+                .phase,
+            FleetAdmissionProjectionPhase::Open
+        );
+        let admitted_result: Result<ManagedGuardReceipt, Error> = ic_testkit::pic::update_wire(
+            fixture.pic(),
+            fixture.app(),
+            admitted,
+            crate::pic::application_probe::MANAGED_GUARD,
+            &(),
+        )
+        .expect("update Wire transport");
+        assert_eq!(
+            admitted_result.expect("admitted explicit admission guard caller"),
+            ManagedGuardReceipt {
+                caller: admitted.into(),
+                workflow_runs: 1,
+            }
+        );
+
+        fixture
+            .upgrade_same_release(Duration::from_mins(5))
+            .expect("same-release managed-App upgrade");
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("restored admission status")
+                .phase,
+            FleetAdmissionProjectionPhase::Open
+        );
+        fixture
+            .prepare_admission_successor([0x94; 32], vec![admitted, fake_principal(16)])
+            .expect("fence successor through published managed-App support");
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("fenced successor status")
+                .phase,
+            FleetAdmissionProjectionPhase::Fenced
+        );
+
+        let wasms = build_canisters_once(&workspace_root);
+        let standalone =
+            canic::testing::install_standalone_app(wasms.wasm("runtime_probe"), INSTALL_CYCLES);
+        let before_upgrade: Result<(), Error> = ic_testkit::pic::update_wire(
+            standalone.pic(),
+            standalone.app(),
+            admitted,
+            crate::pic::runtime_probe::TEST,
+            &(),
+        )
+        .expect("update Candid harness call");
+        assert!(before_upgrade.is_ok());
+        standalone
+            .upgrade_same_release(Duration::from_mins(5))
+            .expect("same-release standalone-local upgrade");
+        let after_upgrade: Result<(), Error> = ic_testkit::pic::update_wire(
+            standalone.pic(),
+            standalone.app(),
+            admitted,
+            crate::pic::runtime_probe::TEST,
+            &(),
+        )
+        .expect("update Candid harness call");
+        assert!(after_upgrade.is_ok());
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one governed public-fixture journey covers the complete managed child lifecycle"
+    )]
+    fn published_managed_component_group_support_drives_child_lifecycle() {
+        let workspace_root = workspace_root();
+        crate::embedded_root::verify(&workspace_root).expect("current embedded allocation peer");
+
+        let wasms = build_managed_component_group_canisters_once(&workspace_root);
+        let admitted = fake_principal(15);
+        let unlisted = fake_principal(16);
+        let artifact = |role: &str, package: &str| {
+            canic::testing::ManagedRoleQualificationArtifact::new(
+                role.parse().expect("canonical fixture role"),
+                wasms.wasm(package),
+            )
+        };
+        let input = canic::testing::ManagedComponentGroupQualificationInput::new(
+            include_str!("../../../../apps/test/test-configs/managed-component-group.toml"),
+            "qualification",
+            super::super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            vec![admitted],
+            vec![
+                artifact("index_child", "canister_index_child"),
+                artifact("index_hub", "canister_index_hub"),
+                artifact("scale_hub", "canister_scale_hub"),
+                artifact("scale_replica", "canister_scale"),
+                artifact("user_hub", "canister_user_hub"),
+                artifact("user_shard", "canister_user_shard"),
+            ],
+        );
+        let mut fixture = canic::testing::install_managed_component_group(input)
+            .expect("install through published managed Component Group support");
+
+        assert_eq!(fixture.nodes().len(), 5);
+        let index_hub = fixture
+            .unique_role(&"index_hub".parse().expect("index Hub role"))
+            .expect("one index Hub");
+        let scale_hub = fixture
+            .unique_role(&"scale_hub".parse().expect("scale Hub role"))
+            .expect("one scale Hub");
+        let scale_replica = fixture
+            .unique_role(&"scale_replica".parse().expect("scale replica role"))
+            .expect("one initial scale replica");
+        let user_hub = fixture
+            .unique_role(&"user_hub".parse().expect("user Hub role"))
+            .expect("one user Hub");
+        let user_shard = fixture
+            .unique_role(&"user_shard".parse().expect("user Shard role"))
+            .expect("one initial user Shard");
+
+        for (child, parent) in [(scale_replica, scale_hub), (user_shard, user_hub)] {
+            let binding = fixture.binding(child).expect("installed child binding");
+            let canic::ids::ManagedCanisterBinding::ComponentChild(binding) = binding else {
+                panic!("placement child must retain ComponentChild authority");
+            };
+            assert_eq!(binding.parent_canister_id, parent);
+            assert_eq!(binding.canister_id, child);
+            let runtime = fixture
+                .runtime_status(child)
+                .expect("active child runtime status");
+            assert_eq!(
+                runtime.runtime.phase,
+                canic::dto::component_registry::ComponentRuntimePhase::Active
+            );
+            let group = runtime
+                .runtime
+                .authority
+                .expect("active child Directory authority")
+                .component_group
+                .expect("child inherits Component Group sibling Directory");
+            assert_eq!(group.members.len(), 3);
+            assert!(
+                group
+                    .members
+                    .iter()
+                    .any(|member| member.binding.canister_id == index_hub)
+            );
+            assert!(
+                group
+                    .members
+                    .iter()
+                    .any(|member| member.binding.canister_id == scale_hub)
+            );
+            assert!(
+                group
+                    .members
+                    .iter()
+                    .any(|member| member.binding.canister_id == user_hub)
+            );
+            assert_eq!(
+                fixture
+                    .admission_status(child)
+                    .expect("open child admission")
+                    .phase,
+                FleetAdmissionProjectionPhase::Open
+            );
+        }
+
+        let admitted_probe: Result<Principal, Error> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                fixture.pic(),
+                user_shard,
+                admitted,
+                crate::pic::application_probe::ADMISSION,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into))
+            .expect("query Wire transport");
+        assert_eq!(admitted_probe, Ok(admitted));
+        let denied_probe: Result<Result<Principal, Error>, _> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                fixture.pic(),
+                user_shard,
+                unlisted,
+                crate::pic::application_probe::ADMISSION,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into));
+        let denied = denied_probe
+            .expect("denied child ingress returns its typed Canic result")
+            .expect_err("unlisted caller must not enter a managed child");
+        assert_eq!(
+            denied,
+            Error::from_registered(canic::diagnostics::codes::CONFIGURATION_UNAVAILABLE)
+        );
+
+        let assigned: Result<Principal, Error> =
+            ic_testkit::pic::update_wire::<_, Result<ic_platform::Principal, Error>>(
+                fixture.pic(),
+                user_hub,
+                admitted,
+                crate::pic::application_probe::CREATE_ACCOUNT,
+                &ic_platform::Principal::from(fake_principal(17)),
+            )
+            .map(|reply| reply.map(Into::into))
+            .expect("update Candid harness call");
+        assert_eq!(assigned, Ok(user_shard));
+
+        let before_index = fixture.nodes().len();
+        let indexed: Result<crate::pic::application_probe::IndexStatus, Error> = fixture
+            .update_settled(
+                index_hub,
+                admitted,
+                crate::pic::application_probe::RESOLVE_ITEM,
+                &"alpha".to_string(),
+                30,
+            )
+            .expect("settle and decode on-demand index allocation");
+        assert_eq!(fixture.nodes().len(), before_index + 1);
+        let crate::pic::application_probe::IndexStatus::Bound {
+            instance_pid: indexed,
+            ..
+        } = indexed.expect("index Hub requests one on-demand child")
+        else {
+            panic!("fresh index resolution must bind its created child");
+        };
+        let indexed: Principal = indexed.into();
+        let indexed_node = fixture
+            .nodes()
+            .into_iter()
+            .find(|node| node.canister_id == indexed)
+            .expect("index-created child enters fixture catalogue");
+        assert_eq!(indexed_node.parent_canister_id, Some(index_hub));
+        assert_eq!(indexed_node.role.as_str(), "index_child");
+        let invalid: Result<crate::pic::application_probe::IndexStatus, Error> = fixture
+            .update_settled(
+                index_hub,
+                admitted,
+                crate::pic::application_probe::RESOLVE_ITEM,
+                &"x".repeat(129),
+                30,
+            )
+            .expect("settled helper preserves application refusal");
+        assert_eq!(
+            invalid,
+            Err(Error::from_registered(
+                canic::diagnostics::codes::SECURITY_INVALID
+            ))
+        );
+        assert!(matches!(
+            fixture.update_settled::<(), _>(
+                index_hub,
+                admitted,
+                ic_testkit::pic::WireCallSpec {
+                    method: "missing_method",
+                    ..crate::pic::application_probe::RESOLVE_ITEM
+                },
+                &(),
+                30
+            ),
+            Err(
+                canic::testing::ManagedComponentGroupQualificationError::Transport(
+                    ic_testkit::pocket_ic::ClientError::Canister(_)
+                )
+            )
+        ));
+        let before_refused_request = fixture.nodes().len();
+        let mut refused_spec = crate::pic::application_probe::RESOLVE_ITEM;
+        refused_spec.request_limits.bytes = 0;
+        assert!(matches!(
+            fixture.update_settled::<(), _>(index_hub, admitted, refused_spec, &"unsubmitted", 30),
+            Err(canic::testing::ManagedComponentGroupQualificationError::RequestFrame(_))
+        ));
+        assert_eq!(fixture.nodes().len(), before_refused_request);
+        assert!(matches!(
+            fixture.update_settled::<String, _>(
+                index_hub,
+                admitted,
+                crate::pic::application_probe::RESOLVE_ITEM,
+                &"alpha".to_string(),
+                30,
+            ),
+            Err(canic::testing::ManagedComponentGroupQualificationError::ResponseFrame(_))
+        ));
+        assert!(matches!(
+            fixture.update_settled::<Result<crate::pic::application_probe::IndexStatus, Error>, _>(
+                index_hub,
+                admitted,
+                crate::pic::application_probe::RESOLVE_ITEM,
+                &"alpha".to_string(),
+                1
+            ),
+            Err(
+                canic::testing::ManagedComponentGroupQualificationError::ProgressLimit {
+                    maximum_ticks: 1,
+                    ..
+                }
+            )
+        ));
+        fixture
+            .settle_requested_children(30)
+            .expect("finish the bounded-out update without resubmitting");
+        assert_eq!(fixture.nodes().len(), before_index + 1);
+        let indexed_probe: Result<Principal, Error> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                fixture.pic(),
+                indexed,
+                admitted,
+                crate::pic::application_probe::ADMISSION,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into))
+            .expect("query Wire transport");
+        assert_eq!(indexed_probe, Ok(admitted));
+
+        let scale_request = fixture
+            .pic()
+            .submit_call(
+                scale_hub,
+                admitted,
+                "create_worker",
+                ic_wire::native::encode_request(
+                    crate::pic::application_probe::CREATE_WORKER.method_id,
+                    &(),
+                    crate::pic::application_probe::CREATE_WORKER.request_limits,
+                )
+                .expect("scaling request frame"),
+            )
+            .expect("submit on-demand scaling allocation");
+        assert_eq!(
+            fixture
+                .settle_submitted_call(&scale_request, 30)
+                .expect("settle on-demand scaling child"),
+            1
+        );
+        let created: Result<ic_platform::Principal, Error> = ic_wire::native::decode_response(
+            crate::pic::application_probe::CREATE_WORKER.method_id,
+            &fixture
+                .pic()
+                .ingress_status(scale_request)
+                .expect("PocketIC ingress_status")
+                .expect("scaling ingress is terminal after settlement")
+                .expect("settled scaling allocation reply"),
+            crate::pic::application_probe::CREATE_WORKER.response_limits,
+        )
+        .expect("decode scaling allocation reply");
+        let created: Principal = created
+            .expect("scaling Hub requests one on-demand child")
+            .into();
+        let created_node = fixture
+            .nodes()
+            .into_iter()
+            .find(|node| node.canister_id == created)
+            .expect("on-demand child enters fixture catalogue");
+        assert_eq!(created_node.parent_canister_id, Some(scale_hub));
+        assert_eq!(created_node.role.as_str(), "scale_replica");
+
+        let timer_identity = |status: &canic::dto::runtime::CanicRuntimeStatus| {
+            status
+                .timers
+                .iter()
+                .map(|timer| {
+                    (
+                        timer.name.clone(),
+                        timer.owner.clone(),
+                        timer.subsystem.clone(),
+                    )
+                })
+                .collect::<std::collections::BTreeSet<_>>()
+        };
+        let before_upgrade = fixture
+            .diagnostic_status(user_shard)
+            .expect("child timer status before upgrade");
+        assert!(!before_upgrade.timers.is_empty());
+        fixture
+            .upgrade_same_release(user_shard, Duration::from_mins(5))
+            .expect("same-release managed child upgrade");
+        fixture
+            .settle_requested_children(30)
+            .expect("settle restored child lifecycle before timer inspection");
+        let after_upgrade = fixture
+            .diagnostic_status(user_shard)
+            .expect("child timer status after upgrade");
+        assert_eq!(
+            timer_identity(&after_upgrade),
+            timer_identity(&before_upgrade)
+        );
+        assert_eq!(
+            fixture
+                .runtime_status(user_shard)
+                .expect("restored child runtime")
+                .runtime
+                .phase,
+            canic::dto::component_registry::ComponentRuntimePhase::Active
+        );
+
+        super::super::caller_authority::qualify_delivery(&fixture, user_hub, user_shard);
+
+        fixture
+            .prepare_admission_successor(user_shard, [0xc4; 32], vec![admitted, fake_principal(18)])
+            .expect("fence child with exact successor projection");
+        assert_eq!(
+            fixture
+                .admission_status(user_shard)
+                .expect("fenced child admission")
+                .phase,
+            FleetAdmissionProjectionPhase::Fenced
+        );
+        let fenced_probe: Result<Result<Principal, Error>, _> =
+            ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+                fixture.pic(),
+                user_shard,
+                admitted,
+                crate::pic::application_probe::ADMISSION,
+                &(),
+            )
+            .map(|reply| reply.map(Into::into));
+        let fenced = fenced_probe
+            .expect("fenced child ingress returns its typed Canic result")
+            .expect_err("a prepared successor must fence admitted callers");
+        assert_eq!(
+            fenced,
+            Error::from_registered(canic::diagnostics::codes::CONFIGURATION_UNAVAILABLE)
+        );
+    }
+
+    fn activate_projection(
+        pic: &PocketIc,
+        canister: Principal,
+        root: Principal,
+        directory: &ComponentRuntimeDirectoryPreparationRequest,
+    ) {
+        let response: Result<canic::dto::role::OperationReceipt, Error> = ic_testkit::pic::update_wire(
+            pic, canister, root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::runtime_configuration::METHOD,
+                method_id: canic::protocol::runtime_configuration::METHOD_ID,
+                request_limits: canic::protocol::runtime_configuration::REQUEST_LIMITS,
+                response_limits: canic::protocol::runtime_configuration::RESPONSE_LIMITS,
+            },
+            &canic::dto::runtime_configuration::ComponentRuntimeDirectoryPreparationRequest::from(directory.clone()),
+        ).expect("native runtime configuration transport");
+        let receipt = response.expect("Root activates the exact prepared runtime");
+        assert_eq!(receipt.operation_id, directory.operation_id);
+        release_application_startup(pic, canister, root);
+    }
+
+    fn caller_status(
+        pic: &PocketIc,
+        canister: Principal,
+        root: Principal,
+    ) -> canic::dto::caller_authority::CallerAuthorityStatus {
+        let response: Result<canic::dto::caller_authority_status::CallerAuthorityStatus, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                canister,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::caller_authority_status::METHOD,
+                    method_id: canic::protocol::caller_authority_status::METHOD_ID,
+                    request_limits: canic::protocol::caller_authority_status::REQUEST_LIMITS,
+                    response_limits: canic::protocol::caller_authority_status::RESPONSE_LIMITS,
+                },
+                &canic::dto::role::OperationStatusRequest {
+                    operation_id: [0; 32],
+                },
+            )
+            .expect("caller authority Wire transport");
+        response.expect("Root caller authority status").into()
+    }
+
+    fn release_application_startup(pic: &PocketIc, canister: Principal, root: Principal) {
+        use canic::dto::caller_authority::{
+            CallerAuthorityChange, CallerAuthorityCommand, CallerAuthorityPhase,
+            CallerAuthorityReadiness,
+        };
+
+        let initial = caller_status(pic, canister, root);
+        assert!(!initial.open);
+        let publication = canic_core::api::caller_authority::CallerAuthorityApi::publication(
+            initial.authority,
+            [0xa1; 32],
+            initial.generation,
+            CallerAuthorityChange::OpenReceiver,
+        )
+        .expect("bind startup release to the installed receiver");
+        for (command, phase) in [
+            (
+                CallerAuthorityCommand::Prepare(publication.clone()),
+                CallerAuthorityPhase::Prepared,
+            ),
+            (
+                CallerAuthorityCommand::Commit(publication.clone()),
+                CallerAuthorityPhase::Committed,
+            ),
+            (
+                CallerAuthorityCommand::Complete(publication.clone()),
+                CallerAuthorityPhase::Complete,
+            ),
+        ] {
+            let request =
+                canic_contracts::ops::caller_authority_status::publication_request(command);
+            let response: Result<
+                canic::dto::caller_authority_status::CallerAuthorityReceipt,
+                canic::Error,
+            > = ic_testkit::pic::update_wire(
+                pic,
+                canister,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: request.method,
+                    method_id: request.method_id,
+                    request_limits: canic::protocol::caller_authority::REQUEST_LIMITS,
+                    response_limits: canic::protocol::caller_authority::RESPONSE_LIMITS,
+                },
+                &request.publication,
+            )
+            .expect("caller publication Wire transport");
+            let receipt: canic::dto::caller_authority::CallerAuthorityReceipt =
+                response.expect("caller publication").into();
+            assert_eq!(receipt.publication, publication);
+            assert_eq!(receipt.phase, phase);
+        }
+        let publication: canic::dto::caller_authority_status::CallerAuthorityPublication =
+            publication.into();
+        let response: Result<OperationReceipt, canic::Error> = ic_testkit::pic::update_wire(
+            pic,
+            canister,
+            root,
+            ic_testkit::pic::WireCallSpec {
+                method: canic::protocol::caller_authority::RELEASE,
+                method_id: canic::protocol::caller_authority::RELEASE_ID,
+                request_limits: canic::protocol::caller_authority::REQUEST_LIMITS,
+                response_limits: canic::protocol::caller_authority::RESPONSE_LIMITS,
+            },
+            &publication,
+        )
+        .expect("startup Wire transport");
+        assert_eq!(
+            response,
+            Ok(OperationReceipt {
+                operation_id: [0xa1; 32]
+            })
+        );
+        for _ in 0..60 {
+            let status = caller_status(pic, canister, root);
+            if status.readiness == CallerAuthorityReadiness::ApplicationReady {
+                assert!(status.open);
+                return;
+            }
+            pic.tick().expect("PocketIC tick");
+        }
+        panic!(
+            "managed application startup did not complete: {:?}",
+            caller_status(pic, canister, root)
+        );
+    }
+
+    fn admission_status(
+        pic: &PocketIc,
+        canister: Principal,
+        root: Principal,
+    ) -> FleetAdmissionProjectionStatusResponse {
+        let response: Result<canic_contracts::dto::admission_control::ManagedStatus, Error> =
+            ic_testkit::pic::query_wire(
+                pic,
+                canister,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic_contracts::protocol::CANIC_ADMISSION_STATUS,
+                    method_id:
+                        canic_contracts::protocol::admission_control::managed_status::METHOD_ID,
+                    request_limits: canic_contracts::protocol::admission_control::REQUEST_LIMITS,
+                    response_limits: canic_contracts::protocol::admission_control::RESPONSE_LIMITS,
+                },
+                &PageRequest {
+                    limit: u64::MAX,
+                    offset: 0,
+                },
+            )
+            .expect("native managed admission status transport");
+        response.expect("protected admission status").into()
+    }
+
+    fn admission_probe(
+        pic: &PocketIc,
+        canister: Principal,
+        caller: Principal,
+    ) -> Result<(), Error> {
+        ic_testkit::pic::query_wire(
+            pic,
+            canister,
+            caller,
+            crate::pic::application_probe::ADMISSION_UNIT,
+            &(),
+        )
+        .expect("query Wire transport")
+    }
+
+    fn managed_admission_probe(
+        pic: &PocketIc,
+        canister: Principal,
+        caller: Principal,
+    ) -> Result<Principal, Error> {
+        ic_testkit::pic::query_wire::<_, Result<ic_platform::Principal, Error>>(
+            pic,
+            canister,
+            caller,
+            crate::pic::application_probe::MANAGED_PARITY,
+            &(),
+        )
+        .map(|reply| reply.map(Into::into))
+        .expect("query Wire transport")
+    }
+
+    fn transition_target<T: serde::Serialize>(
+        pic: &PocketIc,
+        canister: Principal,
+        root: Principal,
+        method: &'static str,
+        method_id: u64,
+        request: &T,
+    ) -> canic::dto::fleet_admission::FleetAdmissionTargetReceipt {
+        try_transition_target(pic, canister, root, method, method_id, request)
+            .expect("accepted target admission transition")
+    }
+    fn try_transition_target<T: serde::Serialize>(
+        pic: &PocketIc,
+        canister: Principal,
+        root: Principal,
+        method: &'static str,
+        method_id: u64,
+        request: &T,
+    ) -> Result<canic::dto::fleet_admission::FleetAdmissionTargetReceipt, Error> {
+        let response: Result<canic::dto::admission_control::TargetReceipt, Error> =
+            ic_testkit::pic::update_wire(
+                pic,
+                canister,
+                root,
+                ic_testkit::pic::WireCallSpec {
+                    method,
+                    method_id,
+                    request_limits: canic::protocol::admission_control::REQUEST_LIMITS,
+                    response_limits: canic::protocol::admission_control::RESPONSE_LIMITS,
+                },
+                request,
+            )
+            .expect("native target admission transition transport");
+        response.map(Into::into)
+    }
+
+    fn managed_guard_workflow_runs(pic: &PocketIc, canister: Principal) -> u32 {
+        let result: Result<u32, Error> = ic_testkit::pic::query_wire(
+            pic,
+            canister,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            crate::pic::application_probe::MANAGED_WORKFLOW_RUNS,
+            &(),
+        )
+        .expect("query Wire transport");
+        result.expect("public workflow-run observation")
+    }
+
+    #[test]
+    fn application_checkpoint_freeze_restore_and_delayed_messages() {
+        let fixture = install_managed_lifecycle_fixture();
+        let (target, directory) = fixture.install_managed_canister();
+        activate_projection(&fixture.pic, target, fixture.root, &directory);
+        crate::pic::application_checkpoint::qualify(&fixture, target);
+    }
+
+    #[test]
+    fn runtime_log_queries_are_effect_free_and_unchanged_deadlines_do_not_rearm() {
+        #[derive(Debug, serde::Deserialize)]
+        struct LogProbeEvidence {
+            rows: u32,
+            logs_unchanged: bool,
+            timer_armed: bool,
+            schedule_unchanged: bool,
+        }
+        let fixture = install_managed_lifecycle_fixture();
+        let (target, directory) = fixture.install_managed_canister();
+        activate_projection(&fixture.pic, target, fixture.root, &directory);
+        let appended: Result<LogProbeEvidence, Error> = ic_testkit::pic::update_wire(
+            &fixture.pic,
+            target,
+            Principal::anonymous(),
+            crate::pic::application_probe::MANAGED_LOG_UPDATE,
+            &(),
+        )
+        .unwrap();
+        let appended = appended.unwrap();
+        assert_eq!(appended.rows, 2);
+        assert!(!appended.logs_unchanged);
+        assert!(appended.timer_armed);
+        assert!(appended.schedule_unchanged);
+        let queried: Result<LogProbeEvidence, Error> = ic_testkit::pic::query_wire(
+            &fixture.pic,
+            target,
+            Principal::anonymous(),
+            crate::pic::application_probe::MANAGED_LOG_QUERY,
+            &(),
+        )
+        .unwrap();
+        let queried = queried.unwrap();
+        assert_eq!(queried.rows, appended.rows);
+        assert!(queried.logs_unchanged);
+        assert!(queried.timer_armed);
+        assert!(queried.schedule_unchanged);
+
+        let controller = Principal::self_authenticating(b"logging-controller");
+        fixture
+            .pic
+            .set_controllers(target, None, vec![controller])
+            .unwrap();
+        for caller in [controller, Principal::anonymous()] {
+            let logs: Result<canic::dto::log::LogPage, Error> = ic_testkit::pic::query_wire(
+                &fixture.pic,
+                target,
+                caller,
+                ic_testkit::pic::WireCallSpec {
+                    method: canic::protocol::protected_logs::METHOD,
+                    method_id: canic::protocol::protected_logs::METHOD_ID,
+                    request_limits: canic::protocol::protected_logs::REQUEST_LIMITS,
+                    response_limits: canic::protocol::protected_logs::RESPONSE_LIMITS,
+                },
+                &canic::dto::role::LogStatusRequest {
+                    crate_name: Some("managed_lifecycle_probe".into()),
+                    topic: None,
+                    min_level: None,
+                    page: canic::dto::log::LogPageRequest {
+                        before: None,
+                        limit: 20,
+                    },
+                },
+            )
+            .unwrap();
+            if caller == controller {
+                let logs = logs.unwrap();
+                assert_eq!(logs.entries.len(), appended.rows as usize);
+                assert!(logs.scanned <= 1024);
+            } else {
+                assert_eq!(
+                    logs.unwrap_err().code(),
+                    canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+                );
+            }
+        }
+    }
+
+    pub fn governed_runtime_cases() -> Vec<crate::pic::GovernedTestCase> {
+        crate::pic::cases::registered![
+            (
+                "local bootstrap independent of held or trapping initialization",
+                standalone_bootstrap_progresses_while_user_initialization_is_held_or_traps
+            ),
+            (
+                "runtime logging query isolation and unchanged retention deadline",
+                runtime_log_queries_are_effect_free_and_unchanged_deadlines_do_not_rearm
+            ),
+            (
+                "original host checkpoint accounting and installed restoration",
+                crate::pic::application_checkpoint::qualify_original_host_workflow
+            ),
+            (
+                "Root checkpoint dispatch and interruption",
+                crate::pic::application_checkpoint::qualify_root_dispatch
+            ),
+            (
+                "application checkpoint freeze and restoration",
+                application_checkpoint_freeze_restore_and_delayed_messages
+            ),
+            (
+                "interleaved endpoint and checkpoint instruction contexts",
+                interleaved_endpoint_and_checkpoint_metrics_preserve_call_contexts,
+            ),
+            (
+                "standalone memory restoration across identical Wasm upgrades",
+                standalone_memory_registry_survives_two_identical_wasm_upgrades,
+            ),
+            (
+                "managed projection restoration",
+                managed_projection_fences_then_opens_and_restores,
+            ),
+            (
+                "explicit admission guard direct ingress",
+                explicit_guard_matches_canic_endpoint_on_direct_ingress,
+            ),
+            (
+                "managed admission target transition",
+                managed_admission_target_transition_replays_and_recovers_forward,
+            ),
+        ]
+    }
+
+    // These independently created estates can run on the journey worker without
+    // repeating runtime ingress/transition qualification or sharing replica state.
+    pub fn governed_support_cases() -> Vec<crate::pic::GovernedTestCase> {
+        crate::pic::cases::registered![
+            (
+                "published managed-App support",
+                published_managed_app_support_drives_managed_lifecycle,
+            ),
+            (
+                "published managed Component Group support",
+                published_managed_component_group_support_drives_child_lifecycle,
+            ),
+        ]
+    }
+}

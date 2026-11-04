@@ -1,6 +1,8 @@
 //! Control-plane ops helpers over local state and template storage.
 #[cfg(feature = "root-control-plane")]
 pub mod application_checkpoint;
+#[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
+pub mod continuation_retry;
 
 #[cfg(feature = "root-control-plane")]
 pub mod canister_pool;

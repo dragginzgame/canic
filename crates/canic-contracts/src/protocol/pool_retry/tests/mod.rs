@@ -1,7 +1,7 @@
 //! Retry transport preserves exact identity and rejects frames for another operation.
 use super::*;
 use crate::dto::{error::Error, pool::PoolAdminCommand, pool_retry::*};
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 #[test]
 fn reset_selection_preserves_exact_canister() {

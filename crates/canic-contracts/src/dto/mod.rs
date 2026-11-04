@@ -34,6 +34,7 @@ pub mod component_deployment;
 pub mod component_directory;
 pub mod component_provisioning;
 pub mod component_registry;
+pub mod cycle_drain;
 pub mod cycle_topups;
 pub mod cycles;
 pub mod env;
@@ -50,6 +51,7 @@ pub mod memory;
 pub mod metadata;
 pub mod metrics;
 pub mod observability;
+pub mod operation_retry;
 pub mod page;
 pub mod placement;
 pub mod pool;
@@ -71,7 +73,9 @@ pub mod state;
 
 pub mod prelude {
     pub use crate::ids::{CanisterRole, ComponentSpecId};
-    pub use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
+    #[cfg(feature = "external-candid")]
+    pub use ic_platform::candid::contract::Nat;
+    pub use ic_platform_types::principal::ExternalPrincipal as Principal;
     pub use serde::{Deserialize, Serialize};
 }
 
@@ -171,3 +175,7 @@ pub mod subtree_read;
 pub mod component_removal_read;
 
 pub mod root_removal_read;
+
+pub mod portable_enrollment;
+pub mod portable_inspection;
+pub mod portable_issuance;

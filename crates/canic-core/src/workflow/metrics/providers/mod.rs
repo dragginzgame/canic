@@ -26,7 +26,7 @@ pub fn snapshot(provider: &str) -> Result<Vec<MetricObservation>, ProviderMetric
 }
 pub fn memory_requests(
     authority: &crate::config::RoleRuntimeAuthority,
-) -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
+) -> Result<Vec<ic_storage::MemoryRequest>, ic_storage::AdmissionError> {
     host::role_memory_requests(authority)
 }
 

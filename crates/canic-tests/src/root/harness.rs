@@ -1,8 +1,8 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
+use crate::pic::{RootBaselineRecipe, RootBaselineSpec};
 use canic::ids::CanisterRole;
-use canic_testing_internal::pic::{RootBaselineRecipe, RootBaselineSpec};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::HashMap,
@@ -12,8 +12,8 @@ use std::{
     sync::{Mutex, MutexGuard, OnceLock},
 };
 use {
-    ic_platform::pocket_ic::PocketIc,
     ic_testkit::pic::{CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard},
+    ic_testkit::pocket_ic::PocketIc,
 };
 
 use super::profile::RootSetupProfile;

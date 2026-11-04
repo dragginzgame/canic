@@ -16,7 +16,8 @@ Canic-owned adapter crates live under `crates/<package-name>/`, including
 `integrations/`.
 
 The Canic-owned blob composition lives in `crates/canic-blob-service`, as a
-main-workspace member sharing the catalog, lockfile and release version. Its two
+main-workspace member sharing the catalog and lockfile, with its own explicit
+[release group](../operations/adapter-release-groups.md). Its two
 application consumers retain isolated qualification workspaces. The upstream
 service remains independently usable and has no Canic dependency. Thin runtime hooks belong in
 Core, operator orchestration in Host, and command parsing/reporting in CLI.
@@ -43,7 +44,7 @@ publication and packaging edges. Live backup and restore commands are unavailabl
 this removal supersedes the earlier requirement to retain the old restore runner.
 No engine was copied into Host and no forwarding package remains.
 
-IC Backup 0.50.2 owns workflow plans, original stage/attempt journals, bounded
+IC Backup owns workflow plans, original stage/attempt journals, bounded
 advancement, inspection, immutable manifests and guarded reference release.
 Canic retains Fleet identity, release/controller authority, application hooks and
 the thin Host checkpoint adapter. Future CLI operations must consume upstream
@@ -63,12 +64,14 @@ those same parts under one lifecycle owner.
 | --- | --- | --- |
 | Blob | `canic_blob_service::mount!()` | Explicit participant hooks; `canister!()` bundles a dedicated service. |
 | IcyDB | `canic_icydb::mount! { managed; … }` | `start!(…; participant, …)` supplies both host hooks; standalone mounting omits `managed;`. |
-| Auth | `canic_auth::mount!()` deliberately refuses compilation | Unimplemented; see the [adapter scaffold](../../crates/canic-auth/README.md). |
 
 Service-specific declarations remain with their owners. This shared naming and
 composition contract does not require identical service configuration or a
-runtime plugin registry. Auth is a private workspace scaffold, excluded from the
-publication family until its production integration is qualified.
+runtime plugin registry. Portable Auth production composition belongs in existing
+Canic owners, with acceptance tracked in
+[#491](https://github.com/dragginzgame/canic/issues/491). Protected enrollment,
+issuer/receiver endpoints, atomic session/login/replay storage, explicit lifecycle
+and memory composition, and browser/runtime acceptance remain unimplemented.
 
 ## Backup Adapter Contract
 

@@ -6,9 +6,9 @@ VALIDATION_KIND="${1:-}"
 BUMP_TYPE="${2:-}"
 
 case "$VALIDATION_KIND/$BUMP_TYPE" in
-    complete/ | complete/patch | complete/minor | complete/major | fast/patch) ;;
+    selected/ | selected/patch | selected/minor | selected/major | complete/ | complete/patch | complete/minor | complete/major | fast/patch) ;;
     *)
-        echo "usage: $0 complete [patch|minor|major] | fast patch" >&2
+        echo "usage: $0 selected [patch|minor|major] | complete [patch|minor|major] | fast patch" >&2
         exit 2
         ;;
 esac
@@ -23,12 +23,21 @@ if [[ -n "${RELEASE_SOURCE:-}" && "$RELEASE_SOURCE" != "$validated_head" ]]; the
     echo 'release qualification source differs from the delivery source' >&2
     exit 1
 fi
+if [[ "$VALIDATION_KIND" == selected ]]; then
+    bash scripts/release/selection.sh
+    rm -f -- "target/release-validation/$RELEASE_GROUP/$validated_head.json"
+fi
 # Qualification is fresh: a source-only receipt cannot bind effective environment,
 # compiler overrides or the current security database. Exact-attempt recovery is
 # owned by the release runner after successful qualification and preparation.
 make --no-print-directory check-build-environment
+make --no-print-directory compiler-check
 make --no-print-directory tools-check
 case "$VALIDATION_KIND" in
+    selected)
+        RELEASE_SOURCE="$validated_head" bash scripts/release/validate.sh
+        VALIDATION_KIND=plan
+        ;;
     complete)
         make --no-print-directory validate
         ;;

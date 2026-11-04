@@ -35,7 +35,7 @@ pub(super) fn commit_logout(caller: Principal, login: PreparedLogin) -> Result<(
         .checked_sub(removed_bytes + login.before_bytes)
         .and_then(|n| n.checked_add(login.after_bytes))
         .ok_or(SessionError::StorageFailure)?;
-    if encoded_bytes > MAX_APPLICATION_SESSION_STABLE_BYTES {
+    if encoded_bytes > capacity().stable_bytes {
         return Err(SessionError::ByteCapacity);
     }
     let canonical = session

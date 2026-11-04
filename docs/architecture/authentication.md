@@ -14,7 +14,7 @@ Root delegation proof configuration, signing, installation and renewal remain
 available. See the [provisioning runbook](../operations/root-proof-provisioning.md).
 Proof readiness alone does not establish an application session.
 
-## Portable application authentication — unfinished
+## Portable application authentication — receiver integration
 
 The accepted design uses Fleet Root-managed issuer/key enrollment and IC Auth's
 portable session engine. IC Auth owns credential verification and session/login
@@ -22,14 +22,17 @@ semantics. Canic owns protected enrollment, Fleet/role authority, endpoint
 admission and bounded durable storage. Transport caller and represented account
 are distinct identities and must remain explicitly bound.
 
-Storage fixtures exercise atomic session/login commits, conflicting-binding
-refusal, logout custody and same-release restoration. They do not provide a live
-login API. Enrollment delivery, admission wiring, retained clocks/floors and
-installed recovery qualification remain open in
+The retained persistent receiver composes atomic session/login commits, replay
+and logout custody, independent work budgets and a protected clock high-water mark.
+Bounded Root snapshots and receiver checkpoints retain monotonic authority and
+terminal retirements; restoration closes readiness until a fresh authenticated
+Root pull. The selected controlled-local runtime now connects Root export,
+activation/refresh, admission/read/logout and `authorize_local_application` to
+that complete protected path. Missing policy, missing fresh enrollment and
+unqualified production clocks refuse access. Guarded Root registration is wired
+and its controlled-local signing, state and installed contracts pass. Issuer custody,
+browser delivery and the remaining acceptance stay in
 [#491](https://github.com/dragginzgame/canic/issues/491).
-`authorize_local_application` refuses admission while that integration is
-unavailable. Applications must not treat the presence of session storage or an
-active Root proof as successful authorization.
 
 ## Current portable contract and implementation boundary
 
@@ -38,15 +41,15 @@ The normative library contracts are IC Auth's [Canic adoption](https://github.co
 [browser client](https://github.com/dragginzgame/ic-auth/blob/5d7da698d3e4d297f32445fb88adbc66a79c5520/docs/browser-client.md),
 [protocol](https://github.com/dragginzgame/ic-auth/blob/5d7da698d3e4d297f32445fb88adbc66a79c5520/docs/design/0.6-auth-protocol.md),
 and [issuer custody](https://github.com/dragginzgame/ic-auth/blob/5d7da698d3e4d297f32445fb88adbc66a79c5520/docs/design/0.6-tee-enrollment.md).
-This review selects published Auth 0.14.1. The design document's `0.6` name is
+The maintained graph selects published Auth/Protocol/Wire 0.32.0. The design document's `0.6` name is
 historical naming, not a dependency instruction or a second protocol lane.
 
-Auth 0.14 returns bounded typed admission refusals through
+Auth returns bounded typed admission refusals through
 `SessionError::admission_refusal()`; future-start, expiry and invalid credentials
 remain distinct. Its Wire receiver reply and generated browser client must migrate
-together; no text-error fallback is supported. Canic currently selects the engine
-and passive types, not `ic-auth-wire` or a production browser adapter. Its shared
-backend regressions exercise the typed projection without claiming endpoint coverage.
+together; no text-error fallback is supported. Canic selects the engine, passive
+types and optional `ic-auth-wire` contracts for receiver exports. This does not
+select a production browser adapter.
 The upstream private browser coordinator now requires explicit account and browser
 identities; that package is not a published Canic browser integration.
 
@@ -77,13 +80,13 @@ The independent choices must remain independent:
 
 | Choice | Supported shared contract | Canic production status |
 | --- | --- | --- |
-| Certified proof | Root delegation plus issuer IC signature, complete certified verifier | Verifier selected; portable endpoints/enrollment unfinished |
-| Enrolled Ed25519 proof | Protected enrolled issuer key, local verification | Verifier selected; registration/issuer lifecycle/endpoints unfinished |
-| Explicitly trusted non-TEE local custody | Heap-only Ed25519 secret; authenticated public-key registration; fresh key/enrollment after upgrade | No implemented custody activation policy or issuer service |
+| Certified proof | Root delegation plus issuer IC signature, complete certified verifier | Receiver branch implemented; installed certified-proof acceptance remains |
+| Enrolled Ed25519 proof | Protected enrolled issuer key, local verification | Receiver, guarded registration and controlled-local real-proof checks implemented; the newer dependency family and production issuer lifecycle remain unqualified |
+| Explicitly trusted non-TEE local custody | Heap-only Ed25519 secret; authenticated public-key registration; fresh key/enrollment after upgrade | Key preparation, original issuance/reconciliation, bounded retention, Root client and init/post-upgrade clearing pass controlled-local checks. Heap snapshot fencing, full-state cost and production activation remain |
 | TEE-required custody | Qualified issuer/subnet/replica/key evidence; refuse missing assurance, never downgrade | Unavailable; software tests are not hardware evidence |
 | Existing threshold signing | Retain the separately governed Root chain-key contract | Root proof provisioning exists; no new portable threshold issuer implied |
-| Volatile receiver sessions | Trusted reset floors, fresh login and fresh Root enrollment after state loss | Runtime profile and production skew qualification missing |
-| Persistent receiver sessions | Atomic sessions/replays/login reservations/tombstones and protected metadata; fresh authority after restore | Backend tests only; production metadata/runtime wiring missing |
+| Volatile receiver sessions | Trusted reset floors, fresh login and fresh Root enrollment after state loss | No separately activated volatile runtime; production skew qualification missing |
+| Persistent receiver sessions | Atomic sessions/replays/login reservations/tombstones and protected metadata; fresh authority after restore | Explicit controlled-local policy, retained owner, refresh/recovery and receiver endpoints implemented; production acceptance remains |
 
 Receiver persistence never stores a local issuer secret. Receiver-only artifacts
 must not select issuer signing/key-custody capabilities. Local secrets must not
@@ -91,11 +94,25 @@ enter stable memory, checkpoints, backups, logs or replies. A restored issuer ke
 cannot regain enrollment. TEE requirements are not a universal gate on ordinary
 non-TEE deployments; explicit governance/custody policy is still required.
 
-Issuer `issue` must retain exact caller/login/request/grants, original credential
-and original admission deadline. Lookup-only `reconcile` returns that original
-work or unresolved. Missing, expired or pruned evidence is not proof of no effect;
-lookup must never reserve, sign, renew or extend a deadline. These operations are
-not yet Canic exports; IC Auth's credential envelope is not an issuer endpoint.
+Issuer `issue` retains exact caller/login/request/grants, original credential and
+original admission deadline. The selected controlled-local API captures the actual
+account caller, requires application permission before and after awaits, refreshes
+Root authority and signs through its heap owner. The application mounts its own
+endpoints. Lookup-only `reconcile` returns original work or unresolved; missing,
+expired or pruned evidence is not proof of no effect. Lookup never reserves, signs,
+renews or extends a deadline. Bounded reclamation closes the current operation
+epoch atomically before forgetting its history; already closed history needs no
+new epoch. Clients save the original epoch before dispatch and never retag unknown
+work for recovery. Independent bounded login records preserve their original
+browser binding and window across credential cleanup. Missing closed-epoch logins
+cannot be recreated, and live rows are never evicted. Production full-state cost,
+snapshot fencing and certified issuance remain open.
+The installed fixed-grant profile now qualifies the 64-key/64-login/32-issuance
+count boundaries and recorded endpoint costs; it does not qualify maximum grant
+or byte shapes. The [feature guide](../features/authentication/README.md#installed-count-capacity-profile)
+owns the measured profile and its source-bound limitations.
+Production issuance refuses while the clock is unqualified. IC Auth's credential
+envelope remains the shared transport, not a separately published issuer endpoint.
 
 The shared browser journal durably invalidates the login generation before logout
 fan-out. Only authenticated committed receiver acknowledgements mean local
@@ -118,12 +135,14 @@ Local application scope and TTL configuration is independent of the retained
 proof-support flags. Its own `allowed_scopes` is
 the local ceiling; authenticated Root enrollment must independently constrain
 issued grants. Configuration does not install enrollment or activate admission.
-The current authority binding still tracks Root verification configuration and
-registry epoch until the protected portable enrollment owner is connected.
+The current authority binding tracks Root verification configuration and registry
+epoch; the protected enrollment owner independently advances local session generation
+when approved issuer authority changes.
 
-Login reservations and logout tombstones currently have no production pruning
-path. Their deletion must use the shared ledger's transactional maintenance and
-persist its trusted clock even on empty or failed work. The existing stable Auth
+Login reservations and logout tombstones use the shared ledger's transactional
+maintenance from the selected receiver owner. Refresh first drains bounded expired
+session/replay batches; it skips login pruning while expired dependent records
+remain. Maintenance persists trusted time even on empty or refused work. The stable Auth
 header now retains `observed_at_ns`; session/replay cleanup advances it before
 validation, including empty and refused work, and rejects clock rollback. It
 rebuilds derived byte accounting after clock changes and invalidates indexes on
@@ -131,11 +150,20 @@ corrupt records. Failed cleanup preserves session/replay/login rows, while the
 accepted clock observation remains durable. This is a current-contract hard cut,
 not a predecessor-state migration.
 
-The same protected clock still needs wiring into production admission, logout,
-ledger restoration and retained budgets. Cleanup alone does not complete those
-obligations or authorize tombstone deletion. Session/replay cleanup validates the
-original snapshot before expiry can remove evidence of a mismatched login binding;
-it does not prune login denials.
+Generic intent cleanup has no Auth storage or deadline dependency. It handles
+intent receipts and reservations; Auth's retained receiver handles sessions,
+replay rows and login retention. A real-proof regression verifies that successful
+and failed intent cleanup preserve receiver authorization and permit independent
+Auth reclamation followed by a fresh login. Cleanup metrics/checkpoints live with
+the Auth owner. Installed denial probes acquire the actual IC caller and run the
+public SDK-backed facade; no synthetic caller-injection adapter is exported.
+
+Admission, logout, ledger restoration and retained budgets share this protected
+clock. Query reads run the complete authorization engine without a stable write;
+replicated reads preserve the trusted observation. Session/replay cleanup validates
+the original snapshot before expiry can remove evidence of a mismatched login binding.
+The runtime remains unavailable for `build_network = "ic"` until production skew
+qualification is supplied; explicit local fixture policy does not waive that boundary.
 
 ## Role Attestation
 

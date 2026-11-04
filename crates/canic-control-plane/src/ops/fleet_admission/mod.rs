@@ -229,6 +229,15 @@ impl FleetAdmissionOps {
         })
     }
 
+    /// Return accepted admission demand without changing the policy transition.
+    pub(crate) fn pending_operation(
+        registry: &FleetRegistry,
+    ) -> Result<Option<[u8; 32]>, InternalError> {
+        Ok(load_valid(registry)?
+            .current_transition
+            .map(|current| current.request.operation_id))
+    }
+
     /// Resolve one exact current or retained operation without a secondary identity.
     pub(crate) fn operation_status(
         registry: &FleetRegistry,
@@ -1869,7 +1878,10 @@ mod tests {
 
     fn reload_admission_authority() {
         let record = FleetAdmissionAuthorityStore::get().expect("admission authority");
-        let restored = FleetAdmissionAuthorityRecord::from_bytes(record.to_bytes());
+        let restored = FleetAdmissionAuthorityRecord::from_bytes(
+            record.to_bytes().expect("encode current record"),
+        )
+        .expect("decode current record");
         assert!(FleetAdmissionAuthorityStore::replace(restored));
     }
 

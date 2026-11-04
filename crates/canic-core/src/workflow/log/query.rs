@@ -5,10 +5,7 @@
 //! Boundary: workflow query facade over runtime log ops.
 
 use crate::{
-    dto::{
-        log::LogEntry,
-        page::{Page, PageRequest},
-    },
+    dto::log::{LogPage, LogPageRequest},
     log::Level,
     ops::runtime::log::LogOps,
 };
@@ -21,13 +18,13 @@ use crate::{
 pub struct LogQuery;
 
 impl LogQuery {
-    #[must_use]
     pub fn page(
         crate_name: Option<String>,
         topic: Option<String>,
         min_level: Option<Level>,
-        page: PageRequest,
-    ) -> Page<LogEntry> {
+        page: LogPageRequest,
+    ) -> Result<LogPage, crate::dto::error::Error> {
         LogOps::page_filtered(crate_name.as_deref(), topic.as_deref(), min_level, page)
+            .map_err(Into::into)
     }
 }

@@ -78,7 +78,7 @@ use canic_core::control_plane_support::{
         component_provisioning_plan::ComponentProvisioningPlanOps, fleet_registry::FleetRegistryOps,
     },
 };
-use ic_host_artifacts::artifact::chunk_digests;
+use ic_host_artifacts::artifact::{ArtifactIdentity, Sha256Digest, chunk_digests};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::{
@@ -2175,10 +2175,16 @@ pub fn compile_current_store_sequence_from_union(
             .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     let manifest_bytes = serde_json::to_vec(&manifest.root_store_manifest())
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
-    let manifest_digest: [u8; 32] = Sha256::digest(&manifest_bytes).into();
     if manifest_bytes.is_empty()
         || manifest_bytes.len() as u64 > ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES
-        || &manifest_digest != authority.initial_release_set.manifest_digest.as_bytes()
+    {
+        return Err(CurrentProtocolError::Configuration(
+            "root release-set manifest differs from installed authority".to_string(),
+        ));
+    }
+    let manifest_payload = PreparedStorePayload::new(manifest_bytes)?;
+    if manifest_payload.identity.sha256.as_bytes()
+        != authority.initial_release_set.manifest_digest.as_bytes()
     {
         return Err(CurrentProtocolError::Configuration(
             "root release-set manifest differs from installed authority".to_string(),
@@ -2194,7 +2200,7 @@ pub fn compile_current_store_sequence_from_union(
             authority.initial_release_set.manifest_digest
         )),
         version.clone(),
-        &manifest_bytes,
+        &manifest_payload,
         None,
     )?;
 
@@ -2211,15 +2217,15 @@ pub fn compile_current_store_sequence_from_union(
     }
     let mut catalog = Vec::with_capacity(artifacts.len());
     for (role, artifact) in artifacts {
-        let bytes = read_qualified_artifact(root, artifact)?;
-        let payload_hash = canic_core::cdk::utils::hash::wasm_hash(&bytes);
+        let payload = read_qualified_artifact(root, artifact)?;
+        let payload_hash = payload.identity.sha256.as_bytes().to_vec();
         let template_id = TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"));
         let artifact_manifest = TemplateManifestInput {
             template_id: template_id.clone(),
             role: role.clone(),
             version: version.clone(),
             payload_hash: payload_hash.clone(),
-            payload_size_bytes: bytes.len() as u64,
+            payload_size_bytes: payload.identity.bytes,
             store_binding: WasmStoreBinding::owned(
                 authority.wasm_store_authority.wasm_store.to_text(),
             ),
@@ -2232,7 +2238,7 @@ pub fn compile_current_store_sequence_from_union(
             &mut actions,
             template_id,
             version.clone(),
-            &bytes,
+            &payload,
             Some(artifact_manifest),
         )?;
         catalog.push(RootStoreCatalogEntry {
@@ -2240,7 +2246,7 @@ pub fn compile_current_store_sequence_from_union(
             raw_module_hash: decode_sha256(&artifact.wasm_sha256_hex)?,
             candid_sha256: artifact.candid_sha256,
             protocol_profile_digest: artifact.protocol_profile_digest,
-            payload_hash: decode_sha256(&artifact.wasm_gz_sha256_hex)?,
+            payload_hash: *payload.identity.sha256.as_bytes(),
             payload_size_bytes: artifact.wasm_gz_size_bytes,
         });
     }
@@ -2262,7 +2268,7 @@ pub fn compile_current_store_sequence_from_union(
             b"store-bootstrap",
             authority.binding.fleet_subnet_root,
         ),
-        manifest_payload_size_bytes: manifest_bytes.len() as u64,
+        manifest_payload_size_bytes: manifest_payload.identity.bytes,
     };
     fixture::append_actions(
         root,
@@ -2290,38 +2296,61 @@ pub fn compile_current_store_sequence_from_union(
     })
 }
 
+/// Exact owned bytes and the bounded digests computed before publication actions exist.
+#[derive(Debug)]
+struct PreparedStorePayload {
+    bytes: Vec<u8>,
+    identity: ArtifactIdentity,
+    chunk_hashes: Vec<Sha256Digest>,
+}
+
+impl PreparedStorePayload {
+    fn new(bytes: Vec<u8>) -> Result<Self, CurrentProtocolError> {
+        if bytes.is_empty() {
+            return Err(CurrentProtocolError::Configuration(
+                "Store publication payload is empty".into(),
+            ));
+        }
+        let (chunk_hashes, identity) = chunk_digests(
+            bytes.as_slice(),
+            NonZeroUsize::new(canic_core::CANIC_WASM_CHUNK_BYTES)
+                .expect("the governed Wasm chunk size is nonzero"),
+            MAX_ARTIFACT_READ_BYTES as u64,
+            MAX_ARTIFACT_READ_BYTES.div_ceil(canic_core::CANIC_WASM_CHUNK_BYTES),
+        )
+        .map_err(|source| CurrentProtocolError::Configuration(source.to_string()))?;
+        Ok(Self {
+            bytes,
+            identity,
+            chunk_hashes,
+        })
+    }
+}
+
 fn append_chunk_actions(
     actions: &mut Vec<CurrentFleetProtocolAction>,
     template_id: TemplateId,
     version: TemplateVersion,
-    bytes: &[u8],
+    payload: &PreparedStorePayload,
     manifest: Option<TemplateManifestInput>,
 ) -> Result<(), CurrentProtocolError> {
-    if bytes.is_empty() {
-        return Err(CurrentProtocolError::Configuration(
-            "Store publication payload is empty".into(),
-        ));
-    }
-    let (chunk_hashes, payload) = chunk_digests(
-        bytes,
-        NonZeroUsize::new(canic_core::CANIC_WASM_CHUNK_BYTES)
-            .expect("the governed Wasm chunk size is nonzero"),
-        MAX_ARTIFACT_READ_BYTES as u64,
-        MAX_ARTIFACT_READ_BYTES.div_ceil(canic_core::CANIC_WASM_CHUNK_BYTES),
-    )
-    .map_err(|source| CurrentProtocolError::Configuration(source.to_string()))?;
     let mut preparation = Some(TemplateChunkSetPrepareInput {
         manifest,
         template_id: template_id.clone(),
         version: version.clone(),
-        payload_hash: payload.sha256.as_bytes().to_vec(),
-        payload_size_bytes: payload.bytes,
-        chunk_hashes: chunk_hashes
-            .into_iter()
+        payload_hash: payload.identity.sha256.as_bytes().to_vec(),
+        payload_size_bytes: payload.identity.bytes,
+        chunk_hashes: payload
+            .chunk_hashes
+            .iter()
             .map(|digest| digest.as_bytes().to_vec())
             .collect(),
     });
-    for (index, bytes) in bytes.chunks(canic_core::CANIC_WASM_CHUNK_BYTES).enumerate() {
+    for (index, bytes) in payload
+        .bytes
+        .chunks(canic_core::CANIC_WASM_CHUNK_BYTES)
+        .enumerate()
+    {
         let request = TemplateChunkInput {
             preparation: preparation.take(),
             template_id: template_id.clone(),
@@ -2349,7 +2378,7 @@ fn append_chunk_actions(
 fn read_qualified_artifact(
     root: &Path,
     artifact: &ApplicationArtifactEntry,
-) -> Result<Vec<u8>, CurrentProtocolError> {
+) -> Result<PreparedStorePayload, CurrentProtocolError> {
     validate_release_artifact_relative_path(&artifact.wasm_gz_relative_path)
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     let path = root.join(&artifact.wasm_gz_relative_path);
@@ -2378,8 +2407,9 @@ fn read_qualified_artifact(
         .ok_or_else(|| {
             CurrentProtocolError::Configuration(format!("missing {}", path.display()))
         })?;
-    if bytes.len() as u64 != artifact.wasm_gz_size_bytes
-        || canic_core::cdk::utils::hash::hex_bytes(Sha256::digest(&bytes))
+    let payload = PreparedStorePayload::new(bytes)?;
+    if payload.identity.bytes != artifact.wasm_gz_size_bytes
+        || canic_core::cdk::utils::hash::hex_bytes(payload.identity.sha256.as_bytes())
             != artifact.wasm_gz_sha256_hex
     {
         return Err(CurrentProtocolError::Configuration(format!(
@@ -2387,7 +2417,7 @@ fn read_qualified_artifact(
             artifact.role
         )));
     }
-    Ok(bytes)
+    Ok(payload)
 }
 
 fn decode_sha256(value: &str) -> Result<[u8; 32], CurrentProtocolError> {

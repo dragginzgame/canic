@@ -18,9 +18,15 @@ fn checkpoint(aggregate: MeasurementAggregate) -> PerfEntry {
 fn public_performance_keeps_empty_zero_and_wide_totals() {
     for aggregate in [
         MeasurementAggregate::EMPTY,
-        MeasurementAggregate::from_parts(1, 0, Some(0), false, false).unwrap(),
-        MeasurementAggregate::from_parts(2, u128::from(u64::MAX) + 1, Some(u64::MAX), false, false)
-            .unwrap(),
+        ic_metrics::persistence::restore_aggregate(1, 0, Some(0), false, false).unwrap(),
+        ic_metrics::persistence::restore_aggregate(
+            2,
+            u128::from(u64::MAX) + 1,
+            Some(u64::MAX),
+            false,
+            false,
+        )
+        .unwrap(),
     ] {
         let rows = project(vec![checkpoint(aggregate)], &[]).unwrap();
         assert_eq!(rows.len(), 2);
@@ -46,17 +52,29 @@ fn public_performance_keeps_empty_zero_and_wide_totals() {
 fn public_performance_uses_actual_count_and_total_overflow_independently() {
     for (aggregate, flags) in [
         (
-            MeasurementAggregate::from_parts(u64::MAX, u128::from(u64::MAX), Some(1), false, false)
-                .unwrap(),
+            ic_metrics::persistence::restore_aggregate(
+                u64::MAX,
+                u128::from(u64::MAX),
+                Some(1),
+                false,
+                false,
+            )
+            .unwrap(),
             [false, false],
         ),
         (
-            MeasurementAggregate::from_parts(u64::MAX, 0, Some(0), true, false).unwrap(),
+            ic_metrics::persistence::restore_aggregate(u64::MAX, 0, Some(0), true, false).unwrap(),
             [true, false],
         ),
         (
-            MeasurementAggregate::from_parts(u64::MAX, u128::MAX, Some(u64::MAX), true, true)
-                .unwrap(),
+            ic_metrics::persistence::restore_aggregate(
+                u64::MAX,
+                u128::MAX,
+                Some(u64::MAX),
+                true,
+                true,
+            )
+            .unwrap(),
             [true, true],
         ),
     ] {
@@ -80,7 +98,8 @@ fn timer_registration_is_carried_without_matching_label_text() {
         started_at_ns: 11,
         sequence: 13,
     };
-    let aggregate = MeasurementAggregate::from_parts(u64::MAX, 0, Some(0), true, false).unwrap();
+    let aggregate =
+        ic_metrics::persistence::restore_aggregate(u64::MAX, 0, Some(0), true, false).unwrap();
     let mut rows = Vec::new();
     append(
         &mut rows,

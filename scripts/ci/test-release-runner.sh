@@ -59,6 +59,9 @@ for argument in "$@"; do export "$argument"; done
 if [[ "$target" == release-version ]]; then cat version; exit; fi
 if [[ "$target" == release-base-version ]]; then cat base-version; exit; fi
 printf '%s\n' "$target" >> events
+if [[ "$target" == release-verify && "${FIXTURE_RETAIN_BULK:-}" == yes ]]; then
+    perl -e 'open my $f, ">", ".release-state/bulk" or die $!; truncate $f, 33554433 or die $!;'
+fi
 printf '%s %s %s\n' "$target" "$RELEASE_VERSION" "${RELEASE_COMMIT:-}" >> selections
 if [[ "$target" == release-verify ]]; then
     attempt="$(awk '$0 == "release-verify" { count++ } END { print count }' events)"
@@ -269,6 +272,22 @@ expect_failure() {
         exit 1
     fi
 }
+
+# Retention refuses existing bulk before adapters, and new bulk before commit.
+new_fixture retention-preflight
+mkdir .release-state
+perl -e 'open my $f, ">", ".release-state/bulk" or die $!; truncate $f, 33554433 or die $!;'
+expect_failure patch origin main
+[[ ! -e events && -f .release-state/bulk ]]
+rm .release-state/bulk
+bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output 2>&1
+[[ "$(count_event push)" == 1 ]]
+new_fixture retention-adapter
+FIXTURE_RETAIN_BULK=yes expect_failure patch origin main
+[[ -f .release-state/bulk && "$(count_event commit)" == 0 ]]
+rm .release-state/bulk
+bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output 2>&1
+[[ "$(count_event push)" == 1 ]]
 
 # Explicit recovery rejects corrupt saved dates without changing intent.
 for invalid_date in 0000-01-01 1900-02-29 2026-02-29 2026-04-31; do
@@ -525,13 +544,16 @@ for kind in patch minor major; do
     done
 done
 
-# Discarding stale candidate links must not follow their targets or erase logs.
+# Retention refuses stale links without following targets or erasing logs.
 new_fixture fresh-candidate-links
 mkdir -p .release-state old-evidence
 printf 'retained diagnostics\n' > old-evidence/payload
 ln -s ../old-evidence .release-state/0.1.1.plan
 ln -s ../old-evidence .release-state/0.1.1.plan.files
 ln -s ../old-evidence/payload .release-state/0.1.1.plan.pr.json
+expect_failure patch origin main
+[[ -L .release-state/0.1.1.plan && "$(cat old-evidence/payload)" == 'retained diagnostics' ]] || exit 1
+rm .release-state/0.1.1.plan .release-state/0.1.1.plan.files .release-state/0.1.1.plan.pr.json
 bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output
 [[ "$(cat old-evidence/payload)" == 'retained diagnostics' ]] || exit 1
 [[ ! -L .release-state/0.1.1.plan && ! -L .release-state/0.1.1.plan.files && ! -e .release-state/0.1.1.plan.pr.json ]] || exit 1

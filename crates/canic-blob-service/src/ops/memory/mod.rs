@@ -8,12 +8,12 @@ use ic_blob_storage::ops::service::{
     installation::{self, INSTALLATION_MEMORY_KEY, ServiceInstallationMemories},
     stores::grants,
 };
-use ic_memory::{DefaultMemoryImpl, RuntimeMemory, StableKey};
+use ic_storage::{DefaultMemoryImpl, RuntimeMemory, StableKey};
 
 pub(super) type Memory = DefaultMemoryImpl;
 
 /// Complete service requests for the composing host; no registration or bootstrap.
-pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
+pub fn requests() -> Result<Vec<ic_storage::MemoryRequest>, ic_storage::AdmissionError> {
     installation::requests(crate::MEMORY_AUTHORITY)
 }
 
@@ -25,13 +25,10 @@ pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDecl
 pub fn host() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
     input.requests.extend(requests().expect("service requests"));
-    input.pool = canic::memory::pool::framework_pool(
-        vec![
-            ic_memory::MemoryAuthority::new(crate::MEMORY_AUTHORITY, crate::MEMORY_KEY_PREFIX)
-                .expect("service authority"),
-        ],
-        Vec::new(),
-    )
+    input.grants = canic::memory::grants::framework_grants(vec![
+        ic_storage::MemoryAuthority::new(crate::MEMORY_AUTHORITY, crate::MEMORY_KEY_PREFIX)
+            .expect("service authority"),
+    ])
     .expect("service grants");
     input
 }

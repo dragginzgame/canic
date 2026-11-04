@@ -1,30 +1,29 @@
 //! Module: memory::policy
 //!
 //! Responsibility: compose Canic memory bootstrap admission and policy identity.
-//! Does not own: memory-manager storage, stable schemas, or diagnostics rendering.
-//! Boundary: memory bootstrap passes this policy into `ic-memory` validation.
+//! Does not own: Storage allocation, stable schemas, or diagnostics rendering.
+//! Boundary: memory bootstrap passes this policy into `ic-storage` validation.
 
 use crate::memory::{admission::MemoryBootstrapAdmission, registry::MemoryRegistryError};
-use ic_memory::{MemoryManagerSlot, PolicyIdentity, RuntimeBootstrapPolicy, StableKey};
+use ic_storage::{PolicyIdentity, RuntimeBootstrapPolicy, StableKey};
 use sha2::{Digest as _, Sha256};
 
 const CANIC_MEMORY_BOOTSTRAP_POLICY_NAME: &str = "canic.memory-bootstrap-policy";
 const CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION: u32 = 1;
 
 ///
-/// CanicMemoryManagerPolicy
+/// CanicStoragePolicy
 ///
-/// Canic policy adapter for the `ic-memory` MemoryManager substrate
-/// allocation slots.
-/// Owned by memory policy and supplied to memory-manager bootstrap.
+/// Canic policy adapter for the `ic-storage` directory and namespace admission.
+/// Owned by memory policy and supplied to Storage bootstrap.
 ///
 
 #[derive(Clone, Debug, Default)]
-pub struct CanicMemoryManagerPolicy {
+pub struct CanicStoragePolicy {
     admission: Option<MemoryBootstrapAdmission>,
 }
 
-impl CanicMemoryManagerPolicy {
+impl CanicStoragePolicy {
     /// Use Canic's bootstrap identity without a consumer admission callback.
     #[must_use]
     pub const fn new() -> Self {
@@ -39,20 +38,16 @@ impl CanicMemoryManagerPolicy {
     }
 }
 
-impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
+impl RuntimeBootstrapPolicy for CanicStoragePolicy {
     type Error = MemoryRegistryError;
 
-    fn validate_allocation(
-        &self,
-        _key: &StableKey,
-        _slot: &MemoryManagerSlot,
-    ) -> Result<(), Self::Error> {
+    fn validate_allocation(&self, _key: &StableKey) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn prepare_bootstrap(
         &self,
-        admission: &mut ic_memory::BootstrapAdmission<'_>,
+        admission: &mut ic_storage::BootstrapAdmission<'_>,
     ) -> Result<(), Self::Error> {
         match &self.admission {
             Some(participant) => (participant.prepare)(admission),
@@ -67,7 +62,7 @@ impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
         match &self.admission {
             Some(participant) => {
                 hash.update([1]);
-                hash.update(participant.identity.as_bytes());
+                hash.update(participant.identity);
             }
             None => hash.update([0]),
         }
@@ -81,19 +76,13 @@ mod tests {
 
     #[test]
     fn runtime_bootstrap_policy_binds_optional_admission_token() {
-        let base = CanicMemoryManagerPolicy::new().runtime_bootstrap_identity();
+        let base = CanicStoragePolicy::new().runtime_bootstrap_identity();
         let policy = |token| {
-            CanicMemoryManagerPolicy::new()
-                .with_admission(MemoryBootstrapAdmission::new(
-                    PolicyIdentity::new(token),
-                    |_| Ok(()),
-                ))
+            CanicStoragePolicy::new()
+                .with_admission(MemoryBootstrapAdmission::new(token, |_| Ok(())))
                 .runtime_bootstrap_identity()
         };
-        assert_eq!(
-            base,
-            CanicMemoryManagerPolicy::new().runtime_bootstrap_identity()
-        );
+        assert_eq!(base, CanicStoragePolicy::new().runtime_bootstrap_identity());
         assert_ne!(base, policy([0; 32]));
         let token = [7; 32];
         assert_eq!(policy(token), policy(token));

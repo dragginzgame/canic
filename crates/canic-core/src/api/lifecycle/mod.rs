@@ -211,7 +211,11 @@ pub mod metrics {
         }
 
         // Assert one metric row count by its stable public labels.
-        fn assert_count(entries: &[crate::dto::metrics::MetricEntry], labels: &[&str], count: u64) {
+        fn assert_count(
+            entries: &[crate::dto::metric_page::MetricEntry],
+            labels: &[&str],
+            count: u64,
+        ) {
             let entry = entries
                 .iter()
                 .find(|entry| {

@@ -74,6 +74,18 @@ pub enum RootAdmissionStep {
 pub struct RootAdmissionOps;
 
 impl RootAdmissionOps {
+    /// Select only a retained phase with work the Root can advance autonomously.
+    pub(crate) fn pending_operation() -> Result<Option<[u8; 32]>, InternalError> {
+        let Some(record) = RootAdmissionStore::export().current else {
+            return Ok(None);
+        };
+        let Some(current) = record.current_transition else {
+            return Ok(None);
+        };
+        let (_, step) = Self::next_step(&current.request.root)?;
+        Ok((step != RootAdmissionStep::Waiting).then_some(current.request.operation_id))
+    }
+
     /// Return whether the bounded Root owner already retains this operation identity.
     pub(crate) fn retains_operation_id(
         root: &FleetSubnetRootBinding,

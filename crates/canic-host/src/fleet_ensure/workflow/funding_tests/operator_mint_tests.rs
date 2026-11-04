@@ -35,8 +35,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use {
-    ic_platform::pocket_ic::PocketIcBuilder,
-    ic_platform::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig},
+    ic_testkit::pocket_ic::PocketIcBuilder,
+    ic_testkit::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig},
 };
 
 #[derive(CandidType, Deserialize)]
@@ -459,7 +459,7 @@ fn operator_mint_journal_requires_explicit_review_and_approval_fields() {
     assert!(serde_json::from_value::<FleetEnsureJournalRecord>(journal).is_err());
 }
 
-pub(super) fn funded_operator() -> (ic_platform::pocket_ic::PocketIc, OperatorMintTransport) {
+pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMintTransport) {
     let config = Some(IcpFeaturesConfig::DefaultConfig);
     let mut pic = start_pocket_ic(
         PocketIcBuilder::new()
@@ -471,19 +471,20 @@ pub(super) fn funded_operator() -> (ic_platform::pocket_ic::PocketIc, OperatorMi
                 ..IcpFeatures::default()
             }),
     );
-    pic.set_time(SystemTime::now().into());
+    pic.set_time(SystemTime::now().into())
+        .expect("PocketIC set_time");
     let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
     let mut key = [0; 32];
     getrandom::fill(&mut key).unwrap();
     let identity = BasicIdentity::from_raw_key(&key);
-    let url = pic.make_live(None);
+    let url = pic.make_live(None).expect("PocketIC make_live");
     let agent = Agent::builder()
         .with_url(url)
         .with_identity(identity)
         .with_max_response_body_size(4 * 1024 * 1024)
         .build()
         .unwrap();
-    agent.set_root_key(pic.root_key().unwrap());
+    agent.set_root_key(pic.root_key().expect("PocketIC root_key").unwrap());
     let operator = agent.get_principal().unwrap();
     let reply = pic
         .update_call(

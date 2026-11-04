@@ -12,6 +12,7 @@ mod component_provisioning_reconciliation;
 mod component_provisioning_retry;
 mod component_provisioning_root_progress;
 mod component_provisioning_validation;
+mod continuation_retry;
 mod deployment_ledger;
 mod funding_rotation;
 mod registry_history;
@@ -291,6 +292,30 @@ impl FleetCoordinatorOps {
         Err(InternalError::unavailable())
     }
 
+    /// Select validated nonterminal provisioning demand from the current journals.
+    pub(crate) fn pending_component_provisioning()
+    -> Result<Option<FleetComponentProvisioningStatusResponse>, InternalError> {
+        let current = Self::current()?;
+        for record in [
+            current.component_provisioning.as_ref(),
+            current.component_scale_out.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let status = Self::provisioning_operation_observation(&current, record.operation_id)?
+                .ok_or_else(InternalError::invariant)?;
+            if status.phase != FleetComponentProvisioningPhase::RuntimesActivated
+                && !status.pending_root_failure.as_ref()
+                    .and_then(|failure| failure.origin.as_ref())
+                    .is_some_and(|origin| origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
+            {
+                return Ok(Some(status));
+            }
+        }
+        Ok(None)
+    }
+
     fn provisioning_operation_observation(
         current: &FleetCoordinatorRegistryRecord,
         operation_id: [u8; 32],
@@ -368,6 +393,7 @@ impl FleetCoordinatorOps {
             args.admission,
         )?;
         Ok(FleetCoordinatorRegistryRecord {
+            continuation_retries: Vec::new(),
             retirement:
                 crate::storage::stable::fleet_coordinator::FleetRetirementRecord::NotStarted,
             configured_app: args.configured_app,
@@ -793,6 +819,9 @@ impl FleetCoordinatorOps {
         {
             return Err(InternalError::invalid_input());
         }
+        let observed_origin = origin
+            .as_ref()
+            .is_some_and(|origin| origin.recorded_at_ns.is_some());
         let failure = FleetComponentProvisioningRootFailure {
             origin: origin.map(|origin| {
                 canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
@@ -811,7 +840,9 @@ impl FleetCoordinatorOps {
             diagnostic_code,
             failed_at_ns,
         };
-        if record.last_root_failure.as_ref() == Some(&failure) {
+        if record.last_root_failure.as_ref() == Some(&failure)
+            || (observed_origin && repeats_current_root_failure(record, &failure))
+        {
             return component_provisioning_status_response(record);
         }
         let mut next = current.clone();
@@ -1061,6 +1092,10 @@ impl FleetCoordinatorOps {
             response: &response,
             recorded_at_ns,
         })?;
+        if response == *previous {
+            // Waiting retains the issued intent; a later poll reconciles the same work.
+            return component_provisioning_status_response(record);
+        }
         let observed = FleetComponentProvisioningRootProvisionRecord {
             started_at_ns: intent.started_at_ns,
             response,
@@ -1698,6 +1733,9 @@ impl FleetCoordinatorOps {
             response,
             recorded_at_ns,
         )?;
+        if previous == root_activation_progress(response) {
+            return component_provisioning_status_response(record);
+        }
         commit_runtime_activation_response(
             &current,
             request,
@@ -1752,11 +1790,55 @@ impl FleetCoordinatorOps {
         let mut next = current.clone();
         next.root_draining_reservations
             .push(FleetSubnetRootDrainingReservationRecord {
+                continuation_requested: false,
                 response: response.clone(),
             });
         let next = Self::validate_current(next)?;
         Self::commit_transition(&current, next)?;
         Ok(response)
+    }
+
+    /// Retain execution demand separately from a prepared removal reservation.
+    pub(crate) fn request_root_removal_continuation(
+        operation_id: [u8; 32],
+    ) -> Result<(), InternalError> {
+        let current = Self::current()?;
+        let status = coordinator_root_removal_operation_status(&current, operation_id)?
+            .ok_or_else(InternalError::unavailable)?;
+        if status.readiness.is_some() {
+            return Ok(());
+        }
+        let mut next = current.clone();
+        let record = next
+            .root_draining_reservations
+            .iter_mut()
+            .find(|record| record.response.request.operation_id == operation_id)
+            .ok_or_else(InternalError::unavailable)?;
+        if record.continuation_requested {
+            return Ok(());
+        }
+        record.continuation_requested = true;
+        Self::commit_transition(&current, Self::validate_current(next)?)?;
+        Ok(())
+    }
+
+    /// Select requested removals until their exact deletion-readiness receipt is retained.
+    pub(crate) fn pending_root_removals() -> Result<Vec<[u8; 32]>, InternalError> {
+        let current = Self::current()?;
+        let mut pending = Vec::new();
+        for record in &current.root_draining_reservations {
+            if !record.continuation_requested {
+                continue;
+            }
+            let id = record.response.request.operation_id;
+            let status = coordinator_root_removal_operation_status(&current, id)?
+                .ok_or_else(InternalError::invariant)?;
+            if status.readiness.is_none() {
+                pending.push(id);
+            }
+        }
+        pending.sort_unstable();
+        Ok(pending)
     }
 
     pub(crate) fn root_draining_reservation_status(
@@ -1946,6 +2028,7 @@ impl FleetCoordinatorOps {
         current: FleetCoordinatorRegistryRecord,
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = Self::validate_current_registry(current)?;
+        continuation_retry::validate(&current)?;
         retirement::validate_retirement(&current)?;
         validate_component_provisioning_record(&current)?;
         validate_component_scale_out_receipts(&current)?;

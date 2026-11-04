@@ -4,7 +4,7 @@ use crate::dto::{
     canister::CanisterInspectionReserveResponse, error::Error,
     inspection_reserve::InspectionReserve,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 #[test]
 fn reserve_round_trip_preserves_authority_and_rejects_wrong_frames() {
     let target = Principal::from_slice(&[7; 29]);

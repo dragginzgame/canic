@@ -114,7 +114,9 @@ still governs demonstrated integration blockers.
   Approved release groups may keep one workspace and lockfile using the existing
   [explicit release-group contract](../docs/releases.md#explicit-cargo-release-groups).
   Its admitted member versions are the scoped exception to workspace-version
-  inheritance; root dependency inheritance and full workspace qualification remain.
+  inheritance; root dependency inheritance and repository-wide CI remain.
+  Release qualification defaults to the full gate until the consumer qualifies
+  an explicit [group plan](../docs/release-group-validation.md).
 - In a workspace with independent release groups, every member, including private
   tooling and fixtures, belongs to one explicit group. Remove
   `[workspace.package].version`; every member declares a literal package version
@@ -157,11 +159,22 @@ still governs demonstrated integration blockers.
 ### Visible release-group map in Cargo.toml
 
 For a workspace with independent release groups, include every workspace member
-in root `[workspace.dependencies]` with its local path and full current version.
+in root `[workspace.dependencies]` with its local path. Publishable members need
+their full current version. Members with `publish = false` may omit the dependency
+version, so Cargo can omit private path-only dev-dependencies from published packages.
+Publishable members may depend on private members only through these path-only
+development edges; versioned private dependencies and normal/build edges are rejected
+before release preparation.
 This is a complete crate catalog, including private qualification/tooling members
 and crates that no other member currently depends on.
-List release groups once in this manifest, as contiguous blocks in
-`[workspace.dependencies]`. Give each block a short title identifying the policy
+List release groups once in this manifest, as contiguous blocks **at the top of
+`[workspace.dependencies]`, before every external dependency**. Keep all local
+groups together, including their private members; do not move a private member
+into the external test/tooling section. Follow the local groups with external
+production dependencies, mixed production/test dependencies, then test/tooling-only
+dependencies, omitting empty sections. Build dependencies belong in the section
+matching their actual use, with a separate heading when useful.
+Give each group block a short title identifying the policy
 group and a separate `# Changelog : releases/<group>/CHANGELOG.md` line.
 Separate blocks with a blank line. Sort entries within each block using the
 formatter's grouped mode; do not interleave groups to impose a global alphabetic
@@ -173,26 +186,29 @@ For example:
 ```toml
 [workspace]
 members = [
-    "crates/ic-logging-stable",
-    "crates/ic-memory",
-    "crates/ic-metrics-stable",
-    "crates/ic-storage",
+    "crates/example-core",
+    "crates/example-derive",
+    "crates/example-host",
+    "crates/example-tests",
 ]
 resolver = "3"
 
 [workspace.dependencies]
-# Persistence
-# Changelog : releases/persistence/CHANGELOG.md
-ic-memory = { path = "crates/ic-memory", version = "0.60.0" }
-ic-storage = { path = "crates/ic-storage", version = "0.60.0" }
+# Core
+# Changelog : releases/core/CHANGELOG.md
+example-core = { path = "crates/example-core", version = "0.6.0" }
+example-derive = { path = "crates/example-derive", version = "0.6.0" }
+example-tests = { path = "crates/example-tests" } # Private qualification member
 
-# Metrics-stable
-# Changelog : releases/metrics-stable/CHANGELOG.md
-ic-metrics-stable = { path = "crates/ic-metrics-stable", version = "0.60.0" }
+# Host
+# Changelog : releases/host/CHANGELOG.md
+example-host = { path = "crates/example-host", version = "0.2.0" }
 
-# Logging-stable
-# Changelog : releases/logging-stable/CHANGELOG.md
-ic-logging-stable = { path = "crates/ic-logging-stable", version = "0.60.0" }
+# External production dependencies
+thiserror = "2.0"
+
+# External tests and tooling only
+serde_json = "1.0"
 ```
 
 The example illustrates the convention, not an instruction to create or rename
@@ -204,9 +220,10 @@ values remain actual Cargo requirements, not package-version inheritance. Do not
 copy numeric versions into comments or add a generated summary or shadow catalog.
 
 List each catalog alias in its owning release group's `dependencies` roster so
-release preparation updates it, including unused and renamed aliases. For every
-root path dependency naming a workspace member, spell the full
-current member version. Preserve its existing bare, `^`, `~` or `=` operator; do
+release preparation accounts for it, including unused and renamed aliases.
+Path-only private entries remain unchanged; their package versions still advance
+with their group. For every versioned root path dependency naming a workspace
+member, spell the full current member version. Preserve its existing bare, `^`, `~` or `=` operator; do
 not add exact pins merely for display. Group admission checks this equality for
 all groups, including through the normal dependency checker. It also checks
 complete member coverage, alias ownership and each path's actual member manifest,
@@ -218,7 +235,9 @@ remain unchanged. Manual member-version edits must update the corresponding real
 requirements too. Before adopting the check, align root declarations with current
 members without changing package versions.
 
-Use comment headings to distinguish local group catalogs from external production,
+Preserve this local-groups-first order during formatting, dependency adoption and
+release preparation; global alphabetic sorting must not move external entries
+ahead of the groups. Use comment headings to distinguish external production,
 build and test/tooling dependencies. Classify by actual member usage: mark shared
 production/test dependencies as mixed, and describe target/feature restrictions
 where they change the graph (for example, native-only schema support). The root

@@ -113,7 +113,7 @@ async fn provision_component_child(
     )? {
         // A bootstrap parent cannot serve Directory convergence until its own
         // activation finishes, so this one path must unwind and resume detached.
-        component_registry::schedule_component_child_allocation(component, operation_id);
+        component_registry::schedule_component_child_allocation(component, operation_id)?;
         return Err(InternalError::unavailable());
     }
 

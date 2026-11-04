@@ -94,7 +94,6 @@ impl ComponentRegistryOps {
         let consecutive_failures = before
             .last_failure
             .as_ref()
-            .filter(|failure| failure.diagnostic_code == diagnostic_code)
             .map_or(1, |failure| failure.consecutive_failures.saturating_add(1));
         let failure = RootComponentChildAllocationFailureRecord {
             diagnostic_code,

@@ -4,7 +4,7 @@ use crate::{
     dto::{fleet_activation as activation, runtime_reporting as native},
     ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId},
 };
-use ic_platform::principal::ExternalPrincipal;
+use ic_platform_types::principal::ExternalPrincipal;
 
 fn fleet() -> FleetBinding {
     FleetBinding {

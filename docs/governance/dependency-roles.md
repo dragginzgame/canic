@@ -13,11 +13,9 @@ The production family is `canic`, `canic-cli`, `canic-contracts`,
 `canic-control-plane`, `canic-core`, `canic-host`, `canic-icydb`, `canic-macros` and
 `canic-blob-service`. Demo/test Apps, framework probes and internal test crates are
 validation packages. The two independent Blob consumers are validation workspaces.
-`canic-auth` is an unpublished adapter scaffold with no runtime dependencies or
-production consumers; its mounting macro refuses compilation.
 
 The root catalog's tests/tooling-only entries are `canic-blob-service`, `canic-cli`,
-`canic-icydb` and `canic-testing-internal`. The first three are production packages,
+`canic-icydb` and `canic-tests`. The first three are production packages,
 but these catalog entries are consumed only by validation packages/dev edges.
 A deployment root is not its own dependency. Normal/build dependencies needed by
 production, including supported optional features and transitive uses, are labelled

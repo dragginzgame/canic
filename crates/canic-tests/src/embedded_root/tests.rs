@@ -1,0 +1,373 @@
+//! Recorded evidence distinguishes unchanged inputs, fresh qualification and corrupt artifacts.
+
+use super::*;
+
+#[test]
+fn relocated_fixture_preserves_internal_and_external_dependency_owners() {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let fixture = source::FixtureSource {
+        root: Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/embedded-root")
+            .join(format!("dependency-paths-{}-{nonce}", std::process::id())),
+    };
+    let workspace = fixture.root.join("workspace");
+    let external = fixture.root.join("external library");
+    let snapshot = fixture.root.join("snapshot");
+    fs::create_dir_all(workspace.join("crates/internal")).unwrap();
+    fs::create_dir_all(&external).unwrap();
+    fs::create_dir_all(&snapshot).unwrap();
+    let workspace = workspace.canonicalize().unwrap();
+    let external = external.canonicalize().unwrap();
+    let manifest = r#"
+        [workspace.dependencies]
+        internal = { version = "1.2.3", path = "crates/internal" }
+        external = { version = "=0.1.0", path = "../external library", features = ["sample"] }
+        registry = "2.3.4"
+    "#;
+    fs::write(workspace.join("Cargo.toml"), manifest).unwrap();
+    fs::write(snapshot.join("Cargo.toml"), manifest).unwrap();
+    source::bind_dependency_paths(&snapshot, &workspace).unwrap();
+    let relocated: toml::Value =
+        toml::from_str(&fs::read_to_string(snapshot.join("Cargo.toml")).unwrap()).unwrap();
+    let dependencies = &relocated["workspace"]["dependencies"];
+    assert_eq!(
+        dependencies["internal"]["path"].as_str(),
+        Some("crates/internal")
+    );
+    assert_eq!(dependencies["external"]["path"].as_str(), external.to_str());
+    assert_eq!(dependencies["external"]["version"].as_str(), Some("=0.1.0"));
+    assert_eq!(
+        dependencies["external"]["features"][0].as_str(),
+        Some("sample")
+    );
+    assert_eq!(dependencies["registry"].as_str(), Some("2.3.4"));
+    assert_eq!(
+        fs::read_to_string(workspace.join("Cargo.toml")).unwrap(),
+        manifest
+    );
+
+    fs::remove_dir(&external).unwrap();
+    assert_eq!(
+        source::bind_dependency_paths(&snapshot, &workspace)
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::NotFound
+    );
+}
+
+#[test]
+fn fixture_version_normalization_preserves_dependency_requirements_and_profiles() {
+    let manifest = r#"
+        [workspace.package]
+        edition = "2024"
+        [workspace.dependencies]
+        canic = { version = "0.110.50", path = "crates/canic", default-features = false }
+        external = "0.110.50"
+        external_path = { version = "0.110.50", path = "../external" }
+        alias = { package = "canic", version = "0.110.50", path = "crates/canic" }
+        independently_versioned = { version = "1.2.3", path = "other" }
+        [profile.fast]
+        inherits = "release"
+        lto = "thin"
+    "#;
+    let owned = std::collections::BTreeMap::from([("canic".into(), "0.110.50".into())]);
+    let normalized = source::normalize_manifest(manifest, &owned, source::FIXTURE_VERSION).unwrap();
+    let document: toml::Value = toml::from_str(&normalized).unwrap();
+    assert_eq!(document["workspace"]["package"].get("version"), None);
+    assert_eq!(
+        document["workspace"]["dependencies"]["canic"]["version"].as_str(),
+        Some("0.0.0")
+    );
+    assert_eq!(
+        document["workspace"]["dependencies"]["external"].as_str(),
+        Some("0.110.50")
+    );
+    assert_eq!(
+        document["workspace"]["dependencies"]["independently_versioned"]["version"].as_str(),
+        Some("1.2.3")
+    );
+    assert_eq!(
+        document["workspace"]["dependencies"]["external_path"]["version"].as_str(),
+        Some("0.110.50")
+    );
+    assert_eq!(
+        document["workspace"]["dependencies"]["alias"]["version"].as_str(),
+        Some("0.0.0")
+    );
+    assert_eq!(document["profile"]["fast"]["lto"].as_str(), Some("thin"));
+    assert_eq!(
+        normalized,
+        source::normalize_manifest(&normalized, &owned, source::FIXTURE_VERSION).unwrap()
+    );
+    assert_eq!(
+        normalized,
+        source::normalize_manifest(
+            &manifest
+                .replace("version = \"0.110.50\"", "version = \"0.110.51\"")
+                .replace(
+                    "external_path = { version = \"0.110.51\"",
+                    "external_path = { version = \"0.110.50\""
+                ),
+            &std::collections::BTreeMap::from([("canic".into(), "0.110.51".into())]),
+            source::FIXTURE_VERSION
+        )
+        .unwrap()
+    );
+    assert_ne!(
+        normalized,
+        source::normalize_manifest(
+            &manifest.replace("lto = \"thin\"", "lto = false"),
+            &owned,
+            source::FIXTURE_VERSION
+        )
+        .unwrap()
+    );
+    assert_ne!(
+        normalized,
+        source::normalize_manifest(
+            &manifest.replace("external = \"0.110.50\"", "external = \"0.110.51\""),
+            &owned,
+            source::FIXTURE_VERSION
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn fixture_lock_normalization_preserves_external_selections_and_ambiguous_references() {
+    let lock = r#"
+        version = 4
+        [[package]]
+        name = "canic"
+        version = "0.110.52"
+        dependencies = ["canic-core 0.110.52", "canic-core 0.110.52 (registry+https://github.com/rust-lang/crates.io-index)", "external"]
+        [[package]]
+        name = "canic-core"
+        version = "0.110.52"
+        [[package]]
+        name = "canic-core"
+        version = "0.110.52"
+        source = "registry+https://github.com/rust-lang/crates.io-index"
+        checksum = "selected-registry-checksum"
+        [[package]]
+        name = "external"
+        version = "0.110.52"
+        [[package]]
+        name = "tar"
+        version = "0.4.46"
+        source = "registry+https://github.com/rust-lang/crates.io-index"
+        checksum = "patched-tar-checksum"
+    "#;
+    let owned = std::collections::BTreeMap::from([
+        ("canic".into(), "0.110.52".into()),
+        ("canic-core".into(), "0.110.52".into()),
+    ]);
+    let normalized = source::normalize_lock(lock, &owned, source::FIXTURE_VERSION).unwrap();
+    let before: toml::Value = toml::from_str(lock).unwrap();
+    let after: toml::Value = toml::from_str(&normalized).unwrap();
+    let packages = after["package"].as_array().unwrap();
+    assert_eq!(packages[0]["version"].as_str(), Some("0.0.0"));
+    assert_eq!(packages[1]["version"].as_str(), Some("0.0.0"));
+    assert_eq!(
+        packages[0]["dependencies"][0].as_str(),
+        Some("canic-core 0.0.0")
+    );
+    assert_eq!(
+        packages[0]["dependencies"][1],
+        before["package"][0]["dependencies"][1]
+    );
+    assert_eq!(packages[0]["dependencies"][2].as_str(), Some("external"));
+    assert_eq!(&packages[2..], &before["package"].as_array().unwrap()[2..]);
+    let owned = owned
+        .into_keys()
+        .map(|name| (name, source::FIXTURE_VERSION.into()))
+        .collect();
+    assert_eq!(
+        normalized,
+        source::normalize_lock(&normalized, &owned, source::FIXTURE_VERSION).unwrap()
+    );
+}
+
+#[test]
+fn literal_member_versions_normalize_across_groups_with_locked_cargo_admission() {
+    let root = crate::workspace::discover()
+        .unwrap()
+        .join("target/embedded-root")
+        .join(format!(
+            "literal-groups-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    let fixture = source::FixtureSource { root };
+    fs::create_dir_all(&fixture.root).unwrap();
+    fs::write(
+        fixture.root.join("Cargo.toml"),
+        r#"
+[workspace]
+members = ["crates/core", "crates/adapter"]
+exclude = ["foreign"]
+resolver = "3"
+[workspace.package]
+edition = "2024"
+rust-version = "1.99.1"
+[workspace.dependencies]
+core_alias = { package = "canic", version = "1.2.3", path = "crates/core" }
+canic-blob-service = { version = "4.5.6", path = "crates/adapter" }
+foreign = { version = "9.9.9", path = "foreign" }
+"#,
+    )
+    .unwrap();
+    for (path, name, version, dependencies) in [
+        ("crates/core", "canic", "1.2.3", "foreign.workspace = true"),
+        (
+            "crates/adapter",
+            "canic-blob-service",
+            "4.5.6",
+            "core_alias.workspace = true",
+        ),
+    ] {
+        let path = fixture.root.join(path);
+        fs::create_dir_all(path.join("src")).unwrap();
+        fs::write(path.join("src/lib.rs"), "pub fn value() -> u32 { 7 }\n").unwrap();
+        fs::write(path.join("Cargo.toml"), format!(
+            "[package]\nname = {name:?}\nversion = {version:?}\nedition.workspace = true\nrust-version.workspace = true\n[dependencies]\n{dependencies}\n"
+        )).unwrap();
+    }
+    fs::create_dir_all(fixture.root.join("foreign/src")).unwrap();
+    fs::write(fixture.root.join("foreign/src/lib.rs"), "").unwrap();
+    let foreign =
+        "[package]\nname = \"foreign\"\nversion = \"9.9.9\"\nedition = \"2024\"\n[workspace]\n";
+    fs::write(fixture.root.join("foreign/Cargo.toml"), foreign).unwrap();
+    source::output(
+        Command::new("cargo")
+            .current_dir(&fixture.root)
+            .args(["generate-lockfile", "--offline"]),
+    )
+    .unwrap();
+    source::normalize(&fixture.root).unwrap();
+    for path in ["crates/core/Cargo.toml", "crates/adapter/Cargo.toml"] {
+        let manifest: toml::Value =
+            toml::from_str(&fs::read_to_string(fixture.root.join(path)).unwrap()).unwrap();
+        assert_eq!(
+            manifest["package"]["version"].as_str(),
+            Some(source::FIXTURE_VERSION)
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(fixture.root.join("foreign/Cargo.toml")).unwrap(),
+        foreign
+    );
+    let first_manifest = fs::read(fixture.root.join("Cargo.toml")).unwrap();
+    let first_lock = fs::read(fixture.root.join("Cargo.lock")).unwrap();
+    let lock: toml::Value = toml::from_slice(&first_lock).unwrap();
+    assert!(
+        lock["package"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|package| package["name"].as_str() == Some("foreign")
+                && package["version"].as_str() == Some("9.9.9"))
+    );
+    source::normalize(&fixture.root).unwrap();
+    assert_eq!(
+        fs::read(fixture.root.join("Cargo.toml")).unwrap(),
+        first_manifest
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("Cargo.lock")).unwrap(),
+        first_lock
+    );
+}
+
+#[test]
+#[ignore = "explicit real-Wasm reproduction across paths and a release version transaction"]
+fn embedded_peer_reproduces_across_paths_and_release_versions() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let manifest_before = fs::read(workspace.join("Cargo.toml")).unwrap();
+    let lock_before = fs::read(workspace.join("Cargo.lock")).unwrap();
+    let first = source::FixtureSource::prepare(&workspace).unwrap();
+    let second = source::FixtureSource::prepare(&workspace).unwrap();
+    source::change_workspace_version(&second.root, "0.110.51").unwrap();
+    source::normalize(&second.root).unwrap();
+    let first_spec = build_spec(&workspace, &first.root).unwrap();
+    let second_spec = build_spec(&workspace, &second.root).unwrap();
+    let first_inputs = resolve_cargo_build_inputs(&first_spec).unwrap();
+    let second_inputs = resolve_cargo_build_inputs(&second_spec).unwrap();
+    assert_eq!(first_inputs.input_digest(), second_inputs.input_digest());
+    let (first_bytes, _) = build(&workspace, &first_spec).unwrap();
+    let (second_bytes, _) = build(&workspace, &second_spec).unwrap();
+    assert_eq!(sha256_hex(&first_bytes), sha256_hex(&second_bytes));
+    assert_eq!(first_bytes, fs::read(workspace.join(ARTIFACT)).unwrap());
+    assert!(
+        !first_bytes
+            .windows(workspace.as_os_str().len())
+            .any(|window| window == workspace.as_os_str().as_encoded_bytes())
+    );
+    let producer = second
+        .root
+        .join("canisters/test/sharding_root_stub/src/lib.rs");
+    let contents = fs::read_to_string(&producer).unwrap();
+    fs::write(
+        &producer,
+        format!("{contents}\ncompile_error!(\"changed fixture producer\");\n"),
+    )
+    .unwrap();
+    assert_ne!(
+        resolve_cargo_build_inputs(&second_spec)
+            .unwrap()
+            .input_digest(),
+        first_inputs.input_digest()
+    );
+    assert!(build(&workspace, &second_spec).is_err());
+    assert_eq!(
+        fs::read(workspace.join("Cargo.toml")).unwrap(),
+        manifest_before
+    );
+    assert_eq!(fs::read(workspace.join("Cargo.lock")).unwrap(), lock_before);
+}
+
+#[test]
+fn changed_sources_need_qualification_but_wrong_artifacts_never_reuse_evidence() {
+    let bytes = b"fixture artifact";
+    let evidence = FixtureEvidence {
+        schema_version: 1,
+        package: PACKAGE.into(),
+        target: TARGET.into(),
+        profile: PROFILE.into(),
+        fixture_version: source::FIXTURE_VERSION.into(),
+        source_input_digest: "a1".repeat(32),
+        build_fingerprint: "b2".repeat(32),
+        lock_sha256: "c3".repeat(32),
+        producer_lock_sha256: "e5".repeat(32),
+        artifact_sha256: sha256_hex(bytes),
+        cargo: "cargo identity".into(),
+        rustc: "rustc identity".into(),
+    };
+    assert!(recorded_match(&evidence, &"a1".repeat(32), bytes).unwrap());
+    assert!(!recorded_match(&evidence, &"d4".repeat(32), bytes).unwrap());
+    assert_eq!(
+        recorded_match(&evidence, &"a1".repeat(32), b"changed artifact")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidData
+    );
+    let changed = FixtureEvidence {
+        target: "another-target".into(),
+        ..evidence
+    };
+    assert_eq!(
+        recorded_match(&changed, &"a1".repeat(32), bytes)
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidData
+    );
+}

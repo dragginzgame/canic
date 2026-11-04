@@ -28,7 +28,7 @@ pub enum PublicHealthStatus {
     derive(ic_wire::Wire)
 )]
 pub struct PublicHealth {
-    pub canister_id: ic_platform::Principal,
+    pub canister_id: ic_platform_types::Principal,
     pub role: Option<String>,
     pub health: PublicHealthStatus,
     pub observed_at_ns: u64,
@@ -53,7 +53,7 @@ pub struct PublicMetricsRequest {
 )]
 pub struct PublicMetric {
     pub name: String,
-    pub canister_id: Option<ic_platform::Principal>,
+    pub canister_id: Option<ic_platform_types::Principal>,
     pub value: u128,
     pub unit: String,
     pub observed_at_ns: u64,
@@ -97,7 +97,7 @@ pub struct PublicMetricsSnapshot {
 pub struct PublicHistoryRequest {
     pub family: PublicMetricFamily,
     pub name: String,
-    pub canister_id: Option<ic_platform::Principal>,
+    pub canister_id: Option<ic_platform_types::Principal>,
     pub page: PageRequest,
 }
 

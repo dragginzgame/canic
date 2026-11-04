@@ -5,8 +5,8 @@
 //! Boundary: access expressions call auth predicates before endpoint workflow execution.
 
 mod attestation;
-#[cfg(feature = "internal-test-fixtures")]
-mod measurement;
+#[cfg(feature = "auth-root-delegation-state")]
+pub mod portable_registration;
 mod predicates;
 
 use crate::{access::AccessError, cdk::types::Principal, ops::ic::IcOps};
@@ -21,10 +21,6 @@ pub use crate::{
     model::auth::application_authorization::CanonicalApplicationScopes,
 };
 
-#[cfg(feature = "internal-test-fixtures")]
-#[doc(hidden)]
-pub use measurement::measure_local_application_authorization_denial;
-
 /// Public synchronous request for one caller-bound local application decision.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LocalApplicationAuthorizationRequest<'a> {
@@ -32,8 +28,7 @@ pub struct LocalApplicationAuthorizationRequest<'a> {
     pub required_scope: ApplicationScopeRef<'a>,
 }
 
-/// Return a closed application admission decision until portable Auth is integrated.
-/// Caller mismatches retain their typed refusal; no session can grant access.
+/// Authorize the actual caller through its local session and current protected enrollment.
 #[must_use]
 pub fn authorize_local_application(
     request: LocalApplicationAuthorizationRequest<'_>,
@@ -52,6 +47,12 @@ fn authorize_with_values(
     } else if actual_caller != request.observed_transport_caller {
         LocalApplicationAuthorizationDenial::CallerMismatch
     } else {
+        #[cfg(feature = "auth-local-application-authorization")]
+        return crate::api::auth::portable::authorize(
+            actual_caller,
+            request.required_scope.as_str(),
+        );
+        #[cfg(not(feature = "auth-local-application-authorization"))]
         LocalApplicationAuthorizationDenial::AuthorityUnavailable
     };
     LocalApplicationAuthorizationDecision::Deny(denial)

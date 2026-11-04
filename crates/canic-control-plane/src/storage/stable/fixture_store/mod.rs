@@ -19,9 +19,9 @@ std::thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::FIXTURE_STORE_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                BTreeMap::create(allocation)
+                BTreeMap::create(allocation).expect("Storage operation failed")
             } else {
-                BTreeMap::load(allocation)
+                BTreeMap::load(allocation).expect("Storage operation failed")
             }
         });
 }
@@ -67,12 +67,17 @@ impl FixtureStore {
                 expected_chunks: 0,
                 stored_chunks: 0,
             };
-            for entry in map {
+            for entry in map
+                .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+            {
                 match entry.key()[0] {
                     1 => {
                         let source: FixtureSourceRecord =
-                            canic_contracts::serialization::deserialize(&entry.value())
-                                .expect("fixture source record");
+                            canic_contracts::serialization::deserialize(
+                                &entry.value().expect("Storage operation failed"),
+                            )
+                            .expect("fixture source record");
                         inventory.sources += 1;
                         inventory.expected_chunks = inventory
                             .expected_chunks
@@ -150,9 +155,11 @@ impl FixtureStore {
     pub fn commit(entries: Vec<FixtureStoreEntryRecord>, projected_bytes: u64) {
         FIXTURES.with_borrow_mut(|map| {
             for entry in entries {
-                map.insert(entry.key, entry.value);
+                map.insert(entry.key, entry.value)
+                    .expect("Storage operation failed");
             }
-            map.insert(ACCOUNTING_KEY, projected_bytes.to_le_bytes().to_vec());
+            map.insert(ACCOUNTING_KEY, projected_bytes.to_le_bytes().to_vec())
+                .expect("Storage operation failed");
         });
     }
 
@@ -165,19 +172,30 @@ impl FixtureStore {
                     std::ops::Bound::Excluded(ACCOUNTING_KEY),
                     std::ops::Bound::Unbounded,
                 ))
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .next()
-                .map(|entry| (*entry.key(), entry.value()));
+                .map(|entry| {
+                    (
+                        *entry.key(),
+                        entry.value().expect("Storage operation failed"),
+                    )
+                });
             if let Some((key, value)) = next {
-                let bytes = map.get(&ACCOUNTING_KEY).expect("fixture byte ledger");
+                let bytes = map
+                    .get(&ACCOUNTING_KEY)
+                    .expect("Storage operation failed")
+                    .expect("fixture byte ledger");
                 let occupied = u64::from_le_bytes(bytes.try_into().expect("fixture byte ledger"));
                 let remaining = occupied
                     .checked_sub((KEY_BYTES + value.len()) as u64)
                     .expect("fixture entry charge");
-                map.remove(&key);
-                map.insert(ACCOUNTING_KEY, remaining.to_le_bytes().to_vec());
+                map.remove(&key).expect("Storage operation failed");
+                map.insert(ACCOUNTING_KEY, remaining.to_le_bytes().to_vec())
+                    .expect("Storage operation failed");
             }
             if map.len() <= 1 {
-                map.remove(&ACCOUNTING_KEY);
+                map.remove(&ACCOUNTING_KEY)
+                    .expect("Storage operation failed");
                 true
             } else {
                 false
@@ -196,9 +214,10 @@ impl FixtureStore {
         FIXTURES.with_borrow(|map| FixtureStoreData {
             entries: map
                 .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .map(|entry| FixtureStoreEntryRecord {
                     key: *entry.key(),
-                    value: entry.value(),
+                    value: entry.value().expect("Storage operation failed"),
                 })
                 .collect(),
         })
@@ -207,18 +226,19 @@ impl FixtureStore {
     #[cfg(test)]
     pub fn import(data: FixtureStoreData) {
         FIXTURES.with_borrow_mut(|map| {
-            while let Some(entry) = map.first_key_value() {
-                map.remove(&entry.0);
+            while let Some(entry) = map.first_key_value().expect("Storage operation failed") {
+                map.remove(&entry.0).expect("Storage operation failed");
             }
             for entry in data.entries {
-                map.insert(entry.key, entry.value);
+                map.insert(entry.key, entry.value)
+                    .expect("Storage operation failed");
             }
         });
     }
 }
 
 fn get(key: [u8; KEY_BYTES]) -> Option<Vec<u8>> {
-    FIXTURES.with_borrow(|map| map.get(&key))
+    FIXTURES.with_borrow(|map| map.get(&key).expect("Storage operation failed"))
 }
 
 fn grant_key(target: Principal) -> [u8; KEY_BYTES] {

@@ -112,7 +112,7 @@ fn governed_pocketic_release_binding_retains_runtime_identity() {
         canister_build::CanisterBuildProfile,
     };
     use canic_contracts::ids::BuildNetwork;
-    use ic_platform::pocket_ic::PocketIcBuilder;
+    use ic_testkit::pocket_ic::PocketIcBuilder;
     use std::fs;
 
     let root = crate::test_support::temp_dir("release-binding");
@@ -238,14 +238,16 @@ lto = true
 }
 
 fn assert_runtime_identity(
-    pic: &ic_platform::pocket_ic::PocketIc,
+    pic: &ic_testkit::pocket_ic::PocketIc,
     bound: &[u8],
     template: &[u8],
     id: ReleaseBuildId,
 ) {
-    let canister = pic.create_canister();
-    pic.add_cycles(canister, 5_000_000_000_000);
-    pic.install_canister(canister, bound.to_vec(), id.to_string().into_bytes(), None);
+    let canister = pic.create_canister().expect("PocketIC create_canister");
+    pic.add_cycles(canister, 5_000_000_000_000)
+        .expect("PocketIC add_cycles");
+    pic.install_canister(canister, bound.to_vec(), id.to_string().into_bytes(), None)
+        .expect("PocketIC install_canister");
     let reply = pic
         .query_call(
             canister,
@@ -271,9 +273,12 @@ fn assert_runtime_identity(
                 request,
             )
             .unwrap_err();
+        let ic_testkit::pocket_ic::ClientError::Canister(rejected) = rejected else {
+            panic!("expected a canister rejection");
+        };
         assert_eq!(
             rejected.reject_code,
-            ic_platform::pocket_ic::RejectCode::CanisterError
+            ic_testkit::pocket_ic::RejectCode::CanisterError
         );
     }
     // A mismatched initializer must not replace a working installation.
@@ -285,9 +290,12 @@ fn assert_runtime_identity(
             None,
         )
         .unwrap_err();
+    let ic_testkit::pocket_ic::ClientError::Canister(rejected) = rejected else {
+        panic!("expected a canister rejection");
+    };
     assert_eq!(
         rejected.reject_code,
-        ic_platform::pocket_ic::RejectCode::CanisterError
+        ic_testkit::pocket_ic::RejectCode::CanisterError
     );
     let unbound = pic
         .reinstall_canister(
@@ -297,9 +305,12 @@ fn assert_runtime_identity(
             None,
         )
         .unwrap_err();
+    let ic_testkit::pocket_ic::ClientError::Canister(unbound) = unbound else {
+        panic!("expected a canister rejection");
+    };
     assert_eq!(
         unbound.reject_code,
-        ic_platform::pocket_ic::RejectCode::CanisterError
+        ic_testkit::pocket_ic::RejectCode::CanisterError
     );
     pic.reinstall_canister(canister, bound.to_vec(), id.to_string().into_bytes(), None)
         .unwrap();

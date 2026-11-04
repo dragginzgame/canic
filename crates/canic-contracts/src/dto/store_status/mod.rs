@@ -1,5 +1,5 @@
 //! Native retained installation authority; stored identities keep their canonical representation.
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 /// Complete Store authority, including its exact release and installed module hash.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

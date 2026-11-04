@@ -140,30 +140,21 @@ impl<const N: u32> Storable for BoundedString<N> {
         is_fixed_size: false,
     };
 
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Borrowed(self.0.as_bytes())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Borrowed(self.0.as_bytes()))
     }
 
-    fn into_bytes(self) -> Vec<u8> {
-        self.0.into_bytes()
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok(self.0.into_bytes())
     }
 
     /// Decode a bounded UTF-8 string from stable memory.
     ///
-    /// # Panics
-    ///
-    /// Panics when stable bytes exceed the declared bound or are not valid UTF-8.
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let bytes = bytes.into_owned();
-        assert!(
-            u64::try_from(bytes.len()).is_ok_and(|length| length <= u64::from(N)),
-            "stable BoundedString<{N}> is {} bytes; maximum is {N}",
-            bytes.len()
-        );
-        let value = String::from_utf8(bytes)
-            .unwrap_or_else(|err| panic!("stable BoundedString<{N}> is not UTF-8: {err}"));
-
-        Self(value)
+    fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        String::from_utf8(bytes.into_owned())
+            .map(Self)
+            .map_err(|_| ic_storage::storable::CodecError::Invalid("bounded UTF-8 string"))
     }
 }
 
@@ -252,14 +243,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "stable BoundedString<16> is 17 bytes; maximum is 16")]
     fn stable_decode_rejects_overlong_bytes() {
-        let _ = BoundedString::<16>::from_bytes(Cow::Owned(vec![b'a'; 17]));
+        assert_eq!(
+            BoundedString::<16>::from_bytes(Cow::Owned(vec![b'a'; 17])).unwrap_err(),
+            ic_storage::storable::CodecError::Bounds
+        );
     }
 
     #[test]
-    #[should_panic(expected = "stable BoundedString<16> is not UTF-8")]
     fn stable_decode_rejects_invalid_utf8() {
-        let _ = BoundedString::<16>::from_bytes(Cow::Owned(vec![0xff]));
+        assert!(matches!(
+            BoundedString::<16>::from_bytes(Cow::Owned(vec![0xff])),
+            Err(ic_storage::storable::CodecError::Bounds
+                | ic_storage::storable::CodecError::Invalid(_))
+        ));
     }
 }

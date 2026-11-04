@@ -4,32 +4,35 @@
 //! Does not own: profile-pruned status envelopes, durable state, advancement, or policy.
 //! Boundary: the destination macro composes these durable details into its exact status union.
 
+use crate::dto::{
+    component_registry::{
+        RootComponentAllocationResponse, RootComponentDeletionResponse,
+        RootComponentDrainingResponse,
+    },
+    fleet_registry::{
+        FleetSubnetRootDeletionReadinessIntentRequest, FleetSubnetRootDeletionReadinessRequest,
+        FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncResponse,
+        FleetSubnetRootRemovalPublicationResponse,
+    },
+    fleet_subnet_root::{
+        FleetSubnetRootDeletionPreparationResponse, FleetSubnetRootDrainingResponse,
+        FleetSubnetRootFinalInventoryResponse, FleetSubnetRootStoreBindingFinalizationResponse,
+        FleetSubnetRootStoreDeletionResponse, FleetSubnetRootStoreReclamationResponse,
+    },
+};
+#[cfg(feature = "external-candid")]
 use crate::{
     cycles::Cycles,
     dto::{
-        component_registry::{
-            RootComponentAllocationResponse, RootComponentDeletionResponse,
-            RootComponentDrainingResponse,
-        },
         fleet_funding::{
             FleetFundingPolicyRotationRootReceipt, FleetRootFundingRequest,
             FleetRootFundingResponse,
-        },
-        fleet_registry::{
-            FleetSubnetRootDeletionReadinessIntentRequest, FleetSubnetRootDeletionReadinessRequest,
-            FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncResponse,
-            FleetSubnetRootRemovalPublicationResponse,
-        },
-        fleet_subnet_root::{
-            FleetSubnetRootDeletionPreparationResponse, FleetSubnetRootDrainingResponse,
-            FleetSubnetRootFinalInventoryResponse, FleetSubnetRootStoreBindingFinalizationResponse,
-            FleetSubnetRootStoreDeletionResponse, FleetSubnetRootStoreReclamationResponse,
         },
         icp_refill::{IcpRefillResponse, IcpRefillTrigger},
     },
     ids::{FleetFundingProfile, FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy},
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 
 /// Root Component allocation detail projected through the operation lane.
@@ -64,6 +67,7 @@ pub struct RootRemovalOperationStatus {
 
 /// Latest Root-local ICP refill outcome with its durable manual/automatic owner.
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct RootIcpRefillStatusResponse {
     pub trigger: IcpRefillTrigger,
     pub amount_e8s: u64,
@@ -76,6 +80,7 @@ pub struct RootIcpRefillStatusResponse {
 /// One exact retained ICP-refill effect and its source account for release review.
 /// Retry exhaustion is evidence, never a settlement receipt.
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct RootIcpRefillReleaseEvidence {
     pub transfer_uncertain: bool,
     pub record_id: u64,
@@ -103,6 +108,7 @@ pub struct RootIcpRefillReleaseEvidence {
 /// Controller-only funding census; does not seal producers or authorize reset.
 /// Pages include all retained refill outcomes and historical source accounts.
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct RootFundingReleaseResponse {
     pub fleet_subnet_root: Principal,
     pub policy_generation: u64,
@@ -118,6 +124,7 @@ pub struct RootFundingReleaseResponse {
 
 /// Controller-only Root operating-funding and emergency-refill projection.
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct RootFundingStatusResponse {
     pub fleet_subnet_root: Principal,
     pub lifecycle_status: crate::dto::fleet_registry::FleetSubnetRootStatus,
@@ -206,14 +213,14 @@ pub struct RootProvisioningReleaseEntry {
     pub key: RootProvisioningReleaseKey,
     pub plan_hash: [u8; 32],
     pub phase: RootProvisioningReleasePhase,
-    pub delivery_in_flight: Option<ic_platform::principal::ExternalPrincipal>,
+    pub delivery_in_flight: Option<ic_platform_types::principal::ExternalPrincipal>,
     pub last_failure: Option<crate::dto::component_provisioning::RootComponentProvisioningFailure>,
 }
 
 /// One retained operation per page, with key-only lookahead and no new-work admission.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct RootProvisioningReleaseResponse {
-    pub root: ic_platform::principal::ExternalPrincipal,
+    pub root: ic_platform_types::principal::ExternalPrincipal,
     pub active_provisioning: Option<[u8; 32]>,
     pub active_directory_synchronization: Option<[u8; 32]>,
     pub entry: Option<RootProvisioningReleaseEntry>,

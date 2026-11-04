@@ -1,6 +1,6 @@
 //! Native Root renewal reporting; persisted issuer state and deadlines are unchanged.
 use crate::dto::auth::{DelegatedRoleGrant, DelegationAudience, RootIssuerRenewalBatchView};
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Native RootIssuerRenewalTemplateView boundary.

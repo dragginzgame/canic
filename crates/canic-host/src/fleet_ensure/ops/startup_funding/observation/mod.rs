@@ -47,18 +47,18 @@ pub fn observe_child(
             child_funding::RESPONSE_LIMITS,
         )
         .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
-    project_child(response.into(), parent, child)
+    project_child(response, parent, child)
 }
 
 pub(in crate::fleet_ensure) fn project_child(
-    value: canic_contracts::dto::observability::ChildFundingUsage,
+    value: canic_contracts::dto::child_funding::ChildFundingUsage,
     parent: Principal,
     child: Principal,
 ) -> Result<
     crate::fleet_ensure::view::startup_funding::StartupChildAccounting,
     StartupUsageUnavailable,
 > {
-    if value.parent != parent || value.child != child {
+    if (value.parent, value.child) != (parent.into(), child.into()) {
         return Err(StartupUsageUnavailable::AuthorityMismatch);
     }
     if value.last_accounted_at_secs > value.observed_at_ns / 1_000_000_000

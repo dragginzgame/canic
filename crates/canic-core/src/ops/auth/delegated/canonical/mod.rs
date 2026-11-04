@@ -483,6 +483,19 @@ mod tests {
     }
 
     #[test]
+    fn cert_hash_rejects_invalid_scope_grammar() {
+        let mut cert = sample_cert();
+        cert.grants = vec![grant("project_instance", &["read:Write"])];
+
+        assert_eq!(
+            cert_hash(&cert),
+            Err(CanonicalAuthError::Scope(
+                ScopeLabelError::InvalidSegmentStart { offset: 5 }
+            ))
+        );
+    }
+
+    #[test]
     fn cert_hash_rejects_noncanonical_scope_order() {
         let mut cert = sample_cert();
         cert.grants = vec![grant("project_instance", &["write", "read"])];

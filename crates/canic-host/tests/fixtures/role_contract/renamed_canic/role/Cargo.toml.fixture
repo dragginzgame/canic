@@ -20,4 +20,4 @@ path = "src/lib.rs"
 framework = { workspace = true, features = [] }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }

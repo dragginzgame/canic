@@ -138,6 +138,8 @@ impl TimerAuthorityWorkflow {
             recovery_watchdog_identity()?,
         ]);
         for identity in [
+            #[cfg(feature = "auth-local-application-authorization")]
+            runtime::auth::portable::PortableSessionWorkflow::claimed_identity()?,
             #[cfg(any(test, feature = "auth-root-delegation-state"))]
             runtime::auth::RuntimeAuthWorkflow::claimed_root_issuer_renewal_timer_identity()?,
             runtime::intent::IntentCleanupWorkflow::claimed_timer_identity()?,
@@ -181,6 +183,8 @@ impl TimerAuthorityWorkflow {
         #[cfg(any(test, feature = "auth-root-delegation-state"))]
         runtime::auth::RuntimeAuthWorkflow::cancel_root_issuer_renewal_timer()?;
         runtime::intent::IntentCleanupWorkflow::cancel_timer()?;
+        #[cfg(feature = "auth-local-application-authorization")]
+        runtime::auth::portable::PortableSessionWorkflow::cancel()?;
         runtime::log::LogRetentionWorkflow::cancel_timer()?;
         crate::workflow::metrics::publication::timer::PublicSamplingTimer::cancel_timer()?;
         runtime::cycles::CycleWorkflow::cancel_timer()?;
@@ -230,6 +234,10 @@ impl TimerAuthorityWorkflow {
     /// Recover expired core-owned business attempts for the one role-native watchdog.
     pub(crate) fn recover_expired_async_jobs(now_ns: u64) -> u64 {
         let mut recovered = 0u64;
+        #[cfg(feature = "auth-local-application-authorization")]
+        if runtime::auth::portable::PortableSessionWorkflow::recover_expired(now_ns) {
+            recovered = recovered.saturating_add(1);
+        }
         #[cfg(any(test, feature = "auth-root-delegation-state"))]
         if runtime::auth::RuntimeAuthWorkflow::recover_expired_root_issuer_renewal(now_ns) {
             recovered = recovered.saturating_add(1);

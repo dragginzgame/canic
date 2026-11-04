@@ -1,5 +1,13 @@
 # AGENTS.md
 
+For scope, delegated delivery, validation, compiler support and reporting, use
+[Shared policy at e84252f](https://github.com/dragginzgame/shared-tooling/blob/e84252f5740bacd708359580455ea2b6fd67df38/DRAGGINZGAME.md)
+and its revision-bound references over older snapshot or local-guide wording.
+This includes Rust 1.99.1 as minimum and pinned development/release compiler;
+check local declarations and qualification before claiming adoption is complete.
+Product-specific safeguards and scoped permissions below remain binding.
+This policy reference does not refresh executable snapshots.
+
 Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), whose reviewed revision is recorded in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
 
 This file is normative for automated agents and contributors. If code conflicts
@@ -54,15 +62,16 @@ never delegates broad validation, Git publication or deployment.
 ## Ownership
 - Runtime/facade: `canic`, `canic-core`, `canic-macros`.
 - Canister control plane: `canic-control-plane`. Fleet artifact entrypoints and
-  their generated Cargo packages are owned by `canic-host`; canonical Candid
-  ships with `canic`.
+  their generated Cargo packages are owned by `canic-host`. Owned endpoint
+  contracts use Wire; required external IC interfaces retain Candid.
 - Host/operator: `canic-cli`, `canic-host`. IC Backup owns the generic backup engine.
-- Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
+- Testing: IC Tooling's `ic-testkit`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
 - Canic-owned adapter packages live under `crates/<package-name>/`, including
   `canic-blob-service` and `canic-icydb`, and share the root workspace catalog,
-  lockfile and release version. Independent consumer fixtures live separately
+  lockfile. Framework, Host/CLI and adapter versions follow the explicit groups in
+  `ci/cargo-release-groups.json`. Independent consumer fixtures live separately
   under `integrations/`; reusable engines remain with their upstream owners.
 - Adapter endpoint composition uses `mount!` at the consuming canister root.
   Mounting contributes endpoints only; lifecycle and memory composition are
@@ -85,39 +94,32 @@ as explicitly approved by the maintainer for this adoption
   native and PocketIC cases qualify their selected managed graphs.
 - The 2026-10-28 maintainer decision moves the Blob adapter to
   `crates/canic-blob-service/`, superseding its package-location exception. It
-  remains in the coherent publication family after `canic`.
+  owns its independent Blob service release group; its declared framework
+  dependency must be available before publication.
 - `integrations/blob-service/consumer/` and
   `integrations/blob-service/embedded-consumer/` retain their independent
   root-package workspaces and existing package locations. Each private consumer
   owns its catalog and Cargo.lock and qualifies the published blob dependency
   graph. Root formatting covers the adapter; formatting also covers both consumer
-  roots. Locked managed Wasm builds, runtime-identity checks, Candid parity and
+  roots. Locked managed Wasm builds, runtime-identity checks, owned Wire and required external Candid contract parity, and
   the owning managed installation/recovery cases cover their selected graphs.
 
 These exceptions preserve existing paths and dependency boundaries; they do not
 authorize additional independent workspaces, package renames or dependency changes.
 
-## Accepted 0.112 Wire hard cut — 2026-10-22
+## Protocol ownership
 
-The maintainer selected implementing #613's coordinated Wire hard cut in the
-current batch, superseding the earlier decision to ship owned Candid contracts.
-Follow [the migration contract](docs/design/0.112-standalone-blob-service-extraction/wire-hard-cut.md).
-Migrate owned endpoints, their callers, generated bindings and release identities
-together. Do not reconstruct Wire schemas from DID, keep fallback codecs, or
-reinterpret Candid hashes as Wire hashes. Required external IC/provider protocols
-retain their specified Candid encoding. The 2026-10-26 completion decision in that contract also removes Canic-owned
-`CandidType` derives/implementations: owned initialization payloads and hash inputs
-move with their producers and validators. Required external types come from their
-upstream owner, including `ic-platform` for IC contracts. Generic external-Candid
-adapter bounds may remain. Storage representation follows the maintainer's
-2026-10-29 Wire hard cut for owned stable records and checkpoints; dedicated Fleet
-activation and release-build CBOR commitments retain their exact encodings.
-Lifecycle safety is unchanged. No next-minor work or release
-execution is implied.
+Owned endpoints, initialization payloads, hash inputs, stable records and
+checkpoints use Wire. Change their producers, callers, generated bindings and
+release identities together. Do not reconstruct schemas from DID, retain
+fallback codecs or reinterpret Candid hashes as Wire hashes. Required external
+IC/provider protocols retain their specified Candid encoding; dedicated Fleet
+activation and release-build CBOR commitments retain their exact bytes. See
+[the protocol migration contract](docs/design/0.112-standalone-blob-service-extraction/wire-hard-cut.md).
 
 ## Pre-1.0 Hard Cuts
 
-The maintainer authorized the optional ICRC adapter in the pending 0.113 batch.
+The optional ICRC adapter remains explicitly selected by applications.
 `canic::icrc::mount!` is explicitly selected by application code, independent of
 configuration, role capabilities and automatic startup. It owns the external
 ICRC-10 `SupportedStandard { name, url }` record; that narrow required-external
@@ -241,20 +243,21 @@ policy and ops independently; ops may call model. Policy never calls ops.
   CLI scope or report scope. Reserve project terminology for exact upstream or
   external concepts such as an ICP project root.
 - Rust edition is 2024.
-- Package versions and dependency declarations in Cargo members inherit from
-  their owning workspace. Declare versions only in `workspace.package` and
-  `workspace.dependencies`; isolated fixture workspaces own their fixture versions.
+- Root members declare the literal version of their explicit release group.
+  The root dependency catalog covers every member; other common package metadata
+  and dependencies inherit from the workspace. Independent fixture workspaces
+  own their fixture versions.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
 - Do not use `#[path = "..."]` for module layout. Rename files/directories so
   Rust's normal module discovery works.
 
 ## Testing
 
-The established local validation exception is retained: focused checks during
-development, broad gates only when explicitly selected or run by configured CI.
-The owning [CI/deployment policy](docs/governance/ci-deployment.md) defines that
-cadence and the eligible non-runtime fast release lane. This cleanup does not
-activate the common automatic full-delivery gate or any release command.
+Use focused checks during development. Explicit release delivery runs its configured
+release gate; continuation/readiness does not independently authorize broad
+validation. The [CI/deployment policy](docs/governance/ci-deployment.md) owns the
+commands and eligible non-runtime fast release lane, subject to the current
+shared authority policy above.
 
 - Canic validation owns its framework and Canic-only fixtures. Consumer-specific
   database composition tests belong to downstream repositories. Do not add IcyDB
@@ -268,24 +271,10 @@ activate the common automatic full-delivery gate or any release command.
   confirmed in-scope source or test defect and running its narrow regression.
   Stop after diagnosis only when the maintainer explicitly requests read-only
   work or the correction would materially expand the accepted batch.
-- During coding and implementation work, automated agents must run only
-  targeted checks for the files, package, and behavior they changed. They must
-  not run full workspace, release-matrix, or broad PocketIC suites such as
-  `make test`, `make clippy`, `make validate`, or workspace-wide Cargo
-  test/Clippy commands.
-- Before starting a targeted Cargo or Make compile/test command, automated
-  agents must check whether another Canic command is actively using the shared
-  repository `target/`. Do not compete for that build lock or alter source and
-  lockfiles beneath an active validation run; wait for the owner to finish or
-  report the conflict. Read-only plan and source checks may continue.
-- Generic continuation or readiness wording such as `continue`, `finish the
-  batch`, `make it push-ready`, or `keep going until we can push` never counts
-  as an explicit request for a broad gate. Do not infer authorization for
-  `make validate` or any equivalent full-suite command from those requests.
-- The maintainer-directed deployment, version, and release flow chooses its
-  validation boundary. Automated agents must not pre-run broad gates while
-  coding, but may execute the exact broad or targeted release command the
-  maintainer explicitly requests.
+- Before compilation or source/lock edits, check for an active command using this
+  repository's `target/`. Do not compete for its lock or alter its inputs; read-only
+  investigation may continue. Select package/test/feature checks for the changed
+  contract, not full workspace or broad PocketIC suites during ordinary coding.
 - After targeted checks pass, agents should state whether the complete planned
   release batch, not merely the latest slice, is ready to push and whether its
   changelog/version surfaces are ready to publish; an unrun full suite is not,
@@ -311,12 +300,3 @@ activate the common automatic full-delivery gate or any release command.
 - Auth is enforced at endpoints.
 - Workflow and ops assume authenticated input.
 - Subnet, parent, subject, audience, and caller bindings must be explicit.
-
-## Checklist
-- Preserve dirty worktree state and keep edits scoped.
-- Treat focused code slices as development work and group them into coherent
-  release batches. Follow `docs/governance/delivery-cadence.md` and
-  `docs/governance/changelog.md` for open-batch and open-patch updates; do not
-  allocate one patch version per slice.
-- Respect CLI/host/backup ownership boundaries.
-- Run targeted checks only, following the Testing policy above.

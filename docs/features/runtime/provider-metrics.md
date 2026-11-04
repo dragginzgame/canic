@@ -4,7 +4,7 @@ Canic selects storage for component-owned diagnostic counters and measurements.
 Heap is the default. A component declares a fixed roster and records through
 `canic::api::metrics::providers::MetricProviderApi`; it does not open a store or
 select its own persistence policy. IC Metrics owns arithmetic and overflow
-quality. Persistence's published `ic-metrics-stable` owns the retained format.
+quality. Storage's published `ic-metrics-storage` owns the retained format.
 
 Select the policy in the existing metrics table for the component's canister:
 
@@ -82,6 +82,12 @@ metric families. `canic_logs` remains controller-only and accepts source, topic,
 severity and pagination filters. The role's observability selection must retain
 the relevant endpoints. These are the existing Wire methods, with no new public
 access grant. See [public observability](public-observability.md).
+
+Protected observations use the canonical `canic::dto::metric_page::MetricEntry`,
+`canic::dto::cycle_topups::{CycleTopupEvent, CycleTopupFailure}` and
+`canic::dto::child_funding::ChildFundingUsage` types. Ops projects stored/domain
+values into these types; direct reads and both relay hops pass the same DTOs.
+Their principal fields use `ic_platform::Principal`.
 
 Provider storage selection applies to metrics. Logs use the separate heap recorder
 and start empty on upgrade or reinstall; this feature does not enable stable log

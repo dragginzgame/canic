@@ -7,7 +7,7 @@ use crate::{
     },
     ids::FleetSubnetCanisterPoolConfig,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 /// Complete CanisterPoolStatusRequest transport contract.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

@@ -10,9 +10,12 @@ mod cycle_history;
 mod cycle_topups;
 mod fixture_reply;
 mod fleet_coordinator;
+mod operation_retry;
+mod portable_sessions;
 mod protected_health;
 mod role;
 mod root;
+mod root_portable_issuers;
 mod wasm_store;
 
 mod protected_logs;

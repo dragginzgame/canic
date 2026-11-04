@@ -1,6 +1,6 @@
 //! Native state mutation receipts; stored state and cascade execution retain their owners.
 use crate::dto::{cascade::StateCascadeTargetResult, error::Error, state::SetStateResponse};
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact target and observed cascade outcome; unconfirmed is not a proven refusal.

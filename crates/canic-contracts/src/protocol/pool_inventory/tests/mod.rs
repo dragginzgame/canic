@@ -9,7 +9,7 @@ use crate::{
 #[test]
 fn pool_cursor_preserves_identity_and_limit() {
     let request = wire::Request {
-        start_after: Some(ic_platform::Principal::from_slice(&[7; 29])),
+        start_after: Some(ic_platform_types::Principal::from_slice(&[7; 29])),
         limit: 256,
     };
     let bytes = ic_wire::native::encode_request(METHOD_ID, &request, REQUEST_LIMITS).unwrap();
@@ -31,7 +31,7 @@ fn pool_cursor_preserves_identity_and_limit() {
 #[test]
 fn every_asset_state_retains_claims_receipts_cycles_and_handoff_authority() {
     use stored::CanisterPoolAssetStatus as S;
-    let principal = ic_platform::principal::ExternalPrincipal::from_slice(&[9; 29]);
+    let principal = ic_platform_types::principal::ExternalPrincipal::from_slice(&[9; 29]);
     let claim = stored::CanisterPoolClaim {
         component: ComponentInstanceId::from_generated_bytes([3; 32]),
         operation_id: [4; 32],

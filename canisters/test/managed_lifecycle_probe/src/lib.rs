@@ -4,6 +4,7 @@ mod checkpoint;
 #[cfg(feature = "icrc-discovery")]
 mod icrc;
 mod initialization;
+mod logging;
 mod protocol;
 
 use canic::{Error, prelude::*};

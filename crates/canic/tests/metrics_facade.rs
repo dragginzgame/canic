@@ -1,6 +1,7 @@
 use canic::{
     api::metrics::MetricsQuery,
-    dto::metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
+    dto::metric_page::MetricEntry,
+    dto::metrics::{MetricValue, MetricsKind, QueryPerfSample},
     dto::page::PageRequest,
 };
 

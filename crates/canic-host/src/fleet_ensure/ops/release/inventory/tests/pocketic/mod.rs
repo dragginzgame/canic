@@ -17,8 +17,8 @@ use canic_contracts::{
     },
     ids::{CanonicalNetworkId, SubnetId},
 };
-use ic_platform::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use ic_platform::{agent::BasicIdentity, principal::ExternalPrincipal as Principal};
+use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use sha2_host::{Digest, Sha256};
 use std::{fs, process::Command, time::SystemTime};
 
@@ -102,17 +102,21 @@ fn governed_pocketic_release_inventory_binds_complete_ownership() {
             .with_nns_subnet()
             .with_application_subnet(),
     );
-    pic.set_time(SystemTime::now().into());
+    pic.set_time(SystemTime::now().into())
+        .expect("PocketIC set_time");
     let agent = Agent::builder()
-        .with_url(pic.make_live(None))
+        .with_url(pic.make_live(None).expect("PocketIC make_live"))
         .with_identity(BasicIdentity::from_raw_key(&[19; 32]))
         .with_max_response_body_size(inventory::RESPONSE_BYTES)
         .build()
         .unwrap();
-    agent.set_root_key(pic.root_key().unwrap());
+    agent.set_root_key(pic.root_key().expect("PocketIC root_key").unwrap());
     let operator = agent.get_principal().unwrap();
     let ids = (0..4)
-        .map(|_| pic.create_canister_with_settings(Some(operator), None))
+        .map(|_| {
+            pic.create_canister_with_settings(Some(operator), None)
+                .expect("PocketIC create_canister_with_settings")
+        })
         .collect::<Vec<_>>();
     let (mut review, mut registry) = fixture();
     review.authority.operator = operator;
@@ -123,7 +127,8 @@ fn governed_pocketic_release_inventory_binds_complete_ownership() {
     let wasm = wire_fixture();
     for (source, id) in review.sources.iter_mut().zip(&ids) {
         source.binding.canister_id = *id;
-        source.binding.subnet = SubnetId::from_principal(pic.get_subnet(*id).unwrap());
+        source.binding.subnet =
+            SubnetId::from_principal(pic.get_subnet(*id).expect("PocketIC get_subnet").unwrap());
         source.binding.controllers = vec![operator];
         source.binding.module_sha256 = Some(Sha256::digest(&wasm).into());
         match &mut source.role {
@@ -157,7 +162,8 @@ fn governed_pocketic_release_inventory_binds_complete_ownership() {
         } else {
             pool_reply.clone()
         };
-        pic.install_canister(*id, wasm.clone(), reply, Some(operator));
+        pic.install_canister(*id, wasm.clone(), reply, Some(operator))
+            .expect("PocketIC install_canister");
     }
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()

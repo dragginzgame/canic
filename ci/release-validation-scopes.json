@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "native_hosts": ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"],
+  "groups": {
+    "framework": {
+      "paths": [],
+      "omit": {}
+    },
+    "host": {
+      "paths": ["crates/canic-cli/src/output/", "crates/canic-cli/src/status/", "crates/canic-cli/src/diagnostic/", "crates/canic-cli/tests/", "crates/canic-host/src/terminal/", "crates/canic-host/src/bounded_reads/", "crates/canic-host/tests/"],
+      "omit": {
+        "dependency-adoption-fixtures": "Only Host presentation, bounded reads or tests changed; private Blob consumer source, graphs, generated peer and all supplying runtime inputs are unchanged.",
+        "control-plane-feature-gate": "Only Host presentation, bounded reads or tests changed; Control Plane features, generators, endpoints and framework inputs are unchanged. Workspace lint, check and the complete installed test graph still run."
+      }
+    },
+    "icydb": {
+      "paths": ["crates/canic-icydb/tests/"],
+      "omit": {
+        "dependency-adoption-fixtures": "Only IcyDB adapter tests changed; both Blob consumer graphs, generated peer and all supplying runtime inputs are unchanged.",
+        "control-plane-feature-gate": "Only IcyDB adapter tests changed; exported mounting macros, public Wire identities, Control Plane features and framework inputs are unchanged. Workspace lint, check and complete tests still run."
+      }
+    },
+    "blob-service": {
+      "paths": ["crates/canic-blob-service/src/ops/metrics/", "crates/canic-blob-service/src/workflow/", "crates/canic-blob-service/src/metrics/", "crates/canic-blob-service/src/funding/", "crates/canic-blob-service/tests/"],
+      "omit": {
+        "control-plane-feature-gate": "Only Blob metric projections, workflow, metrics, funding or tests changed; public schema/transport/mounting, memory/lifecycle composition, Control Plane features and supplying runtime inputs are unchanged. Blob fixture admission and the complete installed/recovery test graph still run."
+      }
+    }
+  }
+}

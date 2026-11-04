@@ -458,7 +458,10 @@ fn component_fence_key_covers_maximum_encoded_identifiers() {
         [255; 32],
     );
     let bytes = key.to_bytes_checked();
-    assert_eq!(CallerRowKey::from_bytes(bytes), key);
+    assert_eq!(
+        CallerRowKey::from_bytes(bytes.unwrap()).expect("decode stable fixture"),
+        key
+    );
 }
 
 #[test]

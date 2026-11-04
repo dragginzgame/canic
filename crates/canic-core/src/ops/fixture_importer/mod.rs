@@ -18,7 +18,22 @@ use crate::{
     },
     ops::{ic::IcOps, storage::fleet_activation::FleetActivationOps},
 };
+use sha2::{Digest, Sha256};
 use std::cell::RefCell;
+
+/// Bind retry custody to the complete current installed assignment using native Wire.
+pub fn assignment_hash(assignment: &FixtureAssignment) -> Result<[u8; 32], FixtureImportError> {
+    let bytes = ic_wire::native::encode(
+        &("canic-fixture-import-attempt:v1", assignment),
+        canic_contracts::serialization::STORAGE_LIMITS,
+    )
+    .map_err(|_| {
+        FixtureImportError::Codec(crate::dto::error::Error::from_registered(
+            crate::diagnostics::codes::CODEC_FAILED,
+        ))
+    })?;
+    Ok(Sha256::digest(bytes).into())
+}
 
 thread_local! {
     static REGISTRY: RefCell<FixtureImporterRegistry<&'static dyn FixtureImporter>> =

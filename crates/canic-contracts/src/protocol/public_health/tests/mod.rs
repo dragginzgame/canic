@@ -8,7 +8,7 @@ fn public_health_round_trips_native_identity_and_refuses_wrong_method() {
     let request = ic_wire::native::encode_request(METHOD_ID, &(), REQUEST_LIMITS).unwrap();
     ic_wire::native::decode_request::<()>(METHOD_ID, &request, REQUEST_LIMITS).unwrap();
     let value = PublicHealth {
-        canister_id: ic_platform::Principal::anonymous(),
+        canister_id: ic_platform_types::Principal::anonymous(),
         role: Some("fleet_coordinator".into()),
         health: PublicHealthStatus::Responding,
         observed_at_ns: u64::MAX,
@@ -40,6 +40,6 @@ fn public_health_projects_the_actual_native_payload() {
     );
     assert_eq!(
         fields[0]["value"],
-        ic_wire::typescript::native_schema::<ic_platform::Principal>().unwrap()
+        ic_wire::typescript::native_schema::<ic_platform_types::Principal>().unwrap()
     );
 }

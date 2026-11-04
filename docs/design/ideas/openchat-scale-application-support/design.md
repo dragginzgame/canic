@@ -183,7 +183,7 @@ For each concern, distinguish a confirmed correctness defect, a limit of the mai
 
 Outcome: a Canic-owned fixture that can expose infrastructure failures before they reach a downstream app. Its profile models global directories, subnet-local indexes on two subnets, MultiUser workers, stateful workers, large-payload workers, and application-owned cross-subnet traffic. OpenChat's MultiUser/group/community/media roles motivate these workload shapes; full chat behavior is unnecessary. Logical users and channels are data, not automatically additional canisters. The legacy User role is excluded, including as a secondary comparator. The forum configuration is an illustration; its proposed storage allocator is not a required new Canic abstraction.
 
-Owners: `canic-testing-internal` for infrastructure journeys; `canic-tests` for public consumer integration; public examples only after their surface is qualified.
+Owners: `canic-tests` for infrastructure journeys; `canic-tests` for public consumer integration; public examples only after their surface is qualified.
 
 Deliverables and acceptance:
 

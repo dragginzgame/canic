@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn calls_saturate() {
-        CANISTER_CALLS.set(MeasurementCounter::from_parts(u128::MAX, false).unwrap());
+        CANISTER_CALLS.set(ic_metrics::persistence::restore_counter(u128::MAX, false).unwrap());
         SystemMetrics::increment();
         assert_eq!(SystemMetrics::count().total(), u128::MAX);
         assert!(SystemMetrics::count().total_overflowed());

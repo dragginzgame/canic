@@ -95,8 +95,13 @@ fn root_owned_running_source_records_stop_and_recovers_without_duplicate_effects
     current.canister_version = 19;
     assert!(CanisterPoolImportOps::issue_controllers(identity(), &current, budget(), 2).is_err());
     CanisterPoolImportOps::issue_stop(identity(), &current, budget(), 2).unwrap();
-    let bytes = CanisterPoolStore::state().to_bytes().into_owned();
-    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    let bytes = CanisterPoolStore::state()
+        .to_bytes()
+        .expect("encode current record")
+        .into_owned();
+    CanisterPoolStore::set_state(
+        CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)).expect("decode current record"),
+    );
     let before = CanisterPoolStore::state();
     assert!(CanisterPoolImportOps::issue_stop(identity(), &current, budget(), 2).is_err());
     assert!(CanisterPoolImportOps::observe_stopped(identity(), &current).is_err());
@@ -189,8 +194,13 @@ fn capacity_import_root_reservation_fences_all_pool_mutations() {
 fn capacity_import_root_lost_reply_reconciles_once_and_keeps_original_receipt() {
     start();
     CanisterPoolImportOps::issue_controllers(identity(), &observed(1), budget(), 2).unwrap();
-    let bytes = CanisterPoolStore::state().to_bytes().into_owned();
-    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    let bytes = CanisterPoolStore::state()
+        .to_bytes()
+        .expect("encode current record")
+        .into_owned();
+    CanisterPoolStore::set_state(
+        CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)).expect("decode current record"),
+    );
     assert!(
         CanisterPoolImportOps::issue_controllers(identity(), &observed(1), budget(), 2).is_err()
     );
@@ -427,7 +437,10 @@ fn capacity_import_root_largest_reservation_fits_terminal_evidence_and_rejects_o
     CanisterPoolImportOps::reserve(request, &large_config, 1).unwrap();
     let state = CanisterPoolStore::state();
     require_completion_fits(&state).unwrap();
-    assert!(state.to_bytes().len() < CANISTER_POOL_STATE_MAX_BYTES as usize);
+    assert!(
+        state.to_bytes().expect("encode current record").len()
+            < CANISTER_POOL_STATE_MAX_BYTES as usize
+    );
     let mut encoded = serde_json::to_value(&state).unwrap();
     encoded.as_object_mut().unwrap().remove("capacity_import");
     assert!(serde_json::from_value::<CanisterPoolStateRecord>(encoded).is_err());
@@ -652,8 +665,13 @@ fn successful_paid_callbacks_release_unused_reserve_without_resetting_call_count
 fn lost_and_stale_callbacks_keep_their_conservative_reservation() {
     start();
     let lost = CanisterPoolImportOps::reserve_paid_call(identity(), 600, 9_950).unwrap();
-    let bytes = CanisterPoolStore::state().to_bytes().into_owned();
-    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    let bytes = CanisterPoolStore::state()
+        .to_bytes()
+        .expect("encode current record")
+        .into_owned();
+    CanisterPoolStore::set_state(
+        CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)).expect("decode current record"),
+    );
     let completed = CanisterPoolImportOps::reserve_paid_call(identity(), 300, 9_940).unwrap();
     CanisterPoolImportOps::complete_paid_call(identity(), completed, 9_930).unwrap();
     let before = CanisterPoolStore::state();
@@ -711,8 +729,13 @@ fn capacity_import_root_credits_preserve_debit_and_uncertain_call_authority() {
     let first = CanisterPoolImportOps::reserve_paid_call(identity(), 600, 9_950).unwrap();
     CanisterPoolImportOps::complete_paid_call(identity(), first, 9_940).unwrap();
     let lost = CanisterPoolImportOps::reserve_paid_call(identity(), 300, 11_000).unwrap();
-    let encoded = CanisterPoolStore::state().to_bytes().into_owned();
-    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(encoded)));
+    let encoded = CanisterPoolStore::state()
+        .to_bytes()
+        .expect("encode current record")
+        .into_owned();
+    CanisterPoolStore::set_state(
+        CanisterPoolStateRecord::from_bytes(Cow::Owned(encoded)).expect("decode current record"),
+    );
     let successful = CanisterPoolImportOps::reserve_paid_call(identity(), 100, 12_000).unwrap();
     CanisterPoolImportOps::complete_paid_call(identity(), successful, 13_000).unwrap();
     let retained = CanisterPoolImportOps::status(identity()).unwrap();
@@ -750,8 +773,13 @@ fn capacity_import_source_credits_keep_custody_receipts_and_effect_free_replay()
     .unwrap();
     current.cycles = 4_000;
     CanisterPoolImportOps::issue_uninstall(identity(), &current, budget()).unwrap();
-    let bytes = CanisterPoolStore::state().to_bytes().into_owned();
-    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    let bytes = CanisterPoolStore::state()
+        .to_bytes()
+        .expect("encode current record")
+        .into_owned();
+    CanisterPoolStore::set_state(
+        CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)).expect("decode current record"),
+    );
     current = observed(3);
     current.cycles = 5_000;
     let receipt = CanisterPoolImportOps::observe_cleared(

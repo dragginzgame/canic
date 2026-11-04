@@ -2,7 +2,7 @@
 name = "canic-cli"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 license = { workspace = true }
 description = "Operator CLI for Canic fleet setup, builds, evidence, catalog, and diagnostics"
 readme = "README.md"
@@ -18,14 +18,12 @@ name = "canic"
 path = "src/main.rs"
 
 [dependencies]
-canic-contracts.workspace = true
+canic-contracts = { workspace = true, features = ["external-candid"] }
 canic-core = { workspace = true, features = [] }
 canic-host = { workspace = true }
 clap = { workspace = true }
 ic-host-fs = { workspace = true }
-ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
-ic-metrics.workspace = true
 ic-platform = { workspace = true, features = ["candid"] }
 ic-wire.workspace = true
 rustix = { workspace = true, features = ["termios"] }
@@ -34,10 +32,6 @@ serde_json = { workspace = true }
 signal-hook = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
-
-[dev-dependencies.ic-host-process]
-workspace = true
-features = ["test-support"]
 
 [lints]
 workspace = true

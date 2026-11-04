@@ -1,8 +1,11 @@
 //! Fallible, lossless conversion of external numeric evidence at the funding boundary.
+use crate::dto::funding_read as wire;
+#[cfg(feature = "external-candid")]
 use crate::{
-    dto::{funding_read as wire, icp_refill, root},
+    dto::{icp_refill, root},
     ops::unsigned_magnitude,
 };
+#[cfg(feature = "external-candid")]
 impl TryFrom<icp_refill::IcpRefillResponse> for wire::RefillResult {
     type Error = ic_wire::Error;
     fn try_from(value: icp_refill::IcpRefillResponse) -> Result<Self, Self::Error> {
@@ -20,6 +23,7 @@ impl TryFrom<icp_refill::IcpRefillResponse> for wire::RefillResult {
         })
     }
 }
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::RefillResult> for icp_refill::IcpRefillResponse {
     type Error = ic_wire::Error;
     fn try_from(value: wire::RefillResult) -> Result<Self, Self::Error> {
@@ -37,6 +41,7 @@ impl TryFrom<wire::RefillResult> for icp_refill::IcpRefillResponse {
         })
     }
 }
+#[cfg(feature = "external-candid")]
 impl TryFrom<root::RootIcpRefillReleaseEvidence> for wire::RefillEvidence {
     type Error = ic_wire::Error;
     fn try_from(value: root::RootIcpRefillReleaseEvidence) -> Result<Self, Self::Error> {
@@ -65,6 +70,7 @@ impl TryFrom<root::RootIcpRefillReleaseEvidence> for wire::RefillEvidence {
         })
     }
 }
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::RefillEvidence> for root::RootIcpRefillReleaseEvidence {
     type Error = ic_wire::Error;
     fn try_from(value: wire::RefillEvidence) -> Result<Self, Self::Error> {
@@ -93,6 +99,7 @@ impl TryFrom<wire::RefillEvidence> for root::RootIcpRefillReleaseEvidence {
         })
     }
 }
+#[cfg(feature = "external-candid")]
 impl TryFrom<root::RootFundingReleaseResponse> for wire::ReleasePage {
     type Error = ic_wire::Error;
     fn try_from(value: root::RootFundingReleaseResponse) -> Result<Self, Self::Error> {
@@ -113,6 +120,7 @@ impl TryFrom<root::RootFundingReleaseResponse> for wire::ReleasePage {
         })
     }
 }
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::ReleasePage> for root::RootFundingReleaseResponse {
     type Error = ic_wire::Error;
     fn try_from(value: wire::ReleasePage) -> Result<Self, Self::Error> {
@@ -134,6 +142,7 @@ impl TryFrom<wire::ReleasePage> for root::RootFundingReleaseResponse {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<root::RootIcpRefillStatusResponse> for wire::RefillStatus {
     type Error = ic_wire::Error;
     fn try_from(value: root::RootIcpRefillStatusResponse) -> Result<Self, Self::Error> {
@@ -148,6 +157,7 @@ impl TryFrom<root::RootIcpRefillStatusResponse> for wire::RefillStatus {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::RefillStatus> for root::RootIcpRefillStatusResponse {
     type Error = ic_wire::Error;
     fn try_from(value: wire::RefillStatus) -> Result<Self, Self::Error> {
@@ -162,6 +172,7 @@ impl TryFrom<wire::RefillStatus> for root::RootIcpRefillStatusResponse {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<root::RootFundingStatusResponse> for wire::RootStatus {
     type Error = ic_wire::Error;
     fn try_from(value: root::RootFundingStatusResponse) -> Result<Self, Self::Error> {
@@ -193,6 +204,7 @@ impl TryFrom<root::RootFundingStatusResponse> for wire::RootStatus {
     }
 }
 
+#[cfg(feature = "external-candid")]
 impl TryFrom<wire::RootStatus> for root::RootFundingStatusResponse {
     type Error = ic_wire::Error;
     fn try_from(value: wire::RootStatus) -> Result<Self, Self::Error> {
@@ -438,5 +450,5 @@ impl From<wire::RotationPhase>
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "external-candid"))]
 mod tests;

@@ -66,14 +66,28 @@ fn endpoint_call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
 
 #[test]
 fn perf_projection_preserves_wide_totals_empty_zero_and_independent_quality() {
-    use ic_metrics::MeasurementAggregate as Aggregate;
     let aggregates = [
-        Aggregate::EMPTY,
-        Aggregate::from_parts(1, 0, Some(0), false, false).unwrap(),
-        Aggregate::from_parts(2, u128::from(u64::MAX), Some(u64::MAX), false, false).unwrap(),
-        Aggregate::from_parts(2, u128::from(u64::MAX) + 1, Some(u64::MAX), false, false).unwrap(),
-        Aggregate::from_parts(u64::MAX, 0, Some(0), true, false).unwrap(),
-        Aggregate::from_parts(u64::MAX, u128::MAX, Some(u64::MAX), true, true).unwrap(),
+        ic_metrics::MeasurementAggregate::EMPTY,
+        ic_metrics::persistence::restore_aggregate(1, 0, Some(0), false, false).unwrap(),
+        ic_metrics::persistence::restore_aggregate(
+            2,
+            u128::from(u64::MAX),
+            Some(u64::MAX),
+            false,
+            false,
+        )
+        .unwrap(),
+        ic_metrics::persistence::restore_aggregate(
+            2,
+            u128::from(u64::MAX) + 1,
+            Some(u64::MAX),
+            false,
+            false,
+        )
+        .unwrap(),
+        ic_metrics::persistence::restore_aggregate(u64::MAX, 0, Some(0), true, false).unwrap(),
+        ic_metrics::persistence::restore_aggregate(u64::MAX, u128::MAX, Some(u64::MAX), true, true)
+            .unwrap(),
     ];
     let snapshot = aggregates
         .iter()
@@ -110,7 +124,7 @@ fn timer_diagnostics_keep_starts_and_latest_delay_independent() {
     for (delay, expected_rows) in [(None, 1), (Some(0), 2), (Some(500_000_000), 2)] {
         let rows = timer_rows(
             vec!["once".into(), "app".into(), "jobs".into(), "tick".into()],
-            ic_metrics::MeasurementCounter::from_parts(4, false).unwrap(),
+            ic_metrics::persistence::restore_counter(4, false).unwrap(),
             delay,
         );
         assert_eq!(rows.len(), expected_rows);
@@ -984,7 +998,7 @@ fn assert_metric_u128(
         .iter()
         .find(|entry| {
             entry.labels.iter().map(String::as_str).collect::<Vec<_>>() == labels
-                && entry.principal == principal
+                && entry.principal == principal.map(Into::into)
         })
         .expect("metric entry should exist");
 
@@ -1004,7 +1018,7 @@ fn inter_canister_call_overflow_projection_keeps_real_targets_distinct() {
     assert_eq!(rows.len(), 2);
     let retained = rows
         .iter()
-        .find(|row| row.principal == Some(target))
+        .find(|row| row.principal == Some(target.into()))
         .unwrap();
     assert_eq!(retained.labels, ["inter_canister_call", "overflow"]);
     assert!(matches!(
@@ -1036,7 +1050,7 @@ fn scalar_count_projection_preserves_wide_totals_and_source_quality() {
         (u128::MAX, false),
         (u128::MAX, true),
     ] {
-        let source = ic_metrics::MeasurementCounter::from_parts(total, overflowed).unwrap();
+        let source = ic_metrics::persistence::restore_counter(total, overflowed).unwrap();
         assert!(
             matches!(count_value(source), MetricValue::Count { count, exact }
             if count == total && exact != overflowed)
@@ -1044,7 +1058,7 @@ fn scalar_count_projection_preserves_wide_totals_and_source_quality() {
     }
     let forwarded = timer_rows(
         vec!["test".into()],
-        ic_metrics::MeasurementCounter::from_parts(u128::MAX, true).unwrap(),
+        ic_metrics::persistence::restore_counter(u128::MAX, true).unwrap(),
         Some(0),
     );
     assert!(

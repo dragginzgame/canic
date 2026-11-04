@@ -8,16 +8,11 @@ use crate::{
         abi::v1::CanisterInitPayload, env::EnvBootstrapArgs,
         fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
     },
-    lifecycle::{LifecyclePhase, lifecycle_trap, retryable_nonroot_bootstrap_error},
-    log,
-    log::Topic,
-    ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
+    lifecycle::{LifecyclePhase, lifecycle_trap},
+    ops::runtime::bootstrap::BootstrapStatusOps,
     workflow,
 };
 use canic_contracts::ids::CanisterRole;
-use std::time::Duration;
-
-const MAX_NONROOT_BOOTSTRAP_ATTEMPTS: u32 = 64;
 
 pub fn init_nonroot_canister_before_bootstrap(
     role: CanisterRole,
@@ -132,67 +127,6 @@ pub fn schedule_init_nonroot_bootstrap() {
         LifecycleMetricRole::Nonroot,
         LifecycleMetricOutcome::Scheduled,
     );
-    schedule_init_nonroot_bootstrap_after(0, Duration::ZERO);
-}
-
-fn schedule_init_nonroot_bootstrap_after(attempt: u32, delay: Duration) {
-    crate::api::timer::TimerApi::defer_lifecycle_required(
-        delay,
-        "canic:bootstrap:init_nonroot_canister",
-        async move {
-            BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT);
-            LifecycleMetricsApi::record_bootstrap(
-                LifecycleMetricPhase::Init,
-                LifecycleMetricRole::Nonroot,
-                LifecycleMetricOutcome::Started,
-            );
-            if let Err(err) = workflow::bootstrap::nonroot::bootstrap_init_nonroot_canister().await
-            {
-                let next_attempt = attempt.saturating_add(1);
-                let retryable = retryable_nonroot_bootstrap_error(&err);
-                if retryable && next_attempt < MAX_NONROOT_BOOTSTRAP_ATTEMPTS {
-                    BootstrapStatusOps::set_phase(
-                        BootstrapPhaseLabel::NONROOT_INIT_WAITING_AUTHORITY,
-                    );
-                    log!(
-                        Topic::Init,
-                        Warn,
-                        "non-root bootstrap waiting for managed authority (attempt {next_attempt}/{MAX_NONROOT_BOOTSTRAP_ATTEMPTS}): {err}"
-                    );
-                    schedule_init_nonroot_bootstrap_after(
-                        next_attempt,
-                        bootstrap_retry_delay(next_attempt),
-                    );
-                    return;
-                }
-                LifecycleMetricsApi::record_bootstrap(
-                    LifecycleMetricPhase::Init,
-                    LifecycleMetricRole::Nonroot,
-                    LifecycleMetricOutcome::Failed,
-                );
-                let failure = format!("non-root bootstrap failed (init): {err}");
-                if retryable {
-                    BootstrapStatusOps::mark_retryable_init_failure_exhausted(failure);
-                } else {
-                    BootstrapStatusOps::mark_failed(failure);
-                }
-                log!(
-                    Topic::Init,
-                    Error,
-                    "non-root bootstrap failed (init): {err}"
-                );
-                return;
-            }
-            LifecycleMetricsApi::record_bootstrap(
-                LifecycleMetricPhase::Init,
-                LifecycleMetricRole::Nonroot,
-                LifecycleMetricOutcome::Completed,
-            );
-        },
-    );
-}
-
-const fn bootstrap_retry_delay(attempt: u32) -> Duration {
-    let exponent = if attempt > 4 { 4 } else { attempt };
-    Duration::from_millis(250_u64.saturating_mul(1_u64 << exponent))
+    workflow::bootstrap::timer::schedule(LifecyclePhase::Init)
+        .unwrap_or_else(|error| lifecycle_trap(LifecyclePhase::Init, error));
 }

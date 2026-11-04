@@ -8,8 +8,10 @@
 #[macro_export]
 macro_rules! canic_emit_root_command_endpoint {
     () => {
+        $crate::__canic_emit_operation_retry_endpoints!();
         $crate::__canic_emit_root_capability_endpoints!();
         $crate::__canic_emit_root_observation_updates!();
+        $crate::__canic_emit_root_portable_issuer_endpoints!();
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::application_checkpoint::BEGIN, request = ::canic::protocol::application_checkpoint::LIMITS, response = ::canic::protocol::application_checkpoint::LIMITS))]
         fn canic_root_checkpoint_begin(request: ::canic::dto::application_checkpoint::RootCheckpointBeginRequest) -> Result<::canic::dto::application_checkpoint::RootCheckpointStatus, ::canic::Error> {
             $crate::__internal::control_plane::api::application_checkpoint::RootCheckpointApi::begin(request)
@@ -48,7 +50,7 @@ macro_rules! canic_emit_root_command_endpoint {
         }
 
         #[$crate::update(public, wire(id = ::canic::protocol::funding_control::root_accept::METHOD_ID, request = ::canic::protocol::funding_control::REQUEST_LIMITS, response = ::canic::protocol::funding_control::RESPONSE_LIMITS))]
-        fn canic_root_accept_funding(request: ::canic::dto::funding_control::AcceptanceRequest) -> Result<::canic::dto::funding_control::AcceptanceReceipt, ::canic::Error> {
+        fn canic_root_accept_funding(request: ::canic::dto::funding_control::AcceptanceRequest) -> Result<::canic::dto::funding_control::AcceptanceOutcome, ::canic::Error> {
             let caller = $crate::__internal::cdk::api::msg_caller().into();
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_root_funding_caller(caller)?;
             $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
@@ -129,7 +131,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     let operation_id = request.operation_id;
                     let component = request.component;
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_child(request).await?;
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_child_allocation(component, operation_id);
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_child_allocation(component, operation_id)?;
                     Ok(::canic::dto::role::OperationReceipt { operation_id })
 
         }
@@ -142,7 +144,7 @@ macro_rules! canic_emit_root_command_endpoint {
 
                     let operation_id = request.operation_id;
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_peer_component_allocation(request).await?;
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id)?;
                     Ok(::canic::dto::role::OperationReceipt { operation_id })
 
         }
@@ -155,7 +157,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     let operation_id = request.operation_id;
                     let component = request.component;
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_draining(request).await?;
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_removal(component, operation_id);
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_removal(component, operation_id)?;
                     Ok(::canic::dto::role::OperationReceipt { operation_id })
 
         }
@@ -169,7 +171,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     let operation_id = request.operation_id;
                     let component = request.component;
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_subtree_removal(request).await?;
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_subtree_removal(component, operation_id);
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_subtree_removal(component, operation_id)?;
                     Ok(::canic::dto::role::OperationReceipt { operation_id })
 
         }
@@ -333,7 +335,7 @@ macro_rules! canic_emit_root_command_endpoint {
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_update_allowed("canic_root_provision_component", true)?;
             let operation_id = request.operation_id;
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_allocation(request).await?;
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id)?;
             Ok(::canic::dto::role::OperationReceipt { operation_id })
         }
 
@@ -799,6 +801,19 @@ macro_rules! canic_emit_root_status_endpoint {
             $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_update_allowed("canic_root_delegation_proof", false)?;
             $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root().await.map(Into::into)
+        }
+
+        #[cfg(canic_capability_root_delegation)]
+        #[$crate::update(internal, public, wire(id = ::canic::protocol::portable_enrollment::METHOD_ID, request = ::canic::protocol::portable_enrollment::REQUEST_LIMITS, response = ::canic::protocol::portable_enrollment::RESPONSE_LIMITS))]
+        fn canic_root_portable_enrollment(request: ::canic::dto::portable_enrollment::PortableEnrollmentRequest) -> Result<::canic::dto::portable_enrollment::PortableEnrollmentSnapshot, ::canic::Error> {
+            use $crate::__internal::core::access::expr::AccessCheck as _;
+            let call = ::canic::ids::EndpointCall { endpoint: ::canic::ids::EndpointId::new(::canic::protocol::portable_enrollment::METHOD), kind: ::canic::ids::EndpointCallKind::Update };
+            $crate::__internal::core::access::expr::eval_default_fleet_guard($crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates, call).map_err(::canic::Error::from)?;
+            let context = $crate::__internal::core::access::expr::AccessContext { caller: $crate::__internal::cdk::api::msg_caller().into(), call };
+            $crate::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate.eval(&context).map_err(::canic::Error::from)?;
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_update_allowed(::canic::protocol::portable_enrollment::METHOD, false)?;
+            $crate::__internal::core::api::auth::AuthApi::portable_enrollment_root(request)
         }
 
         #[cfg(canic_capability_root_delegation)]

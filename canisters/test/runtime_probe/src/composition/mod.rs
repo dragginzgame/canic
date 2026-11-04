@@ -22,7 +22,7 @@ fn startup_step() -> canic_icydb::__private::StartupProgress {
 
 pub mod __icydb_facade {
     pub mod db {
-        use ic_memory::{DefaultMemoryImpl, MemoryRuntime};
+        use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
         use std::{cell::RefCell, rc::Rc};
 
         thread_local! {

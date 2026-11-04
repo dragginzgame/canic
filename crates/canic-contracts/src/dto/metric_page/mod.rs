@@ -9,6 +9,6 @@ use crate::dto::metrics::MetricValue;
 )]
 pub struct MetricEntry {
     pub labels: Vec<String>,
-    pub principal: Option<ic_platform::Principal>,
+    pub principal: Option<ic_platform_types::Principal>,
     pub value: MetricValue,
 }

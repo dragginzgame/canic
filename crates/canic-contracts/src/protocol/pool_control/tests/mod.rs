@@ -5,7 +5,7 @@ use crate::dto::{error::Error, pool::PoolImportResponse, pool_control::ImportReq
 #[test]
 fn physical_import_preserves_target_and_reset_outcome() {
     let request = ImportRequest {
-        canister_id: ic_platform::Principal::from_slice(&[5; 29]),
+        canister_id: ic_platform_types::Principal::from_slice(&[5; 29]),
     };
     let bytes =
         ic_wire::native::encode_request(import::METHOD_ID, &request, REQUEST_LIMITS).unwrap();

@@ -8,8 +8,8 @@ use crate::dto::{fleet_snapshot::FleetSubnetRootBinding, pool_import::PoolImport
 )]
 pub struct Bootstrap {
     pub review_sha256: [u8; 32],
-    pub operator: ic_platform::Principal,
-    pub sources: Vec<ic_platform::Principal>,
+    pub operator: ic_platform_types::Principal,
+    pub sources: Vec<ic_platform_types::Principal>,
 }
 /// Complete current import authority and next sequence, without issuing work.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

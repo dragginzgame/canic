@@ -208,7 +208,7 @@ fn named_components_preserve_instances_unknown_state_and_current_owner() {
     painter.paint(&mut bytes, &panel, (24, 14)).unwrap();
     let rendered = String::from_utf8(bytes).unwrap();
     let (_, frame) = rendered.split_once("\x1b[H\x1b[2J").unwrap();
-    assert!(frame.lines().all(|line| line.len() <= 23));
+    assert!(frame.lines().all(|line| line.chars().count() <= 23));
     assert!(frame.lines().count() <= 14);
     painter.clear(&mut Vec::new(), (24, 14)).unwrap();
 }
@@ -420,14 +420,25 @@ fn repaint_bounds_names_and_resizes_without_erasing_prior_messages() {
     painter.paint(&mut bytes, &lines, (80, 24)).unwrap();
     let first = String::from_utf8(bytes.clone()).unwrap();
     let (_, frame) = first.split_once("\x1b[H\x1b[2J").unwrap();
-    assert!(frame.lines().all(|line| line.len() <= 79));
+    assert!(frame.lines().all(|line| {
+        line.chars()
+            .map(|ch| if ch == '界' { 2 } else { 1 })
+            .sum::<usize>()
+            <= 79
+    }));
     assert!(!frame.contains('\x1b'));
+    assert!(frame.contains('界'));
     assert!(first.starts_with("\x1b[?1049h"));
     bytes.clear();
     painter.paint(&mut bytes, &lines, (24, 24)).unwrap();
     let resized = String::from_utf8(bytes).unwrap();
     let (_, frame) = resized.split_once("\x1b[H\x1b[2J").unwrap();
-    assert!(frame.lines().all(|line| line.len() <= 23));
+    assert!(frame.lines().all(|line| {
+        line.chars()
+            .map(|ch| if ch == '界' { 2 } else { 1 })
+            .sum::<usize>()
+            <= 23
+    }));
     assert!(!resized.contains("\x1b[?1049h"));
     let mut bytes = Vec::new();
     painter.clear(&mut bytes, (24, 24)).unwrap();

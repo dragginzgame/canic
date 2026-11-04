@@ -3,13 +3,15 @@
 macro_rules! keys {
     ($( $(#[$attr:meta])* $name:ident = $key:literal; )*) => {
         $( $(#[$attr])* pub const $name: &str = $key; )*
-        pub(super) fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
-            Ok(vec![$( $(#[$attr])* ic_memory::MemoryRequest::new(super::MEMORY_AUTHORITY, $name)?, )*])
+        pub(super) fn requests() -> Result<Vec<ic_storage::MemoryRequest>, ic_storage::AdmissionError> {
+            Ok(vec![$( $(#[$attr])* ic_storage::MemoryRequest::new(super::MEMORY_AUTHORITY, $name)?, )*])
         }
     };
 }
 
 keys! {
+    #[cfg(any(test, feature = "auth-portable-issuer"))]
+    AUTH_PORTABLE_ISSUER_V1 = "canic.core.auth.portable.issuer.v1";
     APPLICATION_RECEIPT_ELIGIBILITY_V1 = "canic.core.application_receipt.eligibility.v1";
     ASYNC_JOB_RECOVERY_V1 = "canic.core.async_job_recovery.v1";
     #[cfg(any(test, feature = "auth-delegated-token-issuer-state"))]
@@ -21,6 +23,10 @@ keys! {
     AUTH_LOCAL_APPLICATION_AUTHORIZATION_STATE_V1 = "canic.core.auth.local_application_authorization.state.v1";
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     AUTH_ROOT_DELEGATION_STATE_V1 = "canic.core.auth.root_delegation.state.v1";
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
+    AUTH_PORTABLE_ROOT_ENROLLMENT_V1 = "canic.core.auth.portable.root_enrollment.v1";
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    AUTH_PORTABLE_RECEIVER_ENROLLMENT_V1 = "canic.core.auth.portable.receiver_enrollment.v1";
     AUTHORITY_RESTORE_FENCE_V1 = "canic.core.authority_restore.fence.v1";
     CALLER_AUTHORITY_HEADER_V1 = "canic.core.caller_authority.header.v1";
     CALLER_AUTHORITY_ROWS_V1 = "canic.core.caller_authority.rows.v1";

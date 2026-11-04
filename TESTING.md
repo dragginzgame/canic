@@ -12,7 +12,7 @@ Follow these rules during refactors to prevent test sprawl.
 - Crate integration tests live under `crates/<crate>/tests/`.
 - Cross-crate and managed-Fleet PocketIC tests live under
   `crates/canic-tests/tests/`; shared harness support belongs in
-  `crates/canic-testing-internal/`.
+  `crates/canic-tests/src/`.
 - Avoid `#[path = "..."]` in tests; use top-level files in `tests/`.
 - Test canister crates are not tests; keep repo-level fixtures under
   `canisters/test/` and audit probes under `canisters/audit/`.

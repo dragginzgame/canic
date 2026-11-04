@@ -1,7 +1,7 @@
 //! Complete native management observations; external IC transport remains Candid.
 //! Unsigned evidence uses minimal big-endian magnitudes, including values above u128.
 use crate::{dto::canister::EnvironmentVariable, values::canister::CanisterStatusType};
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 /// No individual magnitude can exceed the existing four-MiB host reply ceiling.
 /// Operation-wide frame and allocation limits independently bound the complete graph.

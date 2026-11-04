@@ -3,7 +3,7 @@ use crate::{
     dto::{component_registry::ComponentRegistryHead, registry_discovery::RegistryVersion},
     ids::{ComponentInstanceId, ComponentSpecId, FleetServiceId},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 /// Exact subtree target and observed partition.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -17,11 +17,12 @@ case "${1:-}" in
 esac
 
 cd "$ROOT"
+bash scripts/release/selection.sh
 [ -z "$(git status --porcelain)" ] || fail "source candidate is dirty"
 
 workspace_version="$(bash "$VERSION_READER")" ||
     fail "workspace version is unavailable"
-base_tag="v$workspace_version"
+base_tag="$RELEASE_GROUP-v$workspace_version"
 tag_type="$(git cat-file -t "refs/tags/$base_tag" 2>/dev/null)" ||
     fail "published baseline tag $base_tag is missing"
 [ "$tag_type" = "tag" ] || fail "$base_tag is not an annotated release tag"
@@ -38,24 +39,24 @@ git cat-file -e "$receipt_source^{commit}" 2>/dev/null ||
 git merge-base --is-ancestor "$receipt_source" "$base_commit" ||
     fail "$base_tag validation receipt source does not precede its release"
 validation_basis_tag="$base_tag"
-if [[ "$receipt_gate" == fast ]]; then
+if [[ "$receipt_gate" == fast || "$receipt_gate" == plan-group ]]; then
     validation_basis_tag=""
     while IFS= read -r candidate_tag; do
         [ "$candidate_tag" != "$base_tag" ] || continue
-        candidate_version="${candidate_tag#v}"
+        candidate_version="${candidate_tag#"$RELEASE_GROUP-v"}"
         [[ "$candidate_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
         [ "$(git cat-file -t "refs/tags/$candidate_tag" 2>/dev/null || true)" = "tag" ] || continue
         candidate_receipt="$(bash "$ROOT/scripts/ci/read-release-validation.sh" "$candidate_tag" "$candidate_version" 2>/dev/null)" || continue
         IFS=$'\t' read -r candidate_source candidate_gate <<<"$candidate_receipt"
-        [[ "$candidate_gate" == complete ]] || continue
+        [[ "$candidate_gate" == complete || "$candidate_gate" == plan-workspace ]] || continue
         candidate_commit="$(git rev-list -n 1 "$candidate_tag")"
         git cat-file -e "$candidate_source^{commit}" 2>/dev/null || continue
         git merge-base --is-ancestor "$candidate_source" "$candidate_commit" || continue
         validation_basis_tag="$candidate_tag"
         break
-    done < <(git tag --merged "$base_commit" --sort=-version:refname 'v*')
+    done < <(git tag --merged "$base_commit" --sort=-version:refname "$RELEASE_GROUP-v*")
     [ -n "$validation_basis_tag" ] ||
-        fail "$base_tag has a fast receipt but no complete validated release ancestor"
+        fail "$base_tag has no full-workspace validated release ancestor"
 fi
 
 mapfile -t changed_paths < <(git diff --name-only "$base_tag"..HEAD)
@@ -67,7 +68,7 @@ for changed_path in "${changed_paths[@]}"; do
     case "$changed_path" in
         AGENTS.md | docs/*)
             ;;
-        CHANGELOG.md)
+        releases/"$RELEASE_GROUP"/CHANGELOG.md)
             changelog_changed=1
             ;;
         Makefile | \

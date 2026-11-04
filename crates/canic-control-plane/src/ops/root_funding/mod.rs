@@ -442,9 +442,11 @@ impl RootFundingOps {
         ) || acceptance_request(&active.request) != *request
             || request.expected_registry != authority.registry
             || request.policy_hash != fleet_subnet_root_funding_policy_hash(&authority.funding)
-            || current_balance > authority.funding.root_funding.request_threshold.to_u128()
         {
             return Err(InternalError::conflict());
+        }
+        if current_balance > authority.funding.root_funding.request_threshold.to_u128() {
+            return Ok(RootFundingAcceptanceDisposition::BalanceRelieved);
         }
         Ok(RootFundingAcceptanceDisposition::Fresh)
     }

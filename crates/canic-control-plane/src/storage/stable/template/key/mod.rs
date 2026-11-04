@@ -45,16 +45,26 @@ mod tests {
             version: TemplateVersion::new("0.110.54"),
         };
         let stored = TemplateReleaseKeyRecord(release.clone());
-        assert_eq!(stored.to_bytes().as_ref(), serialize(&release).unwrap());
         assert_eq!(
-            TemplateReleaseKeyRecord::from_bytes(stored.to_bytes()).0,
+            stored.to_bytes().expect("encode current record").as_ref(),
+            serialize(&release).unwrap()
+        );
+        assert_eq!(
+            TemplateReleaseKeyRecord::from_bytes(stored.to_bytes().expect("encode current record"))
+                .expect("decode current record")
+                .0,
             release
         );
         let chunk = TemplateChunkKey::new(release, u32::MAX);
         let stored = TemplateChunkKeyRecord(chunk.clone());
-        assert_eq!(stored.to_bytes().as_ref(), serialize(&chunk).unwrap());
         assert_eq!(
-            TemplateChunkKeyRecord::from_bytes(stored.to_bytes()).0,
+            stored.to_bytes().expect("encode current record").as_ref(),
+            serialize(&chunk).unwrap()
+        );
+        assert_eq!(
+            TemplateChunkKeyRecord::from_bytes(stored.to_bytes().expect("encode current record"))
+                .expect("decode current record")
+                .0,
             chunk
         );
     }

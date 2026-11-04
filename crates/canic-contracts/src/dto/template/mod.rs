@@ -6,7 +6,7 @@ use crate::ids::{
     CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
     WasmStoreBinding, WasmStoreGcMode,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]

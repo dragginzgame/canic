@@ -5,7 +5,7 @@ use crate::dto::{canister::CanisterHistoryResponse, error::Error, inspection_his
 #[test]
 fn history_frame_preserves_external_evidence_and_target() {
     let request = Request {
-        canister_id: ic_platform::Principal::from_slice(&[3; 29]),
+        canister_id: ic_platform_types::Principal::from_slice(&[3; 29]),
     };
     let bytes = ic_wire::native::encode_request(METHOD_ID, &request, REQUEST_LIMITS).unwrap();
     assert_eq!(

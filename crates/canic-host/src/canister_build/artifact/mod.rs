@@ -93,9 +93,14 @@ impl CanisterBuildGroup<'_> {
 impl CanisterArtifactBuilder {
     /// Resolve every profile-required external tool before starting build work.
     pub fn for_profile(profile: CanisterBuildProfile) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(Self {
-            toolchain: BuildToolchain::resolve(profile)?,
-        })
+        Ok(Self::with_toolchain(BuildToolchain::resolve(profile)?))
+    }
+
+    /// Use an admitted toolchain for build, provenance and complete-build reuse.
+    /// Each build rejects a context whose profile differs from this toolchain.
+    #[must_use]
+    pub const fn with_toolchain(toolchain: BuildToolchain) -> Self {
+        Self { toolchain }
     }
 
     /// Return the exact selected executable paths and identities for operator diagnostics.

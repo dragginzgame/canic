@@ -459,6 +459,9 @@ pub enum FleetInitMode {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AuthConfig {
+    /// Protected Root snapshot lease. Absence keeps portable enrollment unavailable.
+    #[serde(default)]
+    pub portable_enrollment_freshness_ns: Option<u64>,
     #[serde(default)]
     pub delegated_tokens: DelegatedTokenConfig,
 

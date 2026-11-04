@@ -58,8 +58,8 @@ use canic_core::{
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{fmt, time::Duration};
 use {
-    ic_platform::pocket_ic::PocketIc,
-    ic_testkit::pic::{CanisterInstallExt, PocketIcCallFailure},
+    ic_testkit::pic::CanisterInstallExt,
+    ic_testkit::pocket_ic::{ClientError, PocketIc},
 };
 
 const DEFAULT_INSTALL_CYCLES: u128 = 10_000_000_000_000;
@@ -183,9 +183,9 @@ impl ManagedAppFixture {
             {
                 return Ok(());
             }
-            self.pic.advance_time(Duration::from_secs(1));
-            self.pic.tick();
-            self.pic.tick();
+            self.pic.advance_time(Duration::from_secs(1))?;
+            self.pic.tick()?;
+            self.pic.tick()?;
         }
         Err(ManagedAppQualificationError::ProgressLimit {
             operation: "managed runtime activation",
@@ -281,7 +281,7 @@ impl ManagedAppFixture {
         install_code_cooldown: Duration,
     ) -> Result<(), ManagedAppQualificationError> {
         self.pic
-            .wait_out_install_code_rate_limit(install_code_cooldown);
+            .wait_out_install_code_rate_limit(install_code_cooldown)?;
         self.pic
             .upgrade_canister(
                 self.app,
@@ -290,7 +290,7 @@ impl ManagedAppFixture {
                     .map_err(|error| ManagedAppQualificationError::Encoding(error.to_string()))?,
                 None,
             )
-            .map_err(|error| ManagedAppQualificationError::Install(error.to_string()))
+            .map_err(ManagedAppQualificationError::Transport)
     }
 
     fn runtime_is_active(&self) -> Result<bool, ManagedAppQualificationError> {
@@ -343,7 +343,7 @@ impl StandaloneAppFixture {
         install_code_cooldown: Duration,
     ) -> Result<(), ManagedAppQualificationError> {
         self.pic
-            .wait_out_install_code_rate_limit(install_code_cooldown);
+            .wait_out_install_code_rate_limit(install_code_cooldown)?;
         self.pic
             .upgrade_canister(
                 self.app,
@@ -352,24 +352,21 @@ impl StandaloneAppFixture {
                     .map_err(|error| ManagedAppQualificationError::Encoding(error.to_string()))?,
                 None,
             )
-            .map_err(|error| ManagedAppQualificationError::Install(error.to_string()))
+            .map_err(ManagedAppQualificationError::Transport)
     }
 }
 
 /// Install one exact managed App into a fresh application-subnet PocketIC.
 ///
-/// # Panics
-///
-/// Panics only if PocketIC rejects creation or installation before the managed
-/// Canic protocol can return typed evidence.
+/// Simulator failures retain their typed request and execution evidence.
 pub fn install_managed_app(
     input: ManagedAppQualificationInput<'_>,
 ) -> Result<ManagedAppFixture, ManagedAppQualificationError> {
     let pic = build_pocketic().map_err(ManagedAppQualificationError::Install)?;
-    let app = pic.create_canister();
-    pic.add_cycles(app, input.install_cycles);
+    let app = pic.create_canister()?;
+    pic.add_cycles(app, input.install_cycles)?;
     let compiled = compile_managed_app(&input, app)?;
-    pic.install_canister(app, input.wasm.clone(), compiled.init_args, None);
+    pic.install_canister(app, input.wasm.clone(), compiled.init_args, None)?;
     Ok(ManagedAppFixture {
         caller: compiled.caller,
         app,
@@ -388,14 +385,16 @@ pub fn install_managed_app(
 #[must_use]
 pub fn install_standalone_app(wasm: Vec<u8>, install_cycles: u128) -> StandaloneAppFixture {
     let pic = build_pocketic().expect("caller-owned PocketIC startup");
-    let app = pic.create_canister();
-    pic.add_cycles(app, install_cycles);
+    let app = pic.create_canister().expect("create standalone fixture");
+    pic.add_cycles(app, install_cycles)
+        .expect("fund standalone fixture");
     pic.install_canister(
         app,
         wasm.clone(),
         encode(None::<Vec<u8>>).expect("encode standalone-local init argument"),
         None,
-    );
+    )
+    .expect("install standalone fixture");
     StandaloneAppFixture { app, pic, wasm }
 }
 
@@ -727,7 +726,7 @@ pub enum ManagedAppQualificationError {
     Config(String),
     /// Canic rejected a protected lifecycle operation.
     Canic(Error),
-    /// PocketIC rejected installation or same-release upgrade.
+    /// PocketIC instance setup failed.
     Install(String),
     /// A bounded lifecycle observation did not reach terminal state.
     ProgressLimit {
@@ -735,7 +734,7 @@ pub enum ManagedAppQualificationError {
         maximum_ticks: usize,
     },
     /// PocketIC rejected the call or its transport failed.
-    Transport(PocketIcCallFailure),
+    Transport(ClientError),
     /// The reply exceeded its decoder limits or had an invalid Candid shape.
     Decode(ic_platform::candid::DecodeError),
     /// The bounded Wire call failed.
@@ -744,8 +743,8 @@ pub enum ManagedAppQualificationError {
     UnexpectedResponse(&'static str),
 }
 
-impl From<PocketIcCallFailure> for ManagedAppQualificationError {
-    fn from(value: PocketIcCallFailure) -> Self {
+impl From<ClientError> for ManagedAppQualificationError {
+    fn from(value: ClientError) -> Self {
         Self::Transport(value)
     }
 }
@@ -784,4 +783,12 @@ impl fmt::Display for ManagedAppQualificationError {
     }
 }
 
-impl std::error::Error for ManagedAppQualificationError {}
+impl std::error::Error for ManagedAppQualificationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Transport(error) => Some(error),
+            Self::Wire(error) => Some(error),
+            _ => None,
+        }
+    }
+}

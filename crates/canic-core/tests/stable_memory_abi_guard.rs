@@ -58,9 +58,6 @@ fn forbidden_tokens(tokens: proc_macro2::TokenStream) -> bool {
             continue;
         };
         let name = identifier.to_string();
-        if matches!(name.as_str(), "MEMORY_MANAGER" | "RestrictedMemory") {
-            return true;
-        }
         let next = tokens.get(index + 1);
         if matches!(
             name.as_str(),
@@ -68,22 +65,6 @@ fn forbidden_tokens(tokens: proc_macro2::TokenStream) -> bool {
         ) && matches!(next, Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis)
         {
             return true;
-        }
-        if name == "ic_memory"
-            && matches!(next, Some(TokenTree::Punct(mark)) if mark.as_char() == '!')
-        {
-            return true;
-        }
-        if matches!(tokens.get(index + 1), Some(TokenTree::Punct(mark)) if mark.as_char() == ':')
-            && matches!(tokens.get(index + 2), Some(TokenTree::Punct(mark)) if mark.as_char() == ':')
-            && let Some(TokenTree::Ident(method)) = tokens.get(index + 3)
-        {
-            let method = method.to_string();
-            if (name == "MemoryApi" && matches!(method.as_str(), "register" | "register_with_key"))
-                || (name == "MemoryManager" && (method == "init" || method.starts_with("init_")))
-            {
-                return true;
-            }
         }
     }
     false
@@ -99,15 +80,11 @@ fn managed_memory_guard_matches_calls_without_rejecting_observation_names() {
         "let pages = memory.maximum_stable_growth_pages();"
     ));
     assert!(!has_forbidden_memory_pattern(
-        "let count = ic_memory::MEMORY_MANAGER_INVALID_ID;"
+        "let id = allocation.allocation_id;"
     ));
     assert!(!has_forbidden_memory_pattern(
         r#"let example = "stable_grow(1)"; // MEMORY_MANAGER"#
     ));
-    assert!(has_forbidden_memory_pattern(
-        "MemoryManager :: init_with_bucket_size(memory, 1)"
-    ));
-    assert!(has_forbidden_memory_pattern("ic_memory ! (slot)"));
 }
 
 fn is_managed_memory_runtime_boundary(path: &Path) -> bool {

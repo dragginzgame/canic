@@ -25,8 +25,13 @@ fn held() {
 fn bootstrap_capacity_hold_allows_only_supplied_store_and_fences_allocation() {
     held();
     let original = CanisterPoolStore::state();
-    let bytes = original.to_bytes().into_owned();
-    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    let bytes = original
+        .to_bytes()
+        .expect("encode current record")
+        .into_owned();
+    CanisterPoolStore::set_state(
+        CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)).expect("decode current record"),
+    );
     assert_eq!(CanisterPoolStore::state(), original);
     assert!(CanisterPoolImportOps::is_active());
     assert_conflict(

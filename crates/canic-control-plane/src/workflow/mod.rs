@@ -1,6 +1,8 @@
 //! Control-plane workflows for bootstrap and publication runtime.
 #[cfg(feature = "root-control-plane")]
 pub mod application_checkpoint;
+#[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
+pub mod continuation_retry;
 #[cfg(feature = "wasm-store-canister")]
 pub mod fixture_store;
 
@@ -38,6 +40,8 @@ pub mod root_funding;
 mod root_ledger_retirement;
 #[cfg(feature = "root-control-plane")]
 pub mod root_status;
+#[cfg(feature = "root-control-plane")]
+pub mod root_transition_timer;
 #[cfg(feature = "root-control-plane")]
 pub mod runtime;
 #[cfg(feature = "root-control-plane")]

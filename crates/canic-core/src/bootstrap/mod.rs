@@ -6,7 +6,7 @@
 
 #[doc(hidden)]
 pub mod release_binding;
-#[cfg(any(not(target_arch = "wasm32"), test))]
+#[cfg(all(feature = "build-support", not(target_arch = "wasm32")))]
 mod render;
 
 use crate::config::{Config, RoleRuntimeAuthority, RoleRuntimeConfig, schema::ConfigModel};
@@ -38,9 +38,9 @@ pub mod compiled {
         LocalApplicationAuthorizationConfig, LogConfig, MAX_COMPONENT_CHILD_ROLES,
         MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS,
         MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES,
-        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, RoleObservabilityConfig,
-        ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
-        ShardingConfig, TopupPolicy, implicit_root_canister_config,
+        PortableReceiverConfig, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind,
+        RoleObservabilityConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig,
+        ShardPool, ShardPoolPolicy, ShardingConfig, TopupPolicy, implicit_root_canister_config,
         implicit_wasm_store_canister_config, validate_app_name, validate_canister_role_name,
     };
     pub use crate::config::schema::{MetricProviderStorage, MetricStorage, MetricStorageConfig};
@@ -142,14 +142,14 @@ pub fn parse_config_model(toml: &str) -> Result<ConfigModel, ConfigError> {
 /// emit_config_model_source
 ///
 /// Render the validated configuration model as Rust source for `include!` at runtime.
-#[cfg(any(not(target_arch = "wasm32"), test))]
+#[cfg(all(feature = "build-support", not(target_arch = "wasm32")))]
 #[must_use]
 pub fn emit_config_model_source(config: &ConfigModel) -> String {
     render::config_model(config)
 }
 
 /// Render one validated role runtime authority as Rust source for `include!`.
-#[cfg(any(not(target_arch = "wasm32"), test))]
+#[cfg(all(feature = "build-support", not(target_arch = "wasm32")))]
 pub fn emit_role_runtime_authority_source(
     config: &ConfigModel,
     role: &crate::ids::CanisterRole,
@@ -251,6 +251,7 @@ maximum_instances = 1
         parse_config_model(MINIMAL_CONFIG).expect("current config should parse");
     }
 
+    #[cfg(feature = "build-support")]
     #[test]
     fn role_runtime_source_contains_only_the_compiled_runtime_authority() {
         let config = parse_config_model(MINIMAL_CONFIG).expect("current config should parse");

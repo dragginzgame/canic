@@ -305,6 +305,11 @@ impl ConfigOps {
         Ok(Self::authority()?.auth.delegated_tokens.clone())
     }
 
+    #[cfg(feature = "auth-root-delegation-state")]
+    pub(crate) fn portable_enrollment_freshness() -> Result<Option<u64>, InternalError> {
+        Ok(Self::authority()?.auth.portable_enrollment_freshness_ns)
+    }
+
     pub(crate) fn role_attestation_config() -> Result<RoleAttestationConfig, InternalError> {
         Ok(Self::authority()?.auth.role_attestation.clone())
     }

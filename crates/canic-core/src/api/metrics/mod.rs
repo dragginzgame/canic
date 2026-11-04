@@ -48,7 +48,7 @@ impl MetricProviderApi {
     #[doc(hidden)]
     pub fn memory_requests(
         authority: &crate::config::RoleRuntimeAuthority,
-    ) -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
+    ) -> Result<Vec<ic_storage::MemoryRequest>, ic_storage::AdmissionError> {
         crate::workflow::metrics::providers::memory_requests(authority)
     }
 }

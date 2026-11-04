@@ -2,15 +2,14 @@
 
 /// Include the generated private actor module emitted by the consumer's IcyDB build script.
 ///
-/// The final host must define `icydb_memory_pool() ->
-/// Result<icydb::db::MemoryAllocationPool, icydb::db::MemoryAllocationPoolError>`.
-/// Cold bootstrap uses this explicit pool's namespace grants and physical
-/// exclusions. An already committed host is adopted without invoking the provider.
+/// The final host must define `icydb_memory_grants() ->
+/// Result<icydb::db::AllocationGrants, icydb::db::AdmissionError>`.
+/// Cold bootstrap uses these explicit namespace grants. An already committed host is adopted without invoking the provider.
 /// Permanent component keys never choose IDs or grant their own namespace.
 /// The generated public `icydb_memory_requests()` factory returns all database
 /// requests without opening stores. A composed host combines those requests with
 /// other components and passes a checked `icydb::db::SealedDeclarationSnapshot` to
-/// Memory bootstrap, invoking `icydb::db::prepare_memory_bootstrap` in its policy.
+/// Storage bootstrap, invoking `icydb::db::prepare_memory_bootstrap` in its policy.
 /// IcyDB then verifies its requirements against that committed host once.
 ///
 /// The standalone form owns install and post-upgrade exports. A managed host

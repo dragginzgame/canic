@@ -2,7 +2,7 @@
 name = "root_funding_probe"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 publish = false
 
 [lib]

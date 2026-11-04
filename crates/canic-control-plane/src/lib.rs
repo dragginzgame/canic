@@ -37,6 +37,8 @@ pub mod installation;
 pub mod memory;
 
 pub(crate) mod ops;
+#[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
+pub(crate) mod policy;
 #[cfg(feature = "root-control-plane")]
 pub(crate) mod runtime;
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]

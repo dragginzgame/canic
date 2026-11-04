@@ -9,7 +9,7 @@ use crate::dto::{
         SetStateResponse,
     },
 };
-use ic_platform::principal::ExternalPrincipal;
+use ic_platform_types::principal::ExternalPrincipal;
 
 #[test]
 fn cascade_receipt_preserves_partial_failures_and_omissions() {

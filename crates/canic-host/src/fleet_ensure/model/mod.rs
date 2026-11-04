@@ -229,7 +229,7 @@ pub enum DesiredPresence {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DrainAuthority {
-    pub candid: String,
+    pub wire_schema: String,
     pub method: String,
     pub destination: String,
     pub maximum_execution_burn_cycles: String,
@@ -375,7 +375,7 @@ pub struct DesiredComponentGroupPlacement {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DesiredFleetArtifacts {
     pub continuation: Option<FleetEnsureContinuationAuthority>,
-    pub drain_candid_sha256_by_canister: BTreeMap<String, String>,
+    pub drain_wire_schema_sha256_by_canister: BTreeMap<String, String>,
     pub init_arg_sha256_by_canister: BTreeMap<String, String>,
     pub init_candid_sha256_by_canister: BTreeMap<String, String>,
     pub wasm_sha256_by_canister: BTreeMap<String, String>,
@@ -537,8 +537,8 @@ pub enum EnsureAction {
     Transfer {
         #[serde(with = "u128_text")]
         amount: u128,
-        candid: String,
-        candid_sha256: String,
+        wire_schema: String,
+        wire_schema_sha256: String,
         destination: String,
         #[serde(with = "u128_text")]
         maximum_execution_burn_cycles: u128,

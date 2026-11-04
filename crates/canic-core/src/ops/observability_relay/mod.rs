@@ -20,6 +20,27 @@ pub async fn observe(
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, InternalError> {
     match request {
+        CanisterObservabilityRequest::PortablePolicy => {
+            let wire = canic_contracts::protocol::portable_inspection::policy::METHOD_ID;
+            let reply = read_auth(
+                target,
+                canic_contracts::protocol::portable_inspection::policy::METHOD,
+                wire,
+                &(),
+            )
+            .await?;
+            Ok(CanisterObservabilityResponse::PortablePolicy(reply))
+        }
+        CanisterObservabilityRequest::PortableSessions(request) => {
+            let reply = read_auth(
+                target,
+                canic_contracts::protocol::portable_inspection::METHOD,
+                canic_contracts::protocol::portable_inspection::METHOD_ID,
+                &request,
+            )
+            .await?;
+            Ok(CanisterObservabilityResponse::PortableSessions(reply))
+        }
         CanisterObservabilityRequest::ChildFunding(request) => {
             let reply: canic_contracts::dto::child_funding::ChildFundingUsage = read(
                 target,
@@ -30,7 +51,7 @@ pub async fn observe(
                 protocol::child_funding::RESPONSE_LIMITS,
             )
             .await?;
-            Ok(CanisterObservabilityResponse::ChildFunding(reply.into()))
+            Ok(CanisterObservabilityResponse::ChildFunding(reply))
         }
         CanisterObservabilityRequest::CycleBalance => {
             let reply: canic_contracts::dto::role::CycleBalanceStatusResponse = read(
@@ -45,9 +66,7 @@ pub async fn observe(
             Ok(CanisterObservabilityResponse::CycleBalance(reply))
         }
         CanisterObservabilityRequest::CycleHistory(request) => {
-            let reply: canic_contracts::dto::page::Page<
-                canic_contracts::dto::cycles::CycleTrackerEntry,
-            > = read(
+            let reply = read(
                 target,
                 protocol::cycle_history::METHOD,
                 protocol::cycle_history::METHOD_ID,
@@ -59,9 +78,7 @@ pub async fn observe(
             Ok(CanisterObservabilityResponse::CycleHistory(reply))
         }
         CanisterObservabilityRequest::CycleTopups(request) => {
-            let reply: canic_contracts::dto::page::Page<
-                canic_contracts::dto::cycle_topups::CycleTopupEvent,
-            > = read(
+            let reply = read(
                 target,
                 protocol::cycle_topups::METHOD,
                 protocol::cycle_topups::METHOD_ID,
@@ -70,7 +87,7 @@ pub async fn observe(
                 protocol::cycle_topups::RESPONSE_LIMITS,
             )
             .await?;
-            Ok(CanisterObservabilityResponse::CycleTopups(reply.into()))
+            Ok(CanisterObservabilityResponse::CycleTopups(reply))
         }
         CanisterObservabilityRequest::MemoryAllocations => {
             let reply: canic_contracts::dto::memory::MemoryAllocationsResponse = read(
@@ -85,9 +102,7 @@ pub async fn observe(
             Ok(CanisterObservabilityResponse::MemoryAllocations(reply))
         }
         CanisterObservabilityRequest::Metrics(request) => {
-            let reply: canic_contracts::dto::page::Page<
-                canic_contracts::dto::metric_page::MetricEntry,
-            > = read(
+            let reply = read(
                 target,
                 protocol::metrics::METHOD,
                 protocol::metrics::METHOD_ID,
@@ -96,7 +111,7 @@ pub async fn observe(
                 protocol::metrics::RESPONSE_LIMITS,
             )
             .await?;
-            Ok(CanisterObservabilityResponse::Metrics(reply.into()))
+            Ok(CanisterObservabilityResponse::Metrics(reply))
         }
     }
 }
@@ -118,4 +133,30 @@ async fn read<T: Serialize + Sync, R: DeserializeOwned>(
     let value: Result<R, Error> = ic_wire::native::decode_response(id, &reply, response_limits)
         .map_err(|_| InternalError::invariant())?;
     value.map_err(InternalError::observed_public)
+}
+
+// Preserve Auth inspection refusals separately from call/framing failures.
+async fn read_auth<T: Serialize + Sync, R: DeserializeOwned>(
+    target: Principal,
+    method: &str,
+    id: u64,
+    request: &T,
+) -> Result<R, InternalError> {
+    use canic_contracts::protocol::portable_inspection as wire;
+    let bytes = ic_wire::native::encode_request(id, request, wire::REQUEST_LIMITS)
+        .map_err(|_| InternalError::invalid_input())?;
+    let reply = execute_call(
+        Call::new(
+            target.into(),
+            method,
+            WaitPolicy::Bounded {
+                timeout_seconds: 30,
+            },
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
+    ic_wire::native::decode_response(id, &reply, wire::RESPONSE_LIMITS)
+        .map_err(|_| InternalError::invariant())
 }

@@ -4,7 +4,7 @@ use crate::dto::{
     retirement_control::{LedgerTransferIntent, LedgerTransferReceipt},
     root_removal_read::*,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 fn ledger_receipt() -> LedgerTransferReceipt {
     LedgerTransferReceipt {

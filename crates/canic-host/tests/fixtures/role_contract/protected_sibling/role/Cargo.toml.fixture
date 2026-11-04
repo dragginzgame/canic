@@ -21,4 +21,4 @@ canic = { workspace = true, features = [] }
 fixture_protected_helper = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }

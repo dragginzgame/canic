@@ -23,6 +23,7 @@ pub enum CanicFeatureKey {
     AuthIssuerCanisterSigCreate,
     AuthIssuerCanisterSigVerify,
     AuthLocalApplicationAuthorization,
+    AuthPortableIssuer,
     AuthRootCanisterSigCreate,
     AuthRootCanisterSigVerify,
     ControlPlane,
@@ -138,6 +139,7 @@ pub enum StateAllocationKey {
     CoreFleetActivation,
     CoreCallerAuthority,
     CoreDelegatedTokenIssuerState,
+    CorePortableIssuerState,
     CoreLocalApplicationAuthorizationState,
     CoreRootDelegationState,
     CoreReplayReceipts,
@@ -333,7 +335,7 @@ pub enum RoleContractFinding {
     MultipleCanicPackages {
         packages: Vec<String>,
     },
-    MultipleMemoryRuntimes {
+    MultipleStorageRuntimes {
         packages: Vec<String>,
     },
     MultipleTimerRuntimes {
@@ -385,7 +387,7 @@ impl RoleContractFinding {
             Self::DependencyShapeUnsupported { .. } => "role_contract_dependency_shape_unsupported",
             Self::MemoryKeyCollision { .. } => "role_contract_memory_key_collision",
             Self::MultipleCanicPackages { .. } => "role_contract_multiple_canic_packages",
-            Self::MultipleMemoryRuntimes { .. } => "role_contract_multiple_memory_runtimes",
+            Self::MultipleStorageRuntimes { .. } => "role_contract_multiple_storage_runtimes",
             Self::MultipleTimerRuntimes { .. } => "role_contract_multiple_timer_runtimes",
             Self::PackageAmbiguous { .. } => "role_contract_package_ambiguous",
             Self::PackageMetadataMismatch { .. } => "role_contract_package_metadata_mismatch",

@@ -206,6 +206,7 @@ fn omitted_policy_embeds_no_permissions_and_distinct_role_identity() {
     );
 }
 
+#[cfg(feature = "build-support")]
 #[test]
 fn toml_policy_is_compiled_into_generated_runtime_source() {
     let mut model = ConfigModel::test_default();

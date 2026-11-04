@@ -2,7 +2,7 @@
 name = "canister_scale_hub"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 publish = false
 build = "../build.rs"
 
@@ -25,7 +25,7 @@ ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-wire = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }
 
 [[example]]
 name = "wire_schema"

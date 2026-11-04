@@ -19,7 +19,10 @@ cleanup() {
 trap cleanup EXIT
 exec >"$FIXTURE/output.log" 2>&1
 
-mkdir -p "$FIXTURE/bin" "$FIXTURE/scripts/ci" "$FIXTURE/docs/changelog"
+mkdir -p "$FIXTURE/bin" "$FIXTURE/scripts/ci" "$FIXTURE/docs/changelog" "$FIXTURE/scripts/release" "$FIXTURE/releases/framework" "$FIXTURE/ci"
+cp "$ROOT/scripts/release/selection.sh" "$FIXTURE/scripts/release/"
+cp "$ROOT/ci/cargo-release-groups.json" "$FIXTURE/ci/"
+export RELEASE_GROUP=framework
 cp "$ROOT/scripts/ci/run-release-validation-lane.sh" \
     "$FIXTURE/scripts/ci/run-release-validation-lane.sh"
 cp "$ROOT/scripts/ci/check-release-draft-ready.sh" \
@@ -30,7 +33,7 @@ cp "$ROOT/scripts/ci/next-release-version.sh" \
 bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$FIXTURE" \
     scripts/ci/next-release-version.sh scripts/ci/finalize-release-changelog.awk \
     scripts/ci/validate-release-inputs.pl
-printf '## [1.2.4]\n' >"$FIXTURE/docs/changelog/1.2.md"
+printf '## [1.2.4]\n' >"$FIXTURE/releases/framework/CHANGELOG.md"
 printf '## [1.3.0]\n' >"$FIXTURE/docs/changelog/1.3.md"
 printf '## [2.0.0]\n' >"$FIXTURE/docs/changelog/2.0.md"
 
@@ -38,6 +41,7 @@ printf '%s\n' \
     '#!/usr/bin/env bash' \
     'printf "make %s\n" "$*" >>"$FIXTURE_EVENTS"' \
     'if [[ "$*" == *tools-check* ]]; then exit "${FAKE_TOOLS_STATUS:-0}"; fi' \
+    'if [[ "$*" == *compiler-check* ]]; then exit "${FAKE_COMPILER_STATUS:-0}"; fi' \
     'if [[ "$*" == *validate* ]]; then exit "${FAKE_VALIDATE_STATUS:-0}"; fi' \
     'exit 0' >"$FIXTURE/bin/make"
 printf '%s\n' \
@@ -57,6 +61,11 @@ printf '%s\n' \
     'printf "fast-eligibility\n" >>"$FIXTURE_EVENTS"' \
     'exit "${FAKE_FAST_STATUS:-0}"' \
     >"$FIXTURE/scripts/ci/check-fast-patch-eligibility.sh"
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "group-plan source=%s group=%s\n" "$RELEASE_SOURCE" "$RELEASE_GROUP" >>"$FIXTURE_EVENTS"' \
+    'exit "${FAKE_PLAN_STATUS:-0}"' \
+    >"$FIXTURE/scripts/release/validate.sh"
 printf '%s\n' \
     '#!/usr/bin/env bash' \
     'printf "1.2.3\n"' \
@@ -85,7 +94,7 @@ reset_fixture() {
     rm -f "$FIXTURE_EVENTS" "$FAKE_GIT_COUNT"
     local candidate
     candidate="$(bash "$FIXTURE/scripts/ci/next-release-version.sh" 1.2.3 "${1:-patch}")"
-    printf '## [%s]\n' "$candidate" >"$FIXTURE/CHANGELOG.md"
+    printf '## [%s]\n' "$candidate" >"$FIXTURE/releases/framework/CHANGELOG.md"
 }
 
 assert_no_bump() {
@@ -104,7 +113,7 @@ assert_no_validation() {
 
 reset_fixture
 status=0
-printf '## [1.2.5]\n' >"$FIXTURE/CHANGELOG.md"
+printf '## [1.2.5]\n' >"$FIXTURE/releases/framework/CHANGELOG.md"
 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete patch || status=$?
 [[ "$status" -eq 1 ]] || {
     echo "release validation lane test failed: conflicting draft status was $status" >&2
@@ -115,9 +124,9 @@ assert_no_bump
 
 reset_fixture
 status=0
-mv "$FIXTURE/docs/changelog/1.2.md" "$FIXTURE/changelog.saved"
+mv "$FIXTURE/releases/framework/CHANGELOG.md" "$FIXTURE/changelog.saved"
 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete patch || status=$?
-mv "$FIXTURE/changelog.saved" "$FIXTURE/docs/changelog/1.2.md"
+mv "$FIXTURE/changelog.saved" "$FIXTURE/releases/framework/CHANGELOG.md"
 [[ "$status" -eq 1 ]] || {
     echo "release validation lane test failed: draft preflight failure status was $status" >&2
     exit 1
@@ -220,11 +229,34 @@ assert_no_validation
 assert_no_bump
 
 reset_fixture major
+if FAKE_COMPILER_STATUS=43 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete; then
+    echo 'qualification bypassed the selected compiler' >&2
+    exit 1
+fi
+assert_no_validation
+assert_no_bump
+
+reset_fixture major
 if RELEASE_SOURCE=another-source bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete; then
     echo 'release qualification accepted a different delivery source' >&2
     exit 1
 fi
 assert_no_validation
+assert_no_bump
+
+reset_fixture
+bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" selected patch
+rg -Fx 'group-plan source=validated-head group=framework' "$FIXTURE_EVENTS" >/dev/null
+rg -Fx 'bump=patch validated=1 head=validated-head kind=plan' "$FIXTURE_EVENTS" >/dev/null
+assert_no_validation
+reset_fixture
+if FAKE_PLAN_STATUS=29 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" selected patch; then
+    echo 'selected release validation bypassed plan failure' >&2; exit 1
+fi
+assert_no_bump
+reset_fixture
+bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" selected
+rg -Fx 'group-plan source=validated-head group=framework' "$FIXTURE_EVENTS" >/dev/null
 assert_no_bump
 
 echo "release validation lane test passed" >&3

@@ -11,8 +11,8 @@ use crate::ops::runtime::metric_providers::{
 
 use std::cell::RefCell;
 
-use ic_memory::{DefaultMemoryImpl, Memory, MemoryRequest, RuntimeMemory};
 use ic_storage::adapter::StableBTreeMap;
+use ic_storage::{DefaultMemoryImpl, MemoryRequest, RuntimeMemory};
 
 thread_local! {
     static PROVIDERS: RefCell<ProviderMetrics<DefaultMemoryImpl>> = RefCell::default();
@@ -49,7 +49,8 @@ pub fn activate(fresh: bool) -> Result<(), ProviderMetricsError> {
                     StableBTreeMap::create(memory)
                 } else {
                     StableBTreeMap::load(memory)
-                };
+                }
+                .map_err(ic_metrics_storage::StoreError::Storage)?;
                 Ok(MetricsStore::new(map))
             },
         )
@@ -73,7 +74,7 @@ pub fn snapshot(provider: &str) -> Result<Vec<MetricObservation>, ProviderMetric
 /// artifact declares no Metrics allocation; unrelated child-role policy is ignored.
 pub fn role_memory_requests(
     authority: &crate::config::RoleRuntimeAuthority,
-) -> Result<Vec<MemoryRequest>, ic_memory::MemoryDeclarationError> {
+) -> Result<Vec<MemoryRequest>, ic_storage::AdmissionError> {
     if authority
         .canisters
         .iter()

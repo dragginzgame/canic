@@ -1,7 +1,20 @@
 # 0.112 consolidated push-readiness plan
 
-Audit date: 2026-10-26. Status: earlier owned-cut evidence retained; latest dependencies adopted with validation left to the maintainer; external DTO migration remains.
-This is a development checklist, not release authority or a validation receipt.
+Historical audit date: 2026-10-26. This checklist retains its original 0.112
+selections and validation boundary. Current adoption is recorded in the
+[current handoff](../../../status/current.md), [Blob acceptance audit](../blob-0411-adoption.md)
+and [adoption receipt](upstream-adoption.json). The refreshed Auth 0.32 / Query
+0.87 family passes selected native checks, both installed Blob composition/client
+shapes and all 13 timer cases. The earlier five-profile funding matrix retains
+its original graph. The receipt separates current raw logs from earlier
+reconstructed results after target-cache removal. Supplier-publication blockers
+below describe their dated graphs. This checklist is not release authority.
+
+Auth integration resumed at the maintainer's request on 2026-11-03. The persistent
+receiver/enrollment components and upstream pair/count validation are integrated
+locally; the [current integration status](../../../design/0.112-standalone-blob-service-extraction/status.md#persistent-auth-integration-resumed--2026-11-03)
+records their focused evidence and remaining production path. The dated deferrals
+below do not prohibit this resumed work or establish that login is operational.
 
 ## Final coordinated adoption — maintainer-selected validation boundary
 

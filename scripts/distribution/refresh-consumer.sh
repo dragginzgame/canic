@@ -6,9 +6,9 @@ SCRIPT_ROOT="${BASH_SOURCE[0]}"
 [[ "$SCRIPT_ROOT" == /* ]] || SCRIPT_ROOT="$PWD/$SCRIPT_ROOT"
 SCRIPT_ROOT="$(cd -P "${SCRIPT_ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 SCRIPT_ROOT="${SCRIPT_ROOT%/.}"
-# shellcheck source=scripts/ci/shared-companions.sh
-source "$SCRIPT_ROOT/scripts/ci/shared-companions.sh"
 SOURCE_ROOT="$SCRIPT_ROOT"
+requested_revision=""
+EXECUTION_DIR=""
 CONSUMER_ROOT=""
 MANIFEST_PATH=".shared-tooling.snapshot"
 STAGING_DIR=""
@@ -26,7 +26,7 @@ takeover_payload_states=()
 
 usage() {
     cat >&2 <<'USAGE'
-usage: refresh-consumer.sh [--preview | --impact] [--source <shared-tooling-checkout>] --consumer <repository> [--manifest <relative-path>] [--entrypoint <relative-path>]... [--add-entrypoint <relative-path>]... [--takeover-snapshot <relative-root|.> <relative-manifest>]...
+usage: refresh-consumer.sh [--preview | --impact] [--source <shared-tooling-checkout>] [--revision <full-commit>] --consumer <repository> [--manifest <relative-path>] [--entrypoint <relative-path>]... [--add-entrypoint <relative-path>]... [--takeover-snapshot <relative-root|.> <relative-manifest>]...
 
 Use --entrypoint to select the complete set of roots, initially or on refresh.
 Otherwise refresh reuses the manifest's recorded entrypoints. --add-entrypoint
@@ -35,7 +35,10 @@ extends that selection. Required companions and integrity tools are derived.
 retirements. Refresh automatically removes unchanged, previously owned files
 outside the new closure. Select directly used helpers as entrypoints to keep them.
 --impact implies preview and adds affected current entrypoints and path-filtered
-commit history. The clean source checkout HEAD is the selected comparison commit.
+commit history. Without --revision, select the clean source checkout HEAD.
+--revision reads an available full commit from the local object database, ignoring
+source working/index bytes. The executing exporter and helpers must match their
+own checkout HEAD; unrelated edits are allowed. No fetching or checkout occurs.
 USAGE
 }
 
@@ -48,6 +51,9 @@ cleanup() {
     if [[ -n "$replacement" ]]; then rm -f -- "$replacement"; fi
     if [[ -n "$STAGING_DIR" && -d "$STAGING_DIR" ]]; then
         rm -rf "$STAGING_DIR"
+    fi
+    if [[ -n "$EXECUTION_DIR" && -d "$EXECUTION_DIR" ]]; then
+        rm -rf "$EXECUTION_DIR"
     fi
 }
 
@@ -184,6 +190,12 @@ while [[ $# -gt 0 ]]; do
         SOURCE_ROOT="$2"
         shift 2
         ;;
+    --revision)
+        [[ $# -ge 2 && -z "$requested_revision" ]] || { usage; exit 2; }
+        requested_revision="$2"
+        [[ "$requested_revision" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || fail "--revision requires a full commit ID"
+        shift 2
+        ;;
     --consumer)
         [[ $# -ge 2 ]] || { usage; exit 2; }
         CONSUMER_ROOT="$2"
@@ -242,10 +254,46 @@ consumer_top="${consumer_top%.}"
 consumer_top="$(resolve_directory "${consumer_top%$'\n'}")"
 [[ "$consumer_top" == "$CONSUMER_ROOT" ]] || fail "--consumer must name the checkout root"
 
-source_status="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=all)"
-[[ -z "$source_status" ]] || fail "source checkout must be clean so its revision identifies every copied byte"
+if [[ -n "$requested_revision" ]]; then
+    # Never allow replacement refs to reinterpret a pinned commit or blob. Avoid
+    # optional index refreshes: this mode is read-only with respect to the source.
+    export GIT_NO_REPLACE_OBJECTS=1 GIT_OPTIONAL_LOCKS=0
+    source_revision="$requested_revision"
+    revision_kind="$(git -C "$SOURCE_ROOT" cat-file -t "$source_revision")" || fail "selected revision is unavailable"
+    [[ "$revision_kind" == commit ]] || fail "selected revision must be a commit"
 
-source_revision="$(git -C "$SOURCE_ROOT" rev-parse HEAD)"
+    # Admit execution separately from the exported revision. A newer committed
+    # exporter can export an older payload. Never source a dirty helper first.
+    execution_revision="$(git -C "$SCRIPT_ROOT" rev-parse --verify HEAD)" || fail "exporter requires a committed execution source"
+    execution_tmp="$(resolve_directory "${TMPDIR:-/tmp}")"
+    case "$execution_tmp/" in
+        "$SOURCE_ROOT/"*|"$CONSUMER_ROOT/"*) fail "execution temporary directory must be outside source and consumer" ;;
+    esac
+    EXECUTION_DIR="$(mktemp -d "$execution_tmp/shared-tooling-execution.XXXXXX")"
+    for path in scripts/distribution/refresh-consumer.sh scripts/ci/shared-companions.sh \
+        scripts/ci/verify-file-checksum.sh scripts/ci/verify-shared-tooling-snapshot.sh; do
+        execution_entry="$(git -C "$SCRIPT_ROOT" --literal-pathspecs ls-tree "$execution_revision" -- "$path")" || fail "cannot inspect execution source: $path"
+        execution_mode="${execution_entry%% *}"
+        [[ "$execution_mode" == 100644 || "$execution_mode" == 100755 ]] || fail "execution source must be a committed regular file: $path"
+        [[ -f "$SCRIPT_ROOT/$path" && ! -L "$SCRIPT_ROOT/$path" ]] || fail "execution source is missing or symlinked: $path"
+        mkdir -p "$EXECUTION_DIR/${path%/*}"
+        git -C "$SCRIPT_ROOT" cat-file blob "$execution_revision:$path" > "$EXECUTION_DIR/$path" || fail "cannot read execution source: $path"
+        cmp -s "$EXECUTION_DIR/$path" "$SCRIPT_ROOT/$path" || fail "execution source differs from its committed HEAD: $path"
+        if [[ "$execution_mode" == 100755 ]]; then
+            [[ -x "$SCRIPT_ROOT/$path" ]] || fail "execution source mode differs: $path"
+        else
+            [[ ! -x "$SCRIPT_ROOT/$path" ]] || fail "execution source mode differs: $path"
+        fi
+    done
+    # All subsequent helper execution uses the admitted immutable copies.
+    SCRIPT_ROOT="$EXECUTION_DIR"
+else
+    source_status="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=all)"
+    [[ -z "$source_status" ]] || fail "source checkout must be clean so its revision identifies every copied byte"
+    source_revision="$(git -C "$SOURCE_ROOT" rev-parse HEAD)"
+fi
+# shellcheck source=scripts/ci/shared-companions.sh
+source "$SCRIPT_ROOT/scripts/ci/shared-companions.sh"
 [[ "$source_revision" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || fail "source revision is malformed"
 # Read the display version from the same immutable source as the payload, never
 # the working tree or the consumer's own VERSION. Preserve invalid extra lines.
@@ -456,14 +504,16 @@ for index in "${!files[@]}"; do
     path="${files[$index]}"
     validate_relative_path "$path"
     [[ "$path" != "$MANIFEST_PATH" ]] || fail "manifest may not include itself"
-    source_file="$SOURCE_ROOT/$path"
-    [[ -f "$source_file" && ! -L "$source_file" ]] ||
-        fail "source file is missing or symlinked: $path"
-    source_parent="$(resolve_directory "${source_file%/*}")"
-    case "$source_parent/" in
-    "$SOURCE_ROOT/"*) ;;
-    *) fail "source file escapes the source checkout: $path" ;;
-    esac
+    if [[ -z "$requested_revision" ]]; then
+        source_file="$SOURCE_ROOT/$path"
+        [[ -f "$source_file" && ! -L "$source_file" ]] ||
+            fail "source file is missing or symlinked: $path"
+        source_parent="$(resolve_directory "${source_file%/*}")"
+        case "$source_parent/" in
+        "$SOURCE_ROOT/"*) ;;
+        *) fail "source file escapes the source checkout: $path" ;;
+        esac
+    fi
     if [[ "$index" -ge "$selected_count" ]]; then
         consumer_states[index]="$(consumer_state "$path")" || fail "cannot inspect consumer input: $path"
         git -C "$CONSUMER_ROOT" --literal-pathspecs ls-files --stage -z -- "$path" > "$STAGING_DIR/index-$index" ||
@@ -586,6 +636,7 @@ done
 
 # Detect changes made while committed payloads and companions were prepared,
 # before publishing any selected file. Keep unrelated working/index edits intact.
+[[ "$(git -C "$SOURCE_ROOT" remote get-url origin)" == "$source_remote" ]] || fail "source origin changed during refresh"
 check_consumer_unchanged "$MANIFEST_PATH" "$manifest_state"
 check_index_unchanged manifest "$MANIFEST_PATH"
 for index in "${!files[@]}"; do
@@ -692,9 +743,13 @@ check_consumer_unchanged "$MANIFEST_PATH" "$manifest_state"
 check_index_unchanged manifest "$MANIFEST_PATH"
 mv "$staged_manifest" "$manifest"
 
-bash "$staged_files/scripts/ci/verify-shared-tooling-snapshot.sh" \
+verification_args=()
+if [[ -n "$requested_revision" ]]; then
+    verification_args=(--source "$SOURCE_ROOT" --revision "$source_revision")
+fi
+bash "$SCRIPT_ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" \
     --consumer "$CONSUMER_ROOT" \
-    --manifest "$MANIFEST_PATH"
+    --manifest "$MANIFEST_PATH" ${verification_args[@]+"${verification_args[@]}"}
 
 # Retire receipts only after the new authoritative manifest and bytes verify.
 for index in "${!takeover_paths[@]}"; do

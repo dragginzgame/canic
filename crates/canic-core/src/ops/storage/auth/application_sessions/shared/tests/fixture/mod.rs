@@ -139,7 +139,7 @@ pub(super) fn issue(
         nonce: [if second { 2 } else { 1 }; 16],
         grants: vec![DelegatedRoleGrant {
             target: role,
-            scopes: vec!["read".into()],
+            scopes: vec!["read".parse().expect("valid fixture scope")],
         }],
     };
     let bytes = encode_claims(&claims).unwrap();
@@ -172,7 +172,7 @@ pub(super) fn establish_issued(
     let role: AuthRole = "app_service".parse().unwrap();
     let grants = ValidatedGrants::new(vec![DelegatedRoleGrant {
         target: role.clone(),
-        scopes: vec!["read".into()],
+        scopes: vec!["read".parse().expect("valid fixture scope")],
     }])
     .unwrap();
     let claims = PortableClaimsContext {
@@ -233,7 +233,7 @@ pub(super) fn authorize(
     let role: AuthRole = "app_service".parse().unwrap();
     let grants = ValidatedGrants::new(vec![DelegatedRoleGrant {
         target: role.clone(),
-        scopes: vec!["read".into()],
+        scopes: vec!["read".parse().expect("valid fixture scope")],
     }])
     .unwrap();
     let required_scopes = RequiredScopes::new(required_scopes.to_vec())?;
@@ -283,7 +283,9 @@ fn submitted_claims_cannot_supply_receiver_authority() {
         let expected = match variant {
             0 => SessionError::StaleAuthority,
             1 => {
-                credential.claims.grants[0].scopes.push("write".into());
+                credential.claims.grants[0]
+                    .scopes
+                    .push("write".parse().expect("valid fixture scope"));
                 SessionError::Claims(PortableClaimsError::GrantsExceeded)
             }
             2 => {

@@ -1,0 +1,156 @@
+diff --git a/crates/ic-auth/src/session/model.rs b/crates/ic-auth/src/session/model.rs
+index 7499d62..7f7db5c 100644
+--- a/crates/ic-auth/src/session/model.rs
++++ b/crates/ic-auth/src/session/model.rs
+@@ -44,6 +44,9 @@ pub struct SessionLimits {
+ impl SessionLimits {
+     /// Admit protected storage configuration once. Reconstruct after decoding;
+     /// current occupancy and encoded-byte capacity are still checked per write.
++    /// Each limit must be positive. The host chooses deployment capacity and must
++    /// qualify allocation, restoration and cleanup costs for that capacity. This
++    /// constructor allocates no backing and does not enlarge individual records.
+     pub const fn new(
+         max_sessions: usize,
+         max_replays: usize,
+@@ -51,13 +54,9 @@ impl SessionLimits {
+         max_encoded_bytes: usize,
+     ) -> Result<Self, SessionError> {
+         if max_sessions == 0
+-            || max_sessions > 2048
+             || max_replays == 0
+-            || max_replays > 4096
+             || max_replays_per_caller == 0
+-            || max_replays_per_caller > 256
+             || max_encoded_bytes == 0
+-            || max_encoded_bytes > 8 * 1024 * 1024
+         {
+             return Err(SessionError::InvalidPolicyOrRecord);
+         }
+diff --git a/crates/ic-auth/tests/session_configuration.rs b/crates/ic-auth/tests/session_configuration.rs
+index 4f653fd..aa0949f 100644
+--- a/crates/ic-auth/tests/session_configuration.rs
++++ b/crates/ic-auth/tests/session_configuration.rs
+@@ -1,7 +1,10 @@
+ #![cfg(feature = "sessions")]
+ use ic_auth::{
+     canonical::CanonicalAuthError,
+-    session::{MemorySessionStore, RequiredScopes, SessionError, SessionLimits, SessionStore},
++    session::{
++        MemorySessionStore, RequiredScopes, SessionError, SessionLimits, SessionOccupancy,
++        SessionStore,
++    },
+ };
+ 
+ #[test]
+@@ -42,18 +45,16 @@ fn required_scope_admission_preserves_operation_semantics_and_enforces_bounds()
+ 
+ #[test]
+ fn limits_refuse_each_invalid_dimension_before_store_construction() {
+-    let maximum = [2048, 4096, 256, 8 * 1024 * 1024];
++    let selected = [100_000, 200_000, 1024, 512 * 1024 * 1024];
+     for index in 0..4 {
+-        for invalid in [0, maximum[index] + 1] {
+-            let mut values = maximum;
+-            values[index] = invalid;
+-            assert_eq!(
+-                SessionLimits::new(values[0], values[1], values[2], values[3]),
+-                Err(SessionError::InvalidPolicyOrRecord)
+-            );
+-        }
++        let mut values = selected;
++        values[index] = 0;
++        assert_eq!(
++            SessionLimits::new(values[0], values[1], values[2], values[3]),
++            Err(SessionError::InvalidPolicyOrRecord)
++        );
+     }
+-    for values in [[1; 4], maximum] {
++    for values in [[1; 4], selected, [usize::MAX; 4]] {
+         let limits = SessionLimits::new(values[0], values[1], values[2], values[3]).unwrap();
+         assert_eq!(
+             [
+@@ -70,3 +71,63 @@ fn limits_refuse_each_invalid_dimension_before_store_construction() {
+         assert_eq!(store.encoded_bytes(), 0);
+     }
+ }
++
++#[test]
++fn host_selected_capacity_refuses_each_exhausted_dimension_and_preserves_replacement() {
++    let limits = SessionLimits::new(100_000, 200_000, 1024, 512 * 1024 * 1024).unwrap();
++    let available = SessionOccupancy {
++        sessions: 99_999,
++        replays: 199_999,
++        replays_for_caller: 1023,
++    };
++    assert_eq!(limits.check_capacity(available, false), Ok(()));
++    let sessions_full = SessionOccupancy {
++        sessions: 100_000,
++        ..available
++    };
++    assert_eq!(
++        limits.check_capacity(sessions_full, false),
++        Err(SessionError::Capacity)
++    );
++    assert_eq!(limits.check_capacity(sessions_full, true), Ok(()));
++    for full in [
++        SessionOccupancy {
++            replays: 200_000,
++            ..available
++        },
++        SessionOccupancy {
++            replays_for_caller: 1024,
++            ..available
++        },
++    ] {
++        for replacing in [false, true] {
++            assert_eq!(
++                limits.check_capacity(full, replacing),
++                Err(SessionError::Capacity)
++            );
++        }
++    }
++    let maximum = SessionLimits::new(usize::MAX, usize::MAX, usize::MAX, usize::MAX).unwrap();
++    assert_eq!(
++        maximum.check_capacity(
++            SessionOccupancy {
++                sessions: usize::MAX - 1,
++                replays: usize::MAX - 1,
++                replays_for_caller: usize::MAX - 1
++            },
++            false
++        ),
++        Ok(())
++    );
++    assert_eq!(
++        maximum.check_capacity(
++            SessionOccupancy {
++                sessions: usize::MAX,
++                replays: usize::MAX,
++                replays_for_caller: usize::MAX
++            },
++            true
++        ),
++        Err(SessionError::Capacity)
++    );
++}
+diff --git a/docs/sessions.md b/docs/sessions.md
+index 8999d39..227a0ef 100644
+--- a/docs/sessions.md
++++ b/docs/sessions.md
+@@ -6,6 +6,16 @@ select `portable-signature-verification` for Ed25519 or `certified-proof-verific
+ complete certified portable proofs. Fresh admission is available only with a complete
+ verifier selected; session-only builds retain authorization, logout and storage. It does not depend on Canic, Toko, CDK or stable memory.
+ 
++## Host-selected capacity
++
++`SessionLimits::new` accepts positive host-selected session, replay, per-caller
++replay and encoded-byte budgets. It does not impose a deployment-wide session
++ceiling or allocate backing. Admission and restoration still enforce the selected
++budgets; individual record codec limits are unchanged. A host may select 100,000
++sessions with proportional retention budgets, but must qualify its actual store,
++heap indexes, reconstruction, cleanup and instruction costs. These values are
++protected configuration, never token or caller input.
++
+ ## Admission and ordinary calls
+ 
+ `establish_session` takes a host store, retained login ledger, shared work budget,

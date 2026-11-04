@@ -1,6 +1,6 @@
-//! Keep the latest declared release paired with its detailed notes, before and after dating.
+//! Each explicit release group owns one unambiguous ledger.
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, process::Command};
 
 fn workspace_root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -44,24 +44,26 @@ fn latest_release(source: &str) -> Result<&str, ReleaseSelectionError> {
     Ok(version)
 }
 
-fn detailed_notes_match(source: &str, version: &str) -> bool {
-    let heading = format!("## [{version}]");
-    let dated_heading = format!("{heading} - ");
-    source
-        .lines()
-        .any(|line| line == heading || line.starts_with(&dated_heading))
-}
-
 #[test]
-fn latest_changelog_release_has_matching_detailed_notes() {
+fn each_group_has_one_canonical_unambiguous_ledger() {
     let root = workspace_root();
-    let root_source =
-        fs::read_to_string(root.join("CHANGELOG.md")).expect("root changelog should be readable");
-    let version = latest_release(&root_source).expect("one latest numbered release");
-    let minor = version.rsplit_once('.').expect("release minor line").0;
-    let detailed = root.join(format!("docs/changelog/{minor}.md"));
-    let source = fs::read_to_string(detailed).expect("selected detailed notes must exist");
-    assert!(detailed_notes_match(&source, version));
+    let output = Command::new(root.join(".tools/host/bin/jq"))
+        .args(["-er", ".groups[].changelog"])
+        .arg(root.join("ci/cargo-release-groups.json"))
+        .output()
+        .expect("read the admitted group policy");
+    assert!(output.status.success());
+    let ledgers = String::from_utf8(output.stdout).expect("group ledger paths");
+    assert!(!ledgers.trim().is_empty());
+    let index = fs::read_to_string(root.join("CHANGELOG.md")).expect("changelog index");
+    for path in ledgers.lines() {
+        let source = fs::read_to_string(root.join(path)).expect("group ledger");
+        latest_release(&source).expect("one latest numbered release per group");
+        assert!(
+            index.contains(path),
+            "group ledger missing from index: {path}"
+        );
+    }
 }
 
 #[test]
@@ -82,17 +84,5 @@ fn release_selection_accepts_finalization_and_refuses_ambiguous_drafts() {
         ("# Changelog\n", Err(ReleaseSelectionError::MissingRelease)),
     ] {
         assert_eq!(latest_release(source), expected);
-    }
-}
-
-#[test]
-fn matching_notes_cover_pending_and_released_headings() {
-    for source in [
-        "## [1.2.3]\n",
-        "## [1.2.3] - Unreleased\n",
-        "## [1.2.3] - 2026-10-31\n",
-    ] {
-        assert!(detailed_notes_match(source, "1.2.3"));
-        assert!(!detailed_notes_match(source, "1.2.2"));
     }
 }

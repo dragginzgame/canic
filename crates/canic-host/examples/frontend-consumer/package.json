@@ -3,9 +3,12 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@dragginzgame/ic-auth-client": "file:../../../canic-tests/test-support/auth/browser/dragginzgame-ic-auth-client-0.0.0.tgz",
     "@tokostudios/ic-platform": "0.1.1"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright-core": "1.62.1",
     "typescript": "6.0.3"
   },
   "engines": {

@@ -36,16 +36,12 @@ use thiserror::Error as ThisError;
 pub enum RuntimeOpsError {
     #[error(transparent)]
     EnvOps(#[from] env::EnvOpsError),
-
-    #[error(transparent)]
-    MemoryRegistryOps(#[from] memory::MemoryRegistryOpsError),
 }
 
 impl From<RuntimeOpsError> for InternalError {
     fn from(err: RuntimeOpsError) -> Self {
         match err {
             RuntimeOpsError::EnvOps(err) => err.into(),
-            RuntimeOpsError::MemoryRegistryOps(err) => err.into(),
         }
     }
 }

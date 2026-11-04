@@ -251,21 +251,33 @@ the trap diagnostic includes its application error code. Permanent failures
 returned before mutation retain their exact diagnostic in protected recovery
 state and report `Failed`, including after restart. A trapped callback retains
 uncertain work for watchdog recovery; its application code is not a durable
-failure record. Encoding or decoding failures report `Codec` with the original
+failure record. Three unfinished attempts at the retained assignment/position
+stop with `Interrupted`, including the position and attempt count. This diagnostic
+does not claim whether a rolled-back callback returned an error or trapped directly.
+`FixtureProvisioningApi::recovery_status()` exposes the assignment hash, last
+committed position, unfinished attempt count, limit and active-attempt flag without
+invoking the application callback. Encoding or decoding failures report `Codec` with the original
 diagnostic code and stop automatic retries. Transport outages remain retryable;
 an incompatible response is not treated as an outage.
 
 Canic schedules delivery automatically after runtime activation. Registration and
-same-release restoration reconcile one retained native watchdog; lifecycle itself
-never invokes application import callbacks. The watchdog pre-arms recovery in a
-separate message before dispatching work, so a trapped callback cannot strand
-its successor behind an ordinary running timer.
+same-release restoration reconcile one retained native watchdog and one retained
+native worker. Lifecycle itself never invokes application import callbacks. The
+watchdog commits attempt custody before scheduling the worker in another message,
+so even a callback trapping before its first await cannot erase the charge.
+Recovery does not replace a still-live worker merely because its lease expired.
 Source awaits also carry an exact durable attempt fence. Recovery reconstructs
 pending demand after traps and restart, while completed receipts stop delivery.
 Successful steps request an immediate successor. Transient failures honor the
 existing provisioning backoff and are revisited on Canic's recovery cadence.
 The existing durable attempt record retains the failure streak and retry deadline,
 so a same-release restart cannot accelerate attempts during a source outage.
+Returned source outages refund the prospective callback charge while preserving
+earlier unfinished attempts. Successful validated progress clears that count.
+After repairing the application condition, an authenticated application command
+may call `FixtureProvisioningApi::retry_failed()`. It admits scheduling before
+clearing the durable failure, refuses an active attempt or changed assignment,
+and preserves the application's checkpoint. It supplies no cross-release import.
 Only the current attempt may change that delay; successful progress resets it.
 The delay doubles from one second to the existing 60-second provisioning maximum.
 That maximum bounds the interval between eligible retries, not total attempts or

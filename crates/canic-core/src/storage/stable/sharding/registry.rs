@@ -45,8 +45,8 @@ impl ShardingRegistry {
     #[cfg(test)]
     pub(crate) fn clear() {
         Self::with_mut(|core| {
-            core.registry.clear();
-            core.assignments.clear();
+            core.registry.clear().expect("commit stable fixture");
+            core.assignments.clear().expect("commit stable fixture");
         });
     }
 
@@ -104,10 +104,11 @@ impl ShardingRegistry {
         Self::with(|core| {
             core.registry
                 .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .take(limit)
                 .map(|row| ShardingRegistryEntryRecord {
-                    pid: *row.key(),
-                    entry: row.value(),
+                    pid: row.key().principal(),
+                    entry: row.value().expect("decode Storage entry"),
                 })
                 .collect()
         })

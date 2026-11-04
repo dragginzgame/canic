@@ -41,8 +41,8 @@ pub mod __private {
     pub use crate::schema::methods as wire_methods;
     pub use crate::transport;
     pub use ic_blob_storage_contracts;
-    pub use ic_memory;
     pub use ic_platform;
+    pub use ic_storage;
 }
 
 /// Register the supplier projections only in its explicitly selected native producer.

@@ -19,7 +19,6 @@ use crate::{
     test_support::temp_dir,
 };
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_hex};
-use ic_platform::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 use ic_platform::{
     candid::{
         contract::{CandidType, Nat, encode_args},
@@ -27,6 +26,7 @@ use ic_platform::{
     },
     principal::ExternalPrincipal as Principal,
 };
+use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -68,7 +68,12 @@ impl EnsurePlatform for FundedCanister {
             RootManagementCanisterObservation {
                 live,
                 name: "treasury".into(),
-                subnet: self.pic.get_subnet(self.destination).unwrap().to_text(),
+                subnet: self
+                    .pic
+                    .get_subnet(self.destination)
+                    .expect("PocketIC get_subnet")
+                    .unwrap()
+                    .to_text(),
             },
         )])))
     }
@@ -107,7 +112,10 @@ impl EnsurePlatform for FundedCanister {
                 "treasury".into(),
                 Some(LiveCanister {
                     principal: self.destination.to_text(),
-                    cycles: self.pic.cycle_balance(self.destination),
+                    cycles: self
+                        .pic
+                        .cycle_balance(self.destination)
+                        .expect("PocketIC cycle_balance"),
                     controllers: status
                         .settings
                         .controllers
@@ -141,7 +149,11 @@ impl EnsurePlatform for FundedCanister {
         else {
             panic!("only native withdrawal is in this fixture")
         };
-        let live_cycles = Some(self.pic.cycle_balance(self.destination));
+        let live_cycles = Some(
+            self.pic
+                .cycle_balance(self.destination)
+                .expect("PocketIC cycle_balance"),
+        );
         Ok(EffectObservation {
             provisioning_progress: None,
             provisioning_failure: None,
@@ -166,7 +178,11 @@ impl EnsurePlatform for FundedCanister {
         _: &EnsureAction,
         _: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
-        Ok(Some(self.pic.cycle_balance(self.destination)))
+        Ok(Some(
+            self.pic
+                .cycle_balance(self.destination)
+                .expect("PocketIC cycle_balance"),
+        ))
     }
     fn action_destination_cycles(
         &mut self,
@@ -228,7 +244,11 @@ impl EnsurePlatform for FundedCanister {
         };
         Ok(EffectOutcome {
             created_principal: None,
-            post_cycles: Some(self.pic.cycle_balance(self.destination)),
+            post_cycles: Some(
+                self.pic
+                    .cycle_balance(self.destination)
+                    .expect("PocketIC cycle_balance"),
+            ),
             receipt: Some(block.to_string()),
         })
     }
@@ -268,7 +288,8 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
         )
         .unwrap();
     let wasm = b"\0asm\x01\0\0\0";
-    pic.install_canister(destination, wasm.to_vec(), vec![], Some(operator));
+    pic.install_canister(destination, wasm.to_vec(), vec![], Some(operator))
+        .expect("PocketIC install_canister");
     let root = temp_dir("mint-native-recovery");
     fs::create_dir_all(&root).unwrap();
     let wasm_path = root.join("treasury.wasm");
@@ -276,7 +297,7 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     let desired: DesiredFleet = serde_json::from_value(serde_json::json!({
         "canisters": [{"controllers": [operator.to_text()], "initial_cycles": "2T", "minimum_cycles": "2T",
             "kind": "coordinator", "name": "treasury", "presence": "present", "principal": destination.to_text(),
-            "replace": false, "subnet": pic.get_subnet(destination).unwrap().to_text(), "wasm": wasm_path}],
+            "replace": false, "subnet": pic.get_subnet(destination).expect("PocketIC get_subnet").unwrap().to_text(), "wasm": wasm_path}],
         "cycles_ledger": LEDGER, "environment": "local", "fleet": "mint-fleet",
         "ledger_fee_cycles": fee.to_string(), "management_creation_fee_cycles": "0",
         "material_cycle_threshold": "1B", "maximum_observation_burn_cycles": "1B",
@@ -323,7 +344,10 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
         estate_funding_required: None,
         effects: vec![intent.clone()],
         fleet: "mint-fleet".into(),
-        initial_controlled_cycles: platform.pic.cycle_balance(destination),
+        initial_controlled_cycles: platform
+            .pic
+            .cycle_balance(destination)
+            .expect("PocketIC cycle_balance"),
         initial_estate_funding_cycles_by_root: BTreeMap::new(),
         initial_operator_cycles: 0,
         operation_id: plan.operation_id.clone(),
@@ -395,7 +419,13 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
         complete.actual_conservation.unwrap().operator_debit_cycles,
         credit - after_loss
     );
-    assert!(platform.pic.cycle_balance(destination) >= 2_000_000_000_000);
+    assert!(
+        platform
+            .pic
+            .cycle_balance(destination)
+            .expect("PocketIC cycle_balance")
+            >= 2_000_000_000_000
+    );
     let retained = ops::read_journal(&paths).unwrap().unwrap();
     assert_eq!(retained.effects[0].action_sha256, intent.action_sha256);
     assert_eq!(retained.initial_operator_cycles, 0);

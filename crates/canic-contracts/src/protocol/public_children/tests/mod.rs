@@ -9,9 +9,9 @@ use crate::dto::{
 
 fn child() -> CanisterInfo {
     CanisterInfo {
-        pid: ic_platform::Principal::from_slice(&[7; 29]),
+        pid: ic_platform_types::Principal::from_slice(&[7; 29]),
         role: "worker".into(),
-        parent_pid: Some(ic_platform::Principal::from_slice(&[8; 29])),
+        parent_pid: Some(ic_platform_types::Principal::from_slice(&[8; 29])),
         module_hash: Some(vec![9; 32]),
         created_at: u64::MAX,
     }
@@ -69,7 +69,7 @@ fn child_schema_uses_native_principals() {
     assert_eq!(schema["fields"][0]["name"], "pid");
     assert_eq!(
         schema["fields"][0]["value"],
-        ic_wire::typescript::native_schema::<ic_platform::Principal>().unwrap()
+        ic_wire::typescript::native_schema::<ic_platform_types::Principal>().unwrap()
     );
     ic_wire::typescript::native_schema::<Result<Page<CanisterInfo>, Error>>().unwrap();
 }

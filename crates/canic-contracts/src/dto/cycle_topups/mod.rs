@@ -27,7 +27,7 @@ pub struct CycleTopupEvent {
     derive(ic_wire::Wire)
 )]
 pub struct CycleTopupFailure {
-    pub parent: ic_platform::Principal,
+    pub parent: ic_platform_types::Principal,
     pub operation_id: [u8; 32],
     pub public_error_code: u16,
     pub disposition: CycleTopupFailureDisposition,

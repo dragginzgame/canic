@@ -5,9 +5,7 @@
 //! Boundary: host composition supplies policy identity and a fallible pre-commit callback.
 
 use crate::memory::registry::MemoryRegistryError;
-use ic_memory::BootstrapAdmission;
-
-pub use ic_memory::PolicyIdentity;
+use ic_storage::BootstrapAdmission;
 
 /// One host-owned admission over the complete sealed declaration snapshot.
 ///
@@ -16,7 +14,7 @@ pub use ic_memory::PolicyIdentity;
 /// inside this single callback; return the original typed failure on rejection.
 #[derive(Clone, Debug)]
 pub struct MemoryBootstrapAdmission {
-    pub(super) identity: PolicyIdentity,
+    pub(super) identity: [u8; 32],
     pub(super) prepare: fn(&mut BootstrapAdmission<'_>) -> Result<(), MemoryRegistryError>,
 }
 
@@ -24,7 +22,7 @@ impl MemoryBootstrapAdmission {
     /// Bind the callback to its semantic identity, including any configuration digest.
     #[must_use]
     pub const fn new(
-        identity: PolicyIdentity,
+        identity: [u8; 32],
         prepare: fn(&mut BootstrapAdmission<'_>) -> Result<(), MemoryRegistryError>,
     ) -> Self {
         Self { identity, prepare }

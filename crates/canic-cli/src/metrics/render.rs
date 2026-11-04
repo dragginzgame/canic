@@ -6,9 +6,12 @@ use crate::{
     },
     output,
 };
-use ic_host_text::table::{self, Alignment, Options};
+use ic_host_text::{
+    table::{self, Alignment, Options},
+    width::fit_line,
+};
 
-const DEFAULT_LABEL_MAX_CHARS: usize = 56;
+const DEFAULT_LABEL_MAX_COLUMNS: usize = 56;
 
 pub(super) fn write_metrics_report(
     options: &MetricsOptions,
@@ -76,7 +79,7 @@ fn render_default_metrics_table(report: &MetricsReport) -> String {
                 canister.role.clone(),
                 canister.status.label().to_string(),
                 metric_family_label(entry),
-                metric_detail_label(entry, Some(DEFAULT_LABEL_MAX_CHARS)),
+                metric_detail_label(entry, Some(DEFAULT_LABEL_MAX_COLUMNS)),
                 value.count,
                 value.average_per_count,
                 value.amount,
@@ -241,28 +244,16 @@ fn metric_family_label(entry: &MetricEntry) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
-fn metric_detail_label(entry: &MetricEntry, max_chars: Option<usize>) -> String {
+fn metric_detail_label(entry: &MetricEntry, max_columns: Option<usize>) -> String {
     let label = if entry.labels.len() > 1 {
         entry.labels[1..].join("/")
     } else {
         "-".to_string()
     };
-    match max_chars {
-        Some(max_chars) => compact_cell(&label, max_chars),
+    match max_columns {
+        Some(columns) => fit_line(&label, columns),
         None => label,
     }
-}
-
-fn compact_cell(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_string();
-    }
-
-    let prefix_chars = max_chars.saturating_sub(3);
-    format!(
-        "{}...",
-        value.chars().take(prefix_chars).collect::<String>()
-    )
 }
 
 fn average_per_count(total: u128, count: u64) -> String {
@@ -277,9 +268,8 @@ fn average_per_count(total: u128, count: u64) -> String {
     }
     // Round only the fractional remainder so an exact wide integer never needs
     // multiplication by ten. The CLI retains its nearest-half-up decimal policy.
-    let Ok(tenths) = ic_metrics::checked_scaled_ratio_nearest(remainder, count, 10) else {
-        return "-".into();
-    };
+    // The remainder is less than a u64 denominator, so this fits in u128.
+    let tenths = (remainder * 10 + denominator / 2) / denominator;
     if tenths == 10 {
         whole
             .checked_add(1)
@@ -470,6 +460,22 @@ mod tests {
     }
 
     #[test]
+    fn metric_label_display_uses_terminal_columns_without_changing_the_report() {
+        let mut report = report();
+        let entry = &mut report.canisters[0].entries[0];
+        entry.labels[1] = "界".repeat(5);
+        assert_eq!(metric_detail_label(entry, Some(6)), "界界…");
+        assert_eq!(entry.labels[1], "界".repeat(5));
+
+        entry.labels[1] = "界\x1b[2J\n".into();
+        assert_eq!(metric_detail_label(entry, Some(56)), "界\\u{1b}[2J\\n");
+        let rendered = render_metrics_report(&report, false);
+        assert!(rendered.contains("界\\u{1b}[2J\\n"));
+        assert!(!rendered.contains('\x1b'));
+        assert_eq!(report.canisters[0].entries[0].labels[1], "界\x1b[2J\n");
+    }
+
+    #[test]
     fn default_metrics_table_splits_count_and_average_without_verbose_columns() {
         let output = render_metrics_report(&report(), false);
 
@@ -479,7 +485,7 @@ mod tests {
         assert!(output.contains("perf"));
         assert!(output.contains('3'));
         assert!(output.contains('5'));
-        assert!(output.contains("..."));
+        assert!(output.contains('…'));
         assert!(!output.contains("CANISTER_ID"));
         assert!(!output.contains("PRINCIPAL"));
         assert!(!output.contains("TOTAL"));

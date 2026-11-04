@@ -65,3 +65,33 @@ pub(super) fn pending_component_provisioning_root_failure(
         .all(std::convert::identity);
     matches_current_retry.then(|| failure.clone())
 }
+
+/// Exact remote failure evidence within the currently retained retry authority.
+#[derive(Eq, PartialEq)]
+struct RootFailureObservation<'a> {
+    origin: &'a Option<canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin>,
+    fleet_subnet_root: Principal,
+    stage: FleetComponentProvisioningRetryStage,
+    diagnostic_code: u16,
+}
+
+impl<'a> From<&'a FleetComponentProvisioningRootFailure> for RootFailureObservation<'a> {
+    fn from(failure: &'a FleetComponentProvisioningRootFailure) -> Self {
+        Self {
+            origin: &failure.origin,
+            fleet_subnet_root: failure.fleet_subnet_root,
+            stage: failure.stage,
+            diagnostic_code: failure.diagnostic_code,
+        }
+    }
+}
+
+/// Polling the same remote failure is an observation, not another failed attempt.
+pub(super) fn repeats_current_root_failure(
+    record: &FleetComponentProvisioningRecord,
+    failure: &FleetComponentProvisioningRootFailure,
+) -> bool {
+    pending_component_provisioning_root_failure(record).is_some_and(|previous| {
+        RootFailureObservation::from(&previous) == RootFailureObservation::from(failure)
+    })
+}

@@ -30,9 +30,9 @@ std::thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::ROOT_FLEET_REGISTRY_MIRROR_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, RootFleetRegistryMirrorStateRecord::default())
+                Cell::create(allocation, RootFleetRegistryMirrorStateRecord::default()).expect("Storage operation failed")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -106,7 +106,8 @@ impl RootFleetRegistryMirrorStore {
                 candidate: Some(record),
                 active: None,
                 synchronization,
-            });
+            })
+            .expect("Storage operation failed");
         });
     }
 
@@ -121,7 +122,8 @@ impl RootFleetRegistryMirrorStore {
                 candidate: None,
                 active: Some(record),
                 synchronization,
-            });
+            })
+            .expect("Storage operation failed");
         });
     }
 }

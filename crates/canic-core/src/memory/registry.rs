@@ -1,8 +1,8 @@
 //! Module: memory::registry
 //!
 //! Responsibility: define memory registry bootstrap and validation errors.
-//! Does not own: allocation policy, stable schemas, or memory-manager storage.
-//! Boundary: memory bootstrap maps `ic-memory` validation failures into this type.
+//! Does not own: allocation policy, stable schemas, or Storage allocation.
+//! Boundary: memory bootstrap maps `ic-storage` validation failures into this type.
 
 use thiserror::Error as ThisError;
 
@@ -10,7 +10,7 @@ use thiserror::Error as ThisError;
 /// MemoryRegistryError
 ///
 /// Canic-facing errors returned while bootstrapping or reading the
-/// `ic-memory` allocation ledger.
+/// `ic-storage` allocation ledger.
 /// Owned by memory registry and returned to lifecycle/bootstrap callers.
 ///
 
@@ -23,14 +23,14 @@ pub enum MemoryRegistryError {
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
-    /// A declaration was rejected before or during `ic-memory` validation.
+    /// A declaration was rejected before or during `ic-storage` validation.
     #[error("memory declaration rejected for stable key '{stable_key}': {reason}")]
     InvalidDeclaration {
         stable_key: String,
         reason: &'static str,
     },
 
-    /// The host supplied invalid namespace grants or physical exclusions.
+    /// The host supplied invalid namespace grants.
     #[error(transparent)]
-    Pool(#[from] ic_memory::MemoryAllocationPoolError),
+    Grants(#[from] ic_storage::AdmissionError),
 }

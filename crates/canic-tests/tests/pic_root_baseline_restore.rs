@@ -19,14 +19,17 @@ fn root_topology_restores_the_same_instance_and_current_time() {
         first.pic.canister_status(root, None).unwrap().module_hash,
         None
     );
-    first.pic.advance_time(Duration::from_secs(60));
-    let current_time = first.pic.get_time();
+    first
+        .pic
+        .advance_time(Duration::from_secs(60))
+        .expect("PocketIC advance_time");
+    let current_time = first.pic.get_time().expect("PocketIC get_time");
     drop(first);
 
     let restored = setup_root(RootSetupProfile::Capability);
     assert_eq!(restored.pic.instance_id(), instance);
     assert_eq!(restored.root_id, root);
-    assert!(restored.pic.get_time() >= current_time);
+    assert!(restored.pic.get_time().expect("PocketIC get_time") >= current_time);
     assert_eq!(restored.coordinator_id, coordinator);
     let coordinator_restored = restored.pic.canister_status(coordinator, None).unwrap();
     assert_eq!(

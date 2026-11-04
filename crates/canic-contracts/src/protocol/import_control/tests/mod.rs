@@ -10,7 +10,7 @@ fn import_steps_preserve_identity_and_reject_phase_substitution() {
     };
     let request = AdvanceRequest {
         identity,
-        canister_id: ic_platform::Principal::from_slice(&[4; 29]),
+        canister_id: ic_platform_types::Principal::from_slice(&[4; 29]),
     };
     let bytes =
         ic_wire::native::encode_request(advance::METHOD_ID, &request, REQUEST_LIMITS).unwrap();

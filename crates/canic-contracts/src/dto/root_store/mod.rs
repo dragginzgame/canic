@@ -8,7 +8,7 @@ use crate::{
     },
     protocol::profile::ProtocolProfileDigest,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Maximum canonical root release-set manifest bytes admitted at the runtime boundary.

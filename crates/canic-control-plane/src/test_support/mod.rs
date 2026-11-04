@@ -6,21 +6,34 @@ use canic_contracts::dto::fleet_funding::{
 };
 #[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
 use canic_contracts::ids::FleetAdmissionPolicy;
+#[cfg(any(
+    feature = "root-control-plane",
+    feature = "fleet-coordinator-canister",
+    feature = "wasm-store-canister"
+))]
+use canic_contracts::ids::FleetBinding;
 #[cfg(feature = "fleet-coordinator-canister")]
 use canic_contracts::ids::FleetCoordinatorRootFundingPolicy;
 use canic_contracts::{
     cycles::Cycles,
+    ids::{
+        CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy,
+    },
+};
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+use canic_contracts::{
     dto::{fleet_funding::FleetRootFundingRequest, fleet_registry::FleetRegistryVersion},
     ids::{
-        AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
-        FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
-        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, SubnetId,
+        AppId, CanonicalNetworkId, FleetCoordinatorBinding, FleetId, FleetKey,
+        FleetRegistryAuthority, SubnetId,
     },
 };
 #[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
 use canic_core::shared_support::fleet_admission_policy::{
     bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
 };
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 use canic_core::shared_support::fleet_funding_policy::{
     fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
 };
@@ -66,6 +79,7 @@ pub fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
     bind_initial_fleet_admission_policy(fleet, &template).expect("test Fleet admission policy")
 }
 
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub fn root_funding_request_fixture(operation_sequence: u64) -> FleetRootFundingRequest {
     let coordinator = Principal::from_slice(&[70; 29]);
     let root = Principal::from_slice(&[71; 29]);

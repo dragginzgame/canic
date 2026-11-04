@@ -929,7 +929,13 @@ fn require_completion_fits(state: &CanisterPoolStateRecord) -> Result<(), Intern
         })
         .collect();
     // Keep headroom for the existing refill/handoff fields after release.
-    if expanded.to_bytes().len() + 4_096 > CANISTER_POOL_STATE_MAX_BYTES as usize {
+    if expanded
+        .to_bytes()
+        .map_err(|_| InternalError::resource_exhausted())?
+        .len()
+        + 4_096
+        > CANISTER_POOL_STATE_MAX_BYTES as usize
+    {
         return Err(InternalError::resource_exhausted());
     }
     Ok(())

@@ -3,6 +3,17 @@ use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{fs, net::TcpListener, path::PathBuf};
 
 #[test]
+fn new_record_binds_the_linked_framework_and_exact_configuration() {
+    let config = configuration(12345);
+    let record = ops::initial_record(&config).unwrap();
+    assert_eq!(record.canic_version, canic_core::VERSION);
+    assert_eq!(record.configuration, config);
+    assert_eq!(record.schema_version, 1);
+    assert_eq!(record.checkpoint, LocalCheckpoint::Running);
+    assert!(!record.session_id.is_empty());
+}
+
+#[test]
 fn binary_fingerprint_preserves_digest_size_admission_and_native_read_errors() {
     let root = crate::test_support::temp_dir("local-binary-fingerprint");
     fs::create_dir_all(&root).unwrap();

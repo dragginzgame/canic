@@ -1,6 +1,6 @@
 [package]
 name = "canic-blob-service"
-version.workspace = true
+version = "0.114.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -25,8 +25,8 @@ ic-wire = { workspace = true, optional = true, features = ["typescript"] }
 canic.workspace = true
 ic-blob-storage.workspace = true
 ic-blob-storage-contracts.workspace = true
-ic-memory.workspace = true
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-storage.workspace = true
 
 [lints]
 workspace = true

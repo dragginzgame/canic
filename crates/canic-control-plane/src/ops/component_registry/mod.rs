@@ -4,14 +4,18 @@
 //! Does not own: Store side effects, Fleet Registry, topology, admission, or orchestration.
 //! Boundary: converts stable records into read-only views before workflow use.
 
+mod allocation_continuation;
 pub mod caller_authority;
 mod child_activation;
 mod child_allocation;
+mod child_continuation;
 mod child_failure;
 mod component_retirement;
+mod continuation_retry;
 mod directory_refresh;
 mod initial_inventory;
 mod initialization;
+mod removal_continuation;
 mod root_retirement;
 mod subtree_retirement;
 mod top_level_activation;
@@ -1339,6 +1343,20 @@ impl ComponentRegistryOps {
         exact_committed_partition(&record, commitment).map(partition_record_to_view)
     }
 
+    /// Project the original commit receipt after validating the current partition's lineage.
+    pub(crate) fn allocation_commit_partition(
+        operation_id: [u8; 32],
+    ) -> Result<ComponentRegistryPartitionView, InternalError> {
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(InternalError::unavailable)?;
+        let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
+        else {
+            return Err(InternalError::conflict());
+        };
+        exact_committed_partition(&record, commitment)?;
+        committed_partition_snapshot(&record, commitment).map(partition_record_to_view)
+    }
+
     pub(crate) fn committed_child_authority(
         component: ComponentInstanceId,
         operation_id: [u8; 32],
@@ -1505,31 +1523,42 @@ impl ComponentRegistryOps {
         let partition = RootComponentRegistryStore::partition(component)
             .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
-        if partition.status != ComponentLifecycleStatus::Prepared
-            || partition.reserved_descendants != 0
-        {
-            return Ok(false);
+        if partition.status != ComponentLifecycleStatus::Prepared {
+            return Err(InternalError::invariant());
         }
         let allocations = RootComponentRegistryStore::child_allocations(component);
         if allocations.is_empty() {
-            return Ok(false);
+            return Err(InternalError::invariant());
         }
+        let mut complete = true;
         for allocation in &allocations {
             validate_child_allocation_record(allocation)?;
+            if !allocation.initial_bootstrap {
+                return Err(InternalError::invariant());
+            }
             let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
                 &allocation.progress
             else {
-                return Ok(false);
+                complete = false;
+                continue;
             };
             let Some(membership) = commitment.membership.as_ref() else {
-                return Ok(false);
+                complete = false;
+                continue;
             };
-            if !allocation.initial_bootstrap || !membership.directory_synchronized {
-                return Ok(false);
+            if !membership.directory_synchronized {
+                complete = false;
+                continue;
             }
             validate_active_child_partition(allocation, commitment, membership, &partition)?;
         }
-        Ok(u32::try_from(allocations.len()).ok() == Some(partition.committed_descendants))
+        if complete
+            && (partition.reserved_descendants != 0
+                || u32::try_from(allocations.len()).ok() != Some(partition.committed_descendants))
+        {
+            return Err(InternalError::invariant());
+        }
+        Ok(complete)
     }
 }
 
@@ -4468,12 +4497,37 @@ fn exact_committed_partition(
     record: &RootComponentAllocationRecord,
     commitment: &RootComponentCommitmentRecord,
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
+    let current = RootComponentRegistryStore::partition(record.component)
+        .ok_or_else(InternalError::invariant)?;
+    let prepared = committed_partition_snapshot(record, commitment)?;
+    match &commitment.membership {
+        None if current.binding == prepared.binding
+            && current.protocol_profile_digest == prepared.protocol_profile_digest
+            && current.provisioning_origin == prepared.provisioning_origin
+            && current.release_set == prepared.release_set
+            && current.status == ComponentLifecycleStatus::Prepared
+            && ComponentPartitionCoverage::new(&current, &prepared).is_monotonic() =>
+        {
+            return Ok(current);
+        }
+        Some(membership) => {
+            let _active = validate_active_partition(record, commitment, membership, &current)?;
+        }
+        None => {
+            return Err(InternalError::invariant());
+        }
+    }
+    Ok(prepared)
+}
+
+fn committed_partition_snapshot(
+    record: &RootComponentAllocationRecord,
+    commitment: &RootComponentCommitmentRecord,
+) -> Result<ComponentRegistryPartitionRecord, InternalError> {
     let RootComponentAllocationProgressRecord::Committed { installation, .. } = &record.progress
     else {
         return Err(InternalError::invariant());
     };
-    let current = RootComponentRegistryStore::partition(record.component)
-        .ok_or_else(InternalError::invariant)?;
     let prepared = ComponentRegistryPartitionRecord {
         binding: installation.binding.clone(),
         protocol_profile_digest: installation.protocol_profile_digest,
@@ -4496,23 +4550,6 @@ fn exact_committed_partition(
         return Err(InternalError::invariant());
     }
     validate_partition_snapshot(&prepared)?;
-    match &commitment.membership {
-        None if current.binding == prepared.binding
-            && current.protocol_profile_digest == prepared.protocol_profile_digest
-            && current.provisioning_origin == prepared.provisioning_origin
-            && current.release_set == prepared.release_set
-            && current.status == ComponentLifecycleStatus::Prepared
-            && ComponentPartitionCoverage::new(&current, &prepared).is_monotonic() =>
-        {
-            return Ok(current);
-        }
-        Some(membership) => {
-            let _active = validate_active_partition(record, commitment, membership, &current)?;
-        }
-        None => {
-            return Err(InternalError::invariant());
-        }
-    }
     Ok(prepared)
 }
 

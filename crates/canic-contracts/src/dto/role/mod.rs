@@ -116,7 +116,7 @@ pub struct LogStatusRequest {
     pub crate_name: Option<String>,
     pub topic: Option<String>,
     pub min_level: Option<Level>,
-    pub page: PageRequest,
+    pub page: crate::dto::log::LogPageRequest,
 }
 
 /// Bounded metrics observation selector used by each role status surface.
@@ -175,9 +175,9 @@ mod tests {
             crate_name: Some("canic-core".to_string()),
             topic: Some("Cycles".to_string()),
             min_level: Some(Level::Warn),
-            page: PageRequest {
+            page: crate::dto::log::LogPageRequest {
                 limit: 25,
-                offset: 50,
+                before: Some(50),
             },
         };
         let bytes = ic_wire::native::encode_request(METHOD_ID, &logs, REQUEST_LIMITS)

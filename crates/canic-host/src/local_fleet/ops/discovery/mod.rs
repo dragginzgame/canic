@@ -6,8 +6,8 @@ use crate::local_fleet::{
 };
 use canic_contracts::ids::CanonicalNetworkId;
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_testkit::pocket_ic::PocketIc;
 use std::{collections::BTreeMap, path::Path};
 
 /// Verify every terminal role in the owned instance, including imported Root-owned assets.
@@ -22,7 +22,7 @@ pub fn resolve(
         .map_err(|_| LocalFleetError::Configuration)?;
     let current = crate::fleet_ensure::resolve_current_fleet(workspace, &local.environment, fleet)
         .map_err(|error| LocalFleetError::Preparation(error.to_string()))?;
-    let key = super::runtime::guarded(|| pic.root_key())?.ok_or(LocalFleetError::Identity)?;
+    let key = pic.root_key()?.ok_or(LocalFleetError::Identity)?;
     let network = CanonicalNetworkId::from_der_root_trust_anchor(&key)
         .map_err(|_| LocalFleetError::Identity)?;
     let registry = current
@@ -47,12 +47,10 @@ pub fn resolve(
         .into_iter()
         .map(|entry| {
             let id = Principal::from_text(&entry.pid).map_err(|_| LocalFleetError::Identity)?;
-            let subnet_id = super::runtime::guarded(|| {
-                pic.canister_exists(id)
-                    .then(|| pic.get_subnet(id))
-                    .flatten()
-            })?
-            .ok_or(LocalFleetError::Identity)?;
+            if !pic.canister_exists(id)? {
+                return Err(LocalFleetError::Identity);
+            }
+            let subnet_id = pic.get_subnet(id)?.ok_or(LocalFleetError::Identity)?;
             if !local.application_subnets.contains(&subnet_id)
                 || allocated
                     .get(&id)

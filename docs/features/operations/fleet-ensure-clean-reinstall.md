@@ -227,8 +227,8 @@ frontend configuration.
 
 ## After Convergence
 
-Downstream orchestration should call readiness before `canic build`, use the
-current release consistently for CLI and runtime, and follow the phase commands
+Downstream orchestration should call readiness before `canic build`, use a CLI
+built for the selected framework release, and follow the phase commands
 until Fleet completion. Readiness does not authorize payment or predict complete
 application initialization.
 

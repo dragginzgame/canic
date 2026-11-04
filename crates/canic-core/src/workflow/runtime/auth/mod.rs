@@ -4,9 +4,15 @@
 //! Does not own: endpoint authorization, auth storage records, or crypto primitives.
 //! Boundary: lifecycle and API layers call this after config/runtime context is available.
 
+#[cfg(feature = "auth-local-application-authorization")]
+pub mod portable;
+#[cfg(feature = "auth-portable-issuer")]
+pub mod portable_issuer;
 mod prepare;
 mod provisioning;
 mod public_key;
+#[cfg(feature = "auth-root-delegation-state")]
+mod registration;
 mod renewal;
 mod root_delegation_batch;
 mod root_issuer;
@@ -50,12 +56,53 @@ use canic_contracts::ids::{CanisterRole, ManagedCanisterBinding};
 pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
+    #[cfg(feature = "auth-root-delegation-state")]
+    pub(crate) fn portable_enrollment_root(
+        request: canic_contracts::dto::portable_enrollment::PortableEnrollmentRequest,
+    ) -> Result<canic_contracts::dto::portable_enrollment::PortableEnrollmentSnapshot, InternalError>
+    {
+        let freshness = ConfigOps::portable_enrollment_freshness()?.ok_or_else(|| {
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAVAILABLE)
+        })?;
+        crate::ops::auth::enrollment::RootPortableEnrollmentOps::snapshot(request, freshness)
+            .map_err(|error| {
+                crate::log!(
+                    Topic::Auth,
+                    Warn,
+                    "portable enrollment snapshot refused: {error}"
+                );
+                InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAVAILABLE)
+            })
+    }
     /// Reconcile the one locally activated application authority binding.
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn reconcile_local_application_authority()
     -> Result<ApplicationAuthorityBindingTransition, InternalError> {
+        // Managed identity and protected configuration are installed before this phase.
+        let max_sessions = crate::ops::config::ConfigOps::current_canister()?
+            .auth
+            .local_application_authorization
+            .and_then(|auth| auth.receiver)
+            .map_or(
+                crate::model::auth::application_authorization::capacity::DEFAULT_MAX_SESSIONS,
+                |receiver| receiver.max_sessions,
+            );
+        LocalApplicationAuthorizationStateOps::configure_receiver_capacity(max_sessions)
+            .map_err(|_| InternalError::invariant())?;
+        let application_session_restore_start = crate::perf::perf_counter();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state(IcOps::now_nanos())
+        .map_err(|_| InternalError::invariant())?;
+        crate::perf::record_checkpoint(
+            module_path!(),
+            "application_session_restore",
+            crate::perf::perf_counter().saturating_sub(application_session_restore_start),
+        );
         let binding = AuthOps::local_application_authority_binding()?;
-        Self::reconcile_application_authority_binding(binding)
+        let transition = Self::reconcile_application_authority_binding(binding)?;
+        #[cfg(feature = "auth-local-application-authorization")]
+        crate::ops::auth::portable::runtime::restore(IcOps::now_nanos())
+            .map_err(|_| InternalError::invariant())?;
+        Ok(transition)
     }
 
     /// Leave local application authorization uninitialized when its capability is absent.

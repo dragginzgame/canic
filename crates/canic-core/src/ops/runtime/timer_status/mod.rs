@@ -72,8 +72,7 @@ mod tests {
 
     #[test]
     fn counter_projection_refuses_overflow_and_narrowing() {
-        use ic_timers::MeasurementCounter;
-        let exact = |total| MeasurementCounter::from_parts(total, false).unwrap();
+        let exact = |total| ic_metrics::persistence::restore_counter(total, false).unwrap();
         assert_eq!(counter_total(&[exact(4), exact(5)]), Some(9));
         assert_eq!(
             counter_total(&[exact(u128::from(u64::MAX))]),
@@ -85,7 +84,7 @@ mod tests {
             None
         );
         assert_eq!(
-            counter_total(&[MeasurementCounter::from_parts(u128::MAX, true).unwrap()]),
+            counter_total(&[ic_metrics::persistence::restore_counter(u128::MAX, true).unwrap()]),
             None
         );
     }

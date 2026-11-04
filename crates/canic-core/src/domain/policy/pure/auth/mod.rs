@@ -11,6 +11,16 @@ use crate::domain::value::Principal;
 use canic_contracts::ids::CanisterRole;
 use thiserror::Error as ThisError;
 
+/// Controlled local clocks are qualified for tests; production skew remains unqualified.
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "auth-portable-issuer"
+))]
+pub const fn portable_clock_is_qualified(network: canic_contracts::ids::BuildNetwork) -> bool {
+    matches!(network, canic_contracts::ids::BuildNetwork::Local)
+}
+
 pub use root_provisioning::{
     RootDelegationProofPreparePolicyInput, validate_root_delegation_proof_prepare_policy,
     validate_root_issuer_policy_fleet_binding, validate_root_issuer_policy_upsert,

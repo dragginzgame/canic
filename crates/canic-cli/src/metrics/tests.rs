@@ -6,22 +6,21 @@ use crate::metrics::{
     parse::metric_page,
 };
 use canic_contracts::dto::{
-    metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
-    page::Page,
+    metric_page::MetricEntry as MetricEntryDto, metrics::MetricValue as MetricValueDto, page::Page,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::Principal;
 
 fn roundtrip_metric_page(page: Page<MetricEntryDto>) -> super::model::MetricsPage {
     use canic_contracts::{dto::metric_page, protocol::protected_metrics as protocol};
     let response: Result<Page<metric_page::MetricEntry>, canic_contracts::dto::error::Error> =
-        Ok(page.into());
+        Ok(page);
     let bytes =
         ic_wire::native::encode_response(protocol::METHOD_ID, &response, protocol::RESPONSE_LIMITS)
             .unwrap();
     let decoded: Result<Page<metric_page::MetricEntry>, canic_contracts::dto::error::Error> =
         ic_wire::native::decode_response(protocol::METHOD_ID, &bytes, protocol::RESPONSE_LIMITS)
             .unwrap();
-    metric_page(decoded.unwrap().into())
+    metric_page(decoded.unwrap())
 }
 
 #[test]

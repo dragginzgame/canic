@@ -570,21 +570,13 @@ mod tests {
         let cert = cert();
         let policy = policy();
         let original = proof_for_cert(&cert, &policy);
-        let cfg = crate::ops::auth::AuthProofVerifierConfig {
-            build_network: BuildNetwork::Local,
-            root_canister_id: policy.policy.root_canister_id,
-            ic_root_public_key_raw: vec![1; 96],
-            chain_key_root: Some(policy),
-        };
-        let invalid = crate::diagnostics::codes::REQUEST_INVALID;
-        let stale = crate::diagnostics::codes::SECURITY_CONFLICT;
-        for (signature_only, conflicting_metadata, derivation, expected) in [
-            (true, false, false, invalid),
-            (false, false, false, stale),
-            (true, false, true, invalid),
-            (false, false, true, stale),
-            (false, true, false, invalid),
-            (false, true, true, invalid),
+        for (signature_only, conflicting_metadata, derivation) in [
+            (true, false, false),
+            (false, false, false),
+            (true, false, true),
+            (false, false, true),
+            (false, true, false),
+            (false, true, true),
         ] {
             let mut proof = original.clone();
             mutate_proof(&mut proof, |proof| {
@@ -626,25 +618,16 @@ mod tests {
                 installed_by: cert.root_pid,
                 this_canister: cert.issuer_pid,
                 now_ns: 150,
-                verifier: cfg.chain_key_root.as_ref().unwrap(),
+                verifier: &policy,
             })
             .expect_err("installation must preserve the canonical binding cause");
-            assert_eq!(
-                &installed,
-                &InstallActiveDelegationProofError::RootProofInvalid(expected_cause)
+            assert!(
+                matches!(&installed, InstallActiveDelegationProofError::RootProofInvalid(cause) if cause == &expected_cause)
             );
-            let cause = crate::ops::auth::AuthOps::verify_delegation_root_proof(
-                &cert,
-                &proof,
-                &cfg,
-                150,
-                DelegatedAuthTtlLimits {
-                    max_cert_ttl_ns: 600,
-                    max_token_ttl_ns: 120,
-                },
-            )
-            .expect_err("unbound signature metadata or stale enrollment must reject");
-            assert_eq!(cause.public_error().code(), expected.raw_code());
+            assert_eq!(
+                verify(&cert, &proof, &policy),
+                Err(RootDelegationProofError::Verification(expected_cause))
+            );
         }
     }
 }

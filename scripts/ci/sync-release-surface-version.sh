@@ -3,7 +3,7 @@ set -euo pipefail
 
 NEW_VERSION="${1:?usage: sync-release-surface-version.sh <x.y.z>}"
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd -P)"
 cd "$ROOT_DIR"
 
 if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then

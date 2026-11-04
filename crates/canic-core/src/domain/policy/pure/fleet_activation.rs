@@ -222,6 +222,7 @@ pub fn require_prepared_root_endpoint(
                 crate::protocol::fleet_state_control::funding::METHOD,
                 crate::protocol::fleet_state_control::status::METHOD,
                 crate::protocol::pool_retry::refill::METHOD,
+                crate::protocol::operation_retry::resume::METHOD,
                 crate::protocol::pool_retry::reset::METHOD,
                 crate::protocol::admission_control::root_prepare::METHOD,
                 crate::protocol::admission_control::root_activate::METHOD,

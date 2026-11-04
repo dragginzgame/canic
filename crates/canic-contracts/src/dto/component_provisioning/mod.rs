@@ -14,7 +14,7 @@ use crate::{
         FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 pub use crate::values::provisioning_failure::{

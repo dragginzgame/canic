@@ -1,4 +1,5 @@
 use super::*;
+
 use crate::{
     cdk::types::Principal,
     model::{
@@ -1566,4 +1567,32 @@ fn embedded_receipt_retention_and_count_fail_closed_without_rebuilding_indexes()
             .code(),
         crate::diagnostics::codes::EVIDENCE_UNEXPECTED_STATE
     );
+}
+
+#[test]
+fn reservation_preflight_uses_the_expiry_index_boundary() {
+    for (created_at, ttl) in [
+        (0, None),
+        (10, Some(0)),
+        (10, Some(60)),
+        (u64::MAX / NANOS_PER_SECOND - 1, Some(0)),
+    ] {
+        let due = IntentStoreOps::reservation_cleanup_due_at_secs(created_at, ttl).unwrap();
+        let indexed = expiry_key(IntentId(7), created_at, ttl)
+            .unwrap()
+            .map(|key| key.due_at_secs);
+        assert_eq!(due, indexed);
+    }
+    for (created_at, ttl) in [(u64::MAX, Some(1)), (u64::MAX / NANOS_PER_SECOND, Some(0))] {
+        assert_eq!(
+            IntentStoreOps::reservation_cleanup_due_at_secs(created_at, ttl)
+                .unwrap_err()
+                .code(),
+            crate::diagnostics::codes::TIME_CAPACITY,
+        );
+        assert!(matches!(
+            expiry_key(IntentId(7), created_at, ttl),
+            Err(IntentStoreOpsError::ExpiryDeadlineOverflow { .. })
+        ));
+    }
 }

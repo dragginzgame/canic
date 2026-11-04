@@ -10,7 +10,7 @@ use crate::{
     },
     ids::{FleetKey, ReleaseBuildId},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Complete native ComponentRuntimeStatusResponse projection.

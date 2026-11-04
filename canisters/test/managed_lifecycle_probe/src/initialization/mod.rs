@@ -1,6 +1,6 @@
 //! Own the generic fixture's initialization evidence in application memory.
 
-use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, Memory, StableCell as Cell};
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::dto::abi::v1::CanisterInitPayload;
 use std::cell::RefCell;
 
@@ -8,20 +8,19 @@ type Evidence = Cell<Vec<u8>, DefaultMemoryImpl>;
 const KEY: &str = "managed_probe.initialization.v1";
 pub const LIMITS: ic_wire::Limits = canic::__internal::contracts::protocol::initialization::LIMITS;
 
-canic::memory::memory_allocation_pool!(
-    provider = memory_pool,
+canic::memory::memory_allocation_grants!(
+    provider = memory_grants,
     authorities = [("managed-probe", "managed_probe.")],
-    exclusions = []
 );
 pub fn memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
-    input.pool = memory_pool().expect("fixture grants");
+    input.grants = memory_grants().expect("fixture grants");
     input
         .requests
-        .push(ic_memory::MemoryRequest::new("managed-probe", KEY).unwrap());
+        .push(ic_storage::MemoryRequest::new("managed-probe", KEY).unwrap());
     input
         .requests
-        .push(ic_memory::MemoryRequest::new("managed-probe", super::checkpoint::KEY).unwrap());
+        .push(ic_storage::MemoryRequest::new("managed-probe", super::checkpoint::KEY).unwrap());
     input
 }
 
@@ -35,7 +34,10 @@ pub fn install() {
         canic::endpoint::read_initialization(LIMITS).expect("bounded init envelope");
     let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0);
-    EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::create(memory, args.unwrap_or_default())));
+    EVIDENCE.with_borrow_mut(|cell| {
+        *cell =
+            Some(Cell::create(memory, args.unwrap_or_default()).expect("open fixture collection"));
+    });
 }
 
 pub fn restore() {
@@ -43,7 +45,7 @@ pub fn restore() {
     let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0);
     EVIDENCE.with_borrow_mut(|cell| {
-        *cell = Some(Cell::load(memory).expect("retained initialization evidence"));
+        *cell = Some(Cell::load(memory, LIMITS.bytes).expect("retained initialization evidence"));
     });
 }
 

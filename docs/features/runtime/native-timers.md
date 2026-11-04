@@ -6,6 +6,11 @@ cancel, reconstruct and observe their own native registrations. Canic provides
 the lifecycle composition point; it does not provide an application timer
 facade.
 
+Timers owns callback execution, scheduling transitions and native registration
+state. Canic owns durable business demand, paid-operation reconciliation, lifecycle
+reconstruction and the authority fences that permit work. Those records remain
+necessary even when a callback's execution is entirely delegated to Timers.
+
 The maintained end-to-end fixture is
 [`runtime_probe`](../../../canisters/test/runtime_probe/src/lib.rs). It owns a
 one-shot, an after-completion registration, cancellation, native inventory and
@@ -227,12 +232,103 @@ must not be copied into a generic recovery record.
 
 ## Recover Abandoned Callbacks
 
+Finite local reservations admit their cleanup deadline before allocating an intent
+ID or writing reservation state. Cost permits admit the same shared owner once,
+before creating their quota and cycle intents; both use the same validated expiry
+deadline. There is no await between schedule admission and reservation, so the
+callback cannot run between these steps. Scheduling refusal leaves reservations
+unchanged. TTL-free reservations need no timer admission. An existing retained
+cleanup declaration can still schedule when the native registry is otherwise full.
+
 Canic retains durable business attempts for cycle top-up, placement
 acknowledgements, issuer renewal and pool maintenance. Its recovery watchdog
 rearms the exact native owner after confirmed callback abandonment. The native
 callback then claims or resumes the business attempt and returns its actual
 retry, deadline or stop decision to Timers. Recovery does not spawn a separate
 copy of the workflow or discard its completion directive.
+
+Coordinator provisioning retains one native registration for its current journals,
+including scale-out. Admission, applied funding rotation and requested Root removal
+share `canic/coordinator_transition/advance`, with fair selection between retained
+operations. Both owners share Coordinator's native recovery watchdog. Staging a
+funding plan or reserving Root removal does not request autonomous execution.
+Root-removal acceptance retains execution demand before remote calls; replay shares
+that exact operation even while Root is unavailable. Snapshot preparation refuses
+pending work, releases idle owner/watchdog claims, then applies the existing empty-
+inventory and running-callback fences. The Coordinator post-upgrade hook restores
+the durable authority fence before rebuilding owners from accepted journals; sealed
+authority schedules no work and retains its history-bound resume checks. Installed
+provisioning and admission reconstruction, live snapshot resume, and sealed upgrade
+refusal pass. Coordinator retries use the retained business-attempt windows described
+below. An unchanged exact publication before Root runtime activation starts is a wait,
+not a new failure; the original issued intent remains authoritative.
+
+Root admission and Registry synchronization share `canic/root_transition/advance`.
+Exact command replay selects existing durable demand without allocating another
+chain. Root upgrade and its shared watchdog reconstruct that owner, while live
+callbacks keep native custody. Completion removes the declaration; terminal
+synchronization replay does not leave a claim behind.
+
+Root aggregate provisioning holds one native `OnceRegistration` under
+`canic/root_component_provisioning/advance`. Its callback reads the current
+durable operation and returns its next deadline or stop decision. Exact replay
+requests a successor on that claim; terminal replay clears obsolete demand.
+The existing Root watchdog also covers prepared provisioning, preserves live
+callbacks and re-arms recoverable demand. Normal completion removes this
+transient declaration so it does not obstruct a later authority snapshot.
+
+Ordinary and peer allocations retain their continuation request in the existing
+allocation record. One `canic/component_allocation/advance` registration rotates
+between unfinished operations. Exact replay reuses its claim; synchronous Root
+restoration and the shared watchdog reconstruct it without enrolling aggregate
+Component-group work. Completed allocations no longer create demand. Exact ordinary
+and peer reservation replay validates retained caller and authority evidence before
+any Store dependency call, so an unavailable Store cannot obscure accepted work.
+
+Root child allocations retain autonomous continuation demand in their existing
+operation records. One native `canic/component_child_allocation/advance` owner
+advances one eligible child step per callback, rotating between ready children.
+Root reconstruction and the shared watchdog recover this owner from retained
+demand. Persisted deadlines, permanent refusals and the consecutive-failure
+budget still determine eligibility; reconstruction does not reset them. Completed
+operations create no timer demand, and synchronous caller-owned work is not
+implicitly enrolled for autonomous continuation.
+
+Standalone Component and subtree removals share the native
+`canic/component_retirement/advance` owner. Their existing journals retain whether
+an autonomous continuation was requested; admission alone does not enroll nested
+work. A draining Component owns its subtree cursor, and Root removal owns its
+nested Component work. Reconstruction and watchdog recovery select only requested,
+unfinished work. Exact replay reuses the claim and terminal work leaves no demand.
+The retry windows below preserve these journals and their reserved storage capacity.
+
+Coordinator admission, applied funding rotation, provisioning and requested Root
+removal, plus Root ordinary/peer allocation and standalone Component/subtree removal,
+retain a maximum of 16 attempts without observed business progress. Attempts are
+charged before dispatch, with exponential delays capped at 60 seconds. Waiting does
+not invent a diagnostic; changing errors, command replay, abandonment and upgrade
+cannot replenish the budget. Proved authority/data conflicts suspend for review.
+Only observed business progress or exact controller resumption renews the window.
+
+Controllers query `canic_operation_retry_status` with the exact operation selector,
+then submit `canic_operation_retry_resume` with its observed generation. Replaying
+that generation cannot renew twice. Resume refuses a running native owner and changes
+neither paid-effect reconciliation nor issued authority. Retry state describes the
+attempt window independently of the business operation's phase. Exhausted pending
+work still prevents authority snapshot sealing even after its timer stops.
+
+Root removal retains `canic/root_removal/advance` for its current durable journal.
+Exact replay reuses that claim, and same-release reconstruction resumes removal
+without re-enabling proactive pool maintenance. The shared Root watchdog recovers
+missing or abandoned work only after Timers reports no live callback. Removal
+journals still own effect reconciliation. This whole-Root driver retains its own
+retry policy, independently of the Coordinator and standalone retirement windows.
+
+Child-allocation retry budgets belong to the retained business operation. A new
+diagnostic does not reset consecutive failures; only actual work progress or
+completion does. Repeated observations of the same remote Root failure preserve
+the Coordinator's original observation without another journal write or warning.
+A fresh failed attempt and changed remote evidence remain distinct observations.
 
 An expired business lease alone does not authorize replacing a native callback
 that is still scheduled or running. A pending IC response can outlive that
@@ -241,10 +337,12 @@ intact. Explicit cancellation, invariant failure and provider control failure
 also remain distinct from recovery demand. Snapshot suspension gates recovery
 until the authority owner explicitly resumes.
 
-Normal demand becoming empty leaves a retained ordinary registration idle
-and keeps its declaration. Clearing normal demand does not count as explicit
-cancellation. Prior explicit cancellation remains disabled until the owner
-rearms it. A later durable deadline rearms the same owner. Runtime
+For `TimerStart::Retained`, normal demand becoming empty leaves the ordinary
+registration idle and keeps its declaration. Transient `RemoveWhenStopped`
+owners, including Root allocation and retirement continuations, remove their
+declaration when they stop; new durable demand recreates it under the same
+identity. Clearing normal demand does not count as explicit cancellation.
+Prior explicit cancellation remains disabled until the owner rearms it. Runtime
 `next_due_at_ns` describes current demand; a metric named for the last armed
 delay is historical evidence and may remain after the current deadline clears.
 
@@ -286,7 +384,17 @@ Canic invokes the matching function exactly once after it has initialized the
 shared provider and restored its synchronous invariants and native claims, but
 before it schedules bootstrap or deferred application hooks. Managed
 Prepared/inactive canisters still run the participant during init and
-post-upgrade. Application fan-out belongs inside the named function:
+post-upgrade. Store activation/upgrade and standalone-local lifecycle adapters
+schedule framework bootstrap independently before the optional asynchronous
+`init` block. That block gates only application setup and phase hooks; a held
+or trapping user future must not prevent framework bootstrap from running.
+Non-root bootstrap retains one native registration throughout its bounded
+64-attempt authority retry window. Callbacks return retry decisions to Timers;
+they do not create successor registrations. A new same-release lifecycle rebuilds
+the bootstrap owner after synchronous restoration. Store GC reports failed
+collection as a failed timer completion; Root retains authority to retry the
+exact collection operation.
+Application fan-out belongs inside the named function:
 
 ```rust
 pub fn after_canic_post_upgrade() {
@@ -327,6 +435,8 @@ are qualification surfaces, not application timer APIs.
 Before shipping a composed canister, prove:
 
 - one resolved `ic-timers` package identity and no unintended raw provider;
+- one `ic-platform-runtime` execution owner and its matching exact Runtime guard
+  across the selected canister's normal Wasm graph;
 - application identities use an application/framework owner label, never
   `canic`;
 - native inventory contains each expected owner after init and same-release

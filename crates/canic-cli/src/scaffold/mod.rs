@@ -953,13 +953,14 @@ fn write_schema_example(directory: &Path, package: &str) -> Result<(), ScaffoldC
 }
 
 fn canister_cargo_toml(app: &str, role: &str) -> String {
-    let canic_version = env!("CARGO_PKG_VERSION");
+    let canic_version = canic_core::VERSION;
+    let rust_version = env!("CARGO_PKG_RUST_VERSION");
     let package_name = canister_package_name(app, role);
     format!(
         r#"[package]
 name = "{package_name}"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "{rust_version}"
 version = "0.1.0"
 publish = false
 
@@ -979,11 +980,11 @@ required-features = ["wire-schema"]
 
 [dependencies]
 # Add runtime Canic features here when canic.toml enables auth settings.
-canic = "{canic_version}"
-ic-platform = {{ version = "0.4", default-features = false, features = ["cdk"] }}
+canic = {{ version = "{canic_version}", default-features = false, features = [] }}
+ic-platform = {{ version = "0.20", default-features = false, features = ["cdk"] }}
 
 [build-dependencies]
-canic = "{canic_version}"
+canic = {{ version = "{canic_version}", default-features = false, features = ["build-support"] }}
 "#
     )
 }
@@ -1015,12 +1016,13 @@ maximum_instances = 1
 }
 
 fn app_cargo_toml(name: &str) -> String {
-    let canic_version = env!("CARGO_PKG_VERSION");
+    let canic_version = canic_core::VERSION;
+    let rust_version = env!("CARGO_PKG_RUST_VERSION");
     format!(
         r#"[package]
 name = "canister_{name}_app"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "{rust_version}"
 version = "0.1.0"
 publish = false
 
@@ -1040,11 +1042,11 @@ required-features = ["wire-schema"]
 
 [dependencies]
 # Add runtime Canic features here when canic.toml enables auth settings.
-canic = "{canic_version}"
-ic-platform = {{ version = "0.4", default-features = false, features = ["cdk"] }}
+canic = {{ version = "{canic_version}", default-features = false, features = [] }}
+ic-platform = {{ version = "0.20", default-features = false, features = ["cdk"] }}
 
 [build-dependencies]
-canic = "{canic_version}"
+canic = {{ version = "{canic_version}", default-features = false, features = ["build-support"] }}
 "#
     )
 }

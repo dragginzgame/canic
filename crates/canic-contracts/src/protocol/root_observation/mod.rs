@@ -72,3 +72,19 @@ pub mod metrics {
     pub use super::REQUEST_LIMITS;
     pub use crate::protocol::observability_relay::metrics::RESPONSE_LIMITS;
 }
+
+/// Operator-to-Root hop for protected Auth session metadata.
+pub mod portable_sessions {
+    pub const METHOD: &str = "canic_root_observe_portable_sessions";
+    pub const METHOD_ID: u64 = 0x4341_4e49_0000_0606;
+    pub use super::REQUEST_LIMITS;
+    pub use crate::protocol::portable_inspection::RESPONSE_LIMITS;
+}
+
+/// Operator-to-Root hop for declared and currently effective Auth policy.
+pub mod portable_policy {
+    pub const METHOD: &str = "canic_root_observe_portable_policy";
+    pub const METHOD_ID: u64 = 0x4341_4e49_0000_0607;
+    pub use super::REQUEST_LIMITS;
+    pub use crate::protocol::portable_inspection::RESPONSE_LIMITS;
+}

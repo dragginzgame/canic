@@ -6,8 +6,7 @@
 
 use crate::metrics::model::{MetricEntry, MetricValue, MetricsPage};
 use canic_contracts::dto::{
-    metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
-    page::Page,
+    metric_page::MetricEntry as MetricEntryDto, metrics::MetricValue as MetricValueDto, page::Page,
 };
 
 pub(super) fn metric_page(page: Page<MetricEntryDto>) -> MetricsPage {

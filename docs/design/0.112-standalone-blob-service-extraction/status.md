@@ -1,6 +1,41 @@
 # Upstream Integration Implementation Status
 
-Current execution follows the [consolidated push-readiness checklist](../../audits/working/0.112-push-readiness/plan.md). Dated sections below retain historical evidence; they do not override that checklist or establish current qualification.
+Current versions and qualification are in the [current handoff](../../status/current.md),
+[Blob acceptance audit](../../audits/working/blob-0411-adoption.md) and
+[adoption receipt](../../audits/working/0.112-push-readiness/upstream-adoption.json).
+The refreshed Auth 0.32/Query 0.88 family includes Blob Engine 0.68.0 / Contracts
+0.68.1, Storage 0.65.4 and Timers 0.38.1. Both installed composition/client
+shapes and all 13 timer cases pass. Earlier five-profile funding evidence keeps
+its original graph. Caffeine/application acceptance and delivery remain separate.
+Dated sections below and the [0.112 checklist](../../audits/working/0.112-push-readiness/plan.md)
+retain their historical selections and acceptance boundaries.
+
+## Persistent Auth integration resumed — 2026-11-03
+
+The latest controlled-local issuer continuation qualifies bounded history
+reclamation, independent original login windows and closed-epoch retry refusal.
+Its frozen seven-case installed target passes without native Host/Query pins;
+the concurrent newer dependency-family adoption remains separate qualification.
+See the [Auth progress table](../../features/authentication/README.md#progress)
+and current handoff for the latest source-bound evidence. The component-only
+counts and unavailable surfaces below describe the earlier resumption snapshot.
+
+The maintainer resumed local Auth integration. The existing Core/Contracts owners
+now incorporate the persistent receiver and bounded Root-enrollment components
+from PRs #701/#703, adapted to published Auth 0.32 and Storage 0.65.4. Restoration
+closes enrollment readiness; retained clocks, separate proof/logout budgets,
+monotonic authority and terminal retirements survive their owning transactions.
+Auth owns pair/login/generation and physical count admission validation (#720);
+Canic retains replay uniqueness, byte/index budgets and atomic stable writes.
+
+The 42 session, nine dedicated enrollment, two native Wire, 11 state-descriptor,
+31 role-contract and one closed-facade cases pass. Strict Core/Contracts lint and
+base/receiver-only/Root-only normal Wasm graphs pass. These are internal component,
+native and compile proofs. Root snapshot export, issuer registration/possession
+and custody approval, automatic receiver activation/refresh, admission/read/logout
+endpoints, browser delivery and installed production acceptance remain #491.
+The application facade stays closed. Earlier release scope remains historical;
+this request does not itself accept a minor closeout or activate issuer custody.
 
 ## Selected release scope — 2026-10-26
 

@@ -14,8 +14,8 @@ use crate::{
     },
     build_profile::CanisterBuildProfile,
     ic_wasm::{
-        IcWasmExecutable, IcWasmToolError, current_ic_wasm_authority, default_ic_wasm_install_path,
-        install_required_ic_wasm, resolve_required_ic_wasm,
+        IcWasmExecutable, IcWasmToolError, admit_required_ic_wasm, current_ic_wasm_authority,
+        default_ic_wasm_install_path, install_required_ic_wasm, resolve_required_ic_wasm,
     },
 };
 use std::{
@@ -44,20 +44,34 @@ impl BuildToolchain {
     pub(crate) fn resolve_prepared(
         profile: CanisterBuildProfile,
     ) -> Result<Self, BuildToolchainError> {
-        let mut tools = Self::resolve(CanisterBuildProfile::Fast)?;
-        tools.profile = profile;
-        if profile == CanisterBuildProfile::Release {
-            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.tools/ic/bin/wasm-opt");
-            tools.binaryen = Some(crate::binaryen::admit_required_binaryen(&path)?);
-        }
-        Ok(tools)
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.tools/ic/bin/wasm-opt");
+        Self::resolve_with_paths(profile, None, Some(&path))
     }
 
     /// Resolve every required tool before Cargo or artifact mutation begins.
     pub fn resolve(profile: CanisterBuildProfile) -> Result<Self, BuildToolchainError> {
-        let ic_wasm = resolve_required_ic_wasm()?;
+        Self::resolve_with_paths(profile, None, None)
+    }
+
+    /// Resolve profile-required tools, preferring each explicitly selected path.
+    ///
+    /// Unselected tools retain ordinary installation/PATH lookup. Explicit paths
+    /// undergo the same version, optimizer checksum and runtime-library admission.
+    /// `wasm_opt` is used only by the Release profile.
+    pub fn resolve_with_paths(
+        profile: CanisterBuildProfile,
+        ic_wasm: Option<&Path>,
+        wasm_opt: Option<&Path>,
+    ) -> Result<Self, BuildToolchainError> {
+        let ic_wasm = match ic_wasm {
+            Some(path) => admit_required_ic_wasm(path)?,
+            None => resolve_required_ic_wasm()?,
+        };
         let binaryen = match profile {
-            CanisterBuildProfile::Release => Some(resolve_required_binaryen()?),
+            CanisterBuildProfile::Release => Some(match wasm_opt {
+                Some(path) => crate::binaryen::admit_required_binaryen(path)?,
+                None => resolve_required_binaryen()?,
+            }),
             CanisterBuildProfile::Debug | CanisterBuildProfile::Fast => None,
         };
         Ok(Self {

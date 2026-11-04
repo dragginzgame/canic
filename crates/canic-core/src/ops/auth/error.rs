@@ -72,9 +72,6 @@ pub enum AuthValidationError {
         expires_at_ns: u64,
     },
 
-    #[error("delegated token auth disabled (set auth.delegated_tokens.enabled=true in canic.toml)")]
-    DelegatedTokenAuthDisabled,
-
     #[error("auth validation failed: {0}")]
     Auth(String),
 }
@@ -135,9 +132,6 @@ pub enum AuthScopeError {
 
 #[derive(Debug, ThisError)]
 pub enum AuthExpiryError {
-    #[error("delegation cert expired at {expires_at}")]
-    CertExpired { expires_at: u64 },
-
     #[error("attestation expired at {expires_at_ns} (now {now_ns})")]
     AttestationExpired { expires_at_ns: u64, now_ns: u64 },
 
@@ -174,7 +168,6 @@ impl From<AuthValidationError> for InternalError {
             AuthValidationError::AttestationInvalidWindow { .. }
             | AuthValidationError::Auth(_)
             | AuthValidationError::Canonical(_) => codes::SECURITY_INVALID,
-            AuthValidationError::DelegatedTokenAuthDisabled => codes::SECURITY_INACTIVE,
         };
         Self::public(code)
     }
@@ -208,7 +201,6 @@ impl From<AuthExpiryError> for InternalError {
         use crate::diagnostics::codes;
 
         let code = match err {
-            AuthExpiryError::CertExpired { .. } => codes::AUTH_CERT_EXPIRED,
             AuthExpiryError::AttestationNotYetValid { .. } => codes::SECURITY_INVALID_STATE,
             AuthExpiryError::AttestationExpired { .. } => codes::SECURITY_EXPIRED,
             AuthExpiryError::AttestationEpochRejected { .. } => codes::VERSION_INACTIVE,

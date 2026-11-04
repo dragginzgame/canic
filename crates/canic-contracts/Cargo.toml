@@ -2,7 +2,7 @@
 name = "canic-contracts"
 edition.workspace = true
 rust-version.workspace = true
-version.workspace = true
+version = "0.114.0"
 license.workspace = true
 description = "Runtime-free Canic protocol contracts and identifiers"
 readme = "README.md"
@@ -11,17 +11,21 @@ homepage.workspace = true
 publish = true
 
 [features]
+default = []
+external-candid = ["dep:ic-platform", "dep:num-bigint"]
 # Host metadata only; runtime DTO serialization remains independent of generation.
-wire-schema = ["ic-wire/typescript", "dep:serde_json"]
+wire-schema = ["ic-wire/platform-types", "ic-auth-wire/typescript", "dep:serde_json"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 serde_json = { workspace = true, optional = true }
 
 [dependencies]
 ic-auth-protocol-types.workspace = true
-ic-platform = { workspace = true, features = ["candid"] }
+ic-auth-wire.workspace = true
+ic-platform = { workspace = true, optional = true, features = ["candid"] }
+ic-platform-types = { workspace = true, features = ["principal-external"] }
 ic-wire.workspace = true
-num-bigint.workspace = true
+num-bigint = { workspace = true, optional = true }
 remain.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_bytes.workspace = true

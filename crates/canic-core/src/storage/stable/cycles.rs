@@ -20,10 +20,10 @@ std::thread_local! {
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new({
             let allocation = crate::memory::open(crate::memory::keys::CYCLES_TRACKER_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         }));
 }
@@ -35,10 +35,10 @@ std::thread_local! {
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
         RefCell::new(CycleTopupEvents::new({
             let allocation = crate::memory::open(crate::memory::keys::CYCLES_TOPUP_EVENTS_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         }));
 }
@@ -50,10 +50,10 @@ std::thread_local! {
     static CYCLES_FUNDING_LEDGER: RefCell<CyclesFundingLedger> =
         RefCell::new(CyclesFundingLedger::new({
             let allocation = crate::memory::open(crate::memory::keys::CYCLES_FUNDING_LEDGER_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         }));
 }
@@ -159,43 +159,67 @@ impl CyclesFundingLedgerData {
 ///
 
 pub struct CyclesFundingLedger {
-    map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, DefaultMemoryImpl>,
+    map: StableBtreeMap<
+        crate::cdk::types::PrincipalKeyRecord,
+        CyclesFundingLedgerRecord,
+        DefaultMemoryImpl,
+    >,
 }
 
 impl CyclesFundingLedger {
     pub const fn new(
-        map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, DefaultMemoryImpl>,
+        map: StableBtreeMap<
+            crate::cdk::types::PrincipalKeyRecord,
+            CyclesFundingLedgerRecord,
+            DefaultMemoryImpl,
+        >,
     ) -> Self {
         Self { map }
     }
 
     #[must_use]
     pub(crate) fn snapshot(child: Principal) -> Option<CyclesFundingLedgerRecord> {
-        CYCLES_FUNDING_LEDGER.with_borrow(|ledger| ledger.map.get(&child))
+        CYCLES_FUNDING_LEDGER.with_borrow(|ledger| {
+            ledger
+                .map
+                .get(&child.into())
+                .expect("Storage operation failed")
+        })
     }
 
     pub(crate) fn record_child_grant(child: Principal, granted_cycles: Cycles, now_secs: u64) {
         CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| {
-            let mut record = ledger.map.get(&child).unwrap_or_default();
+            let mut record = ledger
+                .map
+                .get(&child.into())
+                .expect("Storage operation failed")
+                .unwrap_or_default();
             let granted_total = record
                 .granted_total
                 .to_u128()
                 .saturating_add(granted_cycles.to_u128());
             record.granted_total = Cycles::new(granted_total);
             record.last_granted_at = now_secs;
-            ledger.map.insert(child, record);
+            ledger
+                .map
+                .insert(child.into(), record)
+                .expect("Storage operation failed");
         });
     }
 
     pub(crate) fn set_snapshot(child: Principal, record: CyclesFundingLedgerRecord) {
         CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| {
-            ledger.map.insert(child, record);
+            ledger
+                .map
+                .insert(child.into(), record)
+                .expect("Storage operation failed");
         });
     }
 
     #[cfg(test)]
     pub(crate) fn clear_for_tests() {
-        CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| ledger.map.clear());
+        CYCLES_FUNDING_LEDGER
+            .with_borrow_mut(|ledger| ledger.map.clear().expect("Storage operation failed"));
     }
 
     #[cfg(test)]
@@ -206,9 +230,10 @@ impl CyclesFundingLedger {
                 ledger
                     .map
                     .iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| CyclesFundingLedgerEntryRecord {
-                        child: *entry.key(),
-                        record: entry.value(),
+                        child: entry.key().principal(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -218,9 +243,12 @@ impl CyclesFundingLedger {
     #[cfg(test)]
     pub(crate) fn import(data: CyclesFundingLedgerData) {
         CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| {
-            ledger.map.clear();
+            ledger.map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                ledger.map.insert(entry.child, entry.record);
+                ledger
+                    .map
+                    .insert(entry.child.into(), entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -255,30 +283,36 @@ impl Storable for CycleTopupEventKey {
         max_size: Self::STORABLE_SIZE,
         is_fixed_size: true,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.into_bytes())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Owned({
+            let mut bytes = Vec::with_capacity(Self::STORABLE_SIZE as usize);
+            bytes.extend_from_slice(&self.timestamp_secs.to_be_bytes());
+            bytes.extend_from_slice(&self.sequence.to_be_bytes());
+            bytes
+        }))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(Self::STORABLE_SIZE as usize);
-        bytes.extend_from_slice(&self.timestamp_secs.to_be_bytes());
-        bytes.extend_from_slice(&self.sequence.to_be_bytes());
-        bytes
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok({
+            let mut bytes = Vec::with_capacity(Self::STORABLE_SIZE as usize);
+            bytes.extend_from_slice(&self.timestamp_secs.to_be_bytes());
+            bytes.extend_from_slice(&self.sequence.to_be_bytes());
+            bytes
+        })
     }
-
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        let bytes = bytes.as_ref();
-        assert!(
-            bytes.len() == Self::STORABLE_SIZE as usize,
-            "cycle topup event key has unexpected length"
-        );
-        let timestamp_secs =
-            u64::from_be_bytes(bytes[0..8].try_into().expect("cycle topup timestamp bytes"));
-        let sequence =
-            u32::from_be_bytes(bytes[8..12].try_into().expect("cycle topup sequence bytes"));
-
-        Self::new(timestamp_secs, sequence)
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self::new(
+            u64::from_be_bytes(
+                bytes[..8]
+                    .try_into()
+                    .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
+            ),
+            u32::from_be_bytes(
+                bytes[8..]
+                    .try_into()
+                    .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
+            ),
+        ))
     }
 }
 
@@ -388,16 +422,19 @@ impl CycleTopupEvents {
     ) {
         CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| {
             let sequence = events.next_sequence(timestamp_secs);
-            events.map.insert(
-                CycleTopupEventKey::new(timestamp_secs, sequence),
-                CycleTopupEventRecord {
-                    requested_cycles,
-                    transferred_cycles,
-                    status,
-                    error,
-                    parent_failure,
-                },
-            );
+            events
+                .map
+                .insert(
+                    CycleTopupEventKey::new(timestamp_secs, sequence),
+                    CycleTopupEventRecord {
+                        requested_cycles,
+                        transferred_cycles,
+                        status,
+                        error,
+                        parent_failure,
+                    },
+                )
+                .expect("Storage operation failed");
         });
     }
 
@@ -413,11 +450,12 @@ impl CycleTopupEvents {
                 events
                     .map
                     .iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .skip(offset)
                     .take(limit)
                     .map(|entry| CycleTopupEventEntryRecord {
                         key: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -427,34 +465,47 @@ impl CycleTopupEvents {
     #[cfg(test)]
     pub(crate) fn import(data: CycleTopupEventsData) {
         CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| {
-            events.map.clear();
+            events.map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                events.map.insert(entry.key, entry.record);
+                events
+                    .map
+                    .insert(entry.key, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
 
     #[cfg(test)]
     pub(crate) fn clear_for_tests() {
-        CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| events.map.clear());
+        CYCLE_TOPUP_EVENTS
+            .with_borrow_mut(|events| events.map.clear().expect("Storage operation failed"));
     }
 
     fn purge_inner(&mut self, cutoff: u64, limit: usize) -> usize {
         // Preserve a stopped owner's last failure even after history retention expires.
         // A later outcome supersedes it; no extra allocation or unbounded pin set is needed.
-        let retained = self.map.last_key_value().and_then(|(key, record)| {
-            record
-                .parent_failure
-                .filter(|failure| failure.disposition == CycleTopupFailureDisposition::Terminal)
-                .map(|_| key)
-        });
+        let retained = self
+            .map
+            .last_key_value()
+            .expect("Storage operation failed")
+            .and_then(|(key, record)| {
+                record
+                    .parent_failure
+                    .filter(|failure| failure.disposition == CycleTopupFailureDisposition::Terminal)
+                    .map(|_| key)
+            });
         let mut purged = 0;
 
         while purged < limit
-            && let Some((first_key, _)) = self.map.first_key_value()
+            && let Some((first_key, _)) = self
+                .map
+                .first_key_value()
+                .expect("Storage operation failed")
         {
             if first_key.timestamp_secs < cutoff && Some(first_key) != retained {
-                self.map.remove(&first_key);
+                self.map
+                    .remove(&first_key)
+                    .expect("Storage operation failed");
                 purged += 1;
             } else {
                 break;
@@ -470,6 +521,7 @@ impl CycleTopupEvents {
                 CycleTopupEventKey::new(timestamp_secs, 0)
                     ..=CycleTopupEventKey::new(timestamp_secs, u32::MAX),
             )
+            .map(|entry| entry.expect("Storage iteration failed"))
             .next_back()
             .map_or(0, |entry| entry.key().sequence.saturating_add(1))
     }
@@ -498,6 +550,7 @@ impl CycleTracker {
             tracker
                 .map
                 .last_key_value()
+                .expect("Storage operation failed")
                 .map(|(timestamp, record)| (timestamp, record.0))
         })
     }
@@ -507,9 +560,10 @@ impl CycleTracker {
         CYCLE_TRACKER.with_borrow(|t| {
             t.map
                 .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .skip(offset)
                 .take(limit)
-                .map(|entry| (*entry.key(), entry.value().0))
+                .map(|entry| (*entry.key(), entry.value().expect("decode Storage entry").0))
                 .collect()
         })
     }
@@ -521,9 +575,10 @@ impl CycleTracker {
                 tracker
                     .map
                     .iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| CycleTrackerEntryRecord {
                         timestamp_secs: *entry.key(),
-                        cycles: entry.value().0,
+                        cycles: entry.value().expect("decode Storage entry").0,
                     })
                     .collect()
             }),
@@ -533,12 +588,15 @@ impl CycleTracker {
     #[cfg(test)]
     pub(crate) fn import(data: CycleTrackerData) {
         CYCLE_TRACKER.with_borrow_mut(|tracker| {
-            tracker.map.clear();
+            tracker.map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                tracker.map.insert(
-                    entry.timestamp_secs,
-                    CycleTrackerBalanceRecord(entry.cycles),
-                );
+                tracker
+                    .map
+                    .insert(
+                        entry.timestamp_secs,
+                        CycleTrackerBalanceRecord(entry.cycles),
+                    )
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -547,10 +605,15 @@ impl CycleTracker {
         let mut purged = 0;
 
         while purged < limit
-            && let Some((first_ts, _)) = self.map.first_key_value()
+            && let Some((first_ts, _)) = self
+                .map
+                .first_key_value()
+                .expect("Storage operation failed")
         {
             if first_ts < cutoff {
-                self.map.remove(&first_ts);
+                self.map
+                    .remove(&first_ts)
+                    .expect("Storage operation failed");
                 purged += 1;
             } else {
                 break;
@@ -563,6 +626,7 @@ impl CycleTracker {
     fn insert(&mut self, now: u64, cycles: Cycles) -> bool {
         self.map
             .insert(now, CycleTrackerBalanceRecord(cycles))
+            .expect("Storage operation failed")
             .is_some()
     }
 }
@@ -583,9 +647,12 @@ mod tests {
                 granted_total: Cycles::new(amount),
                 last_granted_at: u64::MAX,
             };
-            let bytes = record.to_bytes();
+            let bytes = record.to_bytes().expect("encode stable fixture");
             assert!(bytes.len() <= CyclesFundingLedgerRecord::STORABLE_MAX_SIZE as usize);
-            assert_eq!(CyclesFundingLedgerRecord::from_bytes(bytes), record);
+            assert_eq!(
+                CyclesFundingLedgerRecord::from_bytes(bytes).unwrap(),
+                record
+            );
         }
     }
 
@@ -593,10 +660,20 @@ mod tests {
     fn cycle_balance_record_preserves_fixed_width_bytes() {
         for amount in [0, 1, u128::MAX] {
             let record = CycleTrackerBalanceRecord(Cycles::new(amount));
-            assert_eq!(record.to_bytes().as_ref(), amount.to_be_bytes());
-            assert_eq!(record.clone().into_bytes(), amount.to_be_bytes());
             assert_eq!(
-                CycleTrackerBalanceRecord::from_bytes(record.to_bytes()).0,
+                record.to_bytes().expect("encode stable fixture").as_ref(),
+                amount.to_be_bytes()
+            );
+            assert_eq!(
+                record.clone().into_bytes().expect("encode stable fixture"),
+                amount.to_be_bytes()
+            );
+            assert_eq!(
+                CycleTrackerBalanceRecord::from_bytes(
+                    record.to_bytes().expect("encode stable fixture")
+                )
+                .expect("decode stable fixture")
+                .0,
                 record.0
             );
         }
@@ -614,6 +691,7 @@ mod tests {
         for length in [0, 15, 17] {
             let result = std::panic::catch_unwind(|| {
                 CycleTrackerBalanceRecord::from_bytes(Cow::Owned(vec![0; length]))
+                    .expect("decode stable fixture")
             });
             assert!(result.is_err());
         }
@@ -736,15 +814,19 @@ impl Storable for CycleTrackerBalanceRecord {
         max_size: 16,
         is_fixed_size: true,
     };
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.0.to_u128().to_be_bytes().to_vec())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Owned(self.0.to_u128().to_be_bytes().to_vec()))
     }
-    fn into_bytes(self) -> Vec<u8> {
-        self.0.to_u128().to_be_bytes().to_vec()
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok(self.0.to_u128().to_be_bytes().to_vec())
     }
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let exact = <[u8; 16]>::try_from(bytes.as_ref())
-            .expect("stable cycle balance must contain exactly 16 bytes");
-        Self(Cycles::new(u128::from_be_bytes(exact)))
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self(Cycles::new(u128::from_be_bytes(
+            bytes
+                .as_ref()
+                .try_into()
+                .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
+        ))))
     }
 }

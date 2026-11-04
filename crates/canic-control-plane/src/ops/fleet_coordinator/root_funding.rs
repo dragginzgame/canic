@@ -428,8 +428,16 @@ impl FleetCoordinatorOps {
     pub(crate) fn record_root_funding_rejection(
         fleet_subnet_root: Principal,
         request: &FleetRootFundingAcceptanceRequest,
+        reason: FleetRootFundingNoGrantReason,
         decided_at_ns: u64,
     ) -> Result<FleetRootFundingResponse, InternalError> {
+        if !matches!(
+            reason,
+            FleetRootFundingNoGrantReason::RootRejected
+                | FleetRootFundingNoGrantReason::RootBalanceRelieved
+        ) {
+            return Err(InternalError::invariant());
+        }
         let registry = Self::current()?;
         let current = current_funding(&registry)?;
         let mut next = current.clone();
@@ -445,7 +453,7 @@ impl FleetCoordinatorOps {
         next.roots[root_index].current = None;
         let response = FleetRootFundingResponse::NoGrant(FleetRootFundingNoGrantReceipt {
             request: active.request.clone(),
-            reason: FleetRootFundingNoGrantReason::RootRejected,
+            reason,
             decided_at_ns,
         });
         next.roots[root_index].last = Some(CoordinatorRootGrantResultRecord {
@@ -1238,9 +1246,11 @@ fn validate_terminal_result(
         FleetRootFundingResponse::NoGrant(receipt) => {
             let request_matches = receipt.request == result.request;
             let decision_time_matches = receipt.decided_at_ns == result.completed_at_ns;
-            let window_authority_matches = if receipt.reason
-                == FleetRootFundingNoGrantReason::RootRejected
-            {
+            let window_authority_matches = if matches!(
+                receipt.reason,
+                FleetRootFundingNoGrantReason::RootRejected
+                    | FleetRootFundingNoGrantReason::RootBalanceRelieved
+            ) {
                 result.fleet_window_start_secs.is_some() && result.root_window_start_secs.is_some()
             } else {
                 result.fleet_window_start_secs.is_none() && result.root_window_start_secs.is_none()

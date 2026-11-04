@@ -18,18 +18,28 @@ struct ReviewedEndpoint {
     kind: &'static str,
     guard: Option<&'static str>,
     decoder: &'static str,
-    encoder: &'static str,
+    encoder: Option<&'static str>,
 }
 
 fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
     vec![
+        // A manual reply lets the installed timer recovery probe hold a real
+        // outstanding callback and select exact rejection/refund behavior.
+        ReviewedEndpoint {
+            path: "canisters/test/runtime_probe/src/platform_call/mod.rs".into(),
+            name: "platform_call_target",
+            kind: "update",
+            guard: None,
+            decoder: "codec::target",
+            encoder: None,
+        },
         ReviewedEndpoint {
             path: "apps/test/user_hub/src/fixture_importer/mod.rs".into(),
             name: "test_release_fixture",
             kind: "update",
             guard: Some("require_controller"),
             decoder: "decode_release",
-            encoder: "encode_release",
+            encoder: Some("encode_release"),
         },
         // This standalone probe must use the bare CDK adapter to qualify the
         // inherited inspector limit independently of Canic's update macro.
@@ -39,7 +49,7 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             kind: "update",
             guard: None,
             decoder: "codec::decode_one",
-            encoder: "codec::encode_reply",
+            encoder: Some("codec::encode_reply"),
         },
         // Simulator polling must observe invocation state and measurements
         // without dispatch instrumentation adding samples to the measured table.
@@ -49,7 +59,7 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             kind: "query",
             guard: None,
             decoder: "codec::entered::decode_args",
-            encoder: "codec::entered::encode_reply",
+            encoder: Some("codec::entered::encode_reply"),
         },
         ReviewedEndpoint {
             path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
@@ -57,7 +67,7 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             kind: "query",
             guard: None,
             decoder: "codec::completed::decode_args",
-            encoder: "codec::completed::encode_reply",
+            encoder: Some("codec::completed::encode_reply"),
         },
         ReviewedEndpoint {
             path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
@@ -65,7 +75,7 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             kind: "query",
             guard: None,
             decoder: "codec::metrics::decode_args",
-            encoder: "codec::metrics::encode_reply",
+            encoder: Some("codec::metrics::encode_reply"),
         },
     ]
 }
@@ -110,14 +120,23 @@ fn options_match(attribute: &Attribute, endpoint: &ReviewedEndpoint) -> bool {
         }
         Meta::NameValue(_) => return false,
     };
-    let mut expected = vec![
-        ("decode_with", endpoint.decoder),
-        ("encode_with", endpoint.encoder),
-    ];
+    let mut expected = vec![("decode_with", endpoint.decoder)];
+    if let Some(encoder) = endpoint.encoder {
+        expected.push(("encode_with", encoder));
+    }
     if let Some(guard) = endpoint.guard {
         expected.push(("guard", guard));
     }
-    if args.len() != expected.len() {
+    let manual_reply = usize::from(endpoint.encoder.is_none());
+    if args.len() != expected.len() + manual_reply {
+        return false;
+    }
+    if manual_reply == 1
+        && args.iter().filter(|arg| matches!(arg,
+            Meta::NameValue(value) if value.path.is_ident("manual_reply")
+                && matches!(&value.value, Expr::Lit(expr) if matches!(&expr.lit, Lit::Bool(value) if value.value))
+        )).count() != 1
+    {
         return false;
     }
     expected.into_iter().all(|(name, expected)| {
@@ -314,6 +333,24 @@ mod tests {
         ] {
             assert!(!check(source, path).is_empty());
         }
+        assert!(!check(&format!("{probe}\n{probe}"), path).is_empty());
+    }
+
+    #[test]
+    fn manual_callback_probe_requires_exact_options() {
+        let path = "canisters/test/runtime_probe/src/platform_call/mod.rs";
+        let probe = r#"#[ic_platform::cdk::update(decode_with = "codec::target", manual_reply = true)] fn platform_call_target() {}"#;
+        assert!(check(probe, path).is_empty());
+        for invalid in [
+            probe.replace("true", "false"),
+            probe.replace("true", "\"true\""),
+            probe.replace(", manual_reply = true", ""),
+            probe.replace("codec::target", "codec::other"),
+            probe.replace("cdk::update", "cdk::query"),
+        ] {
+            assert!(!check(&invalid, path).is_empty());
+        }
+        assert!(!check(probe, "apps/production/src/lib.rs").is_empty());
         assert!(!check(&format!("{probe}\n{probe}"), path).is_empty());
     }
 

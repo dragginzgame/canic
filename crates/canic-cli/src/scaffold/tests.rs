@@ -4,6 +4,38 @@ use super::*;
 use crate::test_support::TempDir;
 
 #[test]
+fn generated_packages_select_the_linked_framework() {
+    for source in [
+        app_cargo_toml("demo"),
+        canister_cargo_toml("demo", "worker"),
+    ] {
+        let manifest = toml::from_str::<toml::Value>(&source).unwrap();
+        for table in ["dependencies", "build-dependencies"] {
+            assert_eq!(
+                manifest[table]["canic"]["version"].as_str(),
+                Some(canic_core::VERSION)
+            );
+            assert_eq!(
+                manifest[table]["canic"]["default-features"].as_bool(),
+                Some(false)
+            );
+        }
+        assert_eq!(
+            manifest["dependencies"]["canic"]["features"],
+            toml::Value::Array(vec![])
+        );
+        assert_eq!(
+            manifest["build-dependencies"]["canic"]["features"],
+            toml::Value::Array(vec!["build-support".into()])
+        );
+        assert_eq!(
+            manifest["package"]["rust-version"].as_str(),
+            Some(env!("CARGO_PKG_RUST_VERSION"))
+        );
+    }
+}
+
+#[test]
 fn parses_scaffold_options() {
     let options =
         ScaffoldOptions::parse([OsString::from("my_app")]).expect("parse scaffold options");
@@ -168,7 +200,7 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
     let manifest: toml::Value = toml::from_str(&app_manifest).expect("valid app manifest");
     assert_eq!(
         manifest["dependencies"]["ic-platform"]["version"].as_str(),
-        Some("0.4")
+        Some("0.20")
     );
     assert!(!app_manifest.contains("workspace = true"));
     assert!(app_lib.contains("canic::start!();"));
@@ -250,7 +282,7 @@ fn scaffold_canister_writes_declared_only_role_files() {
     let parsed_manifest: toml::Value = toml::from_str(&manifest).expect("valid role manifest");
     assert_eq!(
         parsed_manifest["dependencies"]["ic-platform"]["version"].as_str(),
-        Some("0.4")
+        Some("0.20")
     );
     assert!(build_rs.contains("canic::build!(\"../canic.toml\")"));
     assert!(lib.contains("canic::start!();"));

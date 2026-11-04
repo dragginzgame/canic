@@ -56,6 +56,9 @@ impl LogRetentionWorkflow {
         message: &str,
         created_at: u64,
     ) -> Result<(), InternalError> {
+        if !IcOps::in_replicated_execution() {
+            return Ok(());
+        }
         let config = ConfigOps::log_config()?;
         LogOps::append_runtime_log(
             crate_name,
@@ -79,6 +82,8 @@ impl LogRetentionWorkflow {
             let mut registration = registration
                 .try_borrow_mut()
                 .map_err(|_| TimerError::CustodyBusy)?;
+            // Native exact reconciliation preserves an unchanged live deadline
+            // and repairs abandoned delivery. Keep that decision with Timers.
             reconcile_once(
                 &mut registration,
                 &Self::timer_identity()?,
@@ -209,12 +214,14 @@ mod tests {
                     None,
                     None,
                     None,
-                    crate::dto::page::PageRequest {
+                    crate::dto::log::LogPageRequest {
                         limit: 1,
-                        offset: 0
+                        before: None
                     },
                 )
-                .total,
+                .unwrap()
+                .entries
+                .len(),
                 1
             );
         }

@@ -73,7 +73,7 @@ pub(crate) use error::InternalError;
 #[doc(hidden)]
 pub mod __reexports {
     pub use ::ctor;
-    pub use ::ic_memory;
+    pub use ::ic_storage;
 }
 
 ///

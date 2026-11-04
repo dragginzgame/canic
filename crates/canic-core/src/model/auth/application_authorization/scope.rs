@@ -4,10 +4,7 @@
 //! Does not own: grant issuance, endpoint mapping, or session policy.
 //! Boundary: all layers reuse these owned and borrowed validated values.
 
-use crate::model::auth::application_authorization::{
-    MAX_APPLICATION_SESSION_SCOPE_BYTES, MAX_APPLICATION_SESSION_SCOPES,
-    MAX_VERIFIED_APPLICATION_SCOPES,
-};
+use crate::model::auth::application_authorization::MAX_VERIFIED_APPLICATION_SCOPES;
 use ic_auth_protocol_types::{ScopeLabel, ScopeLabelError};
 use std::{
     fmt::{self, Display},
@@ -109,20 +106,11 @@ impl Display for ApplicationScopeRef<'_> {
 pub struct CanonicalApplicationScopes(Vec<ApplicationScope>);
 
 impl CanonicalApplicationScopes {
-    /// Canonicalize scopes granted by one verified delegated-token role grant.
+    /// Canonicalize the scope ceiling of one protected local authority.
     pub fn for_verified_grant(
         scopes: Vec<ApplicationScope>,
     ) -> Result<Self, ApplicationScopeError> {
-        canonicalize(scopes, MAX_VERIFIED_APPLICATION_SCOPES, None)
-    }
-
-    /// Canonicalize the non-empty scope subset retained by one local session.
-    pub fn for_session(scopes: Vec<ApplicationScope>) -> Result<Self, ApplicationScopeError> {
-        canonicalize(
-            scopes,
-            MAX_APPLICATION_SESSION_SCOPES,
-            Some(MAX_APPLICATION_SESSION_SCOPE_BYTES),
-        )
+        canonicalize(scopes)
     }
 
     /// Return whether this set contains the validated scope.
@@ -143,9 +131,6 @@ impl CanonicalApplicationScopes {
 /// Typed canonical application-scope validation failure.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum ApplicationScopeError {
-    #[error("application scope aggregate is {bytes} bytes and exceeds {max} bytes")]
-    AggregateTooLarge { bytes: usize, max: usize },
-
     #[error("application scope contains an empty namespace segment")]
     EmptySegment,
 
@@ -173,26 +158,14 @@ pub enum ApplicationScopeError {
 
 fn canonicalize(
     mut scopes: Vec<ApplicationScope>,
-    max_count: usize,
-    max_aggregate_bytes: Option<usize>,
 ) -> Result<CanonicalApplicationScopes, ApplicationScopeError> {
     if scopes.is_empty() {
         return Err(ApplicationScopeError::SetEmpty);
     }
-    if scopes.len() > max_count {
+    if scopes.len() > MAX_VERIFIED_APPLICATION_SCOPES {
         return Err(ApplicationScopeError::TooMany {
             count: scopes.len(),
-            max: max_count,
-        });
-    }
-
-    let aggregate_bytes = scopes.iter().map(|scope| scope.as_str().len()).sum();
-    if let Some(max) = max_aggregate_bytes
-        && aggregate_bytes > max
-    {
-        return Err(ApplicationScopeError::AggregateTooLarge {
-            bytes: aggregate_bytes,
-            max,
+            max: MAX_VERIFIED_APPLICATION_SCOPES,
         });
     }
 
@@ -270,8 +243,8 @@ mod tests {
     }
 
     #[test]
-    fn session_scope_set_sorts_once_and_rejects_duplicates() {
-        let set = CanonicalApplicationScopes::for_session(vec![
+    fn authority_scope_set_sorts_once_and_rejects_duplicates() {
+        let set = CanonicalApplicationScopes::for_verified_grant(vec![
             ApplicationScope::parse("app:write").unwrap(),
             ApplicationScope::parse("app:read").unwrap(),
         ])
@@ -287,7 +260,7 @@ mod tests {
 
         let duplicate = ApplicationScope::parse("app:read").unwrap();
         assert_eq!(
-            CanonicalApplicationScopes::for_session(vec![duplicate.clone(), duplicate]),
+            CanonicalApplicationScopes::for_verified_grant(vec![duplicate.clone(), duplicate]),
             Err(ApplicationScopeError::ExactDuplicate {
                 scope: "app:read".to_string()
             })
@@ -295,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn scope_set_enforces_verified_and_session_count_bounds() {
+    fn authority_scope_set_enforces_its_count_bound() {
         let scopes = |count: usize| {
             (0..count)
                 .map(|index| ApplicationScope::parse(format!("app:s{index}")))
@@ -307,11 +280,6 @@ mod tests {
         assert_eq!(
             CanonicalApplicationScopes::for_verified_grant(scopes(33)),
             Err(ApplicationScopeError::TooMany { count: 33, max: 32 })
-        );
-        assert!(CanonicalApplicationScopes::for_session(scopes(16)).is_ok());
-        assert_eq!(
-            CanonicalApplicationScopes::for_session(scopes(17)),
-            Err(ApplicationScopeError::TooMany { count: 17, max: 16 })
         );
     }
 }

@@ -37,7 +37,7 @@ use ic_backup::{
     view::execution_workflow::ExecutionStageProgressState,
     workflow::execution_workflow::{
         ExecutionWorkflowAdvance, ExecutionWorkflowRunError, RetainedStageEvidence,
-        advance_execution_workflow, run_new_execution_workflow, run_retained_execution_workflow,
+        advance_execution_workflow,
     },
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -193,6 +193,7 @@ fn complete_original_checkpoint_and_cold_replay_do_not_touch_root_paid_evidence(
     let (path, intent) = fixture();
     let layout = BackupLayoutGuard::acquire(&path).unwrap();
     intent.retain(&layout).unwrap();
+    create_execution_workflow(&layout, intent.workflow()).unwrap();
     fs::write(
         path.join("separate-root-paid-evidence.json"),
         br#"{"pending":true,"original_limit":1}"#,
@@ -200,12 +201,17 @@ fn complete_original_checkpoint_and_cold_replay_do_not_touch_root_paid_evidence(
     .unwrap();
     let paid = fs::read(path.join("separate-root-paid-evidence.json")).unwrap();
     let mut driver = CheckpointDriver::new(&layout, intent.clone(), provider(false)).unwrap();
-    ready(run_new_execution_workflow(
-        &layout,
-        intent.workflow(),
-        &mut driver,
-    ))
-    .unwrap();
+    assert!(matches!(
+        ready(advance_execution_workflow(
+            &layout,
+            &intent.workflow().digest(),
+            &BTreeMap::new(),
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
+            &mut driver,
+        ))
+        .unwrap(),
+        ExecutionWorkflowAdvance::Complete(_)
+    ));
     let retained = driver
         .provider()
         .replies
@@ -229,13 +235,17 @@ fn complete_original_checkpoint_and_cold_replay_do_not_touch_root_paid_evidence(
         provider(false),
     )
     .unwrap();
-    ready(run_retained_execution_workflow(
-        &layout,
-        &intent.workflow().digest(),
-        &retained,
-        &mut cold,
-    ))
-    .unwrap();
+    assert!(matches!(
+        ready(advance_execution_workflow(
+            &layout,
+            &intent.workflow().digest(),
+            &retained,
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
+            &mut cold,
+        ))
+        .unwrap(),
+        ExecutionWorkflowAdvance::Complete(_)
+    ));
     assert_eq!(cold.provider().calls, 0);
     assert_eq!(
         fs::read(path.join("separate-root-paid-evidence.json")).unwrap(),
@@ -248,11 +258,14 @@ fn lost_ingress_keeps_original_pending_and_never_redispatches() {
     let (path, intent) = fixture();
     let layout = BackupLayoutGuard::acquire(&path).unwrap();
     intent.retain(&layout).unwrap();
+    create_execution_workflow(&layout, intent.workflow()).unwrap();
     let mut driver = CheckpointDriver::new(&layout, intent.clone(), provider(true)).unwrap();
     assert!(
-        ready(run_new_execution_workflow(
+        ready(advance_execution_workflow(
             &layout,
-            intent.workflow(),
+            &intent.workflow().digest(),
+            &BTreeMap::new(),
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
             &mut driver
         ))
         .is_err()
@@ -266,18 +279,21 @@ fn lost_ingress_keeps_original_pending_and_never_redispatches() {
     )
     .unwrap();
     assert!(
-        ready(run_retained_execution_workflow(
+        ready(advance_execution_workflow(
             &layout,
             &intent.workflow().digest(),
             &BTreeMap::new(),
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
             &mut cold
         ))
         .is_err()
     );
     assert!(
-        ready(run_new_execution_workflow(
+        ready(advance_execution_workflow(
             &layout,
-            intent.workflow(),
+            &intent.workflow().digest(),
+            &BTreeMap::new(),
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
             &mut cold
         ))
         .is_err()
@@ -294,6 +310,7 @@ fn wrong_original_reply_preserves_bytes_and_pending_spending() {
     let (path, intent) = fixture();
     let layout = BackupLayoutGuard::acquire(&path).unwrap();
     intent.retain(&layout).unwrap();
+    create_execution_workflow(&layout, intent.workflow()).unwrap();
     let mut wrong = intent.request(0).unwrap().expected_status().clone();
     wrong.operation_id[0] ^= 1;
     let raw = ic_wire::native::encode_response(
@@ -305,9 +322,11 @@ fn wrong_original_reply_preserves_bytes_and_pending_spending() {
     let mut source = provider(false);
     source.reply_override = Some(raw.clone());
     let mut driver = CheckpointDriver::new(&layout, intent.clone(), source).unwrap();
-    let error = ready(run_new_execution_workflow(
+    let error = ready(advance_execution_workflow(
         &layout,
-        intent.workflow(),
+        &intent.workflow().digest(),
+        &BTreeMap::new(),
+        NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
         &mut driver,
     ))
     .unwrap_err();
@@ -328,11 +347,12 @@ fn wrong_original_reply_preserves_bytes_and_pending_spending() {
     )
     .unwrap();
     assert!(
-        ready(run_retained_execution_workflow(
+        ready(advance_execution_workflow(
             &layout,
             &intent.workflow().digest(),
             &BTreeMap::new(),
-            &mut cold,
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
+            &mut cold
         ))
         .is_err()
     );
@@ -494,11 +514,14 @@ fn original_recovery_observation_settles_once_and_continues_without_mutation_rep
     let (path, intent) = fixture();
     let layout = BackupLayoutGuard::acquire(&path).unwrap();
     intent.retain(&layout).unwrap();
+    create_execution_workflow(&layout, intent.workflow()).unwrap();
     let mut original = CheckpointDriver::new(&layout, intent.clone(), provider(true)).unwrap();
     assert!(
-        ready(run_new_execution_workflow(
+        ready(advance_execution_workflow(
             &layout,
-            intent.workflow(),
+            &intent.workflow().digest(),
+            &BTreeMap::new(),
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
             &mut original
         ))
         .is_err()
@@ -573,13 +596,17 @@ fn original_recovery_observation_settles_once_and_continues_without_mutation_rep
         provider(false),
     )
     .unwrap();
-    ready(run_retained_execution_workflow(
-        &layout,
-        &intent.workflow().digest(),
-        &retained,
-        &mut cold,
-    ))
-    .unwrap();
+    assert!(matches!(
+        ready(advance_execution_workflow(
+            &layout,
+            &intent.workflow().digest(),
+            &retained,
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
+            &mut cold,
+        ))
+        .unwrap(),
+        ExecutionWorkflowAdvance::Complete(_)
+    ));
     assert_eq!(cold.provider().calls, 1);
 }
 
@@ -597,11 +624,14 @@ fn failed_recovery_keeps_original_observation_occupied_without_retry_or_refund()
         let (path, intent) = fixture();
         let layout = BackupLayoutGuard::acquire(&path).unwrap();
         intent.retain(&layout).unwrap();
+        create_execution_workflow(&layout, intent.workflow()).unwrap();
         let mut original = CheckpointDriver::new(&layout, intent.clone(), provider(true)).unwrap();
         assert!(
-            ready(run_new_execution_workflow(
+            ready(advance_execution_workflow(
                 &layout,
-                intent.workflow(),
+                &intent.workflow().digest(),
+                &BTreeMap::new(),
+                NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
                 &mut original
             ))
             .is_err()
@@ -702,6 +732,7 @@ async fn agent_retention_refusal_preserves_original_spending_without_network_or_
     let (path, intent) = fixture();
     let layout = BackupLayoutGuard::acquire(&path).unwrap();
     intent.retain(&layout).unwrap();
+    create_execution_workflow(&layout, intent.workflow()).unwrap();
     let transport = AgentTransport::new(
         intent.record.context().clone(),
         "http://127.0.0.1:1",
@@ -726,7 +757,14 @@ async fn agent_retention_refusal_preserves_original_spending_without_network_or_
         },
     );
     let mut driver = CheckpointDriver::new(&layout, intent.clone(), provider).unwrap();
-    let result = run_new_execution_workflow(&layout, intent.workflow(), &mut driver).await;
+    let result = advance_execution_workflow(
+        &layout,
+        &intent.workflow().digest(),
+        &BTreeMap::new(),
+        NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
+        &mut driver,
+    )
+    .await;
     assert!(matches!(
         result,
         Err(ExecutionWorkflowRunError::Driver(
@@ -739,10 +777,11 @@ async fn agent_retention_refusal_preserves_original_spending_without_network_or_
     let journal_path = path.join("execution-stage-0/attempt-0.json");
     let original = fs::read(&journal_path).unwrap();
     assert!(
-        run_retained_execution_workflow(
+        advance_execution_workflow(
             &layout,
             &intent.workflow().digest(),
             &BTreeMap::new(),
+            NonZeroUsize::new(intent.workflow().allocation().graph().nodes().len()).unwrap(),
             &mut driver
         )
         .await

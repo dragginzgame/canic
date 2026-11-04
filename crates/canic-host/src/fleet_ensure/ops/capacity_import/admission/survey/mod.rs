@@ -16,13 +16,15 @@ use crate::fleet_ensure::{
 };
 use canic_contracts::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES;
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_host_artifacts::artifact::BoundedWriter;
 use ic_host_fs::{
-    durable::{PublicationMode, WriteOptions, write_bytes},
+    durable::{NamedWriteError, PublicationMode, WriteOptions, write_with},
     read::read_optional_file_no_follow,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    io::{BufWriter, Write},
     path::PathBuf,
 };
 
@@ -224,20 +226,29 @@ impl<'a> CapacityImportSurveyStore<'a> {
     }
 
     fn save(&self) -> Result<(), CapacityImportJournalError> {
-        let bytes = serde_json::to_vec(&self.record)?;
-        if bytes.len() > MAXIMUM_BYTES {
-            return Err(CapacityImportJournalError::Integrity);
-        }
-        write_bytes(
+        let mut exceeded = false;
+        let result = write_with(
             &self.path,
             WriteOptions {
                 mode: PublicationMode::Replace,
                 permissions: 0o666,
             },
-            &bytes,
-        )
-        .map_err(crate::publication::ops::io_error)?;
-        Ok(())
+            |file| {
+                let mut writer = BoundedWriter::new(BufWriter::new(file), MAXIMUM_BYTES as u64);
+                let result = serde_json::to_writer(&mut writer, &self.record);
+                exceeded = writer.limit_exceeded();
+                result?;
+                writer.flush().map_err(serde_json::Error::io)
+            },
+        );
+        match result {
+            Ok(()) => Ok(()),
+            Err(NamedWriteError::Producer {
+                cleanup_error: None,
+                ..
+            }) if exceeded => Err(CapacityImportJournalError::Integrity),
+            Err(source) => Err(crate::publication::ops::json_error(source).into()),
+        }
     }
 }
 

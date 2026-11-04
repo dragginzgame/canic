@@ -185,12 +185,7 @@ impl CostGuardOps {
     ///
     /// Reserve quota and cycle budget before a workflow crosses an expensive side-effect boundary.
     pub fn reserve(request: CostGuardRequest) -> Result<CostGuardPermit, CostGuardReserveError> {
-        validate_request(&request)?;
-
-        let quota_key = quota_resource_key(&request)?;
-        enforce_quota(&quota_key, &request)?;
-        let reservation_key = reservation_resource_key(&request)?;
-        enforce_cycle_reserve(&reservation_key, &request)?;
+        let (quota_key, reservation_key) = validate_reservation(&request)?;
 
         let quota_intent_id = IntentStoreOps::allocate_intent_id()?;
         let retain_until_secs = request
@@ -231,6 +226,14 @@ impl CostGuardOps {
             reservation_id,
             quota_intent_id,
         })
+    }
+
+    /// Both pending permit intents use the same finite expiry index deadline.
+    /// Validate capacity without allocating IDs or writing either reservation.
+    pub fn cleanup_due_at_secs(request: &CostGuardRequest) -> Result<u64, CostGuardReserveError> {
+        validate_reservation(request)?;
+        IntentStoreOps::reservation_cleanup_due_at_secs(request.now_secs, Some(INTENT_TTL_SECONDS))?
+            .ok_or_else(|| CostGuardReserveError::Store(InternalError::invariant()))
     }
 
     /// complete
@@ -314,6 +317,17 @@ fn validate_request(request: &CostGuardRequest) -> Result<(), CostGuardReserveEr
         return Err(CostGuardReserveError::CycleReservationOverflow);
     }
     Ok(())
+}
+
+fn validate_reservation(
+    request: &CostGuardRequest,
+) -> Result<(IntentResourceKey, IntentResourceKey), CostGuardReserveError> {
+    validate_request(request)?;
+    let quota_key = quota_resource_key(request)?;
+    enforce_quota(&quota_key, request)?;
+    let reservation_key = reservation_resource_key(request)?;
+    enforce_cycle_reserve(&reservation_key, request)?;
+    Ok((quota_key, reservation_key))
 }
 
 fn enforce_quota(
@@ -450,6 +464,40 @@ mod tests {
             cycle_reservation_cycles: 2,
             min_cycles_after_reservation: 5,
         }
+    }
+
+    #[test]
+    fn suspended_cleanup_refuses_cost_permit_before_any_reservation() {
+        use crate::workflow::{
+            cost_guard::CostGuardWorkflow, runtime::timer::TimerAuthorityWorkflow,
+        };
+        let _guard = crate::test::seams::lock();
+        reset();
+        let before = IntentStore::export_meta();
+        TimerAuthorityWorkflow::restore_snapshot_suspension(true);
+        let refused = CostGuardWorkflow::reserve(request(10));
+        TimerAuthorityWorkflow::restore_snapshot_suspension(false);
+        assert!(
+            matches!(refused, Err(CostGuardReserveError::Store(error)) if error.code() == crate::diagnostics::codes::STATE_INVALID)
+        );
+        assert_eq!(IntentStore::export_meta(), before);
+        assert_eq!(IntentStoreOps::next_expiry_at_secs().unwrap(), None);
+    }
+
+    #[test]
+    fn cleanup_preflight_does_not_allocate_and_covers_both_permit_intents() {
+        reset();
+        let before = IntentStore::export_meta();
+        let request = request(10);
+        let due = CostGuardOps::cleanup_due_at_secs(&request).unwrap();
+        assert_eq!(IntentStore::export_meta(), before);
+        assert_eq!(IntentStoreOps::next_expiry_at_secs().unwrap(), None);
+        let permit = CostGuardOps::reserve(request).unwrap();
+        assert_eq!(IntentStoreOps::next_expiry_at_secs().unwrap(), Some(due));
+        let entries = IntentStoreOps::list_due_expiry_intents(due, 3).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries.contains(&permit.quota_intent_id));
+        assert!(entries.contains(&permit.reservation_id));
     }
 
     #[test]

@@ -25,7 +25,7 @@ fn metrics_frames_admit_full_cache_pages_and_reject_wrong_identity_and_limits() 
     assert_eq!(decoded.page, request.page);
     let row = PublicMetric {
         name: "x".repeat(128),
-        canister_id: Some(ic_platform::Principal::from_slice(&[42; 29])),
+        canister_id: Some(ic_platform_types::Principal::from_slice(&[42; 29])),
         value: u128::MAX,
         unit: "y".repeat(128),
         observed_at_ns: u64::MAX,
@@ -76,7 +76,8 @@ fn metrics_frames_admit_full_cache_pages_and_reject_wrong_identity_and_limits() 
 #[test]
 fn metrics_schema_uses_native_principal_dimensions() {
     let row = ic_wire::typescript::native_schema::<PublicMetric>().unwrap();
-    let principal = ic_wire::typescript::native_schema::<Option<ic_platform::Principal>>().unwrap();
+    let principal =
+        ic_wire::typescript::native_schema::<Option<ic_platform_types::Principal>>().unwrap();
     assert_eq!(row["fields"][1]["value"], principal);
     assert!(ic_wire::typescript::native_schema::<PublicMetricsRequest>().is_ok());
     assert!(ic_wire::typescript::native_schema::<PublicMetricsSnapshot>().is_ok());

@@ -18,8 +18,6 @@ pub mod observability;
 mod root;
 pub mod timer;
 
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
-use crate::ops::storage::auth::LocalApplicationAuthorizationStateOps;
 use crate::{
     InternalError,
     log::Topic,
@@ -57,6 +55,8 @@ pub struct RuntimeWorkflow;
 impl RuntimeWorkflow {
     /// Start fixed runtime consumers shared by non-root profiles.
     pub fn start_all() -> Result<(), InternalError> {
+        #[cfg(feature = "auth-local-application-authorization")]
+        workflow::runtime::auth::portable::PortableSessionWorkflow::start()?;
         workflow::fixture_provisioning::timer::FixtureImportTimer::start()?;
         workflow::runtime::log::LogRetentionWorkflow::start()?;
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
@@ -128,17 +128,6 @@ pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
     #[cfg(feature = "auth-delegated-token-issuer-state")]
     crate::ops::storage::auth::DelegatedTokenIssuerStateOps::restore();
 
-    #[cfg(any(test, feature = "auth-local-application-authorization"))]
-    {
-        let application_session_restore_start = crate::perf::perf_counter();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state(IcOps::now_nanos())
-            .map_err(|_| InternalError::invariant())?;
-        crate::perf::record_checkpoint(
-            module_path!(),
-            "application_session_restore",
-            crate::perf::perf_counter().saturating_sub(application_session_restore_start),
-        );
-    }
     IntentStoreOps::rebuild_expiry_index()?;
     ReceiptBackedIntentOps::reconcile_receipt_indexes()?;
     let _receipt_capacity = ReceiptBackedIntentOps::receipt_capacity()?;

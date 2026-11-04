@@ -20,6 +20,55 @@ use crate::{
 };
 
 impl AuthApi {
+    /// Compose controller-authenticated revocation through the Root lifecycle fence.
+    #[cfg(feature = "auth-root-delegation-state")]
+    pub fn retire_portable_issuer_root(
+        issuer: ic_platform::Principal,
+    ) -> Result<(), crate::ops::auth::enrollment::PortableEnrollmentError> {
+        RuntimeAuthWorkflow::retire_portable_issuer(issuer)
+    }
+
+    /// Compose controller-approved public intent; caller authentication belongs to endpoints.
+    #[cfg(feature = "auth-root-delegation-state")]
+    pub async fn prepare_portable_issuer_root(
+        request: canic_contracts::dto::portable_enrollment::PreparePortableIssuer,
+    ) -> Result<
+        canic_contracts::dto::portable_enrollment::PortableIssuerChallenge,
+        crate::ops::auth::enrollment::PortableEnrollmentError,
+    > {
+        RuntimeAuthWorkflow::prepare_portable_issuer(request).await
+    }
+
+    /// Complete possession using the actual IC issuer caller, never a request identity.
+    #[cfg(feature = "auth-root-delegation-state")]
+    pub fn register_portable_issuer_root(
+        request: canic_contracts::dto::portable_enrollment::RegisterPortableIssuer,
+    ) -> Result<
+        canic_contracts::dto::portable_enrollment::PortableIssuerEnrollment,
+        crate::ops::auth::enrollment::PortableEnrollmentError,
+    > {
+        RuntimeAuthWorkflow::register_portable_issuer(IcOps::msg_caller().into(), request)
+    }
+
+    /// Read the original caller-bound work without signing, reserving or extending it.
+    #[cfg(feature = "auth-root-delegation-state")]
+    pub fn portable_issuer_registration_root(
+        operation_id: [u8; 32],
+    ) -> Result<
+        canic_contracts::dto::portable_enrollment::PortableIssuerRegistrationStatus,
+        crate::ops::auth::enrollment::PortableEnrollmentError,
+    > {
+        RuntimeAuthWorkflow::portable_issuer_registration(IcOps::msg_caller().into(), operation_id)
+    }
+
+    /// Serve a receiver-bound snapshot after endpoint membership authentication.
+    #[cfg(feature = "auth-root-delegation-state")]
+    pub fn portable_enrollment_root(
+        request: canic_contracts::dto::portable_enrollment::PortableEnrollmentRequest,
+    ) -> Result<canic_contracts::dto::portable_enrollment::PortableEnrollmentSnapshot, Error> {
+        crate::workflow::runtime::auth::RuntimeAuthWorkflow::portable_enrollment_root(request)
+            .map_err(Into::into)
+    }
     /// Derive the public key for this Root without exposing signing authority.
     pub async fn root_chain_key_public_key(
         request: RootChainKeyPublicKeyRequest,

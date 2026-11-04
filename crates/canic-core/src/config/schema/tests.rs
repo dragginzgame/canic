@@ -85,6 +85,7 @@ fn component_spec_config(role: &str, maximum_instances: u32) -> ComponentSpecCon
 
 fn local_application_authorization() -> LocalApplicationAuthorizationConfig {
     LocalApplicationAuthorizationConfig {
+        receiver: None,
         allowed_scopes: vec!["my_app:read".to_string()],
         default_session_ttl_secs: 900,
         maximum_session_ttl_secs: 1_800,

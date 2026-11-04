@@ -48,17 +48,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let principals = Page {
         entries: vec![
-            ic_platform::Principal::management_canister(),
-            ic_platform::Principal::anonymous(),
-            ic_platform::Principal::from_slice(&[42; 29]),
+            ic_platform_types::Principal::management_canister(),
+            ic_platform_types::Principal::anonymous(),
+            ic_platform_types::Principal::from_slice(&[42; 29]),
         ],
         total: 3,
     };
     let mut principal_method = method.clone();
     principal_method["name"] = json!("principals");
     principal_method["id"] = json!("18");
-    principal_method["response"] = typescript::native_schema::<Page<ic_platform::Principal>>()
-        .map_err(|error| format!("principal schema: {error:?}"))?;
+    principal_method["response"] =
+        typescript::native_schema::<Page<ic_platform_types::Principal>>()
+            .map_err(|error| format!("principal schema: {error:?}"))?;
     let result_method = results::method(&method)?;
     let account_method = accounts::method(&method)?;
     let identity_method = identities::method(&method)?;
@@ -102,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "identities":identities::vectors(limits).map_err(|e| format!("identity vectors: {e}"))?,
             "accounts":accounts::vectors(limits).map_err(|e| format!("account vectors: {e}"))?,
             "network":network,
-            "principals":principals.entries.iter().map(ic_platform::Principal::as_slice).collect::<Vec<_>>(),
+            "principals":principals.entries.iter().map(ic_platform_types::Principal::as_slice).collect::<Vec<_>>(),
             "principalResponse":native::encode_response(18, &principals, limits)?,
             "request":native::encode_request(17, &request, limits)?,
             "response":native::encode_response(17, &response, limits)?

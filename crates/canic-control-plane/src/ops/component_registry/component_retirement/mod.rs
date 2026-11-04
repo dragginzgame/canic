@@ -91,6 +91,28 @@ impl ComponentRegistryOps {
         Ok(Some(component_draining_record_to_view(record)))
     }
 
+    /// Resolve exact terminal replay after the live partition has been removed.
+    pub(crate) fn completed_component_draining(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_registry: &ComponentRegistryHead,
+    ) -> Result<Option<RootComponentDrainingView>, InternalError> {
+        let Some(draining) = Self::component_draining(component)? else {
+            return Ok(None);
+        };
+        if !matches!(
+            draining.deletion,
+            Some(crate::view::component_registry::RootComponentDeletionProgressView::MembershipRemoved(_))
+        ) {
+            return Ok(None);
+        }
+        if draining.operation_id != operation_id || draining.previous_registry != *expected_registry
+        {
+            return Err(InternalError::conflict());
+        }
+        Ok(Some(draining))
+    }
+
     /// Resolve one top-level Component draining operation through its durable identity.
     pub(crate) fn component_draining_by_operation(
         operation_id: [u8; 32],
@@ -195,6 +217,8 @@ impl ComponentRegistryOps {
         next_partition.directory_synchronized_at_ns = started_at_ns;
         let registry = component_partition_head(&next_partition);
         let record = RootComponentDrainingRecord {
+            retry: crate::storage::stable::continuation_retry::ContinuationRetryRecord::default(),
+            continuation_requested: false,
             operation_id,
             component,
             previous_registry: current_registry,

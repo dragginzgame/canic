@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EvidenceEnvelopeV1 {
     pub envelope_schema: PayloadSchemaRefV1,
+    /// Producer's Host/CLI release version; artifact protocol bindings carry runtime identity.
     pub canic_version: String,
     pub command: CommandProvenanceV1,
     pub target: EvidenceTargetV1,

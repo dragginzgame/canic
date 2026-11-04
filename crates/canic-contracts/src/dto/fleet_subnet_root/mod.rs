@@ -11,7 +11,7 @@ use crate::{
         FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, SubnetId,
     },
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Execution balance retained while a removed root completes its deletion handoff.

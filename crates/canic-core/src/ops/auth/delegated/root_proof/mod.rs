@@ -2,7 +2,7 @@
 //!
 //! Responsibility: project protected Canic context into IC Auth Root-proof verification.
 //! Does not own: issuer policy, endpoint authorization, signing or proof storage.
-//! Boundary: one library verifier for active-proof installation and token presentation.
+//! Boundary: one library verifier for active Root-proof installation.
 
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use super::canonical::CanonicalAuthError;
@@ -74,12 +74,7 @@ pub(in crate::ops::auth) fn verify_root_delegation_proof(
     input: VerifyRootDelegationProofInput<'_>,
 ) -> Result<VerifiedRootDelegationProof, RootDelegationProofError> {
     let policy = &input.verifier.policy;
-    let permitted_key = match policy.build_network {
-        crate::ids::BuildNetwork::Ic => policy.key_id.name == "key_1",
-        crate::ids::BuildNetwork::Local => {
-            policy.key_id.name != "test_key_1" || input.verifier.allow_test_chain_key
-        }
-    };
+    let permitted_key = root_policy_permitted(input.verifier);
     if !permitted_key {
         return Err(RootDelegationProofError::RootPolicyRejected);
     }
@@ -104,6 +99,19 @@ pub(in crate::ops::auth) fn verify_root_delegation_proof(
         cert_hash: verified.certificate_hash(),
         expires_at_ns: verified.expires_at_ns(),
     })
+}
+
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+pub(in crate::ops::auth) fn root_policy_permitted(
+    verifier: &AuthChainKeyRootVerifierConfig,
+) -> bool {
+    let policy = &verifier.policy;
+    match policy.build_network {
+        crate::ids::BuildNetwork::Ic => policy.key_id.name == "key_1",
+        crate::ids::BuildNetwork::Local => {
+            policy.key_id.name != "test_key_1" || verifier.allow_test_chain_key
+        }
+    }
 }
 
 #[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]

@@ -412,6 +412,7 @@ pub struct CanisterAuthConfig {
 #[derive(Clone, Debug, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalApplicationAuthorizationConfig {
+    pub receiver: Option<PortableReceiverConfig>,
     pub allowed_scopes: Vec<String>,
     pub default_session_ttl_secs: u64,
     pub maximum_session_ttl_secs: u64,
@@ -425,6 +426,8 @@ impl<'de> Deserialize<'de> for LocalApplicationAuthorizationConfig {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct RawConfig {
+            #[serde(default)]
+            receiver: Option<PortableReceiverConfig>,
             allowed_scopes: Vec<String>,
             default_session_ttl_secs: u64,
             maximum_session_ttl_secs: u64,
@@ -434,11 +437,31 @@ impl<'de> Deserialize<'de> for LocalApplicationAuthorizationConfig {
         let mut allowed_scopes = raw.allowed_scopes;
         allowed_scopes.sort_unstable();
         Ok(Self {
+            receiver: raw.receiver,
             allowed_scopes,
             default_session_ttl_secs: raw.default_session_ttl_secs,
             maximum_session_ttl_secs: raw.maximum_session_ttl_secs,
         })
     }
+}
+
+/// Explicit persistent receiver policy; deployment must qualify its clock bound.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PortableReceiverConfig {
+    /// Simultaneous browser sessions; retention and byte budgets scale with this count.
+    #[serde(default = "default_receiver_max_sessions")]
+    pub max_sessions: u32,
+    pub clock_skew_ns: u64,
+    pub verification_burst: u32,
+    pub verification_refill_interval_ns: u64,
+    pub unknown_logout_burst: u32,
+    pub unknown_logout_refill_interval_ns: u64,
+    pub enrollment_refresh_interval_ns: u64,
+    pub enrollment_receipt_timeout_ns: u64,
+    pub max_login_ttl_ns: u64,
+    pub max_proof_ttl_ns: u64,
+    pub max_certificate_age_ns: u64,
 }
 
 ///
@@ -823,3 +846,7 @@ impl Default for ShardPoolPolicy {
 mod tests;
 
 pub use canic_contracts::deployment::ComponentChildKind;
+
+const fn default_receiver_max_sessions() -> u32 {
+    crate::model::auth::application_authorization::capacity::DEFAULT_MAX_SESSIONS
+}

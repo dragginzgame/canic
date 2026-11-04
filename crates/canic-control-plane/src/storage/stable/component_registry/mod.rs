@@ -80,9 +80,9 @@ std::thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_STATE_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, RootComponentRegistryStateRecord::default())
+                Cell::create(allocation, RootComponentRegistryStateRecord::default()).expect("Storage operation failed")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -98,9 +98,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_DRAINING_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -116,9 +116,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -134,9 +134,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_ENTRIES_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -152,9 +152,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PRINCIPAL_INDEX_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -170,9 +170,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_ALLOCATIONS_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+            StableBtreeMap::create(allocation).expect("Storage operation failed")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("Storage operation failed")
         }
     });
 }
@@ -1077,6 +1077,8 @@ impl RootFleetSubnetDrainingInventoryAuthority {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentAllocationRecord {
+    pub retry: super::continuation_retry::ContinuationRetryRecord,
+    pub continuation_requested: bool,
     #[serde(deserialize_with = "Option::deserialize")]
     pub application_initialization:
         Option<canic_contracts::dto::component_registry::ComponentApplicationInitialization>,
@@ -1264,6 +1266,8 @@ pub struct ComponentRegistryPartitionRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentDrainingRecord {
+    pub retry: super::continuation_retry::ContinuationRetryRecord,
+    pub continuation_requested: bool,
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
     pub previous_registry: ComponentRegistryHead,
@@ -1783,6 +1787,7 @@ impl<'a> From<&'a ComponentRegistryPartitionRecord> for ComponentPartitionSnapsh
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildAllocationRecord {
+    pub continuation_requested: bool,
     pub last_failure: Option<RootComponentChildAllocationFailureRecord>,
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -1913,6 +1918,8 @@ pub enum RootComponentChildAllocationProgressRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentSubtreeRemovalRecord {
+    pub retry: super::continuation_retry::ContinuationRetryRecord,
+    pub continuation_requested: bool,
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
     pub target: ComponentRegistryChildRecord,
@@ -2953,7 +2960,7 @@ impl RootComponentRegistryStore {
             match state.current.as_ref() {
                 None => {
                     state.current = Some(record);
-                    cell.set(state);
+                    cell.set(state).expect("Storage operation failed");
                     Ok(RootComponentRegistryCommitOutcome::Committed)
                 }
                 Some(existing) if existing == &record => {
@@ -2986,7 +2993,7 @@ impl RootComponentRegistryStore {
             let mut next = current.clone();
             next.root_draining = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3025,7 +3032,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .funding_fenced_at_ns = Some(fenced_at_ns);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3064,7 +3071,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .final_inventory_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3102,7 +3109,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .final_inventory = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3140,7 +3147,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .removal_publication = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3179,7 +3186,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .store_reclamation_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3218,7 +3225,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .store_reclamation = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3257,7 +3264,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .store_binding_finalization_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3296,7 +3303,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .store_binding_finalization = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3336,7 +3343,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .store_deletion_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3382,7 +3389,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .store_deletion_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3421,7 +3428,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .store_deletion = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3464,7 +3471,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .root_deletion_preparation_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3519,7 +3526,7 @@ impl RootComponentRegistryStore {
                 .expect("validated draining authority")
                 .root_deletion_preparation_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3570,7 +3577,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .root_deletion_preparation_intent = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3609,7 +3616,7 @@ impl RootComponentRegistryStore {
                 .expect("validated root draining authority")
                 .root_deletion_preparation = Some(record);
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -3617,95 +3624,50 @@ impl RootComponentRegistryStore {
     #[must_use]
     #[cfg(test)]
     pub(crate) fn export() -> RootComponentRegistryData {
-        ROOT_COMPONENT_REGISTRY.with_borrow(|cell| RootComponentRegistryData {
+        let mut data = ROOT_COMPONENT_REGISTRY.with_borrow(|cell| RootComponentRegistryData {
             caller_pending: cell.get().caller_pending,
             caller_rows: Self::caller_rows(),
             current: cell.get().current.clone(),
-            allocations: ROOT_COMPONENT_ALLOCATIONS
-                .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
-            partitions: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            allocations: Self::allocations(),
+            component_drainings: Self::component_drainings(),
+            subtree_removal_history: ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow(|map| {
                 map.iter()
-                    .filter_map(|entry| match entry.value() {
-                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                        ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                    .map(|entry| {
+                        entry
+                            .expect("read subtree history")
+                            .value()
+                            .expect("decode subtree history")
                     })
                     .collect()
             }),
-            children: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.iter()
-                    .filter_map(|entry| match entry.value() {
-                        ComponentRegistryEntryRecord::Child(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
-                    .collect()
-            }),
-            child_traversals: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.iter()
-                    .filter_map(|entry| match entry.value() {
-                        ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
-                    .collect()
-            }),
-            child_allocations: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.iter()
-                    .filter_map(|entry| match entry.value() {
-                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
-                    .collect()
-            }),
-            subtree_removals: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.iter()
-                    .filter_map(|entry| match entry.value() {
-                        ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
-                    .collect()
-            }),
-            subtree_removal_history: ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY
-                .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
-            component_drainings: ROOT_COMPONENT_DRAINING
-                .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
-            parent_role_counts: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.iter()
-                    .filter_map(|entry| match entry.value() {
-                        ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
-                    .collect()
-            }),
-        })
+            ..RootComponentRegistryData::default()
+        });
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            for entry in map {
+                match entry
+                    .expect("read Component record")
+                    .value()
+                    .expect("decode Component record")
+                {
+                    ComponentRegistryEntryRecord::Partition(record) => data.partitions.push(record),
+                    ComponentRegistryEntryRecord::Child(record) => data.children.push(record),
+                    ComponentRegistryEntryRecord::ChildTraversal(record) => {
+                        data.child_traversals.push(record);
+                    }
+                    ComponentRegistryEntryRecord::ChildAllocation(record) => {
+                        data.child_allocations.push(record);
+                    }
+                    ComponentRegistryEntryRecord::SubtreeRemoval(record) => {
+                        data.subtree_removals.push(record);
+                    }
+                    ComponentRegistryEntryRecord::ParentRoleCount(record) => {
+                        data.parent_role_counts.push(record);
+                    }
+                    ComponentRegistryEntryRecord::CallerAuthority(_) => {}
+                }
+            }
+        });
+        data
     }
 
     #[must_use]
@@ -3715,30 +3677,42 @@ impl RootComponentRegistryStore {
 
     #[must_use]
     pub(crate) fn allocations() -> Vec<RootComponentAllocationRecord> {
-        ROOT_COMPONENT_ALLOCATIONS
-            .with_borrow(|map| map.iter().map(|entry| entry.value()).collect())
+        ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {
+            map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .map(|entry| entry.value().expect("Storage operation failed"))
+                .collect()
+        })
     }
 
     #[must_use]
     pub(crate) fn component_drainings() -> Vec<RootComponentDrainingRecord> {
-        ROOT_COMPONENT_DRAINING.with_borrow(|map| map.iter().map(|entry| entry.value()).collect())
+        ROOT_COMPONENT_DRAINING.with_borrow(|map| {
+            map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .map(|entry| entry.value().expect("Storage operation failed"))
+                .collect()
+        })
     }
 
     #[must_use]
     pub(crate) fn registry_components() -> Vec<ComponentInstanceId> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
             map.iter()
-                .filter_map(|entry| match entry.value() {
-                    ComponentRegistryEntryRecord::Partition(record) => {
-                        Some(record.binding.component)
-                    }
-                    ComponentRegistryEntryRecord::Child(_)
-                    | ComponentRegistryEntryRecord::ChildTraversal(_)
-                    | ComponentRegistryEntryRecord::ChildAllocation(_)
-                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                    | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                    | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                })
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .filter_map(
+                    |entry| match entry.value().expect("Storage operation failed") {
+                        ComponentRegistryEntryRecord::Partition(record) => {
+                            Some(record.binding.component)
+                        }
+                        ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                    },
+                )
                 .collect()
         })
     }
@@ -3752,15 +3726,18 @@ impl RootComponentRegistryStore {
     pub(crate) fn partitions() -> Vec<ComponentRegistryPartitionRecord> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
             map.iter()
-                .filter_map(|entry| match entry.value() {
-                    ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                    ComponentRegistryEntryRecord::Child(_)
-                    | ComponentRegistryEntryRecord::ChildTraversal(_)
-                    | ComponentRegistryEntryRecord::ChildAllocation(_)
-                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                    | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                    | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                })
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .filter_map(
+                    |entry| match entry.value().expect("Storage operation failed") {
+                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                        ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                    },
+                )
                 .collect()
         })
     }
@@ -3779,39 +3756,43 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             state.current = Some(next);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
 
     #[must_use]
     pub(crate) fn allocation(operation_id: [u8; 32]) -> Option<RootComponentAllocationRecord> {
-        ROOT_COMPONENT_ALLOCATIONS
-            .with_borrow(|map| map.get(&RootComponentAllocationOperationKey::from(operation_id)))
+        ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {
+            map.get(&RootComponentAllocationOperationKey::from(operation_id))
+                .expect("Storage operation failed")
+        })
     }
 
     #[must_use]
     pub(crate) fn allocation_counts(component_spec: &ComponentSpecId) -> (usize, usize) {
         ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {
-            map.iter().fold((0, 0), |(reserved, committed), entry| {
-                let record = entry.value();
-                if &record.component_spec != component_spec {
-                    return (reserved, committed);
-                }
-                if matches!(
-                    record.progress,
-                    RootComponentAllocationProgressRecord::Committed { .. }
-                ) {
-                    (reserved, committed + 1)
-                } else if matches!(
-                    record.progress,
-                    RootComponentAllocationProgressRecord::Removed { .. }
-                ) {
-                    (reserved, committed)
-                } else {
-                    (reserved + 1, committed)
-                }
-            })
+            map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .fold((0, 0), |(reserved, committed), entry| {
+                    let record = entry.value().expect("Storage operation failed");
+                    if &record.component_spec != component_spec {
+                        return (reserved, committed);
+                    }
+                    if matches!(
+                        record.progress,
+                        RootComponentAllocationProgressRecord::Committed { .. }
+                    ) {
+                        (reserved, committed + 1)
+                    } else if matches!(
+                        record.progress,
+                        RootComponentAllocationProgressRecord::Removed { .. }
+                    ) {
+                        (reserved, committed)
+                    } else {
+                        (reserved + 1, committed)
+                    }
+                })
         })
     }
 
@@ -3821,37 +3802,41 @@ impl RootComponentRegistryStore {
         target_component_spec: &ComponentSpecId,
     ) -> (usize, usize) {
         ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {
-            map.iter().fold((0, 0), |(reserved, committed), entry| {
-                let record = entry.value();
-                let recorded_requester = match &record.provisioning_origin {
-                    ComponentProvisioningOrigin::Component { requester, .. } => requester.as_ref(),
-                    ComponentProvisioningOrigin::FleetServiceComponent { requester, .. } => {
-                        &requester.component
-                    }
-                    ComponentProvisioningOrigin::FleetAdministrator { .. }
-                    | ComponentProvisioningOrigin::ComponentGroup { .. } => {
+            map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .fold((0, 0), |(reserved, committed), entry| {
+                    let record = entry.value().expect("Storage operation failed");
+                    let recorded_requester = match &record.provisioning_origin {
+                        ComponentProvisioningOrigin::Component { requester, .. } => {
+                            requester.as_ref()
+                        }
+                        ComponentProvisioningOrigin::FleetServiceComponent {
+                            requester, ..
+                        } => &requester.component,
+                        ComponentProvisioningOrigin::FleetAdministrator { .. }
+                        | ComponentProvisioningOrigin::ComponentGroup { .. } => {
+                            return (reserved, committed);
+                        }
+                    };
+                    if recorded_requester != requester
+                        || &record.component_spec != target_component_spec
+                    {
                         return (reserved, committed);
                     }
-                };
-                if recorded_requester != requester
-                    || &record.component_spec != target_component_spec
-                {
-                    return (reserved, committed);
-                }
-                if matches!(
-                    record.progress,
-                    RootComponentAllocationProgressRecord::Committed { .. }
-                ) {
-                    (reserved, committed + 1)
-                } else if matches!(
-                    record.progress,
-                    RootComponentAllocationProgressRecord::Removed { .. }
-                ) {
-                    (reserved, committed)
-                } else {
-                    (reserved + 1, committed)
-                }
-            })
+                    if matches!(
+                        record.progress,
+                        RootComponentAllocationProgressRecord::Committed { .. }
+                    ) {
+                        (reserved, committed + 1)
+                    } else if matches!(
+                        record.progress,
+                        RootComponentAllocationProgressRecord::Removed { .. }
+                    ) {
+                        (reserved, committed)
+                    } else {
+                        (reserved + 1, committed)
+                    }
+                })
         })
     }
 
@@ -3860,7 +3845,10 @@ impl RootComponentRegistryStore {
         component: ComponentInstanceId,
     ) -> Option<ComponentRegistryPartitionRecord> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-            match map.get(&ComponentRegistryEntryKey::partition(component)) {
+            match map
+                .get(&ComponentRegistryEntryKey::partition(component))
+                .expect("Storage operation failed")
+            {
                 Some(ComponentRegistryEntryRecord::Partition(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Child(_)
@@ -3879,8 +3867,10 @@ impl RootComponentRegistryStore {
     pub(crate) fn component_draining(
         component: ComponentInstanceId,
     ) -> Option<RootComponentDrainingRecord> {
-        ROOT_COMPONENT_DRAINING
-            .with_borrow(|map| map.get(&RootComponentDrainingKey::from(component)))
+        ROOT_COMPONENT_DRAINING.with_borrow(|map| {
+            map.get(&RootComponentDrainingKey::from(component))
+                .expect("Storage operation failed")
+        })
     }
 
     #[must_use]
@@ -3889,10 +3879,13 @@ impl RootComponentRegistryStore {
         operation_id: [u8; 32],
     ) -> Option<RootComponentChildAllocationRecord> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-            match map.get(&ComponentRegistryEntryKey::child_allocation(
-                component,
-                operation_id,
-            )) {
+            match map
+                .get(&ComponentRegistryEntryKey::child_allocation(
+                    component,
+                    operation_id,
+                ))
+                .expect("Storage operation failed")
+            {
                 Some(ComponentRegistryEntryRecord::ChildAllocation(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
@@ -3913,10 +3906,13 @@ impl RootComponentRegistryStore {
         operation_id: [u8; 32],
     ) -> Option<RootComponentSubtreeRemovalRecord> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-            match map.get(&ComponentRegistryEntryKey::subtree_removal(
-                component,
-                operation_id,
-            )) {
+            match map
+                .get(&ComponentRegistryEntryKey::subtree_removal(
+                    component,
+                    operation_id,
+                ))
+                .expect("Storage operation failed")
+            {
                 Some(ComponentRegistryEntryRecord::SubtreeRemoval(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
@@ -3943,6 +3939,7 @@ impl RootComponentRegistryStore {
                 operation_id,
                 traversal_steps,
             ))
+            .expect("Storage operation failed")
         })
     }
 
@@ -3955,7 +3952,8 @@ impl RootComponentRegistryStore {
             let end =
                 RootComponentSubtreeRemovalHistoryKey::new(component, [u8::MAX; 32], u32::MAX);
             map.range((Bound::Included(start), Bound::Included(end)))
-                .map(|entry| entry.value())
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .map(|entry| entry.value().expect("Storage operation failed"))
                 .collect()
         })
     }
@@ -3973,15 +3971,18 @@ impl RootComponentRegistryStore {
                     component,
                 )),
             ))
-            .filter_map(|entry| match entry.value() {
-                ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
-                ComponentRegistryEntryRecord::Partition(_)
-                | ComponentRegistryEntryRecord::Child(_)
-                | ComponentRegistryEntryRecord::ChildTraversal(_)
-                | ComponentRegistryEntryRecord::ChildAllocation(_)
-                | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-            })
+            .map(|entry| entry.expect("Storage iteration failed"))
+            .filter_map(
+                |entry| match entry.value().expect("Storage operation failed") {
+                    ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                    | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                },
+            )
             .collect()
         })
     }
@@ -3999,15 +4000,18 @@ impl RootComponentRegistryStore {
                     component,
                 )),
             ))
-            .filter_map(|entry| match entry.value() {
-                ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
-                ComponentRegistryEntryRecord::Partition(_)
-                | ComponentRegistryEntryRecord::Child(_)
-                | ComponentRegistryEntryRecord::ChildTraversal(_)
-                | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-            })
+            .map(|entry| entry.expect("Storage iteration failed"))
+            .filter_map(
+                |entry| match entry.value().expect("Storage operation failed") {
+                    ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                    | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                },
+            )
             .collect()
         })
     }
@@ -4018,7 +4022,10 @@ impl RootComponentRegistryStore {
         canister_id: Principal,
     ) -> Option<ComponentRegistryChildRecord> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-            match map.get(&ComponentRegistryEntryKey::child(component, canister_id)) {
+            match map
+                .get(&ComponentRegistryEntryKey::child(component, canister_id))
+                .expect("Storage operation failed")
+            {
                 Some(ComponentRegistryEntryRecord::Child(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
@@ -4041,12 +4048,15 @@ impl RootComponentRegistryStore {
         canister_id: Principal,
     ) -> Option<ComponentRegistryChildTraversalRecord> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-            match map.get(&ComponentRegistryEntryKey::child_traversal(
-                component,
-                parent_canister_id,
-                role,
-                canister_id,
-            )) {
+            match map
+                .get(&ComponentRegistryEntryKey::child_traversal(
+                    component,
+                    parent_canister_id,
+                    role,
+                    canister_id,
+                ))
+                .expect("Storage operation failed")
+            {
                 Some(ComponentRegistryEntryRecord::ChildTraversal(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
@@ -4117,15 +4127,18 @@ impl RootComponentRegistryStore {
                 ),
             };
             map.range((lower, upper))
-                .filter_map(|entry| match entry.value() {
-                    ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
-                    ComponentRegistryEntryRecord::Partition(_)
-                    | ComponentRegistryEntryRecord::Child(_)
-                    | ComponentRegistryEntryRecord::ChildAllocation(_)
-                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                    | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                    | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                })
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .filter_map(
+                    |entry| match entry.value().expect("Storage operation failed") {
+                        ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                    },
+                )
                 .take(limit)
                 .collect()
         })
@@ -4138,11 +4151,14 @@ impl RootComponentRegistryStore {
         child_role: &CanisterRole,
     ) -> Option<ComponentRegistryParentRoleCountRecord> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-            match map.get(&ComponentRegistryEntryKey::parent_role_count(
-                component,
-                parent_canister_id,
-                child_role,
-            )) {
+            match map
+                .get(&ComponentRegistryEntryKey::parent_role_count(
+                    component,
+                    parent_canister_id,
+                    child_role,
+                ))
+                .expect("Storage operation failed")
+            {
                 Some(ComponentRegistryEntryRecord::ParentRoleCount(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
@@ -4160,7 +4176,10 @@ impl RootComponentRegistryStore {
     #[must_use]
     pub(crate) fn component_for_principal(canister: Principal) -> Option<ComponentInstanceId> {
         COMPONENT_REGISTRY_PRINCIPAL_INDEX
-            .with_borrow(|map| map.get(&ComponentRegistryPrincipalKey::from(canister)))
+            .with_borrow(|map| {
+                map.get(&ComponentRegistryPrincipalKey::from(canister))
+                    .expect("Storage operation failed")
+            })
             .map(|record| record.component)
     }
 
@@ -4171,10 +4190,11 @@ impl RootComponentRegistryStore {
                 Bound::Included(ComponentRegistryEntryKey::partition(component)),
                 Bound::Unbounded,
             ))
+            .map(|entry| entry.expect("Storage iteration failed"))
             .take_while(|entry| entry.key().component == *component.as_bytes())
             .all(|entry| {
                 matches!(
-                    entry.value(),
+                    entry.value().expect("Storage operation failed"),
                     ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
                         | ComponentRegistryEntryRecord::SubtreeRemoval(_)
@@ -4191,7 +4211,10 @@ impl RootComponentRegistryStore {
         Self::component_for_principal(top_level_canister) == Some(component)
             && COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow(|map| {
                 map.iter()
-                    .filter(|entry| entry.value().component == component)
+                    .map(|entry| entry.expect("Storage iteration failed"))
+                    .filter(|entry| {
+                        entry.value().expect("Storage operation failed").component == component
+                    })
                     .count()
                     == 1
             })
@@ -4199,8 +4222,13 @@ impl RootComponentRegistryStore {
 
     #[must_use]
     pub(crate) fn component_principal_inventory_is_empty(component: ComponentInstanceId) -> bool {
-        COMPONENT_REGISTRY_PRINCIPAL_INDEX
-            .with_borrow(|map| map.iter().all(|entry| entry.value().component != component))
+        COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow(|map| {
+            map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .all(|entry| {
+                    entry.value().expect("Storage operation failed").component != component
+                })
+        })
     }
 
     pub(crate) fn reserve_allocation(
@@ -4216,7 +4244,9 @@ impl RootComponentRegistryStore {
                 .as_ref()
                 .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
 
-            if let Some(existing) = ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| map.get(&key)) {
+            if let Some(existing) = ROOT_COMPONENT_ALLOCATIONS
+                .with_borrow(|map| map.get(&key).expect("Storage operation failed"))
+            {
                 return if existing == record {
                     Ok(RootComponentRegistryCommitOutcome::Existing)
                 } else {
@@ -4233,16 +4263,20 @@ impl RootComponentRegistryStore {
             }
             if ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {
                 map.iter()
-                    .any(|entry| entry.value().component == record.component)
+                    .map(|entry| entry.expect("Storage iteration failed"))
+                    .any(|entry| {
+                        entry.value().expect("Storage operation failed").component
+                            == record.component
+                    })
             }) {
                 return Err(RootComponentAllocationCommitError::ComponentIdentityConflict);
             }
 
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
-                map.insert(key, record);
+                map.insert(key, record).expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -4282,8 +4316,8 @@ impl RootComponentRegistryStore {
                 .current
                 .as_ref()
                 .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
-            if let Some(existing) =
-                COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| map.get(&operation_key))
+            if let Some(existing) = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| map.get(&operation_key).expect("Storage operation failed"))
             {
                 return match existing {
                     ComponentRegistryEntryRecord::ChildAllocation(existing)
@@ -4308,6 +4342,7 @@ impl RootComponentRegistryStore {
             let current_partition = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
                     map.get(&ComponentRegistryEntryKey::partition(component))
+                        .expect("Storage operation failed")
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(record) => Some(record),
                             ComponentRegistryEntryRecord::Child(_)
@@ -4323,15 +4358,17 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             let current_count = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.get(&count_key).and_then(|entry| match entry {
-                    ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
-                    ComponentRegistryEntryRecord::Partition(_)
-                    | ComponentRegistryEntryRecord::Child(_)
-                    | ComponentRegistryEntryRecord::ChildTraversal(_)
-                    | ComponentRegistryEntryRecord::ChildAllocation(_)
-                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                    | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                })
+                map.get(&count_key)
+                    .expect("Storage operation failed")
+                    .and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                    })
             });
             if current_count.as_ref() != expected_parent_role_count {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
@@ -4341,6 +4378,7 @@ impl RootComponentRegistryStore {
                     map.get(&ComponentRegistryPrincipalKey::from(
                         record.parent_canister_id,
                     ))
+                    .expect("Storage operation failed")
                 })
                 .map(|indexed| indexed.component)
                 != Some(component)
@@ -4352,18 +4390,21 @@ impl RootComponentRegistryStore {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::ChildAllocation(record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     count_key,
                     ComponentRegistryEntryRecord::ParentRoleCount(next_parent_role_count),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -4400,8 +4441,8 @@ impl RootComponentRegistryStore {
                 .current
                 .as_ref()
                 .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
-            if let Some(existing) =
-                COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| map.get(&operation_key))
+            if let Some(existing) = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| map.get(&operation_key).expect("Storage operation failed"))
             {
                 return match existing {
                     ComponentRegistryEntryRecord::SubtreeRemoval(existing)
@@ -4426,7 +4467,7 @@ impl RootComponentRegistryStore {
             if let Some(expected_draining) = expected_draining {
                 let draining_key = RootComponentDrainingKey::from(component);
                 let current_draining = ROOT_COMPONENT_DRAINING
-                    .with_borrow(|map| map.get(&draining_key))
+                    .with_borrow(|map| map.get(&draining_key).expect("Storage operation failed"))
                     .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
                 if current_draining != *expected_draining {
                     return Err(RootComponentAllocationCommitError::ConflictingState);
@@ -4440,7 +4481,7 @@ impl RootComponentRegistryStore {
                     );
                     let previous_is_completed = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
                         matches!(
-                            map.get(&previous_key),
+                            map.get(&previous_key).expect("Storage operation failed"),
                             Some(ComponentRegistryEntryRecord::SubtreeRemoval(previous))
                                 if matches!(
                                     previous.progress,
@@ -4455,24 +4496,30 @@ impl RootComponentRegistryStore {
             }
             let (current_partition, current_target) =
                 COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                    let partition = map.get(&partition_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                        ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
-                    let target = map.get(&target_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::Child(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
+                    let partition = map
+                        .get(&partition_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
+                    let target = map
+                        .get(&target_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Child(record) => Some(record),
+                            ComponentRegistryEntryRecord::Partition(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
                     (partition, target)
                 });
             if current_partition.as_ref() != Some(expected_partition)
@@ -4485,19 +4532,22 @@ impl RootComponentRegistryStore {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::SubtreeRemoval(record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             if let Some(next_draining) = next_draining {
                 ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
-                    map.insert(RootComponentDrainingKey::from(component), next_draining);
+                    map.insert(RootComponentDrainingKey::from(component), next_draining)
+                        .expect("Storage operation failed");
                 });
             }
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(RootComponentRegistryCommitOutcome::Committed)
         })
     }
@@ -4542,24 +4592,30 @@ impl RootComponentRegistryStore {
             }
             let (current_partition, current_record) =
                 COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                    let partition = map.get(&partition_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                        ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
-                    let record = map.get(&operation_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
+                    let partition = map
+                        .get(&partition_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
+                    let record = map
+                        .get(&operation_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                            ComponentRegistryEntryRecord::Partition(_)
+                            | ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
                     (partition, record)
                 });
             if current_partition.as_ref() != Some(expected_partition)
@@ -4572,14 +4628,16 @@ impl RootComponentRegistryStore {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::SubtreeRemoval(next_record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -4684,31 +4742,39 @@ impl RootComponentRegistryStore {
                 .as_ref()
                 .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
             if current_meta != expected_meta
-                || ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY
-                    .with_borrow(|map| map.contains_key(&history_key))
+                || ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow(|map| {
+                    map.contains_key(&history_key)
+                        .expect("Storage operation failed")
+                })
             {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             let (current_partition, current_record) =
                 COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                    let partition = map.get(&partition_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                        ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
-                    let record = map.get(&operation_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
+                    let partition = map
+                        .get(&partition_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
+                    let record = map
+                        .get(&operation_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                            ComponentRegistryEntryRecord::Partition(_)
+                            | ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
                     (partition, record)
                 });
             if current_partition.as_ref() != Some(expected_partition)
@@ -4718,20 +4784,23 @@ impl RootComponentRegistryStore {
             }
 
             ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(|map| {
-                map.insert(history_key, completed_leaf);
+                map.insert(history_key, completed_leaf)
+                    .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::SubtreeRemoval(next_record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -4877,26 +4946,41 @@ impl RootComponentRegistryStore {
                 current_traversal,
                 current_count,
             ) = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                let partition = map.get(&partition_key).and_then(|entry| match entry {
-                    ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                    _ => None,
-                });
-                let record = map.get(&operation_key).and_then(|entry| match entry {
-                    ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
-                    _ => None,
-                });
-                let child = map.get(&child_key).and_then(|entry| match entry {
-                    ComponentRegistryEntryRecord::Child(record) => Some(record),
-                    _ => None,
-                });
-                let traversal = map.get(&traversal_key).and_then(|entry| match entry {
-                    ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
-                    _ => None,
-                });
-                let count = map.get(&count_key).and_then(|entry| match entry {
-                    ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
-                    _ => None,
-                });
+                let partition = map
+                    .get(&partition_key)
+                    .expect("Storage operation failed")
+                    .and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                        _ => None,
+                    });
+                let record = map
+                    .get(&operation_key)
+                    .expect("Storage operation failed")
+                    .and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                        _ => None,
+                    });
+                let child = map
+                    .get(&child_key)
+                    .expect("Storage operation failed")
+                    .and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Child(record) => Some(record),
+                        _ => None,
+                    });
+                let traversal = map
+                    .get(&traversal_key)
+                    .expect("Storage operation failed")
+                    .and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
+                        _ => None,
+                    });
+                let count = map
+                    .get(&count_key)
+                    .expect("Storage operation failed")
+                    .and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
+                        _ => None,
+                    });
                 (partition, record, child, traversal, count)
             });
             if current_partition.as_ref() != Some(expected_partition)
@@ -4908,7 +4992,7 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             if COMPONENT_REGISTRY_PRINCIPAL_INDEX
-                .with_borrow(|map| map.get(&principal_key))
+                .with_borrow(|map| map.get(&principal_key).expect("Storage operation failed"))
                 .map(|indexed| indexed.component)
                 != Some(component)
             {
@@ -4919,30 +5003,35 @@ impl RootComponentRegistryStore {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::SubtreeRemoval(next_record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
-                map.remove(&child_key);
-                map.remove(&traversal_key);
+                )
+                .expect("Storage operation failed");
+                map.remove(&child_key).expect("Storage operation failed");
+                map.remove(&traversal_key)
+                    .expect("Storage operation failed");
                 match next_parent_role_count {
                     Some(next) => {
                         map.insert(
                             count_key,
                             ComponentRegistryEntryRecord::ParentRoleCount(next),
-                        );
+                        )
+                        .expect("Storage operation failed");
                     }
                     None => {
-                        map.remove(&count_key);
+                        map.remove(&count_key).expect("Storage operation failed");
                     }
                 }
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
-                map.remove(&principal_key);
+                map.remove(&principal_key)
+                    .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -4977,6 +5066,7 @@ impl RootComponentRegistryStore {
             let current_partition = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
                     map.get(&ComponentRegistryEntryKey::partition(component))
+                        .expect("Storage operation failed")
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(record) => Some(record),
                             ComponentRegistryEntryRecord::Child(_)
@@ -4990,15 +5080,17 @@ impl RootComponentRegistryStore {
                 .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
             let current_record = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
-                    map.get(&operation_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
+                    map.get(&operation_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                            ComponentRegistryEntryRecord::Partition(_)
+                            | ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        })
                 })
                 .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
             if &current_partition != expected_partition || &current_record != expected_record {
@@ -5009,14 +5101,16 @@ impl RootComponentRegistryStore {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::ChildAllocation(next_record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5071,33 +5165,42 @@ impl RootComponentRegistryStore {
             }
             let (current_partition, current_record, current_child) = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
-                    let partition = map.get(&partition_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                        ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
-                    let record = map.get(&operation_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
-                    let child = map.get(&child_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::Child(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    });
+                    let partition = map
+                        .get(&partition_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
+                    let record = map
+                        .get(&operation_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                            ComponentRegistryEntryRecord::Partition(_)
+                            | ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
+                    let child = map
+                        .get(&child_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Child(record) => Some(record),
+                            ComponentRegistryEntryRecord::Partition(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        });
                     (partition, record, child)
                 });
             if current_partition.as_ref() != Some(expected_partition)
@@ -5111,15 +5214,18 @@ impl RootComponentRegistryStore {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::ChildAllocation(next_record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
-                map.insert(child_key, ComponentRegistryEntryRecord::Child(next_child));
+                )
+                .expect("Storage operation failed");
+                map.insert(child_key, ComponentRegistryEntryRecord::Child(next_child))
+                    .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5145,17 +5251,18 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             let current_record = ROOT_COMPONENT_ALLOCATIONS
-                .with_borrow(|map| map.get(&key))
+                .with_borrow(|map| map.get(&key).expect("Storage operation failed"))
                 .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
             if &current_record != expected_record {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
 
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
-                map.insert(key, next_record);
+                map.insert(key, next_record)
+                    .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5189,19 +5296,22 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             let current_record = ROOT_COMPONENT_ALLOCATIONS
-                .with_borrow(|map| map.get(&operation_key))
+                .with_borrow(|map| map.get(&operation_key).expect("Storage operation failed"))
                 .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
             if &current_record != expected_record {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             if COMPONENT_REGISTRY_ENTRIES
-                .with_borrow(|map| map.get(&ComponentRegistryEntryKey::partition(component)))
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryEntryKey::partition(component))
+                        .expect("Storage operation failed")
+                })
                 .is_some()
             {
                 return Err(RootComponentAllocationCommitError::ConflictingPartition);
             }
             if COMPONENT_REGISTRY_PRINCIPAL_INDEX
-                .with_borrow(|map| map.get(&principal_key))
+                .with_borrow(|map| map.get(&principal_key).expect("Storage operation failed"))
                 .is_some()
             {
                 return Err(RootComponentAllocationCommitError::ComponentPrincipalConflict);
@@ -5211,19 +5321,22 @@ impl RootComponentRegistryStore {
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
                     principal_key,
                     ComponentRegistryPrincipalIndexRecord { component },
-                );
+                )
+                .expect("Storage operation failed");
             });
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
-                map.insert(operation_key, next_record);
+                map.insert(operation_key, next_record)
+                    .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5279,40 +5392,50 @@ impl RootComponentRegistryStore {
             }
             let current_partition = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
-                    map.get(&partition_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
-                        ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
+                    map.get(&partition_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        })
                 })
                 .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
             let current_record = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
-                    map.get(&operation_key).and_then(|entry| match entry {
-                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
-                        ComponentRegistryEntryRecord::Partition(_)
-                        | ComponentRegistryEntryRecord::Child(_)
-                        | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
-                        | ComponentRegistryEntryRecord::ParentRoleCount(_)
-                        | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
-                    })
+                    map.get(&operation_key)
+                        .expect("Storage operation failed")
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                            ComponentRegistryEntryRecord::Partition(_)
+                            | ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_)
+                            | ComponentRegistryEntryRecord::CallerAuthority(_) => None,
+                        })
                 })
                 .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
             if &current_partition != expected_partition || &current_record != expected_record {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             if COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.get(&child_key).is_some() || map.get(&traversal_key).is_some()
+                map.get(&child_key)
+                    .expect("Storage operation failed")
+                    .is_some()
+                    || map
+                        .get(&traversal_key)
+                        .expect("Storage operation failed")
+                        .is_some()
             }) {
                 return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
             }
             if COMPONENT_REGISTRY_PRINCIPAL_INDEX
-                .with_borrow(|map| map.get(&principal_key))
+                .with_borrow(|map| map.get(&principal_key).expect("Storage operation failed"))
                 .is_some()
             {
                 return Err(RootComponentAllocationCommitError::ComponentPrincipalConflict);
@@ -5322,6 +5445,7 @@ impl RootComponentRegistryStore {
                     map.get(&ComponentRegistryPrincipalKey::from(
                         expected_record.parent_canister_id,
                     ))
+                    .expect("Storage operation failed")
                 })
                 .map(|indexed| indexed.component)
                 != Some(component)
@@ -5333,25 +5457,30 @@ impl RootComponentRegistryStore {
                 map.insert(
                     operation_key,
                     ComponentRegistryEntryRecord::ChildAllocation(next_record),
-                );
+                )
+                .expect("Storage operation failed");
                 map.insert(
                     partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
-                map.insert(child_key, ComponentRegistryEntryRecord::Child(child));
+                )
+                .expect("Storage operation failed");
+                map.insert(child_key, ComponentRegistryEntryRecord::Child(child))
+                    .expect("Storage operation failed");
                 map.insert(
                     traversal_key,
                     ComponentRegistryEntryRecord::ChildTraversal(traversal),
-                );
+                )
+                .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
                     principal_key,
                     ComponentRegistryPrincipalIndexRecord { component },
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5385,11 +5514,12 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             let current_record = ROOT_COMPONENT_ALLOCATIONS
-                .with_borrow(|map| map.get(&operation_key))
+                .with_borrow(|map| map.get(&operation_key).expect("Storage operation failed"))
                 .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
             let current_partition = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
                     map.get(&ComponentRegistryEntryKey::partition(component))
+                        .expect("Storage operation failed")
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(record) => Some(record),
                             ComponentRegistryEntryRecord::Child(_)
@@ -5406,16 +5536,18 @@ impl RootComponentRegistryStore {
             }
 
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
-                map.insert(operation_key, next_record);
+                map.insert(operation_key, next_record)
+                    .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5468,13 +5600,15 @@ impl RootComponentRegistryStore {
                 .as_ref()
                 .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
             if current_meta != expected_meta
-                || ROOT_COMPONENT_DRAINING.with_borrow(|map| map.contains_key(&key))
+                || ROOT_COMPONENT_DRAINING
+                    .with_borrow(|map| map.contains_key(&key).expect("Storage operation failed"))
             {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             let current_partition = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
                     map.get(&ComponentRegistryEntryKey::partition(component))
+                        .expect("Storage operation failed")
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(partition) => Some(partition),
                             ComponentRegistryEntryRecord::Child(_)
@@ -5491,16 +5625,17 @@ impl RootComponentRegistryStore {
             }
 
             ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
-                map.insert(key, record);
+                map.insert(key, record).expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5544,11 +5679,12 @@ impl RootComponentRegistryStore {
                 .as_ref()
                 .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
             let current_record = ROOT_COMPONENT_DRAINING
-                .with_borrow(|map| map.get(&key))
+                .with_borrow(|map| map.get(&key).expect("Storage operation failed"))
                 .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
             let current_partition = COMPONENT_REGISTRY_ENTRIES
                 .with_borrow(|map| {
                     map.get(&ComponentRegistryEntryKey::partition(component))
+                        .expect("Storage operation failed")
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(partition) => Some(partition),
                             ComponentRegistryEntryRecord::Child(_)
@@ -5568,16 +5704,18 @@ impl RootComponentRegistryStore {
             }
 
             ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
-                map.insert(key, next_record);
+                map.insert(key, next_record)
+                    .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(next_partition),
-                );
+                )
+                .expect("Storage operation failed");
             });
             state.current = Some(next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5613,11 +5751,13 @@ impl RootComponentRegistryStore {
         ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
             let current = map
                 .get(&key)
+                .expect("Storage operation failed")
                 .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
             if current != *expected_record {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
-            map.insert(key, next_record);
+            map.insert(key, next_record)
+                .expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5647,11 +5787,13 @@ impl RootComponentRegistryStore {
         ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
             let current = map
                 .get(&key)
+                .expect("Storage operation failed")
                 .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
             if current != *expected_record {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
-            map.insert(key, next_record);
+            map.insert(key, next_record)
+                .expect("Storage operation failed");
             Ok(())
         })
     }
@@ -5711,15 +5853,17 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             let current_partition = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
-                map.get(&partition_key).and_then(|entry| match entry {
-                    ComponentRegistryEntryRecord::Partition(partition) => Some(partition),
-                    _ => None,
-                })
+                map.get(&partition_key)
+                    .expect("Storage operation failed")
+                    .and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Partition(partition) => Some(partition),
+                        _ => None,
+                    })
             });
-            let current_allocation =
-                ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| map.get(&allocation_key));
-            let current_draining =
-                ROOT_COMPONENT_DRAINING.with_borrow(|map| map.get(&draining_key));
+            let current_allocation = ROOT_COMPONENT_ALLOCATIONS
+                .with_borrow(|map| map.get(&allocation_key).expect("Storage operation failed"));
+            let current_draining = ROOT_COMPONENT_DRAINING
+                .with_borrow(|map| map.get(&draining_key).expect("Storage operation failed"));
             let partition_is_exact = current_partition.as_ref() == Some(commit.expected_partition);
             let allocation_is_exact =
                 current_allocation.as_ref() == Some(commit.expected_allocation);
@@ -5733,10 +5877,14 @@ impl RootComponentRegistryStore {
             let principal_is_exact = COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow(|map| {
                 let indexed_component_is_exact = map
                     .get(&principal_key)
+                    .expect("Storage operation failed")
                     .is_some_and(|indexed| indexed.component == component);
                 let component_principal_count = map
                     .iter()
-                    .filter(|entry| entry.value().component == component)
+                    .map(|entry| entry.expect("Storage iteration failed"))
+                    .filter(|entry| {
+                        entry.value().expect("Storage operation failed").component == component
+                    })
                     .count();
                 indexed_component_is_exact && component_principal_count == 1
             });
@@ -5745,21 +5893,39 @@ impl RootComponentRegistryStore {
             }
 
             COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
-                map.remove(&partition_key);
+                map.remove(&partition_key)
+                    .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
-                map.remove(&principal_key);
+                map.remove(&principal_key)
+                    .expect("Storage operation failed");
             });
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
-                map.insert(allocation_key, commit.next_allocation);
+                map.insert(allocation_key, commit.next_allocation)
+                    .expect("Storage operation failed");
             });
             ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
-                map.insert(draining_key, commit.next_draining);
+                map.insert(draining_key, commit.next_draining)
+                    .expect("Storage operation failed");
             });
             state.current = Some(commit.next_meta);
-            cell.set(state);
+            cell.set(state).expect("Storage operation failed");
             Ok(())
         })
+    }
+
+    /// Change only continuation custody; paid-effect progress and capacity remain exact.
+    pub(crate) fn request_component_removal_continuation(
+        expected: &RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let mut next = expected.clone();
+        next.continuation_requested = true;
+        if Self::component_draining_entry_bytes(&next)
+            != Self::component_draining_entry_bytes(expected)
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingState);
+        }
+        Self::replace_component_draining(expected, next)
     }
 
     fn replace_component_draining(
@@ -5770,23 +5936,38 @@ impl RootComponentRegistryStore {
         ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
             let current = map
                 .get(&key)
+                .expect("Storage operation failed")
                 .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
             if current != *expected_record {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
-            map.insert(key, next_record);
+            map.insert(key, next_record)
+                .expect("Storage operation failed");
             Ok(())
         })
     }
 
+    /// Change retry accounting without changing the exact draining effect journal.
+    pub(crate) fn replace_component_retry(
+        expected: &RootComponentDrainingRecord,
+        retry: super::continuation_retry::ContinuationRetryRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let mut next = expected.clone();
+        next.retry = retry;
+        Self::replace_component_draining(expected, next)
+    }
+
     fn encoded_entry_bytes(key: &impl Storable, value: &impl Storable) -> u64 {
-        (key.to_bytes().len() + value.to_bytes().len()) as u64
+        (key.to_bytes().expect("encode admitted record").len()
+            + value.to_bytes().expect("encode admitted record").len()) as u64
     }
 
     #[must_use]
     pub(crate) fn allocation_entry_bytes(record: &RootComponentAllocationRecord) -> u64 {
         let key = RootComponentAllocationOperationKey::from(record.operation_id);
-        Self::encoded_entry_bytes(&key, record)
+        let mut maximum = record.clone();
+        maximum.retry = super::continuation_retry::ContinuationRetryRecord::MAXIMUM;
+        Self::encoded_entry_bytes(&key, &maximum)
     }
 
     #[must_use]
@@ -5822,7 +6003,9 @@ impl RootComponentRegistryStore {
     #[must_use]
     pub(crate) fn subtree_removal_entry_bytes(record: &RootComponentSubtreeRemovalRecord) -> u64 {
         let key = ComponentRegistryEntryKey::subtree_removal(record.component, record.operation_id);
-        let value = ComponentRegistryEntryRecord::SubtreeRemoval(record.clone());
+        let mut maximum = record.clone();
+        maximum.retry = super::continuation_retry::ContinuationRetryRecord::MAXIMUM;
+        let value = ComponentRegistryEntryRecord::SubtreeRemoval(maximum);
         Self::encoded_entry_bytes(&key, &value)
     }
 
@@ -5841,7 +6024,9 @@ impl RootComponentRegistryStore {
     #[must_use]
     pub(crate) fn component_draining_entry_bytes(record: &RootComponentDrainingRecord) -> u64 {
         let key = RootComponentDrainingKey::from(record.component);
-        Self::encoded_entry_bytes(&key, record)
+        let mut maximum = record.clone();
+        maximum.retry = super::continuation_retry::ContinuationRetryRecord::MAXIMUM;
+        Self::encoded_entry_bytes(&key, &maximum)
     }
 
     #[must_use]
@@ -5894,19 +6079,30 @@ impl RootComponentRegistryStore {
         reason = "test snapshot import repopulates every normalized stable domain explicitly"
     )]
     pub(crate) fn import(data: RootComponentRegistryData) {
-        ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(StableBtreeMap::clear);
-        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(StableBtreeMap::clear);
-        ROOT_COMPONENT_DRAINING.with_borrow_mut(StableBtreeMap::clear);
+        ROOT_COMPONENT_ALLOCATIONS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        ROOT_COMPONENT_DRAINING
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         for record in data.allocations {
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(
                     RootComponentAllocationOperationKey::from(record.operation_id),
                     record,
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
-        COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(StableBtreeMap::clear);
-        COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(StableBtreeMap::clear);
+        COMPONENT_REGISTRY_ENTRIES
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        COMPONENT_REGISTRY_PRINCIPAL_INDEX
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         for record in data.partitions {
             let component = record.binding.component;
             let canister = record.binding.canister_id;
@@ -5914,13 +6110,15 @@ impl RootComponentRegistryStore {
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(record),
-                );
+                )
+                .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
                     ComponentRegistryPrincipalKey::from(canister),
                     ComponentRegistryPrincipalIndexRecord { component },
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         for record in data.children {
@@ -5930,13 +6128,15 @@ impl RootComponentRegistryStore {
                 map.insert(
                     ComponentRegistryEntryKey::child(component, canister),
                     ComponentRegistryEntryRecord::Child(record),
-                );
+                )
+                .expect("Storage operation failed");
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
                     ComponentRegistryPrincipalKey::from(canister),
                     ComponentRegistryPrincipalIndexRecord { component },
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         for record in data.child_traversals {
@@ -5949,7 +6149,8 @@ impl RootComponentRegistryStore {
                         record.canister_id,
                     ),
                     ComponentRegistryEntryRecord::ChildTraversal(record),
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         for record in data.child_allocations {
@@ -5960,7 +6161,8 @@ impl RootComponentRegistryStore {
                         record.operation_id,
                     ),
                     ComponentRegistryEntryRecord::ChildAllocation(record),
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         for record in data.subtree_removals {
@@ -5971,7 +6173,8 @@ impl RootComponentRegistryStore {
                         record.operation_id,
                     ),
                     ComponentRegistryEntryRecord::SubtreeRemoval(record),
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         for record in data.subtree_removal_history {
@@ -5983,12 +6186,14 @@ impl RootComponentRegistryStore {
                         record.traversal_steps,
                     ),
                     record,
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         for record in data.component_drainings {
             ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
-                map.insert(RootComponentDrainingKey::from(record.component), record);
+                map.insert(RootComponentDrainingKey::from(record.component), record)
+                    .expect("Storage operation failed");
             });
         }
         for record in data.parent_role_counts {
@@ -6000,7 +6205,8 @@ impl RootComponentRegistryStore {
                         &record.child_role,
                     ),
                     ComponentRegistryEntryRecord::ParentRoleCount(record),
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         let caller_rows =
@@ -6013,7 +6219,8 @@ impl RootComponentRegistryStore {
                         index: ComponentRegistryEntryIndexKey::CallerAuthority(key),
                     },
                     ComponentRegistryEntryRecord::CallerAuthority(Box::new(row)),
-                );
+                )
+                .expect("Storage operation failed");
             });
         }
         ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
@@ -6021,7 +6228,8 @@ impl RootComponentRegistryStore {
                 caller_pending: data.caller_pending,
                 caller_rows,
                 current: data.current,
-            });
+            })
+            .expect("Storage operation failed");
         });
     }
 }

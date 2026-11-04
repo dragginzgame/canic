@@ -73,7 +73,7 @@ printf 'ensure-clean\nclippy\n' >"$FIXTURE/expected"
 cmp "$FIXTURE/expected" "$ORDER_EVENTS"
 : >"$ORDER_EVENTS"
 make -j4 --no-print-directory -C "$FIXTURE" validate >"$FIXTURE/order.log" 2>&1
-printf '%s\n' tools-check dependency-adoption-admission clippy dependency-adoption-fixtures fmt-check check-invariants shellcheck dependency-risk-gate dependency-risk-inventory-test \
+printf '%s\n' tools-check dependency-adoption-admission clippy dependency-adoption-fixtures fmt-check compiler-check check-invariants shellcheck dependency-risk-gate dependency-risk-inventory-test \
     check control-plane-feature-gate test >"$FIXTURE/expected"
 cmp "$FIXTURE/expected" "$ORDER_EVENTS"
 # Hosted partitions consume the same groups, with deliberate cheap-first scheduling.
@@ -81,7 +81,7 @@ for target in ci-preflight ci-checks ci-security; do
     : > "$ORDER_EVENTS"
     make -j4 --no-print-directory -C "$FIXTURE" "$target" >"$FIXTURE/order.log" 2>&1
     case "$target" in
-        ci-preflight) printf '%s\n' check-invariants shellcheck lint-workflows workspace-test-inventory-gate ;;
+        ci-preflight) printf '%s\n' compiler-check check-invariants shellcheck lint-workflows workspace-test-inventory-gate ;;
         ci-checks) printf '%s\n' fmt-check clippy control-plane-feature-gate ;;
         ci-security) printf '%s\n' dependency-risk-gate dependency-risk-inventory-test ;;
     esac >"$FIXTURE/expected"

@@ -4,7 +4,7 @@ use crate::{
     cycles::Cycles,
     ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig},
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Identifies the durable Component allocation that has claimed one empty Canister.
@@ -272,10 +272,10 @@ pub enum PoolAdminResponse {
 )]
 pub enum PoolImportResponse {
     Imported {
-        canister_id: ic_platform::Principal,
+        canister_id: ic_platform_types::Principal,
     },
     ResetFailed {
-        canister_id: ic_platform::Principal,
+        canister_id: ic_platform_types::Principal,
         reason: String,
     },
 }

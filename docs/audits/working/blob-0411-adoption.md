@@ -1,6 +1,6 @@
 # Blob ownership and acceptance audit
 
-## Current mounted acceptance — Blob 0.66 adoption
+## Current mounted acceptance — Blob Engine 0.68.0 and Contracts 0.68.1
 
 This supersedes the historical inventory below. The canonical method owner is
 `ic_blob_storage_contracts::mount_service_endpoints!`, expanded by the Canic
@@ -17,31 +17,41 @@ adapter; export parity is not exhaustive behavioral coverage.
 | External GC callbacks | `operator/provider/gc/`, bounds, caller/revocation, atomic refusal, replay and restore, both shapes | Physical deletion and billing cessation |
 | Generated tenant query/update clients | `browser/`, retained schemas and compiled codecs against both installed shapes; caller/binding denial, malformed frames and unchanged mutation replay | Deployed browser login, upload and download |
 
-The current Canic locks select Blob/Contracts 0.66, Memory/Storage 0.62.1,
-Metrics 0.25.1, Metrics Stable 0.64, Platform 0.17 and Wire 0.14.2. Timers 0.36
-now supplies the matching executor; the stable metrics adapter's type mismatch
-is also resolved. Blob's engine and the matching Query 0.84 are now published;
-all three maintained graphs resolve and pass dependency admission with Auth 0.30.
-The Blob adapter consumes checked upstream keys from the
-single committed host runtime. Explicit fresh creation and retained loading keep
-lazy framework stores without an initialize-on-load fallback. Gateway tests now
-exercise superseded failures and two held reads whose callbacks arrive in reverse
-order. On 2026-11-02, the dedicated managed installation/recovery case passes
-(459s), all five embedded funding profiles pass (577s), and the generated-client
-case passes for both shapes (133s). These use complete locked managed builds,
-Testkit 0.78, Node 24.21.0 and TypeScript 6.0.3. Both private consumers also pass
-strict Clippy and allocation-peer verification. The initial dedicated failure
-was an undersized fixture method-name budget; it now derives aggregate bytes
-from its four held replies, and focused Clippy plus the installed rerun pass.
-All three lockfiles remain unchanged through this qualification.
+The current family selects Blob Engine 0.68.0/Contracts 0.68.1, Storage 0.65.4,
+Metrics 0.27.2, Metrics Storage 0.66, Platform 0.18 with Runtime/Guard 0.18.1,
+Wire 0.15.1, Timers 0.38.1, Auth/protocol 0.32, Query 0.87, Host Tools 0.78.1
+and Testkit 0.80.2. Engine and Contracts release independently. Canic retains
+one Storage owner, namespace admission and synchronous lifecycle composition.
+Cross-release transitions require clean reinstall; these cases qualify
+same-release recovery.
 
-Retained evidence is in `target/upstream-adoption/20261102/` (admission,
-private-consumer Clippy/peer verification and `dedicated-fixed.log`) and
-`target/integrations/checks/blob66-20261102/` (embedded, generated clients,
-source hashes and `results.json`). Local current-family qualification is
-complete. Default-branch delivery, positive independent credit/receipt replay
-(#494) and real-provider/browser acceptance remain separate open work.
-The [current handoff](../../status/current.md) records exact execution results.
+The current `managed_browser_compositions` case passes generated clients against
+both dedicated and embedded installed endpoints, including complete managed
+builds, exact schema/runtime identities, caller/binding refusals, malformed frames,
+mutation replay and restoration. It exercises the malformed-funding profile in
+both shapes. The earlier five-profile matrix retains its original Storage 0.65.1,
+Metrics 0.27.1, Wire 0.15, Auth 0.31 and Testkit 0.80.1 graph; it is not newly
+replayed by this refresh. The table identifies owning fixture reachability and
+selected assertions, rather than exhaustive branch coverage.
+
+The [current adoption receipt](0.112-push-readiness/upstream-adoption.json)
+binds exact inputs, completed checks and log hashes. Current raw logs are retained
+under `target/upstream-adoption/20261102-refresh/` with an independent scratch
+copy during qualification. The receipt preserves the earlier reconstructed
+qualification separately: that earlier target cache and scratch backup were
+removed after verification. Older dates and results retain their original scope.
+
+Both independent consumers pass strict lint and all three locked graphs pass
+boundary and singleton admission. The allocation peer is refreshed through its
+owner and independently verified. Current Auth checks cover canonical hash
+identity, malformed scope refusal and durable session/replay transactions;
+production enrollment/issuer/browser acceptance remains #491.
+
+Default-branch delivery, positive independent credit/receipt replay (#494), and
+real Caffeine/browser/application acceptance remain separate. Caffeine is the
+selected provider; its network, service and application binding still need a
+concrete acceptance deployment. Acknowledged payment is not independent credit.
+See the [current handoff](../../status/current.md).
 
 ### Earlier Blob 0.47 evidence
 

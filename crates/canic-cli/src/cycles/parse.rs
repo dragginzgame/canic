@@ -9,7 +9,8 @@ use crate::cycles::model::{
     CycleTrackerSample,
 };
 use canic_contracts::dto::{
-    cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
+    cycle_topups::CycleTopupEvent,
+    cycles::{CycleTopupEventStatus, CycleTrackerEntry},
     page::Page,
 };
 

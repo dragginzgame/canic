@@ -2,7 +2,7 @@ use canic::testing::CANDID_REPLY_LIMITS as REPLY_LIMITS;
 use std::{num::NonZeroUsize, sync::LazyLock};
 
 use canic::{Error, ids::CanisterRole};
-use canic_testing_internal::pic::{
+use canic_tests::pic::{
     CanicWasmBuildProfile, install_standalone_canister, install_standalone_canister_on_pic,
     standalone_canister_wasm,
 };
@@ -12,12 +12,12 @@ use ic_platform::{
 };
 use serde::Deserialize;
 use {
-    ic_platform::pocket_ic::{ErrorCode, RejectCode},
     ic_testkit::pic::{
         CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
         CanisterInstallExt, RetryPolicy, SnapshotRestoreFunding, StandaloneCanisterFixture,
         StandaloneCanisterRecipe,
     },
+    ic_testkit::pocket_ic::{ErrorCode, RejectCode},
 };
 
 const PROBE_CRATE: &str = "payload_limit_probe";
@@ -35,16 +35,12 @@ struct PlainReply {
 fn counts(fixture: &CachedPocketIcBaseline<Principal>) -> PlainReply {
     (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
         let request_bytes = ic_platform::candid::contract::encode_args(())?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (fixture.pocket_ic()).query_call(
-                *fixture.metadata(),
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "dispatch_counts",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        let reply = (fixture.pocket_ic()).query_call(
+            *fixture.metadata(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            "dispatch_counts",
+            request_bytes,
+        )?;
         ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
     })()
     .map(|(reply,)| reply)
@@ -103,6 +99,9 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
             encode_args((false,)).unwrap(),
         )
         .unwrap_err();
+    let ic_testkit::pocket_ic::ClientError::Canister(refusal) = refusal else {
+        panic!("expected a canister rejection");
+    };
     assert_eq!(refusal.reject_code, RejectCode::CanisterReject);
     assert_eq!(
         counts(&fixture),
@@ -116,16 +115,12 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
     let accepted: Result<PlainReply, String> =
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes = ic_platform::candid::contract::encode_args((true,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pocket_ic()).update_call(
-                    *fixture.metadata(),
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "result_commit",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            let reply = (fixture.pocket_ic()).update_call(
+                *fixture.metadata(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "result_commit",
+                request_bytes,
+            )?;
             ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
         })()
         .map(|(reply,)| reply)
@@ -147,6 +142,9 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
             encode_args((false,)).unwrap(),
         )
         .unwrap_err();
+    let ic_testkit::pocket_ic::ClientError::Canister(denied) = denied else {
+        panic!("expected a canister rejection");
+    };
     assert_eq!(denied.reject_code, RejectCode::CanisterReject);
     assert_eq!(
         counts(&fixture),
@@ -184,16 +182,12 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes =
                 ic_platform::candid::contract::encode_args((*fixture.metadata(), method, bytes))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pocket_ic()).update_call(
-                    relay,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "relay_bounded",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            let reply = (fixture.pocket_ic()).update_call(
+                relay,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "relay_bounded",
+                request_bytes,
+            )?;
             ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
         })()
         .map(|(reply,)| reply)
@@ -256,6 +250,10 @@ fn participant_log_count(fixture: &CachedPocketIcBaseline<Principal>) -> usize {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep the installed fixture setup and ordered effect assertions together"
+)]
 fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
     let fixture = acquire_probe_fixture();
     let wasm = standalone_canister_wasm(PROBE_CRATE, CanicWasmBuildProfile::Fast);
@@ -286,6 +284,9 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
             )
         })
         .unwrap_err();
+    let ic_testkit::pocket_ic::ClientError::Canister(witness) = witness else {
+        panic!("expected a canister rejection");
+    };
     assert_eq!(witness.error_code, ErrorCode::CanisterCalledTrap);
     assert!(
         fixture
@@ -298,7 +299,8 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
     for bytes in bad_inputs {
         fixture
             .pocket_ic()
-            .wait_out_install_code_rate_limit(std::time::Duration::from_mins(5));
+            .wait_out_install_code_rate_limit(std::time::Duration::from_mins(5))
+            .expect("PocketIC wait_out_install_code_rate_limit");
         let error = fixture
             .pocket_ic()
             .retry_install_code(retry, || {
@@ -310,6 +312,9 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
                 )
             })
             .unwrap_err();
+        let ic_testkit::pocket_ic::ClientError::Canister(error) = error else {
+            panic!("expected a canister rejection");
+        };
         assert_eq!(error.reject_code, RejectCode::CanisterError, "{error:?}");
         assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
         // Reinstall clears old logs. A participant reached in this failed
@@ -317,7 +322,8 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
         assert_eq!(participant_log_count(&fixture), 0);
         fixture
             .pocket_ic()
-            .wait_out_install_code_rate_limit(std::time::Duration::from_mins(5));
+            .wait_out_install_code_rate_limit(std::time::Duration::from_mins(5))
+            .expect("PocketIC wait_out_install_code_rate_limit");
         let error = fixture
             .pocket_ic()
             .retry_install_code(retry, || {
@@ -329,13 +335,17 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
                 )
             })
             .unwrap_err();
+        let ic_testkit::pocket_ic::ClientError::Canister(error) = error else {
+            panic!("expected a canister rejection");
+        };
         assert_eq!(error.reject_code, RejectCode::CanisterError, "{error:?}");
         assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
         assert_eq!(participant_log_count(&fixture), 0);
     }
     fixture
         .pocket_ic()
-        .wait_out_install_code_rate_limit(std::time::Duration::from_mins(5));
+        .wait_out_install_code_rate_limit(std::time::Duration::from_mins(5))
+        .expect("PocketIC wait_out_install_code_rate_limit");
     fixture
         .pocket_ic()
         .retry_install_code(retry, || {
@@ -414,16 +424,12 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
                 *target.metadata(),
                 exact_payload_len,
             ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (target.pocket_ic()).update_call(
-                    relay,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "relay_explicit_echo",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            let reply = (target.pocket_ic()).update_call(
+                relay,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "relay_explicit_echo",
+                request_bytes,
+            )?;
             ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
         })()
         .map(|(reply,)| reply)
@@ -439,16 +445,12 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
                 *target.metadata(),
                 exact_payload_len + 1,
             ))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (target.pocket_ic()).update_call(
-                    relay,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "relay_explicit_echo",
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            let reply = (target.pocket_ic()).update_call(
+                relay,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "relay_explicit_echo",
+                request_bytes,
+            )?;
             ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
         })()
         .map(|(reply,)| reply)
@@ -474,16 +476,12 @@ fn assert_echo_ok(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len
     let response: Result<usize, String> =
         (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
             let request_bytes = ic_platform::candid::contract::encode_args((payload,))?;
-            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                (fixture.pocket_ic()).update_call(
-                    *fixture.metadata(),
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    method,
-                    request_bytes,
-                )
-            })
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            let reply = (fixture.pocket_ic()).update_call(
+                *fixture.metadata(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                method,
+                request_bytes,
+            )?;
             ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
         })()
         .map(|(reply,)| reply)
@@ -497,24 +495,20 @@ fn assert_rejected(fixture: &CachedPocketIcBaseline<Principal>, method: &str, le
     let payload = payload(len);
     let err = (|| -> Result<(Result<usize, String>,), Box<dyn std::error::Error + Send + Sync>> {
         let request_bytes = ic_platform::candid::contract::encode_args((payload,))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (fixture.pocket_ic()).update_call(
-                *fixture.metadata(),
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                method,
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        let reply = (fixture.pocket_ic()).update_call(
+            *fixture.metadata(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            method,
+            request_bytes,
+        )?;
         ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
     })()
     .map(|(reply,)| reply)
     .expect_err("transport should reject oversized ingress");
 
     assert!(matches!(
-        err.downcast_ref::<ic_testkit::pic::PocketIcCallFailure>(),
-        Some(ic_testkit::pic::PocketIcCallFailure::Rejected(_))
+        err.downcast_ref::<ic_testkit::pocket_ic::ClientError>(),
+        Some(ic_testkit::pocket_ic::ClientError::Canister(_))
     ));
 }
 
@@ -537,11 +531,9 @@ fn string_len_for_wire_size(wire_size: usize) -> usize {
 
 #[test]
 fn compiled_payload_contract_matches_actual_ingress_boundaries() {
-    let candid = canic_testing_internal::pic::standalone_canister_candid(
-        PROBE_CRATE,
-        CanicWasmBuildProfile::Fast,
-    );
-    let contract = canic_testing_internal::payload_contract::read(&candid).unwrap();
+    let candid =
+        canic_tests::pic::standalone_canister_candid(PROBE_CRATE, CanicWasmBuildProfile::Fast);
+    let contract = canic_tests::payload_contract::read(&candid).unwrap();
     let program = candid
         .parse::<ic_platform::candid_parser::IDLProg>()
         .unwrap();
@@ -593,16 +585,12 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
         if method == "bare_echo" {
             let result: usize = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
                 let request_bytes = ic_platform::candid::contract::encode_args((payload(length),))?;
-                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-                    (fixture.pocket_ic()).update_call(
-                        *fixture.metadata(),
-                        ic_platform::principal::ExternalPrincipal::anonymous(),
-                        method,
-                        request_bytes,
-                    )
-                })
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                let reply = (fixture.pocket_ic()).update_call(
+                    *fixture.metadata(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    method,
+                    request_bytes,
+                )?;
                 ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
             })()
             .map(|(reply,)| reply)
@@ -619,16 +607,12 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
 fn assert_bounded_query_admission(fixture: &CachedPocketIcBaseline<Principal>) {
     let query: PlainReply = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
         let request_bytes = ic_platform::candid::contract::encode_args(("valid",))?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            (fixture.pocket_ic()).query_call(
-                *fixture.metadata(),
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "bounded_query",
-                request_bytes,
-            )
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        let reply = (fixture.pocket_ic()).query_call(
+            *fixture.metadata(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            "bounded_query",
+            request_bytes,
+        )?;
         ic_platform::candid::decode_args(&reply, REPLY_LIMITS).map_err(Into::into)
     })()
     .map(|(reply,)| reply)
@@ -648,6 +632,9 @@ fn assert_bounded_query_admission(fixture: &CachedPocketIcBaseline<Principal>) {
                 bytes,
             )
             .unwrap_err();
+        let ic_testkit::pocket_ic::ClientError::Canister(error) = error else {
+            panic!("expected a canister rejection");
+        };
         assert_eq!(error.reject_code, RejectCode::CanisterError, "{error:?}");
         assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
     }
@@ -723,7 +710,7 @@ fn native_wire_endpoints_enforce_frames_and_roll_back_failed_replies() {
     let ic_testkit::pic::WireCallError::Call { source, .. } = denied else {
         panic!("expected a rejected update");
     };
-    let ic_testkit::pic::PocketIcCallFailure::Rejected(rejection) = *source else {
+    let ic_testkit::pocket_ic::ClientError::Canister(rejection) = *source else {
         panic!("expected an IC rejection");
     };
     assert_eq!(rejection.reject_code, RejectCode::CanisterReject);
@@ -814,6 +801,9 @@ fn raw_wire_contract_preserves_owner_codec_and_pre_copy_limits() {
     );
     assert_eq!(counts(&fixture).committed, before + 1);
     let rejected = update(vec![0; 1025]).unwrap_err();
+    let ic_testkit::pocket_ic::ClientError::Canister(rejected) = rejected else {
+        panic!("expected a canister rejection");
+    };
     assert_eq!(rejected.reject_code, RejectCode::CanisterReject);
     assert!(update(ic_wire::native::encode_request(7002, &2_u32, limits).unwrap()).is_err());
     assert!(update(request(1024)).is_err());
@@ -908,7 +898,10 @@ fn native_wire_composite_query_resumes_after_callback_and_rejection() {
         )
     };
     // An existing empty canister gives a real downstream rejection, not a codec refusal.
-    let empty = fixture.pocket_ic().create_canister();
+    let empty = fixture
+        .pocket_ic()
+        .create_canister()
+        .expect("PocketIC create_canister");
     assert!(invoke(empty.into()).is_err());
     let reply = invoke(receiver.into()).unwrap();
     let echoed: ic_platform::Principal =

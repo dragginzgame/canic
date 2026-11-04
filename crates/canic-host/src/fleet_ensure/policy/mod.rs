@@ -1849,13 +1849,13 @@ fn append_retirement_actions(
         }
         actions.push(EnsureAction::Transfer {
             amount,
-            candid: drain.candid.clone(),
-            candid_sha256: artifacts
-                .drain_candid_sha256_by_canister
+            wire_schema: drain.wire_schema.clone(),
+            wire_schema_sha256: artifacts
+                .drain_wire_schema_sha256_by_canister
                 .get(&configured.name)
                 .cloned()
                 .ok_or_else(|| EnsurePolicyError::MissingArtifactIdentity {
-                    kind: "drain Candid",
+                    kind: "drain Wire schema",
                     name: configured.name.clone(),
                 })?,
             destination: drain.destination.clone(),

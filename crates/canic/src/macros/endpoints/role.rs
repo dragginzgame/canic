@@ -97,6 +97,7 @@ macro_rules! __canic_compiled_role_capabilities {
 #[macro_export]
 macro_rules! __canic_emit_managed_status_endpoint {
     () => {
+        $crate::__canic_emit_portable_session_endpoints!();
         $crate::__canic_emit_public_health_endpoint!();
         #[cfg(canic_capability_observability_metrics)]
         $crate::__canic_emit_public_metrics_endpoint!();
@@ -434,7 +435,7 @@ macro_rules! __canic_role_metrics_status {
             }
             _ => Err::<
                 $crate::__internal::contracts::dto::page::Page<
-                    $crate::__internal::contracts::dto::metrics::MetricEntry,
+                    $crate::__internal::contracts::dto::metric_page::MetricEntry,
                 >,
                 _,
             >(::canic::Error::from_registered(

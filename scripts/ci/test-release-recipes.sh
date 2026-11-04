@@ -9,6 +9,10 @@ cp "$ROOT/tool-versions.env" "$fixture/"
 mkdir -p "$fixture/ci" "$fixture/scripts/ci"
 cp "$ROOT/ci/ic-tools.tsv" "$ROOT/ci/tool-versions.env" "$fixture/ci/"
 mkdir -p "$fixture/make"
+mkdir -p "$fixture/scripts/release"
+cp "$ROOT/scripts/release/selection.sh" "$fixture/scripts/release/"
+cp "$ROOT/ci/cargo-release-groups.json" "$fixture/ci/"
+export RELEASE_GROUP=framework
 cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$fixture/make/"
 cp "$ROOT/scripts/ci/check-make-execution.sh" "$fixture/scripts/ci/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
@@ -16,6 +20,7 @@ cat >"$fixture/bin/record" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == */check-make-execution.sh ]]; then exec "$CANIC_RECIPE_TEST_BASH" "$@"; fi
+if [[ "$1" == scripts/release/selection.sh ]]; then exec "$CANIC_RECIPE_TEST_BASH" "$@"; fi
 printf '%s\n' "$*" >>"$EVENTS"
 if [[ "$*" == scripts/ci/push-release.sh ]]; then
     [[ "${CANIC_RELEASE_PUSH_READY:-}" == 1 ]] || exit 28
@@ -75,7 +80,7 @@ printf '%s\n' '--no-print-directory tools-check' \
     'scripts/ci/run-canic-validation-targets.sh dependency-adoption-admission' \
     'scripts/ci/run-canic-validation-targets.sh clippy' \
     'scripts/ci/run-canic-validation-targets.sh dependency-adoption-fixtures' \
-    'scripts/ci/run-canic-validation-targets.sh fmt-check check-invariants shellcheck dependency-risk-gate dependency-risk-inventory-test' \
+    'scripts/ci/run-canic-validation-targets.sh fmt-check compiler-check check-invariants shellcheck dependency-risk-gate dependency-risk-inventory-test' \
     'scripts/ci/run-canic-validation-targets.sh check' \
     'scripts/ci/run-canic-validation-targets.sh control-plane-feature-gate' \
     'scripts/ci/run-canic-validation-targets.sh test' > "$fixture/expected"
@@ -84,4 +89,10 @@ for gate in dependency-adoption-admission clippy dependency-adoption-fixtures; d
     FAIL_AT="scripts/ci/run-canic-validation-targets.sh $gate" run_case validate failure
     [[ "$(tail -1 "$EVENTS")" == "scripts/ci/run-canic-validation-targets.sh $gate" ]]
 done
+# Compare the actual complete-gate dispatch above with the machine-readable
+# policy. Updating one without the other cannot silently omit a new stage.
+run_case validate success
+perl -ne 's/^--no-print-directory //; s{^scripts/ci/run-canic-validation-targets.sh }{}; print "$_\n" for split /\s+/' "$EVENTS" > "$fixture/actual-roster"
+jq -r '.stages[]' "$ROOT/ci/release-validation.json" > "$fixture/policy-roster"
+cmp "$fixture/actual-roster" "$fixture/policy-roster"
 echo 'release Make recipes preserve ordering and failure boundaries (no Git effects)'

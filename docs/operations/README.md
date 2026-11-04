@@ -1,5 +1,8 @@
 # Operations Reference
 
+See [independent adapter releases](adapter-release-groups.md) for group selection,
+version ownership and supplier ordering.
+
 These documents are for people operating Canic or preparing a Canic release.
 They cover deployment, recovery, funding, diagnostics, packaging, and release
 checks.

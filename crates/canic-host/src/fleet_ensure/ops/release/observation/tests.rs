@@ -17,7 +17,7 @@ use crate::{
 };
 use canic_contracts::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey};
 use ic_platform::agent::BasicIdentity;
-use ic_platform::pocket_ic::{CanisterSettings, PocketIcBuilder};
+use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use std::{path::PathBuf, time::SystemTime};
 
 fn reservation_journal(
@@ -155,31 +155,39 @@ fn governed_pocketic_release_physical_observation_binds_custody() {
             .with_nns_subnet()
             .with_application_subnet(),
     );
-    pic.set_time(SystemTime::now().into());
+    pic.set_time(SystemTime::now().into())
+        .expect("PocketIC set_time");
     let identity = BasicIdentity::from_raw_key(&[17; 32]);
-    let url = pic.make_live(None);
+    let url = pic.make_live(None).expect("PocketIC make_live");
     let agent = Agent::builder()
         .with_url(url)
         .with_identity(identity)
         .with_max_response_body_size(SNAPSHOT_RESPONSE_BYTES)
         .build()
         .unwrap();
-    agent.set_root_key(pic.root_key().unwrap());
+    agent.set_root_key(pic.root_key().expect("PocketIC root_key").unwrap());
     let mut authority = authority(&agent);
     let operator = authority.operator;
-    let canister = pic.create_canister_with_settings(Some(operator), None);
+    let canister = pic
+        .create_canister_with_settings(Some(operator), None)
+        .expect("PocketIC create_canister_with_settings");
     authority.coordinator = canister;
     pic.install_canister(
         canister,
         b"\0asm\x01\0\0\0".to_vec(),
         vec![],
         Some(operator),
-    );
+    )
+    .expect("PocketIC install_canister");
     pic.stop_canister(canister, Some(operator)).unwrap();
     let snapshot = pic
         .take_canister_snapshot(canister, Some(operator), None)
         .unwrap();
-    let subnet = SubnetId::from_principal(pic.get_subnet(canister).unwrap());
+    let subnet = SubnetId::from_principal(
+        pic.get_subnet(canister)
+            .expect("PocketIC get_subnet")
+            .unwrap(),
+    );
     let binding = source(canister, subnet, operator);
     let (directory, mut journal) = reservation_journal(&authority, &binding);
     let runtime = tokio::runtime::Builder::new_current_thread()

@@ -17,25 +17,63 @@ use crate::{
     },
     workflow::runtime::{
         async_job::AsyncJobWorkflow,
-        timer::{RECOVERY_WATCHDOG_CADENCE, TimerError, require_active},
+        timer::{RECOVERY_WATCHDOG_CADENCE, TimerAuthorityWorkflow, TimerError, require_active},
     },
 };
 use ic_timers::{
-    TimerCadence, TimerCompletion, TimerIdentity, WatchdogDecision, WatchdogReconcileState,
-    WatchdogRegistration, WatchdogRunResult, reconcile_watchdog,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCadence, TimerCompletion, TimerIdentity,
+    TimerSchedule, WatchdogDecision, WatchdogReconcileState, WatchdogRegistration,
+    WatchdogRunResult, reconcile_once, reconcile_watchdog,
 };
-use std::cell::RefCell;
+use std::{
+    cell::{Cell, RefCell},
+    time::Duration,
+};
 
 thread_local! {
     static TIMER: RefCell<Option<WatchdogRegistration>> = const { RefCell::new(None) };
+    static WORKER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
+    static WORKER_ATTEMPT: Cell<Option<AsyncJobAttempt>> = const { Cell::new(None) };
 }
 
 /// Canic-owned delivery; durable demand remains the installed assignment and receipt.
 pub struct FixtureImportTimer;
 
 impl FixtureImportTimer {
+    /// Admit scheduling before clearing a reviewed failure's durable stop.
+    pub(super) fn arm_retry() -> Result<(), TimerError> {
+        Self::reconcile(WatchdogReconcileState::ScheduledImmediately)
+    }
     pub(crate) fn timer_identity() -> Result<TimerIdentity, TimerError> {
         TimerIdentity::try_new("canic", "fixture_import", "deliver").map_err(Into::into)
+    }
+
+    fn worker_identity() -> Result<TimerIdentity, TimerError> {
+        TimerIdentity::try_new("canic", "fixture_import", "step").map_err(Into::into)
+    }
+
+    fn schedule_worker(attempt: AsyncJobAttempt) -> Result<(), TimerError> {
+        require_active()?;
+        WORKER_ATTEMPT.set(Some(attempt));
+        WORKER.with(|owner| {
+            let mut owner = owner
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            reconcile_once(
+                &mut owner,
+                &Self::worker_identity()?,
+                Some(TimerSchedule::After(Duration::ZERO)),
+                |_| async {
+                    if let Some(attempt) = WORKER_ATTEMPT.take()
+                        && AsyncJobRecoveryOps::is_current(attempt)
+                    {
+                        Self::run(attempt).await;
+                    }
+                    OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop)
+                },
+            )
+            .map_err(Into::into)
+        })
     }
 
     /// Lifecycle may precede registration; defer every application callback.
@@ -82,9 +120,28 @@ impl FixtureImportTimer {
         if fixture_importer::require_active().is_err() {
             return idle();
         }
+        if fixture_importer::registered().is_none() {
+            return idle();
+        }
+        let Ok(assignment_hash) = fixture_importer::assignment()
+            .and_then(|assignment| {
+                assignment.ok_or(crate::dto::fixture_provisioning::FixtureImportError::Authority)
+            })
+            .and_then(|assignment| fixture_importer::assignment_hash(&assignment))
+        else {
+            return idle();
+        };
         let owner = AsyncJobOwner::FixtureImport;
         if let Some(deadline) = AsyncJobRecoveryOps::active_lease_deadline(owner) {
             if deadline > now {
+                return idle();
+            }
+            let recover = Self::worker_identity()
+                .and_then(|identity| {
+                    TimerAuthorityWorkflow::registration_requires_recovery(&identity, true)
+                })
+                .unwrap_or(false);
+            if !recover {
                 return idle();
             }
             fixture_importer::abandon_expired_fetch();
@@ -93,9 +150,25 @@ impl FixtureImportTimer {
         let Ok(attempt) = AsyncJobWorkflow::claim(owner) else {
             return idle();
         };
-        ic_platform::cdk::futures::spawn(async move {
-            Self::run(attempt).await;
-        });
+        match AsyncJobRecoveryOps::admit_fixture_work(attempt, assignment_hash) {
+            Ok(true) => {}
+            Ok(false) => {
+                return WatchdogRunResult::new(
+                    TimerCompletion::invariant_failure(0),
+                    WatchdogDecision::Stop,
+                );
+            }
+            Err(error) => IcOps::trap(format!("fixture admission failed: {error}")),
+        }
+        // This callback commits custody before the native worker can run or trap.
+        if Self::schedule_worker(attempt).is_err() {
+            WORKER_ATTEMPT.set(None);
+            AsyncJobRecoveryOps::finish(attempt, AsyncJobCompletion::RetryableFailure, now)
+                .unwrap_or_else(|error| {
+                    IcOps::trap(format!("fixture scheduling refusal failed: {error}"))
+                });
+            return idle();
+        }
         WatchdogRunResult::new(TimerCompletion::success(1), WatchdogDecision::Continue)
     }
 
@@ -103,6 +176,10 @@ impl FixtureImportTimer {
         let outcome = super::advance_owned(attempt).await;
         if !AsyncJobRecoveryOps::is_current(attempt) {
             return;
+        }
+        if let Ok(FixtureProvisioningStatus::Pending(Some(progress))) = &outcome {
+            AsyncJobRecoveryOps::record_fixture_position(attempt, progress.next_chunk)
+                .unwrap_or_else(|error| IcOps::trap(format!("fixture progress failed: {error}")));
         }
         let (completion, desired) = match outcome {
             Ok(FixtureProvisioningStatus::NotRequired | FixtureProvisioningStatus::Complete(_)) => {

@@ -90,7 +90,7 @@ fn maximum_b3_current_plus_last_authority_fits_its_allocation() {
         }),
     };
 
-    let bytes = record.to_bytes();
+    let bytes = record.to_bytes().expect("encode current record");
     eprintln!(
         "maximum Coordinator admission current-plus-last encoded bytes: {}",
         bytes.len()
@@ -101,34 +101,41 @@ fn maximum_b3_current_plus_last_authority_fits_its_allocation() {
 
 fn assert_cell_allocation(record: &FleetAdmissionAuthorityRecord, encoded_bytes: u64) {
     let physical = VectorMemory::default();
-    let runtime = ic_memory::testing::fixture_runtime(
+    let runtime = ic_storage::testing::fixture_runtime(
         physical.clone(),
         "test",
         "test.",
         &["test.admission.v1"],
-        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(16).unwrap()),
+        ic_storage::StorageConfig::default(),
     )
     .unwrap();
     let mut cell = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.admission.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.admission.v1").unwrap())
             .unwrap();
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableCell::create(allocation, None)
+            StableCell::create(allocation, None).expect("Storage operation failed")
         } else {
-            StableCell::load(allocation).expect("retained stable cell")
+            StableCell::load(
+                allocation,
+                canic_contracts::serialization::STORAGE_LIMITS.bytes,
+            )
+            .expect("retained stable cell")
         }
     };
-    cell.set(Some(record.clone()));
-    let id = usize::from(
-        runtime
-            .memory_id(&ic_memory::StableKey::parse("test.admission.v1").unwrap())
-            .unwrap(),
+    cell.set(Some(record.clone()))
+        .expect("Storage operation failed");
+    let pages = runtime
+        .memory_allocations()
+        .unwrap()
+        .iter()
+        .find(|entry| entry.stable_key.as_str() == "test.admission.v1")
+        .unwrap()
+        .pages;
+    assert_eq!(
+        pages,
+        (encoded_bytes + ic_storage::STABLE_CELL_HEADER_SIZE as u64).div_ceil(65_536)
     );
-    let pages = runtime.memory_allocations().unwrap().memories[id]
-        .virtual_extent
-        .wasm_pages;
-    assert_eq!(pages, (encoded_bytes + 9).div_ceil(65_536));
     eprintln!(
         "Coordinator admission cell: virtual_bytes={} physical_bytes={}",
         pages * 65_536,
@@ -138,12 +145,16 @@ fn assert_cell_allocation(record: &FleetAdmissionAuthorityRecord, encoded_bytes:
     assert_eq!(
         {
             let allocation = runtime
-                .open_memory(&ic_memory::StableKey::parse("test.admission.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.admission.v1").unwrap())
                 .unwrap();
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                StableCell::create(allocation, None)
+                StableCell::create(allocation, None).expect("Storage operation failed")
             } else {
-                StableCell::load(allocation).expect("retained stable cell")
+                StableCell::load(
+                    allocation,
+                    canic_contracts::serialization::STORAGE_LIMITS.bytes,
+                )
+                .expect("retained stable cell")
             }
         }
         .get(),

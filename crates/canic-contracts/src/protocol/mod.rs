@@ -4,6 +4,7 @@ pub mod cycle_balance;
 pub mod cycle_history;
 pub mod cycle_topups;
 pub mod limits;
+pub mod operation_retry;
 pub mod profile;
 pub mod protected_health;
 pub mod public_children;
@@ -150,6 +151,7 @@ pub mod registry_control;
 
 pub mod root_store_control;
 
+pub mod cycle_drain;
 pub mod retirement_control;
 
 pub mod batch_control;
@@ -171,3 +173,7 @@ pub mod root_removal_read;
 pub mod authority;
 
 pub mod initialization;
+
+pub mod portable_enrollment;
+pub mod portable_inspection;
+pub mod portable_issuance;

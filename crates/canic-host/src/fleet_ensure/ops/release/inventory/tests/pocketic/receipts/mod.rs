@@ -9,7 +9,7 @@ use crate::fleet_ensure::{
     view::release::receipts::ReleaseReplayDisposition,
     workflow::release::assess_receipts,
 };
-use ic_platform::pocket_ic::PocketIc;
+use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
     pic: &PocketIc,
@@ -44,7 +44,11 @@ pub(super) fn assert_census(
             .block_on(receipts::collect_with_agent(agent, review, registry))
             .map(assess_receipts)
     };
-    let balances = [pic.cycle_balance(coordinator), pic.cycle_balance(root)];
+    let balances = [
+        pic.cycle_balance(coordinator)
+            .expect("PocketIC cycle_balance"),
+        pic.cycle_balance(root).expect("PocketIC cycle_balance"),
+    ];
     let observed = collect(review, registry).unwrap();
     assert_eq!(
         observed.evidence.owners,
@@ -64,7 +68,11 @@ pub(super) fn assert_census(
     }
     assert_eq!(collect(review, registry).unwrap(), observed);
     assert_eq!(
-        [pic.cycle_balance(coordinator), pic.cycle_balance(root)],
+        [
+            pic.cycle_balance(coordinator)
+                .expect("PocketIC cycle_balance"),
+            pic.cycle_balance(root).expect("PocketIC cycle_balance")
+        ],
         balances
     );
     let mut wrong = review.clone();

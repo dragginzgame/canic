@@ -19,9 +19,9 @@ std::thread_local! {
         {
             let allocation = canic_core::memory::open(crate::memory::keys::TEMPLATE_MANIFESTS_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+                StableBtreeMap::create(allocation).expect("Storage operation failed")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("Storage operation failed")
             }
         },
     );
@@ -94,7 +94,9 @@ impl TemplateManifestStateStore {
     // Insert or replace a stored template manifest record.
     pub fn upsert(release: TemplateReleaseKey, record: TemplateManifestRecord) {
         TEMPLATE_MANIFESTS.with_borrow_mut(|map| {
-            let previous = map.insert(TemplateReleaseKeyRecord(release.clone()), record.clone());
+            let previous = map
+                .insert(TemplateReleaseKeyRecord(release.clone()), record.clone())
+                .expect("Storage operation failed");
             TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
                 if let Some(current) = occupied.as_mut() {
                     let previous_bytes = previous
@@ -112,7 +114,9 @@ impl TemplateManifestStateStore {
     // Remove one stored template manifest record.
     pub fn remove(release: &TemplateReleaseKey) -> Option<TemplateManifestRecord> {
         TEMPLATE_MANIFESTS.with_borrow_mut(|map| {
-            let removed = map.remove(&TemplateReleaseKeyRecord(release.clone()));
+            let removed = map
+                .remove(&TemplateReleaseKeyRecord(release.clone()))
+                .expect("Storage operation failed");
             TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
                 if let (Some(current), Some(record)) = (occupied.as_mut(), removed.as_ref()) {
                     *current = current.saturating_sub(manifest_entry_size(release, record));
@@ -128,9 +132,10 @@ impl TemplateManifestStateStore {
         TEMPLATE_MANIFESTS.with_borrow(|map| TemplateManifestsData {
             entries: map
                 .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .map(|entry| TemplateManifestEntryRecord {
                     release: entry.key().0.clone(),
-                    record: entry.value(),
+                    record: entry.value().expect("Storage operation failed"),
                 })
                 .collect(),
         })
@@ -154,7 +159,13 @@ impl TemplateManifestStateStore {
 
         let bytes = TEMPLATE_MANIFESTS.with_borrow(|map| {
             map.iter()
-                .map(|entry| manifest_entry_size(&entry.key().0, &entry.value()))
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .map(|entry| {
+                    manifest_entry_size(
+                        &entry.key().0,
+                        &entry.value().expect("Storage operation failed"),
+                    )
+                })
                 .sum()
         });
         TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
@@ -167,7 +178,9 @@ impl TemplateManifestStateStore {
     // Clear the manifest store.
     #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn clear() {
-        TEMPLATE_MANIFESTS.with_borrow_mut(StableBtreeMap::clear);
+        TEMPLATE_MANIFESTS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
         });
@@ -181,7 +194,11 @@ impl TemplateManifestStateStore {
 }
 
 fn manifest_entry_size(release: &TemplateReleaseKey, record: &TemplateManifestRecord) -> u64 {
-    (TemplateReleaseKeyRecord(release.clone()).to_bytes().len() + record.to_bytes().len()) as u64
+    (TemplateReleaseKeyRecord(release.clone())
+        .to_bytes()
+        .expect("encode admitted record")
+        .len()
+        + record.to_bytes().expect("encode admitted record").len()) as u64
 }
 
 #[cfg(test)]
@@ -221,7 +238,7 @@ mod tests {
             chunk_hashes: vec![vec![255; 32]; 40],
             created_at: 41,
         };
-        let manifest_bytes = manifest.to_bytes().len();
+        let manifest_bytes = manifest.to_bytes().expect("encode admitted record").len();
         let aggregate_bytes =
             canic_core::cdk::serialize::serialize(&(Some(&manifest), Some(&chunks)))
                 .unwrap()

@@ -68,7 +68,7 @@ fn runtime_request_preserves_canonical_authority_bytes_and_operation_identity() 
             FleetRegistryAuthority, SubnetId,
         },
     };
-    use ic_platform::principal::ExternalPrincipal;
+    use ic_platform_types::principal::ExternalPrincipal;
     let principal = ExternalPrincipal::from_slice(&[7; 29]);
     let authority = FleetRegistryAuthority {
         binding: FleetCoordinatorBinding {

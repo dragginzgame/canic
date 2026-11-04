@@ -7,7 +7,7 @@ use crate::{
     },
     ids::*,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 
 fn version() -> FleetRegistryVersion {
     FleetRegistryVersion {

@@ -3,16 +3,14 @@
 mod platform_call_support;
 
 use canic::{Error, diagnostics::codes};
-use canic_testing_internal::pic::install_lifecycle_boundary_fixture;
-use ic_platform::{
-    pocket_ic::{ErrorCode, PocketIc, common::rest::RawMessageId},
-    principal::ExternalPrincipal as Principal,
-};
+use canic_tests::pic::install_lifecycle_boundary_fixture;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::{
     WireCallSpec,
     fixtures::{RawReplyLimits, RawReplyMethod, ReplyMode, raw_reply_canister},
     query_wire, update_wire,
 };
+use ic_testkit::pocket_ic::{ErrorCode, PocketIc, common::rest::RawMessageId};
 use platform_call_support::*;
 use std::time::Duration;
 
@@ -23,6 +21,30 @@ const fn spec(method: &'static str, method_id: u64) -> WireCallSpec {
         request_limits: LIMITS,
         response_limits: LIMITS,
     }
+}
+
+#[test]
+fn private_timer_dispatch_rejects_foreign_canister_calls() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let sender = fixture.install_runtime_probe_canister();
+    let receiver = fixture.install_runtime_probe_canister();
+    let result = execute(
+        &fixture.pic,
+        sender,
+        &CallRequest {
+            target: receiver.into(),
+            method: "<ic-timers internal> dispatch".into(),
+            bytes: 0_u64.to_le_bytes().to_vec(),
+            cycles: 0,
+            timeout_seconds: None,
+            after: AfterCall::Raw,
+        },
+    );
+    assert_eq!(
+        result.result,
+        Some(Err(Error::from_registered(codes::PLATFORM_UNAVAILABLE)))
+    );
+    assert_eq!(result.rejection_code, Some(5));
 }
 fn request(
     target: Principal,
@@ -66,10 +88,13 @@ fn submit(pic: &PocketIc, sender: Principal, input: &CallRequest) -> RawMessageI
 fn wait(
     pic: &PocketIc,
     ingress: RawMessageId,
-) -> Result<Vec<u8>, ic_platform::pocket_ic::RejectResponse> {
+) -> Result<Vec<u8>, ic_testkit::pocket_ic::RejectResponse> {
     for _ in 0..200 {
-        pic.tick();
-        if let Some(reply) = pic.ingress_status(ingress.clone()) {
+        pic.tick().expect("PocketIC tick");
+        if let Some(reply) = pic
+            .ingress_status(ingress.clone())
+            .expect("PocketIC ingress_status")
+        {
             return reply;
         }
     }
@@ -116,7 +141,7 @@ fn release(pic: &PocketIc, receiver: Principal, id: u8) {
 }
 fn until_held(pic: &PocketIc, receiver: Principal, ids: &[usize]) {
     for _ in 0..100 {
-        pic.tick();
+        pic.tick().expect("PocketIC tick");
         if ids.iter().all(|&id| target(pic, receiver).held[id]) {
             return;
         }
@@ -125,7 +150,7 @@ fn until_held(pic: &PocketIc, receiver: Principal, ids: &[usize]) {
 }
 fn tick(pic: &PocketIc) {
     for _ in 0..20 {
-        pic.tick();
+        pic.tick().expect("PocketIC tick");
     }
 }
 fn counts(pic: &PocketIc, sender: Principal, expected: (u64, u64, u64, u64)) {
@@ -209,7 +234,12 @@ fn reverse_callback_order_preserves_each_attachment_and_refund() {
     let second = finish(&f.pic, second);
     assert_eq!(second.decoded, Some(Ok(101)));
     assert_eq!(second.refunded, Some(600));
-    assert!(f.pic.ingress_status(first.clone()).is_none());
+    assert!(
+        f.pic
+            .ingress_status(first.clone())
+            .expect("PocketIC ingress_status")
+            .is_none()
+    );
     release(&f.pic, receiver, 0);
     let first = finish(&f.pic, first);
     assert_eq!(first.decoded, Some(Ok(100)));
@@ -335,9 +365,15 @@ fn bounded_unknown_reply_preserves_effect_and_does_not_resubmit() {
     until_held(&f.pic, receiver, &[0]);
     let mut reply = None;
     for _ in 0..100 {
-        f.pic.advance_time(Duration::from_secs(1));
-        f.pic.tick();
-        if let Some(outcome) = f.pic.ingress_status(ingress.clone()) {
+        f.pic
+            .advance_time(Duration::from_secs(1))
+            .expect("PocketIC advance_time");
+        f.pic.tick().expect("PocketIC tick");
+        if let Some(outcome) = f
+            .pic
+            .ingress_status(ingress.clone())
+            .expect("PocketIC ingress_status")
+        {
             reply = Some(outcome);
             break;
         }
@@ -371,8 +407,9 @@ fn bounded_unknown_reply_preserves_effect_and_does_not_resubmit() {
 }
 
 fn install_reply(pic: &PocketIc, name: &str, reply: &[u8]) -> Principal {
-    let id = pic.create_canister();
-    pic.add_cycles(id, 1_000_000_000_000);
+    let id = pic.create_canister().expect("PocketIC create_canister");
+    pic.add_cycles(id, 1_000_000_000_000)
+        .expect("PocketIC add_cycles");
     let wasm = raw_reply_canister(
         &[RawReplyMethod {
             name,
@@ -386,7 +423,8 @@ fn install_reply(pic: &PocketIc, name: &str, reply: &[u8]) -> Principal {
         },
     )
     .unwrap();
-    pic.install_canister(id, wasm, vec![], None);
+    pic.install_canister(id, wasm, vec![], None)
+        .expect("PocketIC install_canister");
     id
 }
 

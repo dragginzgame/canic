@@ -54,7 +54,7 @@ ops.
 
 ## Quick Start (Typical Canister)
 
-Make sure `canic` is available in both `[dependencies]` and `[build-dependencies]`, because the `build!` macros run inside `build.rs`.
+Make sure `canic` is available in both `[dependencies]` and `[build-dependencies]`, because the `build!` macros run inside `build.rs`. Select `canic/build-support` on the build dependency. Core's native source renderer requires `canic-core/build-support`; runtime initialization, typed configuration and native TOML parsing remain independently available.
 
 In `Cargo.toml`:
 

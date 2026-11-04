@@ -5,6 +5,8 @@ pub mod application_checkpoint;
 pub mod fixture_content;
 #[cfg(feature = "wasm-store-canister")]
 pub mod fixture_store;
+#[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
+pub mod operation_retry;
 
 #[cfg(feature = "root-control-plane")]
 pub mod canister_pool;

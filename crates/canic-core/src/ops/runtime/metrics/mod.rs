@@ -29,7 +29,7 @@ pub mod wasm_store;
 
 use crate::{
     domain::metrics::MetricsKind,
-    dto::metrics::{MetricEntry, MetricValue},
+    dto::{metric_page::MetricEntry, metrics::MetricValue},
     ops::runtime::env::EnvOps,
     perf::{self, PerfKey},
 };
@@ -413,7 +413,7 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
         .into_iter()
         .map(|(key, count)| MetricEntry {
             labels: vec![key.method],
-            principal: Some(key.target),
+            principal: Some(key.target.into()),
             value: count_value(count),
         })
         .collect();
@@ -496,7 +496,7 @@ fn delegated_auth_entries() -> Vec<MetricEntry> {
         .into_iter()
         .map(|(authority, count)| MetricEntry {
             labels: vec!["delegated_auth_authority".to_string()],
-            principal: Some(authority),
+            principal: Some(authority.into()),
             value: count_value(count),
         })
         .collect();
@@ -560,7 +560,7 @@ fn cycles_funding_entries_from(limit: usize) -> Vec<MetricEntry> {
                     ]
                 },
             ),
-            principal: child_principal,
+            principal: child_principal.map(Into::into),
             value: MetricValue::U128 {
                 value: cycles.total(),
                 exact: !cycles.total_overflowed(),

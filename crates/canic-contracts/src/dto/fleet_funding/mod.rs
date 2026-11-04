@@ -9,7 +9,7 @@ use crate::{
     dto::fleet_registry::FleetRegistryVersion,
     ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingPolicy, SubnetId},
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Frozen ingress envelope used by both sides of the funding command exchange.
@@ -201,9 +201,16 @@ pub struct FleetRootFundingAcceptanceRequest {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRootFundingAcceptanceReceipt {
     pub request: FleetRootFundingAcceptanceRequest,
-    pub fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
-    pub coordinator: ic_platform::principal::ExternalPrincipal,
+    pub fleet_subnet_root: ic_platform_types::principal::ExternalPrincipal,
+    pub coordinator: ic_platform_types::principal::ExternalPrincipal,
     pub accepted_at_ns: u64,
+}
+
+/// Exact acceptance reply; relieved demand accepts zero attached cycles.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetRootFundingAcceptanceOutcome {
+    Accepted(Box<FleetRootFundingAcceptanceReceipt>),
+    BalanceRelieved,
 }
 
 /// Terminal reason that one authenticated request transferred no cycles.
@@ -223,6 +230,7 @@ pub enum FleetRootFundingNoGrantReason {
     RegistryStale,
     RootIneligible,
     RootRejected,
+    RootBalanceRelieved,
     RootAutomaticCapExhausted,
     RootWindowExhausted,
 }
@@ -251,7 +259,7 @@ mod tests {
         FleetRegistryAuthority, FleetSubnetRootFundingPolicy, SubnetId,
     };
     use crate::{dto::funding_control as native, protocol::funding_control as wire};
-    use ic_platform::principal::ExternalPrincipal as Principal;
+    use ic_platform_types::principal::ExternalPrincipal as Principal;
 
     #[test]
     fn exact_funding_commands_roundtrip_below_the_frozen_ingress_envelope() {

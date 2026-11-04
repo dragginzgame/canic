@@ -14,11 +14,11 @@ use ic_platform::{
 };
 use std::{path::Path, time::Duration};
 use {
-    ic_platform::pocket_ic::common::rest::{
+    ic_testkit::pic::{PocketIcManagedServer, PocketIcStartupConfig},
+    ic_testkit::pocket_ic::common::rest::{
         IcpFeatures, IcpFeaturesConfig, InstanceHttpGatewayConfig,
     },
-    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
-    ic_testkit::pic::{PocketIcManagedServer, PocketIcStartupConfig},
+    ic_testkit::pocket_ic::{PocketIc, PocketIcBuilder},
 };
 
 /// Spawn one managed server whose drop waits for that exact child.
@@ -91,12 +91,12 @@ pub fn instance(
 
 /// Expose one selected loopback port; the instance owns its gateway lifecycle.
 pub fn gateway(pic: &mut PocketIc, port: u16) -> Result<String, LocalFleetError> {
-    guarded(|| pic.make_live(Some(port)).to_string())
+    Ok(pic.make_live(Some(port))?.to_string())
 }
 
 /// Stop the instance's gateway before deterministic clock operations or restart.
 pub fn stop_gateway(pic: &mut PocketIc) -> Result<(), LocalFleetError> {
-    guarded(|| pic.stop_live())
+    pic.stop_live().map_err(Into::into)
 }
 
 /// Submit the retained Ledger request; duplicates return the same exact created canister.
@@ -106,9 +106,7 @@ pub fn create(
     config: &LocalFleetConfig,
 ) -> Result<ic_platform::principal::ExternalPrincipal, LocalFleetError> {
     if let Some(id) = allocation.canister_id {
-        if !guarded(|| pic.canister_exists(id))?
-            || guarded(|| pic.get_subnet(id))? != Some(allocation.subnet_id)
-        {
+        if !pic.canister_exists(id)? || pic.get_subnet(id)? != Some(allocation.subnet_id) {
             return Err(LocalFleetError::Identity);
         }
         return Ok(id);
@@ -138,9 +136,7 @@ pub fn create(
     };
     let payload = ic_platform::candid::contract::encode_one(args)
         .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
-    let bytes =
-        guarded(|| pic.update_call(ledger, Principal::anonymous(), "create_canister", payload))?
-            .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
+    let bytes = pic.update_call(ledger, Principal::anonymous(), "create_canister", payload)?;
     let result: Result<CreateCanisterSuccess, CreateCanisterError> =
         ic_platform::candid::decoder::decode_one(&bytes)
             .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
@@ -156,7 +152,7 @@ pub fn create(
             )));
         }
     };
-    if guarded(|| pic.get_subnet(id))? != Some(allocation.subnet_id) {
+    if pic.get_subnet(id)? != Some(allocation.subnet_id) {
         return Err(LocalFleetError::Identity);
     }
     Ok(id)
@@ -164,13 +160,8 @@ pub fn create(
 
 /// Advance only this instance's deterministic time; automatic progress resumes separately.
 pub fn advance(pic: &PocketIc, seconds: u32) -> Result<(), LocalFleetError> {
-    guarded(|| pic.advance_time(Duration::from_secs(u64::from(seconds))))
-}
-
-/// Convert upstream panicking transport boundaries to one owned local failure.
-pub fn guarded<T>(action: impl FnOnce() -> T) -> Result<T, LocalFleetError> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(action))
-        .map_err(|_| LocalFleetError::Platform("PocketIC operation did not complete".into()))
+    pic.advance_time(Duration::from_secs(u64::from(seconds)))
+        .map_err(Into::into)
 }
 
 /// Set one new local canister's final controller set, reconciling a lost response by observation.
@@ -180,7 +171,7 @@ pub fn controllers(
     operator: ic_platform::principal::ExternalPrincipal,
     expected: &[ic_platform::principal::ExternalPrincipal],
 ) -> Result<(), LocalFleetError> {
-    let mut observed = guarded(|| pic.get_controllers(target))?;
+    let mut observed = pic.get_controllers(target)?;
     observed.sort();
     if observed == expected {
         return Ok(());
@@ -188,8 +179,7 @@ pub fn controllers(
     if observed != [operator] {
         return Err(LocalFleetError::Identity);
     }
-    guarded(|| pic.set_controllers(target, Some(operator), expected.to_vec()))?
-        .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
+    pic.set_controllers(target, Some(operator), expected.to_vec())?;
     Ok(())
 }
 
@@ -198,14 +188,13 @@ pub fn install_root(
     pic: &PocketIc,
     target: &crate::local_fleet::view::LocalRootInstallationView,
 ) -> Result<(), LocalFleetError> {
-    guarded(|| {
-        pic.install_canister(
-            target.canister_id,
-            target.wasm.clone(),
-            target.arguments.clone(),
-            Some(target.operator),
-        );
-    })
+    pic.install_canister(
+        target.canister_id,
+        target.wasm.clone(),
+        target.arguments.clone(),
+        Some(target.operator),
+    )
+    .map_err(Into::into)
 }
 
 /// Read and compare the complete Root authority after installation or a lost response.
@@ -216,9 +205,7 @@ pub fn verify_root_authority(
     use canic_contracts::{dto::root_authority::Authority, protocol::root_authority as wire};
     let request = ic_wire::native::encode_request(wire::METHOD_ID, &(), wire::REQUEST_LIMITS)
         .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
-    let bytes =
-        guarded(|| pic.query_call(target.canister_id, target.operator, wire::METHOD, request))?
-            .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
+    let bytes = pic.query_call(target.canister_id, target.operator, wire::METHOD, request)?;
     let response: Result<Authority, canic_contracts::dto::error::Error> =
         ic_wire::native::decode_response(wire::METHOD_ID, &bytes, wire::RESPONSE_LIMITS)
             .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
@@ -235,8 +222,7 @@ pub fn root_needs_install(
     pic: &PocketIc,
     target: &crate::local_fleet::view::LocalRootInstallationView,
 ) -> Result<bool, LocalFleetError> {
-    let status = guarded(|| pic.canister_status(target.canister_id, Some(target.operator)))?
-        .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
+    let status = pic.canister_status(target.canister_id, Some(target.operator))?;
     match status.module_hash {
         None => Ok(true),
         Some(hash) if canic_core::cdk::utils::hash::hex_bytes(&hash) == target.wasm_sha256 => {

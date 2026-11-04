@@ -321,7 +321,7 @@ fn configured_specs_bind_canonical_root_and_application_workspace() {
     assert!(
         specs
             .iter()
-            .all(|spec| spec.package_version == env!("CARGO_PKG_VERSION"))
+            .all(|spec| spec.package_version == canic_core::VERSION)
     );
     for spec in &specs {
         let expected_workspace = if spec.role == "root" {

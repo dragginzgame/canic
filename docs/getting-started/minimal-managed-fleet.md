@@ -251,7 +251,7 @@ canic = { workspace = true, features = [] }
 ic-wire.workspace = true
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }
 ```
 
 ```rust

@@ -12,7 +12,7 @@ use crate::{
 };
 
 fn status() -> RootStatus {
-    let root = ic_platform::Principal::from_slice(&[1]);
+    let root = ic_platform_types::Principal::from_slice(&[1]);
     let rotation = RotationReceipt {
         operation_id: [2; 32],
         plan_digest: [3; 32],

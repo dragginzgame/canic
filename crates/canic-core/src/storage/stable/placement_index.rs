@@ -15,10 +15,10 @@ std::thread_local! {
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::PLACEMENT_INDEX_REGISTRY_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -120,18 +120,19 @@ pub struct PlacementIndexRegistry;
 impl PlacementIndexRegistry {
     #[must_use]
     pub(crate) fn get(key: &PlacementIndexKey) -> Option<PlacementIndexEntryRecord> {
-        PLACEMENT_INDEX_REGISTRY.with_borrow(|map| map.get(key))
+        PLACEMENT_INDEX_REGISTRY.with_borrow(|map| map.get(key).expect("Storage operation failed"))
     }
 
     pub(crate) fn insert(key: PlacementIndexKey, entry: PlacementIndexEntryRecord) {
         PLACEMENT_INDEX_REGISTRY.with_borrow_mut(|map| {
-            map.insert(key, entry);
+            map.insert(key, entry).expect("Storage operation failed");
         });
     }
 
     #[must_use]
     pub(crate) fn remove(key: &PlacementIndexKey) -> Option<PlacementIndexEntryRecord> {
-        PLACEMENT_INDEX_REGISTRY.with_borrow_mut(|map| map.remove(key))
+        PLACEMENT_INDEX_REGISTRY
+            .with_borrow_mut(|map| map.remove(key).expect("Storage operation failed"))
     }
 
     #[must_use]
@@ -139,9 +140,10 @@ impl PlacementIndexRegistry {
         PlacementIndexRegistryData {
             entries: PLACEMENT_INDEX_REGISTRY.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| PlacementIndexRegistryEntryRecord {
                         key: entry.key().clone(),
-                        entry: entry.value(),
+                        entry: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -150,6 +152,8 @@ impl PlacementIndexRegistry {
 
     #[cfg(test)]
     pub(crate) fn clear() {
-        PLACEMENT_INDEX_REGISTRY.with_borrow_mut(StableBtreeMap::clear);
+        PLACEMENT_INDEX_REGISTRY
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("commit stable fixture");
     }
 }

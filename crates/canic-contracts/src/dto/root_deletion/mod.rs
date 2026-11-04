@@ -1,5 +1,5 @@
 //! Exact observed authority and receipts for controller-owned Root deletion.
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// FleetSubnetRootDeletionExecutionRequest with native principal identity.

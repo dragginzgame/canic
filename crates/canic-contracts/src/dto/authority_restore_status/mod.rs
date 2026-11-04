@@ -1,5 +1,5 @@
 //! Native read-only authority-fence projection; stored and mutation contracts stay separate.
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Current fence phase with a native recipient identity.

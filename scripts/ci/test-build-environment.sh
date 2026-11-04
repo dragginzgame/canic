@@ -16,6 +16,10 @@ mkdir -p "$fixture/"{scripts/ci,ci,make,bin}
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
 cp "$ROOT/make/"{consumer,tools,execution,release,rust-format}.mk "$fixture/make/"
 cp "$ROOT/ci/"{tool-versions.env,ic-tools.tsv} "$fixture/ci/"
+mkdir -p "$fixture/scripts/release"
+cp "$ROOT/scripts/release/selection.sh" "$fixture/scripts/release/"
+cp "$ROOT/ci/cargo-release-groups.json" "$fixture/ci/"
+export RELEASE_GROUP=framework
 cp "$ROOT/scripts/ci/"{prepare-validation,run-release-validation-lane,run-canic-sccache,run-sccache,check-make-execution,ic-tool-pins}.sh "$fixture/scripts/ci/"
 cat > "$fixture/scripts/ci/install-pinned-ci-tool.sh" <<'INSTALL'
 #!/usr/bin/env bash
@@ -35,7 +39,7 @@ case "$*" in
         printf '%s\n' "${CARGO_TARGET_DIR-}" "$CANIC_SCCACHE_BIN" "$RUSTC_WRAPPER" "$SCCACHE_RUNTIME_DIR" "$CARGO_INCREMENTAL" > "$ENV_EVIDENCE-$2"
         if [[ "$2" == validate ]]; then [[ "$CARGO_NET_OFFLINE" == true ]]; fi ;;
     '--no-print-directory install-host-tools') touch .host-prepared ;;
-    '--no-print-directory ensure-clean'|'--no-print-directory tools-check'|'--no-print-directory install-rust-tools') ;;
+    '--no-print-directory ensure-clean'|'--no-print-directory compiler-check'|'--no-print-directory tools-check'|'--no-print-directory install-rust-tools') ;;
     *) exit 99 ;;
 esac
 MAKE

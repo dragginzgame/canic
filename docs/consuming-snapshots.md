@@ -80,11 +80,38 @@ neither role labels nor cached build success establishes it.
 
 ## Upgrade impact
 
+Adopt a snapshot for an applicable fix, a needed capability or an explicitly
+requested refresh. An intact older snapshot does not trigger adoption on its own.
+Batch optional refreshes with requested maintenance or a natural release boundary;
+do not refresh every sibling after each Shared release. Required fixes retain
+their own urgency and actual caller qualification.
+
 Run `scripts/distribution/refresh-consumer.sh --impact --source /reviewed/shared-checkout
 --consumer /consumer` before adopting a clean committed Shared revision. This
 implies `--preview`; it never publishes or retires consumer files. The source
-checkout's HEAD is the explicit target revision; dirty source is still refused.
+checkout's HEAD is the target revision unless `--revision FULL_COMMIT` is supplied.
 Custom manifests and entrypoints use the existing exporter options.
+
+Use `--revision` to export a reviewed commit already present in the local object
+database while leaving unrelated source work in place. Payloads, modes, companion
+closure and display version come only from that commit. Full commit IDs are
+required; branches, tags, abbreviated IDs and unavailable objects refuse. Git
+replacement refs cannot substitute another tree. No fetch, stash, branch switch,
+index update or source checkout is performed.
+
+The executing exporter and its three helpers must match their own committed
+HEAD in bytes and executable mode. Dirty execution files refuse before helpers
+run or consumer files change; unrelated dirty source files are allowed. Admitted
+helpers run from private committed copies, independently of the payload revision.
+A newer committed exporter can therefore export older payloads. Preview/impact
+use the same admission. Consumer conflict, ownership and concurrent-change checks
+still apply, and a changed source origin refuses before publication. Concurrent
+source working edits do not change the pinned payload. After refresh, the admitted
+verifier independently compares the manifest and files against the selected commit.
+
+Producer validation can select `test-snapshot-distribution.sh --case revision`,
+`--case core` or `--case transactions`. The full entrypoint retains all cases and
+the broader exported-consumer fixtures.
 
 The normal ADD/UPDATE/KEEP/REMOVE roster is followed by `AFFECTS` records mapping
 changed payloads to current entrypoints through their transitive companions.
@@ -144,7 +171,10 @@ Before adoption, compare existing host/Cargo versions and IC versions/digests
 against the selected source commit. Qualify differences or retain an explicitly
 selected consumer exception; do not silently replace a product requirement.
 Review direct script calls, CI cache inputs, formatter adapters and evidence
-action inputs as well as Make. Product/compiler/PocketIC selections stay local.
+action inputs as well as Make. Product and PocketIC selections stay local.
+Compiler selectors are consumer-owned files implementing the
+[shared support policy](../rules/cargo-dependencies.md#minimum-supported-rust-version-msrv);
+snapshot export does not update them automatically.
 
 For root-layout snapshots, existing consumer-owned `ci/tool-versions.env` or
 `ci/ic-tools.tsv` may occupy the new payload paths. Move any still-needed local
@@ -721,6 +751,15 @@ Shared Tooling CI qualifies the shared implementation. A consumer qualifies how
 its selected snapshot is wired into its own repository. Installing a snapshot
 does not require running every exported upstream test in routine consumer CI or
 adding the complete producer suite to its release gate.
+
+Inspect the selected fixture's nested dispatch before running it. A single
+script may still execute hundreds of unrelated cases. Prefer a named case or
+bounded caller check, and add independent case selection when changing an
+oversized fixture. Keep its full entrypoint for producer release qualification.
+When narrow selection is unavailable, report the specific gap rather than
+silently substituting the complete upstream suite during ordinary development.
+Development completion requires the affected proof, not release readiness for
+every host or automatic follow-up adoption in another workspace.
 
 During adoption, inventory prerequisites for **every target in the actual release
 gate**, including nested/native and browser steps. Keep consumer-owned

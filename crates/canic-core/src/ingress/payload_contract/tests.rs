@@ -9,7 +9,9 @@ fn declaration_carries_current_inspector_policy_without_altering_service() {
         .unwrap();
     assert_eq!(body.trim(), service);
     let bytes = crate::cdk::utils::hash::decode_hex(encoded.trim()).unwrap();
-    let contract: PayloadContract = serde_cbor::from_reader(bytes.as_slice()).unwrap();
+    let (header, contract): ([u8; 4], PayloadContract) =
+        ic_wire::native::decode(&bytes, PAYLOAD_CONTRACT_LIMITS).unwrap();
+    assert_eq!(header, PAYLOAD_CONTRACT_HEADER);
     assert_eq!(contract.schema_version, 1);
     assert_eq!(
         contract.default_update_ingress_max_bytes,

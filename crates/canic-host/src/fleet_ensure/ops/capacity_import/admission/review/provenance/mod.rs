@@ -76,7 +76,7 @@ pub(super) async fn inspect(
         let retained = state.topology.get(&canister.name).ok_or_else(missing)?;
         let protocol = resolve_infrastructure_wire_profile(&paths.workspace, artifact)
             .map_err(|_| missing())?;
-        if artifact.protocol_release_identity != env!("CARGO_PKG_VERSION")
+        if artifact.protocol_release_identity != canic_core::VERSION
             || canister.wasm.as_ref() != Some(&artifact.wasm_relative_path)
             || retained.module_hash.as_ref() != Some(&artifact.wasm_sha256_hex)
             || retained.kind != canister.kind

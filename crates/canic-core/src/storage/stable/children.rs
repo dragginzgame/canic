@@ -21,14 +21,14 @@ std::thread_local! {
     // CANISTER_CHILDREN
     //
     static CANISTER_CHILDREN: RefCell<
-        StableBtreeMap<Principal, CanisterChildRecord, DefaultMemoryImpl>
+        StableBtreeMap<crate::cdk::types::PrincipalKeyRecord, CanisterChildRecord, DefaultMemoryImpl>
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::RUNTIME_CANISTER_CHILDREN_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -79,7 +79,7 @@ pub struct CanisterChildren;
 impl CanisterChildren {
     #[must_use]
     pub(crate) fn get(pid: Principal) -> Option<CanisterChildRecord> {
-        CANISTER_CHILDREN.with_borrow(|map| map.get(&pid))
+        CANISTER_CHILDREN.with_borrow(|map| map.get(&pid.into()).expect("Storage operation failed"))
     }
 
     #[must_use]
@@ -87,9 +87,10 @@ impl CanisterChildren {
         CanisterChildrenData {
             entries: CANISTER_CHILDREN.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| CanisterChildEntryRecord {
-                        pid: *entry.key(),
-                        record: entry.value(),
+                        pid: entry.key().principal(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -98,9 +99,10 @@ impl CanisterChildren {
 
     pub(crate) fn import(data: CanisterChildrenData) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
-            map.clear();
+            map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                map.insert(entry.pid, entry.record);
+                map.insert(entry.pid.into(), entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -133,7 +135,7 @@ mod tests {
                 },
                 allocation_operation_id,
             };
-            let bytes = record.to_bytes();
+            let bytes = record.to_bytes().expect("encode stable fixture");
             let crate::cdk::structures::storable::Bound::Bounded { max_size, .. } =
                 CanisterChildRecord::BOUND
             else {
@@ -141,7 +143,9 @@ mod tests {
             };
             assert!(bytes.len() <= max_size as usize);
             assert_eq!(
-                CanisterChildRecord::from_bytes(bytes.clone()).allocation_operation_id,
+                CanisterChildRecord::from_bytes(bytes.clone())
+                    .expect("decode stable fixture")
+                    .allocation_operation_id,
                 allocation_operation_id,
             );
             let missing = serialize(&record.canister).unwrap();

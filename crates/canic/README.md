@@ -27,9 +27,9 @@ normal runtime dependency on `canic`.
 
 Shared runtime libraries must not depend on `canic`. Keep their domain logic
 framework-independent; role packages and IC adapters depend directly on
-upstream crates such as `ic-platform`, `ic-memory`, and `ic-storage` for generic
+upstream crates such as `ic-platform` and `ic-storage` for generic
 IC types and APIs. Governed stable collections and traits are available through
-`ic_storage::adapter`; collections consume exclusive `ic_memory::RuntimeMemory`
+`ic_storage::adapter`; collections consume exclusive `ic_storage::RuntimeMemory`
 leases. This keeps every role package's runtime
 graph to one direct path to Canic.
 
@@ -95,7 +95,16 @@ required runtime features through the maintained generated build path.
 ## Typical Use
 
 Use `canic` in both `[dependencies]` and `[build-dependencies]` so the build
-macros and runtime macros come from the same facade crate.
+macros and runtime macros come from the same facade crate. Select `build-support`
+only on the build dependency:
+
+```toml
+[build-dependencies]
+canic = { workspace = true, features = ["build-support"] }
+```
+
+Keep runtime features on the normal dependency; the workspace Canic declaration
+retains empty features and disabled defaults.
 
 Each canister crate declares its role in package metadata:
 
@@ -176,20 +185,21 @@ provides no timer macro, handle or cancellation facade:
 
 ```rust
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceDecision, OnceRunResult,
-    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
+    OnceContext, OnceDecision, OnceRunResult, TimerCompletion,
+    TimerIdentity, TimerSchedule, TimerStart, register_once,
 };
 use std::time::Duration;
 
 let timer = register_once(
     TimerIdentity::try_new("my-app", "cache", "refresh")?,
-    DeclarationLifetime::RemoveWhenStopped,
+    TimerStart::RemoveWhenStopped {
+        initial: TimerSchedule::After(Duration::from_secs(30)),
+    },
     |_context: OnceContext| async {
         refresh_cache().await;
         OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop)
     },
 )?;
-timer.ensure_scheduled(TimerSchedule::After(Duration::from_secs(30)))?;
 ```
 
 Keep the native registration when later cancellation or reconciliation is

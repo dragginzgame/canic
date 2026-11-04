@@ -27,7 +27,6 @@ use canic_contracts::{
     ids::{FleetAdmissionPolicy, FleetAdmissionProjection, ManagedCanisterBinding},
 };
 use canic_core::{
-    api::timer::TimerApi,
     control_plane_support::{error::InternalError, ops::config::ConfigOps},
     shared_support::fleet_admission_policy::{
         effective_fleet_admission_principals, fleet_admission_target_for_binding,
@@ -35,7 +34,6 @@ use canic_core::{
     },
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::time::Duration;
 
 /// Authenticate one Root admission phase command against the exact installed Coordinator.
 
@@ -58,10 +56,10 @@ pub fn prepare(
     } else {
         compile_participant_projections(&root, &request.successor)?
     };
-    if let Some(receipt) = RootAdmissionOps::prepare(&root, active, request.clone(), projections)? {
+    if let Some(receipt) = RootAdmissionOps::prepare(&root, active, request, projections)? {
         Ok(receipt)
     } else {
-        schedule(request.operation_id, Duration::ZERO);
+        super::root_transition_timer::schedule()?;
         Err(InternalError::unavailable())
     }
 }
@@ -71,10 +69,10 @@ pub fn activate(
     request: FleetAdmissionActivateRootRequest,
 ) -> Result<FleetAdmissionRootReceipt, InternalError> {
     let (protected, _) = validated_root_authority()?;
-    if let Some(receipt) = RootAdmissionOps::activate(&protected.binding, request.clone())? {
+    if let Some(receipt) = RootAdmissionOps::activate(&protected.binding, request)? {
         Ok(receipt)
     } else {
-        schedule(request.operation_id, Duration::ZERO);
+        super::root_transition_timer::schedule()?;
         Err(InternalError::unavailable())
     }
 }
@@ -84,10 +82,10 @@ pub fn open(
     request: FleetAdmissionOpenRootRequest,
 ) -> Result<FleetAdmissionRootReceipt, InternalError> {
     let (protected, _) = validated_root_authority()?;
-    if let Some(receipt) = RootAdmissionOps::open(&protected.binding, request.clone())? {
+    if let Some(receipt) = RootAdmissionOps::open(&protected.binding, request)? {
         Ok(receipt)
     } else {
-        schedule(request.operation_id, Duration::ZERO);
+        super::root_transition_timer::schedule()?;
         Err(InternalError::unavailable())
     }
 }
@@ -132,17 +130,7 @@ pub(super) fn require_catalog_mutation_for(
     RootAdmissionOps::require_catalog_mutation_allowed(&protected.binding)
 }
 
-fn schedule(operation_id: [u8; 32], delay: Duration) {
-    TimerApi::defer_lifecycle_required(delay, "Root Fleet-admission convergence", async move {
-        match advance_once(operation_id).await {
-            Ok(true) => {}
-            Ok(false) => schedule(operation_id, Duration::ZERO),
-            Err(_) => schedule(operation_id, Duration::from_secs(1)),
-        }
-    });
-}
-
-async fn advance_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
+pub(super) async fn advance_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
     let (protected, _) = validated_root_authority()?;
     let root = protected.binding;
     let (expected, step) = RootAdmissionOps::next_step(&root)?;

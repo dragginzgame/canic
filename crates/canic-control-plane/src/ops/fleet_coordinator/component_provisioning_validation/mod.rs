@@ -397,12 +397,31 @@ pub(super) fn validate_runtime_activation_response(
 ) -> Result<(), InternalError> {
     validate_runtime_activation_authority(publication, response)?;
     let actual = root_activation_progress(response);
-    if !activation_progress_advances(previous, actual) {
+    let observation_is_current = previous == actual;
+    if !observation_is_current && !activation_progress_advances(previous, actual) {
         return Err(InternalError::conflict());
     }
-    let activation_started_at_ns = response
-        .activation_started_at_ns
-        .ok_or_else(InternalError::conflict)?;
+    let Some(activation_started_at_ns) = response.activation_started_at_ns else {
+        // The Root may still be preparing managed startup after publication. Only
+        // its exact unchanged publication can precede the first activation attempt.
+        let awaiting_start = [
+            observation_is_current,
+            previous_activation_started_at_ns.is_none(),
+            response.phase == RootComponentProvisioningPhase::Published,
+            response.activated_component_count == 0,
+            !response.root_runtime_active,
+            response.activation.is_none(),
+            response.runtimes_activated_at_ns.is_none(),
+            response.receipt_content_hash == publication.receipt_content_hash,
+        ]
+        .into_iter()
+        .all(std::convert::identity);
+        return if awaiting_start {
+            Ok(())
+        } else {
+            Err(InternalError::conflict())
+        };
+    };
     if previous_activation_started_at_ns
         .is_some_and(|expected| expected != activation_started_at_ns)
     {
@@ -648,10 +667,19 @@ pub(super) fn validate_directory_confirmation_response(
     {
         return Err(InternalError::conflict());
     }
-    let publication = response
-        .publication
-        .as_ref()
-        .ok_or_else(InternalError::conflict)?;
+    let Some(publication) = response.publication.as_ref() else {
+        // Root publishes asynchronously after observing Coordinator's service topology.
+        // Its unchanged provisioned receipt is waiting, not conflicting authority.
+        let mut observed = response.clone();
+        observed.last_failure.clone_from(&previous.last_failure);
+        return if previous.phase == RootComponentProvisioningPhase::Provisioned
+            && observed == *previous
+        {
+            Err(InternalError::unavailable())
+        } else {
+            Err(InternalError::conflict())
+        };
+    };
     if &publication.fleet_registry != context.published_registry
         || publication.fleet_directory_content_hash != context.fleet_directory_content_hash
     {

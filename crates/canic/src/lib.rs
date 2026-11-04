@@ -24,7 +24,7 @@
 
 pub mod access;
 pub mod api;
-#[cfg(any(not(target_arch = "wasm32"), test))]
+#[cfg(all(feature = "build-support", not(target_arch = "wasm32")))]
 mod build_support;
 pub mod diagnostics;
 pub mod dto;
@@ -80,7 +80,7 @@ pub mod __internal {
 }
 
 #[doc(hidden)]
-#[cfg(any(not(target_arch = "wasm32"), test))]
+#[cfg(all(feature = "build-support", not(target_arch = "wasm32")))]
 pub mod __build {
     pub use crate::build_support::{
         CANIC_CUSTOM_CFG_NAMES, METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM,

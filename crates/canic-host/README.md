@@ -9,7 +9,7 @@ Normal operators use the installed `canic` binary. Direct Rust consumers may
 use the build and `fleet_ensure` modules when embedding the same current
 contract.
 
-Generic host mechanics use the published IC Host Tooling 0.14 packages:
+Generic host mechanics use the published IC Host packages:
 `ic-host-artifacts` owns Wasm inspection, gzip encoding/decoding and bounded
 stream reads, copying and hashing; `ic-host-fs` owns regular/private reads,
 path observations, durable publication and descriptor locks,
@@ -20,10 +20,9 @@ Direct consumers import reads from `ic_host_fs::read` and publication/locks from
 transaction ordering and interruption recovery.
 
 Rust callers passing shared types into public Canic APIs must select the same
-upstream family. In particular, `publication::ops::io_error` takes the
-`ic-host-fs` 0.14 `NamedWriteError`; a 0.12 value has a different Rust identity.
-Rebuild direct consumers against the aligned family; see
-[#517](https://github.com/dragginzgame/canic/issues/517).
+upstream family selected in the [workspace catalog](../../Cargo.toml). For
+example, `publication::ops::io_error` takes that `ic-host-fs` selection's
+`NamedWriteError`. Rebuild direct consumers against the aligned family.
 
 Canic's `publication::ops::io_error` projects the shared typed publication failure
 into existing Host and CLI I/O boundaries, retaining its phase, native cause and
@@ -67,6 +66,36 @@ non-incremental for deterministic Wasm. Cargo owns compiler-wrapper selection:
 configure `RUSTC_WRAPPER` or Cargo's wrapper settings when compiler caching is
 wanted. Canic runs Cargo once with that configuration and retains compiler
 failures. Complete artifact reuse remains independent of compiler caching.
+
+Library callers can select repository-local build tools without changing global
+installations or `PATH`:
+
+```rust,no_run
+use canic_host::{
+    build_profile::CanisterBuildProfile,
+    build_toolchain::BuildToolchain,
+    canister_build::CanisterArtifactBuilder,
+};
+use std::path::Path;
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let tools = BuildToolchain::resolve_with_paths(
+    CanisterBuildProfile::Release,
+    Some(Path::new(".tools/ic/bin/ic-wasm")),
+    Some(Path::new(".tools/ic/bin/wasm-opt")),
+)?;
+let builder = CanisterArtifactBuilder::with_toolchain(tools);
+// Use builder.build_workspace_canister_artifact(&context) for the selected role.
+# Ok(())
+# }
+```
+
+Explicit tools undergo ordinary version and optimizer checksum/library checks.
+Their admitted paths feed artifact transforms, provenance and build-reuse
+fingerprints. A build must use the toolchain's profile. `None` retains default
+lookup for that tool; Debug and Fast do not select an optimizer. The CLI and
+`CanisterArtifactBuilder::for_profile` retain their normal global-install-first
+lookup. Linux checks do not establish macOS bundle qualification.
 
 ## Fleet Ensure
 

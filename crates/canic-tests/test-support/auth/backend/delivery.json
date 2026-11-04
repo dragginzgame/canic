@@ -1,0 +1,16 @@
+{
+   "archive" : "ic-auth-backend-conformance-0.33.0.crate",
+   "engine_version" : "0.33.0",
+   "protocol_version" : "0.33.0",
+   "qualification" : {
+      "actual_canic_adapter_conformance" : false,
+      "compiled_registry_trait_identity_witness" : true,
+      "evidence_directory" : ".tmp/auth-current-family-20261103",
+      "packaged_scenarios_passed" : 8,
+      "registry_graph_checked" : true
+   },
+   "schema_version" : 1,
+   "sha256" : "6a99f27890e3663427745ca5bf45a59d736117175a6de6bd9ae364c60e4ba783",
+   "source_dirty" : false,
+   "source_revision" : "fa6823a25cedb04f55f91301efcf261ab4109b1f"
+}

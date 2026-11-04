@@ -35,10 +35,17 @@ thread_local! {
     static TRAP_COST_WATCHDOG: Cell<bool> = const { Cell::new(false) };
 }
 
-canic::start_local!(lifecycle_participant(
-    init = __icydb_lifecycle_participant::init,
-    post_upgrade = __icydb_lifecycle_participant::post_upgrade,
-),);
+canic::start_local!(
+    lifecycle_participant(
+        init = __icydb_lifecycle_participant::init,
+        post_upgrade = __icydb_lifecycle_participant::post_upgrade,
+    ),
+    init = {
+        if option_env!("CANIC_TEST_HELD_USER_INIT").is_some() {
+            perf_context::await_controlled_response(94).await;
+        }
+    },
+);
 
 /// Run no-op setup for the runtime probe.
 async fn canic_setup() {
@@ -309,6 +316,52 @@ async fn fill_timer_registry() -> Result<(u64, bool), Error> {
     }
     CAPACITY_TIMERS.with_borrow_mut(|current| current.extend(claims));
     Ok((registered, false))
+}
+
+/// Release only the native claims retained by the capacity fixture.
+#[update(public, wire(id = crate::timer_wire::CLEAR_CAPACITY, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+fn clear_timer_probe_capacity() -> Result<(), Error> {
+    CAPACITY_TIMERS.with_borrow_mut(|claims| {
+        for claim in claims.drain(..) {
+            claim.cancel().expect("release fixture timer capacity");
+        }
+    });
+    Ok(())
+}
+
+/// Restore the actual timer admission flag without fabricating snapshot state.
+#[update(public, wire(id = crate::timer_wire::SET_INTENT_SUSPENSION, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+fn set_intent_probe_suspension(sealed: bool) -> Result<(), Error> {
+    canic::__internal::core::api::runtime::intent_fixture::restore_suspension(sealed);
+    Ok(())
+}
+
+/// Exercise the actual cost workflow using a stable one-operation fixture quota.
+#[update(public, wire(id = crate::timer_wire::RESERVE_COST, request = crate::timer_wire::REQUEST_LIMITS, response = crate::timer_wire::RESPONSE_LIMITS))]
+fn reserve_timer_probe_cost() -> Result<(u64, u64), Error> {
+    use canic::__internal::core::api::runtime::intent_fixture::{
+        CommandKind, CostClass, CostGuardRequest, CostGuardWorkflow, map_cost_guard_reserve_error,
+    };
+    let permit = CostGuardWorkflow::reserve(CostGuardRequest {
+        cost_class: CostClass::ManagementDeployment,
+        command_kind: CommandKind::new("timer_probe.management_deployment.v1")
+            .expect("fixture command"),
+        quota_subject: ic_platform::cdk::api::canister_self().into(),
+        payer: ic_platform::cdk::api::canister_self().into(),
+        now_secs: ic_platform::cdk::api::time() / 1_000_000_000,
+        quota_window_secs: 3_600,
+        max_operations_per_window: 1,
+        current_cycle_balance: 10,
+        cycle_reservation_cycles: 2,
+        min_cycles_after_reservation: 5,
+    })
+    .map_err(map_cost_guard_reserve_error)
+    .map_err(Error::from)?;
+    let settlement = permit.replay_settlement();
+    Ok((
+        settlement.quota_intent_id.0,
+        settlement.reservation_intent_id.0,
+    ))
 }
 
 /// Attempt one invalid identity so tests can prove registration is leak-free.

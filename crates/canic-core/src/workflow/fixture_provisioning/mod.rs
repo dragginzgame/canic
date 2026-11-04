@@ -27,6 +27,26 @@ pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImp
     timer::FixtureImportTimer::start().map_err(|error| FixtureImportError::Runtime(error.into()))
 }
 
+/// Explicit same-release recovery preserves the installed assignment and application cursor.
+pub fn retry_failed() -> Result<(), FixtureImportError> {
+    fixture_importer::require_active()?;
+    let assignment = fixture_importer::assignment()?.ok_or(FixtureImportError::Authority)?;
+    let hash = fixture_importer::assignment_hash(&assignment)?;
+    crate::ops::storage::async_job_recovery::AsyncJobRecoveryOps::require_fixture_retry(hash)
+        .map_err(|error| FixtureImportError::Runtime(error.into()))?;
+    timer::FixtureImportTimer::arm_retry()
+        .map_err(|error| FixtureImportError::Runtime(crate::InternalError::from(error).into()))?;
+    crate::ops::storage::async_job_recovery::AsyncJobRecoveryOps::retry_fixture_import(hash)
+        .map_err(|error| FixtureImportError::Runtime(error.into()))
+}
+
+/// Read retained attempt evidence without invoking application callbacks.
+#[must_use]
+pub fn recovery_status()
+-> Option<canic_contracts::values::fixture_import::FixtureImportRecoveryStatus> {
+    crate::ops::storage::async_job_recovery::AsyncJobRecoveryOps::fixture_import_recovery()
+}
+
 pub fn status() -> Result<FixtureProvisioningStatus, FixtureImportError> {
     if FleetActivationRuntimeOps::is_standalone_local()
         || EnvOps::is_fleet_coordinator_runtime()

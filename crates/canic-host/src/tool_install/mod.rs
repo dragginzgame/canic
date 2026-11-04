@@ -7,7 +7,10 @@
 mod tests;
 
 use crate::output_with_executable_busy_retry;
-use ic_host_fs::durable::{NamedWriteError, PublicationMode, WriteOptions, write_validated_with};
+use ic_host_fs::{
+    durable::{NamedWriteError, PublicationMode, WriteOptions, write_validated_with},
+    owned_directory::OwnedDirectory,
+};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
@@ -93,18 +96,18 @@ pub fn install<T, E: From<InstallError> + std::error::Error + Send + Sync + 'sta
     destination: &Path,
     admit: impl Fn(&Path) -> Result<T, E>,
 ) -> Result<T, E> {
-    let temp = TempDirectory::create(spec.tool)?;
-    let archive = temp.path.join(spec.archive_name);
+    let temp = installation_scratch(spec.tool)?;
+    let archive = temp.path().join(spec.archive_name);
     download_archive(spec.archive_url, &archive)?;
     verify_archive(&archive, spec.archive_sha256)?;
-    extract_archive(spec, &archive, &temp.path)?;
-    let candidate = temp.path.join(spec.member);
+    extract_archive(spec, &archive, temp.path())?;
+    let candidate = temp.path().join(spec.member);
     admit(&candidate)?;
     if let Some(library) = spec.runtime_library {
         publish_bundle(
             spec.tool,
             &candidate,
-            &temp.path.join(library),
+            &temp.path().join(library),
             destination,
             |path| admit(path).map(|_| ()),
         )?;
@@ -384,39 +387,27 @@ fn io_error(operation: &'static str, path: &Path, source: io::Error) -> InstallE
     }
 }
 
-struct TempDirectory {
-    path: PathBuf,
-}
-
-impl TempDirectory {
-    fn create(tool: &str) -> Result<Self, InstallError> {
-        let root = env::temp_dir();
-        for _ in 0..TEMP_ATTEMPTS {
-            let path = root.join(format!(
-                "canic-{tool}-install-{}-{}",
-                std::process::id(),
-                TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-            ));
-            match fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path }),
-                Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(source) => {
-                    return Err(io_error(
-                        "create temporary tool installation directory",
-                        &path,
-                        source,
-                    ));
-                }
+fn installation_scratch(tool: &str) -> Result<OwnedDirectory, InstallError> {
+    let root = env::temp_dir();
+    for _ in 0..TEMP_ATTEMPTS {
+        let path = root.join(format!(
+            "canic-{tool}-install-{}-{}",
+            std::process::id(),
+            TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => return Ok(OwnedDirectory::new(path)),
+            Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(source) => {
+                return Err(io_error(
+                    "create temporary tool installation directory",
+                    &path,
+                    source,
+                ));
             }
         }
-        Err(InstallError::TempDirectoryExhausted { root })
     }
-}
-
-impl Drop for TempDirectory {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
+    Err(InstallError::TempDirectoryExhausted { root })
 }
 
 // Keep tool-specific public variants while sharing the mechanical install-error mapping.

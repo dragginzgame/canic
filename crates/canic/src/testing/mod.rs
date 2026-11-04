@@ -22,8 +22,8 @@ pub use managed_component_group::{
     ManagedRoleQualificationArtifact, install_managed_component_group,
 };
 pub use {
-    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
     ic_testkit::pic::CanisterInstallExt,
+    ic_testkit::pocket_ic::{PocketIc, PocketIcBuilder},
 };
 
 /// Borrow the governed caller's server; never discover or launch a hidden child.

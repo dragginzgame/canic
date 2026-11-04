@@ -25,24 +25,30 @@ macro_rules! impl_storable_bounded {
                     is_fixed_size: $is_fixed_size,
                 };
 
-            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                let bytes = $crate::cdk::serialize::serialize(self).unwrap_or_else(|err| {
-                    panic!("impl_storable_bounded: serialize failed: {err}");
-                });
-
-                ::std::borrow::Cow::Owned(bytes)
+            fn to_bytes(
+                &self,
+            ) -> ::core::result::Result<
+                ::std::borrow::Cow<'_, [u8]>,
+                $crate::cdk::structures::storable::CodecError,
+            > {
+                $crate::cdk::serialize::serialize(self)
+                    .map(::std::borrow::Cow::Owned)
+                    .map_err($crate::cdk::serialize::storable_error)
             }
 
-            fn into_bytes(self) -> Vec<u8> {
-                $crate::cdk::serialize::serialize(&self).unwrap_or_else(|err| {
-                    panic!("impl_storable_bounded: serialize failed: {err}");
-                })
+            fn into_bytes(
+                self,
+            ) -> ::core::result::Result<Vec<u8>, $crate::cdk::structures::storable::CodecError>
+            {
+                $crate::cdk::serialize::serialize(&self)
+                    .map_err($crate::cdk::serialize::storable_error)
             }
 
-            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::cdk::serialize::deserialize(&bytes).unwrap_or_else(|err| {
-                    panic!("impl_storable_bounded: deserialize failed: {err}");
-                })
+            fn from_bytes(
+                bytes: ::std::borrow::Cow<'_, [u8]>,
+            ) -> ::core::result::Result<Self, $crate::cdk::structures::storable::CodecError> {
+                $crate::cdk::serialize::deserialize(&bytes)
+                    .map_err($crate::cdk::serialize::storable_error)
             }
         }
     };
@@ -61,24 +67,30 @@ macro_rules! impl_storable_unbounded {
             const BOUND: $crate::cdk::structures::storable::Bound =
                 $crate::cdk::structures::storable::Bound::Unbounded;
 
-            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                let bytes = $crate::cdk::serialize::serialize(self).unwrap_or_else(|err| {
-                    panic!("impl_storable_unbounded: serialize failed: {err}");
-                });
-
-                ::std::borrow::Cow::Owned(bytes)
+            fn to_bytes(
+                &self,
+            ) -> ::core::result::Result<
+                ::std::borrow::Cow<'_, [u8]>,
+                $crate::cdk::structures::storable::CodecError,
+            > {
+                $crate::cdk::serialize::serialize(self)
+                    .map(::std::borrow::Cow::Owned)
+                    .map_err($crate::cdk::serialize::storable_error)
             }
 
-            fn into_bytes(self) -> Vec<u8> {
-                $crate::cdk::serialize::serialize(&self).unwrap_or_else(|err| {
-                    panic!("impl_storable_unbounded: serialize failed: {err}");
-                })
+            fn into_bytes(
+                self,
+            ) -> ::core::result::Result<Vec<u8>, $crate::cdk::structures::storable::CodecError>
+            {
+                $crate::cdk::serialize::serialize(&self)
+                    .map_err($crate::cdk::serialize::storable_error)
             }
 
-            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::cdk::serialize::deserialize(&bytes).unwrap_or_else(|err| {
-                    panic!("impl_storable_unbounded: deserialize failed: {err}");
-                })
+            fn from_bytes(
+                bytes: ::std::borrow::Cow<'_, [u8]>,
+            ) -> ::core::result::Result<Self, $crate::cdk::structures::storable::CodecError> {
+                $crate::cdk::serialize::deserialize(&bytes)
+                    .map_err($crate::cdk::serialize::storable_error)
             }
         }
     };

@@ -51,6 +51,7 @@ pub enum LocalApplicationAuthorityBindingRecord {
 /// Atomic persisted projection for local application session authority.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LocalApplicationAuthorizationStateData {
+    pub receiver_floors: Option<PortableReceiverFloorsRecord>,
     pub sessions: Vec<LocalApplicationSessionRecord>,
     pub replays: Vec<LocalApplicationReplayRecord>,
     pub authority_generation: u64,
@@ -369,6 +370,8 @@ pub struct RootIssuerRenewalStateRecord {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalApplicationAuthorizationStateRecord {
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
+    pub receiver_floors: Option<PortableReceiverFloorsRecord>,
     pub application_authority_generation: u64,
 
     pub application_authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
@@ -378,6 +381,14 @@ pub struct LocalApplicationAuthorizationStateRecord {
 
 impl LocalApplicationAuthorizationStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "LocalApplicationAuthorizationStateRecord";
+}
+
+/// Immutable first-activation cutoffs, retained through same-release recovery.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PortableReceiverFloorsRecord {
+    pub min_login_started_at_ns: u64,
+    pub min_proof_issued_at_ns: u64,
 }
 
 /// Capability-owned persistence for one delegated-token issuer.
@@ -533,4 +544,25 @@ mod current_resource_contract {
         assert!(replay_bytes <= 512);
         assert!(maximum_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
     }
+}
+
+/// Bounded canonical portable enrollment checkpoint; readiness is never serialized.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PortableEnrollmentRecord {
+    #[serde(with = "serde_bytes")]
+    pub bytes: Vec<u8>,
+    pub observed_at_ns: u64,
+}
+impl PortableEnrollmentRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "PortableEnrollmentRecord";
+}
+
+/// One canonical enrollment checkpoint snapshot for storage/recovery evidence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PortableEnrollmentData {
+    pub record: PortableEnrollmentRecord,
+}
+impl PortableEnrollmentData {
+    pub const STATE_CONTRACT_NAME: &'static str = "PortableEnrollmentData";
 }

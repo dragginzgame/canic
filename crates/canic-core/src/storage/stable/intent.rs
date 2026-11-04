@@ -40,10 +40,10 @@ std::thread_local! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, DefaultMemoryImpl>> =
         RefCell::new({
             let allocation = crate::memory::open(crate::memory::keys::INTENT_META_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, IntentStoreMetaRecord::default())
+            if ic_storage::Memory::size(&allocation) == 0 {
+                Cell::create(allocation, IntentStoreMetaRecord::default()).expect("create admitted stable cell")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -53,10 +53,10 @@ std::thread_local! {
         let memory = crate::memory::open(crate::memory::keys::APPLICATION_RECEIPT_ELIGIBILITY_V1);
         let map = {
             let allocation = memory;
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         };
         RefCell::new(Some(map))
@@ -72,10 +72,10 @@ std::thread_local! {
         >
     > = RefCell::new({
         let allocation = crate::memory::open(crate::memory::keys::INTENT_RECEIPT_BACKED_RECORDS_V1);
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     });
 }
@@ -86,10 +86,10 @@ std::thread_local! {
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::INTENT_EXPIRY_INDEX_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -104,10 +104,10 @@ std::thread_local! {
         >
     > = RefCell::new({
         let allocation = crate::memory::open(crate::memory::keys::PLACEMENT_ACKNOWLEDGEMENT_INDEX_V1);
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     });
 }
@@ -118,10 +118,10 @@ std::thread_local! {
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::INTENT_RECORDS_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -133,10 +133,10 @@ std::thread_local! {
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::INTENT_TOTALS_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -148,10 +148,10 @@ std::thread_local! {
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::INTENT_PENDING_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -162,29 +162,20 @@ impl Storable for IntentId {
         max_size: 8,
         is_fixed_size: true,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.0.to_be_bytes().to_vec())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Owned(self.0.to_be_bytes().to_vec()))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        self.0.to_be_bytes().to_vec()
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok(self.0.to_be_bytes().to_vec())
     }
-
-    /// Decode the exact fixed-width stable intent identity.
-    ///
-    /// # Panics
-    ///
-    /// Panics when stable memory contains an intent ID that is not exactly eight bytes.
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let bytes = <[u8; 8]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
-            panic!(
-                "stable IntentId is {} bytes; expected 8",
-                bytes.as_ref().len()
-            )
-        });
-
-        Self(u64::from_be_bytes(bytes))
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self(u64::from_be_bytes(
+            bytes
+                .as_ref()
+                .try_into()
+                .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
+        )))
     }
 }
 
@@ -193,28 +184,20 @@ impl Storable for OperationId {
         max_size: 32,
         is_fixed_size: true,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Borrowed(self.as_bytes())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Owned(self.as_bytes().to_vec()))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        self.as_bytes().to_vec()
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok(self.as_bytes().to_vec())
     }
-
-    /// Decode the exact fixed-width stable operation identity.
-    ///
-    /// # Panics
-    ///
-    /// Panics when stable memory contains an operation ID that is not exactly 32 bytes.
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let operation_id = <[u8; 32]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
-            panic!(
-                "stable OperationId is {} bytes; expected 32",
-                bytes.as_ref().len()
-            )
-        });
-        Self::from_bytes(operation_id)
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self::from_bytes(
+            bytes
+                .as_ref()
+                .try_into()
+                .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
+        ))
     }
 }
 
@@ -230,39 +213,36 @@ impl Storable for IntentExpiryKeyRecord {
         max_size: 16,
         is_fixed_size: true,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.into_bytes())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Owned({
+            let mut bytes = Vec::with_capacity(16);
+            bytes.extend_from_slice(&self.due_at_secs.to_be_bytes());
+            bytes.extend_from_slice(&self.intent_id.0.to_be_bytes());
+            bytes
+        }))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(16);
-        bytes.extend_from_slice(&self.due_at_secs.to_be_bytes());
-        bytes.extend_from_slice(&self.intent_id.0.to_be_bytes());
-        bytes
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok({
+            let mut bytes = Vec::with_capacity(16);
+            bytes.extend_from_slice(&self.due_at_secs.to_be_bytes());
+            bytes.extend_from_slice(&self.intent_id.0.to_be_bytes());
+            bytes
+        })
     }
-
-    /// Decode the exact fixed-width stable intent-expiry key.
-    ///
-    /// # Panics
-    ///
-    /// Panics when stable memory contains a key that is not exactly sixteen bytes.
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let bytes = <[u8; 16]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
-            panic!(
-                "stable IntentExpiryKeyRecord is {} bytes; expected 16",
-                bytes.as_ref().len()
-            )
-        });
-        let (due_at_secs, intent_id) = bytes.split_at(8);
-        Self {
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self {
             due_at_secs: u64::from_be_bytes(
-                due_at_secs.try_into().expect("expiry key deadline width"),
+                bytes[..8]
+                    .try_into()
+                    .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
             ),
             intent_id: IntentId(u64::from_be_bytes(
-                intent_id.try_into().expect("expiry key intent width"),
+                bytes[8..]
+                    .try_into()
+                    .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
             )),
-        }
+        })
     }
 }
 
@@ -463,43 +443,36 @@ impl Storable for ApplicationReceiptEligibilityKeyRecord {
         max_size: 40,
         is_fixed_size: true,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.into_bytes())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Owned({
+            let mut bytes = Vec::with_capacity(40);
+            bytes.extend_from_slice(&self.eligible_at_ns.to_be_bytes());
+            bytes.extend_from_slice(self.operation_id.as_bytes());
+            bytes
+        }))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(40);
-        bytes.extend_from_slice(&self.eligible_at_ns.to_be_bytes());
-        bytes.extend_from_slice(self.operation_id.as_bytes());
-        bytes
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok({
+            let mut bytes = Vec::with_capacity(40);
+            bytes.extend_from_slice(&self.eligible_at_ns.to_be_bytes());
+            bytes.extend_from_slice(self.operation_id.as_bytes());
+            bytes
+        })
     }
-
-    /// Decode the exact fixed-width stable eligibility key.
-    ///
-    /// # Panics
-    ///
-    /// Panics when stable memory contains a key that is not exactly forty bytes.
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let bytes = <[u8; 40]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
-            panic!(
-                "stable ApplicationReceiptEligibilityKeyRecord is {} bytes; expected 40",
-                bytes.as_ref().len()
-            )
-        });
-        let (eligible_at_ns, operation_id) = bytes.split_at(8);
-        Self {
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self {
             eligible_at_ns: u64::from_be_bytes(
-                eligible_at_ns
+                bytes[..8]
                     .try_into()
-                    .expect("eligibility deadline width"),
+                    .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
             ),
             operation_id: OperationId::from_bytes(
-                operation_id
+                bytes[8..]
                     .try_into()
-                    .expect("eligibility operation identity width"),
+                    .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
             ),
-        }
+        })
     }
 }
 
@@ -721,7 +694,7 @@ impl IntentStore {
     }
 
     pub(crate) fn set_meta(meta: IntentStoreMetaRecord) {
-        INTENT_META.with_borrow_mut(|cell| cell.set(meta));
+        INTENT_META.with_borrow_mut(|cell| cell.set(meta).expect("Storage operation failed"));
     }
 
     // -------------------------------------------------------------
@@ -730,7 +703,7 @@ impl IntentStore {
 
     #[must_use]
     pub(crate) fn get_record(id: IntentId) -> Option<IntentRecord> {
-        INTENT_RECORDS.with_borrow(|map| map.get(&id))
+        INTENT_RECORDS.with_borrow(|map| map.get(&id).expect("Storage operation failed"))
     }
 
     /// Read canonical local accounting independently of derived pending/expiry indexes.
@@ -741,7 +714,10 @@ impl IntentStore {
     }
 
     pub(crate) fn insert_record(record: IntentRecord) -> Option<IntentRecord> {
-        INTENT_RECORDS.with_borrow_mut(|map| map.insert(record.id, record))
+        INTENT_RECORDS.with_borrow_mut(|map| {
+            map.insert(record.id, record)
+                .expect("Storage operation failed")
+        })
     }
 
     // -------------------------------------------------------------
@@ -750,7 +726,7 @@ impl IntentStore {
 
     #[must_use]
     pub(crate) fn get_totals(key: &IntentResourceKey) -> Option<IntentResourceTotalsRecord> {
-        INTENT_TOTALS.with_borrow(|map| map.get(key))
+        INTENT_TOTALS.with_borrow(|map| map.get(key).expect("Storage operation failed"))
     }
 
     #[must_use]
@@ -762,10 +738,11 @@ impl IntentStore {
     pub(crate) fn totals_entries(limit: usize) -> Vec<IntentTotalsEntryRecord> {
         INTENT_TOTALS.with_borrow(|map| {
             map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .take(limit)
                 .map(|entry| IntentTotalsEntryRecord {
                     resource_key: entry.key().clone(),
-                    record: entry.value(),
+                    record: entry.value().expect("decode Storage entry"),
                 })
                 .collect()
         })
@@ -775,11 +752,12 @@ impl IntentStore {
         key: IntentResourceKey,
         totals: IntentResourceTotalsRecord,
     ) -> Option<IntentResourceTotalsRecord> {
-        INTENT_TOTALS.with_borrow_mut(|map| map.insert(key, totals))
+        INTENT_TOTALS
+            .with_borrow_mut(|map| map.insert(key, totals).expect("Storage operation failed"))
     }
 
     pub(crate) fn remove_totals(key: &IntentResourceKey) -> Option<IntentResourceTotalsRecord> {
-        INTENT_TOTALS.with_borrow_mut(|map| map.remove(key))
+        INTENT_TOTALS.with_borrow_mut(|map| map.remove(key).expect("Storage operation failed"))
     }
 
     // -------------------------------------------------------------
@@ -788,18 +766,19 @@ impl IntentStore {
 
     #[must_use]
     pub(crate) fn get_pending(id: IntentId) -> Option<IntentPendingEntryRecord> {
-        INTENT_PENDING.with_borrow(|map| map.get(&id))
+        INTENT_PENDING.with_borrow(|map| map.get(&id).expect("Storage operation failed"))
     }
 
     pub(crate) fn insert_pending(
         id: IntentId,
         entry: IntentPendingEntryRecord,
     ) -> Option<IntentPendingEntryRecord> {
-        INTENT_PENDING.with_borrow_mut(|map| map.insert(id, entry))
+        INTENT_PENDING
+            .with_borrow_mut(|map| map.insert(id, entry).expect("Storage operation failed"))
     }
 
     pub(crate) fn remove_pending(id: IntentId) -> Option<IntentPendingEntryRecord> {
-        INTENT_PENDING.with_borrow_mut(|map| map.remove(&id))
+        INTENT_PENDING.with_borrow_mut(|map| map.remove(&id).expect("Storage operation failed"))
     }
 
     pub(crate) fn with_pending_entries<R>(
@@ -814,22 +793,26 @@ impl IntentStore {
 
     #[must_use]
     pub(crate) fn get_expiry(key: IntentExpiryKeyRecord) -> Option<IntentExpiryEntryRecord> {
-        INTENT_EXPIRY_INDEX.with_borrow(|map| map.get(&key))
+        INTENT_EXPIRY_INDEX.with_borrow(|map| map.get(&key).expect("Storage operation failed"))
     }
 
     pub(crate) fn insert_expiry(
         key: IntentExpiryKeyRecord,
         record: IntentExpiryEntryRecord,
     ) -> Option<IntentExpiryEntryRecord> {
-        INTENT_EXPIRY_INDEX.with_borrow_mut(|map| map.insert(key, record))
+        INTENT_EXPIRY_INDEX
+            .with_borrow_mut(|map| map.insert(key, record).expect("Storage operation failed"))
     }
 
     pub(crate) fn remove_expiry(key: IntentExpiryKeyRecord) -> Option<IntentExpiryEntryRecord> {
-        INTENT_EXPIRY_INDEX.with_borrow_mut(|map| map.remove(&key))
+        INTENT_EXPIRY_INDEX
+            .with_borrow_mut(|map| map.remove(&key).expect("Storage operation failed"))
     }
 
     pub(crate) fn clear_expiry_index() {
-        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear);
+        INTENT_EXPIRY_INDEX
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
     }
 
     pub(crate) fn with_expiry_entries<R>(
@@ -852,13 +835,20 @@ impl ReceiptBackedIntentStore {
 
     #[must_use]
     pub(crate) fn get(operation_id: OperationId) -> Option<ReceiptBackedIntentRecord> {
-        RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| records.get(&operation_id))
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| {
+            records
+                .get(&operation_id)
+                .expect("Storage operation failed")
+        })
     }
 
     pub(crate) fn insert(record: ReceiptBackedIntentRecord) -> Option<ReceiptBackedIntentRecord> {
         let application = record.application_retention.is_some();
-        let previous = RECEIPT_BACKED_INTENT_RECORDS
-            .with_borrow_mut(|records| records.insert(record.operation_id, record));
+        let previous = RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(|records| {
+            records
+                .insert(record.operation_id, record)
+                .expect("Storage operation failed")
+        });
         Self::update_application_count(
             previous
                 .as_ref()
@@ -869,8 +859,11 @@ impl ReceiptBackedIntentStore {
     }
 
     pub(crate) fn remove(operation_id: OperationId) -> Option<ReceiptBackedIntentRecord> {
-        let previous =
-            RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(|records| records.remove(&operation_id));
+        let previous = RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(|records| {
+            records
+                .remove(&operation_id)
+                .expect("Storage operation failed")
+        });
         Self::update_application_count(
             previous
                 .as_ref()
@@ -911,9 +904,9 @@ impl ReceiptBackedIntentStore {
     /// Provision the pinned B-tree's maximum live-node envelope before admission.
     pub(crate) fn reserve_application_eligibility_capacity(
         record_count: u64,
-    ) -> Result<(), ic_memory::RuntimeGrowError> {
+    ) -> Result<(), ic_storage::RuntimeGrowError> {
         let required_pages = application_eligibility_required_pages(record_count)
-            .ok_or(ic_memory::RuntimeGrowError::ArithmeticOverflow)?;
+            .ok_or(ic_storage::RuntimeGrowError::ArithmeticOverflow)?;
 
         APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
             let map = state.take().expect("eligibility map is installed");
@@ -932,6 +925,7 @@ impl ReceiptBackedIntentStore {
                 .as_ref()
                 .expect("eligibility map is installed")
                 .get(&key)
+                .expect("Storage operation failed")
         })
     }
 
@@ -944,6 +938,7 @@ impl ReceiptBackedIntentStore {
                 .as_mut()
                 .expect("eligibility map is installed")
                 .insert(key, record)
+                .expect("Storage operation failed")
         })
     }
 
@@ -955,6 +950,7 @@ impl ReceiptBackedIntentStore {
                 .as_mut()
                 .expect("eligibility map is installed")
                 .remove(&key)
+                .expect("Storage operation failed")
         })
     }
 
@@ -981,8 +977,9 @@ impl ReceiptBackedIntentStore {
                 .as_ref()
                 .expect("eligibility map is installed")
                 .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .next()
-                .map(|entry| (*entry.key(), entry.value()))
+                .map(|entry| (*entry.key(), entry.value().expect("decode Storage entry")))
         })
     }
 
@@ -1000,24 +997,34 @@ impl ReceiptBackedIntentStore {
     pub(crate) fn get_placement_acknowledgement(
         operation_id: OperationId,
     ) -> Option<PlacementAcknowledgementEntryRecord> {
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| index.get(&operation_id))
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX
+            .with_borrow(|index| index.get(&operation_id).expect("Storage operation failed"))
     }
 
     pub(crate) fn insert_placement_acknowledgement(
         record: PlacementAcknowledgementEntryRecord,
     ) -> Option<PlacementAcknowledgementEntryRecord> {
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX
-            .with_borrow_mut(|index| index.insert(record.operation_id, record))
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(|index| {
+            index
+                .insert(record.operation_id, record)
+                .expect("Storage operation failed")
+        })
     }
 
     pub(crate) fn remove_placement_acknowledgement(
         operation_id: OperationId,
     ) -> Option<PlacementAcknowledgementEntryRecord> {
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(|index| index.remove(&operation_id))
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(|index| {
+            index
+                .remove(&operation_id)
+                .expect("Storage operation failed")
+        })
     }
 
     pub(crate) fn clear_placement_acknowledgement_index() {
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear);
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
     }
 
     pub(crate) fn with_placement_acknowledgements<R>(
@@ -1067,9 +1074,10 @@ impl IntentStore {
         IntentRecordsData {
             entries: INTENT_RECORDS.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| IntentRecordEntryRecord {
                         intent_id: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -1078,9 +1086,10 @@ impl IntentStore {
 
     pub(crate) fn import_records(data: IntentRecordsData) {
         INTENT_RECORDS.with_borrow_mut(|map| {
-            map.clear();
+            map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                map.insert(entry.intent_id, entry.record);
+                map.insert(entry.intent_id, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -1090,9 +1099,10 @@ impl IntentStore {
         IntentTotalsData {
             entries: INTENT_TOTALS.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| IntentTotalsEntryRecord {
                         resource_key: entry.key().clone(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -1101,9 +1111,10 @@ impl IntentStore {
 
     pub(crate) fn import_totals(data: IntentTotalsData) {
         INTENT_TOTALS.with_borrow_mut(|map| {
-            map.clear();
+            map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                map.insert(entry.resource_key, entry.record);
+                map.insert(entry.resource_key, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -1113,9 +1124,10 @@ impl IntentStore {
         IntentPendingData {
             entries: INTENT_PENDING.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| IntentPendingIndexEntryRecord {
                         intent_id: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -1124,9 +1136,10 @@ impl IntentStore {
 
     fn import_pending(data: IntentPendingData) {
         INTENT_PENDING.with_borrow_mut(|map| {
-            map.clear();
+            map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                map.insert(entry.intent_id, entry.record);
+                map.insert(entry.intent_id, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -1136,9 +1149,10 @@ impl IntentStore {
         IntentExpiryIndexData {
             entries: INTENT_EXPIRY_INDEX.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| IntentExpiryIndexEntryRecord {
                         key: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -1147,19 +1161,31 @@ impl IntentStore {
 
     fn import_expiry_index(data: IntentExpiryIndexData) {
         INTENT_EXPIRY_INDEX.with_borrow_mut(|map| {
-            map.clear();
+            map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                map.insert(entry.key, entry.record);
+                map.insert(entry.key, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
 
     pub(crate) fn reset_for_tests() {
-        INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear);
-        INTENT_TOTALS.with_borrow_mut(StableBtreeMap::clear);
-        INTENT_PENDING.with_borrow_mut(StableBtreeMap::clear);
-        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear);
-        INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMetaRecord::default()));
+        INTENT_RECORDS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        INTENT_TOTALS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        INTENT_PENDING
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        INTENT_EXPIRY_INDEX
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
+        INTENT_META.with_borrow_mut(|cell| {
+            cell.set(IntentStoreMetaRecord::default())
+                .expect("Storage operation failed")
+        });
         ReceiptBackedIntentStore::reset_for_tests();
     }
 }
@@ -1172,9 +1198,10 @@ impl ReceiptBackedIntentStore {
             entries: RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| {
                 records
                     .iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| ReceiptBackedIntentEntryRecord {
                         operation_id: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -1188,9 +1215,11 @@ impl ReceiptBackedIntentStore {
             .filter(|entry| entry.record.application_retention.is_some())
             .count() as u64;
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(|records| {
-            records.clear();
+            records.clear().expect("Storage operation failed");
             for entry in data.entries {
-                records.insert(entry.operation_id, entry.record);
+                records
+                    .insert(entry.operation_id, entry.record)
+                    .expect("Storage operation failed");
             }
         });
         let mut meta = IntentStore::meta();
@@ -1206,9 +1235,10 @@ impl ReceiptBackedIntentStore {
                     .as_ref()
                     .expect("eligibility map is installed")
                     .iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| ApplicationReceiptEligibilityEntryRecord {
                         key: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -1220,12 +1250,14 @@ impl ReceiptBackedIntentStore {
             state
                 .as_mut()
                 .expect("eligibility map is installed")
-                .clear();
+                .clear()
+                .expect("commit stable fixture");
             for entry in data.entries {
                 state
                     .as_mut()
                     .expect("eligibility map is installed")
-                    .insert(entry.key, entry.record);
+                    .insert(entry.key, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
@@ -1236,9 +1268,10 @@ impl ReceiptBackedIntentStore {
             entries: PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| {
                 index
                     .iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| PlacementAcknowledgementIndexEntryRecord {
                         operation_id: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -1247,15 +1280,19 @@ impl ReceiptBackedIntentStore {
 
     pub(crate) fn import_placement_acknowledgement_index(data: PlacementAcknowledgementIndexData) {
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(|index| {
-            index.clear();
+            index.clear().expect("Storage operation failed");
             for entry in data.entries {
-                index.insert(entry.operation_id, entry.record);
+                index
+                    .insert(entry.operation_id, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
 
     pub(crate) fn reset_for_tests() {
-        RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear);
+        RECEIPT_BACKED_INTENT_RECORDS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
         let mut meta = IntentStore::meta();
         meta.application_receipt_count = 0;
         IntentStore::set_meta(meta);
@@ -1263,9 +1300,12 @@ impl ReceiptBackedIntentStore {
             state
                 .as_mut()
                 .expect("eligibility map is installed")
-                .clear();
+                .clear()
+                .expect("commit stable fixture");
         });
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear);
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("Storage operation failed");
     }
 }
 
@@ -1280,23 +1320,28 @@ mod tests {
     };
 
     #[test]
-    #[should_panic(expected = "stable IntentId is 7 bytes; expected 8")]
     fn malformed_stable_intent_id_fails_closed() {
-        let _ = <IntentId as Storable>::from_bytes(Cow::Owned(vec![0; 7]));
+        assert_eq!(
+            <IntentId as Storable>::from_bytes(Cow::Owned(vec![0; 7])).unwrap_err(),
+            ic_storage::storable::CodecError::Bounds
+        );
     }
 
     #[test]
-    #[should_panic(expected = "stable OperationId is 31 bytes; expected 32")]
     fn malformed_stable_operation_id_fails_closed() {
-        let _ = <OperationId as Storable>::from_bytes(Cow::Owned(vec![0; 31]));
+        assert_eq!(
+            <OperationId as Storable>::from_bytes(Cow::Owned(vec![0; 31])).unwrap_err(),
+            ic_storage::storable::CodecError::Bounds
+        );
     }
 
     #[test]
-    #[should_panic(
-        expected = "stable ApplicationReceiptEligibilityKeyRecord is 39 bytes; expected 40"
-    )]
     fn malformed_stable_application_eligibility_key_fails_closed() {
-        let _ = ApplicationReceiptEligibilityKeyRecord::from_bytes(Cow::Owned(vec![0; 39]));
+        assert_eq!(
+            ApplicationReceiptEligibilityKeyRecord::from_bytes(Cow::Owned(vec![0; 39]))
+                .unwrap_err(),
+            ic_storage::storable::CodecError::Bounds
+        );
     }
 
     #[test]
@@ -1307,14 +1352,16 @@ mod tests {
         assert_eq!(application_eligibility_required_pages(u64::MAX), None);
         assert_eq!(
             ReceiptBackedIntentStore::reserve_application_eligibility_capacity(u64::MAX),
-            Err(ic_memory::RuntimeGrowError::ArithmeticOverflow)
+            Err(ic_storage::RuntimeGrowError::ArithmeticOverflow)
         );
     }
 
     #[test]
-    #[should_panic(expected = "stable IntentExpiryKeyRecord is 15 bytes; expected 16")]
     fn malformed_stable_intent_expiry_key_fails_closed() {
-        let _ = <IntentExpiryKeyRecord as Storable>::from_bytes(Cow::Owned(vec![0; 15]));
+        assert_eq!(
+            <IntentExpiryKeyRecord as Storable>::from_bytes(Cow::Owned(vec![0; 15])).unwrap_err(),
+            ic_storage::storable::CodecError::Bounds
+        );
     }
 
     #[test]
@@ -1333,14 +1380,14 @@ mod tests {
                 intent_id: IntentId(1),
             },
         ];
-        let mut encoded = keys.map(Storable::into_bytes);
+        let mut encoded = keys.map(|key| key.into_bytes().unwrap());
         encoded.sort();
         assert_eq!(
             encoded,
             [
-                keys[2].into_bytes(),
-                keys[1].into_bytes(),
-                keys[0].into_bytes()
+                keys[2].into_bytes().expect("encode stable fixture"),
+                keys[1].into_bytes().expect("encode stable fixture"),
+                keys[0].into_bytes().expect("encode stable fixture")
             ]
         );
     }
@@ -1355,7 +1402,10 @@ mod tests {
             aborted_total: u64::MAX,
             application_receipt_count: u64::MAX,
         };
-        assert!(record.to_bytes().len() <= IntentStoreMetaRecord::STORABLE_MAX_SIZE as usize);
+        assert!(
+            record.to_bytes().expect("encode stable fixture").len()
+                <= IntentStoreMetaRecord::STORABLE_MAX_SIZE as usize
+        );
     }
 
     #[test]
@@ -1431,9 +1481,12 @@ mod tests {
             pending_count: u64::MAX,
             retain_until_secs: Some(u64::MAX),
         };
-        let bytes = record.to_bytes();
+        let bytes = record.to_bytes().expect("encode stable fixture");
         assert!(bytes.len() <= IntentResourceTotalsRecord::STORABLE_MAX_SIZE as usize);
-        assert_eq!(IntentResourceTotalsRecord::from_bytes(bytes), record);
+        assert_eq!(
+            IntentResourceTotalsRecord::from_bytes(bytes).expect("decode stable fixture"),
+            record
+        );
     }
 
     #[test]

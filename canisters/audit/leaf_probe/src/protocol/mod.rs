@@ -12,6 +12,11 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: 131_072,
     depth: 32,
 };
+/// Bounded log text and its measurement envelope retain the production traversal allowance.
+pub const LOG_RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    allocation: canic::protocol::protected_logs::RESPONSE_LIMITS.allocation,
+    ..RESPONSE_LIMITS
+};
 pub const TIME: u64 = 0x4155_4454_0000_0010;
 pub const ENV: u64 = 0x4155_4454_0000_0011;
 pub const LOG: u64 = 0x4155_4454_0000_0012;
@@ -43,7 +48,7 @@ pub struct LogRequest {
     pub crate_name: Option<String>,
     pub topic: Option<String>,
     pub min_level: Option<canic::__internal::core::log::Level>,
-    pub page: canic::dto::page::PageRequest,
+    pub page: canic::dto::log::LogPageRequest,
 }
 
 /// Fixed cohort selection; nominal fanout remains controlled by the build configuration.

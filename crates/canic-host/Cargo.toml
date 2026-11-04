@@ -2,7 +2,7 @@
 name = "canic-host"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 license = { workspace = true }
 description = "Host-side App build and desired-state Fleet reconciliation library for Canic workspaces"
 readme = "README.md"
@@ -17,13 +17,13 @@ publish = true
 ignored = ["serde_bytes"]
 
 [features]
-local-fleet = ["dep:ic-testkit", "ic-platform/pocket-ic"]
+local-fleet = ["dep:ic-testkit"]
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }
 
 [dependencies]
-canic-contracts.workspace = true
+canic-contracts = { workspace = true, features = ["external-candid"] }
 # Host materializes metadata for every infrastructure role.
 canic-control-plane = { workspace = true, features = [
     "fleet-coordinator-canister",
@@ -40,9 +40,10 @@ ic-build.workspace = true
 ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
-ic-host-text = { workspace = true }
+ic-host-text = { workspace = true, features = ["yaml"] }
 ic-host-tools = { workspace = true, features = ["candid", "ic-interface", "icp-ledger", "ledger-evidence"] }
 ic-platform = { workspace = true, features = ["agent", "certified-assets-types", "cmc-types", "cycles-ledger-types", "icp-ledger-types", "candid", "certification", "candid-parser", "icrc-ledger-types", "management-canister-types"] }
+ic-platform-host = { workspace = true, features = ["certification"] }
 ic-query = { workspace = true, features = ["ledger-evidence-host"] }
 ic-testkit = { workspace = true, optional = true }
 ic-wire = { workspace = true, features = ["typescript"] }
@@ -51,7 +52,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml_ng = { workspace = true }
 sha2-host = { workspace = true }
 syn = { workspace = true, features = ["full", "visit"] }
 thiserror = { workspace = true }
@@ -62,7 +62,7 @@ url = { workspace = true }
 [dev-dependencies]
 clap = { workspace = true }
 ic-host-process = { workspace = true, features = ["test-support"] }
-ic-platform = { workspace = true, features = ["bls", "pocket-ic"] }
+ic-platform = { workspace = true, features = ["bls"] }
 ic-testkit = { workspace = true }
 prost = { workspace = true }
 

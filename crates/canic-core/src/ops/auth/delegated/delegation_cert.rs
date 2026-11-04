@@ -253,10 +253,12 @@ mod tests {
             assemble_delegation_proof_for_tests(input, root_proof(1)),
             Err(PrepareDelegationCertError::CertRules(
                 CertificateIssuanceValidationError::Rules(
-                    ic_auth::certificate_issuance::CertificateIssuanceError::CertTtlExceeded {
-                        ttl_ns: 601,
-                        max_ttl_ns: 600,
-                    }
+                    ic_auth::certificate_issuance::CertificateIssuanceError::Lifetime(
+                        ic_auth::certificate_issuance::CertificateLifetimeError::CertTtlExceeded {
+                            ttl_ns: 601,
+                            max_ttl_ns: 600
+                        }
+                    )
                 )
             ))
         );

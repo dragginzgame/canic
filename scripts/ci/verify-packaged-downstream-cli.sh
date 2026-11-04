@@ -190,7 +190,7 @@ canic::finish!();
 EOF
     mkdir -p "$DOWNSTREAM_ROOT/apps/downstream/app/src/protocol" \
         "$DOWNSTREAM_ROOT/apps/downstream/app/examples/wire_schema"
-    cp "$ROOT/crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/packaged_consumer/protocol/mod.rs" \
+    cp "$ROOT/crates/canic-tests/src/pic/fleet_registry/baseline/tests/packaged_consumer/protocol/mod.rs" \
         "$DOWNSTREAM_ROOT/apps/downstream/app/src/protocol/mod.rs"
     cat >"$DOWNSTREAM_ROOT/apps/downstream/app/examples/wire_schema/main.rs" <<'EOF'
 use downstream_app as _;

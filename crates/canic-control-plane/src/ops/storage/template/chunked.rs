@@ -511,7 +511,11 @@ fn manifest_store_bytes(manifests: &[TemplateManifestEntryRecord]) -> u64 {
             (canic_contracts::serialization::serialize(&entry.release)
                 .expect("encode current template release key")
                 .len()
-                + entry.record.to_bytes().len()) as u64
+                + entry
+                    .record
+                    .to_bytes()
+                    .expect("encode admitted record")
+                    .len()) as u64
         })
         .sum::<u64>()
 }
@@ -523,7 +527,11 @@ fn chunk_set_store_bytes(chunk_sets: &[TemplateChunkSetEntryRecord]) -> u64 {
             (canic_contracts::serialization::serialize(&entry.release)
                 .expect("encode current template release key")
                 .len()
-                + entry.record.to_bytes().len()) as u64
+                + entry
+                    .record
+                    .to_bytes()
+                    .expect("encode admitted record")
+                    .len()) as u64
         })
         .sum::<u64>()
 }

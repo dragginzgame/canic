@@ -10,7 +10,7 @@ use crate::dto::{
 #[test]
 fn reclamation_retains_all_observed_cycle_evidence() {
     let original = WasmStoreDeletionCycleReclamationResponse {
-        destination: ic_platform::principal::ExternalPrincipal::from_slice(&[8; 29]),
+        destination: ic_platform_types::principal::ExternalPrincipal::from_slice(&[8; 29]),
         cycles_before: u128::MAX,
         retained_cycles_target: 500,
         cycles_transferred: u128::MAX - 500,

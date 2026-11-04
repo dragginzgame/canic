@@ -1,11 +1,11 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
+use crate::pic::{CanicPicExt, report_canister_diagnostics};
 use canic::{Error, dto::page::PageRequest, protocol};
 use canic_contracts::dto::{canister::CanisterInfo, page::Page};
-use canic_testing_internal::pic::{CanicPicExt, report_canister_diagnostics};
-use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_testkit::pocket_ic::PocketIc;
 use std::time::Duration;
 
 const TC: u128 = 1_000_000_000_000;
@@ -24,7 +24,7 @@ pub fn create_worker(
         pic,
         hub_pid,
         Principal::anonymous(),
-        canic_testing_internal::pic::application_probe::CREATE_WORKER,
+        crate::pic::application_probe::CREATE_WORKER,
         &(),
     )
     .expect("create worker Wire transport");
@@ -35,10 +35,15 @@ pub fn create_worker(
 
 /// Move a configured worker beyond autonomous funding before an explicit
 /// child-to-parent funding call is measured.
+///
+/// # Panics
+/// Panics if PocketIC cannot fund the worker or advance the fixture.
 pub fn prepare_worker_for_explicit_parent_funding(pic: &PocketIc, worker_pid: Principal) {
-    pic.add_cycles(worker_pid, 20 * TC);
-    pic.advance_time(Duration::from_secs(DEFAULT_FUNDING_COOLDOWN_SECS + 1));
-    pic.tick();
+    pic.add_cycles(worker_pid, 20 * TC)
+        .expect("PocketIC add_cycles");
+    pic.advance_time(Duration::from_secs(DEFAULT_FUNDING_COOLDOWN_SECS + 1))
+        .expect("PocketIC advance_time");
+    pic.tick().expect("PocketIC tick");
 }
 
 /// Wait until the parent's local child view includes the newly created worker.
@@ -51,7 +56,7 @@ fn wait_for_worker_sync(
     pic.wait_for_ready(worker_pid, hub_pid, 50, "scale replica bootstrap");
 
     for _ in 0..50 {
-        pic.tick();
+        pic.tick().expect("PocketIC tick");
 
         let children: Result<Page<CanisterInfo>, Error> = ic_testkit::pic::query_wire(
             pic,

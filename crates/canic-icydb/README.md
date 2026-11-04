@@ -1,5 +1,13 @@
 # Canic IcyDB adapter
 
+This package owns the independent `icydb` release group in the existing Canic
+workspace. Its package version and [changelog](../../releases/icydb/CHANGELOG.md)
+advance separately from the framework; declared macro and runtime requirements
+still apply. After an authorized source release, use
+`make publish RELEASE_GROUP=icydb`. See the
+[release boundary](../../docs/operations/adapter-release-groups.md) for supplier
+ordering and qualification. CLI/runtime matching remains coordinated.
+
 The adapter owns native canister exports, caller/controller context, secure boot
 entropy acquisition and lifecycle/watchdog scheduling. Consumers supply their
 actual `icydb` facade binding to `start!`; emitted code is checked against that

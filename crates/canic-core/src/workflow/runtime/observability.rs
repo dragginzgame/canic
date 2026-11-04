@@ -29,7 +29,7 @@ pub fn release_receipts(
 /// Read exact parent-local child funding evidence after controller authentication.
 pub fn child_funding(
     child: Principal,
-) -> Result<crate::dto::observability::ChildFundingUsage, InternalError> {
+) -> Result<crate::dto::child_funding::ChildFundingUsage, InternalError> {
     crate::ops::runtime::funding_usage::child(child)
 }
 

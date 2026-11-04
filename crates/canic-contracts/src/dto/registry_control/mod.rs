@@ -64,7 +64,7 @@ pub struct SynchronizeRequest {
     derive(ic_wire::Wire)
 )]
 pub struct Synchronization {
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub version: RegistryVersion,
     pub acknowledgement: crate::dto::coordinator_acknowledgements::RootAcknowledgement,
 }
@@ -76,7 +76,7 @@ pub struct Synchronization {
     derive(ic_wire::Wire)
 )]
 pub struct MirrorActivation {
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
     pub previous_registry: RegistryVersion,
     pub version: RegistryVersion,
     pub directory: crate::dto::runtime_configuration::FleetDirectorySnapshot,

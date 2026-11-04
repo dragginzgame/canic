@@ -3,6 +3,14 @@
 #[macro_export]
 macro_rules! __canic_emit_root_observation_updates {
     () => {
+        #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::root_observation::portable_policy::METHOD_ID, request = ::canic::protocol::root_observation::portable_policy::REQUEST_LIMITS, response = ::canic::protocol::root_observation::portable_policy::RESPONSE_LIMITS))]
+        async fn canic_root_observe_portable_policy(request: ::canic::dto::root_observation::Request<()>) -> Result<Result<::canic::dto::portable_inspection::PolicyReport, ::canic::dto::portable_inspection::Refusal>, ::canic::Error> {
+            $crate::__internal::core::api::observability::ObservabilityApi::observe_root_controlled_canister(request.canister_id.into(), ::canic::dto::observability::CanisterObservabilityRequest::PortablePolicy).await
+        }
+        #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::root_observation::portable_sessions::METHOD_ID, request = ::canic::protocol::root_observation::portable_sessions::REQUEST_LIMITS, response = ::canic::protocol::root_observation::portable_sessions::RESPONSE_LIMITS))]
+        async fn canic_root_observe_portable_sessions(request: ::canic::dto::root_observation::Request<::canic::dto::portable_inspection::Request>) -> Result<Result<::canic::dto::portable_inspection::Page, ::canic::dto::portable_inspection::Refusal>, ::canic::Error> {
+            $crate::__internal::core::api::observability::ObservabilityApi::observe_root_controlled_canister(request.canister_id.into(), ::canic::dto::observability::CanisterObservabilityRequest::PortableSessions(request.input)).await
+        }
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::root_observation::child_funding::METHOD_ID, request = ::canic::protocol::root_observation::child_funding::REQUEST_LIMITS, response = ::canic::protocol::root_observation::child_funding::RESPONSE_LIMITS))]
         async fn canic_root_observe_child_funding(request: ::canic::dto::root_observation::Request<$crate::__internal::ic_platform::Principal>) -> Result<::canic::dto::child_funding::ChildFundingUsage, ::canic::Error> {
             $crate::__internal::core::api::observability::ObservabilityApi::observe_root_controlled_canister(request.canister_id.into(), ::canic::dto::observability::CanisterObservabilityRequest::ChildFunding(request.input.into())).await

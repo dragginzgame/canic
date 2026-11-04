@@ -19,6 +19,11 @@ pub struct AuthorityRestoreApi;
 
 impl AuthorityRestoreApi {
     #[doc(hidden)]
+    pub fn restore_timer_suspension() -> Result<bool, Error> {
+        AuthorityRestoreWorkflow::restore_timer_suspension().map_err(Into::into)
+    }
+
+    #[doc(hidden)]
     pub fn initialize(authority_canister: Principal) -> Result<(), Error> {
         AuthorityRestoreWorkflow::initialize(authority_canister).map_err(Into::into)
     }

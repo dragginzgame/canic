@@ -12,7 +12,7 @@ use crate::{
     },
     ids::{BuildNetwork, ReleaseBuildId},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Complete CanicRuntimeStatus as a native transport projection.

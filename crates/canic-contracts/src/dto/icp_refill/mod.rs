@@ -31,6 +31,7 @@ pub struct IcpRefillRequest {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg(feature = "external-candid")]
 pub struct IcpRefillResponse {
     pub operation_id: [u8; 32],
     pub status: IcpRefillStatus,
@@ -63,6 +64,7 @@ pub struct IcpRefillDryRun {
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
 #[remain::sorted]
+#[cfg(feature = "external-candid")]
 pub enum IcpRefillEndpointResponse {
     DryRun(IcpRefillDryRun),
     Refill(IcpRefillResponse),
@@ -72,6 +74,7 @@ pub enum IcpRefillEndpointResponse {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "external-candid")]
     #[test]
     fn reexported_status_and_error_code_roundtrip_through_wire() {
         let response = IcpRefillResponse {

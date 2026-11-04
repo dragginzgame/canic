@@ -3,14 +3,13 @@
 use std::cell::RefCell;
 
 use canic::dto::public_status::{PublicMetric, PublicMetricKind};
-use ic_memory::Memory;
 use ic_storage::adapter::StableCell;
 
 const KEY: &str = "embedded_app.counter.v1";
 type Counter = StableCell<u64>;
 
-pub(super) fn memory_requests() -> Vec<ic_memory::MemoryRequest> {
-    vec![ic_memory::MemoryRequest::new("embedded-app", KEY).unwrap()]
+pub(super) fn memory_requests() -> Vec<ic_storage::MemoryRequest> {
+    vec![ic_storage::MemoryRequest::new("embedded-app", KEY).unwrap()]
 }
 
 thread_local! {
@@ -20,14 +19,22 @@ thread_local! {
 pub(super) fn install(initial: u64) {
     let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0, "fresh counter memory");
-    COUNTER.with_borrow_mut(|counter| *counter = Some(StableCell::create(memory, initial)));
+    COUNTER.with_borrow_mut(|counter| {
+        *counter = Some(StableCell::create(memory, initial).expect("open fixture collection"))
+    });
 }
 
 pub(super) fn restore() {
     let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0, "retained counter memory");
     COUNTER.with_borrow_mut(|counter| {
-        *counter = Some(StableCell::load(memory).expect("retained application counter"));
+        *counter = Some(
+            StableCell::load(
+                memory,
+                canic::__internal::contracts::serialization::STORAGE_LIMITS.bytes,
+            )
+            .expect("retained application counter"),
+        );
     });
 }
 
@@ -39,7 +46,7 @@ pub(super) fn increment() -> u64 {
     COUNTER.with_borrow_mut(|counter| {
         let counter = counter.as_mut().expect("initialized counter");
         let next = counter.get().saturating_add(1);
-        counter.set(next);
+        counter.set(next).expect("persist application count");
         next
     })
 }

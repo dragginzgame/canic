@@ -96,7 +96,8 @@ pub fn materialize(
     let mut document = serde_json::json!({
         "package": {
             "name": spec.package, "version": dependencies.canic_version,
-            "edition": "2024", "publish": false,
+            "edition": "2024", "rust-version": env!("CARGO_PKG_RUST_VERSION"),
+            "publish": false,
             "metadata": { "canic": { "app": spec.app, "role": spec.role } },
         },
         "workspace": { "resolver": "3" },
@@ -110,7 +111,7 @@ pub fn materialize(
     });
     if spec.build_script.is_some() {
         document["build-dependencies"] = serde_json::json!({
-            "canic": { "path": canic_root, "default-features": false, "features": [] },
+            "canic": { "path": canic_root, "default-features": false, "features": ["build-support"] },
         });
     }
     let mut source = toml::to_string(&toml::Value::try_from(document)?)?;

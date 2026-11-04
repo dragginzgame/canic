@@ -5,7 +5,7 @@
 //! Boundary: authoritative owners validate these passive shapes before storing or acting on them.
 
 use crate::ids::{FleetBinding, FleetKey, ReleaseBuildId};
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Maximum managed Canisters represented by one Fleet activation.

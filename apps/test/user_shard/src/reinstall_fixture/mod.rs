@@ -9,19 +9,18 @@ use std::cell::RefCell;
 
 const ROWS_KEY: &str = "test.user_rows.v1";
 
-canic::memory::memory_allocation_pool!(
-    provider = memory_pool,
+canic::memory::memory_allocation_grants!(
+    provider = memory_grants,
     authorities = [("test", "test.")],
-    exclusions = []
 );
 
 pub fn memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
-    input.pool = memory_pool().expect("fixture grants");
+    input.grants = memory_grants().expect("fixture grants");
     for key in [ROWS_KEY, super::fixture_importer::MEMORY_KEY] {
         input
             .requests
-            .push(ic_memory::MemoryRequest::new("test", key).expect("fixture memory request"));
+            .push(ic_storage::MemoryRequest::new("test", key).expect("fixture memory request"));
     }
     input
 }
@@ -40,10 +39,10 @@ pub struct UserRow {
 thread_local! {
     static ROWS: RefCell<BTreeMap<u64, u64, DefaultMemoryImpl>> = RefCell::new({
         let memory = canic::memory::open(ROWS_KEY);
-        if ic_memory::Memory::size(&memory) == 0 {
-            BTreeMap::create(memory)
+        if ic_storage::Memory::size(&memory) == 0 {
+            BTreeMap::create(memory).expect("open fixture collection")
         } else {
-            BTreeMap::load(memory)
+            BTreeMap::load(memory).expect("open fixture collection")
         }
     });
 }
@@ -53,14 +52,15 @@ pub fn seed() {
 }
 pub fn insert(id: u64, value: u64) {
     ROWS.with_borrow_mut(|rows| {
-        rows.insert(id, value);
+        rows.insert(id, value).expect("persist application row");
     });
 }
 pub fn rows() -> Vec<UserRow> {
     ROWS.with_borrow(|rows| {
         rows.iter()
+            .map(|entry| entry.expect("read application row"))
             .map(|entry| {
-                let (id, value) = entry.into_pair();
+                let (id, value) = entry.into_pair().expect("decode application row");
                 UserRow { id, value }
             })
             .collect()

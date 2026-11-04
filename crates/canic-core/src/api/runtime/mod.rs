@@ -2,6 +2,9 @@
 #[doc(hidden)]
 pub mod call_fixture;
 pub mod install;
+#[cfg(feature = "internal-test-fixtures")]
+#[doc(hidden)]
+pub mod intent_fixture;
 pub mod root_funding;
 #[cfg(feature = "internal-test-fixtures")]
 pub mod topup_fixture;
@@ -591,18 +594,18 @@ const fn timer_execution_outcome(
 }
 
 fn state_summary(role: Option<&str>) -> Option<RuntimeStateSummary> {
-    let memories = MemoryRegistryOps::ledger_snapshot()
+    let memories = MemoryRegistryOps::allocation_snapshot()
         .ok()?
         .memories
         .into_iter()
-        .map(|memory| (memory.stable_key, memory.memory_manager_id))
+        .map(|memory| (memory.stable_key, memory.allocation_id))
         .collect::<std::collections::BTreeMap<_, _>>();
     state_summary_for_memories(role, &memories)
 }
 
 fn state_summary_for_memories(
     role: Option<&str>,
-    memories: &std::collections::BTreeMap<String, u8>,
+    memories: &std::collections::BTreeMap<String, u64>,
 ) -> Option<RuntimeStateSummary> {
     role?;
     let mut domains = canic_state_descriptors()

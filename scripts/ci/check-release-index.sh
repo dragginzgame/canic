@@ -1,88 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$ROOT_DIR"
-
-consumer_lock_paths="$(bash "$SCRIPT_DIR/../release/adapter.sh" consumer-locks)"
-[[ -n "$consumer_lock_paths" ]] || { echo 'Release consumer lock inventory is empty' >&2; exit 1; }
-CONSUMER_LOCKS=()
-while IFS= read -r path; do CONSUMER_LOCKS[${#CONSUMER_LOCKS[@]}]="$path"; done <<< "$consumer_lock_paths"
-
-STAGED_FILES=()
-while IFS= read -r value; do STAGED_FILES[${#STAGED_FILES[@]}]="$value"; done < <(git diff --cached --name-only --diff-filter=ACMRD)
-
-if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
-  echo "No staged release files; run make release-stage first." >&2
-  exit 1
-fi
-
-DELETED_FILES=()
-while IFS= read -r value; do DELETED_FILES[${#DELETED_FILES[@]}]="$value"; done < <(git diff --cached --name-only --diff-filter=D)
-
-if [[ ${#DELETED_FILES[@]} -ne 0 ]]; then
-  echo "Release commit index contains staged deletions:" >&2
-  printf '  %s\n' "${DELETED_FILES[@]}" >&2
-  echo "Commit file removals separately before running make release-commit." >&2
-  exit 1
-fi
-
-is_release_file() {
-  case "$1" in
-    CHANGELOG.md | \
-      Cargo.toml | \
-      Cargo.lock | \
-      release-validation.json | \
-      scripts/dev/install_dev.sh)
-      return 0
-      ;;
-    docs/changelog/[0-9]*.[0-9]*.md)
-      return 0
-      ;;
-    */Cargo.toml)
-      return 0
-      ;;
-    *)
-      local lock
-      for lock in "${CONSUMER_LOCKS[@]}"; do
-        [[ "$1" != "$lock" ]] || return 0
-      done
-      return 1
-      ;;
-  esac
-}
-
-INVALID_FILES=()
-for file in "${STAGED_FILES[@]}"; do
-  if ! is_release_file "$file"; then
-    INVALID_FILES+=("$file")
-  fi
-done
-
-if [[ ${#INVALID_FILES[@]} -ne 0 ]]; then
-  echo "Release commit index contains non-release files:" >&2
-  printf '  %s\n' "${INVALID_FILES[@]}" >&2
-  echo "Commit code/docs changes separately before running make release-commit." >&2
-  exit 1
-fi
-
-DIRTY_FILES=()
-while IFS= read -r value; do DIRTY_FILES[${#DIRTY_FILES[@]}]="$value"; done < <(git diff --name-only)
-PARTIAL_FILES=()
-for staged in "${STAGED_FILES[@]}"; do
-  for dirty in "${DIRTY_FILES[@]}"; do
-    if [[ "$staged" == "$dirty" ]]; then
-      PARTIAL_FILES+=("$staged")
-    fi
-  done
-done
-
-if [[ ${#PARTIAL_FILES[@]} -ne 0 ]]; then
-  echo "Release files are staged with additional unstaged changes:" >&2
-  printf '  %s\n' "${PARTIAL_FILES[@]}" >&2
-  echo "Stage the final release file contents or split the work before release-commit." >&2
-  exit 1
-fi
-
-echo "✅ Release index contains only complete release files"
+root="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$root"
+bash scripts/release/selection.sh
+roster="$(mktemp "${TMPDIR:-/tmp}/canic-release-index.XXXXXX")"
+trap 'rm -f -- "$roster"' EXIT
+bash scripts/release/metadata.sh files > "$roster"
+[[ -n "$(git diff --cached --name-only)" ]] || { echo 'No staged release files' >&2; exit 1; }
+[[ -z "$(git diff --cached --name-only --diff-filter=D)" ]] || exit 1
+while IFS= read -r -d '' staged; do
+    admitted=false
+    while IFS= read -r -d '' path; do [[ "$staged" != "$path" ]] || admitted=true; done < "$roster"
+    [[ "$admitted" == true ]] || { echo "Unexpected staged path: $staged" >&2; exit 1; }
+    git diff --quiet -- "$staged" || { echo "Partially staged release file: $staged" >&2; exit 1; }
+done < <(git diff --cached --name-only -z)
+echo 'Release index contains complete selected-group files'

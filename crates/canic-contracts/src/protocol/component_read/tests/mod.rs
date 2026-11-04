@@ -59,7 +59,7 @@ fn child_failure_and_creation_preserve_retry_and_uncertain_effect_evidence() {
     )
     .unwrap();
     assert_eq!(RootComponentChildAllocationFailure::from(restored), failure);
-    let principal = ic_platform::principal::ExternalPrincipal::from_slice(&[3]);
+    let principal = ic_platform_types::principal::ExternalPrincipal::from_slice(&[3]);
     for canister in [None, Some(principal)] {
         let creation = RootComponentCreationEvidence {
             wasm_store: principal,
@@ -169,7 +169,7 @@ fn coordinator_failure_keeps_original_owner_deadline() {
             failed_at_ns: 41,
             retry_at_ns,
             stage: ProvisioningFailureStage::ComponentMembership,
-            target: ic_platform::Principal::from_slice(&[42]),
+            target: ic_platform_types::Principal::from_slice(&[42]),
             operation_id: [43; 32],
             diagnostic_code: 137,
             retry_category: ProvisioningRetryCategory::Backoff,
@@ -212,7 +212,7 @@ fn allocation_schema_covers_complete_authority_and_installation_evidence() {
 fn membership_frames_preserve_subject_and_negative_result() {
     use crate::dto::component_registry::{RootMembershipRequest, RootMembershipResponse};
     let request = RootMembershipRequest {
-        subject: ic_platform::Principal::from_slice(&[17]),
+        subject: ic_platform_types::Principal::from_slice(&[17]),
     };
     let bytes =
         ic_wire::native::encode_request(membership::METHOD_ID, &request, REQUEST_LIMITS).unwrap();

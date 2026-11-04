@@ -19,9 +19,9 @@ std::thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::ROOT_WASM_STORE_STATE_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, RootWasmStoreStateRecord::default())
+                Cell::create(allocation, RootWasmStoreStateRecord::default()).expect("Storage operation failed")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -295,7 +295,7 @@ impl RootWasmStoreState {
                     &data.publication_store,
                     true,
                 );
-                cell.set(data);
+                cell.set(data).expect("Storage operation failed");
             } else {
                 Self::validate_publication_store_transition(&previous, &previous, false);
             }
@@ -346,7 +346,7 @@ impl RootWasmStoreState {
                 };
             }
             data.root_store_bootstrap = Some(record.clone());
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
             Ok(record)
         })
     }
@@ -370,7 +370,7 @@ impl RootWasmStoreState {
                 return Err(SiblingWasmStoreAdoptionError::InventoryAlreadyPopulated);
             }
             data.sibling_wasm_store_adoption = Some(record.clone());
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
             Ok(record)
         })
     }
@@ -407,7 +407,7 @@ impl RootWasmStoreState {
                 gc: WasmStoreGcRecord::default(),
             });
             let committed = adoption.clone();
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
             Ok(committed)
         })
     }
@@ -476,7 +476,7 @@ impl RootWasmStoreState {
                 }
             }
 
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
             true
         })
     }
@@ -505,7 +505,7 @@ impl RootWasmStoreState {
                 return true;
             }
             record.gc = next;
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
             true
         })
     }
@@ -518,7 +518,7 @@ impl RootWasmStoreState {
                 .iter()
                 .position(|record| &record.binding == binding)?;
             let removed = data.wasm_stores.remove(index);
-            cell.set(data);
+            cell.set(data).expect("Storage operation failed");
             Some(removed)
         })
     }
@@ -578,7 +578,8 @@ impl RootWasmStoreState {
                 record.pid
             );
         }
-        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| cell.set(data.record));
+        ROOT_WASM_STORE_STATE
+            .with_borrow_mut(|cell| cell.set(data.record).expect("Storage operation failed"));
     }
 
     #[must_use]

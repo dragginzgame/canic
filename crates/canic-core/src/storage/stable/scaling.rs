@@ -12,14 +12,14 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static SCALING_REGISTRY: RefCell<
-        StableBtreeMap<Principal, WorkerEntryRecord, DefaultMemoryImpl>
+        StableBtreeMap<crate::cdk::types::PrincipalKeyRecord, WorkerEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::PLACEMENT_SCALING_REGISTRY_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -67,7 +67,8 @@ impl ScalingRegistry {
     /// Insert or update a worker entry
     pub(crate) fn upsert(pid: Principal, entry: WorkerEntryRecord) {
         SCALING_REGISTRY.with_borrow_mut(|map| {
-            map.insert(pid, entry);
+            map.insert(pid.into(), entry)
+                .expect("Storage operation failed");
         });
     }
 
@@ -77,9 +78,10 @@ impl ScalingRegistry {
         ScalingRegistryData {
             entries: SCALING_REGISTRY.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| ScalingRegistryEntryRecord {
-                        pid: *entry.key(),
-                        entry: entry.value(),
+                        pid: entry.key().principal(),
+                        entry: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),

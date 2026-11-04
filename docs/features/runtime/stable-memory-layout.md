@@ -1,389 +1,129 @@
 # Stable-memory layout
 
-Canic uses a single `ic-memory` runtime per canister.
-The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
-one virtual memory; it cannot be shared between IDs. The manager's own metadata
-page is separate. This setting reduces the minimum physical allocation of a
-small populated store from 8 MiB to 1 MiB.
+Canic composes one `ic-storage` runtime per canister. Storage owns the physical
+backing, allocation directory, exclusive leases, codecs and collections. Canic
+owns its permanent store keys, namespace grants, lifecycle ordering and domain
+records. The current Storage family requires clean reinstall across releases;
+same-release restart, snapshots and interruption recovery remain supported.
 
-## Upstream allocation and metrics formats
+## Host namespace grants
 
-Memory 0.56 owns the bounded native Wire allocation ledger: physical records use
-`ICML` and ledger snapshots use `ICMWIRE1`. Metrics Stable 0.56 retains its Wire
-rows with `ICMW`. Their upstream owners validate these schemas and bounds; Canic
-composes allocation requests and restoration through the single host runtime.
-These release selections require clean reinstall. Same-release restoration uses
-the selected formats and never resets a malformed ledger or substitutes empty rows.
-
-## Owned stable-value format
-
-Canic-owned Serde stable records and checkpoints use native IC Wire with the
-four-byte `CSW\x01` storage marker. Memory ownership selects the exact record
-schema; the marker is checked before record visitors run. Wire owns numeric and
-container encoding, complete-input validation and traversal admission, including
-full-range `u128`. There is no intermediate decoding tree. One value admits at
-most 64 MiB encoded bytes, 1 GiB of conservative traversal allocation allowance,
-64 Mi visited nodes and depth 128. Existing narrower record ceilings remain.
-
-This is a clean-reinstall hard cut. Same-release upgrades, snapshots and
-interruption recovery use the current Wire records; no predecessor reader or
-state conversion is provided. Upstream Auth, Metrics Stable and fixed-width
-records retain their owners' formats.
-
-Checkpoint authority/unit hashes, caller-publication and census hashes, and
-completed-subtree receipt hashes use native `protocol::authority` bytes with
-explicit `.wire.v1` domains, independently of storage envelopes. Their producers
-and validators move together. Dedicated Fleet activation hash inputs and Host
-release-build records retain their fixed CBOR formats and domains; required
-external IC certificates and protocols also retain their specified encoding.
-
-## Bootstrap and store access
-
-Canic components return explicit request lists from the same named keys used by
-their stores. The host supplies their complete composition to ic-memory before
-any lazy store opens. Invalid or duplicate requests fail before allocation
-authority is published. Canic retains its authority constants and store-readiness
-checks; memory bootstrap has no constructor or registration hooks.
-
-Canic commits the allocation declarations and runs composed admission before
-stable-memory access. This reserves and validates the declared slots without
-opening every store. Stable stores use ordinary `std::thread_local!` and open
-on their first selected access; declaring a slot does not allocate its payload
-pages. The allocation report includes declared but unopened slots.
-
-Lifecycle owners restore the state they need synchronously before invoking a
-configured lifecycle participant or scheduling deferred work. A lazy store
-still checks bootstrap readiness and its exact committed stable key.
-Application storage must follow the same bootstrap-before-access ordering.
-
-Provider metrics add `canic.core.metrics.providers.v1` only when a compiled
-variant of that role selects stable provider storage. The active heap variant
-does not open the map. All stable providers share this governed allocation;
-IC Metrics Stable owns its encoded records and checkpoint validation. State
-tooling reports the upstream-owned map as an explicit memory reservation rather
-than inventing a Canic record or snapshot schema.
-Early default-runtime opens return typed `RuntimeOpenError::NotBootstrapped`
-without constructing a manager or selecting its bucket size. Committed ID
-resolution and authority verification also observe only an existing runtime.
-Canic owns one explicit `MemoryRuntime` and opens application handles through
-`canic::memory::open`. Components contribute requests to the host composition;
-they must not construct another manager over the same backing memory. Independent
-hosts can use their runtime's `memory_id` and `verify_authority` methods to inspect
-committed keys and ownership before injecting handles into components.
-
-### Native composed tests
-
-Canic's own unit tests install a bootstrap hook under `cfg(test)`. An application
-compiling Canic as a dependency does not receive that hook. Initializing a
-database alone is not Canic test initialization, even when package identities
-have been unified.
-
-Use the same composed memory declarations and admission callback as the Wasm
-artifact. Bootstrap through the owning framework before the database's native
-initialization helper and before opening Canic stores:
+Components return complete checked `MemoryRequest` lists without opening stores.
+The host combines those requests and selects `AllocationGrants` before bootstrap.
+The framework contributes `canic-core` / `canic.core.` and
+`canic-control-plane` / `canic.control_plane.`. Application namespaces must be
+disjoint; a request cannot grant its own owner, choose an allocation ID or open
+another runtime over the backing.
 
 ```rust
-canic::memory::bootstrap(application_memory())
-    .expect("Canic composed memory bootstrap");
-// Run the application's generated database initialization helper next.
-```
-
-The Canic-owned runtime is thread-local: run this ordering on every native thread
-that uses it. A process-global `Once` or a mutex serializing test bodies does
-not initialize another thread's runtime. Request-execution wrappers and the
-database's native helper retain their own startup/convergence responsibilities.
-Do not let the database choose a standalone bootstrap policy before the host
-has selected its composed policy and compiled bucket geometry.
-
-## Capacity and selection
-
-A bucket is allocation granularity, not a per-store size limit. Stores grow by
-acquiring more buckets. The manager has 32,768 bucket slots shared across all
-virtual memories in a canister. Consequently smaller buckets also reduce its
-addressable managed capacity:
-
-| Build setting | Bucket bytes | Manager bucket-table capacity |
-| --- | ---: | ---: |
-| `CANIC_MEMORY_BUCKET_PAGES=1` | 64 KiB | 2 GiB |
-| `CANIC_MEMORY_BUCKET_PAGES=8` | 512 KiB | 16 GiB |
-| `CANIC_MEMORY_BUCKET_PAGES=16` (default) | 1 MiB | 32 GiB |
-| `CANIC_MEMORY_BUCKET_PAGES=32` | 2 MiB | 64 GiB |
-| `CANIC_MEMORY_BUCKET_PAGES=64` | 4 MiB | 128 GiB |
-| `CANIC_MEMORY_BUCKET_PAGES=128` | 8 MiB | 256 GiB |
-
-These are manager addressing ceilings, not a promise of available IC memory,
-cycles or application capacity. The setting accepts any nonzero `u16` number
-of pages. Invalid values fail the build. Smaller selections reduce allocation
-slack and manager capacity together; the qualified default is 16 pages. Select a
-larger value when building an
-application expected to outgrow 32 GiB, including its database, indexes,
-framework allocations and headroom. The environment variable must accompany
-the actual artifact build, rather than only a later install command.
-
-Direct `RuntimeMemory::grow` calls return `Result<u64, RuntimeGrowError>`.
-Backing refusal, arithmetic overflow, bucket exhaustion and reentrant growth
-remain typed; ordinary refusal preserves virtual extents and manager metadata
-for retry. Only the upstream `Memory` trait adapter maps failures to its required
-`-1` sentinel. Canic's application-receipt capacity reservation retains the typed
-growth source in its ops error and refuses admission before inserting a receipt.
-Ledger growth failure returns `RuntimeBootstrapError::LedgerGrowth` without
-publishing committed allocation authority; the same attempt can retry.
-
-Cargo tracks the variable through the core build script; Canic's complete-build
-reuse fingerprint also includes the build environment. The selected size is
-compiled into each artifact and supplied to ic-memory before stable stores open.
-`canic::memory::configured_bucket_pages()` exposes that compiled selection.
-There is no runtime resize, automatic switch or per-ID bucket override. Changing
-this setting belongs to a fresh installation at a release boundary. Same-release
-reopen and interruption recovery retain the same manager geometry.
-
-The 1 MiB default balances the many small framework stores against manager
-capacity. It is not claimed to be globally optimal for every application's data
-or workload. Application-owned stores share the same manager geometry;
-Canic does not change their schemas or permanent key identities.
-
-Consumers composed into the same canister must use the same ic-memory package
-identity. Qualify consumer-specific composition in the consuming application's
-repository. Canic's production Wasm dependency guard requires a single memory
-runtime in the selected deployed graph; Canic's own fixture suite contains no
-database dependency.
-
-Application role validation also rejects multiple reachable `ic-memory` package
-identities with `role_contract_multiple_memory_runtimes` before compiling the
-role. Whole-App builds validate all configured roles before compiling infrastructure.
-Single-role checks follow the actual `--features` and `--no-default-features`
-selection. The check uses the existing selected-package Wasm dependency evidence;
-it does not scan every package in the workspace lockfile. Build/dev dependencies,
-inactive features, native-only edges and procedural-macro subtrees do not count.
-Renamed runtime dependencies do count, and equal versions from different package
-sources are still distinct runtimes. Align the application's framework/database
-dependencies to one package identity, then qualify their composed lifecycle.
-
-Package identity alignment is necessary, not sufficient. Selected consumer
-APIs must compose with host admission, grants must accommodate the actual
-schema, and the database must verify/adopt the already committed host
-authority rather than starting an independent manager. Qualification covers
-fresh installation, repeated identical-Wasm upgrades and native initialization.
-Changing a dependency across a release boundary follows clean reinstall;
-repeated-upgrade evidence uses one exact selected release artifact.
-
-### Qualification failures and upstream feedback
-
-A direct Cargo fixture asserting `CANIC_ROLE_CONTRACT_VALIDATED=1` must separately
-retain evidence that the selected Wasm dependency graph passed role validation.
-The marker is the result of that validation, not a replacement for it. A manually
-asserted marker does not establish that a duplicate memory runtime was excluded.
-
-An unbootstrapped Canic receipt-backed intent store in a native consumer test
-identifies missing host initialization; database readiness alone does not satisfy
-it. A lifecycle trap carrying only `E137` identifies a generic invalid state.
-Canic currently projects memory bootstrap failures through that invariant path,
-so the code alone cannot distinguish declaration, policy, geometry, recovery or
-consumer-admission failures. Canic must retain the underlying typed cause at
-the bootstrap/lifecycle diagnostic boundary before assigning an upstream defect.
-
-Actionable ic-memory qualification feedback is a composed-host example and a
-repeated cold-reopen regression: bootstrap with one host policy and consumer
-admission, verify the consumer authority without replaying host admission, write
-selected stores, and reconstruct the runtime over the same backing twice with
-unchanged declarations and geometry. Each cold attempt runs admission; warm
-verification does not. Observe exact IDs, allocation authority and retained
-bytes, and assert typed failures with no candidate commitment on rejection.
-Include the native per-thread bootstrap ordering in the example. Canic-owned
-PocketIC evidence must additionally exercise its lifecycle participants and
-store restoration; a substrate regression cannot substitute for that proof.
-The reported Toko failures do not yet establish an ic-memory implementation bug.
-
-A Canic-owned standalone PocketIC regression installs the runtime, retains a
-TTL-free local intent reservation and upgrades the exact same Wasm twice. It
-checks memory ownership and geometry, reservation denial and the persistent
-intent counter after both cold restorations. This passes with Canic 0.110.51 and
-ic-memory 0.15.3. It covers Canic's local intent stores and lifecycle participant;
-it does not reproduce Toko's Generator, IcyDB composition or the native
-receipt-backed store at memory ID 45. Matching package identities remains a
-prerequisite for a composed artifact, not a sufficient qualification result.
-
-## Host allocation pool
-
-The artifact owner selects one `MemoryAllocationPool`, including Canic's
-`canic-core` / `canic.core.` and `canic-control-plane` / `canic.control_plane.`
-grants. Every additional linked component needs an explicit disjoint namespace
-grant. A declaration contributes only its owner and permanent key; it cannot
-choose a physical ID. Framework-only artifacts use the framework grants.
-
-Select the final application pool once, before bootstrap:
-
-```rust
-canic::memory::memory_allocation_pool!(
-    provider = application_memory_pool,
-    authorities = [("app", "app."), ("jobs", "jobs.")],
-    exclusions = [],
+canic::memory::memory_allocation_grants!(
+    provider = application_memory_grants,
+    authorities = [("app", "app.")],
 );
 
 fn application_memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
-    input.pool = application_memory_pool().expect("application grants");
-    input.requests.extend(app::memory_requests().expect("app requests"));
-    input.requests.extend(jobs::memory_requests().expect("jobs requests"));
+    input.grants = application_memory_grants().expect("host namespace grants");
+    input.requests.extend(application_requests().expect("application requests"));
     input
 }
-// Pass memory = application_memory(), first in canic::start!(...).
 ```
 
-All owners share eligible IDs 10 through 254. Governance IDs 0 through 9 are
-excluded. Additional exclusions protect actual unmanaged physical users, not
-component partitions. Populated unmanaged IDs in the pool refuse bootstrap
-before commitment. Omitted, reserved and retired ledger keys retain their IDs;
-removing a component never frees its slots. Current grants determine diagnostic
-owner labels, which are not durable allocation identity.
+Pass that composition to `canic::start!(memory = application_memory(), ...)`.
+Canic supplies `StorageConfig::default()` to the single owner. Storage enforces
+its allocation, extent, physical-page and Wire budgets. Growth uses Wasm pages
+and returns typed `RuntimeGrowError`, including capacity, arithmetic and backing
+refusal. An ordinary refusal preserves the prior allocation for retry.
+Allocation IDs are opaque `u64` values selected by Storage; callers use checked
+`StableKey` inputs and inspect `allocation_id` only for diagnostics.
 
-For a generated database that requires a pool-provider function, name that
-function in the same declaration:
+Declaring a store does not allocate its payload pages. Lazy stores open through
+`canic::memory::open(key)` after committed bootstrap. Their exclusive leases
+retain backing custody even if the runtime handle is dropped. Store APIs own
+capacity reservations; observation must not open a second lease.
+
+## Lifecycle and composed admission
+
+Lifecycle restores Canic's invariants synchronously, then runs the selected
+synchronous participant, then schedules deferred application work. A participant
+uses `canic::memory::runtime::shared_runtime()` to verify its requirements and
+open its admitted keys. It does not become a second lifecycle or storage owner.
+
+An optional `MemoryBootstrapAdmission::new(identity, prepare)` supplies one
+composed pre-commit callback. Its identity is a `[u8; 32]` digest covering the
+callback's semantics and configuration. Cold bootstrap invokes admission before
+publishing authority; warm verification requires the same declarations, grants
+and policy and does not rerun admission. Consumer errors retain their typed
+source through `MemoryRegistryError::Admission`.
+
+Native consuming applications must perform the same composition on every thread
+that touches Canic storage, before database initialization or store access:
 
 ```rust
-canic::memory::memory_allocation_pool!(
-    provider = icydb_memory_pool,
-    authorities = [("icydb.app", "icydb.app.")],
-    exclusions = [],
-);
+canic::memory::bootstrap(application_memory()).expect("composed host bootstrap");
 ```
 
-This emits the checked `icydb_memory_pool()` builder in the invocation module and
-supplies the host composition. Do not author a second grant/exclusion list.
-The builder returns the upstream `MemoryAllocationPool`/`MemoryAllocationPoolError`
-result, without reading a sealed runtime or registering, sealing or bootstrapping
-again. It is available before bootstrap and after warm adoption. Declare it at
-the crate root when generated IcyDB code requires `crate::icydb_memory_pool`.
-Canic still owns the composed admission and lifecycle ordering; the provider
-does not replace the database's preparation or restoration participant.
-Authored exclusions list individual numeric IDs, for example
-`exclusions = [240, 241, 242]`. Invalid IDs and namespace/pool failures return
-the upstream typed error.
+A process-global `Once` does not initialize another thread's runtime. Canic's own
+unit-test hook is not installed for applications compiling it as a dependency.
+Actual database composition belongs to the consuming application's qualification.
 
-Protected allocation observations expose `pool_eligible`, independently of a
-current or retained ledger binding. Protected ledger observations include the
-selected `allocation_pool` grants and `excluded_ids`. Allocation records report
-key, slot, state and measured size; application schemas remain component-owned. Static role manifests use
-`memory_key`; public runtime state summaries resolve their numeric `memory_id`
-from the current protected ledger. A pool cannot change after selection or replace
-an established runtime binding. Release transitions remain clean reinstall;
-these retained bindings qualify same-release recovery only.
+## Records and collections
 
-## Composed consumer admission
+Canic-owned Serde records and checkpoints use native Wire with the `CSW\x01`
+storage marker. The maintained record ceiling is 64 MiB encoded bytes, 1 GiB
+conservative traversal allocation allowance, 64 Mi visited nodes and depth 128;
+narrower record bounds still apply. Fixed-width keys retain their explicit
+encodings. Principal map keys use Canic's `PrincipalKeyRecord` and preserve the
+canonical raw principal bytes.
 
-A consuming application passes a complete `canic::memory::MemoryBootstrap` to
-`canic::start!(memory = application_memory(), ...)`. Begin with
-`canic::memory::framework()`, extend its requests with each component's complete
-request factory, select the checked host pool and set its optional `admission`
-to `MemoryBootstrapAdmission::new(identity, prepare)`. Stores and request factories
-share named keys; opening a lazy store contributes no declaration.
+`Storable` encoding and decoding return typed codec errors. Storage collection
+construction, access and iteration are fallible. `StableCell::load` also requires
+an explicit payload ceiling and checks integrity before decoding. Metrics
+provider rows use `ic-metrics-storage`; the upstream adapter owns their schema
+and validation. Host diagnostics report a reservation for that upstream map.
 
-Canic invokes admission over the complete sealed snapshot on each cold bootstrap
-attempt, after ledger recovery and before commitment. The Memory runtime owns
-ledger persistence and capability publication. Warm reuse requires identical
-requests, pool and policy and does not rerun admission. The synchronous lifecycle
-participant still runs after Canic restoration.
+Checkpoint and authority hash domains retain their maintained Wire contracts.
+Required external IC protocols, dedicated Fleet activation commitments and Host
+release-build records keep their separately specified encodings.
 
-The callback's semantic name, version and optional configuration digest are bound
-into Canic's policy configuration digest. Change that identity when the admission
-contract changes. Hosts with multiple consumers compose them in one callback and
-propagate each rejection; they supply one composed callback. Typed
-consumer errors remain available in `MemoryRegistryError::Admission`; Canic's
-existing lifecycle error boundary still maps bootstrap failures to its error code.
-A rejected attempt cannot commit the candidate allocation set.
+## Allocation reporting and dependency identity
 
-Consumer admission must account for its own historical namespaces and outstanding
-recovery obligations. Release transitions remain reinstall-only. Application
-allocations are identified by stable key; the committed ledger owns each key's
-manager ID. Declaration order can affect IDs in a fresh installation, so inspect
-`MemoryAllocations` for the selected canister rather than assuming a fixed ID.
-Artifacts without a callback retain the base policy identity.
+The protected allocation report reads the committed Storage directory without
+opening stores, writing, growing memory or advancing its generation. It reports
+retained keys, opaque IDs and logical capacities, including unopened zero-page
+allocations. Its summary separates data pages, directory metadata, unassigned
+physical pages and the one protected root page. Capacity does not establish
+record payload occupancy or reclaimable space.
 
-## Representation and consolidation
+Role validation rejects multiple reachable Storage identities with
+`role_contract_multiple_storage_runtimes`. It uses the selected normal Wasm
+graph, including active features and renamed dependencies. Build/dev edges,
+native-only dependencies and proc-macro subtrees do not define that runtime.
+The adoption guard also requires one Platform Runtime and Runtime Guard in
+each selected root and private-consumer graph. Matching package identities are
+necessary; lifecycle and authority composition still need behavioral proof.
 
-- Activation (`canic.core.fleet.activation.v1`), the restore fence
-  (`canic.core.authority_restore.fence.v1`), admission projection
-  (`canic.core.fleet_admission.projection.v1`) and Coordinator admission
-  (`canic.control_plane.fleet_admission.v1`) each use their own optional bounded
-  cell. Empty state remains explicit. The cell checks the complete encoding
-  before writing; declared record limits remain enforced. Independent authority
-  records stay separate.
-- `canic.control_plane.root.component_provisioning.operations.v1` retains the
-  multi-record provisioning map. Its B-tree allocator uses small
-  overflow pages, while its encoder and decoder enforce the existing 8,650,000
-  byte record ceiling. The large logical record limit no longer sizes every
-  B-tree node for the worst case.
-- Receipt storage owns its application replay deadline. Intent metadata maintains the exact
-  application receipt count for constant-time capacity reporting. Insertion,
-  replacement and reclamation maintain that count; reconciliation validates it.
-  Cleanup eligibility remains in the ordered application eligibility allocation, including reserved capacity and
-  exact binding/revision validation. The separate deadline allocation is removed.
-- Shard registry owns its activation flag. Registration records activation in the
-  same row; selection still checks activation and routing authority. Assignment
-  lookup remains in the assignments allocation. The separate active-set allocation and facades are
-  removed.
-- Child projection retains each Component child's allocation operation ID.
-  Scaling workers, bound index keys, shard entries and individual
-  partition assignments retain the same identity. Reusing a physical canister
-  does not grant its earlier assignments routing authority. Canonical child
-  snapshots retain this identity; infrastructure topology carries no Component
-  allocation. Directory refresh replaces the bounded child projection without
-  scanning partition assignments.
+## Retained store boundaries
 
-This is a hard cut of the maintained stable layout. Release transitions are
-reinstall-only. There are no old-layout readers or migration paths. Canonical
-snapshots and same-release recovery use the maintained records.
+Independent authority, funding, authentication, replay and telemetry owners keep
+their separate lifetimes. Ordered expiry, pending, reverse-lookup and terminal
+eligibility indexes preserve bounded reads. The Component provisioning map
+retains its checked record ceiling. Receipt metadata owns application count and
+replay retention; cleanup reserves its own eligibility capacity before admission.
+Shard rows own activation, while routing still checks the current allocation
+operation identity.
 
-## Template decisions
+Template manifests, staged chunk sets, compact chunk references and payload
+vectors remain separate. Manifest approval and chunk cleanup have different
+lifetimes. GC counts resolvable slots from references and vector length without
+loading chunk bodies. Current-family tests must qualify these decisions; older
+allocator measurements do not describe this Storage graph.
 
-Keep template manifests and staged chunk-set metadata separate. Approval can be
-removed while staged chunks remain. Combining them would make manifest listing
-and approval updates read/write the chunk hash list as well. With one 40-chunk
-release, the standalone manifest encodes to 191 bytes; the candidate aggregate
-encodes to 2,946 bytes. A saved small bucket does not justify coupling these
-paths.
+## Maintained allocation inventory
 
-Keep the compact chunk-reference map and payload vector separate. An isolated
-measurement with the pinned ic-stable-structures 0.7.2 compares eight chunks and
-counts calls to the backing `Memory` interface:
-
-| Bytes per chunk | Split virtual pages | Direct-map virtual pages | Split reads | Direct-map reads | Split writes | Direct-map writes |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 4,096 | 114 | 1 | 201 | 465 | 220 | 527 |
-| 1,048,576 | 130 | 132 | 201 | 74,706 | 220 | 87,140 |
-
-The direct map saves space for tiny chunks but uses more space and approximately
-372 times as many backing reads for full chunks. Counts are storage-call
-measurements, not IC instruction or wall-time ratios. The vector retains its
-1,048,580-byte slot stride; short nonfinal slots and cleared slots can leave
-unused space. That remaining tradeoff is explicit. A packed bulk-data allocator
-would be a separate design, rather than forcing bulk payloads through B-tree
-overflow chains.
-
-GC chunk counting uses the reference map and the payload vector's length. It
-does not load chunk bodies merely to count resolvable slots. This avoids up to
-1 MiB of transient payload buffering per visited chunk and payload-volume reads
-during accounting; it does not reduce allocated stable pages. Empty payloads
-remain valid slots, and out-of-range references remain excluded. Reopen and
-bounded metadata-read checks cover this path.
-
-Further physical reductions would need a separate measured change: packing
-short bulk chunks, avoiding unnecessary store initialization where lifecycle
-invariants permit it, or qualifying smaller buckets for known-capacity roles.
-None is assumed safe from empty-store measurements alone. The default remains
-1 MiB so this follow-up does not reduce the shared manager capacity again.
-
-## Inventory and retained boundaries
-
-The following inventory covers every maintained Canic-owned allocation. Role
-and feature selection determine which entries a canister actually opens. Bucket
-selection applies to the whole manager; individual record bounds do not reserve
-that amount in cells. ic-memory owns its ledger at ID 0. Managed receiver roles
-select caller-authority header and indexed rows under the Core owner.
-Root publication journals and recipient indexes share the existing Component
-Registry entries owner. This maintained layout uses the pre-1.0
-reinstall-only boundary; same-release restoration validates current installation
-and publication authority before application hooks.
+Role and feature selection determine the declared stores and those opened by
+lifecycle. The upstream directory is outside application allocations and has no
+application-selected ID.
 
 | Stable key | Representation |
 | --- | --- |
@@ -444,50 +184,33 @@ and publication authority before application hooks.
 | `canic.core.auth.root_delegation.state.v1` | Cell |
 | `canic.control_plane.fixture_store.v1` | B-tree |
 
-Retain the independent funding, registry, authority, authentication, replay and
-telemetry owners. Live assets and completed handoff receipts have different
-lifetimes. Ordered expiry, pending membership, reverse lookups and terminal
-eligibility avoid unbounded scans; they remain separate indexes. Fixture Store
-is a related typed namespace and remains separate from executable
-template authority. A smaller bucket reduces the minimum footprint of these
-small owners without coupling their mutation or retention rules.
-
 ## Qualification
 
-The maximum Coordinator admission fixture encodes to 2,055,610 bytes. Its
-bounded cell uses 2,097,152 virtual bytes and 2,162,688 physical bytes including
-the isolated manager metadata: 2 MiB plus one 64 KiB page. The four empty
-singleton types each use one virtual page. Their declared maxima remain record
-ceilings rather than preallocated B-tree node capacity.
+Focused tests cover explicit namespace admission, uncommitted-read refusal, warm
+identity checks, cold reopen, exclusive custody, growth refusal, typed codec
+rejection, metrics failure retention and receipt capacity. Installed Canic
+lifecycle and dedicated/embedded Blob evidence must identify the exact selected
+graph. A native substrate result does not replace installed or downstream
+application acceptance.
 
-The targeted qualification covers bounded-cell reopen and rejection before
-writes, full-width count encoding, receipt retry/reconciliation/reclamation,
-reserved cleanup space at the 1,000-record admission limit, shard activation and
-registry reopen, manifests, memory ownership and descriptor inventories.
-Template storage-call measurements above are native isolated-memory results.
-The disposable Fleet Root reports 47,251,456 bytes (45.0625 MiB) of allocated
-stable memory, including 2,949,120 bytes of virtual extent. Virtual extent is
-not a payload-occupancy measurement. Protected observation preserves stable
-bytes and controller authority. Receipt conformance survives same-release
-restart, exact retries, settlement and reclamation. The historical seven-case
-database composition run also covered held replies and consumer reinstall;
-that consumer suite is no longer maintained in Canic.
+## Storage 0.65.1 template measurement
 
-The three governed runtime targets took 359s, 51s and 191s including builds and
-runner setup. All 1,643 source/lock inputs stayed unchanged. These results
-qualify the fresh-layout default; they do not measure the current Toko Miner
-estate or establish worst-case instruction cost for every maximum-sized record.
-Large provisioning records still traverse overflow pages when loaded.
+The native comparison writes and reads eight chunks through each layout. Counts
+are calls to the backing interface, not IC instructions or wall time. Split pages
+include both independent backing directories; direct pages include its directory.
 
-Allocation policies receive a checked `ic_memory::MemoryManagerSlot`. Its
-constructor and decoder reject ID 255, and `.id()` returns a usable ID directly.
-The host pool owns namespace grants and physical exclusions; Canic retains
-its reservation and admission decisions; the
-upstream slot type does not grant allocation authority.
+| Bytes per chunk | Split physical pages | Direct physical pages | Split reads | Direct reads | Split writes | Direct writes |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4,096 | 136 | 5 | 32 | 32 | 71 | 34 |
+| 1,048,576 | 136 | 260 | 32 | 32 | 71 | 48 |
+
+The previous overflow-read penalty no longer applies. The current split layout
+retains lower physical capacity for full chunks; a direct map packs tiny chunks
+more efficiently. A different packing policy needs its own workload evidence.
+
 
 ## Continue From Here
 
-- [Review update payload limits](update-payload-limits.md)
+- [Read protected and public observations](public-observability.md)
 - [Browse runtime features](README.md)
-- [Browse all documentation](../../README.md)
 - [Back to the main README](../../../README.md)

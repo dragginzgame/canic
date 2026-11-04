@@ -34,23 +34,25 @@ use crate::{
 };
 use canic_contracts::{
     cycles::Cycles,
+    dto::cycle_drain::{DrainRequest, DrainResponse},
     dto::pool::{
         CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
         CanisterPoolCreationFailure, CanisterPoolCreationProgress, CanisterPoolHandoff,
         CanisterPoolResponse, CanisterPoolStatusRequest,
     },
 };
-use canic_contracts::{ids::BuildNetwork, protocol as canic_protocol};
+use canic_contracts::{
+    ids::BuildNetwork, protocol as canic_protocol, protocol::cycle_drain as drain_wire,
+};
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_platform::{
-    candid::contract::{CandidType, Nat},
+    candid::contract::Nat,
     cycles_ledger_types::{
         CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
         CreateCanisterSuccess, SubnetSelection, WithdrawArgs, WithdrawError,
     },
     principal::ExternalPrincipal as Principal,
 };
-use serde::Deserialize;
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
@@ -91,23 +93,6 @@ fn is_unallocated_fresh_root(
                     .iter()
                     .any(|root| root.root == configured.name)
         })
-}
-
-/// Exact input expected by a configured cycle-safe retirement endpoint.
-
-#[derive(CandidType)]
-#[candid_path("ic_platform::candid::contract")]
-struct DrainRequest {
-    operation_id: String,
-    destination: Principal,
-    cycles: Nat,
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum DrainResponse {
-    Accepted { transferred_cycles: Nat },
-    Replayed { transferred_cycles: Nat },
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -652,7 +637,13 @@ pub enum IcpEnsurePlatformError {
     UnresolvedCreated(String),
 
     #[error("configured retirement endpoint transferred {actual} cycles, expected {expected}")]
-    WrongTransferAmount { actual: Nat, expected: u128 },
+    WrongTransferAmount { actual: u128, expected: u128 },
+
+    #[error(transparent)]
+    DrainWire(#[from] crate::icp::IcpWireQueryError),
+
+    #[error("retirement endpoint rejected the original operation: {0}")]
+    DrainRejected(canic_contracts::dto::error::Error),
 
     #[error(
         "retirement transfer for {canister} is not conserved: source debit {source_debit}, treasury credit {destination_credit}, expected credit {expected}, maximum source debit {maximum_source_debit}; source and treasury were left untouched by later retirement steps"
@@ -3159,29 +3150,37 @@ impl IcpEnsurePlatform {
     fn apply_transfer(
         &self,
         amount: u128,
-        candid: &str,
-        candid_sha256: &str,
+        wire_schema: &str,
+        wire_schema_sha256: &str,
         destination: &str,
         method: &str,
         operation_id: &str,
         principal: &str,
     ) -> Result<EffectOutcome, IcpEnsurePlatformError> {
-        let candid = resolve_path(&self.root, candid);
-        if !candid.is_file() {
-            return Err(IcpEnsurePlatformError::CandidUnavailable(candid));
+        let schema = current_protocol::read_schema(&resolve_path(&self.root, wire_schema))?;
+        let actual = canic_core::cdk::utils::hash::sha256_hex(&schema);
+        if actual != wire_schema_sha256 {
+            return Err(IcpEnsurePlatformError::ArtifactDigestMismatch {
+                actual,
+                expected: wire_schema_sha256.into(),
+                kind: "drain Wire schema",
+            });
         }
-        verify_artifact(&candid, candid_sha256, "drain Candid")?;
-        let response: DrainResponse = self.icp.canister_call_candid(
-            principal,
-            method,
-            &DrainRequest {
-                operation_id: operation_id.to_string(),
-                destination: parse_principal("treasury", destination)?,
-                cycles: Nat::from(amount),
-            },
-            Some(&candid),
-        )?;
-        let transferred = match response {
+        super::admit_drain_schema(&schema, method)?;
+        let response: Result<DrainResponse, canic_contracts::dto::error::Error> =
+            self.icp.canister_update_wire(
+                principal,
+                method,
+                drain_wire::METHOD_ID,
+                &DrainRequest {
+                    operation_id: operation_id.to_string(),
+                    destination: parse_principal("treasury", destination)?.into(),
+                    cycles: amount,
+                },
+                drain_wire::REQUEST_LIMITS,
+                drain_wire::RESPONSE_LIMITS,
+            )?;
+        let transferred = match response.map_err(IcpEnsurePlatformError::DrainRejected)? {
             DrainResponse::Accepted { transferred_cycles }
             | DrainResponse::Replayed { transferred_cycles } => transferred_cycles,
         };
@@ -4543,16 +4542,16 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 }
                 EnsureAction::Transfer {
                     amount,
-                    candid,
-                    candid_sha256,
+                    wire_schema,
+                    wire_schema_sha256,
                     destination,
                     method,
                     principal,
                     ..
                 } => platform.apply_transfer(
                     *amount,
-                    candid,
-                    candid_sha256,
+                    wire_schema,
+                    wire_schema_sha256,
                     platform
                         .current_principal(state, destination)
                         .ok_or_else(|| {
@@ -5217,6 +5216,8 @@ fn render_ledger_transfer_error(error: TransferError) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    mod drain;
     #[cfg(unix)]
     mod snapshots;
 

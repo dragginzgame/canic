@@ -119,7 +119,10 @@ impl LifecycleApi {
     > {
         canic_core::api::authority_restore::AuthorityRestoreApi::prepare_root_snapshot(
             request,
-            crate::workflow::root_funding::require_authority_snapshot_resumable,
+            || {
+                crate::workflow::component_registry::require_continuations_settled()?;
+                crate::workflow::root_funding::require_authority_snapshot_resumable()
+            },
             crate::workflow::canister_pool::suspend_for_authority_snapshot,
         )
         .await
@@ -380,7 +383,7 @@ impl LifecycleApi {
     pub fn accept_root_funding(
         request: canic_contracts::dto::fleet_funding::FleetRootFundingAcceptanceRequest,
     ) -> Result<
-        canic_contracts::dto::fleet_funding::FleetRootFundingAcceptanceReceipt,
+        canic_contracts::dto::fleet_funding::FleetRootFundingAcceptanceOutcome,
         canic_contracts::dto::error::Error,
     > {
         crate::workflow::root_funding::accept(request).map_err(Into::into)
@@ -470,35 +473,41 @@ impl LifecycleApi {
     }
 
     /// Detach private autonomous advancement for one accepted top-level allocation.
-    pub fn schedule_component_allocation(operation_id: [u8; 32]) {
-        crate::workflow::component_registry::schedule_component_allocation(operation_id);
+    pub fn schedule_component_allocation(
+        operation_id: [u8; 32],
+    ) -> Result<(), canic_contracts::dto::error::Error> {
+        crate::workflow::component_registry::schedule_component_allocation(operation_id)
+            .map_err(Into::into)
     }
 
     /// Detach private autonomous advancement for one accepted direct-child allocation.
     pub fn schedule_component_child_allocation(
         component: canic_contracts::ids::ComponentInstanceId,
         operation_id: [u8; 32],
-    ) {
+    ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::component_registry::schedule_component_child_allocation(
             component,
             operation_id,
-        );
+        )
+        .map_err(Into::into)
     }
 
     /// Detach private autonomous advancement for one accepted subtree removal.
     pub fn schedule_component_subtree_removal(
         component: canic_contracts::ids::ComponentInstanceId,
         operation_id: [u8; 32],
-    ) {
-        crate::workflow::component_registry::schedule_subtree_removal(component, operation_id);
+    ) -> Result<(), canic_contracts::dto::error::Error> {
+        crate::workflow::component_registry::schedule_subtree_removal(component, operation_id)
+            .map_err(Into::into)
     }
 
     /// Detach private autonomous advancement for one accepted top-level Component removal.
     pub fn schedule_component_removal(
         component: canic_contracts::ids::ComponentInstanceId,
         operation_id: [u8; 32],
-    ) {
-        crate::workflow::component_registry::schedule_component_removal(component, operation_id);
+    ) -> Result<(), canic_contracts::dto::error::Error> {
+        crate::workflow::component_registry::schedule_component_removal(component, operation_id)
+            .map_err(Into::into)
     }
 
     pub fn accept_fleet_subnet_root_removal(
@@ -748,7 +757,28 @@ impl LifecycleApi {
                 "Root Component provisioning resume failed: {error}"
             ))
         });
-        if active {
+        crate::workflow::root_transition_timer::resume_after_restart()
+            .unwrap_or_else(|error| IcOps::trap(format!("Root transition resume failed: {error}")));
+        crate::workflow::component_registry::resume_removal_continuations().unwrap_or_else(
+            |error| {
+                IcOps::trap(format!(
+                    "Root retirement continuation resume failed: {error}"
+                ))
+            },
+        );
+        crate::workflow::component_registry::resume_allocation_continuations().unwrap_or_else(
+            |error| {
+                IcOps::trap(format!(
+                    "Root allocation continuation resume failed: {error}"
+                ))
+            },
+        );
+        crate::workflow::component_registry::resume_child_continuations().unwrap_or_else(|error| {
+            IcOps::trap(format!("Root child continuation resume failed: {error}"))
+        });
+        let draining = crate::workflow::fleet_subnet_root::resume_after_restart()
+            .unwrap_or_else(|error| IcOps::trap(format!("Root removal resume failed: {error}")));
+        if active && !draining {
             crate::workflow::canister_pool::start().unwrap_or_else(|error| {
                 IcOps::trap(format!("Canister pool maintenance start failed: {error}"))
             });

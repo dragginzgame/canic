@@ -4,9 +4,12 @@
 //! Does not own: stable encoding, canonical validation, root effects, or endpoint transport.
 //! Boundary: lifecycle and endpoint APIs delegate here after transport authentication.
 
+mod provisioning_timer;
+mod recovery;
 pub mod retirement;
 #[cfg(test)]
 mod tests;
+mod transition_timer;
 
 use crate::{
     dto::{
@@ -50,7 +53,8 @@ use canic_contracts::dto::{
         FleetFundingPolicyRotationRootActivateRequest,
         FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
         FleetFundingPolicyRotationStageRootRequest, FleetRootFundingAcceptanceReceipt,
-        FleetRootFundingRequest, FleetRootFundingResponse,
+        FleetRootFundingAcceptanceRequest, FleetRootFundingNoGrantReason, FleetRootFundingRequest,
+        FleetRootFundingResponse,
     },
     fleet_registry::{
         FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -67,7 +71,6 @@ use canic_contracts::dto::{
     state::SetStateResponse,
 };
 use canic_core::{
-    api::timer::TimerApi,
     cdk::utils::hash::hex_bytes,
     control_plane_support::{
         error::InternalError,
@@ -80,6 +83,7 @@ use ic_platform::{
     call::{Call, WaitPolicy},
     principal::ExternalPrincipal as Principal,
 };
+use ic_timers::{OnceDecision, OnceRunResult, TimerCompletion};
 use std::time::Duration;
 
 ///
@@ -91,6 +95,12 @@ use std::time::Duration;
 pub struct FleetCoordinatorWorkflow;
 
 impl FleetCoordinatorWorkflow {
+    /// Reconstruct native owners from accepted same-release work after memory restoration.
+    pub(crate) fn resume_after_restart() -> Result<(), InternalError> {
+        provisioning_timer::schedule()?;
+        transition_timer::schedule()
+    }
+
     pub(crate) fn authorize_registry_caller(
         caller: Principal,
         caller_is_controller: bool,
@@ -226,7 +236,7 @@ impl FleetCoordinatorWorkflow {
         }
         let response = FleetAdmissionOps::mutate(&registry, request)?;
         if response.outcome == FleetAdmissionMutationOutcome::Planned {
-            schedule_fleet_admission(response.operation_id, Duration::ZERO);
+            transition_timer::schedule()?;
         }
         Ok(response)
     }
@@ -272,20 +282,36 @@ impl FleetCoordinatorWorkflow {
         };
         let fleet_subnet_root = call.fleet_subnet_root;
         let acceptance_request = call.request.clone();
-        match call_root_funding_acceptance(call).await? {
+        let outcome = call_root_funding_acceptance(call).await;
+        Self::finish_root_funding_call(
+            fleet_subnet_root,
+            &acceptance_request,
+            outcome,
+            IcOps::now_nanos(),
+        )
+    }
+
+    fn finish_root_funding_call(
+        fleet_subnet_root: Principal,
+        acceptance_request: &FleetRootFundingAcceptanceRequest,
+        outcome: Result<FleetRootFundingCallOutcome, InternalError>,
+        now_ns: u64,
+    ) -> Result<FleetRootFundingResponse, InternalError> {
+        match outcome? {
             FleetRootFundingCallOutcome::Accepted(receipt) => {
                 FleetCoordinatorOps::record_root_funding_acceptance(
                     fleet_subnet_root,
-                    &acceptance_request,
+                    acceptance_request,
                     *receipt,
-                    IcOps::now_nanos(),
+                    now_ns,
                 )
             }
-            FleetRootFundingCallOutcome::Rejected => {
+            FleetRootFundingCallOutcome::Rejected(reason) => {
                 FleetCoordinatorOps::record_root_funding_rejection(
                     fleet_subnet_root,
-                    &acceptance_request,
-                    IcOps::now_nanos(),
+                    acceptance_request,
+                    reason,
+                    now_ns,
                 )
             }
         }
@@ -317,12 +343,13 @@ impl FleetCoordinatorWorkflow {
         Self::require_admission_transition_idle()?;
         let receipt =
             FleetCoordinatorOps::apply_funding_policy_rotation(request, IcOps::now_nanos())?;
-        schedule_funding_policy_rotation(receipt.operation_id, Duration::ZERO);
+        transition_timer::schedule()?;
         Ok(receipt)
     }
 
-    pub(crate) fn require_root_funding_snapshot_resumable() -> Result<(), InternalError> {
-        FleetCoordinatorOps::require_root_funding_snapshot_resumable()
+    pub(crate) fn prepare_snapshot_timers() -> Result<(), InternalError> {
+        FleetCoordinatorOps::require_root_funding_snapshot_resumable()?;
+        recovery::release_idle()
     }
 
     pub(crate) fn root_funding_status() -> Result<CoordinatorFundingStatusResponse, InternalError> {
@@ -385,7 +412,7 @@ impl FleetCoordinatorWorkflow {
     ) -> Result<OperationReceipt, InternalError> {
         Self::require_non_admission_operation_id(request.operation_id)?;
         let status = Self::prepare_component_provisioning(request)?;
-        schedule_component_provisioning(status.operation_id, status.plan_hash, Duration::ZERO);
+        provisioning_timer::schedule()?;
         Ok(OperationReceipt {
             operation_id: status.operation_id,
         })
@@ -507,44 +534,15 @@ impl FleetCoordinatorWorkflow {
     }
 
     /// Accept one Coordinator-owned root removal and submit the exact Root intent once.
-    pub(crate) async fn accept_root_removal(
+    pub(crate) fn accept_root_removal(
         request: FleetSubnetRootDrainingReservationRequest,
     ) -> Result<OperationReceipt, InternalError> {
-        use canic_contracts::{dto::retirement_control, protocol::retirement_control as wire};
         Self::require_non_admission_operation_id(request.operation_id)?;
         let reservation = Self::prepare_root_draining_reservation(request)?;
-        let expected = OperationReceipt {
-            operation_id: reservation.request.operation_id,
-        };
-        let root = reservation.request.expected_root.fleet_subnet_root;
-        let bytes = ic_wire::native::encode_request(
-            wire::root_remove::METHOD_ID,
-            &retirement_control::RootRemovalRequest::from(RootRemovalRequest { reservation }),
-            wire::REQUEST_LIMITS,
-        )
-        .map_err(|_| InternalError::invariant())?;
-        let reply = execute_call(
-            Call::new(
-                root.into(),
-                wire::root_remove::METHOD,
-                WaitPolicy::Unbounded,
-            )
-            .take_raw_args(bytes),
-        )
-        .await?
-        .into_bytes();
-        let result: Result<OperationReceipt, Error> = ic_wire::native::decode_response(
-            wire::root_remove::METHOD_ID,
-            &reply,
-            wire::RESPONSE_LIMITS,
-        )
-        .map_err(|_| InternalError::invariant())?;
-        let receipt = result.map_err(InternalError::observed_public)?;
-        if receipt != expected {
-            return Err(InternalError::conflict());
-        }
-        schedule_coordinator_root_removal(receipt.operation_id, Duration::ZERO);
-        Ok(receipt)
+        let operation_id = reservation.request.operation_id;
+        FleetCoordinatorOps::request_root_removal_continuation(operation_id)?;
+        transition_timer::schedule()?;
+        Ok(OperationReceipt { operation_id })
     }
 
     pub(crate) fn root_draining_reservation_status(
@@ -610,16 +608,6 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {
         FleetCoordinatorOps::version()
     }
-}
-
-fn schedule_fleet_admission(operation_id: [u8; 32], delay: Duration) {
-    TimerApi::defer_lifecycle_required(delay, "Fleet admission convergence", async move {
-        match advance_fleet_admission_once(operation_id).await {
-            Ok(true) => {}
-            Ok(false) => schedule_fleet_admission(operation_id, Duration::ZERO),
-            Err(_) => schedule_fleet_admission(operation_id, Duration::from_secs(1)),
-        }
-    });
 }
 
 async fn advance_fleet_admission_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
@@ -698,18 +686,6 @@ async fn advance_fleet_admission_once(operation_id: [u8; 32]) -> Result<bool, In
     }
 }
 
-fn schedule_funding_policy_rotation(operation_id: [u8; 32], delay: Duration) {
-    TimerApi::defer_lifecycle_required(delay, "Fleet funding-policy rotation", async move {
-        match advance_funding_policy_rotation_once(operation_id).await {
-            Ok(true) => {}
-            Ok(false) => schedule_funding_policy_rotation(operation_id, Duration::ZERO),
-            Err(_) => {
-                schedule_funding_policy_rotation(operation_id, Duration::from_secs(1));
-            }
-        }
-    });
-}
-
 async fn advance_funding_policy_rotation_once(
     operation_id: [u8; 32],
 ) -> Result<bool, InternalError> {
@@ -775,16 +751,39 @@ async fn advance_funding_policy_rotation_once(
     }
 }
 
-fn schedule_coordinator_root_removal(operation_id: [u8; 32], delay: Duration) {
-    TimerApi::defer_lifecycle_required(delay, "Fleet Coordinator root removal", async move {
-        match advance_coordinator_root_removal_once(operation_id).await {
-            Ok(true) => {}
-            Ok(false) => schedule_coordinator_root_removal(operation_id, Duration::ZERO),
-            Err(_) => {
-                schedule_coordinator_root_removal(operation_id, Duration::from_secs(1));
-            }
-        }
-    });
+async fn submit_root_removal(
+    reservation: FleetSubnetRootDrainingReservationResponse,
+) -> Result<(), InternalError> {
+    use canic_contracts::{dto::retirement_control, protocol::retirement_control as wire};
+    let operation_id = reservation.request.operation_id;
+    let root = reservation.request.expected_root.fleet_subnet_root;
+    let bytes = ic_wire::native::encode_request(
+        wire::root_remove::METHOD_ID,
+        &retirement_control::RootRemovalRequest::from(RootRemovalRequest { reservation }),
+        wire::REQUEST_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let reply = execute_call(
+        Call::new(
+            root.into(),
+            wire::root_remove::METHOD,
+            WaitPolicy::Unbounded,
+        )
+        .take_raw_args(bytes),
+    )
+    .await?
+    .into_bytes();
+    let result: Result<OperationReceipt, Error> = ic_wire::native::decode_response(
+        wire::root_remove::METHOD_ID,
+        &reply,
+        wire::RESPONSE_LIMITS,
+    )
+    .map_err(|_| InternalError::invariant())?;
+    let receipt = result.map_err(InternalError::observed_public)?;
+    if receipt.operation_id != operation_id {
+        return Err(InternalError::conflict());
+    }
+    Ok(())
 }
 
 async fn advance_coordinator_root_removal_once(
@@ -795,6 +794,9 @@ async fn advance_coordinator_root_removal_once(
         return Ok(true);
     }
 
+    if current.draining.is_none() {
+        submit_root_removal(current.reservation.clone()).await?;
+    }
     let root = current.reservation.request.expected_root.fleet_subnet_root;
     let observed = query_root_removal(root, operation_id).await?;
     if observed.operation_id != operation_id || observed.draining.fleet_subnet_root != root {
@@ -809,9 +811,9 @@ async fn advance_coordinator_root_removal_once(
         return Ok(false);
     }
     if current.removal.is_none() {
-        let final_inventory = observed
-            .final_inventory
-            .ok_or_else(InternalError::unavailable)?;
+        let Some(final_inventory) = observed.final_inventory else {
+            return Ok(false);
+        };
         FleetCoordinatorOps::publish_root_removed(
             root,
             FleetSubnetRootRemovalPublicationRequest {
@@ -822,9 +824,9 @@ async fn advance_coordinator_root_removal_once(
         return Ok(false);
     }
     if current.readiness_intent.is_none() {
-        let request = observed
-            .deletion_readiness_intent
-            .ok_or_else(InternalError::unavailable)?;
+        let Some(request) = observed.deletion_readiness_intent else {
+            return Ok(false);
+        };
         FleetCoordinatorOps::prepare_root_deletion_readiness(
             root,
             IcOps::canister_self(),
@@ -834,9 +836,9 @@ async fn advance_coordinator_root_removal_once(
         return Ok(false);
     }
 
-    let request = observed
-        .deletion_readiness
-        .ok_or_else(InternalError::unavailable)?;
+    let Some(request) = observed.deletion_readiness else {
+        return Ok(false);
+    };
     FleetCoordinatorOps::record_root_deletion_readiness(
         root,
         IcOps::canister_self(),
@@ -870,88 +872,143 @@ async fn query_root_removal(
     Ok(status)
 }
 
-fn schedule_component_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Duration) {
-    TimerApi::defer_lifecycle_required(
-        delay,
-        "Fleet Coordinator Component provisioning",
-        async move {
-            advance_scheduled_component_provisioning(operation_id, plan_hash).await;
-        },
-    );
-}
-
-async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32]) {
+async fn advance_scheduled_component_provisioning(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+) -> OnceRunResult {
     let Ok(status) = FleetCoordinatorWorkflow::component_provisioning_status(
         FleetComponentProvisioningStatusRequest {
             operation_id,
             plan_hash,
         },
     ) else {
-        return;
+        return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
     };
     if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
-        return;
+        return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
     }
     if status.pending_root_failure.as_ref().and_then(|failure| failure.origin.as_ref()).is_some_and(|origin|
         origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
     {
-        return;
+        return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
+    }
+    let pending_delay = component_provisioning_pending_delay(&status, IcOps::now_nanos());
+    if !pending_delay.is_zero() {
+        return OnceRunResult::new(
+            TimerCompletion::no_work(),
+            OnceDecision::RetryAfter(pending_delay),
+        );
     }
     let request = component_provisioning_advance_request(&status);
-    match FleetCoordinatorWorkflow::advance_component_provisioning(&request).await {
-        Ok(status) if status.phase == FleetComponentProvisioningPhase::RuntimesActivated => {}
-        Ok(status) => schedule_component_provisioning(
-            operation_id,
-            plan_hash,
-            component_provisioning_retry_delay(&status, IcOps::now_nanos()),
-        ),
+    let Ok(attempt) = crate::ops::continuation_retry::begin(
+        canic_contracts::dto::operation_retry::Operation::CoordinatorProvisioning { operation_id },
+        IcOps::now_nanos(),
+    ) else {
+        return OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop);
+    };
+    let result = FleetCoordinatorWorkflow::advance_component_provisioning(&request).await;
+    if crate::ops::continuation_retry::finish(attempt, result.as_ref().err()).is_err() {
+        return OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop);
+    }
+    match result {
+        Ok(next_status) => {
+            let completed = next_status.phase == FleetComponentProvisioningPhase::RuntimesActivated;
+            let changed = component_provisioning_advance_request(&status)
+                != component_provisioning_advance_request(&next_status);
+            let completion = if completed || changed {
+                TimerCompletion::success(1)
+            } else {
+                TimerCompletion::no_work()
+            };
+            let decision = if completed {
+                OnceDecision::Stop
+            } else {
+                OnceDecision::RetryAfter(component_provisioning_retry_delay(
+                    &status,
+                    &next_status,
+                    IcOps::now_nanos(),
+                ))
+            };
+            OnceRunResult::new(completion, decision)
+        }
         Err(error) => {
             let diagnostic_code = error.public_error().code().raw();
-            if let Err(retention_error) =
-                FleetCoordinatorOps::record_component_provisioning_root_failure(
-                    FleetComponentProvisioningStatusRequest {
-                        operation_id,
-                        plan_hash,
-                    },
-                    diagnostic_code,
-                    error.provisioning_failure(),
-                    IcOps::now_nanos(),
-                )
-            {
+            let retained = match FleetCoordinatorOps::record_component_provisioning_root_failure(
+                FleetComponentProvisioningStatusRequest {
+                    operation_id,
+                    plan_hash,
+                },
+                diagnostic_code,
+                error.provisioning_failure(),
+                IcOps::now_nanos(),
+            ) {
+                Ok(retained) => retained,
+                Err(retention_error) => {
+                    log!(
+                        Topic::Fleet,
+                        Error,
+                        "Fleet Component provisioning retry diagnostic retention failed: operation_id={} phase={:?} error={retention_error}",
+                        hex_bytes(operation_id),
+                        status.phase,
+                    );
+                    return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
+                }
+            };
+            if retained.pending_root_failure != status.pending_root_failure {
                 log!(
                     Topic::Fleet,
-                    Error,
-                    "Fleet Component provisioning retry diagnostic retention failed: operation_id={} phase={:?} error={retention_error}",
+                    Warn,
+                    "Fleet Component provisioning retry: operation_id={} phase={:?} error={error}",
                     hex_bytes(operation_id),
                     status.phase,
                 );
             }
-            log!(
-                Topic::Fleet,
-                Warn,
-                "Fleet Component provisioning retry: operation_id={} phase={:?} error={error}",
-                hex_bytes(operation_id),
-                status.phase,
-            );
             if !error.provisioning_failure().is_some_and(|origin|
                 origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
             {
-                schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1));
+                let delay = component_provisioning_pending_delay(&retained, IcOps::now_nanos())
+                    .max(Duration::from_secs(1));
+                return OnceRunResult::new(TimerCompletion::retryable_failure(0), OnceDecision::RetryAfter(delay));
             }
+            OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop)
         }
     }
 }
 
 fn component_provisioning_retry_delay(
+    previous: &FleetComponentProvisioningStatusResponse,
     status: &FleetComponentProvisioningStatusResponse,
     now_ns: u64,
 ) -> Duration {
-    status
+    let wait_delay = if component_provisioning_advance_request(previous)
+        == component_provisioning_advance_request(status)
+    {
+        Duration::from_secs(1)
+    } else {
+        Duration::ZERO
+    };
+    wait_delay.max(component_provisioning_pending_delay(status, now_ns))
+}
+
+fn component_provisioning_pending_delay(
+    status: &FleetComponentProvisioningStatusResponse,
+    now_ns: u64,
+) -> Duration {
+    let funding_retry = status
         .estate_funding_required
         .as_ref()
-        .map_or(Duration::ZERO, |funding| {
-            Duration::from_nanos(funding.retry_at_ns.saturating_sub(now_ns))
-        })
+        .map(|funding| funding.retry_at_ns);
+    let failure_retry = status
+        .pending_root_failure
+        .as_ref()
+        .and_then(|failure| failure.origin.as_ref())
+        .and_then(|origin| origin.retry_at_ns);
+    let retry_at_ns = funding_retry
+        .into_iter()
+        .chain(failure_retry)
+        .max()
+        .unwrap_or(now_ns);
+    Duration::from_nanos(retry_at_ns.saturating_sub(now_ns))
 }
 
 const fn component_provisioning_advance_request(
@@ -1187,7 +1244,7 @@ async fn accept_root_component_provisioning(
 
 enum FleetRootFundingCallOutcome {
     Accepted(Box<FleetRootFundingAcceptanceReceipt>),
-    Rejected,
+    Rejected(FleetRootFundingNoGrantReason),
 }
 
 async fn call_root_funding_acceptance(
@@ -1214,18 +1271,37 @@ async fn call_root_funding_acceptance(
     )
     .await?
     .into_bytes();
-    let response: Result<funding_control::AcceptanceReceipt, Error> =
+    let response: Result<funding_control::AcceptanceOutcome, Error> =
         ic_wire::native::decode_response(
             wire::root_accept::METHOD_ID,
             &reply,
             wire::RESPONSE_LIMITS,
         )
         .map_err(|_| InternalError::invariant())?;
+    classify_root_funding_response(response)
+}
+
+fn classify_root_funding_response(
+    response: Result<canic_contracts::dto::funding_control::AcceptanceOutcome, Error>,
+) -> Result<FleetRootFundingCallOutcome, InternalError> {
+    use canic_contracts::dto::funding_control;
     match response {
-        Ok(receipt) => Ok(FleetRootFundingCallOutcome::Accepted(Box::new(
-            receipt.into(),
-        ))),
-        Err(_) => Ok(FleetRootFundingCallOutcome::Rejected),
+        Ok(funding_control::AcceptanceOutcome::Accepted(receipt)) => Ok(
+            FleetRootFundingCallOutcome::Accepted(Box::new((*receipt).into())),
+        ),
+        Ok(funding_control::AcceptanceOutcome::BalanceRelieved) => {
+            Ok(FleetRootFundingCallOutcome::Rejected(
+                FleetRootFundingNoGrantReason::RootBalanceRelieved,
+            ))
+        }
+        Err(error) if crate::policy::funding_acceptance::is_temporary(error.code().raw()) => {
+            // A preceding acceptance reply may have been lost. Retain the exact
+            // reserved operation until Root can answer from its receipt.
+            Err(InternalError::observed_public(error))
+        }
+        Err(_) => Ok(FleetRootFundingCallOutcome::Rejected(
+            FleetRootFundingNoGrantReason::RootRejected,
+        )),
     }
 }
 

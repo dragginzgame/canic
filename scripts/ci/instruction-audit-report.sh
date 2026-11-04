@@ -150,11 +150,11 @@ mapfile -t METHOD_INPUTS < <(
       "$DEFINITION_PATH" \
       "scripts/ci/instruction-audit-report.sh" \
       "crates/canic-tests/tests/instruction_audit.rs" \
-      "crates/canic-testing-internal/src/pic/mod.rs" \
-      "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs" \
-      "crates/canic-testing-internal/src/pic/fleet_registry/build.rs" \
-      "crates/canic-testing-internal/src/pic/fleet_registry/fixture.rs" \
-      "crates/canic-testing-internal/src/pic/fleet_registry/mod.rs"
+      "crates/canic-tests/src/pic/mod.rs" \
+      "crates/canic-tests/src/pic/fleet_registry/baseline.rs" \
+      "crates/canic-tests/src/pic/fleet_registry/build.rs" \
+      "crates/canic-tests/src/pic/fleet_registry/fixture.rs" \
+      "crates/canic-tests/src/pic/fleet_registry/mod.rs"
     find \
       canisters/test/delegation_issuer_stub \
       canisters/test/delegation_root_stub \

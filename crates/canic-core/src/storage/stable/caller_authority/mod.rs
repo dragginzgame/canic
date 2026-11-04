@@ -65,19 +65,19 @@ thread_local! {
     static HEADER: RefCell<StableCell<Option<CallerReceiverRecord>, DefaultMemoryImpl>> =
         RefCell::new({
             let allocation = crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_HEADER_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableCell::create(allocation, None)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableCell::create(allocation, None).expect("create admitted stable cell")
             } else {
-                StableCell::load(allocation).expect("retained stable cell")
+                StableCell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
     static ROWS: RefCell<BTreeMap<CallerRowKey, CallerRowRecord, DefaultMemoryImpl>> =
         RefCell::new({
             let allocation = crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_ROWS_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                BTreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                BTreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                BTreeMap::load(allocation)
+                BTreeMap::load(allocation).expect("open admitted stable collection")
             }
         });
 }
@@ -101,7 +101,7 @@ impl CallerReceiverStore {
     pub(crate) fn import(data: CallerAuthorityData) {
         Self::reset();
         HEADER.with_borrow_mut(|header| {
-            header.set(data.header);
+            header.set(data.header).expect("commit stable fixture");
         });
         for (key, row) in data.rows {
             CallerRowStore::insert(key, row);
@@ -112,18 +112,20 @@ impl CallerReceiverStore {
     }
     pub(crate) fn set(record: CallerReceiverRecord) {
         HEADER.with_borrow_mut(|header| {
-            header.set(Some(record));
+            header
+                .set(Some(record))
+                .expect("commit caller authority header");
         });
     }
 
     #[cfg(test)]
     pub(crate) fn reset() {
         HEADER.with_borrow_mut(|header| {
-            header.set(None);
+            header.set(None).expect("commit stable fixture");
         });
         for (key, _) in CallerRowStore::rows() {
             ROWS.with_borrow_mut(|rows| {
-                rows.remove(&key);
+                rows.remove(&key).expect("Storage operation failed");
             });
         }
     }
@@ -146,9 +148,10 @@ impl CallerRowStore {
         );
         ROWS.with_borrow(|rows| {
             rows.range((start, Unbounded))
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .take(limit)
                 .map_while(|entry| {
-                    let (key, row) = entry.into_pair();
+                    let (key, row) = entry.into_pair().expect("decode Storage entry");
                     match row {
                         CallerRowRecord::Source(source) => Some((key, source)),
                         _ => None,
@@ -160,23 +163,26 @@ impl CallerRowStore {
 
     pub(crate) fn remove(key: &CallerRowKey) {
         ROWS.with_borrow_mut(|rows| {
-            rows.remove(key);
+            rows.remove(key).expect("Storage operation failed");
         });
     }
 
     pub(crate) fn get(key: &CallerRowKey) -> Option<CallerRowRecord> {
-        ROWS.with_borrow(|rows| rows.get(key))
+        ROWS.with_borrow(|rows| rows.get(key).expect("Storage operation failed"))
     }
     pub(crate) fn insert(key: CallerRowKey, record: CallerRowRecord) {
         ROWS.with_borrow_mut(|rows| {
-            rows.insert(key, record);
+            rows.insert(key, record).expect("Storage operation failed");
         });
     }
     pub(crate) fn rows() -> Vec<(CallerRowKey, CallerRowRecord)> {
         ROWS.with_borrow(|rows| {
             let mut projection = Vec::new();
-            for entry in rows {
-                projection.push(entry.into_pair());
+            for entry in rows
+                .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+            {
+                projection.push(entry.into_pair().expect("decode Storage entry"));
             }
             projection
         })

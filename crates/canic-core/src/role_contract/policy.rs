@@ -82,7 +82,13 @@ pub fn resolve_role_contract(input: RoleContractInput<'_>) -> RoleContractResolu
         .iter()
         .map(|requirement| requirement.feature)
         .collect::<BTreeSet<_>>();
-    let required_effective_features = resolve_effective_features(required_direct_features, false);
+    let mut required_effective_features =
+        resolve_effective_features(required_direct_features, false);
+    // A configured issuer may explicitly select volatile Ed25519 custody in addition
+    // to its required Root-proof support. Receivers cannot select signing authority.
+    if capabilities.contains(&RoleCapabilityKey::DelegatedTokenIssuer) {
+        required_effective_features.insert(CanicFeatureKey::AuthPortableIssuer);
+    }
     errors.extend(
         selected_features
             .difference(&required_effective_features)

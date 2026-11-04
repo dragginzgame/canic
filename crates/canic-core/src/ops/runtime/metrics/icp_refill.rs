@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::types::Principal,
-    dto::metrics::{MetricEntry, MetricValue},
+    dto::{metric_page::MetricEntry, metrics::MetricValue},
     ops::storage::icp_refill::{
         IcpRefillMetricSnapshot, IcpRefillRecordOps, metric_error_label, metric_error_phase,
         metric_status_label,
@@ -96,14 +96,10 @@ const fn count_entry(labels: Vec<String>, count: u64) -> MetricEntry {
     }
 }
 
-const fn principal_u128_entry(
-    labels: Vec<String>,
-    principal: Principal,
-    value: u128,
-) -> MetricEntry {
+fn principal_u128_entry(labels: Vec<String>, principal: Principal, value: u128) -> MetricEntry {
     MetricEntry {
         labels,
-        principal: Some(principal),
+        principal: Some(principal.into()),
         value: MetricValue::U128 { value, exact: true },
     }
 }

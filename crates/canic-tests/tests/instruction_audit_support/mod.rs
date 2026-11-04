@@ -6,21 +6,22 @@ use canic::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1,
         },
-        metrics::{MetricEntry, MetricValue, MetricsKind},
+        metric_page::MetricEntry,
+        metrics::{MetricValue, MetricsKind},
         page::PageRequest,
         role::MetricsStatusRequest,
         rpc::{CyclesRequest, Request, Response, RootRequestMetadata},
     },
     ids::cap,
 };
-use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
-use canic_testing_internal::pic::{
+use canic_tests::canister::{APP, SCALE_HUB, TEST, USER_HUB};
+use canic_tests::pic::{
     ActiveComponentRegistryFixture, managed_test_init_identity, role_grant,
     setup_active_component_registry,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
-use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_testkit::pocket_ic::PocketIc;
 use serde::Serialize;
 use std::{
     collections::BTreeSet,

@@ -8,6 +8,7 @@
 #[macro_export]
 macro_rules! canic_emit_fleet_coordinator_endpoints {
     () => {
+        $crate::__canic_emit_operation_retry_endpoints!();
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::batch_control::prepare::METHOD_ID, request = ::canic::protocol::batch_control::PLAN_LIMITS, response = ::canic::protocol::batch_control::RESPONSE_LIMITS))]
         fn canic_coordinator_provision_components(request: ::canic::dto::batch_control::PrepareRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
             $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
@@ -15,9 +16,9 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
         }
 
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::retirement_control::remove::METHOD_ID, request = ::canic::protocol::retirement_control::REQUEST_LIMITS, response = ::canic::protocol::retirement_control::RESPONSE_LIMITS))]
-        async fn canic_coordinator_remove_root(request: ::canic::dto::retirement_control::RemovalRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
+        fn canic_coordinator_remove_root(request: ::canic::dto::retirement_control::RemovalRequest) -> Result<::canic::dto::role::OperationReceipt, ::canic::Error> {
             $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(false)?;
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::remove_root(request.into()).await
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::remove_root(request.into())
         }
         #[$crate::update(requires(caller::is_controller()), wire(id = ::canic::protocol::retirement_control::retire::METHOD_ID, request = ::canic::protocol::retirement_control::REQUEST_LIMITS, response = ::canic::protocol::retirement_control::RESPONSE_LIMITS))]
         async fn canic_coordinator_retire(request: ::canic::dto::retirement_control::RetirementRequest) -> Result<::canic::dto::retirement_control::RetirementStatus, ::canic::Error> {

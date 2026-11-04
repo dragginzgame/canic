@@ -222,56 +222,60 @@ fn provisioning_operation_map_uses_small_pages_and_checks_oversize_before_writes
     let record =
         RootComponentProvisioningStore::directory_synchronization(command.operation_id).unwrap();
     let memory = VectorMemory::default();
-    let runtime = ic_memory::testing::fixture_runtime(
+    let runtime = ic_storage::testing::fixture_runtime(
         memory.clone(),
         "test",
         "test.",
         &["test.rows.v1"],
-        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
+        ic_storage::StorageConfig::default(),
     )
     .unwrap();
     let mut map = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
             .unwrap();
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            BTreeMap::create(allocation)
+            BTreeMap::create(allocation).expect("open fixture collection")
         } else {
-            BTreeMap::load(allocation)
+            BTreeMap::load(allocation).expect("open fixture collection")
         }
     };
     let key = RootComponentOperationKey::DirectorySynchronization(command.operation_id);
     let value = RootComponentOperationRecord::DirectorySynchronization(Box::new(record.clone()));
-    map.insert(key, value.clone());
+    map.insert(key, value.clone()).unwrap();
     let (retained, pages) = map.allocated_pages();
     map = retained;
     assert_eq!(pages, 1);
     drop(map);
     let mut reopened = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
             .unwrap();
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
             BTreeMap::<RootComponentOperationKey, RootComponentOperationRecord, _>::create(
                 allocation,
             )
+            .expect("open fixture collection")
         } else {
             BTreeMap::<RootComponentOperationKey, RootComponentOperationRecord, _>::load(allocation)
+                .expect("open fixture collection")
         }
     };
-    assert_eq!(reopened.get(&key), Some(value.clone()));
+    assert_eq!(reopened.get(&key).unwrap(), Some(value.clone()));
     let before = memory.borrow().clone();
     let mut oversized = record;
     oversized.targets = vec![oversized.targets[0].clone(); 50_000];
     assert!(
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            reopened.insert(
-                key,
-                RootComponentOperationRecord::DirectorySynchronization(Box::new(oversized)),
-            );
+            reopened
+                .insert(
+                    key,
+                    RootComponentOperationRecord::DirectorySynchronization(Box::new(oversized)),
+                )
+                .unwrap();
         }))
         .is_err()
     );
     assert_eq!(*memory.borrow(), before);
-    assert_eq!(reopened.get(&key), Some(value));
+    assert_eq!(reopened.get(&key).unwrap(), Some(value));
 }

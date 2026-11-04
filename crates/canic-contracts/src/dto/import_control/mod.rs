@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 )]
 pub struct AdvanceRequest {
     pub identity: PoolImportIdentity,
-    pub canister_id: ic_platform::Principal,
+    pub canister_id: ic_platform_types::Principal,
 }
 /// Release only against the reviewed publication evidence.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

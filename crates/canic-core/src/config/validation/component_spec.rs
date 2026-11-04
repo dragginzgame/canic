@@ -132,6 +132,9 @@ fn validate_auth(
     let Some(local) = &auth.local_application_authorization else {
         return Ok(());
     };
+    if let Some(receiver) = &local.receiver {
+        receiver.validate()?;
+    }
 
     if local.allowed_scopes.is_empty() {
         return Err(ConfigSchemaError::ValidationError(format!(

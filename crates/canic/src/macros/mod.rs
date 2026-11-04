@@ -1,4 +1,5 @@
 //! Facade macros for downstream canister crates.
+#[cfg(all(feature = "build-support", not(target_arch = "wasm32")))]
 mod build;
 mod endpoints;
 mod start;

@@ -8,8 +8,8 @@ use crate::cycles::Cycles;
     derive(ic_wire::Wire)
 )]
 pub struct ChildFundingUsage {
-    pub parent: ic_platform::Principal,
-    pub child: ic_platform::Principal,
+    pub parent: ic_platform_types::Principal,
+    pub child: ic_platform_types::Principal,
     pub observed_at_ns: u64,
     pub accounted_cycles: Cycles,
     pub last_accounted_at_secs: u64,

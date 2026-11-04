@@ -54,12 +54,13 @@ fn canic_topic_and_severity_project_through_the_upstream_filter() {
             topic: ic_logging::TopicMatch::Exact(Topic::Cycles.log_label()),
             min_level: Some(upstream_level(Level::Warn)),
         },
-        PageRequest {
+        LogPageRequest {
             limit: 10,
-            offset: 0,
+            before: None,
         },
-    );
-    assert_eq!(page.total, 1);
+    )
+    .unwrap();
+    assert_eq!(page.entries.len(), 1);
     assert_eq!(page.entries.len(), 1);
     let row = &page.entries[0];
     assert_eq!(row.crate_name, "worker");
@@ -70,9 +71,9 @@ fn canic_topic_and_severity_project_through_the_upstream_filter() {
 }
 
 #[test]
-fn offset_and_exact_totals_cross_upstream_scan_batches_including_empty_matches() {
+fn cursor_scans_bound_work_and_continue_after_empty_filtered_pages() {
     let mut selected = None;
-    for time in 0..800 {
+    for time in 0..2_000 {
         let source = if time < 300 { "worker" } else { "other" };
         append_entry(&mut selected, time, source, None, ic_logging::Level::Info);
     }
@@ -81,42 +82,53 @@ fn offset_and_exact_totals_cross_upstream_scan_batches_including_empty_matches()
         source: Some("worker"),
         ..ic_logging::Filter::default()
     };
-    let page = project_page(
+    let first = project_page(
         &log,
         filter,
-        PageRequest {
+        LogPageRequest {
             limit: 2,
-            offset: 298,
+            before: None,
         },
-    );
-    assert_eq!(page.total, 300);
+    )
+    .unwrap();
+    assert!(first.entries.is_empty());
+    assert_eq!(first.scanned, LOG_SCAN_MAX);
+    assert!(first.next_before.is_some());
+    let second = project_page(
+        &log,
+        filter,
+        LogPageRequest {
+            limit: 2,
+            before: first.next_before,
+        },
+    )
+    .unwrap();
+    assert!(second.scanned <= LOG_SCAN_MAX);
     assert_eq!(
-        page.entries
+        second
+            .entries
             .iter()
             .map(|entry| entry.created_at)
             .collect::<Vec<_>>(),
-        [1, 0]
+        [299, 298]
     );
-    let beyond = project_page(
+    let third = project_page(
         &log,
         filter,
-        PageRequest {
-            limit: 10,
-            offset: u64::MAX,
+        LogPageRequest {
+            limit: 2,
+            before: second.next_before,
         },
+    )
+    .unwrap();
+    assert_eq!(
+        third
+            .entries
+            .iter()
+            .map(|entry| entry.created_at)
+            .collect::<Vec<_>>(),
+        [297, 296]
     );
-    assert_eq!(beyond.entries.len(), 0);
-    assert_eq!(beyond.total, 300);
-    let count_only = project_page(
-        &log,
-        filter,
-        PageRequest {
-            limit: 0,
-            offset: 0,
-        },
-    );
-    assert_eq!(count_only.entries.len(), 0);
-    assert_eq!(count_only.total, 300);
 }
 
 #[test]
@@ -129,12 +141,14 @@ fn canic_reply_limit_is_independent_of_the_upstream_scan_budget() {
     let page = project_page(
         &log,
         ic_logging::Filter::default(),
-        PageRequest {
-            limit: u64::MAX,
-            offset: 0,
+        LogPageRequest {
+            limit: u16::MAX,
+            before: None,
         },
-    );
-    assert_eq!(page.total, 1_100);
+    )
+    .unwrap();
+    assert_eq!(page.scanned as usize, LOG_PAGE_MAX_LIMIT);
+    assert_eq!(page.next_before, Some(100));
     assert_eq!(page.entries.len(), LOG_PAGE_MAX_LIMIT);
     assert_eq!(page.entries[0].created_at, 1_099);
     assert_eq!(page.entries[LOG_PAGE_MAX_LIMIT - 1].created_at, 100);
@@ -162,12 +176,13 @@ fn disabled_logging_owns_no_recorder_and_projects_an_empty_page() {
         None,
         None,
         None,
-        PageRequest {
+        LogPageRequest {
             limit: 10,
-            offset: 0,
+            before: None,
         },
-    );
-    assert_eq!(page.total, 0);
+    )
+    .unwrap();
+    assert_eq!(page.entries.len(), 0);
     assert_eq!(page.entries.len(), 0);
     assert_eq!(LogOps::next_expiry_secs(10), None);
 }
@@ -209,12 +224,13 @@ fn upstream_refusals_keep_canic_error_identity_and_the_existing_history() {
     let page = project_page(
         &log,
         ic_logging::Filter::default(),
-        PageRequest {
+        LogPageRequest {
             limit: 10,
-            offset: 0,
+            before: None,
         },
-    );
-    assert_eq!(page.total, 1);
+    )
+    .unwrap();
+    assert_eq!(page.entries.len(), 1);
     assert_eq!(page.entries[0].created_at, 10);
 }
 
@@ -244,12 +260,13 @@ fn retained_text_ceiling_preserves_configured_capacity_at_all_field_limits() {
     let page = project_page(
         &log,
         ic_logging::Filter::default(),
-        PageRequest {
+        LogPageRequest {
             limit: 10,
-            offset: 0,
+            before: None,
         },
-    );
-    assert_eq!(page.total, 2);
+    )
+    .unwrap();
+    assert_eq!(page.entries.len(), 2);
     assert_eq!(
         page.entries
             .iter()
@@ -282,13 +299,108 @@ fn changed_host_limits_start_a_new_log_window() {
         let page = project_page(
             selected.as_ref().unwrap(),
             ic_logging::Filter::default(),
-            PageRequest {
-                offset: 0,
+            LogPageRequest {
+                before: None,
                 limit: 10,
             },
-        );
-        assert_eq!(page.total, 1);
+        )
+        .unwrap();
+        assert_eq!(page.entries.len(), 1);
         assert_eq!(page.entries[0].crate_name, "new");
         assert!(page.entries[0].message.len() <= max_message_bytes as usize);
     }
+}
+
+#[test]
+fn reply_text_budget_preserves_every_row_across_cursor_pages() {
+    let mut selected = None;
+    let message = "🦀".repeat(16_384);
+    for time in 0..32 {
+        append(
+            &mut selected,
+            ic_logging::EntryInput {
+                created_at_secs: time,
+                level: ic_logging::Level::Info,
+                source: "worker",
+                topic: None,
+                message: &message,
+            },
+            64,
+            65_536,
+        )
+        .unwrap();
+    }
+    let log = selected.unwrap();
+    let mut before = None;
+    let mut seen = Vec::new();
+    loop {
+        let page = project_page(
+            &log,
+            ic_logging::Filter::default(),
+            LogPageRequest {
+                before,
+                limit: 1000,
+            },
+        )
+        .unwrap();
+        assert!(page.scanned <= LOG_SCAN_MAX);
+        let reply: Result<&LogPage, canic_contracts::dto::error::Error> = Ok(&page);
+        let bytes = ic_wire::native::encode_response(
+            canic_contracts::protocol::protected_logs::METHOD_ID,
+            &reply,
+            canic_contracts::protocol::protected_logs::RESPONSE_LIMITS,
+        )
+        .unwrap();
+        assert!(bytes.len() <= canic_contracts::protocol::protected_logs::RESPONSE_LIMITS.bytes);
+        seen.extend(page.entries.iter().map(|entry| entry.created_at));
+        match page.next_before {
+            Some(next) => {
+                assert!(before.is_none_or(|previous| next < previous));
+                before = Some(next);
+            }
+            None => break,
+        }
+    }
+    assert_eq!(seen, (0..32).rev().collect::<Vec<_>>());
+}
+
+#[test]
+fn oversized_row_and_zero_limit_have_typed_refusals() {
+    let mut selected = None;
+    let message = "x".repeat(LOG_PAGE_TEXT_MAX_BYTES + 1);
+    append(
+        &mut selected,
+        ic_logging::EntryInput {
+            created_at_secs: 1,
+            level: ic_logging::Level::Info,
+            source: "worker",
+            topic: None,
+            message: &message,
+        },
+        2,
+        u32::try_from(message.len()).unwrap(),
+    )
+    .unwrap();
+    let error = project_page(
+        selected.as_ref().unwrap(),
+        ic_logging::Filter::default(),
+        LogPageRequest {
+            before: None,
+            limit: 1,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), codes::CAPACITY_LIMIT);
+    LogOps::reset_for_tests();
+    let error = LogOps::page_filtered(
+        None,
+        None,
+        None,
+        LogPageRequest {
+            before: None,
+            limit: 0,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), InternalError::invalid_input().code());
 }

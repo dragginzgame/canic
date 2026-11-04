@@ -66,7 +66,7 @@ fn staging_retains_partial_and_conflicting_chunk_evidence() {
 #[cfg(feature = "wire-schema")]
 #[test]
 fn all_catalog_reads_have_native_graphs() {
-    ic_wire::typescript::native_schema::<ic_platform::Principal>().unwrap();
+    ic_wire::typescript::native_schema::<ic_platform_types::Principal>().unwrap();
     ic_wire::typescript::native_schema::<crate::dto::template::TemplateLookupRequest>().unwrap();
     ic_wire::typescript::native_schema::<Result<TemplateStagingStatusResponse, Error>>().unwrap();
     ic_wire::typescript::native_schema::<

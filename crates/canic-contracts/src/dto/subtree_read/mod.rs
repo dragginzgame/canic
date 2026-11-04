@@ -6,7 +6,7 @@ use crate::{
     },
     ids::{CanisterRole, ComponentInstanceId},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 /// Complete RootComponentSubtreeRemovalResponse evidence.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

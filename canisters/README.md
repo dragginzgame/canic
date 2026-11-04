@@ -29,6 +29,6 @@ PocketIC fixtures, but `canic app list` must not discover them as Apps.
 ## Continue From Here
 
 - [Read the testing rules](../TESTING.md)
-- [Browse the internal testing crate](../crates/canic-testing-internal/README.md)
+- [Browse the internal testing crate](../crates/canic-tests/README.md)
 - [Browse all documentation](../docs/README.md)
 - [Back to the main README](../README.md)

@@ -31,7 +31,7 @@ const RECORDS: u64 = 1_000;
 #[test]
 fn intent_resource_totals_bound_covers_every_u64_value() {
     let record = max_totals();
-    let encoded = record.to_bytes();
+    let encoded = record.to_bytes().expect("encode stable fixture");
     assert_eq!(
         encoded.len(),
         IntentResourceTotalsRecord::STORABLE_MAX_SIZE as usize
@@ -42,7 +42,10 @@ fn intent_resource_totals_bound_covers_every_u64_value() {
 fn receipt_stable_capacity_fits_with_reserved_cleanup_at_the_admission_limit() {
     for state in [ReceiptBackedIntentState::Pending, terminal_state()] {
         assert!(
-            receipt_record(u64::MAX, state).to_bytes().len()
+            receipt_record(u64::MAX, state)
+                .to_bytes()
+                .expect("encode stable fixture")
+                .len()
                 <= ReceiptBackedIntentRecord::STORABLE_MAX_SIZE as usize
         );
     }
@@ -68,19 +71,23 @@ where
     K: Storable + Ord + Clone,
     V: Storable,
 {
-    let runtime = crate::memory::fixtures::runtime(&["test.rows.v1"], 16);
+    let runtime = crate::memory::fixtures::runtime(&["test.rows.v1"]);
     let mut map = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.rows.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.rows.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::<K, V, _>::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::<K, V, _>::create(allocation).expect("open fixture collection")
         } else {
-            StableBtreeMap::<K, V, _>::load(allocation)
+            StableBtreeMap::<K, V, _>::load(allocation).expect("open fixture collection")
         }
     };
     for (key, value) in entries {
-        assert!(map.insert(key, value).is_none());
+        assert!(
+            map.insert(key, value)
+                .expect("Storage operation failed")
+                .is_none()
+        );
     }
     assert_eq!(map.len(), RECORDS);
     map.allocated_pages().1
@@ -88,7 +95,7 @@ where
 
 fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
-    let runtime = ic_memory::testing::fixture_runtime(
+    let runtime = ic_storage::testing::fixture_runtime(
         physical.clone(),
         "test",
         "test.",
@@ -97,49 +104,55 @@ fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
             "test.acknowledgement.v1",
             "test.totals.v1",
         ],
-        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(16).unwrap()),
+        ic_storage::StorageConfig::default(),
     )
     .unwrap();
     let mut primary = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.primary.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.primary.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     };
     let mut acknowledgements = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.acknowledgement.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.acknowledgement.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     };
     let mut totals = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.totals.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.totals.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     };
 
     for seed in ascending() {
         let record = receipt_record(seed, terminal_state());
         let operation_id = record.operation_id;
-        primary.insert(operation_id, record);
-        acknowledgements.insert(
-            operation_id,
-            PlacementAcknowledgementEntryRecord { operation_id },
-        );
-        totals.insert(resource_key(seed), max_totals());
+        primary
+            .insert(operation_id, record)
+            .expect("commit stable fixture");
+        acknowledgements
+            .insert(
+                operation_id,
+                PlacementAcknowledgementEntryRecord { operation_id },
+            )
+            .expect("commit stable fixture");
+        totals
+            .insert(resource_key(seed), max_totals())
+            .expect("commit stable fixture");
     }
     (
         primary.allocated_pages().1,
@@ -153,42 +166,42 @@ fn managed_application_ascending_pages_with_reservation(
     reserve_eligibility: bool,
 ) -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
-    let runtime = ic_memory::testing::fixture_runtime(
+    let runtime = ic_storage::testing::fixture_runtime(
         physical.clone(),
         "test",
         "test.",
         &["test.primary.v1", "test.eligibility.v1", "test.totals.v1"],
-        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(16).unwrap()),
+        ic_storage::StorageConfig::default(),
     )
     .unwrap();
     let mut primary = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.primary.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.primary.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     };
     let mut eligibility = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.eligibility.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.eligibility.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     };
     let mut totals = {
         let allocation = runtime
-            .open_memory(&ic_memory::StableKey::parse("test.totals.v1").unwrap())
+            .open_memory(&ic_storage::StableKey::parse("test.totals.v1").unwrap())
             .unwrap();
-        if ic_memory::Memory::size(&allocation) == 0 {
-            StableBtreeMap::create(allocation)
+        if ic_storage::Memory::size(&allocation) == 0 {
+            StableBtreeMap::create(allocation).expect("open admitted stable collection")
         } else {
-            StableBtreeMap::load(allocation)
+            StableBtreeMap::load(allocation).expect("open admitted stable collection")
         }
     };
 
@@ -203,10 +216,16 @@ fn managed_application_ascending_pages_with_reservation(
     for seed in ascending() {
         let record = receipt_record(seed, terminal_state());
         let operation_id = record.operation_id;
-        primary.insert(operation_id, record);
+        primary
+            .insert(operation_id, record)
+            .expect("commit stable fixture");
         let (eligibility_key, eligibility_record) = application_eligibility_entry(seed);
-        eligibility.insert(eligibility_key, eligibility_record);
-        totals.insert(resource_key(seed), max_totals());
+        eligibility
+            .insert(eligibility_key, eligibility_record)
+            .expect("commit stable fixture");
+        totals
+            .insert(resource_key(seed), max_totals())
+            .expect("commit stable fixture");
     }
     (
         primary.allocated_pages().1,
@@ -294,29 +313,29 @@ fn application_eligibility_entry(
 #[test]
 fn empty_bounded_singletons_allocate_only_their_cell_header() {
     fn check<T: Storable>() {
-        let runtime = crate::memory::fixtures::runtime(&["test.cell.v1"], 1);
+        let runtime = crate::memory::fixtures::runtime(&["test.cell.v1"]);
         let cell = {
             let allocation = runtime
-                .open_memory(&ic_memory::StableKey::parse("test.cell.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.cell.v1").unwrap())
                 .unwrap();
-            if ic_memory::Memory::size(&allocation) == 0 {
+            if ic_storage::Memory::size(&allocation) == 0 {
                 crate::cdk::structures::StableCell::create(allocation, None::<T>)
+                    .expect("open fixture collection")
             } else {
-                crate::cdk::structures::StableCell::load(allocation).expect("retained stable cell")
+                crate::cdk::structures::StableCell::load(
+                    allocation,
+                    canic_contracts::serialization::STORAGE_LIMITS.bytes,
+                )
+                .expect("retained stable cell")
             }
         };
         assert!(cell.get().is_none());
-        let id = usize::from(
-            runtime
-                .memory_id(&ic_memory::StableKey::parse("test.cell.v1").unwrap())
-                .unwrap(),
-        );
-        assert_eq!(
-            runtime.memory_allocations().unwrap().memories[id]
-                .virtual_extent
-                .wasm_pages,
-            1
-        );
+        let allocations = runtime.memory_allocations().unwrap();
+        let entry = allocations
+            .iter()
+            .find(|entry| entry.stable_key.as_str() == "test.cell.v1")
+            .unwrap();
+        assert_eq!(entry.pages, 1);
     }
     check::<crate::storage::stable::fleet_activation::FleetActivationRecord>();
     check::<crate::storage::stable::authority_restore::AuthorityRestoreFenceRecord>();

@@ -3,7 +3,7 @@ use crate::dto::auth::{
     ChainKeyAlgorithm, ChainKeyBatchWitnessV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
     DelegatedRoleGrant, DelegationAudience, IssuerProofAlgorithm, IssuerProofBinding,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Native ChainKeyBatchHeaderV1 transport.

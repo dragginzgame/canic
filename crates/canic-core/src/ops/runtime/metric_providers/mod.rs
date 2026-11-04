@@ -12,9 +12,9 @@ use crate::config::schema::{MetricStorage, MetricStorageConfig};
 
 use std::collections::BTreeSet;
 
-use ic_memory::Memory;
 use ic_metrics::{MeasurementAggregate, MeasurementCounter};
-use ic_metrics_stable::{MetricIdentity, MetricKey, MetricsStore, StoreError};
+use ic_metrics_storage::{MetricIdentity, MetricKey, MetricsStore, StoreError};
+use ic_storage::Memory;
 
 /// Maximum component namespaces admitted by one canister.
 pub const MAX_PROVIDERS: usize = 16;

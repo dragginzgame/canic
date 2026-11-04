@@ -1,75 +1,62 @@
 #![cfg(test)]
-
 use super::*;
 use crate::{
     dto::{page::PageRequest, public_status::PublicMetricsRequest},
     model::public_metrics::{PUBLIC_METRICS_STALE_AFTER_NS, PublicHistoryCache},
 };
-use std::{collections::BTreeSet, convert::Infallible};
-
-struct FixturePolicy;
-
-impl ic_memory::RuntimeBootstrapPolicy for FixturePolicy {
-    type Error = Infallible;
-
-    fn validate_allocation(
-        &self,
-        _: &ic_memory::StableKey,
-        _: &ic_memory::MemoryManagerSlot,
-    ) -> Result<(), Infallible> {
-        Ok(())
-    }
-
-    fn runtime_bootstrap_identity(&self) -> ic_memory::PolicyIdentity {
-        ic_memory::PolicyIdentity::new([2; 32])
-    }
-}
-
-#[test]
-fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
-    let backing = crate::memory::fixtures::all_slots();
-    let mut runtime = ic_memory::MemoryRuntime::new_with_config(
-        backing.clone(),
-        ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
-    )
-    .unwrap();
-    runtime
-        .bootstrap(
-            &ic_memory::SealedDeclarationSnapshot::new(Vec::new()).unwrap(),
-            &ic_memory::MemoryAllocationPool::new(Vec::new(), (10..=254).collect()).unwrap(),
-            &FixturePolicy,
-        )
-        .unwrap();
-    let before = backing.borrow().clone();
-    let report = runtime.memory_allocation_summary().unwrap();
-    let rows = project(&report, 10).unwrap();
-    assert_eq!(*backing.borrow(), before);
-    assert_eq!(value(&rows, "bucket_size"), 65_536);
-    assert_eq!(
-        value(&rows, "ids_measured"),
-        u128::from(ic_memory::MEMORY_MANAGER_INVALID_ID)
-    );
-    assert_eq!(
-        MemoryAllocationSummary::MEMORIES_MEASURED,
-        u16::from(ic_memory::MEMORY_MANAGER_INVALID_ID)
-    );
-    assert!(
-        report.virtual_extent.wasm_pages >= u64::from(MemoryAllocationSummary::MEMORIES_MEASURED)
-    );
-    assert!(value(&rows, "unknown_binding") > 0);
-    assert_eq!(value(&rows, "physical_extent"), before.len() as u128);
-}
-
-fn report() -> MemoryAllocationSummary {
+use std::collections::BTreeSet;
+fn report() -> StorageDiagnostics {
     MemoryRegistryOps::init_registry().unwrap();
     MemoryRegistryOps::allocation_summary().unwrap()
 }
-
 fn value(rows: &[PublicMetricSample], name: &str) -> u128 {
     rows.iter()
         .find(|row| row.name == format!("{PREFIX}{name}"))
         .unwrap()
         .value
+}
+#[test]
+fn directory_metrics_conserve_capacity_without_opening_allocations() {
+    let before = report();
+    let detailed = MemoryRegistryOps::allocation_snapshot().unwrap();
+    let rows = project(&before, 10).unwrap();
+    assert_eq!(
+        value(&rows, "physical_extent"),
+        u128::from(before.physical_pages) * 65_536
+    );
+    assert_eq!(
+        value(&rows, "physical_extent"),
+        value(&rows, "data_capacity")
+            + value(&rows, "directory_capacity")
+            + value(&rows, "unassigned_capacity")
+            + 65_536
+    );
+    assert_eq!(value(&rows, "allocations"), detailed.memories.len() as u128);
+    assert_eq!(value(&rows, "live_leases"), 0);
+    assert!(
+        rows.iter()
+            .all(|row| row.canister_id.is_none() && row.observed_at_ns == 10)
+    );
+    assert_eq!(report(), before);
+    assert_eq!(MemoryRegistryOps::allocation_snapshot().unwrap(), detailed);
+}
+#[test]
+fn inconsistent_capacity_or_counts_refuse_projection() {
+    let good = report();
+    let mut capacity = good;
+    capacity.physical_pages += 1;
+    let mut counts = good;
+    counts.admitted_allocations = counts.allocations + 1;
+    let mut leases = good;
+    leases.live_leases = leases.allocations + 1;
+    let mut overflow = good;
+    overflow.data_pages = u64::MAX;
+    for invalid_report in [capacity, counts, leases, overflow] {
+        assert_eq!(
+            project(&invalid_report, 10).unwrap_err().code(),
+            invalid().code()
+        );
+    }
 }
 
 #[test]
@@ -92,83 +79,6 @@ fn disabled_and_unsupported_never_collect_or_retain_values() {
     let hidden = PublicMetricsOps::project(request, &BTreeSet::default(), 20);
     assert!(hidden.metrics.entries.is_empty());
     assert_eq!(hidden.sampled_at_ns, None);
-}
-
-#[test]
-fn public_projection_conserves_independent_partitions_without_mutating_memory() {
-    let before = report();
-    let rows = project(&before, 10).unwrap();
-    assert_eq!(MemoryRegistryOps::allocation_summary().unwrap(), before);
-    assert_eq!(value(&rows, "state"), 1);
-    assert_eq!(
-        value(&rows, "physical_extent"),
-        value(&rows, "manager_metadata")
-            + value(&rows, "allocated_bucket_bytes")
-            + value(&rows, "unmanaged")
-    );
-    assert_eq!(
-        value(&rows, "allocated_bucket_bytes"),
-        value(&rows, "virtual_extent") + value(&rows, "bucket_slack")
-    );
-    assert_eq!(
-        value(&rows, "allocated_bucket_bytes"),
-        value(&rows, "known_binding") + value(&rows, "unknown_binding")
-    );
-    assert_eq!(
-        value(&rows, "known_binding"),
-        value(&rows, "current_binding.allocated") + value(&rows, "ledger_binding.allocated")
-    );
-    assert_eq!(value(&rows, "ids_measured"), value(&rows, "ids_total"));
-    assert_eq!(value(&rows, "payload_available"), 0);
-    assert!(!rows.iter().any(|row| row.name.ends_with("payload_bytes")));
-    assert!(
-        rows.iter()
-            .all(|row| row.canister_id.is_none() && row.observed_at_ns == 10)
-    );
-}
-
-#[test]
-fn unknown_binding_does_not_change_public_label_inventory() {
-    let mut source = report();
-    let expected = project(&source, 10).unwrap();
-    source.current_binding = ic_memory::MemoryBindingSummary::default();
-    source.ledger_binding = ic_memory::MemoryBindingSummary::default();
-    source.unknown_binding = ic_memory::MemoryBindingSummary {
-        allocated_buckets: source.allocated_buckets,
-        virtual_extent: source.virtual_extent,
-    };
-    let rows = project(&source, 20).unwrap();
-    assert_eq!(
-        value(&rows, "unknown_binding"),
-        u128::from(source.allocated_bucket_bytes())
-    );
-    assert_eq!(value(&rows, "known_binding"), 0);
-    assert_eq!(
-        rows.iter().map(|row| &row.name).collect::<Vec<_>>(),
-        expected.iter().map(|row| &row.name).collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn incomplete_or_inconsistent_reports_fail_each_conservation_partition() {
-    let good = report();
-    let mutations: [fn(&mut MemoryAllocationSummary); 7] = [
-        |r| r.physical_extent.wasm_pages = 0,
-        |r| r.virtual_extent.wasm_pages += 1,
-        |r| r.allocated_buckets += 1,
-        |r| r.bucket_size_pages = 0,
-        |r| r.current_generation = None,
-        |r| r.current_binding.allocated_buckets += 1,
-        |r| r.ledger_binding.virtual_extent.wasm_pages = u64::MAX,
-    ];
-    for mutate in mutations {
-        let mut source = good;
-        mutate(&mut source);
-        assert_eq!(
-            project(&source, 20).unwrap_err().code(),
-            crate::diagnostics::codes::STATE_INVALID
-        );
-    }
 }
 
 #[test]
@@ -208,59 +118,4 @@ fn failed_collection_keeps_source_time_and_history_then_recovers() {
 fn first_collection_failure_has_no_fabricated_zero_measurements() {
     let rows = collect(true, true, 10, || Err(invalid()));
     assert_eq!(rows, vec![state(AllocationSampleState::Failed, 10)]);
-}
-
-#[test]
-fn numeric_summary_preserves_detailed_accounting_and_read_bound() {
-    let summary = report();
-    let detailed = MemoryRegistryOps::allocation_report().unwrap();
-    assert_eq!(
-        summary.current_generation,
-        detailed.summary.current_generation
-    );
-    assert_eq!(MemoryAllocationSummary::METADATA_BYTES_READ, 34_848);
-    assert_eq!(
-        usize::from(MemoryAllocationSummary::MEMORIES_MEASURED),
-        detailed.memories.len()
-    );
-    let rows = project(&summary, 10).unwrap();
-    for (name, expected) in [
-        ("physical_extent", detailed.summary.physical_extent.bytes()),
-        ("bucket_size", detailed.summary.bucket_size_bytes()),
-        (
-            "allocated_bucket_bytes",
-            detailed.summary.allocated_bucket_bytes(),
-        ),
-        ("virtual_extent", detailed.summary.virtual_extent.bytes()),
-        ("bucket_slack", detailed.summary.bucket_slack_bytes()),
-        (
-            "manager_metadata",
-            MemoryAllocationSummary::MANAGER_METADATA_BYTES,
-        ),
-        ("known_binding", detailed.summary.known_binding_bytes()),
-        ("unknown_binding", detailed.summary.unknown_binding_bytes()),
-        ("unmanaged", detailed.summary.unmanaged_bytes()),
-    ] {
-        assert_eq!(value(&rows, name), u128::from(expected));
-    }
-    let mut groups = [ic_memory::MemoryBindingSummary::default(); 3];
-    let projection = MemoryRegistryOps::allocation_snapshot().unwrap();
-    for (entry, projected) in detailed.memories.into_iter().zip(projection.memories) {
-        let index = match projected.binding {
-            crate::domain::memory::MemoryAllocationBinding::Current { .. } => 0,
-            crate::domain::memory::MemoryAllocationBinding::Ledger { .. } => 1,
-            crate::domain::memory::MemoryAllocationBinding::Unknown => 2,
-        };
-        groups[index].allocated_buckets += entry.allocated_buckets;
-        groups[index].virtual_extent.wasm_pages += entry.virtual_extent.wasm_pages;
-    }
-    assert_eq!(
-        groups,
-        [
-            summary.current_binding,
-            summary.ledger_binding,
-            summary.unknown_binding
-        ]
-    );
-    assert_eq!(MemoryRegistryOps::allocation_summary().unwrap(), summary);
 }

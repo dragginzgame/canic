@@ -8,7 +8,7 @@ use crate::{
     },
     ids::*,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 
 #[test]
 fn acknowledgement_inventory_preserves_exact_authority_and_rejects_wrong_frames() {

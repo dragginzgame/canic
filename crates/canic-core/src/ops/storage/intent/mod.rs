@@ -60,6 +60,9 @@ const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 #[derive(Debug, ThisError)]
 pub enum IntentStoreOpsError {
+    #[error("stable intent collection: {0}")]
+    Collection(#[from] ic_storage::adapter::CollectionError),
+
     #[error("intent aggregate underflow for {field}: current={current}, delta={delta}")]
     AggregateUnderflow {
         field: &'static str,
@@ -250,7 +253,7 @@ pub enum IntentStoreOpsError {
     )]
     ApplicationReceiptEligibilityCapacityUnavailable {
         required_records: u64,
-        source: ic_memory::RuntimeGrowError,
+        source: ic_storage::RuntimeGrowError,
     },
 
     #[error("receipt-backed intent {operation_id} has incompatible {owner} resource ownership")]
@@ -280,6 +283,7 @@ impl From<IntentStoreOpsError> for InternalError {
         use crate::diagnostics::codes;
 
         let code = match err {
+            IntentStoreOpsError::Collection(_) => codes::STORAGE_INVALID_STATE,
             IntentStoreOpsError::AggregateUnderflow { .. } => codes::CAPACITY_INSUFFICIENT,
             IntentStoreOpsError::AggregateOverflow { .. }
             | IntentStoreOpsError::ResourceTotalRecordCapacityReached { .. }
@@ -664,16 +668,17 @@ impl IntentStoreOps {
     }
 
     /// Return the exact cleanup deadline for a validated finite local intent.
-    pub fn cleanup_due_at_secs(intent_id: IntentId) -> Result<Option<u64>, InternalError> {
-        let record =
-            IntentStore::get_record(intent_id).ok_or(IntentStoreOpsError::NotFound(intent_id))?;
-        if record.state != IntentState::Pending {
-            return Ok(None);
-        }
-        ensure_pending_indexes(&record)?;
-        expiry_key(record.id, record.created_at, record.ttl_secs)
-            .map(|key| key.map(|key| key.due_at_secs))
-            .map_err(InternalError::from)
+    /// Validate the exact expiry index deadline before a reservation is written.
+    pub fn reservation_cleanup_due_at_secs(
+        created_at: u64,
+        ttl_secs: Option<u64>,
+    ) -> Result<Option<u64>, InternalError> {
+        ttl_secs
+            .map(|ttl| {
+                checked_cleanup_deadline(created_at, ttl)
+                    .ok_or_else(|| InternalError::public(crate::diagnostics::codes::TIME_CAPACITY))
+            })
+            .transpose()
     }
 
     /// Reset both intent stores through the ops authority for isolated unit tests.
@@ -714,7 +719,8 @@ impl IntentStoreOps {
 
         IntentStore::with_pending_entries(|pending| -> Result<(), IntentStoreOpsError> {
             for entry in pending {
-                let record = entry.value();
+                let entry = entry?;
+                let record = entry.value()?;
                 if is_pending_entry_expired(*entry.key(), now, &record)? {
                     continue;
                 }
@@ -737,11 +743,12 @@ impl IntentStoreOps {
         IntentStore::with_expiry_entries(|index| -> Result<Vec<IntentId>, IntentStoreOpsError> {
             let mut due = Vec::with_capacity(limit);
             for entry in index {
+                let entry = entry?;
                 let key = *entry.key();
                 if key.due_at_secs > now_secs || due.len() == limit {
                     break;
                 }
-                validate_expiry_entry(key, entry.value())?;
+                validate_expiry_entry(key, entry.value()?)?;
                 due.push(key.intent_id);
             }
             Ok::<Vec<IntentId>, IntentStoreOpsError>(due)
@@ -752,11 +759,11 @@ impl IntentStoreOps {
     /// Return the earliest validated finite local-intent cleanup deadline.
     pub fn next_expiry_at_secs() -> Result<Option<u64>, InternalError> {
         IntentStore::with_expiry_entries(|index| -> Result<Option<u64>, IntentStoreOpsError> {
-            let Some(entry) = index.iter().next() else {
+            let Some(entry) = index.iter().next().transpose()? else {
                 return Ok(None);
             };
             let key = *entry.key();
-            validate_expiry_entry(key, entry.value())?;
+            validate_expiry_entry(key, entry.value()?)?;
             Ok(Some(key.due_at_secs))
         })
         .map_err(InternalError::from)
@@ -777,8 +784,9 @@ impl IntentStoreOps {
 
             let mut entries = Vec::new();
             for pending_entry in pending {
+                let pending_entry = pending_entry?;
                 let intent_id = *pending_entry.key();
-                let pending_record = pending_entry.value();
+                let pending_record = pending_entry.value()?;
                 let record = IntentStore::get_record(intent_id)
                     .ok_or(IntentStoreOpsError::NotFound(intent_id))?;
                 ensure_pending_record_matches(&record, &pending_record)?;
@@ -1212,10 +1220,10 @@ impl ReceiptBackedIntentOps {
     /// Return whether exact terminal placement acknowledgement work exists.
     pub(crate) fn has_placement_acknowledgements() -> Result<bool, InternalError> {
         ReceiptBackedIntentStore::with_placement_acknowledgements(|index| {
-            let Some(entry) = index.iter().next() else {
+            let Some(entry) = index.iter().next().transpose()? else {
                 return Ok(false);
             };
-            validate_placement_acknowledgement_entry(*entry.key(), entry.value())?;
+            validate_placement_acknowledgement_entry(*entry.key(), entry.value()?)?;
             Ok::<bool, IntentStoreOpsError>(true)
         })
         .map_err(InternalError::from)
@@ -1233,11 +1241,14 @@ impl ReceiptBackedIntentOps {
             };
             let mut intents = Vec::with_capacity(limit);
             for entry in entries.by_ref().take(limit) {
-                let record = validate_placement_acknowledgement_entry(*entry.key(), entry.value())?;
+                let entry = entry?;
+                let record =
+                    validate_placement_acknowledgement_entry(*entry.key(), entry.value()?)?;
                 intents.push(record.into_intent());
             }
             let next_cursor = entries
                 .next()
+                .transpose()?
                 .and_then(|_| intents.last().map(|intent| intent.operation_id));
             Ok::<PlacementAcknowledgementPage, IntentStoreOpsError>(PlacementAcknowledgementPage {
                 intents,
@@ -1409,13 +1420,17 @@ fn collect_due_application_reclamation_candidates(
     limit: usize,
 ) -> Result<Vec<ApplicationReceiptReclamationCandidate>, IntentStoreOpsError> {
     let due = ReceiptBackedIntentStore::with_application_eligibility(|eligibility| {
-        eligibility
-            .iter()
-            .take_while(|entry| entry.key().eligible_at_ns <= now_ns)
-            .take(limit)
-            .map(|entry| (*entry.key(), entry.value()))
-            .collect::<Vec<_>>()
-    });
+        let mut due = Vec::with_capacity(limit);
+        for entry in eligibility.iter().take(limit) {
+            let entry = entry?;
+            let key = *entry.key();
+            if key.eligible_at_ns > now_ns {
+                break;
+            }
+            due.push((key, entry.value()?));
+        }
+        Ok::<_, IntentStoreOpsError>(due)
+    })?;
 
     due.into_iter()
         .map(|(key, eligibility)| validate_application_reclamation_candidate(key, eligibility))
@@ -1462,7 +1477,8 @@ fn collect_expected_receipt_indexes()
         let mut eligibility = Vec::new();
         let mut application_count = 0;
         for entry in records {
-            let record = entry.value();
+            let entry = entry?;
+            let record = entry.value()?;
             ensure_receipt_backed_record_schema(&record)?;
             if let Some(retention) = application_retention(&record)? {
                 application_count += 1;
@@ -1492,7 +1508,7 @@ fn validate_application_eligibility_index(
     ReceiptBackedIntentStore::with_application_eligibility(|eligibility| {
         let mut actual = eligibility.iter();
         for (expected_key, expected_record) in expected {
-            let Some(actual_entry) = actual.next() else {
+            let Some(actual_entry) = actual.next().transpose()? else {
                 return Err(IntentStoreOpsError::ApplicationReceiptEligibilityMissing(
                     expected_key.operation_id,
                 ));
@@ -1501,10 +1517,10 @@ fn validate_application_eligibility_index(
                 expected_key,
                 expected_record,
                 *actual_entry.key(),
-                actual_entry.value(),
+                actual_entry.value()?,
             )?;
         }
-        if let Some(actual_entry) = actual.next() {
+        if let Some(actual_entry) = actual.next().transpose()? {
             return Err(
                 IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(
                     actual_entry.key().operation_id,
@@ -2176,19 +2192,24 @@ fn expiry_key(
     let Some(ttl_secs) = ttl_secs else {
         return Ok(None);
     };
-    let due_at_secs = created_at
-        .checked_add(ttl_secs)
-        .and_then(|expires_at| expires_at.checked_add(1))
-        .filter(|due_at_secs| *due_at_secs <= u64::MAX / NANOS_PER_SECOND)
-        .ok_or(IntentStoreOpsError::ExpiryDeadlineOverflow {
+    let due_at_secs = checked_cleanup_deadline(created_at, ttl_secs).ok_or(
+        IntentStoreOpsError::ExpiryDeadlineOverflow {
             id: intent_id,
             created_at,
             ttl_secs,
-        })?;
+        },
+    )?;
     Ok(Some(IntentExpiryKeyRecord {
         due_at_secs,
         intent_id,
     }))
+}
+
+fn checked_cleanup_deadline(created_at: u64, ttl_secs: u64) -> Option<u64> {
+    created_at
+        .checked_add(ttl_secs)
+        .and_then(|expires_at| expires_at.checked_add(1))
+        .filter(|due_at_secs| *due_at_secs <= u64::MAX / NANOS_PER_SECOND)
 }
 
 fn is_expired(

@@ -11,7 +11,7 @@ fn complete_inspection_preserves_overflow_evidence_and_external_encoding() {
         version: u64::MAX,
         status: external::CanisterStatusType::Running,
         settings: external::CanisterSettings {
-            controllers: vec![ic_platform::principal::ExternalPrincipal::from_slice(
+            controllers: vec![ic_platform_types::principal::ExternalPrincipal::from_slice(
                 &[7; 29],
             )],
             compute_allocation: overflow.clone(),
@@ -19,7 +19,7 @@ fn complete_inspection_preserves_overflow_evidence_and_external_encoding() {
             freezing_threshold: overflow.clone(),
             reserved_cycles_limit: overflow.clone(),
             log_visibility: external::LogVisibility::AllowedViewers(vec![
-                ic_platform::principal::ExternalPrincipal::anonymous(),
+                ic_platform_types::principal::ExternalPrincipal::anonymous(),
             ]),
             log_memory_limit: overflow.clone(),
             wasm_memory_limit: overflow.clone(),
@@ -76,8 +76,8 @@ fn complete_inspection_preserves_overflow_evidence_and_external_encoding() {
 #[test]
 fn reserve_refusal_keeps_exact_caller_target_and_amounts() {
     let original = external::CanisterInspectionReserveResponse {
-        caller: ic_platform::principal::ExternalPrincipal::from_slice(&[1; 29]),
-        canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[2; 29]),
+        caller: ic_platform_types::principal::ExternalPrincipal::from_slice(&[1; 29]),
+        canister_id: ic_platform_types::principal::ExternalPrincipal::from_slice(&[2; 29]),
         native_cycles: u128::MAX,
         available_liquid_cycles: 4,
         required_liquid_cycles: 5,

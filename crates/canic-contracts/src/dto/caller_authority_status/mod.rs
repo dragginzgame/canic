@@ -3,7 +3,7 @@ use crate::dto::{
     caller_authority::{CallerAuthorityPhase, CallerAuthorityReadiness},
     component_directory::{ComponentBinding, FleetRegistryAuthority, ManagedCanisterBinding},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Complete CallerInstallation with native principal authority.

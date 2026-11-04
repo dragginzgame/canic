@@ -239,7 +239,7 @@ fn execute_scenario(
                     &setup.pic,
                     target_pid,
                     Principal::anonymous(),
-                    canic_testing_internal::pic::application_probe::REQUEST_CYCLES,
+                    canic_tests::pic::application_probe::REQUEST_CYCLES,
                     &999_u128,
                 )
                 .expect("scale parent funding Wire transport");
@@ -260,7 +260,7 @@ fn execute_scenario(
                     &setup.pic,
                     target_pid,
                     ic_platform::principal::ExternalPrincipal::anonymous(),
-                    canic_testing_internal::pic::application_probe::CREATE_ACCOUNT,
+                    canic_tests::pic::application_probe::CREATE_ACCOUNT,
                     &ic_platform::Principal::from(Principal::from_slice(&[51; 29])),
                 )
                 .map(|reply| reply.map(Into::into))
@@ -272,7 +272,7 @@ fn execute_scenario(
                 &setup.pic,
                 target_pid,
                 Principal::anonymous(),
-                canic_testing_internal::pic::application_probe::CREATE_WORKER,
+                canic_tests::pic::application_probe::CREATE_WORKER,
                 &(),
             )
             .expect("create_worker Wire transport");
@@ -336,11 +336,9 @@ fn configure_delegation_issuer(
         issuer_control::REQUEST_LIMITS,
     )
     .unwrap();
-    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-        pic.update_call(root, Principal::anonymous(), configure::METHOD, bytes)
-    })
-    .unwrap()
-    .unwrap();
+    let reply = pic
+        .update_call(root, Principal::anonymous(), configure::METHOD, bytes)
+        .unwrap();
     let registered: Result<native::RootIssuerConfigureResponse, Error> =
         ic_wire::native::decode_response(
             configure::METHOD_ID,
@@ -402,9 +400,6 @@ fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     response
         .expect("controller metrics application result")
         .entries
-        .into_iter()
-        .map(Into::into)
-        .collect()
 }
 
 // Derive one endpoint/timer delta from two perf snapshots.
@@ -556,13 +551,9 @@ fn root_capability_response_as(
 
     let result = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
         let call = canic_contracts::ops::root_capability::encode_request(envelope)?;
-        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
-            setup
-                .pic
-                .update_call(target_pid, caller, call.method, call.bytes)
-        })
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
-        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        let reply = setup
+            .pic
+            .update_call(target_pid, caller, call.method, call.bytes)?;
         canic_contracts::ops::root_capability::decode_response(call.method_id, &reply)
             .map_err(Into::into)
     })();
@@ -573,7 +564,11 @@ fn root_capability_response_as(
 // Read one canister's current time in nanoseconds for capability metadata issuance.
 fn target_now_ns(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
     let _ = canister_id;
-    setup.pic.get_time().as_nanos_since_unix_epoch()
+    setup
+        .pic
+        .get_time()
+        .expect("PocketIC get_time")
+        .as_nanos_since_unix_epoch()
 }
 
 // Rebuild the capability metadata tuple that the structural envelope expects.

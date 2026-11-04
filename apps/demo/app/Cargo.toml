@@ -2,7 +2,7 @@
 name = "demo_fleet_app"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 publish = false
 build = "../build.rs"
 
@@ -24,7 +24,7 @@ canic = { workspace = true, features = [] }
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }
 
 [[example]]
 name = "wire_schema"

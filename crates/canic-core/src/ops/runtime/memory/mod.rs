@@ -1,327 +1,96 @@
-//! Module: ops::runtime::memory
-//!
-//! Responsibility: commit memory allocation declarations and expose memory diagnostics.
-//! Does not own: memory schema declarations, stable records, or DTO schema.
-//! Boundary: maps memory runtime diagnostics into ops query responses.
+//! Project the single committed Storage runtime into protected diagnostic DTOs.
 
 #[cfg(test)]
 mod tests;
 
 use crate::{
     InternalError,
-    domain::memory::{MemoryAllocationBinding, MemoryCommitRecoveryErrorResponse},
     dto::memory::{
-        MemoryAllocationEntry, MemoryAllocationPoolEntry, MemoryAllocationRecordEntry,
-        MemoryAllocationSizeEntry, MemoryAllocationsResponse, MemoryAuthorityEntry,
-        MemoryCommitRecoveryResponse, MemoryCommitSnapshotResponse, MemoryLedgerMemoryEntry,
-        MemoryLedgerResponse,
+        MemoryAllocationEntry, MemoryAllocationSizeEntry, MemoryAllocationsResponse,
+        StorageDirectorySummary,
     },
-    memory::{self, ledger, registry::MemoryRegistryError},
+    memory::{self, runtime::MemoryRuntimeAccessError},
 };
-use ic_memory::{CommitSnapshotDiagnostic, DiagnosticMemorySize, DiagnosticRecord};
-use thiserror::Error as ThisError;
+use ic_storage::StorageDiagnostics;
 
-///
-/// MemoryRegistryOpsError
-///
-/// Typed failure surface for memory registry bootstrap and diagnostics.
-///
-
-#[derive(Debug, ThisError)]
-pub enum MemoryRegistryOpsError {
-    #[error(transparent)]
-    Ledger(#[from] ledger::MemoryLedgerError),
-    // this error comes from the Canic memory runtime boundary
-    #[error(transparent)]
-    Registry(#[from] MemoryRegistryError),
-    // this error comes from the generic ic-memory runtime boundary
-    #[error(transparent)]
-    Runtime(#[from] memory::MemoryBootstrapError),
-    // this error comes from the generic ic-memory runtime diagnostic boundary
-    #[error(transparent)]
-    Diagnostic(#[from] ic_memory::RuntimeDiagnosticError),
-}
-
-impl From<MemoryRegistryOpsError> for InternalError {
-    fn from(err: MemoryRegistryOpsError) -> Self {
-        let code = match err {
-            MemoryRegistryOpsError::Registry(_) | MemoryRegistryOpsError::Runtime(_) => {
-                crate::diagnostics::codes::STORAGE_INVALID_STATE
-            }
-            MemoryRegistryOpsError::Diagnostic(_)
-            | MemoryRegistryOpsError::Ledger(ledger::MemoryLedgerError::Diagnostic(_)) => {
-                crate::diagnostics::codes::STATE_INVALID
-            }
-        };
-        Self::public(code)
-    }
-}
-
-///
-/// MemoryRegistryOps
-///
-/// Operations-layer facade for memory registry bootstrap and diagnostics.
-///
-
+/// Read-only access and synchronous bootstrap of the framework's Storage owner.
 pub struct MemoryRegistryOps;
 
+const fn invalid() -> InternalError {
+    InternalError::public(crate::diagnostics::codes::STATE_INVALID)
+}
+
+impl From<MemoryRuntimeAccessError> for InternalError {
+    fn from(_: MemoryRuntimeAccessError) -> Self {
+        invalid()
+    }
+}
+
 impl MemoryRegistryOps {
-    /// Measure all usable IDs through the substrate's bounded read-only report.
-    /// Collection never decodes history or constructs a missing runtime.
+    /// Collect one validated directory view without constructing or opening allocations.
     pub fn allocation_snapshot() -> Result<MemoryAllocationsResponse, InternalError> {
-        memory::runtime::with_runtime(|runtime| {
-            let report = runtime.memory_allocations()?;
-            let allocations = runtime
-                .committed_allocations()
-                .map_err(|_| ic_memory::RuntimeDiagnosticError::NotBootstrapped)?;
-            let pool = runtime
-                .allocation_pool()
-                .map_err(|_| ic_memory::RuntimeDiagnosticError::NotBootstrapped)?;
-            Ok(memory_allocations_response(report, allocations, pool))
-        })
-        .map_err(MemoryRegistryOpsError::from)?
+        let (report, allocations) = memory::runtime::with_runtime(|runtime| {
+            Ok((runtime.diagnostics()?, runtime.memory_allocations()?))
+        })?;
+        let summary = directory_summary(report)?;
+        let memories = allocations
+            .into_iter()
+            .map(|entry| {
+                Ok(MemoryAllocationEntry {
+                    allocation_id: entry.id.get(),
+                    stable_key: entry.stable_key.as_str().to_owned(),
+                    capacity: MemoryAllocationSizeEntry {
+                        wasm_pages: entry.pages,
+                        bytes: entry
+                            .pages
+                            .checked_mul(ic_storage::WASM_PAGE_SIZE_BYTES)
+                            .ok_or_else(invalid)?,
+                    },
+                })
+            })
+            .collect::<Result<Vec<_>, InternalError>>()?;
+        Ok(MemoryAllocationsResponse { summary, memories })
     }
 
-    /// Share the bounded owner report without constructing protected response rows.
-    #[cfg(test)]
-    pub(crate) fn allocation_report() -> Result<ic_memory::MemoryAllocations, InternalError> {
-        memory::runtime::with_runtime(ic_memory::MemoryRuntime::memory_allocations)
-            .map_err(MemoryRegistryOpsError::from)
-            .map_err(Into::into)
+    /// Numeric upstream diagnostics; no per-key response is allocated.
+    pub(crate) fn allocation_summary() -> Result<StorageDiagnostics, InternalError> {
+        memory::runtime::with_runtime(|runtime| Ok(runtime.diagnostics()?)).map_err(Into::into)
     }
 
-    /// Collect numeric allocation totals without constructing per-ID rows or copying names.
-    pub(crate) fn allocation_summary() -> Result<ic_memory::MemoryAllocationSummary, InternalError>
-    {
-        memory::runtime::with_runtime(ic_memory::MemoryRuntime::memory_allocation_summary)
-            .map_err(MemoryRegistryOpsError::from)
-            .map_err(Into::into)
-    }
-
-    // Initialize the stable-memory registry for this crate and summarize the layout.
     pub(crate) fn init_registry() -> Result<(), InternalError> {
-        memory::bootstrap_framework().map_err(MemoryRegistryOpsError::from)?;
-        Ok(())
+        memory::bootstrap_framework()
+            .map_err(|_| InternalError::public(crate::diagnostics::codes::STORAGE_INVALID_STATE))
     }
 
-    // Run the full synchronous Canic memory bootstrap and return the committed layout.
     pub fn bootstrap_registry() -> Result<(), InternalError> {
         Self::init_registry()
     }
 
     pub fn is_initialized() -> Result<bool, InternalError> {
-        crate::memory::runtime::is_memory_bootstrap_ready()
-            .map_err(MemoryRegistryOpsError::from)
-            .map_err(Into::into)
+        memory::runtime::is_memory_bootstrap_ready().map_err(Into::into)
     }
 
     #[cfg(target_arch = "wasm32")]
     pub fn ensure_bootstrap() -> Result<(), InternalError> {
         if Self::is_initialized()? {
-            return Ok(());
+            Ok(())
+        } else {
+            Self::bootstrap_registry()
         }
-
-        Self::bootstrap_registry()
-    }
-
-    // Read the committed ABI ledger using the restricted diagnostic path.
-    pub fn ledger_snapshot() -> Result<MemoryLedgerResponse, InternalError> {
-        let snapshot = ledger::try_snapshot().map_err(MemoryRegistryOpsError::from)?;
-
-        let allocation_pool = memory_allocation_pool_response(&snapshot.allocation_pool);
-
-        let records: Vec<MemoryAllocationRecordEntry> = snapshot
-            .export
-            .records
-            .into_iter()
-            .map(memory_allocation_record_response)
-            .collect();
-        let memories = memory_ledger_memory_entries(&records);
-        Ok(MemoryLedgerResponse {
-            ledger_schema_version: crate::memory::ledger::MEMORY_LEDGER_SCHEMA_VERSION,
-            physical_format_id: crate::memory::ledger::MEMORY_PHYSICAL_FORMAT_ID,
-            current_generation: snapshot.export.current_generation,
-            ledger_memory_manager_id: ic_memory::MEMORY_MANAGER_LEDGER_ID,
-            commit_recovery: commit_recovery_response(snapshot.commit_recovery),
-            allocation_pool,
-            memories,
-            records,
-        })
     }
 }
 
-fn memory_allocations_response(
-    report: ic_memory::MemoryAllocations,
-    allocations: &[ic_memory::AllocationDeclaration],
-    pool: &ic_memory::MemoryAllocationPool,
-) -> Result<MemoryAllocationsResponse, InternalError> {
-    let ic_memory::MemoryAllocations { summary, memories } = report;
-    let current_generation = summary
-        .current_generation
-        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::STATE_INVALID))?;
-    Ok(MemoryAllocationsResponse {
-        current_generation,
-        manager_layout_version: ic_memory::MemoryAllocationSummary::MANAGER_LAYOUT_VERSION,
-        bucket_size_pages: summary.bucket_size_pages,
-        bucket_size_bytes: summary.bucket_size_bytes(),
-        bucket_capacity: ic_memory::MemoryAllocationSummary::BUCKET_CAPACITY,
-        allocated_buckets: summary.allocated_buckets,
-        remaining_buckets: summary.remaining_buckets(),
-        maximum_bucket_bytes: summary.maximum_bucket_bytes(),
-        physical_extent: memory_allocation_size_response(summary.physical_extent),
-        virtual_extent: memory_allocation_size_response(summary.virtual_extent),
-        manager_metadata_bytes: ic_memory::MemoryAllocationSummary::MANAGER_METADATA_BYTES,
-        manager_header_bytes: ic_memory::MemoryAllocationSummary::MANAGER_HEADER_BYTES,
-        manager_bucket_table_bytes: ic_memory::MemoryAllocationSummary::MANAGER_BUCKET_TABLE_BYTES,
-        manager_padding_bytes: ic_memory::MemoryAllocationSummary::MANAGER_PADDING_BYTES,
-        allocated_bucket_bytes: summary.allocated_bucket_bytes(),
-        bucket_slack_bytes: summary.bucket_slack_bytes(),
-        known_binding_bytes: summary.known_binding_bytes(),
-        unknown_binding_bytes: summary.unknown_binding_bytes(),
-        unmanaged_bytes: summary.unmanaged_bytes(),
-        metadata_bytes_read: ic_memory::MemoryAllocationSummary::METADATA_BYTES_READ,
-        memories: memories
-            .into_iter()
-            .map(|entry| {
-                memory_allocation_entry_response(
-                    entry,
-                    summary.bucket_size_pages,
-                    allocations,
-                    pool,
-                )
-            })
-            .collect::<Result<_, _>>()?,
+fn directory_summary(report: StorageDiagnostics) -> Result<StorageDirectorySummary, InternalError> {
+    Ok(StorageDirectorySummary {
+        generation: report.generation,
+        allocations: u64::try_from(report.allocations).map_err(|_| invalid())?,
+        admitted_allocations: u64::try_from(report.admitted_allocations).map_err(|_| invalid())?,
+        live_leases: u64::try_from(report.live_leases).map_err(|_| invalid())?,
+        extents: u64::try_from(report.extents).map_err(|_| invalid())?,
+        data_pages: report.data_pages,
+        metadata_pages: report.metadata_pages,
+        directory_bytes: report.directory_bytes,
+        physical_pages: report.physical_pages,
+        unassigned_pages: report.unassigned_pages,
     })
-}
-
-fn memory_allocation_entry_response(
-    entry: ic_memory::MemoryAllocation,
-    bucket_size_pages: u16,
-    allocations: &[ic_memory::AllocationDeclaration],
-    pool: &ic_memory::MemoryAllocationPool,
-) -> Result<MemoryAllocationEntry, InternalError> {
-    let allocated_bytes = entry.allocated_bytes(bucket_size_pages);
-    let bucket_slack_bytes = entry.bucket_slack_bytes(bucket_size_pages);
-    let binding = if entry.memory_manager_id == ic_memory::MEMORY_MANAGER_LEDGER_ID {
-        MemoryAllocationBinding::Ledger {
-            stable_key: ic_memory::IC_MEMORY_LEDGER_STABLE_KEY.to_owned(),
-            owner: ic_memory::IC_MEMORY_AUTHORITY_OWNER.to_owned(),
-        }
-    } else if let Some(allocation) = allocations
-        .iter()
-        .find(|allocation| allocation.slot().id() == entry.memory_manager_id)
-    {
-        let owner = pool
-            .authority_for_key(allocation.stable_key())
-            .ok_or_else(|| InternalError::public(crate::diagnostics::codes::STATE_INVALID))?;
-        MemoryAllocationBinding::Current {
-            stable_key: allocation.stable_key().as_str().to_owned(),
-            owner: owner.to_owned(),
-        }
-    } else {
-        MemoryAllocationBinding::Unknown
-    };
-    Ok(MemoryAllocationEntry {
-        memory_manager_id: entry.memory_manager_id,
-        binding,
-        pool_eligible: Some(pool.contains(entry.memory_manager_id)),
-        virtual_extent: memory_allocation_size_response(entry.virtual_extent),
-        allocated_buckets: entry.allocated_buckets,
-        allocated_bytes,
-        bucket_slack_bytes,
-        payload_bytes: None,
-    })
-}
-
-const fn commit_recovery_response(
-    diagnostic: CommitSnapshotDiagnostic,
-) -> MemoryCommitRecoveryResponse {
-    let (authoritative_generation, recovery_error) = match diagnostic {
-        CommitSnapshotDiagnostic::Valid { generation } => (Some(generation), None),
-        CommitSnapshotDiagnostic::Empty => (
-            None,
-            Some(MemoryCommitRecoveryErrorResponse::NoValidGeneration),
-        ),
-        CommitSnapshotDiagnostic::Invalid { .. } => (
-            None,
-            Some(MemoryCommitRecoveryErrorResponse::InvalidSnapshot),
-        ),
-    };
-    MemoryCommitRecoveryResponse {
-        current: commit_snapshot_response(diagnostic),
-        authoritative_generation,
-        recovery_error,
-    }
-}
-
-fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocationRecordEntry {
-    let memory_size = record.memory_size.map(memory_allocation_size_response);
-    let allocation = record.allocation;
-    MemoryAllocationRecordEntry {
-        memory_manager_id: Some(allocation.slot().id()),
-        stable_key: allocation.stable_key().as_str().to_string(),
-        memory_size,
-    }
-}
-
-fn memory_ledger_memory_entries(
-    records: &[MemoryAllocationRecordEntry],
-) -> Vec<MemoryLedgerMemoryEntry> {
-    records
-        .iter()
-        .filter_map(memory_ledger_memory_entry_response)
-        .collect()
-}
-
-fn memory_ledger_memory_entry_response(
-    record: &MemoryAllocationRecordEntry,
-) -> Option<MemoryLedgerMemoryEntry> {
-    Some(MemoryLedgerMemoryEntry {
-        memory_manager_id: record.memory_manager_id?,
-        stable_key: record.stable_key.clone(),
-        size: record.memory_size?,
-    })
-}
-
-fn memory_allocation_pool_response(
-    pool: &ic_memory::MemoryAllocationPool,
-) -> MemoryAllocationPoolEntry {
-    MemoryAllocationPoolEntry {
-        authorities: pool
-            .authorities()
-            .iter()
-            .map(|grant| MemoryAuthorityEntry {
-                owner: grant.authority().to_string(),
-                key_prefix: grant.key_prefix().to_string(),
-            })
-            .collect(),
-        excluded_ids: pool.excluded_ids().collect(),
-    }
-}
-
-const fn memory_allocation_size_response(size: DiagnosticMemorySize) -> MemoryAllocationSizeEntry {
-    MemoryAllocationSizeEntry {
-        wasm_pages: size.wasm_pages,
-        bytes: size.bytes(),
-    }
-}
-
-const fn commit_snapshot_response(slot: CommitSnapshotDiagnostic) -> MemoryCommitSnapshotResponse {
-    match slot {
-        CommitSnapshotDiagnostic::Empty => MemoryCommitSnapshotResponse {
-            present: false,
-            generation: None,
-            valid: false,
-        },
-        CommitSnapshotDiagnostic::Valid { generation } => MemoryCommitSnapshotResponse {
-            present: true,
-            generation: Some(generation),
-            valid: true,
-        },
-        CommitSnapshotDiagnostic::Invalid { generation } => MemoryCommitSnapshotResponse {
-            present: true,
-            generation: Some(generation),
-            valid: false,
-        },
-    }
 }

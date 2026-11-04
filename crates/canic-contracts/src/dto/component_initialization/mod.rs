@@ -1,5 +1,5 @@
 //! Native binding of opaque application bytes to their allocated canister.
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact application bytes; their internal encoding remains application-owned.

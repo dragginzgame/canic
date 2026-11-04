@@ -2,7 +2,7 @@
 name = "leaf_probe"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 publish = false
 
 [package.metadata.cargo-machete]
@@ -25,7 +25,7 @@ ic-wire = { workspace = true }
 serde = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }
 
 [[example]]
 name = "wire_schema"

@@ -2,7 +2,7 @@
 name = "canister_user_shard"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 publish = false
 build = "../build.rs"
 
@@ -21,13 +21,13 @@ wire-schema = ["canic/wire-schema"]
 
 [dependencies]
 canic = { workspace = true, features = ["internal-test-fixtures", "auth-delegated-token-verify", "auth-issuer-canister-sig-create", "auth-root-canister-sig-verify"] }
-ic-memory = { workspace = true }
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-storage = { workspace = true }
 ic-wire = { workspace = true }
 serde = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["build-support"] }
 
 [[example]]
 name = "wire_schema"

@@ -1,7 +1,6 @@
 //! Exact-session local state discard with interruption and terminal replay records.
 
 use crate::local_fleet::{LocalFleetError, model::LocalResetRecord, ops};
-use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 
 use std::{fs, path::Path};
 
@@ -47,15 +46,7 @@ pub fn begin(directory: &Path, expected: &str) -> Result<bool, LocalFleetError> 
         session_id: expected.into(),
         complete: false,
     };
-    durable::write_bytes(
-        &directory.join("reset.json"),
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o666,
-        },
-        &serde_json::to_vec(&intent)?,
-    )
-    .map_err(crate::publication::ops::io_error)?;
+    ops::publish_record(&directory.join("reset.json"), &intent, 4096)?;
     Ok(true)
 }
 
@@ -95,14 +86,6 @@ pub fn finish(directory: &Path, expected: &str) -> Result<(), LocalFleetError> {
         session_id: expected.into(),
         complete: true,
     };
-    durable::write_bytes(
-        &directory.join("reset.json"),
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o666,
-        },
-        &serde_json::to_vec(&record)?,
-    )
-    .map_err(crate::publication::ops::io_error)?;
+    ops::publish_record(&directory.join("reset.json"), &record, 4096)?;
     Ok(())
 }

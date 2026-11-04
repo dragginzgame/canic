@@ -1438,7 +1438,7 @@ mod tests {
         assert!(table.lines().any(|line| line.starts_with("app   ")));
         assert!(table.contains("done"));
         assert!(table.contains("2.00 KiB (gz 512.00 B)"));
-        assert!(table.contains(env!("CARGO_PKG_VERSION")));
+        assert!(table.contains(canic_core::VERSION));
     }
 
     #[test]
@@ -1793,8 +1793,8 @@ mod tests {
         fs::write(&wasm_gz_path, vec![0_u8; gzip_size]).expect("write gzip");
         canic_host::canister_build::CanisterArtifactBuildOutput {
             package_name: format!("canister_{role}"),
-            package_version: env!("CARGO_PKG_VERSION").to_string(),
-            protocol_release_identity: env!("CARGO_PKG_VERSION").to_string(),
+            package_version: canic_core::VERSION.to_string(),
+            protocol_release_identity: canic_core::VERSION.to_string(),
             protocol_role: canic_contracts::ids::CanisterRole::owned(role.to_string()),
             protocol_capabilities: std::collections::BTreeSet::new(),
             artifact_root: artifact_root.clone(),

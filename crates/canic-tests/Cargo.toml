@@ -2,29 +2,58 @@
 name = "canic-tests"
 edition = { workspace = true }
 rust-version = { workspace = true }
-version = { workspace = true }
+version = "0.114.0"
 license = { workspace = true }
-description = "Workspace-only integration tests for Canic"
-readme = false
+description = "Workspace-only Canic test harness and integration suites"
+readme = "README.md"
 publish = false
 
+[package.metadata.cargo-machete]
+# Derive expansion uses the destination crate's direct serde dependency.
+ignored = ["serde"]
+
+[features]
+# Ordinary library discovery excludes the stateful catalogue; governed runs select it.
+governed-pocketic-tests = ["canic-host/local-fleet", "ic-testkit/held-reply-fixtures"]
+
 [dependencies]
-canic = { workspace = true, features = [] }
-canic-contracts.workspace = true
-canic-testing-internal = { workspace = true }
-ic-platform = { workspace = true, features = ["pocket-ic", "candid"] }
-ic-testkit = { workspace = true, features = ["wire"] }
+canic = { workspace = true, features = ["testing"] }
+canic-contracts = { workspace = true, features = ["external-candid"] }
+canic-control-plane = { workspace = true, features = ["root-control-plane", "wasm-store-canister"] }
+canic-core = { workspace = true }
+canic-host = { workspace = true }
+ic-build.workspace = true
+ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
+ic-host-fs = { workspace = true }
+ic-host-process.workspace = true
+ic-platform = { workspace = true, features = ["candid", "candid-parser"] }
+ic-testkit = { workspace = true, features = ["reply-fixtures", "wire"] }
 ic-timers = { workspace = true }
 ic-wire.workspace = true
 serde = { workspace = true }
+serde_cbor = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+canic-contracts = { workspace = true, features = ["wire-schema"] }
+ic-wire = { workspace = true, features = ["typescript"] }
 
 [dev-dependencies]
-canic-core = { workspace = true }
-canic-host = { workspace = true }
-ic-host-artifacts = { workspace = true, features = ["wasm"] }
-ic-memory = { workspace = true, features = ["test-support"] }
-ic-platform = { workspace = true, features = ["agent", "candid-parser", "icrc-ledger-types", "stable-structures"] }
-serde_json = { workspace = true }
+canic-blob-service = { workspace = true }
+canic-cli = { workspace = true }
+ic-auth.workspace = true
+ic-auth-protocol-types.workspace = true
+ic-auth-wire.workspace = true
+ic-backup.workspace = true
+ic-blob-storage-contracts = { workspace = true, features = ["wire-schema"] }
+ic-platform = { workspace = true, features = ["agent", "candid-parser", "ed25519", "icrc-ledger-types"] }
+ic-query = { workspace = true }
+ic-storage = { workspace = true, features = ["test-support"] }
+proc-macro2 = { workspace = true }
+sha2.workspace = true
+syn = { workspace = true, features = ["full", "visit"] }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

@@ -11,7 +11,7 @@ use crate::{
     },
     protocol::profile::ProtocolProfileDigest,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact native projection of the maintained ComponentRuntimeDirectoryPreparationRequest contract.

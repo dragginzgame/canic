@@ -21,7 +21,7 @@ pub struct AdoptRequest {
 pub struct Adoption {
     pub operation_id: [u8; 32],
     pub authority: Authority,
-    pub controllers: Vec<ic_platform::Principal>,
+    pub controllers: Vec<ic_platform_types::Principal>,
     pub adopted_at_ns: u64,
 }
 
@@ -32,8 +32,8 @@ pub struct Adoption {
     derive(ic_wire::Wire)
 )]
 pub struct Bootstrap {
-    pub fleet_subnet_root: ic_platform::Principal,
-    pub wasm_store: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform_types::Principal,
+    pub wasm_store: ic_platform_types::Principal,
     pub release_set: crate::ids::FleetSubnetRootReleaseSet,
     pub catalog: Vec<crate::dto::root_store::RootStoreCatalogEntry>,
     pub fixtures: Vec<crate::dto::root_store::RootStoreFixture>,

@@ -10,6 +10,24 @@ finish() {
 }
 trap finish EXIT
 mkdir -p "$FIXTURE/scripts/ci" "$FIXTURE/bin" "$FIXTURE/registry"
+mkdir -p "$FIXTURE/scripts/release" "$FIXTURE/ci"
+cp "$ROOT/scripts/release/selection.sh" "$FIXTURE/scripts/release/"
+cp "$ROOT/ci/cargo-release-groups.json" "$FIXTURE/ci/"
+export RELEASE_GROUP=framework
+cat > "$FIXTURE/scripts/release/metadata.sh" <<'SH'
+#!/usr/bin/env bash
+[[ "$1" == packages ]] || exit 2
+case "$RELEASE_GROUP" in
+    framework) printf '%s\n' canic-contracts canic-core canic-control-plane canic-macros canic ;;
+    host) printf '%s\n' canic-host canic-cli ;;
+    icydb) echo canic-icydb ;;
+    blob-service) echo canic-blob-service ;;
+    *) exit 2 ;;
+esac
+SH
+printf '#!/usr/bin/env bash\nexit 0\n' > "$FIXTURE/scripts/ci/check-release-tag.sh"
+printf '#!/usr/bin/env bash\n[[ "$*" == "rev-parse HEAD" ]] || exit 2\nprintf "1111111111111111111111111111111111111111\\n"\n' > "$FIXTURE/bin/git"
+chmod +x "$FIXTURE/bin/git"
 cp "$ROOT/scripts/ci/publish-workspace.sh" "$FIXTURE/scripts/ci/"
 cp "$ROOT/scripts/ci/check-crates-io-version.sh" "$FIXTURE/scripts/ci/"
 printf '#!/usr/bin/env bash\necho 0.1.0\n' >"$FIXTURE/scripts/ci/read-workspace-version.sh"
@@ -75,7 +93,7 @@ export PUBLISH_FROM='' PUBLISH_DRY_RUN=0
 # Stubbed online cases own their policy independently of the offline release gate.
 # The explicit offline case below still verifies the production refusal.
 export CARGO_NET_OFFLINE=false
-expected_packages=(canic-contracts canic-core canic-control-plane canic-macros canic canic-icydb canic-blob-service canic-host canic-cli)
+expected_packages=(canic-contracts canic-core canic-control-plane canic-macros canic)
 
 run_case() {
     local expected="$1" status=0
@@ -114,11 +132,11 @@ run_case 0
 
 # A resumed suffix must still reject a missing predecessor package.
 rm "$PUBLICATION_TEST_REGISTRY/canic-contracts"
-PUBLISH_FROM=canic-host run_case 1
+PUBLISH_FROM=canic run_case 1
 [[ "$(rg -c '^publish ' "$PUBLICATION_TEST_EVENTS")" == "$publish_calls" ]]
 touch "$PUBLICATION_TEST_REGISTRY/canic-contracts"
-PUBLISH_FROM=canic-host run_case 0
-FAKE_LOOKUP_PACKAGE=canic-contracts FAKE_LOOKUP_HTTP=503 PUBLISH_FROM=canic-host run_case 2
+PUBLISH_FROM=canic run_case 0
+FAKE_LOOKUP_PACKAGE=canic-contracts FAKE_LOOKUP_HTTP=503 PUBLISH_FROM=canic run_case 2
 [[ "$(rg -c '^publish ' "$PUBLICATION_TEST_EVENTS")" == "$publish_calls" ]]
 
 timings="$(rg --files "$CANIC_PUBLICATION_LOG_DIR" | rg '/timings.tsv$')"
@@ -169,4 +187,25 @@ done
 rg -l $'^lookup-canic-contracts\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
 rg -l $'^propagation-canic-contracts\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
 rg -l $'^verify-canic-contracts\t2\t' "$CANIC_PUBLICATION_LOG_DIR" >/dev/null
-echo "publication runner fixtures passed (no registry effects)"
+: > "$PUBLICATION_TEST_EVENTS"
+RELEASE_GROUP=host PUBLISH_DRY_RUN=1 run_case 0
+[[ "$(rg '^publish ' "$PUBLICATION_TEST_EVENTS")" == $'publish -p canic-host --locked --dry-run\npublish -p canic-cli --locked --dry-run' ]]
+: > "$PUBLICATION_TEST_EVENTS"
+RELEASE_GROUP=host PUBLISH_FROM=canic-cli run_case 1
+if rg -q '^publish ' "$PUBLICATION_TEST_EVENTS"; then exit 1; fi
+: > "$PUBLICATION_TEST_EVENTS"
+RELEASE_GROUP=host FAKE_LOOKUP_PACKAGE=canic-host FAKE_LOOKUP_HTTP=503 PUBLISH_FROM=canic-cli run_case 2
+if rg -q '^publish ' "$PUBLICATION_TEST_EVENTS"; then exit 1; fi
+touch "$PUBLICATION_TEST_REGISTRY/canic-host"
+: > "$PUBLICATION_TEST_EVENTS"
+RELEASE_GROUP=host PUBLISH_DRY_RUN=1 PUBLISH_FROM=canic-cli run_case 0
+[[ "$(rg '^publish ' "$PUBLICATION_TEST_EVENTS")" == 'publish -p canic-cli --locked --dry-run' ]]
+for group in icydb blob-service; do
+    : > "$PUBLICATION_TEST_EVENTS"
+    RELEASE_GROUP="$group" PUBLISH_DRY_RUN=1 run_case 0
+    [[ "$(rg '^publish ' "$PUBLICATION_TEST_EVENTS")" == "publish -p canic-$group --locked --dry-run" ]]
+    : > "$PUBLICATION_TEST_EVENTS"
+    RELEASE_GROUP="$group" PUBLISH_FROM=canic-cli run_case 1
+    [[ ! -s "$PUBLICATION_TEST_EVENTS" ]]
+done
+echo "publication runner fixtures passed (selected groups only; no registry effects)"

@@ -35,5 +35,6 @@ pub struct RootFundingScheduleView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RootFundingAcceptanceDisposition {
     Fresh,
+    BalanceRelieved,
     Replay(Box<FleetRootFundingAcceptanceReceipt>),
 }

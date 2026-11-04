@@ -118,7 +118,7 @@ fn explicit_optional_fields_survive_none_and_refuse_incomplete_records() {
     for retry_at_ns in [Some(u64::MAX), None] {
         let origin = ProvisioningFailureOrigin {
             dependency: Some(ProvisioningDependencyFailure {
-                target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
+                target: ic_platform_types::principal::ExternalPrincipal::from_slice(&[8]),
                 method: crate::protocol::store_publication::inspect::METHOD.into(),
                 step: "inspect_template".into(),
                 rejection_code: None,
@@ -127,7 +127,7 @@ fn explicit_optional_fields_survive_none_and_refuse_incomplete_records() {
             failed_at_ns: 123,
             retry_at_ns,
             stage: ProvisioningFailureStage::ComponentMembership,
-            target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
+            target: ic_platform_types::principal::ExternalPrincipal::from_slice(&[8]),
             operation_id: [9; 32],
             diagnostic_code: 137,
             retry_category: ProvisioningRetryCategory::Backoff,

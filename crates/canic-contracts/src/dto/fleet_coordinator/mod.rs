@@ -37,7 +37,7 @@ pub struct CoordinatorFundingWindowStatusResponse {
 /// Controller-only funding usage and operation state for one registered Root.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CoordinatorRootFundingStatusResponse {
-    pub fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
+    pub fleet_subnet_root: ic_platform_types::principal::ExternalPrincipal,
     pub lifecycle_status: crate::dto::fleet_registry::FleetSubnetRootStatus,
     pub policy_hash: [u8; 32],
     pub policy: FleetSubnetRootFundingPolicy,
@@ -54,7 +54,7 @@ pub struct CoordinatorRootFundingStatusResponse {
 /// Controller-only Coordinator treasury policy, headroom and per-Root usage.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct CoordinatorFundingStatusResponse {
-    pub coordinator: ic_platform::principal::ExternalPrincipal,
+    pub coordinator: ic_platform_types::principal::ExternalPrincipal,
     pub current_cycles: Cycles,
     pub policy_generation: u64,
     pub funding_enabled: bool,

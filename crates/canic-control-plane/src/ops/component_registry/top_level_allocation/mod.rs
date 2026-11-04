@@ -115,6 +115,8 @@ impl ComponentRegistryOps {
         let current =
             RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentAllocationRecord {
+            retry: crate::storage::stable::continuation_retry::ContinuationRetryRecord::default(),
+            continuation_requested: false,
             application_initialization: None,
             operation_id,
             allocation_sequence: decision.allocation_sequence,
@@ -127,7 +129,9 @@ impl ComponentRegistryOps {
             progress: RootComponentAllocationProgressRecord::Reserved,
         };
         if let Some(existing) = RootComponentRegistryStore::allocation(operation_id) {
-            return if existing == record {
+            let mut expected = record;
+            expected.continuation_requested = existing.continuation_requested;
+            return if existing == expected {
                 Ok(allocation_record_to_view(existing))
             } else {
                 Err(InternalError::conflict())

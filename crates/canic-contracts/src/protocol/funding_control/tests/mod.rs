@@ -24,7 +24,7 @@ fn rotation_receipt_keeps_principal_generations_and_original_time() {
     let stored = crate::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt {
         operation_id: [1; 32],
         plan_digest: [2; 32],
-        fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(&[3; 29]),
+        fleet_subnet_root: ic_platform_types::principal::ExternalPrincipal::from_slice(&[3; 29]),
         predecessor_generation: u64::MAX - 1,
         successor_generation: u64::MAX,
         prepared: true,

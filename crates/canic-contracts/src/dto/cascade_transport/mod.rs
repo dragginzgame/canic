@@ -1,6 +1,6 @@
 //! Native cascade topology; internal snapshot and persistence encodings remain unchanged.
 use crate::ids::CanisterRole;
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact receiver-relative ancestry and child inventory.

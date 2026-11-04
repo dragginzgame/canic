@@ -6,7 +6,7 @@ use crate::{
     },
     ids::ComponentInstanceId,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 /// Complete RootComponentRemovalOperationStatus evidence.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

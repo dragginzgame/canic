@@ -244,7 +244,13 @@ fn ic_wasm_authority_for(
 pub fn resolve_required_ic_wasm() -> Result<IcWasmExecutable, IcWasmToolError> {
     current_ic_wasm_authority()?;
     let path = resolve_selected_executable()?;
-    let path = resolve_distribution_executable(&path)?;
+    admit_required_ic_wasm(&path)
+}
+
+/// Admit an explicit executable or npm launcher with the ordinary platform checks.
+pub(crate) fn admit_required_ic_wasm(path: &Path) -> Result<IcWasmExecutable, IcWasmToolError> {
+    current_ic_wasm_authority()?;
+    let path = resolve_distribution_executable(path)?;
     admit_ic_wasm_executable(&path)
 }
 

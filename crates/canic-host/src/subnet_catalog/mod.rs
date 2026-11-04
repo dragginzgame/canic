@@ -13,7 +13,7 @@ pub mod view;
 use ic_query::subnet_catalog::{
     CatalogAssurance, CatalogLoadOutcome, CatalogSourceSelection,
     DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, MAINNET_NETWORK, SubnetCatalogCacheRequest,
-    SubnetCatalogLoadFailure, SubnetCatalogLoadRequest, load_cached_subnet_catalog_detailed,
+    SubnetCatalogLoadFailure, SubnetCatalogLoadRequest, load_cached_subnet_catalog,
 };
 use std::path::{Path, PathBuf};
 
@@ -38,7 +38,7 @@ pub fn load_cached_mainnet_subnet_catalog(
     now_unix_secs: u64,
 ) -> Result<CatalogLoadOutcome, Box<SubnetCatalogLoadFailure>> {
     let request = mainnet_subnet_catalog_cache_only_request(icp_root, now_unix_secs);
-    load_cached_subnet_catalog_detailed(&request)
+    load_cached_subnet_catalog(&request)
 }
 
 fn mainnet_subnet_catalog_load_request(

@@ -10,7 +10,7 @@ use crate::{
     },
     ids::FleetBinding,
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact native MutationRequest contract, independent of other Coordinator capabilities.

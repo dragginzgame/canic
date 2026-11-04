@@ -34,10 +34,10 @@ std::thread_local! {
     > = RefCell::new(
         {
             let allocation = crate::memory::open(crate::memory::keys::REPLAY_RECEIPTS_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         },
     );
@@ -58,29 +58,20 @@ impl Storable for ReplayReceiptSlotKey {
         max_size: 32,
         is_fixed_size: true,
     };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.0.to_vec())
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
+        Ok(Cow::Owned(self.0.to_vec()))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        self.0.to_vec()
+    fn into_bytes(self) -> Result<Vec<u8>, ic_storage::storable::CodecError> {
+        Ok(self.0.to_vec())
     }
-
-    /// Decode the exact fixed-width stable replay slot identity.
-    ///
-    /// # Panics
-    ///
-    /// Panics when stable memory contains a replay slot that is not exactly 32 bytes.
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let key = <[u8; 32]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
-            panic!(
-                "stable ReplayReceiptSlotKey is {} bytes; expected 32",
-                bytes.as_ref().len()
-            )
-        });
-
-        Self(key)
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        Self::check_bounds(&bytes)?;
+        Ok(Self(
+            bytes
+                .as_ref()
+                .try_into()
+                .map_err(|_| ic_storage::storable::CodecError::Bounds)?,
+        ))
     }
 }
 
@@ -166,28 +157,19 @@ impl ReplayReceiptRecord {
 
 impl Storable for ReplayReceiptRecord {
     const BOUND: Bound = Bound::Unbounded;
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, ic_storage::storable::CodecError> {
         let bytes = crate::cdk::serialize::serialize(self)
-            .expect("replay receipt record serializes to Wire");
-        assert!(
-            bytes.len() <= REPLAY_RECEIPT_MAX_BYTES,
-            "replay receipt exceeds its encoded limit"
-        );
-        Cow::Owned(bytes)
+            .map_err(crate::cdk::serialize::storable_error)?;
+        if bytes.len() > REPLAY_RECEIPT_MAX_BYTES {
+            return Err(ic_storage::storable::CodecError::Bounds);
+        }
+        Ok(Cow::Owned(bytes))
     }
-
-    fn into_bytes(self) -> Vec<u8> {
-        self.to_bytes().into_owned()
-    }
-
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        assert!(
-            bytes.len() <= REPLAY_RECEIPT_MAX_BYTES,
-            "replay receipt exceeds its encoded limit"
-        );
-        crate::cdk::serialize::deserialize(bytes.as_ref())
-            .expect("replay receipt record decodes from Wire")
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, ic_storage::storable::CodecError> {
+        if bytes.len() > REPLAY_RECEIPT_MAX_BYTES {
+            return Err(ic_storage::storable::CodecError::Bounds);
+        }
+        crate::cdk::serialize::deserialize(&bytes).map_err(crate::cdk::serialize::storable_error)
     }
 }
 
@@ -232,10 +214,12 @@ impl ReplayReceiptStore {
     #[must_use]
     pub(crate) fn release_page(start_after: Option<ReplayReceiptSlotKey>) -> ReplayReleasePageView {
         REPLAY_RECEIPTS.with_borrow(|map| {
-            let mut rows = map.range((start_after.map_or(Unbounded, Excluded), Unbounded));
+            let mut rows = map
+                .range((start_after.map_or(Unbounded, Excluded), Unbounded))
+                .map(|entry| entry.expect("Storage iteration failed"));
             let entry = rows.next().map(|row| ReplayReceiptEntryRecord {
                 key: *row.key(),
-                record: row.value(),
+                record: row.value().expect("decode Storage entry"),
             });
             ReplayReleasePageView {
                 entry,
@@ -246,7 +230,7 @@ impl ReplayReceiptStore {
 
     #[must_use]
     pub(crate) fn get(key: ReplayReceiptSlotKey) -> Option<ReplayReceiptRecord> {
-        REPLAY_RECEIPTS.with_borrow(|map| map.get(&key))
+        REPLAY_RECEIPTS.with_borrow(|map| map.get(&key).expect("Storage operation failed"))
     }
 
     #[must_use]
@@ -257,7 +241,8 @@ impl ReplayReceiptStore {
     ) -> Vec<ReplayReceiptRecord> {
         REPLAY_RECEIPTS.with_borrow(|map| {
             map.iter()
-                .map(|entry| entry.value())
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .map(|entry| entry.value().expect("decode Storage entry"))
                 .filter(|record| {
                     record.actor == actor
                         && record.operation_id == operation_id
@@ -269,12 +254,12 @@ impl ReplayReceiptStore {
 
     pub(crate) fn upsert(key: ReplayReceiptSlotKey, record: ReplayReceiptRecord) {
         REPLAY_RECEIPTS.with_borrow_mut(|map| {
-            map.insert(key, record);
+            map.insert(key, record).expect("Storage operation failed");
         });
     }
 
     pub(crate) fn remove(key: ReplayReceiptSlotKey) -> Option<ReplayReceiptRecord> {
-        REPLAY_RECEIPTS.with_borrow_mut(|map| map.remove(&key))
+        REPLAY_RECEIPTS.with_borrow_mut(|map| map.remove(&key).expect("Storage operation failed"))
     }
 
     #[must_use]
@@ -286,8 +271,9 @@ impl ReplayReceiptStore {
     pub(crate) fn active_len_for_actor(actor: ReplayActor, now_ns: u64) -> usize {
         REPLAY_RECEIPTS.with_borrow(|map| {
             map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .filter(|entry| {
-                    let record = entry.value();
+                    let record = entry.value().expect("decode Storage entry");
                     record.actor == actor && record_is_active(&record, now_ns)
                 })
                 .count()
@@ -298,8 +284,9 @@ impl ReplayReceiptStore {
     pub(crate) fn pending_len_for_actor(actor: ReplayActor, now_ns: u64) -> usize {
         REPLAY_RECEIPTS.with_borrow(|map| {
             map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .filter(|entry| {
-                    let record = entry.value();
+                    let record = entry.value().expect("decode Storage entry");
                     record.actor == actor && record_is_pending(&record, now_ns)
                 })
                 .count()
@@ -314,7 +301,8 @@ impl ReplayReceiptStore {
     ) -> Vec<ReplayReceiptRecord> {
         REPLAY_RECEIPTS.with_borrow(|map| {
             map.iter()
-                .map(|entry| entry.value())
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .map(|entry| entry.value().expect("decode Storage entry"))
                 .filter(|record| {
                     record.actor == actor
                         && record.command_kind == command_kind
@@ -328,8 +316,9 @@ impl ReplayReceiptStore {
     pub(crate) fn pending_len_for_command_kind(command_kind: &str, now_ns: u64) -> usize {
         REPLAY_RECEIPTS.with_borrow(|map| {
             map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .filter(|entry| {
-                    let record = entry.value();
+                    let record = entry.value().expect("decode Storage entry");
                     record.command_kind == command_kind && record_is_pending(&record, now_ns)
                 })
                 .count()
@@ -344,21 +333,26 @@ impl ReplayReceiptStore {
         now_ns: u64,
     ) -> bool {
         REPLAY_RECEIPTS.with_borrow(|map| {
-            map.iter().any(|entry| {
-                let record = entry.value();
-                record.actor == actor
-                    && record.command_kind == command_kind
-                    && record.operation_id != excluded_operation_id
-                    && record_is_pending(&record, now_ns)
-            })
+            map.iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+                .any(|entry| {
+                    let record = entry.value().expect("decode Storage entry");
+                    record.actor == actor
+                        && record.command_kind == command_kind
+                        && record.operation_id != excluded_operation_id
+                        && record_is_pending(&record, now_ns)
+                })
         })
     }
 
     pub(crate) fn collect_expired(now_ns: u64, limit: usize) -> Vec<ReplayReceiptSlotKey> {
         let mut expired = Vec::new();
         REPLAY_RECEIPTS.with_borrow(|map| {
-            for entry in map {
-                let record = entry.value();
+            for entry in map
+                .iter()
+                .map(|entry| entry.expect("Storage iteration failed"))
+            {
+                let record = entry.value().expect("decode Storage entry");
                 if !record_survives_replay_expiry(&record)
                     && record
                         .expires_at_ns
@@ -406,9 +400,10 @@ impl ReplayReceiptStore {
         ReplayReceiptsData {
             entries: REPLAY_RECEIPTS.with_borrow(|map| {
                 map.iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .map(|entry| ReplayReceiptEntryRecord {
                         key: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -417,15 +412,18 @@ impl ReplayReceiptStore {
 
     pub(crate) fn import(data: ReplayReceiptsData) {
         REPLAY_RECEIPTS.with_borrow_mut(|map| {
-            map.clear();
+            map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                map.insert(entry.key, entry.record);
+                map.insert(entry.key, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
 
     pub(crate) fn reset_for_tests() {
-        REPLAY_RECEIPTS.with_borrow_mut(StableBtreeMap::clear);
+        REPLAY_RECEIPTS
+            .with_borrow_mut(StableBtreeMap::clear)
+            .expect("commit stable fixture");
     }
 }
 
@@ -460,23 +458,27 @@ mod tests {
     }
 
     fn stable_round_trip_into_receipt(record: ReplayReceiptRecord) -> ReplayReceipt {
-        let encoded = record.into_bytes();
+        let encoded = record.into_bytes().expect("encode stable fixture");
         ReplayReceiptRecord::from_bytes(Cow::Owned(encoded))
+            .expect("decode stable fixture")
             .into_receipt()
             .expect("stable replay receipt decodes")
     }
 
     #[test]
-    #[should_panic(expected = "stable ReplayReceiptSlotKey is 31 bytes; expected 32")]
     fn malformed_stable_replay_slot_key_fails_closed() {
-        let _ = ReplayReceiptSlotKey::from_bytes(Cow::Owned(vec![0; 31]));
+        assert_eq!(
+            ReplayReceiptSlotKey::from_bytes(Cow::Owned(vec![0; 31])).unwrap_err(),
+            ic_storage::storable::CodecError::Bounds
+        );
     }
 
     #[test]
     fn replay_receipt_record_round_trips_through_wire_storable() {
         let record = receipt_record_fixture();
-        let encoded = record.clone().into_bytes();
-        let decoded = ReplayReceiptRecord::from_bytes(Cow::Owned(encoded));
+        let encoded = record.clone().into_bytes().expect("encode stable fixture");
+        let decoded =
+            ReplayReceiptRecord::from_bytes(Cow::Owned(encoded)).expect("decode stable fixture");
 
         assert_eq!(decoded, record);
     }
@@ -484,50 +486,52 @@ mod tests {
     #[test]
     fn replay_record_limit_refuses_oversize_before_stable_writes() {
         let memory = crate::cdk::structures::VectorMemory::default();
-        let runtime = ic_memory::testing::fixture_runtime(
+        let runtime = ic_storage::testing::fixture_runtime(
             memory.clone(),
             "test",
             "test.",
             &["test.replay.v1"],
-            ic_memory::MemoryManagerConfig::new(std::num::NonZeroU16::new(1).unwrap()),
+            ic_storage::StorageConfig::default(),
         )
         .unwrap();
         let mut map = {
             let allocation = runtime
-                .open_memory(&ic_memory::StableKey::parse("test.replay.v1").unwrap())
+                .open_memory(&ic_storage::StableKey::parse("test.replay.v1").unwrap())
                 .unwrap();
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         };
         let key = ReplayReceiptSlotKey([4; 32]);
         let record = receipt_record_fixture();
-        map.insert(key, record.clone());
+        map.insert(key, record.clone())
+            .expect("Storage operation failed");
         let before = memory.borrow().clone();
         let mut oversized = record.clone();
         oversized.response_bytes = Some(vec![0; REPLAY_RECEIPT_MAX_BYTES]);
-        assert!(
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                map.insert(key, oversized);
-            }))
-            .is_err()
-        );
+        assert!(matches!(
+            map.insert(key, oversized),
+            Err(ic_storage::adapter::CollectionError::Codec(
+                ic_storage::storable::CodecError::Bounds
+            ))
+        ));
         assert_eq!(*memory.borrow(), before);
-        assert_eq!(map.get(&key), Some(record));
-        assert!(
-            std::panic::catch_unwind(|| {
-                ReplayReceiptRecord::from_bytes(Cow::Owned(vec![0; REPLAY_RECEIPT_MAX_BYTES + 1]))
-            })
-            .is_err()
+        assert_eq!(
+            map.get(&key).expect("Storage operation failed"),
+            Some(record)
+        );
+        assert_eq!(
+            ReplayReceiptRecord::from_bytes(Cow::Owned(vec![0; REPLAY_RECEIPT_MAX_BYTES + 1])),
+            Err(ic_storage::storable::CodecError::Bounds)
         );
     }
 
     #[test]
     fn replay_receipt_record_has_exact_stable_bytes() {
         let record = receipt_record_fixture();
-        let current_bytes = record.into_bytes();
+        let current_bytes = record.into_bytes().expect("encode stable fixture");
 
         assert_eq!(
             current_bytes,
@@ -754,7 +758,7 @@ mod tests {
         record.updated_at_ns = 175;
 
         assert_eq!(
-            record.into_bytes(),
+            record.into_bytes().expect("encode stable fixture"),
             hex_fixture(
                 "43535701010f746573742e636f6d6d616e642e763109090909090909090909090909090909090909090909090909090909090909091d010101010101010101010101010101010101010101010101010101010100010707070707070707070707070707070707070707070707070707070707070707030064af0101c801000000000000"
             )

@@ -69,7 +69,6 @@ use canic_core::{
     },
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::try_pocket_ic_operation;
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -77,9 +76,9 @@ use std::{
     time::Duration,
 };
 use {
-    ic_platform::pocket_ic::PocketIc,
-    ic_platform::pocket_ic::common::rest::RawMessageId,
-    ic_testkit::pic::{CanisterInstallExt, PocketIcCallFailure},
+    ic_testkit::pic::CanisterInstallExt,
+    ic_testkit::pocket_ic::common::rest::RawMessageId,
+    ic_testkit::pocket_ic::{ClientError, PocketIc},
 };
 
 pub use model::{
@@ -177,7 +176,7 @@ impl ManagedComponentGroupFixture {
         &mut self,
         maximum_ticks: usize,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
-        self.settle_children(maximum_ticks, |_| true)
+        self.settle_children(maximum_ticks, |_| Ok(true))
     }
 
     /// Settle a submitted application request and every child it allocates.
@@ -192,7 +191,7 @@ impl ManagedComponentGroupFixture {
         maximum_ticks: usize,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
         self.settle_children(maximum_ticks, |pic| {
-            pic.ingress_status(message_id.clone()).is_some()
+            Ok(pic.ingress_status(message_id.clone())?.is_some())
         })
     }
 
@@ -216,17 +215,15 @@ impl ManagedComponentGroupFixture {
     {
         let bytes = ic_wire::native::encode_request(spec.method_id, args, spec.request_limits)
             .map_err(ManagedComponentGroupQualificationError::RequestFrame)?;
-        let message_id =
-            try_pocket_ic_operation(|| self.pic.submit_call(target, caller, spec.method, bytes))
-                .map_err(PocketIcCallFailure::Operation)?
-                .map_err(PocketIcCallFailure::Rejected)?;
+        let message_id = self.pic.submit_call(target, caller, spec.method, bytes)?;
         self.settle_submitted_call(&message_id, maximum_ticks)?;
-        let reply = try_pocket_ic_operation(|| self.pic.ingress_status(message_id))
-            .map_err(PocketIcCallFailure::Operation)?
+        let reply = self
+            .pic
+            .ingress_status(message_id)?
             .ok_or(ManagedComponentGroupQualificationError::UnexpectedResponse(
                 "settled application update",
             ))?
-            .map_err(PocketIcCallFailure::Rejected)?;
+            .map_err(ClientError::Canister)?;
         ic_wire::native::decode_response(spec.method_id, &reply, spec.response_limits)
             .map_err(ManagedComponentGroupQualificationError::ResponseFrame)
     }
@@ -234,13 +231,13 @@ impl ManagedComponentGroupFixture {
     fn settle_children(
         &mut self,
         maximum_ticks: usize,
-        request_finished: impl Fn(&PocketIc) -> bool,
+        request_finished: impl Fn(&PocketIc) -> Result<bool, ClientError>,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
         let before = self.nodes.len();
         let mut last_allocation_count = None;
         let mut quiet_observations = 0usize;
         for _ in 0..maximum_ticks {
-            self.pic.tick();
+            self.pic.tick()?;
             let allocation_count = self.install_unsettled_allocations()?;
             let installed_child_count = self
                 .nodes
@@ -248,7 +245,7 @@ impl ManagedComponentGroupFixture {
                 .filter(|node| node.public.parent_canister_id.is_some())
                 .count();
             let nodes_ready = self.all_nodes_ready()?;
-            if request_finished(&self.pic)
+            if request_finished(&self.pic)?
                 && nodes_ready
                 && allocation_count == installed_child_count
             {
@@ -265,7 +262,7 @@ impl ManagedComponentGroupFixture {
             }
             last_allocation_count = Some(allocation_count);
             if quiet_observations < SETTLEMENT_QUIET_OBSERVATIONS {
-                self.pic.advance_time(Duration::from_secs(1));
+                self.pic.advance_time(Duration::from_secs(1))?;
             }
         }
         Err(ManagedComponentGroupQualificationError::ProgressLimit {
@@ -443,7 +440,7 @@ impl ManagedComponentGroupFixture {
             )
         })?;
         self.pic
-            .wait_out_install_code_rate_limit(install_code_cooldown);
+            .wait_out_install_code_rate_limit(install_code_cooldown)?;
         self.pic
             .upgrade_canister(
                 target,
@@ -453,7 +450,7 @@ impl ManagedComponentGroupFixture {
                 })?,
                 Some(self.root()),
             )
-            .map_err(|error| ManagedComponentGroupQualificationError::Install(error.to_string()))
+            .map_err(ManagedComponentGroupQualificationError::Transport)
     }
 
     fn install_unsettled_allocations(
@@ -509,7 +506,7 @@ impl ManagedComponentGroupFixture {
                 ))
             })?;
         self.pic
-            .add_cycles(allocation.child, artifact.install_cycles);
+            .add_cycles(allocation.child, artifact.install_cycles)?;
         let binding = ComponentChildBinding {
             component: component.binding.clone(),
             parent_canister_id: allocation.parent,
@@ -557,7 +554,7 @@ impl ManagedComponentGroupFixture {
             artifact.wasm.clone(),
             init_args.clone(),
             Some(self.root()),
-        );
+        )?;
 
         let public = ManagedComponentNode {
             binding: managed_binding,
@@ -955,19 +952,18 @@ fn create_fixture_canisters(
     component_count: usize,
 ) -> Result<(PocketIc, Principal, Vec<Principal>), ManagedComponentGroupQualificationError> {
     let pic = build_pocketic().map_err(ManagedComponentGroupQualificationError::Install)?;
-    let root = pic.create_canister();
-    pic.add_cycles(root, 100_000_000_000_000);
+    let root = pic.create_canister()?;
+    pic.add_cycles(root, 100_000_000_000_000)?;
     let init_args = ic_platform::candid::contract::encode_one(())
         .map_err(|error| ManagedComponentGroupQualificationError::Encoding(error.to_string()))?;
-    pic.install_canister(root, TEST_ROOT_WASM.to_vec(), init_args, None);
+    pic.install_canister(root, TEST_ROOT_WASM.to_vec(), init_args, None)?;
     let components = (0..component_count)
         .map(|_| {
-            let canister = pic.create_canister();
-            pic.set_controllers(canister, None, vec![root])
-                .expect("fresh fixture Component controller update");
-            canister
+            let canister = pic.create_canister()?;
+            pic.set_controllers(canister, None, vec![root])?;
+            Ok::<_, ClientError>(canister)
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     Ok((pic, root, components))
 }
 
@@ -1134,13 +1130,13 @@ impl TopLevelInstallContext<'_> {
             artifact.application_init_args.for_canister(canister),
         ))
         .map_err(|error| ManagedComponentGroupQualificationError::Encoding(error.to_string()))?;
-        self.pic.add_cycles(canister, artifact.install_cycles);
+        self.pic.add_cycles(canister, artifact.install_cycles)?;
         self.pic.install_canister(
             canister,
             artifact.wasm.clone(),
             init_args.clone(),
             Some(self.root.fleet_subnet_root),
-        );
+        )?;
         Ok(init_args)
     }
 }
@@ -1574,7 +1570,7 @@ pub enum ManagedComponentGroupQualificationError {
     Config(String),
     /// Canic rejected a protected lifecycle operation.
     Canic(Error),
-    /// PocketIC rejected installation or same-release upgrade.
+    /// PocketIC instance setup failed.
     Install(String),
     /// A bounded lifecycle observation did not reach terminal state.
     ProgressLimit {
@@ -1584,7 +1580,7 @@ pub enum ManagedComponentGroupQualificationError {
         maximum_ticks: usize,
     },
     /// PocketIC rejected the call or its transport failed.
-    Transport(PocketIcCallFailure),
+    Transport(ClientError),
     /// Wire framing or the PocketIC transport rejected the typed query.
     Wire(ic_testkit::pic::WireCallError),
     /// A submitted request could not be encoded within its native contract.
@@ -1597,8 +1593,8 @@ pub enum ManagedComponentGroupQualificationError {
     UnexpectedResponse(&'static str),
 }
 
-impl From<PocketIcCallFailure> for ManagedComponentGroupQualificationError {
-    fn from(value: PocketIcCallFailure) -> Self {
+impl From<ClientError> for ManagedComponentGroupQualificationError {
+    fn from(value: ClientError) -> Self {
         Self::Transport(value)
     }
 }
@@ -1684,7 +1680,15 @@ impl fmt::Display for ManagedComponentGroupQualificationError {
     }
 }
 
-impl std::error::Error for ManagedComponentGroupQualificationError {}
+impl std::error::Error for ManagedComponentGroupQualificationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Transport(error) => Some(error),
+            Self::Wire(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 /// Exact allocation observation; heap state and installation remain separately owned.
 #[derive(Deserialize)]

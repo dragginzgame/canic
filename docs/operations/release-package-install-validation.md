@@ -133,12 +133,12 @@ defaults.
 Complete release flow remains:
 
 ```text
-make patch
-make minor
-make major
-make release-stage
-make release-commit
-make release-push
+make patch RELEASE_GROUP=framework
+make minor RELEASE_GROUP=framework
+make major RELEASE_GROUP=framework
+make release-stage RELEASE_GROUP=framework
+make release-commit RELEASE_GROUP=framework
+make release-push RELEASE_GROUP=framework
 ```
 
 An eligible non-runtime patch may substitute `make patch-fast` for `make

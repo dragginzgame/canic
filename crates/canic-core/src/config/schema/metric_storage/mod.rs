@@ -107,7 +107,7 @@ impl super::Validate for MetricStorageConfig {
             ));
         }
         for name in self.providers.keys() {
-            ic_metrics_stable::MetricKey::new(name, "configuration").map_err(|_| {
+            ic_metrics_storage::MetricKey::new(name, "configuration").map_err(|_| {
                 super::ConfigSchemaError::ValidationError("invalid metric provider name".into())
             })?;
         }

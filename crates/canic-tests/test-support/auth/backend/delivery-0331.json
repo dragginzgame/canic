@@ -1,0 +1,9 @@
+{
+  "source_revision": "f9105b938aa76de80f1e83c635e1ab445133911c",
+  "dirty": false,
+  "engine_version": "0.33.1",
+  "protocol_version": "0.33.0",
+  "archive": "/home/adam/projects/ic-auth/target/portable-fixtures/backend-package.yJHN35/target/package/ic-auth-backend-conformance-0.33.1.crate",
+  "sha256": "9a71171b494337da1c1254eb61df224f014d25a63dfeccb4989f461e417046ed",
+  "qualification": "registry-consumer-and-packaged-scenarios"
+}

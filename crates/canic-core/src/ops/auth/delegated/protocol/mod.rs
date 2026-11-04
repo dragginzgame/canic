@@ -45,7 +45,7 @@ pub(in crate::ops::auth) fn grants(
         .map(|grant| {
             Ok(protocol::DelegatedRoleGrant {
                 target: role(&grant.target)?,
-                scopes: grant.scopes.clone(),
+                scopes: protocol::ScopeLabel::from_strings(grant.scopes.clone())?,
             })
         })
         .collect()

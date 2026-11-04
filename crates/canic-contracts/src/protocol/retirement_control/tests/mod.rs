@@ -11,7 +11,7 @@ use crate::{
     },
     ids::*,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 
 fn version() -> FleetRegistryVersion {
     FleetRegistryVersion {
@@ -181,8 +181,8 @@ fn deletion_readiness_preserves_original_ledger_and_cycle_authority() {
     use crate::dto::retirement_control::{
         LedgerTransferIntent, LedgerTransferReceipt, Readiness, ReadinessRequest,
     };
-    let root = ic_platform::Principal::from_slice(&[1]);
-    let coordinator = ic_platform::Principal::from_slice(&[2]);
+    let root = ic_platform_types::Principal::from_slice(&[1]);
+    let coordinator = ic_platform_types::Principal::from_slice(&[2]);
     let evidence = Readiness {
         request: ReadinessRequest {
             ledger_receipt: LedgerTransferReceipt {
@@ -218,11 +218,11 @@ fn deletion_readiness_preserves_original_ledger_and_cycle_authority() {
         evidence.clone().into();
     assert_eq!(
         canonical.request.ledger_receipt.intent.source,
-        ic_platform::principal::ExternalPrincipal::from(root)
+        ic_platform_types::principal::ExternalPrincipal::from(root)
     );
     assert_eq!(
         canonical.request.ledger_receipt.intent.destination,
-        ic_platform::principal::ExternalPrincipal::from(coordinator)
+        ic_platform_types::principal::ExternalPrincipal::from(coordinator)
     );
     assert_eq!(
         canonical.request.ledger_receipt.block_index,

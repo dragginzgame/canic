@@ -237,7 +237,7 @@ fn finalize_fixture(context: &WorkspaceBuildContext) -> ReleaseBuildId {
         CanicInfrastructureArtifactBuildOutput {
             role,
             package: "canic-control-plane".into(),
-            protocol_release_identity: env!("CARGO_PKG_VERSION").into(),
+            protocol_release_identity: canic_core::VERSION.into(),
             protocol_role: CanisterRole::owned(role.protocol_role_name().into()),
             protocol_capabilities: BTreeSet::new(),
             release_build_id: release,

@@ -50,6 +50,7 @@ pub use fleet_service::{
     MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES,
 };
 #[cfg(any(not(target_arch = "wasm32"), test))]
+#[cfg(any(test, all(feature = "build-support", not(target_arch = "wasm32"))))]
 pub use runtime::RoleRuntimeAuthorityError;
 pub use runtime::{
     RoleRuntimeAuthority, RoleRuntimeConfig, RuntimeApplicationAuthorization,

@@ -218,7 +218,7 @@ accounts and requires no drain solely because its module changes:
 
 ```toml
 [canisters.drain]
-candid = "interfaces/cycle-drain.did"
+wire_schema = "interfaces/cycle-drain.wire.json"
 method = "canic_cycle_drain"
 destination = "treasury" # exact logical name from the desired document
 maximum_execution_burn_cycles = "0.1B"
@@ -227,7 +227,13 @@ maximum_execution_burn_cycles = "0.1B"
 Fleet Ensure resolves that logical name through its durable current state. The
 endpoint receives the Fleet operation ID, exact destination Principal, and exact
 cycle amount and must return either `Accepted` or `Replayed` with that same
-amount. A missing, changed, foreign, or unsafe drain returns a typed blocker.
+amount inside the ordinary `Result<DrainResponse, canic::Error>` Wire reply.
+Applications use `canic::dto::cycle_drain::{DrainRequest, DrainResponse}` and
+`canic::protocol::cycle_drain` identities/limits when defining that endpoint.
+Its native producer generates the configured schema; Host admits the selected
+update identity and exact budgets before planning, binds those bytes into the
+reviewed action, and verifies them again before the call. A missing, changed,
+foreign, or unsafe drain returns a typed blocker.
 The source response is issuance evidence only. Canic retains the exact source
 and treasury balances from before the call, then proves both the bounded source
 debit and the exact controlled-treasury credit from fresh live observations.

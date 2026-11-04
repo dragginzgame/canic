@@ -13,6 +13,9 @@ fleet_admission = true
 [auth.delegated_tokens]
 enabled = false
 
+[log]
+max_age_secs = 3600
+
 [component_specs.test]
 component_role = "test"
 maximum_instances = 1

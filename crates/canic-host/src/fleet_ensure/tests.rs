@@ -18,7 +18,7 @@ use crate::{
             },
         },
         ops::{
-            EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
+            self, EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
             EnsureStateError, TerminalFleetInventory, action_sha256,
             operator_mint::{journal as records, prepare_intent},
             read_journal,
@@ -49,6 +49,7 @@ use canic_contracts::{
         FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
         ReleaseBuildNonce, ReleaseSetDigest, SubnetId, TemplateId, TemplateVersion,
     },
+    protocol::cycle_drain as drain_wire,
 };
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -5744,8 +5745,8 @@ fn unreadable_plan_without_recovery_evidence_preserves_bytes_and_refuses_effects
     reason = "one governed journey keeps literal-zero planning, lost-Create resume, convergence and second-run proof together"
 )]
 fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects() {
-    use ic_platform::pocket_ic::PocketIcBuilder;
-    use ic_platform::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
+    use ic_testkit::pocket_ic::PocketIcBuilder;
+    use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 
     struct PocketPlatform {
         create_outcomes: BTreeMap<String, EffectOutcome>,
@@ -5784,7 +5785,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     .iter()
                     .map(ToString::to_string)
                     .collect(),
-                cycles: self.pic.cycle_balance(id),
+                cycles: self.pic.cycle_balance(id).expect("PocketIC cycle_balance"),
                 module_sha256: status
                     .module_hash
                     .map(canic_core::cdk::utils::hash::hex_bytes),
@@ -6068,11 +6069,15 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     ..
                 } => {
                     let id = principal(target);
-                    self.pic.add_cycles(id, *amount);
+                    self.pic
+                        .add_cycles(id, *amount)
+                        .expect("PocketIC add_cycles");
                     self.operator_cycles -= amount;
                     Ok(EffectOutcome {
                         created_principal: None,
-                        post_cycles: Some(self.pic.cycle_balance(id)),
+                        post_cycles: Some(
+                            self.pic.cycle_balance(id).expect("PocketIC cycle_balance"),
+                        ),
                         receipt: Some(format!("pocketic-fund-{id}")),
                     })
                 }
@@ -6089,12 +6094,14 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     let bytes = fs::read(wasm).expect("read PocketIC Wasm");
                     match mode {
                         crate::fleet_ensure::model::InstallMode::Install => {
-                            self.pic.install_canister(
-                                id,
-                                bytes,
-                                Vec::new(),
-                                Some(CONTROLLER.parse().expect("controller Principal")),
-                            );
+                            self.pic
+                                .install_canister(
+                                    id,
+                                    bytes,
+                                    Vec::new(),
+                                    Some(CONTROLLER.parse().expect("controller Principal")),
+                                )
+                                .expect("PocketIC install_canister");
                         }
                         crate::fleet_ensure::model::InstallMode::Reinstall => {
                             self.pic
@@ -6272,7 +6279,10 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
     // reconciled. It must not invalidate the exact retained creation identity.
     let donated_to: Principal = platform.known.iter().next().unwrap().parse().unwrap();
     let donation = 5_000_000_000_000;
-    platform.pic.add_cycles(donated_to, donation);
+    platform
+        .pic
+        .add_cycles(donated_to, donation)
+        .expect("PocketIC add_cycles");
 
     // Reconstruct the host adapter around the same live PocketIC estate. The
     // reviewed plan, journal and state are reopened from disk; only remote
@@ -6324,7 +6334,10 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
     }
 
     let paid_before_replay = restarted.mutations.clone();
-    restarted.pic.add_cycles(donated_to, donation);
+    restarted
+        .pic
+        .add_cycles(donated_to, donation)
+        .expect("PocketIC add_cycles");
     let replay = workflow::apply(
         &root,
         &desired,
@@ -6620,9 +6633,9 @@ fn fixture() -> Fixture {
     let root = temp_dir("canic-fleet-ensure");
     fs::create_dir_all(&root).expect("create fixture root");
     let wasm = root.join("app.wasm");
-    let candid = root.join("drain.did");
+    let wire_schema = root.join("drain.wire.json");
     fs::write(&wasm, b"current-wasm").expect("write Wasm");
-    fs::write(&candid, b"service : {};").expect("write Candid");
+    fs::write(&wire_schema, drain_schema()).expect("write drain schema");
     let desired = DesiredFleet {
         bootstrap: None,
         canisters: vec![
@@ -6633,7 +6646,7 @@ fn fixture() -> Fixture {
                 canic_init: None,
                 controller_canisters: Vec::new(),
                 controllers: vec![CONTROLLER.to_string()],
-                drain: Some(drain(&candid)),
+                drain: Some(drain(&wire_schema)),
                 initial_cycles: "0".to_string(),
                 init_arg: None,
                 init_candid: None,
@@ -6648,7 +6661,13 @@ fn fixture() -> Fixture {
                 subnet: SUBNET.to_string(),
                 wasm: None,
             },
-            desired_canister("replaced", Some(OLD_REPLACED), true, &wasm, Some(&candid)),
+            desired_canister(
+                "replaced",
+                Some(OLD_REPLACED),
+                true,
+                &wasm,
+                Some(&wire_schema),
+            ),
         ],
         cycles_ledger: LEDGER.to_string(),
         environment: "local".to_string(),
@@ -6796,13 +6815,13 @@ fn desired_canister(
     principal: Option<&str>,
     replace: bool,
     wasm: &Path,
-    drain_candid: Option<&Path>,
+    drain_wire_schema: Option<&Path>,
 ) -> DesiredCanister {
     DesiredCanister {
         canic_init: None,
         controller_canisters: Vec::new(),
         controllers: vec![CONTROLLER.to_string()],
-        drain: drain_candid.map(drain),
+        drain: drain_wire_schema.map(drain),
         initial_cycles: "20".to_string(),
         init_arg: None,
         init_candid: None,
@@ -6823,13 +6842,55 @@ fn desired_canister(
     }
 }
 
-fn drain(candid: &Path) -> DrainAuthority {
+fn drain(wire_schema: &Path) -> DrainAuthority {
     DrainAuthority {
-        candid: candid.display().to_string(),
+        wire_schema: wire_schema.display().to_string(),
         destination: "treasury".to_string(),
         maximum_execution_burn_cycles: "2".to_string(),
         method: "canic_cycle_drain".to_string(),
     }
+}
+
+pub(super) fn drain_schema() -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!({
+        "schema_version": 1,
+        "methods": [{
+            "name": drain_wire::METHOD, "id": drain_wire::METHOD_ID.to_string(),
+            "kind": "update", "mode": "update",
+            "requestBytes": drain_wire::REQUEST_LIMITS.bytes,
+            "requestAllocation": drain_wire::REQUEST_LIMITS.allocation,
+            "requestNodes": drain_wire::REQUEST_LIMITS.nodes,
+            "requestDepth": drain_wire::REQUEST_LIMITS.depth,
+            "responseBytes": drain_wire::RESPONSE_LIMITS.bytes,
+            "responseAllocation": drain_wire::RESPONSE_LIMITS.allocation,
+            "responseNodes": drain_wire::RESPONSE_LIMITS.nodes,
+            "responseDepth": drain_wire::RESPONSE_LIMITS.depth
+        }]
+    }))
+    .unwrap()
+}
+
+#[test]
+fn drain_wire_contract_is_admitted_before_plan_publication() {
+    let fixture = fixture();
+    let artifacts = ops::resolve_desired_artifacts(&fixture.root, &fixture.desired).unwrap();
+    assert_eq!(
+        artifacts.drain_wire_schema_sha256_by_canister["retired"],
+        sha256_hex(&drain_schema())
+    );
+    let mut schema: serde_json::Value = serde_json::from_slice(&drain_schema()).unwrap();
+    schema["methods"][0]["requestBytes"] = 1.into();
+    fs::write(
+        fixture.root.join("drain.wire.json"),
+        serde_json::to_vec(&schema).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        matches!(ops::resolve_desired_artifacts(&fixture.root, &fixture.desired),
+        Err(ops::EnsureStateError::DrainContract { source, .. })
+        if matches!(*source, ops::current_protocol::CurrentProtocolError::WireSchema(_)))
+    );
+    fs::remove_dir_all(fixture.root).unwrap();
 }
 
 fn fleet_protocol_action(name: &str, action: CurrentFleetProtocolAction) -> EnsureAction {

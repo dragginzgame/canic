@@ -5,9 +5,11 @@
 //! Boundary: sensitive cycle and performance values use one shared bounded transport contract.
 
 use crate::dto::{
-    cycles::{CycleTopupEvent, CycleTrackerEntry},
+    child_funding::ChildFundingUsage,
+    cycle_topups::CycleTopupEvent,
+    cycles::CycleTrackerEntry,
     memory::MemoryAllocationsResponse,
-    metrics::MetricEntry,
+    metric_page::MetricEntry,
     page::{Page, PageRequest},
     prelude::*,
     role::{CycleBalanceStatusResponse, MetricsStatusRequest},
@@ -23,6 +25,8 @@ pub enum CanisterObservabilityRequest {
     CycleTopups(PageRequest),
     MemoryAllocations,
     Metrics(MetricsStatusRequest),
+    PortablePolicy,
+    PortableSessions(crate::dto::portable_inspection::Request),
 }
 
 /// Exact sensitive runtime observation returned to an authenticated controller path.
@@ -34,17 +38,13 @@ pub enum CanisterObservabilityResponse {
     CycleTopups(Page<CycleTopupEvent>),
     MemoryAllocations(MemoryAllocationsResponse),
     Metrics(Page<MetricEntry>),
-}
-
-/// Parent-local ledger and unresolved transfer evidence for one exact child.
-/// Accounted cycles can include an in-flight grant; missing reservation evidence is unknown.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
-pub struct ChildFundingUsage {
-    pub parent: Principal,
-    pub child: Principal,
-    pub observed_at_ns: u64,
-    pub accounted_cycles: crate::cycles::Cycles,
-    pub last_accounted_at_secs: u64,
-    pub pending_operations: u32,
-    pub reserved_cycles: Option<crate::cycles::Cycles>,
+    PortablePolicy(
+        Result<
+            crate::dto::portable_inspection::PolicyReport,
+            crate::dto::portable_inspection::Refusal,
+        >,
+    ),
+    PortableSessions(
+        Result<crate::dto::portable_inspection::Page, crate::dto::portable_inspection::Refusal>,
+    ),
 }

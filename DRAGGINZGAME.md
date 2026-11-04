@@ -24,33 +24,39 @@ same approach: mandatory local constraints first, task-specific references after
 
 ## Scope and authorization
 
-- Preserve unrelated dirty work and reread dirty files before editing. Task-relevant
-  sibling inspection needs no additional permission. Never edit another
-  contributor's sibling working checkout in place.
-- Ordinary fixes authorize local implementation and focused checks. Leave staging,
-  commits, package release versions, tags and release execution to the user unless
-  delegated. Shared Tooling alone automatically prepares its local `VERSION`
-  with pending notes under the [next-version rules](rules/changelogs.md#automatic-next-version-selection).
-  A PR request includes its branch, scoped commits, branch push and PR.
-  A release/ship/deploy request delegates the corresponding delivery workflow,
-  including routine group/version/order choices under
-  [delegated delivery](rules/contributions.md#delegated-delivery). Do not ask again
-  for each necessary command; guidance and readiness questions do not execute it.
-- Relevant cross-repository contributions in `dragginzgame/*` have standing
-  isolated-PR authority. Follow the [contribution workflow](rules/contributions.md#cross-repository-pull-requests)
-  before external writes. `toko` and `toko-miner` remain excluded without explicit
-  authorization; DFINITY contributions remain excluded. Merges, integration-branch
-  pushes, history rewrites, releases, publication, deployment and paid effects
-  require delivery or specific action authority and retain enforced protections.
-- Carry established authorization forward. Do not ask again for necessary
-  substeps or stop an accepted coherent batch after each small slice. Inspection
-  alone does not authorize repair. Resolve actual scope or effect ambiguity,
-  not routine implementation choices. Read [scope details](rules/engineering-details.md#scope-and-authorization)
-  for issue work or other external effects.
-- Runtime approval restrictions remain independent. If an action is rejected,
-  retain prepared work, report the exact action and reason, and continue
-  independent work. Do not switch execution paths to evade a rejection or wait
-  on optional CI merely to outlast it.
+The [contribution rules](rules/contributions.md) own detailed action authority;
+local overlays must not duplicate it or add routine permission gates.
+
+- Prefer direct edits in the normal authorized checkout when a PR is optional.
+  Use branches there when needed; coordinate or wait when another session owns
+  the inputs. Separate checkouts are explicit exceptions, not the default for
+  isolation, PRs or deployment.
+  Ordinary fixes include focused checks and pending notes, not staging, commits
+  or delivery. Shared alone also prepares its pending `VERSION`.
+- A PR request includes its topic branch, scoped commits, branch push and PR.
+  Release/ship/deploy requests include their necessary delivery steps and direct
+  integration-branch pushes. An unqualified “deploy” covers all changed eligible
+  Dragginzgame repositories in the established projects directory and crates.io
+  publication for affected publishable groups. Announce the selected plan, then
+  proceed under [delegated delivery](rules/contributions.md#delegated-delivery).
+- Named scope, no-push/read-only instructions and exclusions take precedence.
+  `toko` and `toko-miner` require explicit inclusion; DFINITY contributions remain
+  excluded. A dependency blocker alone does not expand delivery scope.
+- Preserve unrelated dirty work and reread files before editing. Sibling inspection
+  is read-only; source contributions need scoped authority. Coordinate active
+  sessions before changing their inputs or preparing an authorized fleet release.
+- Do not create new directories directly under `~/projects`; only an explicit
+  user exception for that exact directory permits it. Ordinary fix, PR and deploy
+  authority does not. Additional checkouts require approval of their location.
+  Never leave the only copy of lasting work in `/tmp`, `target/`, caches or a
+  disposable patch.
+  Follow the [checkout contract](rules/contributions.md#durable-work-and-checkout-location).
+- Carry authorization forward without repeated approval. Inspection and readiness
+  questions alone do not authorize repair or delivery. Ask only for a genuinely
+  missing decision; do not create unsolicited PRs or sibling-release waiting issues.
+- Runtime approval restrictions and repository protections remain independent.
+  If rejected, report the exact action/reason, preserve work and continue independent
+  tasks. Do not switch execution routes to evade the rejection.
 
 ## Ownership and simplification
 
@@ -77,6 +83,10 @@ when changing interfaces, persistence or installation/recovery behavior.
 
 ## Validation and evidence
 
+- Ordinary coding and cleanup end after the relevant focused checks pass. Do not
+  turn that handoff into release preparation, fleet adoption or qualification of
+  every supported host. Those are separately requested workflows; missing broad
+  release evidence alone is not unfinished development work.
 - **Finish a coherent edit batch, then run its smallest meaningful checks once.**
   During development, run checks when they answer a specific implementation or
   debugging question. Do not test after every edit or rerun merely because it is
@@ -92,6 +102,12 @@ when changing interfaces, persistence or installation/recovery behavior.
   narrower selections. Do not stack check/build/test commands that prove the same
   compilation, or add feature/MSRV/native matrices without a changed obligation.
   Distinct lint, runtime, platform and product proofs still apply when relevant.
+- Inspect nested work before calling a fixture focused. Select its affected
+  cases rather than an aggregate that also runs unrelated installer, export or
+  release suites. If no narrow entrypoint exists, provide one when practical or
+  report that limitation; do not silently broaden an ordinary task into the full
+  suite. Name the changed behavior each selected check proves. Keep unchanged
+  generic regression matrices with their producer.
 - Reserve local full repository/workspace suites and broad gates for an explicitly
   authorized release or explicit request for those checks. Implementation,
   continuation, PR delivery and readiness wording do not authorize them. Focused
@@ -140,9 +156,11 @@ changing or reviewing commands.
 
 ## Metrics and logging
 
-**All our Rust crates use `ic-metrics` for metrics and `ic-logging` for logging.**
-Do not maintain custom or competing implementations. Raise capability gaps as
-issues in IC Observability and improve the canonical crates there. Read the
+**`ic-metrics` is only for operational instrumentation of the Canic application
+tree, reported through the shared endpoint owned by Canic's metrics adapter.**
+It is not a general math, statistics or validation library; do not depend on it
+or re-export its helpers for those purposes. Use `ic-logging` for logging.
+Read the
 [observability contract](rules/engineering-details.md#metrics-and-logging)
 when adding, changing or reviewing metrics and logging.
 
@@ -185,12 +203,19 @@ before interface or storage changes.
 `make release-patch`, `make release-minor` and `make release-major` share the
 [release contract](rules/engineering-details.md#release-commands). Read it and the
 local adapter before authorized release work. Normal releases start fresh;
-specific-attempt recovery uses `release-resume`. Preserve required full validation.
+specific-attempt recovery uses `release-resume`. Preserve complete qualification
+of the selected release. Independent groups may adopt an explicitly qualified
+[group validation plan](docs/release-group-validation.md); until adoption, keep
+the existing full gate. Repository-wide CI remains separate and unchanged.
 
 ## Changelogs and artifact preservation
 
-Use IcyDB-style emoji category sections in root release notes; read the
-[changelog rules](rules/changelogs.md) when updating them. Preserve selected
+Use IcyDB-style emoji category sections in the owning release changelog; read the
+[changelog rules](rules/changelogs.md) when updating them. Every issue fixed must
+have a direct link in that changelog before handoff: root `CHANGELOG.md` for a
+workspace without independent release groups, or `releases/<group>/CHANGELOG.md`
+for the owning group. A grouped workspace's root remains a navigation index;
+it does not need duplicate issue links. Preserve selected
 deliverables and required provenance/recovery evidence. Regenerable tool-build
 scratch and obsolete cache generations need bounded retention; they are not
 permanent evidence. Consumer release artifacts remain protected from implicit
@@ -200,14 +225,21 @@ Keep plain `cargo clean` able to remove the owning workspace's entire `target/`
 directory. Put workspace build/test scratch and generated fixtures beneath
 `target/`; use `.tmp/` or other outside-target scratch only for a documented
 technical need. Artifact retention must not narrow explicit cleanup.
+Keep `.git` free of build trees and bulk retired-checkout archives. Git-side
+tool state needs explicit size/retention limits under the artifact contract;
+preserving evidence must not silently preserve every compiler output.
 
 ## IC stable-memory governance
 
-Production stable stores use `ic-memory`-issued checked handles. Read the
+Production stable stores use `ic-storage`-issued checked allocation handles. Read the
 [memory contract](rules/engineering-details.md#ic-stable-memory-governance) for
 storage allocation, admission, backing access or persistence integrations.
 
 ## Rust workspaces and portable tooling
+
+Keep Rust tests and test-only helpers in `tests.rs` or a `tests/` directory
+wherever practical, so file-based LOC tools can distinguish test source.
+Follow the [test layout rule](docs/principles/rust-code-hygiene.md#tests).
 
 Use ordinary Rust module discovery. `#[path]` module attributes, including
 conditional path overrides, are prohibited. Follow the
@@ -224,18 +256,31 @@ within explicit release groups where unrelated contracts need independent
 releases. Independent groups all use explicit package versions and
 `releases/<group>/CHANGELOG.md`; the root has no shared version and its changelog
 is an index. Require explicit group selection for releases and publication.
-Show every member's version and path in root `Cargo.toml` dependency declarations.
-Group them once, with short titles and separate changelog comments, under the
+Show every member's path and every publishable member's version in root
+`Cargo.toml` dependency declarations. Private dev helpers may use path-only entries.
+Group them once at the top of `[workspace.dependencies]`, before all external
+dependencies, with short titles and separate changelog comments, under the
 [workspace versioning rules](rules/rust-workspaces.md#coordinated-versions-and-workspace-boundaries).
 Dependency adoption must distinguish required compatibility/security changes from
 optional refreshes and check the destination graph before planning downstream
 releases. A newer external patch alone does not require republishing consumers.
+Defer optional dependency and snapshot refreshes by default, batching them at a
+natural release boundary when requested. Adopt Shared Tooling for a needed fix,
+capability or explicit refresh; an intact older snapshot alone is not work to do.
+Required API, security or compatibility migrations qualify the affected consumer
+boundary, rather than automatically updating the whole fleet.
 Follow the [adoption planning contract](docs/cargo-graph-checks.md#dependency-adoption-planning).
-Use root-owned dependency selections, reviewed shared tooling, explicit setup
-and the product's declared compiler/host requirements. External
-IC dependencies go through `ic-platform`; its canonical `ic-platform-types`
-identity owner may additionally select only `ic_principal` for explicit registry
-conversions and unchanged self-authentication. npm SDK Core uses
+Use root-owned dependency selections, reviewed shared tooling and explicit setup.
+Rust 1.99.1 is the approved minimum and pinned development/release compiler;
+follow the [compiler support policy](rules/cargo-dependencies.md#minimum-supported-rust-version-msrv)
+when adopting it and consolidating duplicate compiler checks. Preserve product
+host requirements. Select canonical identities
+from `ic-platform-types`, IC0/execution from `ic-platform-runtime`, and crypto or
+external IC adapters from `ic-platform`, following the
+[Platform ownership rules](rules/cargo-dependencies.md#platform-package-owners).
+External IC dependencies remain behind that reviewed boundary; Types alone may
+add `ic_principal` for explicit registry conversions. Self-authentication does
+not enable those conversions. npm SDK Core uses
 `@tokostudios/ic-platform`. Keep reusable cores independently upgradable;
 adapters own their matching integration stacks and must not impose consumer
 framework dependencies on core development. Follow the

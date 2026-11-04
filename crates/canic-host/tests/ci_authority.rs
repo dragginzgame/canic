@@ -1,5 +1,6 @@
 //! Validate CI authority from YAML records without binding shell implementation or layout.
 
+use ic_host_text::yaml::{self, DecodePolicy};
 use serde_json::Value;
 use std::{collections::BTreeSet, fs, path::Path};
 
@@ -14,7 +15,8 @@ fn action_is_pinned(action: &str) -> bool {
 }
 
 fn inspect(source: &str) -> Result<Value, Vec<String>> {
-    let workflow: Value = serde_yaml_ng::from_str(source).unwrap();
+    let workflow: Value =
+        yaml::from_slice(source.as_bytes(), 1024 * 1024, DecodePolicy::default()).unwrap();
     let mut failures = Vec::new();
     if workflow.get("permissions").is_none_or(Value::is_null) {
         failures.push("permissions".into());

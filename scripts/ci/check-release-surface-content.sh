@@ -1,85 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-# shellcheck source=scripts/ci/require-jq.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
-require_jq
-
-# Reproduce only Cargo's governed version transaction from the validated source.
-# Comparing Cargo's own output checks every manifest field and the full lock
-# graph without maintaining a second TOML parser or a path-only exception.
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-source="${1:?validated source required}"
-version="${2:?release version required}"
-release_date="${3:?release date required}"
+root="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$root"
+bash scripts/release/selection.sh
+source="${1:?}" version="${2:?}" date="${3:?}" commit="${4:-}"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-content.XXXXXX")"
-trap 'rm -rf "$scratch"' EXIT
-actual_root="$ROOT"
-if [[ -n "${4:-}" ]]; then
-    [[ "$4" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || exit 2
-    actual_root="$scratch/committed"
-    mkdir "$actual_root"
-    git -C "$ROOT" archive "$4" | tar -xf - -C "$actual_root"
+trap 'if [[ $? == 0 ]]; then rm -rf -- "$scratch"; else echo "Content comparison retained: $scratch" >&2; fi' EXIT
+actual="$root"
+if [[ -n "$commit" ]]; then
+    mkdir "$scratch/actual"
+    git archive "$commit" | tar -xf - -C "$scratch/actual"
+    actual="$scratch/actual"
 fi
-
-# jq expressions use literal variable names.
-# shellcheck disable=SC2016
-"$JQ_BIN" -se --arg source "$source" --arg version "$version" --arg date "$release_date" '
-    length == 1 and (.[0] |
-    keys == ["date", "gate", "schema", "source", "version"] and
-    .schema == 1 and .source == $source and .version == $version and .date == $date and
-    (.date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and
-    (.gate == "complete" or .gate == "fast"))
-' "$actual_root/release-validation.json" >/dev/null
+receipt="releases/$RELEASE_GROUP/release-validation.json"
+policy="$(git rev-parse "$source:ci/cargo-release-groups.json")"
+gate="$(jq -er --arg group "$RELEASE_GROUP" --arg source "$source" --arg policy "$policy" \
+    --arg version "$version" --arg date "$date" '
+    select((.gate == "plan" and keys == ["date","gate","group","policy","qualification","schema","source","validation","version"]) or
+        (.gate != "plan" and keys == ["date","gate","group","policy","schema","source","version"])) |
+    select(.schema == 1 and .group == $group and .source == $source and .policy == $policy and
+        .version == $version and .date == $date and (.gate == "complete" or .gate == "fast" or .gate == "plan")) | .gate
+' "$actual/$receipt")"
+mkdir "$scratch/source"
+git archive "$source" | tar -xf - -C "$scratch/source"
+export RELEASE_PREVIOUS RELEASE_VERSION="$version" RELEASE_DATE="$date" CANIC_RELEASE_VALIDATION_KIND="$gate"
+if [[ "$gate" == plan ]]; then
+    jq -cS .validation "$actual/$receipt" > "$scratch/validation.json"
+    export CANIC_RELEASE_PLAN_EVIDENCE="$scratch/validation.json"
+fi
+RELEASE_PREVIOUS="$(cd "$scratch/source" && RELEASE_COMMIT='' bash "$root/scripts/ci/cargo-release-group.sh" version "$RELEASE_GROUP")"
 mkdir "$scratch/expected"
-git -C "$ROOT" archive "$source" | tar -xf - -C "$scratch/expected"
-consumer_locks=()
-consumer_lock_paths="$(bash "$ROOT/scripts/release/adapter.sh" consumer-locks)"
-[[ -n "$consumer_lock_paths" ]]
-while IFS= read -r path; do consumer_locks[${#consumer_locks[@]}]="$path"; done <<< "$consumer_lock_paths"
-(
-    cd "$scratch/expected"
-    cargo metadata --locked --offline --no-deps --format-version 1 > "$scratch/expected/metadata.json"
-    cp -p Cargo.lock "$scratch/expected/source.lock"
-    previous="$(bash "$ROOT/scripts/ci/read-cargo-workspace-version.sh" "$scratch/expected/Cargo.toml")"
-    for index in "${!consumer_locks[@]}"; do
-        lock="${consumer_locks[$index]}"
-        cargo metadata --locked --offline --format-version 1 --manifest-path "${lock%/Cargo.lock}/Cargo.toml" > "$scratch/consumer-$index.json"
-        cp -p "$lock" "$scratch/consumer-$index.lock"
-    done
-    bash "$ROOT/scripts/release/render-owned-manifest.sh" "$scratch/expected/metadata.json" \
-        Cargo.toml "$previous" "$version" > "$scratch/expected/candidate.toml"
-    cat "$scratch/expected/candidate.toml" > Cargo.toml
-    bash "$ROOT/scripts/release/rewrite-owned-lock.sh" "$scratch/expected/metadata.json" "$scratch/expected/source.lock" "$previous" "$version" > Cargo.lock
-    for index in "${!consumer_locks[@]}"; do
-        lock="${consumer_locks[$index]}"
-        bash "$ROOT/scripts/release/rewrite-owned-lock.sh" "$scratch/expected/metadata.json" \
-            "$scratch/consumer-$index.lock" "$previous" "$version" "$scratch/consumer-$index.json" > "$lock"
-        cargo metadata --locked --offline --no-deps --format-version 1 --manifest-path "${lock%/Cargo.lock}/Cargo.toml" >/dev/null
-    done
-)
-while IFS= read -r -d '' manifest; do
-    relative="${manifest#"$scratch/expected/"}"
-    cmp -s "$manifest" "$actual_root/$relative" || {
-        echo "release content differs from the governed version change: $relative" >&2
-        exit 1
-    }
-done < <(find "$scratch/expected" -name Cargo.toml -type f -print0)
-cmp -s "$scratch/expected/Cargo.lock" "$actual_root/Cargo.lock" || {
-    echo 'release lock graph differs from the governed version change' >&2
-    exit 1
-}
-for lock in "${consumer_locks[@]}"; do
-    cmp -s "$scratch/expected/$lock" "$actual_root/$lock" || {
-        echo "release consumer lock graph differs from the governed version change: $lock" >&2
-        exit 1
-    }
+bash scripts/release/render.sh "$source" "$scratch/expected"
+# Every manifest and lock is compared, including unselected groups and private
+# consumers. The selected notes retain editorial freedom; their dated identity
+# is admitted separately, and exact delivery payloads remain runner-bound.
+while IFS= read -r -d '' path; do
+    relative="${path#"$scratch/expected/"}"
+    cmp -- "$path" "$actual/$relative" || exit 1
+done < <(find "$scratch/expected" -type f \( -name Cargo.toml -o -name Cargo.lock \) -print0)
+for path in scripts/dev/install_dev.sh "$receipt"; do
+    cmp -- "$scratch/expected/$path" "$actual/$path"
 done
-sed -E \
-    "s#CANIC_CLI_VERSION=\"\\\$\\{CANIC_CLI_VERSION:-[0-9]+\\.[0-9]+\\.[0-9]+\\}\"#CANIC_CLI_VERSION=\"\\\${CANIC_CLI_VERSION:-$version}\"#" \
-    "$scratch/expected/scripts/dev/install_dev.sh" >"$scratch/expected-installer"
-cmp -s "$scratch/expected-installer" "$actual_root/scripts/dev/install_dev.sh" || {
-    echo 'release installer differs from the governed version change' >&2
-    exit 1
-}
-echo 'release content matches the exact validated source version transaction'
+printf 'Exact selected-group transaction verified: %s %s\n' "$RELEASE_GROUP" "$version"

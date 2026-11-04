@@ -12,6 +12,18 @@ pub use crate::ops::fixture_importer::FixtureImporter;
 pub struct FixtureProvisioningApi;
 
 impl FixtureProvisioningApi {
+    /// Observe the current position's bounded attempt custody independently of callback status.
+    #[must_use]
+    pub fn recovery_status()
+    -> Option<canic_contracts::values::fixture_import::FixtureImportRecoveryStatus> {
+        crate::workflow::fixture_provisioning::recovery_status()
+    }
+
+    /// Retry failed work after application repair, from an authenticated application command.
+    /// Retains the same assignment and application checkpoint; refuses an active attempt.
+    pub fn retry_failed() -> Result<(), FixtureImportError> {
+        crate::workflow::fixture_provisioning::retry_failed()
+    }
     /// Register one application participant after database restoration on each fresh heap.
     pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImportError> {
         crate::workflow::fixture_provisioning::register(importer)

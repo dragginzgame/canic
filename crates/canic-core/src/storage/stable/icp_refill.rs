@@ -24,10 +24,10 @@ thread_local! {
     static ICP_REFILL_RECORDS: RefCell<IcpRefillRecords> =
         RefCell::new(IcpRefillRecords::new({
             let allocation = crate::memory::open(crate::memory::keys::CYCLES_ICP_REFILL_RECORDS_V1);
-            if ic_memory::Memory::size(&allocation) == 0 {
-                StableBtreeMap::create(allocation)
+            if ic_storage::Memory::size(&allocation) == 0 {
+                StableBtreeMap::create(allocation).expect("open admitted stable collection")
             } else {
-                StableBtreeMap::load(allocation)
+                StableBtreeMap::load(allocation).expect("open admitted stable collection")
             }
         }));
 }
@@ -189,13 +189,22 @@ impl IcpRefillRecords {
     }
 
     pub(crate) fn insert(record: IcpRefillRecord) -> Option<IcpRefillRecord> {
-        ICP_REFILL_RECORDS
-            .with_borrow_mut(|records| records.map.insert(IcpRefillRecordKey(record.id), record))
+        ICP_REFILL_RECORDS.with_borrow_mut(|records| {
+            records
+                .map
+                .insert(IcpRefillRecordKey(record.id), record)
+                .expect("Storage operation failed")
+        })
     }
 
     #[must_use]
     pub(crate) fn get(id: u64) -> Option<IcpRefillRecord> {
-        ICP_REFILL_RECORDS.with_borrow(|records| records.map.get(&IcpRefillRecordKey(id)))
+        ICP_REFILL_RECORDS.with_borrow(|records| {
+            records
+                .map
+                .get(&IcpRefillRecordKey(id))
+                .expect("Storage operation failed")
+        })
     }
 
     #[must_use]
@@ -210,10 +219,11 @@ impl IcpRefillRecords {
             records
                 .map
                 .range((lower, Unbounded))
+                .map(|entry| entry.expect("Storage iteration failed"))
                 .take(limit)
                 .map(|entry| IcpRefillEntryRecord {
                     key: *entry.key(),
-                    record: entry.value(),
+                    record: entry.value().expect("decode Storage entry"),
                 })
                 .collect()
         })
@@ -226,11 +236,12 @@ impl IcpRefillRecords {
                 records
                     .map
                     .iter()
+                    .map(|entry| entry.expect("Storage iteration failed"))
                     .skip(offset)
                     .take(limit)
                     .map(|entry| IcpRefillEntryRecord {
                         key: *entry.key(),
-                        record: entry.value(),
+                        record: entry.value().expect("decode Storage entry"),
                     })
                     .collect()
             }),
@@ -240,16 +251,20 @@ impl IcpRefillRecords {
     #[cfg(test)]
     pub(crate) fn import(data: IcpRefillRecordsData) {
         ICP_REFILL_RECORDS.with_borrow_mut(|records| {
-            records.map.clear();
+            records.map.clear().expect("Storage operation failed");
             for entry in data.entries {
-                records.map.insert(entry.key, entry.record);
+                records
+                    .map
+                    .insert(entry.key, entry.record)
+                    .expect("Storage operation failed");
             }
         });
     }
 
     #[cfg(test)]
     pub(crate) fn clear_for_tests() {
-        ICP_REFILL_RECORDS.with_borrow_mut(|records| records.map.clear());
+        ICP_REFILL_RECORDS
+            .with_borrow_mut(|records| records.map.clear().expect("Storage operation failed"));
     }
 }
 

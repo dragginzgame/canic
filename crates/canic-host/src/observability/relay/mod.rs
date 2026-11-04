@@ -1,4 +1,6 @@
 //! Typed outer relay calls after exact release-schema authority has been verified.
+mod portable;
+
 use crate::{
     canister_protocol::{CanisterProtocolError, call_wire},
     icp::IcpCli,
@@ -22,6 +24,10 @@ pub fn observe(
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, CanisterProtocolError> {
     match request {
+        CanisterObservabilityRequest::PortablePolicy => portable::policy(icp, root, target),
+        CanisterObservabilityRequest::PortableSessions(input) => {
+            portable::sessions(icp, root, target, input)
+        }
         CanisterObservabilityRequest::ChildFunding(input) => {
             let reply: dto::child_funding::ChildFundingUsage = call_wire(
                 icp,
@@ -35,7 +41,7 @@ pub fn observe(
                 protocol::child_funding::REQUEST_LIMITS,
                 protocol::child_funding::RESPONSE_LIMITS,
             )?;
-            Ok(CanisterObservabilityResponse::ChildFunding(reply.into()))
+            Ok(CanisterObservabilityResponse::ChildFunding(reply))
         }
         CanisterObservabilityRequest::CycleBalance => {
             let reply: dto::role::CycleBalanceStatusResponse = call_wire(
@@ -80,7 +86,7 @@ pub fn observe(
                 protocol::cycle_topups::REQUEST_LIMITS,
                 protocol::cycle_topups::RESPONSE_LIMITS,
             )?;
-            Ok(CanisterObservabilityResponse::CycleTopups(reply.into()))
+            Ok(CanisterObservabilityResponse::CycleTopups(reply))
         }
         CanisterObservabilityRequest::MemoryAllocations => {
             let reply: dto::memory::MemoryAllocationsResponse = call_wire(
@@ -110,7 +116,7 @@ pub fn observe(
                 protocol::metrics::REQUEST_LIMITS,
                 protocol::metrics::RESPONSE_LIMITS,
             )?;
-            Ok(CanisterObservabilityResponse::Metrics(reply.into()))
+            Ok(CanisterObservabilityResponse::Metrics(reply))
         }
     }
 }

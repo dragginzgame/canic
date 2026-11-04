@@ -7,10 +7,22 @@
 #[cfg(test)]
 mod tests;
 
+use ic_wire::Limits;
 use serde::{Deserialize, Serialize};
 
 /// Dedicated machine field in a Candid comment; ordinary documentation is never parsed.
 pub const CANDID_PAYLOAD_CONTRACT_PREFIX: &str = "// canic:payload-contract ";
+
+/// Current compiled metadata identity, independent of RPC and stable-value frames.
+pub const PAYLOAD_CONTRACT_HEADER: [u8; 4] = *b"CPW\x01";
+
+/// Bound one metadata record; its hexadecimal comment carrier is at most 1 MiB.
+pub const PAYLOAD_CONTRACT_LIMITS: Limits = Limits {
+    bytes: 512 * 1024,
+    allocation: 16 * 1024 * 1024,
+    nodes: 65_536,
+    depth: 16,
+};
 
 ///
 /// PayloadContract
@@ -50,8 +62,11 @@ pub fn annotate_candid(mut candid: String) -> String {
         default_update_ingress_max_bytes: super::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES as u64,
         update_overrides: super::payload::declaration_limits(),
     };
-    let mut bytes = Vec::new();
-    serde_cbor::to_writer(&mut bytes, &contract).expect("compiled payload contract encodes");
+    let bytes = ic_wire::native::encode(
+        &(PAYLOAD_CONTRACT_HEADER, contract),
+        PAYLOAD_CONTRACT_LIMITS,
+    )
+    .expect("compiled payload contract fits its declared limits");
     candid.push('\n');
     candid.push_str(CANDID_PAYLOAD_CONTRACT_PREFIX);
     candid.push_str(&crate::cdk::utils::hash::hex_bytes(&bytes));

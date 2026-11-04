@@ -1,0 +1,1 @@
+{"groups":["framework","host","icydb","blob-service"],"schema":1,"stages":["tools-check","dependency-adoption-admission","clippy","dependency-adoption-fixtures","fmt-check","compiler-check","check-invariants","shellcheck","dependency-risk-gate","dependency-risk-inventory-test","check","control-plane-feature-gate","test"]}

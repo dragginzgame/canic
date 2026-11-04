@@ -7,24 +7,6 @@ pub use crate::values::metrics::MetricsKind;
 //
 
 //
-// MetricEntry
-//
-// Unified metrics row.
-//
-
-#[derive(Debug, Deserialize)]
-pub struct MetricEntry {
-    // Ordered labels.
-    pub labels: Vec<String>,
-
-    // Optional principal dimension.
-    pub principal: Option<Principal>,
-
-    // Metric payload.
-    pub value: MetricValue,
-}
-
-//
 // MetricValue
 //
 

@@ -3,7 +3,7 @@ use crate::{
     dto::root::{RootProvisioningReleaseKey, RootProvisioningReleasePhase},
     values::provisioning_failure::{ProvisioningFailureStage, ProvisioningRetryCategory},
 };
-use ic_platform::Principal;
+use ic_platform_types::Principal;
 
 /// Complete RootProvisioningReleaseResponse transport evidence.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

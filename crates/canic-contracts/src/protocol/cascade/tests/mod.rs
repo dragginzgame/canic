@@ -1,7 +1,7 @@
 //! Lossless topology projection and strict native framing for both cascade operations.
 use super::*;
 use crate::dto::{cascade as stored, cascade_transport as native};
-use ic_platform::principal::ExternalPrincipal;
+use ic_platform_types::principal::ExternalPrincipal;
 
 #[test]
 fn topology_preserves_parent_links_roles_and_canonical_internal_bytes() {

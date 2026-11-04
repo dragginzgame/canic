@@ -5,9 +5,9 @@ use canic::{
     Error,
     dto::canister::{CanisterInspectionOutcome as RootResponse, CanisterInspectionReserveResponse},
 };
-use canic_testing_internal::pic::{CanicWasmBuildProfile, install_audit_root_probe};
-use ic_platform::pocket_ic::{ErrorCode, PocketIc, RejectResponse};
+use canic_tests::pic::{CanicWasmBuildProfile, install_audit_root_probe};
 use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
+use ic_testkit::pocket_ic::{ClientError, ErrorCode, PocketIc};
 
 #[test]
 #[expect(
@@ -18,7 +18,7 @@ fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
     let fixture = install_audit_root_probe(CanicWasmBuildProfile::Fast);
     let pic = &fixture.pic;
     let root = fixture.canister_id;
-    let target = pic.create_canister();
+    let target = pic.create_canister().expect("PocketIC create_canister");
     pic.set_controllers(target, None, vec![root]).unwrap();
     set_freezing_threshold(pic, root, 0);
     let reserve = inspection_reserve(pic, root, target, Principal::anonymous()).unwrap();
@@ -87,7 +87,7 @@ fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
     assert!(evidence.native_cycles > 0);
     assert!(evidence.available_liquid_cycles < evidence.required_liquid_cycles);
     assert!(evidence.available_liquid_cycles <= evidence.native_cycles);
-    let before = pic.cycle_balance(root);
+    let before = pic.cycle_balance(root).expect("PocketIC cycle_balance");
     assert!(before > 0);
     // Query the actual near-freeze Root without spending another update's reserve.
     let preview = inspection_reserve(pic, root, target, Principal::anonymous()).unwrap();
@@ -97,7 +97,10 @@ fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
         preview.required_liquid_cycles,
         evidence.required_liquid_cycles
     );
-    assert_eq!(pic.cycle_balance(root), before);
+    assert_eq!(
+        pic.cycle_balance(root).expect("PocketIC cycle_balance"),
+        before
+    );
     assert!(preview.available_liquid_cycles <= preview.native_cycles);
     let shortfall = find_query_shortfall(pic, root, target);
     assert_eq!(shortfall.caller, root);
@@ -118,7 +121,7 @@ fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
         Ok(RootResponse::Status(_))
     ));
     assert!(
-        pic.cycle_balance(root) <= before,
+        pic.cycle_balance(root).expect("PocketIC cycle_balance") <= before,
         "inspection recovers without adding cycles"
     );
 }
@@ -150,6 +153,9 @@ fn find_inspection_failure(
             }
             Ok(Err(error)) => panic!("unexpected inspection failure: {error}"),
             Err(error) => {
+                let ClientError::Canister(error) = error else {
+                    panic!("expected a canister rejection");
+                };
                 assert_eq!(error.error_code, ErrorCode::CanisterOutOfCycles);
                 high = threshold.checked_sub(1).unwrap();
             }
@@ -174,10 +180,10 @@ fn find_query_shortfall(
         }
         let threshold = low + (high - low) / 2;
         set_freezing_threshold(pic, root, threshold);
-        let before = pic.cycle_balance(root);
+        let before = pic.cycle_balance(root).expect("PocketIC cycle_balance");
         let result = reserve_query(pic, root, target, Principal::anonymous());
         assert_eq!(
-            pic.cycle_balance(root),
+            pic.cycle_balance(root).expect("PocketIC cycle_balance"),
             before,
             "reserve query has no cycle transfer or replicated effect"
         );
@@ -190,6 +196,9 @@ fn find_query_shortfall(
             Ok(Ok(_)) => low = threshold.checked_add(1).unwrap(),
             Ok(Err(error)) => panic!("unexpected reserve query error: {error}"),
             Err(error) => {
+                let ClientError::Canister(error) = error else {
+                    panic!("expected a canister rejection");
+                };
                 assert_eq!(error.error_code, ErrorCode::CanisterOutOfCycles);
                 high = threshold.checked_sub(1).unwrap();
             }
@@ -212,7 +221,7 @@ fn reserve_query(
     root: Principal,
     target: Principal,
     caller: Principal,
-) -> Result<Result<CanisterInspectionReserveResponse, Error>, RejectResponse> {
+) -> Result<Result<CanisterInspectionReserveResponse, Error>, ClientError> {
     use canic::protocol::inspection_reserve as protocol;
     let input: ic_platform::Principal = target.into();
     let bytes = pic.query_call(
@@ -240,7 +249,7 @@ fn inspect(
     pic: &PocketIc,
     root: Principal,
     target: Principal,
-) -> Result<Result<RootResponse, Error>, RejectResponse> {
+) -> Result<Result<RootResponse, Error>, ClientError> {
     let bytes = pic.update_call(
         root,
         Principal::anonymous(),

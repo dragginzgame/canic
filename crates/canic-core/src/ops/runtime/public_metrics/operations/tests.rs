@@ -147,7 +147,7 @@ fn scalar_count_caps_preserve_actual_counter_quality() {
         (u128::MAX, false),
         (u128::MAX, true),
     ] {
-        let source = MeasurementCounter::from_parts(total, overflowed).unwrap();
+        let source = ic_metrics::persistence::restore_counter(total, overflowed).unwrap();
         let row = count("lifecycle.init.root.runtime.started".into(), source);
         assert_eq!(row.value, total);
         assert!(

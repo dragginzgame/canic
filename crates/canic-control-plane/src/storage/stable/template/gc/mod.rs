@@ -13,9 +13,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::WASM_STORE_GC_STATE_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            Cell::create(allocation, WasmStoreGcStateRecord::default())
+            Cell::create(allocation, WasmStoreGcStateRecord::default()).expect("Storage operation failed")
         } else {
-            Cell::load(allocation).expect("retained stable cell")
+            Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -74,7 +74,7 @@ impl WasmStoreGcStateStore {
     // Replace the current local wasm-store GC state record.
     pub fn set(record: WasmStoreGcStateRecord) {
         WASM_STORE_GC_STATE.with_borrow_mut(|cell| {
-            cell.set(record);
+            cell.set(record).expect("Storage operation failed");
         });
     }
 

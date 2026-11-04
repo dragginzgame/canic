@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "$SELF_DIR/../.." && pwd)"
 VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
 REGISTRY_OBSERVER="$ROOT_DIR/scripts/ci/check-crates-io-version.sh"
 cd "$ROOT_DIR"
+bash scripts/release/selection.sh
 
 PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN:-0}"
 PUBLISH_FROM="${PUBLISH_FROM:-}"
@@ -18,7 +19,7 @@ if [[ "${CARGO_NET_OFFLINE:-false}" == true || "${CARGO_NET_OFFLINE:-false}" == 
     exit 2
 fi
 
-PUBLISH_ORDER=(
+PUBLISH_ALL=(
     canic-contracts
     canic-core
     canic-control-plane
@@ -29,6 +30,17 @@ PUBLISH_ORDER=(
     canic-host
     canic-cli
 )
+
+selection="$(bash scripts/release/metadata.sh packages)"
+PUBLISH_ORDER=()
+for crate in "${PUBLISH_ALL[@]}"; do
+    if rg -qx -F "$crate" <<<"$selection"; then PUBLISH_ORDER+=("$crate"); fi
+done
+[[ ${#PUBLISH_ORDER[@]} -gt 0 ]]
+[[ "$(printf '%s\n' "${PUBLISH_ORDER[@]}" | sort -u)" == "$(sort -u <<<"$selection")" ]] || {
+    echo 'Selected group contains a public package missing from the publication order' >&2
+    exit 1
+}
 
 if [ -n "$PUBLISH_FROM" ]; then
     publish_from_is_known=0
@@ -91,6 +103,7 @@ run_publication_step() {
 }
 
 run_publication_step release-candidate bash "$ROOT_DIR/scripts/ci/check-release-candidate.sh"
+run_publication_step release-tag bash "$ROOT_DIR/scripts/ci/check-release-tag.sh" "$(git rev-parse HEAD)" "$version" "$RELEASE_GROUP"
 run_publication_step manifest-boundary bash "$ROOT_DIR/scripts/ci/check-publish-manifest-boundary.sh"
 run_publication_step clippy make --no-print-directory clippy
 
@@ -102,6 +115,16 @@ fi
 for crate in "${PUBLISH_ORDER[@]}"; do
     if [ "$started" -eq 0 ]; then
         if [ "$crate" != "$PUBLISH_FROM" ]; then
+            lookup_status=0
+            run_publication_step "verify-$crate" bash "$REGISTRY_OBSERVER" "$crate" "$version" || lookup_status=$?
+            case "$lookup_status" in
+                0) observed_packages["$crate"]=1 ;;
+                1)
+                    echo "Cannot resume publication before $crate $version is published" >&2
+                    exit 1
+                    ;;
+                *) exit "$lookup_status" ;;
+            esac
             continue
         fi
         started=1
@@ -154,5 +177,5 @@ if [ "$PUBLISH_DRY_RUN" != "1" ]; then
         printf '  %s\n' "${missing_packages[@]}" >&2
         exit 1
     fi
-    echo "Verified complete matching Canic package set at $version"
+    echo "Verified complete $RELEASE_GROUP package set at $version"
 fi

@@ -82,9 +82,9 @@ std::thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_REGISTRY_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, FleetCoordinatorStateRecord::default())
+                Cell::create(allocation, FleetCoordinatorStateRecord::default()).expect("Storage operation failed")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -96,9 +96,9 @@ std::thread_local! {
         RefCell::new({
             let allocation = canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_FUNDING_V1);
             if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-                Cell::create(allocation, FleetCoordinatorFundingStateRecord::default())
+                Cell::create(allocation, FleetCoordinatorFundingStateRecord::default()).expect("Storage operation failed")
             } else {
-                Cell::load(allocation).expect("retained stable cell")
+                Cell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
             }
         });
 }
@@ -235,6 +235,7 @@ pub struct FleetFundingPolicyRotationRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCoordinatorRegistryRecord {
+    pub continuation_retries: Vec<CoordinatorContinuationRetryRecord>,
     pub retirement: FleetRetirementRecord,
     pub configured_app: AppId,
     pub authority: FleetRegistryAuthority,
@@ -259,6 +260,13 @@ pub struct FleetCoordinatorRegistryRecord {
     pub root_deletion_readiness_receipts: Vec<FleetSubnetRootDeletionReadinessResponse>,
     pub root_deletion_execution_intents: Vec<FleetSubnetRootDeletionExecutionResponse>,
     pub root_deletion_receipts: Vec<FleetSubnetRootDeletionResponse>,
+}
+
+/// Retry accounting remains with the Coordinator's authoritative operation journals.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CoordinatorContinuationRetryRecord {
+    pub operation: canic_contracts::dto::operation_retry::Operation,
+    pub retry: super::continuation_retry::ContinuationRetryRecord,
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
@@ -594,6 +602,7 @@ pub struct FleetAdmissionPublicationRecord {
 /// Persisted exact Coordinator reservation for one root's Fleet-wide draining decision.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDrainingReservationRecord {
+    pub continuation_requested: bool,
     pub response: FleetSubnetRootDrainingReservationResponse,
 }
 
@@ -725,7 +734,7 @@ impl FleetCoordinatorFundingStore {
             match state.current.as_ref() {
                 None => {
                     state.current = Some(record);
-                    cell.set(state);
+                    cell.set(state).expect("Storage operation failed");
                     Ok(FleetCoordinatorCommitOutcome::Committed)
                 }
                 Some(existing) if existing == &record => {
@@ -750,7 +759,7 @@ impl FleetCoordinatorFundingStore {
                 }
                 Some(_) => {
                     state.current = Some(next);
-                    cell.set(state);
+                    cell.set(state).expect("Storage operation failed");
                     Ok(FleetCoordinatorCommitOutcome::Committed)
                 }
             }
@@ -769,7 +778,8 @@ impl FleetCoordinatorFundingStore {
         FLEET_COORDINATOR_FUNDING_STATE.with_borrow_mut(|cell| {
             cell.set(FleetCoordinatorFundingStateRecord {
                 current: data.current,
-            });
+            })
+            .expect("Storage operation failed");
         });
     }
 }
@@ -784,7 +794,7 @@ impl FleetCoordinatorRegistryStore {
             match state.current.as_ref() {
                 None => {
                     state.current = Some(record);
-                    cell.set(state);
+                    cell.set(state).expect("Storage operation failed");
                     Ok(FleetCoordinatorCommitOutcome::Committed)
                 }
                 Some(existing) if existing == &record => {
@@ -809,7 +819,7 @@ impl FleetCoordinatorRegistryStore {
                 }
                 Some(_) => {
                     state.current = Some(next);
-                    cell.set(state);
+                    cell.set(state).expect("Storage operation failed");
                     Ok(FleetCoordinatorCommitOutcome::Committed)
                 }
             }
@@ -828,7 +838,8 @@ impl FleetCoordinatorRegistryStore {
         FLEET_COORDINATOR_STATE.with_borrow_mut(|cell| {
             cell.set(FleetCoordinatorStateRecord {
                 current: data.current,
-            });
+            })
+            .expect("Storage operation failed");
         });
         FleetCoordinatorFundingStore::import(FleetCoordinatorFundingData::default());
     }
@@ -1173,7 +1184,7 @@ mod funding_capacity_tests {
     }
 
     fn assert_funding_state_fits(state: &FleetCoordinatorFundingStateRecord, label: &str) {
-        let encoded = state.to_bytes();
+        let encoded = state.to_bytes().expect("encode current record");
         assert!(
             encoded.len() <= FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES as usize,
             "{label} encoded to {} bytes, exceeding {} bytes",

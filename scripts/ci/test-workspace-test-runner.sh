@@ -53,7 +53,7 @@ cat > "$fixture/bin/cargo" <<'SH'
 set -euo pipefail
 [[ "$1" != fetch ]] || exit 0
 if [[ "$1" == run ]]; then
-    [[ "$*" == 'run --locked --offline -p canic-testing-internal --example verify_embedded_root' ]]
+    [[ "$*" == 'run --locked --offline -p canic-tests --example verify_embedded_root' ]]
     [[ ! -e "$CANIC_TEST_SCRATCH/server.pid" ]]
     printf 'preflight\tembedded-root\t1\n' >> "$RUNNER_TEST_TRACE"
     if [[ "$RUNNER_TEST_FAIL_STAGE" == preflight/embedded-root ]]; then

@@ -19,7 +19,7 @@ use crate::{
     },
     protocol::profile::ProtocolProfileDigest,
 };
-use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform_types::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Subject of an authoritative, point-in-time Root membership lookup.
@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
     derive(ic_wire::Wire)
 )]
 pub struct RootMembershipRequest {
-    pub subject: ic_platform::Principal,
+    pub subject: ic_platform_types::Principal,
 }
 
 /// Active binding, including a descendant's own role, or an ordinary negative.

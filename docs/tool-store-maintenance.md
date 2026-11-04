@@ -1,5 +1,5 @@
 # Tool store retention and maintenance
-<!-- Shared companions: scripts/dev/tool-store-maintenance.pl -->
+<!-- Shared companions: scripts/dev/tool-store-maintenance.pl scripts/dev/compiler-cache-maintenance.pl -->
 
 Shared owns the existing tool store and its exported setup helpers. Rust setup
 now discards successful `build/` and private `home/` scratch after executable and
@@ -133,3 +133,21 @@ Shared's Rust collector neither traverses those roots nor authorizes deleting
 their existing contents. Product-owned cache implementation and native Linux
 qualification remain separate from Shared's substitute installer fixtures and
 macOS host qualification.
+
+`scripts/dev/compiler-cache-maintenance.pl prepare|finish|preview ROOT OWNER LOCK
+PID MAX_BYTES MAX_AGE_SECONDS` is the separate compiler-scratch primitive for
+these adapters. It reuses the tool collector's owned-tree inspection/removal,
+but never enters the Rust tool store. The caller must hold its existing exclusive
+assembly lock containing `PID` and serialize every build and maintenance call.
+`prepare` admits a new, absent root or verifies its exact owner, then retires an
+idle/oversized `build/` subtree. `finish` retires oversized output after the child
+compiler exits. `preview` changes nothing. Size is observed allocated bytes,
+deduplicated within the tree; it is not a promise of physically freed space when
+hardlinks exist elsewhere. Limits apply between commands, not during compilation.
+
+Only `build/` is disposable. The owner marker and last-use record stay in ROOT;
+selected executables, source, logs and immutable receipts must stay outside it.
+Unknown contents, missing ownership, redirected roots and changed custody refuse.
+Existing roots are never implicitly claimed. Interrupted creation without its
+complete records requires explicit owner recovery. This helper does not establish
+quiescence for unrelated writers; bypassing the product lock is unsupported.

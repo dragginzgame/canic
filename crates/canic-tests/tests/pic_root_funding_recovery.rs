@@ -1,6 +1,6 @@
 // Category C - Artifact test (built Wasm; no production funding surface).
 
-use canic_testing_internal::pic::{
+use canic_tests::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
 use ic_platform::{
@@ -13,9 +13,9 @@ use std::{
     sync::OnceLock,
 };
 use {
-    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
     ic_testkit::pic::InstallSpec,
     ic_testkit::pic::prelude::*,
+    ic_testkit::pocket_ic::{PocketIc, PocketIcBuilder},
 };
 
 const CANISTERS: [&str; 1] = ["root_funding_probe"];
@@ -306,7 +306,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         ProbeInit::EmergencyRoot { ledger, cmc },
         ROOT_INSTALL_CYCLES,
     );
-    let balance_before = pic.cycle_balance(root);
+    let balance_before = pic.cycle_balance(root).expect("PocketIC cycle_balance");
 
     let transfer_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_wire(
         &pic,
@@ -356,7 +356,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     );
     assert_eq!(completed.max_call_cost, prepared.max_call_cost);
     let recovery_execution = balance_before
-        .checked_sub(pic.cycle_balance(root))
+        .checked_sub(pic.cycle_balance(root).expect("PocketIC cycle_balance"))
         .expect("emergency refill recovery execution");
     let measured_floor = round_up_to_100m(
         completed
@@ -433,8 +433,10 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
 
     prove_accept_then_trap_rolls_back(&pic, coordinator, root, &prepared);
 
-    let coordinator_before_fresh = pic.cycle_balance(coordinator);
-    let root_before_fresh = pic.cycle_balance(root);
+    let coordinator_before_fresh = pic
+        .cycle_balance(coordinator)
+        .expect("PocketIC cycle_balance");
+    let root_before_fresh = pic.cycle_balance(root).expect("PocketIC cycle_balance");
     let trapped: Result<IssueResult, _> = ic_testkit::pic::update_wire(
         &pic,
         coordinator,
@@ -454,8 +456,10 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
     prove_attached_cycles_are_excluded_before_acceptance(&pic, root);
     assert_eq!(intent(&pic, coordinator), Some(prepared.clone()));
 
-    let coordinator_after_fresh = pic.cycle_balance(coordinator);
-    let root_after_fresh = pic.cycle_balance(root);
+    let coordinator_after_fresh = pic
+        .cycle_balance(coordinator)
+        .expect("PocketIC cycle_balance");
+    let root_after_fresh = pic.cycle_balance(root).expect("PocketIC cycle_balance");
     let replay = issue(&pic, coordinator);
     assert_eq!(
         replay,
@@ -481,10 +485,12 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
         BalanceObservation {
             coordinator_before_fresh,
             coordinator_after_fresh,
-            coordinator_after_replay: pic.cycle_balance(coordinator),
+            coordinator_after_replay: pic
+                .cycle_balance(coordinator)
+                .expect("PocketIC cycle_balance"),
             root_before_fresh,
             root_after_fresh,
-            root_after_replay: pic.cycle_balance(root),
+            root_after_replay: pic.cycle_balance(root).expect("PocketIC cycle_balance"),
         },
     );
 }
@@ -495,14 +501,18 @@ fn prove_accept_then_trap_rolls_back(
     root: Principal,
     prepared: &GrantIntent,
 ) {
-    let coordinator_before_root_trap = pic.cycle_balance(coordinator);
-    let root_before_root_trap = pic.cycle_balance(root);
+    let coordinator_before_root_trap = pic
+        .cycle_balance(coordinator)
+        .expect("PocketIC cycle_balance");
+    let root_before_root_trap = pic.cycle_balance(root).expect("PocketIC cycle_balance");
     assert_eq!(
         issue_root_accept_then_trap(pic, coordinator),
         IssueResult::CallFailed
     );
-    let coordinator_after_root_trap = pic.cycle_balance(coordinator);
-    let root_after_root_trap = pic.cycle_balance(root);
+    let coordinator_after_root_trap = pic
+        .cycle_balance(coordinator)
+        .expect("PocketIC cycle_balance");
+    let root_after_root_trap = pic.cycle_balance(root).expect("PocketIC cycle_balance");
     assert_eq!(receipt(pic, root), None);
     assert_eq!(acceptance_observation(pic, root), None);
     assert!(
@@ -699,8 +709,7 @@ fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
 }
 
 fn workspace_root() -> PathBuf {
-    canic_testing_internal::workspace::discover()
-        .expect("discover Canic test workspace through Cargo")
+    canic_tests::workspace::discover().expect("discover Canic test workspace through Cargo")
 }
 
 /// Exact native preparation authority, independent of IC installation encoding.

@@ -7,7 +7,8 @@
 use crate::{
     domain::cycles::{CycleTopupEventStatus, CycleTopupFailureDisposition},
     dto::{
-        cycles::{CycleTopupEvent, CycleTopupFailure, CycleTrackerEntry},
+        cycle_topups::{CycleTopupEvent, CycleTopupFailure},
+        cycles::CycleTrackerEntry,
         page::Page,
     },
     model::{cycles_funding::FundingLedgerSnapshot, replay::OperationId},
@@ -231,7 +232,7 @@ impl CycleTopupEventOps {
                         .record
                         .parent_failure
                         .map(|failure| CycleTopupFailure {
-                            parent: failure.parent,
+                            parent: failure.parent.into(),
                             operation_id: failure.operation_id,
                             public_error_code: failure.public_error_code,
                             disposition: failure.disposition,
@@ -283,7 +284,7 @@ mod tests {
         let event = &page.entries[0];
         assert_eq!(event.timestamp_secs, 2);
         let failure = event.parent_failure.as_ref().unwrap();
-        assert_eq!(failure.parent, parent);
+        assert_eq!(failure.parent, parent.into());
         assert_eq!(failure.operation_id, operation.into_bytes());
         assert_eq!(failure.public_error_code, error.public_error().raw_code());
         assert_eq!(failure.disposition, CycleTopupFailureDisposition::Terminal);
@@ -307,12 +308,12 @@ mod tests {
                 disposition: CycleTopupFailureDisposition::Terminal,
             }),
         };
-        let bytes = record.to_bytes();
+        let bytes = record.to_bytes().expect("encode stable fixture");
         assert!(
             bytes.len() <= CycleTopupEventRecord::STORABLE_MAX_SIZE as usize,
             "{} bytes",
             bytes.len()
         );
-        assert_eq!(CycleTopupEventRecord::from_bytes(bytes), record);
+        assert_eq!(CycleTopupEventRecord::from_bytes(bytes).unwrap(), record);
     }
 }

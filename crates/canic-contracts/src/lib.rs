@@ -18,7 +18,9 @@ pub mod values;
 /// Passive external dependencies needed by exported contract macros.
 #[doc(hidden)]
 pub mod __reexports {
+    #[cfg(feature = "external-candid")]
     pub use ic_platform;
+    pub use ic_platform_types;
     pub use serde;
 }
 

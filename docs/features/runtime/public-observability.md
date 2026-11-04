@@ -42,7 +42,7 @@ state. Existing custom application endpoints are unaffected.
 
 ### Runtime logging ownership
 
-Published [IC Logging](https://crates.io/crates/ic-logging/0.17.1) owns the heap
+Published [IC Logging](https://crates.io/crates/ic-logging/0.23.7) owns the heap
 recorder, UTF-8-safe message bounds, count eviction, age retention and filtered
 cursor scans. Canic supplies its existing log configuration, source/topic labels,
 Wire DTO conversion, controller authorization and the sole retention timer.
@@ -51,9 +51,23 @@ configuration limits remain authoritative; zero retained entries disables loggin
 
 Log history is heap-only and starts a new window on upgrade or reinstall. Canic
 has no stable log allocation or log snapshot schema. Diagnostic history is not
-spending, recovery or completion authority. Canic's public log contract still uses
-offset/limit and exact totals: the adapter scans upstream pages to count all
-retained matches while copying only the selected reply rows, capped at 1,000.
+spending, recovery or completion authority. `LogStatusRequest.page` selects
+`LogPageRequest { before, limit }`: an absent cursor starts at the newest row,
+and a returned `next_before` continues strictly into older retained history.
+`LogPage` returns entries, the number of candidates scanned and that continuation;
+there is no full-history total. Continue with the same filters even after an
+empty page when a cursor is present. Concurrent eviction can remove old rows;
+appends do not restart an existing cursor at newer entries. Cursors belong to
+their current heap window; discard them after a reset, upgrade or reinstall.
+
+Each read scans at most 1,024 candidates, returns at most 1,000 rows and copies
+at most 1 MiB of text. Zero row allowance and a single row beyond the reply text
+allowance return typed refusals. When the next row would exceed the page text
+budget, continuation retries it on the next page. The adapter verifies the actual
+result frame against the method's Wire response budget. Query logging keeps
+operator output but does not append retained rows or reconcile timers. Replicated
+appends use native exact reconciliation: an unchanged live deadline does not
+rearm; abandoned delivery remains repairable through the upstream owner.
 Disabling the generated log read does not disable internal recording.
 
 Component counters and measurements can select heap or stable storage through
@@ -212,52 +226,28 @@ before transport. No Candid sidecar or local preparation is required for this
 read. Paid balance inspection retains its separate management/reserve contract.
 Store does not expose memory allocations. There is no public memory-ledger endpoint.
 
-The response reports the committed generation, actual persisted bucket size,
-manager capacity and allocation totals, and all 255 usable manager IDs in order.
-Each row separates virtual extent, allocated buckets and bytes, bucket slack,
-and a current stable-key/owner binding, the ic-memory ledger binding, or an
-explicit unknown binding. Range claims describe allocation policy; they do not
-establish an unknown allocation's owner. Zero-page entries remain visible.
+The response includes a validated Storage directory summary and retained
+allocation rows. Each row contains `allocation_id` (opaque `u64`), `stable_key`
+and `capacity` in Wasm pages and bytes. Declared but unopened allocations remain
+visible at zero pages. The summary reports generation, retained/admitted counts,
+live leases, extents, data and metadata pages, directory bytes, physical pages
+and unassigned pages.
 
-Collection uses ic-memory's owned runtime report. The 0.13.3 qualification read
-34,848 bytes of validated manager metadata and bounded current declarations without decoding
-history, constructing stores, growing memory, writing, or advancing the ledger
-generation. Canic requires an already bootstrapped runtime.
-The 0.14.1 adoption preserves this reporting path and passes its native accounting
-regressions; it does not supply a new IC instruction/cycle measurement.
-`MemoryQuery::ledger()` is the separate current-ledger diagnostic API. With
-`ic-memory 0.27`, it reports the exact ledger memory ID, checked commit counter
-and recovery slots, retained ownership/state and latest declared schema version.
-It does not report generation events, allocation observation/retirement counters
-or schema history. Retired allocations retain their identity and memory ID.
-The API/ledger hard cut requires updated diagnostic consumers and clean reinstall
-for earlier releases; it adds no predecessor decoding or migration path.
+Collection observes the existing committed `ic_storage::MemoryRuntime`. It does
+not open stores, write, grow memory or advance generation. Storage validates its
+directory; Canic projects checked capacities into the bounded Wire response.
 
-`physical_extent.bytes` measures allocated IC stable memory in canister
-execution and the supplied backing-memory extent in native execution. Format
-bytes in binary units and label this metric **allocated stable memory**.
-Virtual extent includes structure capacity and metadata. `payload_bytes` is
-unavailable; bucket slack is allocation beyond virtual extent, not unused
-record-payload capacity.
+The report preserves these independent identities:
 
-The report preserves these conservation identities:
+- Physical pages = one protected root page + metadata pages + data pages + unassigned pages.
+- Data pages = the sum of the retained allocation capacities.
+- Allocation IDs and keys are unique; admitted and live-lease counts do not exceed retained allocations.
 
-- Physical extent = manager metadata + allocated bucket bytes + unmanaged bytes.
-- Allocated bucket bytes = the sum of every row's allocated bytes.
-- Allocated bucket bytes = known-binding bytes + unknown-binding bytes.
-- Allocated bucket bytes = virtual extent + bucket slack.
-
-The ledger is included in the rows and known-binding total; do not add it twice.
-Unknown-binding bytes are managed buckets without a current binding.
-Unmanaged bytes are physical extent outside the manager's accounted extent.
-
-Canic defaults to 16-page (1 MiB) buckets. The build-time
-`CANIC_MEMORY_BUCKET_PAGES` setting selects larger buckets for applications
-requiring more manager capacity. See the [stable-memory layout](stable-memory-layout.md)
-for the capacity tradeoff, consolidated stores and measured template decisions.
-Storage collections use `ic_storage::adapter` and consume exclusive
-`ic_memory::RuntimeMemory` leases. Capacity reservation and observation use the
-collection owner’s API; they do not open a second handle to its allocation.
+Format physical pages times 65,536 in binary units as **allocated stable memory**.
+Logical allocation capacity includes collection metadata and spare capacity; it
+does not measure record payload occupancy or prove reclaimable space. The
+[stable-memory layout](stable-memory-layout.md) describes grants, custody and
+same-release restoration. Capacity operations use the collection owner's API.
 
 ## Optional Public Metrics
 
@@ -298,45 +288,32 @@ sampler reads bounded memory-manager metadata; public queries and history reads
 only read the cache. There is no additional endpoint, selector, remote collector
 or application callback. Omitting `performance` skips this collection and hides
 its values. Raw keys, owner strings, memory IDs and range claims remain protected.
-The sampler uses ic-memory 0.15.3's numeric `MemoryAllocationSummary`, avoiding
-per-ID rows and copied binding names. It shares accounting with the protected
-detailed report and retains the 34,848-byte metadata-read bound.
-
-All summary names have the `memory.allocations.` prefix and no canister label.
-Rows use `Gauge`, preserve `observed_at_ns`, and use the existing bounded history.
+The sampler uses Storage's numeric `StorageDiagnostics` without allocating a
+per-key response. Its fixed names expose no allocation keys or owners. Rows
+use the `memory.allocations.` prefix, `Gauge`, no canister label, original
+`observed_at_ns` and the existing bounded history.
 
 | Suffix | Unit | Meaning |
 | --- | --- | --- |
-| `state` | `state` | `1` = available, `2` = unsupported, `3` = collection failed or incomplete |
-| `physical_extent` | `bytes` | Allocated IC stable-memory extent |
-| `bucket_size` | `bytes` | Actual persisted bucket size |
-| `allocated_bucket_bytes`, `allocated_buckets` | `bytes`, `count` | Assigned manager capacity |
-| `bucket_capacity`, `remaining_buckets` | `count` | Manager bucket limit and remaining capacity |
-| `virtual_extent`, `bucket_slack` | `bytes` | Addressable virtual capacity and allocation beyond it |
-| `manager_metadata`, `unmanaged` | `bytes` | Manager metadata and physical extent outside its assigned region |
-| `known_binding`, `unknown_binding` | `bytes` | Allocated capacity with and without a current binding |
-| `current_binding.allocated`, `current_binding.slack` | `bytes` | Totals for current declared bindings |
-| `ledger_binding.allocated`, `ledger_binding.slack` | `bytes` | Totals for the substrate ledger binding |
-| `unknown_binding.allocated`, `unknown_binding.slack` | `bytes` | Totals without a current binding |
-| `ids_measured`, `ids_total` | `count` | Coverage of all usable manager IDs, including unopened IDs |
-| `metadata_read` | `bytes` | Bounded manager metadata read by the owner |
-| `payload_available` | `count` | `0`: allocation metadata cannot measure payload occupancy |
+| `state` | `state` | `1` available; `2` unsupported; `3` collection failed |
+| `physical_extent` | `bytes` | Actual allocated stable-memory extent |
+| `data_capacity` | `bytes` | Logical capacity across retained allocations |
+| `directory_capacity` | `bytes` | Reserved directory metadata capacity |
+| `unassigned_capacity` | `bytes` | Physical extent outside data, metadata and the root page |
+| `directory_bytes` | `bytes` | Encoded active directory size |
+| `generation` | `count` | Committed directory generation |
+| `allocations`, `admitted_allocations` | `count` | Retained and currently admitted allocation counts |
+| `live_leases`, `extents` | `count` | Exclusive leases and data extents |
 
-Absence of `state` means no allocation sample has been published. An unsupported
-role publishes only the allocation state; Store is explicitly unsupported.
-A first failure also publishes only state. Later failures retain the last good
-allocation values with their original timestamps and publish a new failure state.
-The containing Performance family may still contain other valid metrics: check
-allocation state and row age before presenting these values as current. Do not
-render missing values as zero. History retains original successful source times
-on failure and reports its existing series/byte truncation limits.
+The physical capacity identity includes one additional 65,536-byte protected root
+page. Counts and checked byte arithmetic are validated before publication.
+Absence of state means no allocation sample exists. Store publishes unsupported
+state only. A first failure publishes only failure state; later failures retain
+last-good values with their original source timestamps. Missing values are not
+zero. Check allocation state and row age independently of other Performance
+metrics. History preserves successful source times and its existing bounds.
+Capacity gauges do not establish payload use, spending or reclaimable space.
 
-The physical, capacity and ownership identities described above are validated
-independently before publication. Current-binding totals include any owner with
-a current declaration; they are not a crate-specific breakdown. The ledger is
-already part of known-binding bytes. Do not add ownership partitions to capacity
-partitions. Virtual extent is not payload use, and bucket slack is not evidence
-of a leak or reclaimable memory. No payload byte gauge is fabricated.
 
 Instruction counts are not cycle costs. Funding amounts are transfers, not
 consumption. An application with an exact accounted cost can publish an

@@ -25,9 +25,9 @@ std::thread_local! {
     > = RefCell::new({
         let allocation = canic_core::memory::open(crate::memory::keys::FLEET_ADMISSION_V1);
         if canic_core::cdk::structures::Memory::size(&allocation) == 0 {
-            StableCell::create(allocation, None)
+            StableCell::create(allocation, None).expect("Storage operation failed")
         } else {
-            StableCell::load(allocation).expect("retained stable cell")
+            StableCell::load(allocation, canic_contracts::serialization::STORAGE_LIMITS.bytes).expect("retained stable cell")
         }
     });
 }
@@ -173,7 +173,7 @@ impl FleetAdmissionAuthorityStore {
             if store.get().is_some() {
                 return false;
             }
-            store.set(Some(record));
+            store.set(Some(record)).expect("Storage operation failed");
             true
         })
     }
@@ -183,7 +183,7 @@ impl FleetAdmissionAuthorityStore {
             if store.get().is_none() {
                 return false;
             }
-            store.set(Some(record));
+            store.set(Some(record)).expect("Storage operation failed");
             true
         })
     }
@@ -197,7 +197,7 @@ impl FleetAdmissionAuthorityStore {
                 return false;
             };
             if &current == expected {
-                store.set(Some(next));
+                store.set(Some(next)).expect("Storage operation failed");
                 true
             } else {
                 current == next
