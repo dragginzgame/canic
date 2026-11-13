@@ -1,0 +1,27 @@
+[package]
+name = "canic-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Reviewed deployment plans and retained signed attempts for Canic"
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[dependencies]
+base64.workspace = true
+canic.workspace = true
+ic-host-fs.workspace = true
+ic-host-process.workspace = true
+ic-platform = { workspace = true, features = ["agent", "ic-protocol", "management-canister-types", "cycles-ledger-types"] }
+ic-wire.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true

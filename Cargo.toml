@@ -1,16 +1,37 @@
 [workspace]
-members = ["crates/canic"]
+members = [
+    "apps/hello/canister",
+    "crates/canic",
+    "crates/canic-cli",
+    "crates/canic-host",
+]
+exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
 
 [workspace.dependencies]
+base64 = "0.23.1"
+canic = { path = "crates/canic" }
+canic-host = { path = "crates/canic-host" }
+clap = { version = "4.6.7", features = ["derive"] }
+ic-host-fs = { version = "0.77.1", default-features = false }
+ic-host-process = { version = "0.77.1", default-features = false }
+ic-platform = { version = "0.32.1", default-features = false }
+ic-platform-runtime = { version = "0.22.1", default-features = false }
+ic-wire = { version = "0.22.1", default-features = false }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
 # Development tooling (source distribution; not a runtime dependency).
-toko-tooling = "=0.41.1"
+toko-tooling = "=0.42.2"
+url = "2.5.8"
 
 [workspace.lints.cargo]
 unused_dependencies = "deny"

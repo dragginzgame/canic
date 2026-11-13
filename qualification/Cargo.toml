@@ -1,0 +1,52 @@
+[workspace]
+members = ["m0-artifact", "m0-probe", "m0-tests", "m1-tests"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.100.0"
+publish = false
+
+[workspace.dependencies]
+canic = { path = "../crates/canic" }
+canic-m0-artifact = { path = "m0-artifact" }
+canic-m0-probe = { path = "m0-probe" }
+ic-platform = { version = "0.32.1", default-features = false, features = ["management-canister-types"] }
+ic-platform-runtime = { version = "0.22.1", default-features = false, features = ["cdk"] }
+ic-testkit = { version = "0.102.0", default-features = false }
+ic-wire = { version = "0.22.0", default-features = false }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_bytes = "0.11.19"
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
+toko-tooling = "=0.42.2"
+
+[workspace.lints.cargo]
+unused_dependencies = "deny"
+unused_workspace_dependencies = "deny"
+unused_workspace_package_fields = "deny"
+missing_lints_inheritance = "deny"
+unknown_lints = "deny"
+
+[workspace.lints.rust]
+dead_code = "deny"
+unused_must_use = "deny"
+unfulfilled_lint_expectations = "deny"
+unsafe_code = "forbid"
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+invalid_markdown_table = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -2 }
+correctness = { level = "deny", priority = -1 }
+redundant_clone = "warn"
+needless_pass_by_value = "warn"
+wildcard_imports = "warn"
+missing_panics_doc = "warn"
+must_use_candidate = "warn"
+too_many_lines = "allow"

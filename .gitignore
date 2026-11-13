@@ -1,4 +1,6 @@
 /target/
+/qualification/target/
+/.canic/
 /.tools/
 /.agents/
 /.aws/

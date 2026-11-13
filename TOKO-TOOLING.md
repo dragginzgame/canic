@@ -75,6 +75,29 @@ This supersedes the 0.39.3–0.39.4 managed-document namespace plan and older li
 instructions to vendor governance guides. It does not trigger unsolicited sibling
 refreshes or change the offline verification of installed executable bytes.
 
+## Installed tooling ownership
+
+From 0.42, keep installed executable tooling and its operational inputs under
+`vendor/toko-tooling/`, preserving their upstream relative paths inside that
+directory. Only `TOKO-TOOLING.md`, `LICENSE.md` and `CONTRIBUTING.md` are installed
+at root; `.toko-tooling.snapshot` remains the root ownership receipt. Do not put
+consumer edits in the vendor tree. Product scripts, Makefiles, CI workflows,
+release policies and `AGENTS.md` remain consumer-owned outside it.
+
+Select only used executable entrypoints. Release and publication are explicit
+selections, not companions of the default Make interface. Reference documentation
+stays online, and producer regression suites stay upstream; qualify actual local
+caller wiring instead of installing generic test scripts. Shared composite actions
+may live inside the vendor tree and be called by consumer-owned workflows.
+
+Migrate with the exporter and a complete retained entrypoint list. It must prove
+old bytes against their source before retiring them and refuse differing existing
+destinations without ownership proof, even when Git considers them clean. Review
+preview, update local paths and hook configuration, then qualify the installed
+callers. Do not manually move managed files or edit receipts. This replaces the
+previous same-path installation rule without relocating reference documentation
+or authorizing unsolicited sibling changes.
+
 ## Scope and authorization
 
 The [contribution rules](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/contributions.md) own detailed action authority;

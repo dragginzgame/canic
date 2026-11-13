@@ -1,6 +1,6 @@
 # Canic system design
 
-Status: proposed architecture for review; implementation has not started.
+Status: accepted architectural basis; M0 is underway and the first M1 CLI/demo path is implemented. See the [current evidence record](m0-first-journey.md) for qualified paths and remaining work.
 Date: 2026-11-13.
 
 Naming: Canic is this fresh rewrite. Legacy Canic is the predecessor now hosted
@@ -38,9 +38,19 @@ The core journeys are:
 
 Application identity, tenancy, routing semantics, data schemas, consistency, business transactions, user balances and governance remain application-owned. Canic supplies infrastructure capabilities, not a database replication system, application economy or universal distributed transaction manager.
 
-### Smallest complete application journey
+### Hands-on delivery from the start
 
-The first design witness is a persistent application with one entry canister and a shared worker on one subnet. Build and install it, serve an authenticated application operation, grow to a second worker under a finite budget, interrupt a management call, recover its original outcome, and inspect what happened. M2 must include meaningful application state, one actual stateful supplier such as IcyDB, and explicit endpoint, memory and timer composition. By M3, a second executable must preserve the promised application invariant and an operation awaiting reconciliation. This narrow rehearsal does not claim general migration or production readiness.
+The team must be able to use each delivered increment and feed experience into the next one. The first deployment is a Hello World application on the IC mainnet, with a local rehearsal of the same supported path. Mainnet experimentation begins before the stateful consumer, autonomous growth and production lifecycle are complete. Passive inspection is useful as an intermediate increment, but does not complete M1.
+
+The first hands-on loop is: obtain the tool and example, build, review the target/controllers/artifact and finite cycle budget, deploy, call the application, inspect its status, change the greeting, and deploy the changed executable. The second deployment must explicitly state whether it preserves the principal and state or creates a fresh disposable installation. Unsupported upgrades must not become an implicit reinstall. Retained canisters, balances and the next maintenance or disposition action remain visible after the experiment.
+
+Deliver this through the product CLI and documented public interfaces, not a private deployment script. Each increment includes a runnable example, exact setup and usage instructions, supported networks, visible limitations and a repeatable team exercise. Team feedback on setup, errors, deploy time, costs and operation status informs the next scope; record actionable feedback in owning GitHub issues. Keep the previously delivered journey runnable as capabilities grow, and document any explicit experimental breaking change.
+
+M0 resolves only the contracts needed for the first effects and records later decisions at their owning gates. Neither the full governance profile nor adoption by the proposed Toko consumer blocks the operator-controlled Hello World loop. Exact authority, bounded spending and truthful uncertainty still apply to its real effects. Mainnet availability describes where the experiment runs; persistent production support remains the M7 claim. Actual execution selects a concrete signer, target and budget; the design does not supply spending authority or credentials.
+
+### Smallest stateful application journey
+
+The next design witness is a persistent application with one entry canister and a shared worker on one subnet. Build and install it, serve an authenticated application operation, grow to a second worker under a finite budget, interrupt a management call, recover its original outcome, and inspect what happened. M2 must include meaningful application state, one actual stateful supplier such as IcyDB, and explicit endpoint, memory and timer composition. By M3, a second executable must preserve the promised application invariant and an operation awaiting reconciliation. This narrow rehearsal does not claim general migration or production readiness.
 
 The application owns logical user routing and data semantics. Begin with explicit canister declarations. Introduce groups, role catalogs, a global directory, warm pools, cross-subnet coordination or a separate artifact canister only when a concrete journey needs them.
 
@@ -219,7 +229,11 @@ An autonomous grant is separate from a deployment plan. It permits bounded futur
 
 ### Proposed command vocabulary
 
-The spelling below is a proposed coherent user interface, not implemented commands:
+The spelling below is the proposed wider interface. The first one-canister CLI
+currently implements `build`, `inspect`, `plan`, `apply`, `status` and `call`;
+see the [runnable journey](../../README.md#first-mainnet-deployment). These use
+one retained plan/apply implementation. Grouped Fleet and optional-service
+commands below remain proposals:
 
 | Journey | Commands |
 | --- | --- |
@@ -263,7 +277,7 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The first managed fixture uses an explicitly trusted operator recovery authority R and a subnet executor E. R is an external principal with retained host custody, not another infrastructure canister required by this design. E controls managed applications; R controls E and performs E's maintenance. R's power to replace E is explicit transitive trust. The following graph is the proposed initial contract; M0 must exercise its management path before provisioning implementation depends on it.
+The preferred candidate for the first managed topology is an explicitly trusted operator recovery authority R controlling a subnet executor E, which controls managed applications. R is an external principal with retained host custody, not another infrastructure canister required by this design. R performs E's maintenance; its power to replace E is explicit transitive trust. M0 must validate the following candidate's management path, surviving custody and artifact availability during operator absence before selecting it for product implementation. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |
@@ -276,7 +290,7 @@ A role is never the sole surviving executor or journal owner for the operation t
 
 The proposed governance profile is hierarchical: governance controls infrastructure owners whose approved code controls descendants. For an SNS profile, ordinary registered infrastructure dapps have SNS Root as controller; their descendants are not assumed to be individually registered dapps. Current ordinary dapp registration removes other controllers outside testflight ([SNS Root source](https://raw.githubusercontent.com/dfinity/ic/master/rs/sns/root/src/lib.rs)). Consequently E cannot be assumed to remain co-controller of every registered application.
 
-M0 must demonstrate that the selected governance approval/execution path can upgrade and recover an infrastructure owner with durable custody outside the affected canister. The direct-operator fixture alone does not prove that. If the consumer requires direct SNS registration of each application, SNS's supported controller path becomes the effect owner and requires a separate architecture decision before implementation. There is no fallback operator bypass. Full SNS lifecycle qualification remains M7.
+M0 proves the direct-operator management/recovery path needed for the first deployment. Before implementing a governance integration, demonstrate that its selected approval/execution path can upgrade and recover an infrastructure owner with durable custody outside the affected canister. The direct-operator fixture alone does not prove that. If the consumer requires direct SNS registration of each application, SNS's supported controller path becomes the effect owner and requires a separate architecture decision before that integration. There is no fallback operator bypass. Full SNS lifecycle qualification remains M7; it does not gate the early operator-controlled mainnet experiment.
 
 ### Threat model
 
@@ -325,6 +339,8 @@ The table specifies required evidence, not provider guarantees already demonstra
 
 Creation result custody is an M0 go/no-go experiment: interrupt dispatch, callback and durable result retention separately. If the chosen API cannot reconstruct a lost principal, either choose a qualified recoverable provider path or explicitly accept bounded blocked exposure. Do not advertise automatic creation recovery without this proof. The early successful recovery witness must name an interruption the selected provider can actually reconcile.
 
+The experiment must identify durable host custody before submission, the executor's local commit of intent/reservations with outgoing-call enqueueing, the separate commit retaining the returned principal, and a later failure that cannot erase it: a queued call acts only after non-trapping return, and a trapping callback discards its own writes ([IC system API](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/), [execution properties](https://docs.internetcomputer.org/references/message-execution-properties/)).
+
 Request size, attached-cycle amount, worker concurrency and retry authority are bounded independently of response-wait semantics. IC bounded-wait calls can return `SYS_UNKNOWN` and lose attached cycles, including refunded cycles; unbounded-wait calls have an accepted-plus-refunded conservation guarantee but different liveness costs ([IC execution properties](https://docs.internetcomputer.org/references/message-execution-properties/)). Receiver deduplication does not recover transport-lost cycles. Select and test wait policy per effect, expose possible loss as exposure, and never turn "one attempt" into a universal bounded-wait setting.
 
 ### Exhaustion and recovery reserves
@@ -344,7 +360,7 @@ Fresh Fleet creation proceeds in this order:
 5. Reserve capacity and funding before allocating or claiming component assets.
 6. Verify artifact bytes and install bindings, initialize participants, then obtain application readiness.
 7. Publish the application bindings needed for this journey and satisfy its selected ingress policy. Global directory or Fleet-wide admission transitions apply only where explicitly selected.
-8. Return a terminal receipt and frontend binding; repeat application produces no new effects.
+8. Return a terminal receipt and verified deployment binding; export a frontend-specific binding only when the consumer needs it. Reapplying the completed plan produces no new effects.
 
 A supplied-canister bootstrap follows the same identity, custody and verification rules. Capacity import cannot implicitly establish infrastructure. Failure at any stage has a status owner and an original operation to reconcile.
 
@@ -422,11 +438,12 @@ Do not assume synchronized cross-canister clocks. Preserve upstream signed deadl
 | Blob | Upload/storage/accounting/certification and service semantics | Explicit service mounting, memory grants, lifecycle and funding bindings |
 | IcyDB | Data model, database consistency, persistence and database readiness | Host lifecycle, endpoint admission, memory and entropy integration |
 | Backup | Snapshot artifacts, transfer/custody machinery and generic capture/restore progression | Fleet membership freeze, controller authority and application acceptance |
+| IC Relay (optional) | Durable channels, batching, acknowledgements, bounded request/result primitives and selected worker orchestration | Endpoint composition, admitted peer/route bindings, lifecycle participation and application workload authority |
 | Metrics and logging | Shared measurement and log machinery | Bounded labels, role-specific collectors and operator presentation |
 | Build/query/host utilities | Generic platform and host mechanics | Product artifact selection, trust, plan and deployment semantics |
 | ICRC | Required external standards and representations | Explicitly selected application adapter and guards |
 
-A service may be embedded or deployed separately only if the same composable parts qualify both cases. Supplier packages remain usable without Canic. Direct supplier types are preferred where identity is shared; duplicate DTOs require an actual boundary. Pin and qualify type/runtime identities that must agree. Do not force unrelated tools and product packages to advance as one dependency generation.
+Qualify the selected service arrangement, embedded or separately deployed. If both arrangements are eventually supported, they must use the same independently owned service engine, with each arrangement qualified for its actual composition boundaries. Supplier packages remain usable without Canic. Direct supplier types are preferred where identity is shared; duplicate DTOs require an actual boundary. Pin and qualify type/runtime identities that must agree. Do not force unrelated tools and product packages to advance as one dependency generation.
 
 ## 12 Protocols transport and artifact identity
 
@@ -437,6 +454,20 @@ Separate four identities: logical protocol/schema, transport encoding, canonical
 A call contract declares request/reply limits, wait policy, attached-cycle maximum and effect certainty. Check request size before dispatch and reply size before decoding. An oversized reply may still follow a completed remote effect. Metrics use bounded outcome/route/method classes, not arbitrary principal labels. Generic calls do not acquire mandatory Fleet lookups.
 
 Build records bind exact sources, selected lock graph, toolchain, features, target, relevant environment, generated inputs and final artifacts. Read executable paths from Cargo artifact messages, not guessed filenames. Generated infrastructure entrypoints stay small and output under build storage; applications do not maintain copies of canonical infrastructure source.
+
+### Direct calls and optional IC Relay
+
+Support direct platform `call()` and an optional `ic-relay` adapter as explicit application communication choices. Direct calls remain the starting path. Relay batches logical messages over physical IC calls and adds retained delivery state; it is an embedded supplier library, not a required relay canister or a replacement for the management API. Applications select it for named traffic where batching or durable delivery earns its storage and scheduling cost. Applications using only direct calls must not acquire Relay's dependency graph, queues or timers.
+
+Keep these APIs semantically explicit: a direct call has a reply/reject boundary; Relay submission admits retained work whose delivery, business execution, result readiness and consumption are separate observations. Transport acknowledgement does not prove application completion or exactly-once external effects. Keep bounded Wire contracts and application-owned operation identities. Never silently fall back between paths after a timeout, rejection or decode failure; uncertain effects retain their original recovery contract.
+
+Canic composes the supplier through the application's lifecycle root: one admitted Storage owner, one shared Timers epoch and one physical-call owner. Restore the exact queues, reservations, peer bindings and worker declarations before admitting traffic or starting workers. Inactive applications stay inactive. Authenticate the actual peer at receive and preserve that identity for deferred authorization; recheck current permissions and original deadlines before business effects. Relay does not gain deployment, spending or Fleet authority. Select and qualify one compatible supplier graph; the historical integration guide's version pin is not this rewrite's dependency decision.
+
+The first Relay pilot uses two demo canisters and one bounded application command, alongside an explicit direct-call version. It must preserve the same application invariant and qualify enqueue/journal, business/reply and consumption/progress commit boundaries, stopped peers, lost acknowledgements, duplicate delivery, backpressure, queued revocation and upgrades with retained work. Management creation, installation and funding stay on their existing effect contracts. The pilot extends the fleet view with labelled direct/Relay edges and bounded queue, result and recovery observations.
+
+Compare physical calls per completed logical operation, cycles, instructions, throughput, end-to-end latency, retained bytes and idle cost under declared payload sizes, concurrency, batch limits and subnet placement. Include sparse traffic and failures as well as saturated batches; compare equivalent completion and durability guarantees, identifying any additional direct-path journal cost. Orders-of-magnitude efficiency is a workload hypothesis to measure, not a universal speedup or an existing Canic result.
+
+Relay's [adoption contract](https://github.com/dragginzgame/ic-relay/blob/50ef15f286830f1c03cc85f0804f23a622bd09bc/docs/integration/canic-adoption.md), inspected on 2026-11-13, describes experimental supplier primitives and prior consumer evidence. It explicitly leaves managed integration unqualified; legacy Canic references and historical storage upgrade pairs do not qualify this rewrite. The optional module is admitted to the design now. Implement its narrow pilot when the multi-canister application can exercise it, without making Relay a prerequisite for M0 closure or the direct-call journey.
 
 ### Separate code identity from deployment approval
 
@@ -452,7 +483,7 @@ Artifact publication is atomic and content-addressed. Verify uploads/chunks befo
 
 ### Experimental and production contracts
 
-Canic starts as a fresh-install experimental system. Cross-release state preservation is not implemented by this document. Legacy Canic state, principals, journals and authority are not imported implicitly. This preserves a clean restart while making the eventual production requirement explicit.
+Canic starts as an experimental system, with preservation guarantees limited to explicitly qualified paths, including the M3 rehearsal. Cross-release state preservation is not implemented by this document. Legacy Canic state, principals, journals and authority are not imported implicitly. Experimental status does not authorize reinstalling to resolve an uncertain effect or discarding state promised by a qualified path.
 
 Before persistent production use, accept and qualify a new release lifecycle contract with these properties:
 
@@ -510,6 +541,18 @@ Keep Observatory, rendering, comparisons and aggregation on the host. Canisters 
 
 Every status states observation age/generation and completeness. An unreachable subnet is unknown, not empty or healthy. Dynamic inventory must include autonomous children. A terminal initial deployment plan is not a perpetual inventory source. Correlate plans, local operations, remote effects and readiness with durable operation IDs.
 
+### Demo fleet visualization from the first multi-canister increment
+
+The first runnable multi-canister demo must include a small browser-based fleet view, delivered with that increment and no later than M2. This is an admitted team-feedback requirement. A local host-served, read-only view is sufficient initially; it uses the same inventory and operation evidence as the CLI and requires no additional infrastructure canister.
+
+Show the actual deployed demo fleet: canister names, principals and roles; distinguish controller relationships from application call/routing relationships. Selecting a canister shows observed lifecycle/readiness, installed module identity, cycles where available, and related deployment or recovery operations. Label the network, observation time and evidence source; missing, stale and unreachable observations remain visibly distinct from healthy or failed states. Do not infer routing relationships or successful effects from a diagram layout.
+
+The team exercise deploys the demo, opens the view, invokes the application, and inspects a worker installation or upgrade. The interrupted-effect exercise must expose the pending/uncertain operation and its eventual retained outcome. As M3 adds autonomous workers, refreshing the same view must discover them and preserve visibility of blocked exposure. Document the launch command and repeatable local/mainnet exercise for each supported deployment path; a static mock diagram does not satisfy the gate.
+
+Keep the initial view limited to these observations. Protected observations retain their access boundary, and browser payloads exclude keys and signed requests. Broader dashboards, historical metrics and application frontend bindings remain separately consumer-gated; this view does not acquire deployment or funding authority.
+
+### Measurements and developer projections
+
 Measure per-role total Wasm and code-section size, validator function count, initial and steady stable-memory allocation, instruction cost, idle timer burn, cross-subnet bytes, queue depth and recovery latency. Measure physical canister overhead and retained reserves separately from logical tenants and consumed cycles. Numeric targets are set against a workload before implementation; historical limits and prices are not universal current constants.
 
 Frontend export is a read-only projection from verified deployment bindings. It names network, application, exact endpoints, protocol and artifact identity, excludes secrets, and cannot make an unready component appear published.
@@ -518,10 +561,11 @@ Persistent local development uses the same compiled contracts and effect transit
 
 ## 15 Qualification and operating budgets
 
-Tests should prove user-visible behavior and recovery boundaries, not preserve the old implementation. Use pure transition and property tests for local state/accounting, native tests for host persistence and artifact admission, and PocketIC for installed lifecycle, management effects and inter-canister behavior. Reserve live-network tests for separately authorized platform gaps.
+Tests should prove user-visible behavior and recovery boundaries, not preserve the old implementation. Use pure transition and property tests for local state/accounting, native tests for host persistence and artifact admission, and PocketIC for installed lifecycle, management effects and inter-canister behavior. Include a bounded mainnet Hello World exercise in M1 and repeat hands-on exercises as the supported surface grows. Live execution uses explicitly selected authority and budgets; normal automated tests do not spend mainnet funds. Additional live qualification targets named platform gaps. A successful mainnet greeting proves that deployment/call path, not all failure recovery or persistent production guarantees.
 
 | Scenario | Required evidence |
 | --- | --- |
+| First hands-on deployment | A team member follows public instructions to build, review, deploy and call Hello World locally and on mainnet, inspect its receipt/cost exposure, then deploy a changed greeting with explicit identity/state semantics |
 | First Fleet | Build, bootstrap, provision, readiness, publication and terminal no-effect replay |
 | Lost responses | Interrupt before/after durable intent, dispatch, reply retention and settlement; resume original effect |
 | Concurrent actors | Duplicate commands, competing reservations, late callbacks, changed policy/controllers and allocation reuse |
@@ -539,9 +583,9 @@ Tests should prove user-visible behavior and recovery boundaries, not preserve t
 
 The OpenChat-class workload is the strategic qualification target, not a chat product to implement. Include shared MultiUser-style workers, user indexes, groups and communities, mixed tenancy, multiple subnets, sustained growth, local funding and governed effects. Exclude the legacy one-User-canister model from this target, following the retained developer feedback. Reported estate sizes and fees in the old idea are historical input, not current benchmark facts.
 
-Use a small synthetic fixture for failure injection and topology, alongside a named actual application consumer. The proposed first consumer is **Toko user shard**: its local manifest already declares Canic and IcyDB dependencies (`toko/fleets/toko/user/shard/Cargo.toml`, observed 2026-11-13). This is a candidate selection, not an authorized port or an adoption result. M0 must agree the narrow capability, meaningful application invariant, pinned inputs and source/build scope with that consumer before claiming the gate complete. If unsuitable, name a replacement actual consumer before M2; a synthetic fixture alone does not satisfy it.
+Use a small synthetic fixture for failure injection and topology, alongside a named actual application consumer. The proposed first stateful consumer is **Toko user shard**: its local manifest already declares Canic and IcyDB dependencies (`toko/fleets/toko/user/shard/Cargo.toml`, observed 2026-11-13). This is a candidate selection, not an authorized port or an adoption result. Before its implementation, agree the narrow capability, meaningful application invariant, pinned inputs and source/build scope with that consumer. If unsuitable, name a replacement actual consumer before M2; a synthetic fixture alone does not satisfy it. The team's M1 Hello World use supplies early product feedback but does not replace M2's stateful adoption proof.
 
-Establish the consumer baseline in M0 and compare equivalent guarantees at M2 and each subsequent expansion. Report advantage, parity, gap, tradeoff or unmeasured. Count application infrastructure removed, integration code added, new permissions, extra canisters, operator interventions and ongoing supplier maintenance. M8 validates accumulated broader value; it is not the first adoption measurement. A smaller diff is not automatically lower burden.
+Establish the first deployment baseline in M0 and capture the team's actual M1 experience. Establish the stateful consumer baseline before its implementation and compare equivalent guarantees at M2 and each subsequent expansion. Report advantage, parity, gap, tradeoff or unmeasured. Count application infrastructure removed, integration code added, new permissions, extra canisters, operator interventions and ongoing supplier maintenance. M8 validates accumulated broader value; it is not the first adoption measurement. A smaller diff is not automatically lower burden.
 
 For the first composed consumer, retain a reproducible comparison with and without the selected capability: application source and explicit imports/composition; transitive dependency graph; generated endpoint catalogue; incremental total Wasm, code-section size and function count; initial stable-memory allocation; idle background activity; additional infrastructure canisters and operating duties. Hold toolchain, workload and optimization choices constant and explain unavoidable differences. Set budgets from that baseline before implementation. The Wasm graph must exclude Host, provisioning and estate accounting. These artifacts qualify the small-runtime claim independently of the interaction diagram.
 
@@ -549,22 +593,26 @@ Record accepted workload bounds before claiming scale: occupied subnets, physica
 
 ## 16 Delivery plan with deletion gates
 
-These are implementation milestones after design acceptance, not a version allocation or authorization to release the old repository. Each is a coherent outcome with its own narrow checks. Do not create a package or framework solely to prepare for a later milestone.
+These are implementation milestones after design acceptance, not a version allocation or authorization to release the old repository. Each is a coherent outcome with its own narrow checks and a team-usable result. Deliver runnable increments within milestones instead of withholding the CLI until the architecture is complete. M0 produces a concrete walkthrough and small executable provider experiments; M1 completes the first product deployment loop. Do not create a package or framework solely to prepare for a later milestone.
+
+The [M0 decision and evidence record](m0-first-journey.md) scopes the initial investigation. Section 17 governs admission: a later milestone names a possible delivery boundary, not permission to implement every integration with a documented owner.
 
 | Milestone | Deliverable | Completion and subtraction gate |
 | --- | --- | --- |
-| M0 Contract decisions and baseline | Name actual consumer and invariant; establish adoption baseline; choose topology/controller graph, approval representation, first provider contracts and application-only restore boundary | Exercise governance feasibility and creation-result custody in small fixtures; classify unavoidable uncertainty; no product framework built to hide an unresolved contract |
-| M1 First useful host tool | Passive inspection, typed compiler, canonical approval/preconditions, plan preview and structured errors | Useful without runtime adoption; deterministic target-output references and one parsing/artifact identity path |
-| M2 Composed managed application | Single-subnet bootstrap/allocation with real consumer state, IcyDB or another actual stateful participant, endpoint/lifecycle integration and interrupted-effect reconciliation | Explicit memory/timer ownership, first adoption/footprint comparison and terminal replay; no second provisioning path; prepare the second-release witness |
+| M0 First deployment contract and baseline | Specify the Hello World walkthrough and finite budget; choose its topology/controller graph, approval representation and provider contracts; identify the later stateful consumer and preservation requirements | Exercise the selected operator management path and creation-result custody in small fixtures; classify unavoidable uncertainty; defer unrelated governance/composition decisions to their owning implementation gates |
+| M1 Hands-on Hello World | Deliver usable CLI/artifact inspection and a narrow build, plan, apply, call and status journey locally and on mainnet, then deploy a changed greeting | Team follows public instructions; exact approval and retained effect custody, explicit identity/state semantics, bounded spending and truthful status; one parsing/artifact identity and operation path; passive preview alone is insufficient |
+| M2 Composed managed application | Single-subnet bootstrap/allocation with real consumer state, IcyDB or another actual stateful participant, endpoint/lifecycle integration, interrupted-effect reconciliation and a runnable demo fleet visualization | Team inspects actual topology and operation evidence in the view from the first multi-canister increment; explicit memory/timer ownership, first adoption/footprint comparison and terminal replay; no second provisioning path; prepare the second-release witness |
 | M3 Autonomous bounded operation and early persistence | Finite grants, demand scheduling, protected recovery resources and second executable preserving application state and uncertain-operation evidence | Operator absence, full uncertainty budget, late replies and recovery after upgrade; no duplicate retry/funding owner; live Rust futures need not migrate |
-| M4 Multi-subnet scale | Justified coordination, dynamic inventory, shared tenancy and explicit delegation reclamation | Unreachable executor cannot release allowance; fence/reconciliation and revocation completion are proven; no central round trip per local continuation |
-| M5 Expanded composition | Complete Auth, Blob and frontend journeys building on M2's composition | Installed consumer journeys and supplier independence; no copied engine or second lifecycle owner |
+| M4 Multi-subnet scale, when admitted | Consumer-required coordination, dynamic inventory, shared tenancy and explicit delegation reclamation | Admit the consumer's multi-subnet need first; unreachable executor cannot release allowance; fence/reconciliation and selected revocation semantics are proven; no central round trip per local continuation |
+| M5 Expanded composition, when admitted | Complete the selected Auth, Blob or frontend journeys building on M2's composition | Admit each integration's consumer need separately and qualify its selected arrangement; supplier independence; no copied engine or second lifecycle owner |
 | M6A Reusable capacity | Independently qualify release/reset and retained custody | Original obligations settled, late callbacks fenced and cycles conserved; checkpoint qualification does not gate this outcome |
 | M6B Application checkpoint/restore | Independently qualify consistent checkpoint provider and fenced recovery | Surviving control-plane authority, explicit stop/load/start/accept/open and no resurrection of post-checkpoint spent authority; no whole-Fleet rollback claim |
 | M7 Production lifecycle and governance | Complete maintenance-window lifecycle and selected governance profile qualification | Broader migration, infrastructure recovery and actual governed effects using early contracts; production claim permitted only here |
 | M8 Broader adoption value | Representative additional consumers and accumulated baseline comparisons | Measured net responsibility removed, including suppliers; reject extensions without demonstrated value |
 
-Design M7 constraints during M0 and exercise their narrow persistence path by M3. M6A and M6B are separately reviewable outcomes; shared custody principles do not couple their completion gates. Expansion depends on the preceding consumer evidence: if M2 adds burden without a credible reduction, revise the architecture before building the larger management surface. Reorder optional adapters for demonstrated consumer needs while retaining dependency and recovery proofs.
+Record M7 preservation requirements during M0 and exercise their narrow persistence path by M3. Complete governance-specific feasibility before implementing that integration, without making it a prerequisite for the direct-operator experiment. M1 implements only the bootstrap/install/status subset required by Hello World using the selected management owner; M2 extends that same path with stateful composition and allocation. A minimal executor is required in M1 if the selected topology uses one; Coordinator, a dedicated Store, Auth and IcyDB are not prerequisites for a public greeting. There is no throwaway second deployment engine.
+
+Every later milestone extends a runnable team journey and updates its example, operator instructions and limitations. M6A and M6B are separately reviewable outcomes; shared custody principles do not couple their completion gates. Expansion depends on preceding hands-on and consumer evidence: if M2 adds burden without a credible reduction, revise the architecture before building the larger management surface. Reorder optional adapters for demonstrated consumer needs while retaining dependency and recovery proofs.
 
 No mechanical port of `canic-core`, `canic-host` or their tests is a milestone. Bring forward behavior requirements and independently author the new implementation. The original repository remains intact as evidence and a separate product until an explicit replacement decision. Migration of existing deployments is not silently included.
 
@@ -578,7 +626,7 @@ Use Toko's tooling and upstream implementations for generic mechanics. Keep targ
 
 ## 17 Complete capability disposition register
 
-Section numbers identify architectural ownership, not a promise to implement every historical capability. The source record identifies the inventory inputs. The initial product is the M2/M3 first-consumer path; wider qualification milestones apply only to capabilities admitted for a demonstrated need. Each row has a separate initial disposition:
+Section numbers identify architectural ownership, not a promise to implement every historical capability. The source record identifies the inventory inputs. The initial product starts with the M1 Hello World deployment loop and grows into the M2/M3 stateful consumer path; wider qualification milestones apply only to capabilities admitted for a demonstrated need. Required rows span that sequence and do not all gate the first deployment. Each row has a separate initial disposition:
 
 - **Required**: required for the first consumer; implement only the stated narrow scope.
 - **Supplier-owned**: integrate the independent implementation only when the consumer needs it; count its maintenance cost.
@@ -586,7 +634,7 @@ Section numbers identify architectural ownership, not a promise to implement eve
 - **Excluded**: no Canic implementation planned under the current design.
 - **Historical**: evidence about old deployments, with no new product commitment.
 
-A future architectural home does not move a Consumer-gated row into the backlog. M0 confirms the Required subset against the chosen consumer. Supplier ownership does not itself schedule an integration.
+A future architectural home does not move a Consumer-gated row into the backlog. M0 confirms the narrow M1 subset; the stateful consumer confirms the additional M2/M3 requirements before their implementation. Supplier ownership does not itself schedule an integration.
 
 | Existing surface or responsibility | Disposition and destination | Initial product disposition | Acceptance witness |
 | --- | --- | --- | --- |
@@ -596,7 +644,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | App config, roles, capabilities and environment | Replace redundant controls with explicit selections and derived facts, section 5 | Required — minimal input model | Invalid combinations fail before effects |
 | Specs, groups and deployments | Begin with explicit canisters; add reusable grouping only for demonstrated repetition, sections 3, 8 | Required — explicit canisters; groups consumer-gated | Exact deterministic desired graph |
 | Coordinator and Registry | Conditional global authority with bounded delegation, sections 4, 6, 8 | Consumer-gated — global constraints | Demonstrated global constraint and membership/reservation concurrency |
-| Root control plane | Rebuild subnet executor, sections 4, 7–9 | Required — first managed effect owner | Local installed management journey |
+| Root control plane | Surviving management-effect owner; subnet executor is the preferred candidate, sections 4, 7–9 | Required — effect ownership for admitted autonomous work; physical placement selected in M0 | Installed management journey and custody/artifact availability during operator absence |
 | Wasm Store and templates | Preserve artifact integrity; select physical distribution after comparison, sections 4, 12 | Required — integrity; separate Store consumer-gated | Integrity/retention proof and justified deployment overhead |
 | Network enrollment and subnet catalog | Retain exact trust and typed evidence, sections 5–6 | Required — selected network and subnet | Wrong network and stale evidence refusal |
 | Fleet generation and Ensure | One compiler and plan/apply owner, sections 5, 7 | Required — one plan/apply path | Repeated convergence has no effects |
@@ -608,6 +656,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Service publication and Group Directory | Generation-bound projections, sections 3, 8 | Required — minimal binding; global directory consumer-gated | Dynamic children and consistent pages |
 | Fleet ingress whitelist/admission | Optional deployment policy with selected consistency semantics, section 6 | Consumer-gated — extra Fleet admission | Application access works without it; selected revocation promise is qualified |
 | Caller/topology access checks and RPC replay | Retain explicit authority and effect identity, sections 6–7, 12 | Required — selected commands and effects | Wrong caller, stale generation and duplicate |
+| Optional IC Relay communication | Independent supplier plus explicit Canic adapter alongside direct calls, sections 11–12 | Supplier-owned — design admitted; narrow multi-canister pilot before adoption | Managed lifecycle/recovery proof and measured direct-call comparison; no automatic fallback |
 | Inspect-message and payload limits | One generated endpoint catalog, section 6 | Required — endpoint enforcement and bounds | Bypass still denied at endpoint |
 | Root proofs, attestation and issuer enrollment | Retain narrow infrastructure identity; delegate generic Auth, section 11 | Consumer-gated — enrollment requirement | Enrollment/revocation/renewal journey |
 | Application login/session/receiver/logout | IC Auth composition, section 11 | Supplier-owned — IC Auth; full journey M5 if selected | Browser, issuer, receiver and device logout |
@@ -619,6 +668,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Entropy and random streams | Independent supplier, explicit fresh/buffered contract, section 10 | Supplier-owned — only selected entropy needs | No fallback or cross-lifecycle reply reuse |
 | Metrics, logs, timers and provider observations | Bounded shared providers, section 14 | Supplier-owned — minimum operational evidence | Label/retention limits and truthful cost |
 | Public observability and compact diagnostics | Public/protected split and typed errors, section 14 | Required — recovery status and safe errors | No sensitive authority leakage |
+| Demo fleet visualization | Small host-served read-only view of actual topology and operation evidence, section 14 | Required — first multi-canister increment, no later than M2 | Runnable team exercise; truthful stale/unknown states; autonomous workers appear when supported |
 | Host Observatory, costs and reports | Host-only aggregation, section 14 | Consumer-gated — broader aggregation | Partial results never become complete |
 | Blob service and embedded/dedicated adapters | Independent engine and explicit composition, section 11 | Supplier-owned — Blob integration when needed | Real provider/application integration |
 | IcyDB integration | Database owns semantics; explicit host composition, section 11 | Supplier-owned — proposed first stateful participant | Database readiness and lifecycle recovery |
@@ -680,14 +730,15 @@ All twelve topics are accounted for. Their old release positions are not carried
 
 ## 19 Decisions required before implementation
 
-The recommended choices make this a usable design draft. Acceptance of a design direction is distinct from proving its implementation.
+The architecture is accepted as the basis for M0. The choices below still require their named evidence before implementation relies on them; architectural acceptance does not establish qualification.
 
 | Decision | Recommended answer | Proof or consequence |
 | --- | --- | --- |
-| First consumer and workload | Toko user shard candidate, narrow capability plus real stateful composition | M0 confirms consumer scope/invariant and baseline; M2 measures adoption; second release by M3 |
-| Production promise | Persistent applications are the target; first prototype remains disposable | Approve lifecycle preservation requirements in M0; require M7 before production claims |
+| First hands-on workload | Team-operated Hello World locally and on mainnet, through the public product path | M0 resolves first-effect contracts; M1 includes deployment, invocation, inspection and a changed greeting; feedback shapes subsequent increments |
+| First stateful consumer | Toko user shard candidate, narrow capability plus real stateful composition | Confirm scope/invariant and baseline before its implementation; M2 measures adoption; second release by M3; this selection does not block M1 |
+| Production promise | Persistent applications are the target; the initial system is experimental, with preservation guarantees limited to explicitly qualified paths | Define lifecycle preservation requirements in M0; prove the M3 path; require M7 before general production claims |
 | First persistent transition | Bounded maintenance-window release | Specify tolerated downtime, schema migration and uncertain-effect custody |
-| Governance profile | Direct operator fixture; hierarchical governance over infrastructure owners as proposed in section 6 | M0 proves a viable management/recovery path; direct SNS registration of every descendant would require a different effect owner |
+| Governance profile | Direct operator for M1; hierarchical governance over infrastructure owners as proposed in section 6 | M0 proves the operator path; prove governance feasibility before that integration; direct SNS registration of every descendant would require a different effect owner |
 | Artifact binding | Separate executable identity from release approval; one activation evidence chain | Structural finalization excluded from initial product |
 | Restore boundary | Application rollback with surviving authoritative control plane | Whole-Fleet/control-plane rollback needs a separately qualified external authority/evidence procedure |
 | Physical infrastructure | Choose the minimum topology satisfying custody and autonomous operation | Compare direct-host and local-executor paths; add Coordinator/Store only for demonstrated needs |
@@ -696,6 +747,7 @@ The recommended choices make this a usable design draft. Acceptance of a design 
 | Application framework ownership | Application owns lifecycle and participant composition | Combined framework fixture before public composability claims |
 | Funding autonomy | Finite renewable grants, reactive funding plus coarse idle coverage | Budget exhaustion pauses; no hidden unlimited authority |
 | Protocol optionality | Wire initially; keep domain free of codec choices | Alternate owned Candid requires explicit policy decision |
+| Application communication | Direct calls plus optional IC Relay adapter | Qualify a bounded multi-canister pilot and workload-specific gains before adoption; no mandatory Relay dependency |
 | Capacity reuse versus deletion | Preserve controlled empty capacity by explicit choice | Retained custody and costs must be visible; deletion never a recovery fallback |
 
 No capacity, cost or schedule estimate is invented here. Set measurable budgets before executing the relevant milestone, and record rejected alternatives beside the decision rather than building them all.

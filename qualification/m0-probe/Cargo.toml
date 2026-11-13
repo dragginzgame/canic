@@ -1,0 +1,30 @@
+[package]
+name = "canic-m0-probe"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+ic-platform.workspace = true
+ic-platform-runtime.workspace = true
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[package.metadata.toko-tooling.loc]
+category = "tests"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+maintenance-candidate = []
+
+[dependencies]
+ic-wire.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+
+[lints]
+workspace = true
