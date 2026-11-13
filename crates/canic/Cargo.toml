@@ -1,0 +1,16 @@
+[package]
+name = "canic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Canic Rust library"
+
+[package.metadata.cargo-machete]
+ignored = ["toko-tooling"]
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true
