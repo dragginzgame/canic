@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.204.0"
+version = "0.204.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.204.0"
+version = "0.204.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.204.0"
+version = "0.204.1"
 dependencies = [
  "ic-wire",
  "serde",

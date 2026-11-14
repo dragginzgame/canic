@@ -188,7 +188,7 @@ pub(crate) fn retain(
 }
 
 /// Lookup and publication share the caller's journal lock.
-pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
+fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
     let root = &store.path;
     if let Some(name) = &plan.deployment {
         // The journal lock spans lookup and publication, including an interrupted earlier plan.

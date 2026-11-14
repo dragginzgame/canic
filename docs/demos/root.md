@@ -11,6 +11,23 @@ Root's controller is the external operator identity. The application's sole
 controller is Root. External identities appear as controller metadata, never as
 nodes above the canister tree.
 
+## Current mainnet demo
+
+The maintainer's generated `starter/` project now has a live Root and greeting app.
+Root `epxmv-tiaaa-aaaah-awe2a-cai` has completed the qualified predecessor
+transition; app `eiwkb-6qaaa-aaaah-awe2q-cai` has subsequently upgraded in place.
+From the Canic checkout:
+
+```sh
+canic fleet show --app starter
+canic fleet call 0a68a8de48d4ca642147087a893813359ca4b7eda6847cf554acfaaa91c757cc --app starter --name team
+```
+
+The greeting is `Hello from upgraded Canic, team!`. Keep `starter/.canic/` for
+recovery. The [journey record](../design/m0-first-journey.md#mainnet-predecessor-transition-and-subsequent-app-upgrade)
+contains the exact operations, artifact hashes and funding evidence. The creation
+walkthrough below is for a fresh project; the existing demo needs no new creation.
+
 ## Try the installed local journey
 
 From the Canic checkout, build the CLI and choose an unused directory for a new project.
@@ -314,10 +331,16 @@ Future child plans bind the new Root hash; historical approvals remain unchanged
 The original creation approval may no longer apply against the new Root code;
 inspect its historical receipt with `fleet status`.
 
-Both Root executables must export `observe_custody` (ID 30). Older deployed Roots
-are refused before installation, without fallback or automatic rebinding. Their
-bootstrap transition, maintenance during active/uncertain work, and Root replacement
-are separate qualification requirements. Existing mainnet demos are unchanged.
+The replacement must export `observe_custody` (ID 30). The predecessor normally
+uses that contract too. One retained single-upgrade Root, SHA-256
+`e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296`, instead uses
+its controller-only creation and unit upgrade observations before installation.
+Both replies must match the approved journal, including an empty upgrade slot
+when no upgrade is recorded. The same full-custody postflight then proves the
+transition. The module hash selects this contract before dispatch; there is no
+endpoint probing, error fallback or change to old approvals. Other old binaries,
+maintenance during active/uncertain work, and Root replacement need separate
+qualification. Existing mainnet demos are unchanged.
 
 ## Responsibility and bounds
 

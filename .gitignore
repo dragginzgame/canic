@@ -6,3 +6,5 @@
 /.agents/
 /.aws/
 /.codex/
+# Generated operator project; source templates are maintained in canic-host.
+/starter/

@@ -47,12 +47,15 @@ authenticated tooling installer.
   publishing each existing managed Plan; a pending tip cannot be overtaken.
   Individually created children retain their existing first-upgrade planning path.
   Change Root and child artifacts in separate approvals. Maintenance binds the
-  exact completed journal, reads it through controller-only `observe_custody`
+  exact completed journal, reads it through the selected controller-only observations
   before installation and verifies preservation before retaining a receipt.
   Reuse direct install/signed-attempt custody; never reset slots or rewrite prior
   approvals. Only completed maintenance advances the Root hash for future child
-  plans. Both executables must support this observation contract; old owners have
-  no fallback. The operator must keep the maintenance window exclusive.
+  plans. The replacement must support this observation contract. One exact retained
+  single-upgrade Root is admitted by module hash with separate controller-only
+  creation and upgrade observations before installation; its pinned binary fixture
+  qualifies the transition. Never probe endpoints or fall back on errors for other
+  old owners. The operator must keep the maintenance window exclusive.
 - The managed starter is a small buildable Rust app with one application
   canister controlled by a Root/management owner. Whole-fleet reviewed convergence,
   cascading discovery and subtree operations are admitted product requirements;
@@ -110,8 +113,11 @@ authenticated tooling installer.
   fresh read authority after the effect deadline; public
   queries cannot establish the created child's custody. Upgrade observations use
   approval-bound ID 29; unit ID 25 remains public latest-status only. Read old
-  on-disk responses without rewriting them; do not fall back to unbound live
-  observations or re-sign an old pending request. Explicit `fleet reconcile`
+  on-disk responses without rewriting them; child recovery must not fall back to
+  unbound live observations or re-sign an old pending request. Only the exact-hash
+  single-upgrade Root maintenance preflight may use its unit ID-25 observation,
+  comparing the complete single slot (including Empty) with approved custody.
+  Explicit `fleet reconcile`
   has separate, short-lived request authority bound to the exact retained approval;
   it never renews effect deadlines, budgets or spent slots. Keep its signed attempt
   and deadline under the existing journal lock, ordered before the next observation.

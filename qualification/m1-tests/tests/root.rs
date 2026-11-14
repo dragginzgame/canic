@@ -9,6 +9,8 @@ use ic_testkit::{
 };
 use std::{path::PathBuf, time::Duration};
 
+mod predecessor;
+
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()

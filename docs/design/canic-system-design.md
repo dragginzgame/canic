@@ -928,12 +928,15 @@ artifacts report no change against
 retained completion, not freshly observed network state. A separate Root-only
 maintenance plan now preserves the full completed journal through the direct
 installation owner, then advances the Root binding for future child plans.
-Both executables must support the controller-only full-custody observation;
-unfinished work, combined Root/child changes and older owners are refused.
+The replacement must support the controller-only full-custody observation.
+One retained single-upgrade predecessor is admitted by exact module hash with
+separate authenticated creation/upgrade preflight reads and the same full-custody
+postflight. Unknown older owners, unfinished work and combined Root/child changes
+are refused; a missing endpoint never authorizes a fallback.
 Unbounded upgrade history, existing-fleet adoption and larger trees remain open. `fleet reconcile`
 requests recovery of an exact retained creation/upgrade approval on a compatible
 Root, retaining original effect limits and ordered signed-attempt custody.
-Maintenance of active/uncertain work, old-owner bootstrap and Root replacement
+Maintenance of active/uncertain work, other old-owner transitions and Root replacement
 still require separately qualified controller paths. These are remaining
 implementation requirements, not claims made by the existing command names.
 Subtree administration and the optional allocation patterns in section 8 extend

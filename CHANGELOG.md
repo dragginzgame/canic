@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.204.1] - 2026-11-14
+
+### ➕ Added
+
+Qualify maintenance from the retained pre-0.204 single-upgrade Root through
+`fleet plan` and `fleet apply`. Its exact module hash selects two authenticated
+preflight reads; the replacement must retain the same complete journal through
+the current custody endpoint. Empty and completed slots migrate; untracked
+scheduled work blocks installation. Unknown older binaries have no fallback.
+Keep original plans and signed attempts, including interrupted-install recovery.
+
+The generated `starter/mainnet` demo now runs this transition: Root and app keep
+their identities, then the maintained Root upgrades the greeting app. Local
+qualification covers interruption recovery; the mainnet run verifies the normal
+path. See the [retained journey evidence](docs/design/m0-first-journey.md#mainnet-predecessor-transition-and-subsequent-app-upgrade).
+
+### ▶️ Try it
+
+For a completed generated fleet whose predecessor is qualified, build the current
+Root into its declared input, then review and apply its maintenance plan. Keep
+the operator window exclusive and change the app in a later approval:
+
+```sh
+canic artifact build --package canic-root --output starter/artifacts/root.wasm
+canic fleet plan --app starter --identity canic-mainnet
+canic fleet apply MAINTENANCE_OPERATION --app starter --identity canic-mainnet
+canic fleet show --app starter
+```
+
+The current demo is already complete. With the maintainer's local `starter/`
+project and its retained journal, inspect it or call its upgraded app:
+
+```sh
+canic fleet show --app starter
+canic fleet call 0a68a8de48d4ca642147087a893813359ca4b7eda6847cf554acfaaa91c757cc --app starter --name team
+```
+
+### 🧹 Cleanup
+
+Limit the plan retention helper to its owning module after the post-push review found no
+remaining cross-module callers. No plan format, command alias or runtime
+persistence schema changes are needed for this increment.
+
+### 🔧 Changed
+
+Qualify the selected IC Timers 0.44.3 lockfile update with the release suite.
+Keep the operator's generated `starter/` project and deployment journals local;
+its reusable source templates and the exact predecessor regression fixture ship
+with Canic.
+
 ## [0.204.0] - 2026-11-14
 
 ### ⚠️ Breaking

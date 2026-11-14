@@ -226,7 +226,7 @@ pub(crate) async fn execute(
     execute_with(path, &Authority::from(plan), call, identity, icp, agent).await
 }
 
-/// Only the fixed Root observation method receives fresh read authority after plan expiry.
+/// Only the selected Root observation contract receives fresh read authority after plan expiry.
 pub(crate) async fn observe(
     path: &Path,
     plan: &Plan,
@@ -236,20 +236,15 @@ pub(crate) async fn observe(
     agent: &Agent,
 ) -> Result<Vec<u8>> {
     let (root, method, args) = if plan.maintenance.is_some() {
-        crate::maintenance::validate(plan)?;
+        let args = crate::maintenance::observation_args(plan, call.method)?;
         (
             principal(
                 plan.target
                     .as_deref()
                     .expect("validated maintenance target"),
             )?,
-            "observe_custody",
-            ic_wire::native::encode_request(
-                canic_management_protocol::custody::OBSERVE,
-                &(),
-                canic_management_protocol::custody::LIMITS,
-            )
-            .map_err(supplier)?,
+            call.method,
+            args,
         )
     } else {
         let owner = plan

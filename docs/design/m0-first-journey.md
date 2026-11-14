@@ -18,6 +18,122 @@ This record contains scoped decisions and evidence, not a second implementation
 backlog. The first product is the [M1 Hello World loop](../../README.md), followed
 by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
+## 0.204.1 release qualification
+
+On 2026-11-14, the complete release gate passes: all `make lint` stages, followed
+by `make test m0-test m0-artifact-test m1-test profile-test growth-test root-test
+endpoint-test`. This includes 68 host tests, 40 CLI tests and seven installed Root
+tests, with the supported predecessor fixture always enabled. Three unrelated
+historical-binary fixtures retain their explicit opt-in status. Release logs and
+input hashes are local under `target/evidence/0.204.1/release/`.
+
+The already-selected product lockfile update to IC Timers 0.44.3 is qualified by
+this gate. Its missing Wasm dependency was fetched with `--locked`, then the
+remaining lint stages resumed before tests. Both manifests and locks stayed
+unchanged throughout validation. Registry review confirms selected first-party
+suppliers are current stable, non-yanked versions. Product metadata has 12 members
+at 0.204.1; four qualification members remain at 0.0.0, all with publication disabled.
+
+The mainnet evidence below belongs to its retained artifacts, built before the
+Timers refresh. This release does not replace those approved bytes or redeploy
+the demo. `starter/` and its active journals remain local, outside Git; the
+reusable generator and the exact predecessor regression fixture are delivered.
+
+## Mainnet predecessor transition and subsequent app upgrade
+
+On 2026-11-14, create the generated `starter/mainnet` fleet using the exact
+qualified predecessor, then maintain Root and upgrade its app through the CLI:
+
+- Root: `epxmv-tiaaa-aaaah-awe2a-cai`, solely controlled by the Canic operator
+  `o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe`.
+- Application: `eiwkb-6qaaa-aaaah-awe2q-cai`, solely controlled by that Root.
+- Creation: `a92356c7cfbeae5a2b380666093d7eae551f09f417e4264a0319729a76e9a1ab`.
+- Root maintenance: `c18ae2216d767a9f75678152e4faf837eaf6e2d5c3be75c47e3f8d41e724b1f9`.
+- Child upgrade: `0a68a8de48d4ca642147087a893813359ca4b7eda6847cf554acfaaa91c757cc`.
+
+Maintenance changes Root from the pinned predecessor hash below to
+`3a6bad4277923e88604781f5700f70830a5f14ffbf31d9b9ae9c6784d81384e1`.
+Its two authenticated preflight replies and full-custody postflight agree on
+creation authority, child, dispatch commitments and empty upgrade history.
+Both principals and controllers survive. The subsequent app upgrade changes
+`2e4c774d9fdabe34922a4b353c71c54c7edbe7a21e94e6df102273f740eef071` to
+`5d65b94c2be98a2c9a6eac541cc0a11f3d1bc9944368bdf3479b3b9321bb9262`, with
+one upload/install, child version 2 → 3 and authenticated Ready completion.
+The greeting changes from `Hello from Canic, team!` to
+`Hello from upgraded Canic, team!`; these greeting queries are uncertified.
+The final read-only fleet snapshot has two canisters and no inventory issues;
+planning reports unchanged against retained completion.
+
+The maintainer explicitly authorized a one-off conversion through ICP CLI:
+1.78 ICP plus the 0.0001 ICP transfer fee credited 3,009,524,000,000 cycles.
+The fleet's 3T debit funds Root and its 1T child attachment. Final public wallet
+observations are 3.32915125 ICP and 415,079,115,186 cycles. No conversion command
+was added to Canic. A preliminary unsubmitted ten-minute creation preview was
+cancelled before preparing the actual two-minute approval; its revocation stays
+retained. No existing profile or hello-world deployment was changed.
+
+The generated project is `starter/`, with operation custody in its configured
+`.canic/apps/starter/fleets/mainnet/` and auxiliary observations/builds/funding
+receipts in `.canic/demo-evidence/`. Keep these records for recovery. The mainnet
+run proves the normal transition; interruption recovery and completed-old-upgrade
+preservation were qualified locally, without injecting failures into the live demo.
+
+## Qualified single-upgrade Root transition
+
+The 0.204.1 host admits one exact pre-0.204 Root module,
+`e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296`, for maintenance
+after completed child work. Its controller-only replicated creation observation
+(ID 21) and single-upgrade observation (unit ID 25) together describe the entire
+old journal. Compare both records, including an empty slot, before preparing the
+install. Normalize only the already excluded live page count and executable
+marker. Preserve each original reply and signed attempt separately; do not
+invent a synthesized authenticated response. The replacement uses the current
+full-custody postflight, and only its completed receipt advances future authority.
+
+The exact predecessor hash already belongs to the immutable maintenance plan;
+it selects these read contracts before dispatch. Unknown hashes retain the
+current full-custody requirement. There is no endpoint probing or fallback on
+rejection, no unbound live read for child recovery, no pending-attempt re-signing
+and no old-plan rewriting. The operator still owns an exclusive maintenance
+window. Active/uncertain work, other old modules and Root replacement remain
+unqualified. The known predecessor cannot represent multiple historical upgrades.
+
+Research reuses and rereads the pinned legacy component-operation owner and
+lifecycle-boundary regressions at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`,
+plus the `aed32be2afbaf66d7e2867292da52f75ce028e41` history recorded below.
+Preserve exact intent, refusal on changed custody and failed-upgrade preservation;
+legacy's catalogue and retries do not establish this transition. Inspect the
+single-slot engine and private endpoint mounts at Canic `v0.203.1` (`a2ecaa3`).
+The retained binary is a behavioral witness, not a reproducible-build claim.
+Keep it under `qualification/m1-tests/fixtures/` so the normal Root suite always
+exercises this supported predecessor rather than silently skipping a cache input.
+
+Focused qualification passes four maintenance/authority unit tests, the remaining
+signer tests, Host/CLI and Root-fixture Clippy, and the installed Root suite:
+seven passed, two older unrelated fixtures remain opt-in. Installed cases cover
+empty and completed single slots, retained ID-25 historical evidence, untracked
+Scheduled refusal before install preparation, lost installation-reply recovery
+without another installation, unchanged creation records/controllers/child, and
+a subsequent child upgrade bound to the maintained Root. Existing greeting,
+profile, two-fleet and current-Root maintenance journeys also pass. Logs are
+under `target/evidence/0.204.1/predecessor/`. Runtime code is unchanged.
+
+## Post-push review: 0.204.0
+
+Review pushed commit `b37a274` against App → Fleets → Canisters, CLI planning and
+status callers, custody checks, signed installation and bounded runtime history.
+Whole-fleet convergence reuses the existing plan publisher and effect owners;
+maintenance retains both custody observations before accepting completion.
+No new aliases, deployed roles or supplier dependencies were introduced. Old
+journal readers preserve required v1/v2 state and are exercised by migration
+qualification; they are not redundant deployment modes.
+
+One concrete leftover is `crates/canic-host/src/plan.rs::retain_locked`, whose
+only caller is now in that module. Narrow its visibility in 0.204.1 rather than
+keeping an unnecessary internal entrypoint. No further actionable duplication
+was found in this focused review. The documented old-Root bootstrap,
+active-work maintenance and multiple-child limits remain separate future work.
+
 ## 0.204.0 release qualification
 
 On 2026-11-14, adopt published Toko Tooling 0.43.2 through its authenticated
