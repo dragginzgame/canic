@@ -50,6 +50,27 @@ authenticated tooling installer.
   Existing IDs are observation declarations and block new creation in that slot.
   `profile_manager: true` selects only the demo's read-only status adapter.
 
+## Post-push design review
+
+After every push, review the pushed changes and their affected callers against
+the current design and actual consumer needs before starting the next increment.
+The purpose is to prevent the drift, accumulated leftovers and technical debt
+that made legacy Canic difficult to evolve.
+
+- Check domain boundaries, ownership, CLI/config semantics and documentation for
+  disagreement with each other or with the intended App → Fleets → Canisters model.
+- Look for obsolete paths, terminology, aliases, compatibility scaffolding,
+  duplicated policy, unused dependencies and temporary mechanisms left behind.
+- Challenge abstractions, modes and infrastructure without a demonstrated need.
+  Prefer deletion or simplification while preserving required safety and recovery
+  guarantees; do not replace sediment with another layer of machinery.
+- Report concrete findings with code locations and the smallest corrective action,
+  or state the reviewed scope and that no actionable findings were found. Record
+  deferred findings in the relevant design/work notes so they are not forgotten.
+
+Keep this a focused review, not an automatic full audit or test-suite rerun.
+The review does not itself authorize another push or an unrelated redesign.
+
 ## Changelog examples
 
 At each user-facing increment, include a few short, copyable `canic` command
