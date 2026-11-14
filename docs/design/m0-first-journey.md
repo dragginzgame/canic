@@ -18,6 +18,138 @@ This record contains scoped decisions and evidence, not a second implementation
 backlog. The first product is the [M1 Hello World loop](../../README.md), followed
 by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
+## 0.203.0 release qualification
+
+The complete local Linux gate, `make ci`, passed before version preparation:
+formatting, snapshot/dependency agreement, native/Wasm lint and docs, host/CLI
+unit tests, creation/funding boundaries, maintenance, artifact custody, direct
+deployment, profile persistence, autonomous growth and Root/fleet journeys.
+Two historical migration fixtures remain explicitly ignored by default because
+they require separately supplied old executables; this run does not renew those
+historical migration claims. No mainnet mutation is part of this release.
+
+Registry freshness review on 2026-11-14 found every direct first-party supplier
+in the product and required qualification graphs current: Host FS/Process/Artifacts
+0.78.0, Text 0.75.0, Platform 0.33.3, Runtime 0.22.4, Storage 0.74.1, Timers 0.44.2,
+Wire 0.22.1, Testkit 0.105.0 and Tooling 0.43.1. Preparation changes only local
+Canic versions in both locks; no dependency refresh or crates.io publication.
+The installed 0.203.0 CLI reports the final version, and its generated-source
+build plus two-fleet simulator journey passed again (15.83s).
+
+## Requested tooling and Testkit refresh
+
+Adopt Toko Tooling 0.43.1 through the authenticated installer and Testkit 0.105.0
+in qualification. Review Testkit's published source revision
+`9378ecb023aaff406a492d3f9bf18dd58bdb8221`: its baseline-pool removal affects no
+Canic caller, which already owns fresh instances and explicit close. Its Host
+0.78 dependencies replace the private 0.77 copies and remove `command-fds`/`nix`.
+No other supplier refresh is required. A concurrent Platform Types 0.20.4 lock
+selection was preserved; final qualification uses that combined graph.
+
+The tooling preview retained all executable payloads and tool catalogs unchanged;
+the updated baseline adds the changelog quick-start requirement, now reflected
+in the pending entry. Installation, prepared-tool admission, snapshot/dependency
+agreement and formatting passed. All M0/M1 Testkit callers passed Clippy, and
+the installed whole-fleet recovery/isolation journey passed in 13.98 seconds
+with Testkit 0.105.0. These checks cover local Linux simulator use; no mainnet
+deployment or release is part of this refresh.
+
+## Starter workflow simplification
+
+The starter now has one app build command and one bounded discovery catalog.
+Generated app definitions own workspace/package recipes and replaceable Wasm
+outputs. The artifact builder remains the sole compilation owner, uses the
+selected workspace working directory, builds one library with --locked, and
+retains no deployment authority. App build prepares an absent lockfile once;
+existing locks survive repeated builds. Source generation defaults to the CLI's
+matching checkout, with an explicit source override still available.
+
+Research reuses legacy configuration and workflow evidence below at
+377fbceb3994c9d1f3033979ef4e4ce9e6b85801, plus canister_build/{mod.rs,tests.rs}.
+Build history 95bdb4ed61aaead6bddfc4a68f6e509063106f64 and its
+wire_schema/build/{mod.rs,tests/mod.rs} change distinguish package/workspace
+ownership from invocation context. Retain explicit package ownership, locked
+compilation and supplied Root code. Omit the old cache/release-set/schema
+machinery: this consumer needs two ordinary Wasm outputs, not that framework.
+
+Listings and selectors share current/direct-child config discovery, matching
+declared identities and refusing duplicates. Discovery is bounded (1024 entries,
+64 configs), skips generated/hidden directories and child symlinks, and never
+searches ancestors. Creation still targets the explicit/default config rather
+than redirecting into a discovered project. Explicit config selection wins.
+
+Cancellation is local revocation under the existing journal lock, permitted only
+while Root/child directories contain the original approval inputs. Any effect
+preparation, even an incomplete attempt directory, blocks cancellation. Keep the
+original approval and revocation; old apply always refuses. Active inventory and
+reservation checks omit revoked approvals but validate their retained evidence.
+No timer, signature or remote management slot is reset. This preserves legacy's
+unknown-outcome rule while giving genuinely unsubmitted expired plans an exit.
+
+Planning may read a qualified ICP identity's public principal; approval still
+binds the exact principal. Human output exposes UTC deadlines, budgets and
+scope-preserving continuations. The default signer selection has one CLI owner.
+The main tutorial now uses whole-fleet deployment; the duplicated individual
+bootstrap recipe and stale pending-deployment claims are retired. Docs distinguish
+replaceable builds from config/journal custody and external identity storage.
+
+Evidence: 59 Host unit tests, 12 CLI context tests, two continuation/authority
+argument tests, Host/CLI Clippy and Host Rustdoc passed. The installed whole-fleet
+simulator test passed in 18.67s, including generated-source defaults, app builds,
+lock preservation, identity-based planning, two fleets, lost-reply recovery and
+replay without another signing attempt. The installed CLI smoke check also
+selected a nested app whose directory differed from its declared name, cancelled
+and replaced a pristine approval, and refused applying its revoked digest.
+Anonymous mainnet planning was correctly refused. No mainnet deployment or release is part
+of this cleanup.
+
+## First whole-fleet approval
+
+The first slice composes exactly one new Root and its new app. The fleet envelope
+binds their names, both artifacts, network/operator, Root debit and child attachment,
+and fixed dispatch/deadlines. A typed `CreatedCanister` reference names the Root
+creation digest. Only its retained result and matching completion receipt can
+materialize the child's immutable plan. The fleet digest uses bounded Wire;
+existing single-canister plan encodings and signed requests are unchanged.
+
+Research at legacy `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` reuses
+`component_operation/{workflow,ops}/mod.rs`, `component_operation/tests.rs` and
+`component_topology/mod.rs`. The workflow history at
+`4176ee97405185bf4780b5ada0f9206ead750313` and parent
+`0509ec870891515923f79d3932ece127b351cd15` retains the same-operation resume
+contract while changing timer ownership. Preserve immutable review authority,
+intent before submission, correlated outcomes, failed reads as unknown and
+parent-before-child resolution. Do not import pools, Coordinator/Store roles or
+a generic transport/workflow framework for this two-step consumer.
+
+One journal lock covers publication and apply. Atomic directory publication
+retains both artifacts and the complete fleet approval before effects. Root and
+child use the existing effect/signing handlers; child materialization resumes
+from Root's retained output without changing the review. Replanning never renews
+authority. A new Root cannot start after child admission closes. Already-issued
+Root work may settle under its original final deadline; if child admission is
+then too late, the fleet remains incomplete with the funded Root retained.
+Uncertainty never grants a second creation or a replacement schedule.
+
+Status and call select the composed operation; fleet inventory projects its
+deployment steps with the shared status/apply address. Views remain read-only,
+and reported Ready does not create a completion receipt. App definitions and
+fleet bindings remain unchanged by deployment. The generated README now uses
+the fleet workflow. Old individual operation guides remain for those deployments.
+This is new-fleet creation and replay, not arbitrary desired-state convergence:
+larger trees, adoption, fleet upgrades and cascading discovery remain outside
+this qualified slice.
+
+Local qualification passed: 55 Host and 37 CLI unit tests, Host/CLI Clippy,
+Host Rustdoc and both workspaces' formatting. The installed whole-fleet CLI
+test deployed two isolated fleets, recovered a lost admission reply, retained
+completion and replayed without another signer invocation or creation (14.16s).
+The existing individual creation/upgrade CLI regression also passed (17.43s).
+Final inventory review preserved partial results when a fleet journal is busy;
+the focused fleet-approval and partial-inventory regressions passed after that
+correction. `make canic` builds the current CLI. These are local simulator
+results, not mainnet qualification; this increment remains unreleased.
+
 ## 0.202.0 release scope and supplier review
 
 This release contains the completed one-child upgrade, live progress, retained
@@ -577,6 +709,23 @@ adoption measurements and broader production lifecycle remain unqualified; this
 review does not close M0 or admit the optional capability catalogue.
 
 ### Legacy evidence applied to configuration and terminal output
+
+The named-directory lookup reuses this pinned configuration/history research and
+rechecks legacy `config_discovery/{mod.rs,tests.rs}` at the same revision below.
+Retain explicit selection, bounded discovery and validation of declared app
+identity. Listings and selection now share the current/direct-child config
+catalog; the earlier named-directory fallback is retired. Explicit config paths
+always win. Duplicate identities require explicit selection. The recursive legacy
+workspace scanner and ancestor search are unnecessary here. Malformed discovered config blocks selection;
+an app name cannot contain path traversal, and a directory name never substitutes
+for validated config contents. All CLI contexts share the Host resolver; relative
+artifacts and journals continue to belong to the selected config.
+Validation passed: 23 Host config tests, 12 CLI context tests, Host/CLI Clippy,
+Host Rustdoc and formatting. The installed CLI also resolved a generated starter
+beside an unrelated current config for listings, fleet initialization, app edits,
+planning and status, while preserving the current config and selecting the
+starter's journal. Explicit `--config` still refused the wrong app. No apply or
+network mutation was part of that lookup check.
 
 The 0.200.1 configuration increment was compared with committed legacy revision
 `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`. This is a scoped source and history

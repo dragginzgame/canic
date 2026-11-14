@@ -55,10 +55,17 @@ pub fn build(
     features: &[String],
     destination: Option<&Path>,
 ) -> Result<PathBuf> {
+    let manifest = manifest.canonicalize().map_err(supplier)?;
     let mut command = Command::new("cargo");
     command
+        .current_dir(
+            manifest
+                .parent()
+                .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?,
+        )
         .args([
             "build",
+            "--lib",
             "--locked",
             "--release",
             "--target",

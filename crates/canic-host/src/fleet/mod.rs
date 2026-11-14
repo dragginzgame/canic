@@ -20,7 +20,7 @@ pub struct Fleet {
     pub scope: &'static str,
     /// Known targets, deduplicated by exact network trust binding and principal.
     pub canisters: Vec<FleetCanister>,
-    /// Retained operations, including plans without a known target.
+    /// Retained deployment steps, including unknown targets. Fleet steps share their approval digest.
     pub operations: Vec<FleetOperation>,
     /// Local records that could not be admitted. Other records remain visible.
     pub issues: Vec<String>,
@@ -57,7 +57,7 @@ pub struct FleetUpgrade {
     pub observation_error: Option<String>,
 }
 
-/// One admitted operation's public observation projection, excluding signed requests.
+/// One admitted deployment step's public observation projection, excluding signed requests.
 #[derive(Debug, Serialize)]
 pub struct FleetOperation {
     /// Exact planned Root-owned work, used only to select and check read-only reports.
@@ -68,7 +68,7 @@ pub struct FleetOperation {
     pub upgrade: Option<canic_management_protocol::upgrade::Approval>,
     /// Names committed in the approved plan, if created through a fleet configuration.
     pub deployment: Option<crate::DeploymentName>,
-    /// Digest of the original approved plan.
+    /// Digest of the original approval; whole-fleet steps share this status/apply address.
     pub operation: String,
     /// Digest of the exact network trust binding.
     pub network_id: String,
@@ -130,15 +130,23 @@ pub(crate) fn local_operation(
     id: &str,
     now: u64,
 ) -> Result<(FleetOperation, Network)> {
-    let state = operation::status(root, id)?;
+    let store = crate::store::Store::open(root)?;
+    local_operation_at(&store.operation(id)?, id, now)
+}
+
+pub(crate) fn local_operation_at(
+    dir: &Path,
+    id: &str,
+    now: u64,
+) -> Result<(FleetOperation, Network)> {
+    let state = operation::status_at(dir, id)?;
     let plan: Plan = serde_json::from_value(state["plan"].clone()).map_err(supplier)?;
     let receipt: Option<Receipt> =
         serde_json::from_value(state["receipt"].clone()).map_err(supplier)?;
-    let dir = root.join(id);
     let canister = if let Some(target) = &plan.target {
         Some(target.clone())
     } else if plan.management.is_some() {
-        crate::managed::evidence(&dir, &plan)?.and_then(|status| status.worker)
+        crate::managed::evidence(dir, &plan)?.and_then(|status| status.worker)
     } else if dir
         .join("create/reply.bin")
         .try_exists()
@@ -401,6 +409,29 @@ pub(crate) fn inventory(
     missing_allowed: bool,
     started_at_ns: u64,
 ) -> Result<Inventory> {
+    let (ids, mut issues) = operation_ids(root, missing_allowed)?;
+    let mut records = Vec::new();
+    for id in ids {
+        let result = (|| {
+            if crate::fleet_plan::exists(&root.join(&id))? {
+                let _store = crate::store::Store::open(root)?;
+                crate::fleet_plan::inventory(&root.join(&id), &id, started_at_ns)
+            } else {
+                local_operation(root, &id, started_at_ns).map(|record| vec![record])
+            }
+        })();
+        match result {
+            Ok(mut found) => records.append(&mut found),
+            Err(error) => issues.push(format!("{id}: {error}")),
+        }
+    }
+    Ok(Inventory { records, issues })
+}
+
+pub(crate) fn operation_ids(
+    root: &Path,
+    missing_allowed: bool,
+) -> Result<(Vec<String>, Vec<String>)> {
     let mut ids = Vec::new();
     let mut issues = Vec::new();
     let entries = match std::fs::read_dir(root) {
@@ -431,14 +462,7 @@ pub(crate) fn inventory(
         }
     }
     ids.sort();
-    let mut records = Vec::new();
-    for id in ids {
-        match local_operation(root, &id, started_at_ns) {
-            Ok(record) => records.push(record),
-            Err(error) => issues.push(format!("{id}: {error}")),
-        }
-    }
-    Ok(Inventory { records, issues })
+    Ok((ids, issues))
 }
 
 /// Observe locally retained deployments using anonymous certified metadata reads.

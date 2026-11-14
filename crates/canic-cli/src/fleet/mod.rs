@@ -76,7 +76,7 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
     write!(html,
         "<header><p class=eyebrow>CANIC / FLEET OBSERVATION</p><h1>Your deployment fleet</h1><p>Snapshot collected <time data-ns=\"{}\">{} Unix seconds</time>. Regenerate the report to refresh.</p></header><div class=summary><strong>{} canisters</strong><strong>{} operations</strong><strong>{} inventory issues</strong></div><p class=scope>Scope: local deployment journal and explicitly selected observations. Certified module and controller reads are sampled separately. Canister cycle balances and running/stopped status are not observed.</p>",
         snapshot.finished_at_ns, snapshot.finished_at_ns / 1_000_000_000,
-        snapshot.canisters.len(), snapshot.operations.len(), snapshot.issues.len()
+        snapshot.canisters.len(), snapshot.operations.iter().map(|operation| &operation.operation).collect::<std::collections::BTreeSet<_>>().len(), snapshot.issues.len()
     ).expect("writing to a String");
     if let Some(config) = &snapshot.configuration {
         write!(html, "<h2>App: {}</h2><h3>Fleet: {}</h3><p>Local declarations; deployment evidence is shown separately.</p><p>Configured network: {}</p>", escape(&config.app), escape(&config.fleet), escape(&configured_network(config))).expect("writing to String");

@@ -948,3 +948,217 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     );
     owner.close().await;
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn whole_fleet_cli_binds_future_root_and_replays_without_new_effects() {
+    let mut owner = PocketIcStartupConfig::Spawn {
+        server_binary: server_assets::check(&repo().join("target/m0/server")).unwrap(),
+        timeout: Duration::from_secs(30),
+        server_hard_ttl: Some(Duration::from_secs(300)),
+        server_idle_ttl: None,
+        server_output_files: None,
+    }
+    .build_instance(
+        PocketIcBuilder::new()
+            .with_nns_subnet()
+            .with_application_subnet(),
+    )
+    .await
+    .unwrap();
+    let routing = owner.instance().create_canister().await;
+    let url = owner.instance_mut().make_live(None).await.to_string();
+    let key: String = owner
+        .instance()
+        .root_key()
+        .await
+        .unwrap()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let artifacts = repo().join("target/root");
+    let workspace = artifacts.join(format!(
+        "whole-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let executable = std::env::var_os("CANIC_CLI").unwrap();
+    let initialized = std::process::Command::new(&executable)
+        .args([
+            "app",
+            "init",
+            "starter",
+            "--fleet",
+            "first",
+            "--network",
+            "local",
+            "--url",
+            &url,
+            "--root-key",
+            &key,
+            "--routing-canister",
+            &routing.to_text(),
+            "--source",
+            workspace.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        initialized.status.success(),
+        "{}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
+    let config = workspace.join("canic.json");
+    cli(&config, &["app", "build"]);
+    let lock = std::fs::read(workspace.join("Cargo.lock")).unwrap();
+    cli(&config, &["app", "build"]);
+    assert_eq!(lock, std::fs::read(workspace.join("Cargo.lock")).unwrap());
+    cli(
+        &config,
+        &[
+            "fleet",
+            "init",
+            "second",
+            "--network",
+            "local",
+            "--url",
+            &url,
+            "--root-key",
+            &key,
+            "--routing-canister",
+            &routing.to_text(),
+        ],
+    );
+    let config_bytes = std::fs::read(&config).unwrap();
+    let mut identities = Vec::new();
+    for fleet in ["first", "second"] {
+        let dispatch = (owner
+            .instance()
+            .get_time()
+            .await
+            .as_nanos_since_unix_epoch()
+            / 1_000_000_000
+            + 40)
+            .to_string();
+        let plan_args = [
+            "fleet",
+            "plan",
+            "--fleet",
+            fleet,
+            "--identity",
+            "anonymous",
+            "--execute-at",
+            &dispatch,
+        ];
+        let planned = cli(&config, &plan_args);
+        let id = planned["operation"].as_str().unwrap();
+        let journal = PathBuf::from(planned["state_dir"].as_str().unwrap());
+        assert_eq!(cli(&config, &plan_args), planned);
+        assert!(cli(&config, &["fleet", "status", id, "--fleet", fleet])["child"].is_null());
+        assert!(status_text(&config, id, fleet).contains("Waiting for retained Root completion"));
+        // Cross-fleet selection refuses before invoking an absent signer.
+        let other = if fleet == "first" { "second" } else { "first" };
+        let rejected = std::process::Command::new(&executable)
+            .args([
+                "fleet",
+                "apply",
+                id,
+                "--config",
+                config.to_str().unwrap(),
+                "--fleet",
+                other,
+                "--state-dir",
+                journal.to_str().unwrap(),
+                "--identity",
+                "anonymous",
+                "--icp-bin",
+                "must-not-run",
+            ])
+            .output()
+            .unwrap();
+        assert!(!rejected.status.success());
+        assert!(String::from_utf8_lossy(&rejected.stderr).contains("does not belong"));
+        let apply = [
+            "fleet",
+            "apply",
+            id,
+            "--fleet",
+            fleet,
+            "--identity",
+            "anonymous",
+        ];
+        let pending = cli(&config, &apply);
+        assert_eq!(pending["operation"], id);
+        assert_eq!(pending["child"]["status"]["phase"], "Scheduled");
+        let root = CanisterId::from_text(pending["root"]["canister"].as_str().unwrap()).unwrap();
+        let child_dir = journal.join(id).join("child");
+        let signed = std::fs::read(child_dir.join("stage/signed.json")).unwrap();
+        // Crash after admission, before retaining its reply: same aggregate approval resumes.
+        std::fs::remove_file(child_dir.join("stage/reply.bin")).unwrap();
+        assert_eq!(
+            cli(&config, &apply)["child"]["status"]["phase"],
+            "Scheduled"
+        );
+        assert_eq!(
+            std::fs::read(child_dir.join("stage/signed.json")).unwrap(),
+            signed
+        );
+        owner.instance().stop_progress().await;
+        owner.instance().advance_time(Duration::from_secs(45)).await;
+        settle(owner.instance()).await;
+        owner.instance().auto_progress().await;
+        let view = cli(&config, &["fleet", "show", "--fleet", fleet]);
+        assert_eq!(view["issues"], serde_json::json!([]));
+        assert_eq!(view["canisters"].as_array().unwrap().len(), 2);
+        assert_eq!(view["managers"][0]["reported"]["phase"], "Ready");
+        assert!(!child_dir.join("receipt.json").exists());
+        let completed = cli(&config, &apply);
+        let child =
+            CanisterId::from_text(completed["child"]["canister"].as_str().unwrap()).unwrap();
+        assert_eq!(completed["child"]["controller"], root.to_text());
+        let calls = status(owner.instance(), root).await.attempts;
+        assert_eq!(calls, [1; 3]);
+        let repeat = cli(
+            &config,
+            &[
+                "fleet",
+                "apply",
+                id,
+                "--fleet",
+                fleet,
+                "--identity",
+                "anonymous",
+                "--icp-bin",
+                "must-not-run",
+            ],
+        );
+        assert_eq!(repeat, completed);
+        assert_eq!(status(owner.instance(), root).await.attempts, calls);
+        assert_eq!(cli(&config, &plan_args), planned);
+        assert_eq!(
+            cli(
+                &config,
+                &["fleet", "call", id, "--fleet", fleet, "--name", "fleet"]
+            )["greeting"],
+            "Hello from Canic, fleet!"
+        );
+        identities.push((root, child));
+    }
+    assert_ne!(identities[0].0, identities[1].0);
+    assert_ne!(identities[0].1, identities[1].1);
+    let subnet = owner.instance().get_subnet(routing).await.unwrap();
+    assert_eq!(
+        owner
+            .instance()
+            .get_subnet_metrics(subnet)
+            .await
+            .unwrap()
+            .num_canisters,
+        5
+    );
+    assert_eq!(std::fs::read(config).unwrap(), config_bytes);
+    owner.close().await;
+}

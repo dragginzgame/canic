@@ -17,6 +17,53 @@ mod management;
 mod tests;
 
 pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String> {
+    if let Some(value) = state.get("fleet_plan") {
+        let plan: canic_host::FleetPlan = serde_json::from_value(value.clone())
+            .map_err(|error| Error::Supplier(Box::new(error)))?;
+        let operation = state["operation"]
+            .as_str()
+            .ok_or_else(|| Error::Invalid("missing fleet operation".into()))?;
+        let mut output = fleet_preview(operation, &plan, journal)?;
+        if !state["cancellation"].is_null() {
+            output.push_str("Cancelled before effect preparation. This approval cannot apply.\n");
+            return Ok(output);
+        }
+        let evidence = |step: &serde_json::Value| -> String {
+            if step.is_null() {
+                return "Waiting for retained Root completion".into();
+            }
+            if !step["receipt"].is_null() {
+                return "Completion receipt retained".into();
+            }
+            step["management"]["phase"].as_str().map_or_else(
+                || "No completion receipt; inspect host effects with --json".into(),
+                |phase| format!("{phase}; no completion receipt"),
+            )
+        };
+        output.push_str(&table::render(
+            &["STEP", "RETAINED EVIDENCE"],
+            &[
+                ["Root".into(), evidence(&state["root"])],
+                ["Application".into(), evidence(&state["child"])],
+            ],
+            &[Alignment::Left; 2],
+            Options {
+                column_gap: 2,
+                header_separator: true,
+            },
+        ));
+        output.push_str(
+            "\n\nLocal evidence only. Resume this same fleet operation with fleet apply.\n",
+        );
+        if !state["child"]["management"].is_null() {
+            output.push_str(&management::render(
+                &state["child"]["management"],
+                false,
+                !state["child"]["receipt"].is_null(),
+            )?);
+        }
+        return Ok(output);
+    }
     let plan: Plan = serde_json::from_value(state["plan"].clone())
         .map_err(|error| Error::Supplier(Box::new(error)))?;
     let receipt: Option<Receipt> = serde_json::from_value(state["receipt"].clone())
@@ -143,4 +190,87 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     }
     output.push_str("Current code, controllers, readiness and balances are not checked here.\n");
     Ok(output)
+}
+
+pub(crate) fn fleet_preview(
+    id: &str,
+    plan: &canic_host::FleetPlan,
+    journal: &Path,
+) -> Result<String> {
+    if plan.digest()? != id {
+        return Err(Error::Invalid("fleet approval digest mismatch".into()));
+    }
+    let root = plan
+        .root
+        .deployment
+        .as_ref()
+        .ok_or_else(|| Error::Invalid("missing Root slot".into()))?;
+    let rows = [
+        [
+            root.canister.clone(),
+            "operator".into(),
+            format!("{} debit ceiling", cycles(plan.root.creation_cycles)),
+        ],
+        [
+            plan.child.deployment.canister.clone(),
+            format!("{}.result.canister", root.canister),
+            format!("{} from Root", cycles(plan.child.creation_cycles)),
+        ],
+    ];
+    Ok(format!(
+        "CANIC FLEET PLAN\nOperation: {}\nApp: {}\nFleet: {}\nNetwork: {}\nOperator: {}\nJournal: {}\n\n{}\n\nRoot module: {}\nApplication module: {}\nAdmission before: {}\nChild effect deadline: {}\n\n",
+        terminal_text(id),
+        terminal_text(&root.app),
+        terminal_text(&root.fleet),
+        terminal_text(&match &plan.root.network {
+            Network::Mainnet => "IC mainnet".into(),
+            Network::Local { url, .. } => format!("Local replica: {url}"),
+        }),
+        terminal_text(&plan.root.controller),
+        terminal_text(&journal.to_string_lossy()),
+        table::render(
+            &["CANISTER", "CONTROLLER", "BUDGET"],
+            &rows,
+            &[Alignment::Left; 3],
+            Options {
+                column_gap: 2,
+                header_separator: true
+            }
+        ),
+        plan.root.artifact.sha256,
+        plan.child.artifact.sha256,
+        deadline(plan.child.execute_at_ns),
+        deadline(plan.child.execute_at_ns + 600_000_000_000)
+    ))
+}
+
+fn deadline(ns: u64) -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |time| time.as_secs());
+    let seconds = ns / 1_000_000_000;
+    let relative = if seconds > now {
+        format!("in {}m {}s", (seconds - now) / 60, (seconds - now) % 60)
+    } else {
+        "expired".into()
+    };
+    format!(
+        "{} ({relative})",
+        ic_host_text::timestamp::format_utc_timestamp_secs(seconds)
+    )
+}
+
+fn cycles(value: u64) -> String {
+    let scaled = ic_host_text::quantity::scaled_quantity_text(
+        u128::from(value),
+        &[
+            (1_000_000_000_000, "T cycles"),
+            (1_000_000_000, "B cycles"),
+            (1, "cycles"),
+        ],
+    );
+    scaled.map_or_else(
+        |_| format!("{value} cycles"),
+        |text| format!("{text} ({value})"),
+    )
 }

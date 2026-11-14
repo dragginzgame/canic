@@ -7,7 +7,7 @@ include vendor/toko-tooling/make/cargo-dependencies.mk
 .PHONY: help canic check test clippy doc lint ci m0-setup m0-test m0-maintenance-test m0-artifact-test m0-artifact-clippy m0-artifact-doc m0-clippy m0-doc m1-test m1-clippy m1-doc
 help:
 	@printf '%s\n' \
-	  'make canic               Build the Canic CLI (target/debug/canic)' \
+	  'make canic               Build and install canic on PATH' \
 	  'make profile             Build the profile demo client and deployment CLI' \
 	  'make profile-test        Qualify profile ownership, limits and persistent upgrade' \
 	  'make growth-test         Qualify one autonomous worker and interrupted effects' \
@@ -38,8 +38,10 @@ help:
 	  'make toko-tooling-check  Verify the installed tooling snapshot'
 
 canic:
-	cargo build --locked -p canic-cli --bin canic
-	@printf '%s\n' 'Run: ./target/debug/canic --help'
+	cargo install --locked --debug --path crates/canic-cli --root "$(HOME)/.local" --force
+	@test "$$(command -v canic)" = "$(HOME)/.local/bin/canic" || { printf '%s\n' 'The installed ~/.local/bin/canic is shadowed or unavailable on PATH.' >&2; exit 1; }
+	@canic --version
+	@printf '%s\n' 'Ready: canic --help'
 
 check:
 	cargo check --locked -p canic

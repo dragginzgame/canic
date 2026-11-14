@@ -59,9 +59,15 @@ pub(super) enum Commands {
 
 #[derive(Args)]
 pub(super) struct ConfigArgs {
-    /// Local application/fleet declarations.
-    #[arg(long, default_value = "canic.json", value_name = "PATH")]
-    pub(super) config: PathBuf,
+    /// Override the current/direct-child canic.json catalog.
+    #[arg(long, value_name = "PATH")]
+    pub(super) config: Option<PathBuf>,
+}
+
+impl ConfigArgs {
+    pub(super) fn path(&self, app: Option<&str>) -> canic_host::Result<PathBuf> {
+        canic_host::resolve_config_path(std::path::Path::new(""), self.config.as_deref(), app)
+    }
 }
 
 #[derive(Args)]
@@ -69,7 +75,7 @@ pub(super) struct FleetScope {
     /// Override the journal (default .canic/apps/APP/fleets/FLEET); without config, .canic.
     #[arg(long)]
     pub(super) state_dir: Option<PathBuf>,
-    /// Fleet config; defaults to canic.json when present. No config keeps the legacy journal flow.
+    /// Override the current/direct-child canic.json catalog.
     #[arg(long)]
     pub(super) config: Option<PathBuf>,
     /// Select an app; required when the config has multiple apps.
@@ -85,6 +91,11 @@ pub(super) struct FleetScope {
 
 #[derive(Subcommand)]
 pub(super) enum AppCommand {
+    /// Build every app canister from its declared Cargo recipe; deploys nothing.
+    Build {
+        #[command(flatten)]
+        selection: AppConfigArgs,
+    },
     /// Define or list reusable app canisters; affects declarations for every fleet.
     #[command(subcommand)]
     Canister(AppCanisterCommand),
@@ -102,18 +113,13 @@ pub(super) enum AppCommand {
         #[command(flatten)]
         network: NetworkArgs,
         /// Generate a new standalone source workspace and its config in this directory.
-        #[arg(
-            long,
-            value_name = "DIRECTORY",
-            conflicts_with = "config",
-            requires = "canic_source"
-        )]
+        #[arg(long, value_name = "DIRECTORY", conflicts_with = "config")]
         source: Option<PathBuf>,
         /// Matching local Canic checkout supplying the runtime and greeting contract.
         #[arg(long, value_name = "DIRECTORY", requires = "source")]
         canic_source: Option<PathBuf>,
     },
-    /// List apps declared in the local config; makes no network calls.
+    /// List apps in the current and direct-child configs; makes no network calls.
     List {
         #[command(flatten)]
         config: ConfigArgs,
@@ -178,6 +184,13 @@ pub(super) enum ArtifactCommand {
 
 #[derive(Subcommand)]
 pub(super) enum FleetCommand {
+    /// Cancel an unsubmitted whole-fleet approval; retain its evidence and release its slots.
+    Cancel {
+        #[command(flatten)]
+        scope: FleetScope,
+        #[arg(value_name = "OPERATION")]
+        digest: String,
+    },
     /// Bind existing canister IDs or list this fleet's app-defined slots; local config only.
     #[command(subcommand)]
     Canister(CanisterCommand),
@@ -203,7 +216,8 @@ pub(super) enum FleetCommand {
         #[arg(long)]
         app: Option<String>,
     },
-    /// Plan one canister creation or upgrade in the selected fleet; writes only local evidence.
+    /// Plan a Root-plus-app fleet, or select one canister; writes only local evidence.
+    #[command(mut_arg("icp_bin", |arg| arg.conflicts_with("controller")))]
     Plan {
         #[command(flatten)]
         scope: FleetScope,
@@ -214,10 +228,20 @@ pub(super) enum FleetCommand {
         #[arg(long, value_name = "WASM_FILE")]
         wasm: Option<PathBuf>,
         #[command(flatten)]
-        network: NetworkArgs,
+        network: Box<NetworkArgs>,
         /// Controller principal to bind into this exact plan.
-        #[arg(long, value_name = "PRINCIPAL")]
-        controller: String,
+        #[arg(
+            long,
+            value_name = "PRINCIPAL",
+            required_unless_present = "identity",
+            conflicts_with = "identity"
+        )]
+        controller: Option<String>,
+        /// Read this signer's public principal and bind it as the controller; signs nothing.
+        #[arg(long, required_unless_present = "controller")]
+        identity: Option<String>,
+        #[command(flatten)]
+        signer: SignerArgs,
         /// Existing canister to upgrade, preserving its principal.
         #[arg(long, value_name = "PRINCIPAL", requires = "previous_module")]
         target: Option<String>,
@@ -227,11 +251,11 @@ pub(super) enum FleetCommand {
         /// Admit the named child through its Root parent, pinned to this reviewed module hash.
         #[arg(long, value_name = "SHA256", requires = "canister")]
         root_module: Option<String>,
-        /// Unix seconds for a new Root plan's dispatch; default is ten minutes from planning.
+        /// Unix seconds for Root's child dispatch; default is ten minutes from planning.
         /// Reopening a slot keeps its original schedule.
-        #[arg(long, value_name = "UNIX_SECONDS", requires = "root_module")]
+        #[arg(long, value_name = "UNIX_SECONDS")]
         execute_at: Option<u64>,
-        /// Creation debit ceiling, including ledger fee; defaults to 1T for creation, zero for upgrade.
+        /// Creation debit ceiling including fee: whole-fleet Root defaults to 3T, single creation 1T, upgrade zero.
         #[arg(long, value_parser = clap::value_parser!(u64).range(0..=5_000_000_000_000))]
         cycles: Option<u64>,
     },
@@ -243,9 +267,8 @@ pub(super) enum FleetCommand {
         digest: String,
         #[arg(long)]
         identity: String,
-        /// ICP CLI executable used only to sign offline. Identity passwords stay in its terminal prompt.
-        #[arg(long, default_value = "icp")]
-        icp_bin: PathBuf,
+        #[command(flatten)]
+        signer: SignerArgs,
     },
     /// Inspect local retained progress; makes no network calls.
     Status {
@@ -351,6 +374,7 @@ impl FleetCommand {
     pub(super) fn scope(&self) -> Option<&FleetScope> {
         match self {
             Self::Plan { scope, .. }
+            | Self::Cancel { scope, .. }
             | Self::Apply { scope, .. }
             | Self::Status { scope, .. }
             | Self::Show { scope, .. }
@@ -358,6 +382,17 @@ impl FleetCommand {
             Self::Canister(_) | Self::Init { .. } | Self::List { .. } | Self::View { .. } => None,
         }
     }
+}
+
+pub(super) fn checkout() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+#[derive(Args)]
+pub(super) struct SignerArgs {
+    /// Override the prepared signer in this Canic checkout's .tools/ic/bin/icp.
+    #[arg(long, default_value_os_t = checkout().join(".tools/ic/bin/icp"), hide_default_value = true)]
+    pub(super) icp_bin: PathBuf,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

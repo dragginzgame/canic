@@ -29,7 +29,15 @@ authenticated tooling installer.
   and existing identities. Spawn permissions, placement and budgets still require
   their admitted management contracts. Initialization declares an app and its
   first fleet; optional source generation creates a standalone greeting workspace.
-  Whole-fleet management remains upcoming work.
+  Whole-fleet plan/apply currently accepts a new Root-plus-app tree only. One
+  immutable fleet approval binds both artifacts and the Root's typed creation
+  output; both steps reuse the existing signer/effect owners under the journal
+  lock. Retain nested Root/child attempts, preserve original deadlines on replan,
+  and refuse competing individual plans. `fleet cancel` may release an approval
+  only before effect preparation; retain its revocation and never apply it again.
+  Once any effect preparation begins, preserve the reservation and resume it.
+  Larger trees, existing-fleet adoption
+  and whole-fleet upgrades remain upcoming work.
 - The managed starter is a small buildable Rust app with one application
   canister controlled by a Root/management owner. Whole-fleet reviewed convergence,
   cascading discovery and subtree operations are admitted product requirements;
@@ -94,15 +102,18 @@ authenticated tooling installer.
 - `canic app init` creates local `canic.json` declarations by default: it creates a missing
   config or adds a new app and its first fleet, refusing existing app names and
   preserving other apps. Configured journals are not created by initialization.
-  `--source DIRECTORY --canic-source CHECKOUT` instead creates a new standalone
+  `--source DIRECTORY` instead creates a new standalone
   source workspace with its own config, supplied Root and generated app declarations.
+  The supplying checkout defaults to the CLI build source; `--canic-source` overrides it.
   It conflicts with `--config`, requires the destination's parent to exist, and
   refuses occupied destinations. Publish source/config together through the Host
   FS no-replace directory owner; preserve uncertain staging on publication errors.
   Resolve the matching Canic checkout physically; use its contract dependency,
   supplier selections, toolchain and inherited lints. Do not select legacy Canic
-  from crates.io or copy Root management code into generated apps. Lockfile/tool
-  preparation remains explicit. `artifact build --output` publishes a replaceable
+  from crates.io or copy Root management code into generated apps. Tool
+  preparation remains explicit. `app build` owns declared workspace/package recipes,
+  prepares only missing Cargo locks, and builds both canisters through the locked
+  artifact builder. Preserve existing locks. `artifact build --output` publishes a replaceable
   build input; retained deployment artifacts still belong to the plan/journal owner.
   `canic fleet init` adds a fleet projecting the shared app definitions, with
   no existing identity bindings, journal creation or network effects. Config
@@ -119,6 +130,12 @@ authenticated tooling installer.
   fail before effects. Keep selectors scoped to commands that use them, with
   no aliases or saved current context. `app list` and unfiltered `fleet list`
   list all declarations; names being created by initialization remain required.
+  Explicit `--config` wins. Listings and selection share a bounded catalog of the
+  current and direct-child `canic.json` files. Match declared app identity, reject
+  duplicates and malformed configs, skip hidden/generated trees and child symlinks.
+  Never search ancestors or recursively scan. Use this same catalog for declarations,
+  edits and operations; creation of a new app
+  still targets the current config unless `--config` or `--source` is supplied.
   The current config is unversioned, with `apps.APP.canisters` definitions and
   `apps.APP.fleets.FLEET.canisters` identity bindings. Refuse the retired versioned
   layout rather than maintaining a second reader. Retained v1/v2 deployment plans
@@ -181,6 +198,12 @@ examples in fenced `sh` blocks in the root `CHANGELOG.md`. Place them near the
 top of the current entry or beside the relevant feature, rather than burying
 usage in prose or only linking to another document. Show supported fleet tasks,
 state necessary prerequisites and effects, and keep browser launches opt-in.
+`make canic` owns building and installing the CLI on PATH and verifying command
+resolution. User-facing instructions use plain `canic ...`, never build-directory
+executable paths, PATH exports or shell aliases. Keep explicit app/fleet/config
+selection appropriate to the stated working directory.
+Normal apply examples use the prepared default signer; reserve `--icp-bin` for
+explicit overrides and qualification fixtures.
 
 ## Development checks
 

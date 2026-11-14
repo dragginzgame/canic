@@ -196,6 +196,18 @@ pub(crate) fn retain(
                     "named planning inventory exceeds 128 operations".into(),
                 ));
             }
+            if crate::fleet_plan::exists(&entry.path())? {
+                let fleet = crate::fleet_plan::load(&entry.path(), &existing_id)?;
+                if crate::fleet_plan::cancelled(&entry.path(), &existing_id)? {
+                    continue;
+                }
+                if fleet.reserves(name) {
+                    return Err(Error::Blocked(format!(
+                        "fleet already belongs to operation {existing_id}; resume that whole-fleet approval"
+                    )));
+                }
+                continue;
+            }
             let existing: Plan = store::json(&entry.path().join("plan.json"))?;
             if existing.digest()? != existing_id {
                 return Err(Error::Invalid("retained plan digest mismatch".into()));

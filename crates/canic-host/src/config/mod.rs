@@ -6,9 +6,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod discovery;
 #[cfg(test)]
 mod tests;
 mod unique;
+pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 
 const MAX_CONFIG_BYTES: usize = 32 * 1024;
 
@@ -46,6 +48,19 @@ pub struct CanisterDefinition {
     /// Wasm input relative to the config file; exact bytes are retained by planning.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wasm: Option<PathBuf>,
+    /// Local Cargo recipe; no build input grants deployment authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<BuildInput>,
+}
+
+/// Explicit workspace manifest and package for an app-owned build.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildInput {
+    /// Workspace manifest, relative to the config file unless absolute.
+    pub manifest: PathBuf,
+    /// Cargo package producing one Wasm library.
+    pub package: String,
 }
 
 /// Fleet-owned observation binding; no application topology or artifact overrides.
@@ -167,6 +182,16 @@ impl Config {
         let mut membership = BTreeMap::new();
         for (app, definition) in &self.apps {
             name(app)?;
+            for canister in definition.canisters.values() {
+                if let Some(build) = &canister.build {
+                    name(&build.package)?;
+                    if build.manifest.as_os_str().is_empty() || canister.wasm.is_none() {
+                        return Err(Error::Invalid(
+                            "build recipe needs a manifest and Wasm output".into(),
+                        ));
+                    }
+                }
+            }
             if definition.fleets.is_empty() || definition.fleets.len() > 16 {
                 return Err(Error::Invalid("each app needs 1–16 fleets".into()));
             }
@@ -449,6 +474,19 @@ impl SelectedFleet {
     /// Refuses unreadable evidence or operations outside this app, fleet or network.
     pub fn check_operation(&self, root: &Path, id: &str) -> Result<()> {
         self.validate()?;
+        {
+            let store = crate::store::Store::open(root)?;
+            let dir = store.operation(id)?;
+            if crate::fleet_plan::exists(&dir)? {
+                return if crate::fleet_plan::load(&dir, id)?.belongs(self) {
+                    Ok(())
+                } else {
+                    Err(Error::Invalid(
+                        "operation does not belong to the selected app/fleet".into(),
+                    ))
+                };
+            }
+        }
         let (operation, network) = crate::fleet::local_operation(root, id, crate::now()?)?;
         let records = crate::fleet::inventory(root, false, crate::now()?)?.records;
         if !self.contains(&operation, &network, &self.known_targets(&records))

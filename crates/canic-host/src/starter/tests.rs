@@ -93,6 +93,37 @@ fn invalid_names_or_source_are_refused_before_any_staging() {
     std::fs::remove_dir_all(parent).unwrap();
 }
 
+#[test]
+fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
+    let parent = crate::tests::directory();
+    let destination = parent.join("starter");
+    let path = create_starter(
+        &destination,
+        "hello",
+        "mainnet",
+        Network::Mainnet,
+        &source(),
+    )
+    .unwrap();
+    let original = crate::load_config(&path).unwrap();
+    for case in 0..3 {
+        let mut config = original.clone();
+        let canisters = &mut config.apps.get_mut("hello").unwrap().canisters;
+        let root = canisters.get_mut("root").unwrap();
+        match case {
+            0 => root.build = None,
+            1 => root.build.as_mut().unwrap().manifest = "app/Cargo.toml".into(),
+            _ => root.wasm = Some("artifacts/app.wasm".into()),
+        }
+        std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
+        assert!(crate::build_app(&path, None).is_err());
+        assert!(!destination.join("Cargo.lock").exists());
+        assert!(!destination.join("artifacts").exists());
+        assert!(!destination.join(".canic").exists());
+    }
+    std::fs::remove_dir_all(parent).unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn source_alias_resolves_physically_and_destination_symlinks_are_not_replaced() {

@@ -5,11 +5,12 @@ Canic's first native CLI and deployable greeting application. The CLI lives in
 Wire contract in `crates/canic`, and the demo in `apps/hello/canister`.
 
 The [one-child Root journey](docs/demos/root.md) generates a greeting workspace
-and deploys its application through explicit Root-owned plan/apply approval.
+and deploys Root and its application through one fleet plan/apply approval.
 The installed local journey qualifies admission, lost-reply recovery and completion
 receipts. Run `make root-test`
-after simulator preparation. Whole-fleet deployment remains upcoming; existing
-mainnet demos are unchanged.
+after simulator preparation. The first fleet path supports a new Root-plus-app
+tree. Larger trees, adopting existing deployments and whole-fleet upgrades remain
+upcoming; existing mainnet demos are unchanged.
 
 The current increment also qualifies one Root-owned child upgrade locally,
 including retained outcomes, callback-loss recovery and application persistence.
@@ -58,8 +59,9 @@ Delivery starts with a hands-on Hello World deployment locally and on mainnet,
 followed by stateful composition and bounded autonomous operation. Each increment
 will include a runnable example and team-facing instructions so feedback can
 shape the next step. Early mainnet experiments do not imply production lifecycle
-support. Each deployment plan has one operator and one application canister;
-the CLI can inspect multiple retained deployments without a Coordinator or Store.
+support. A starter fleet approval composes Root and one application under one
+operator; individual canister plans remain available for existing workflows.
+The CLI can inspect multiple retained deployments without a Coordinator or Store.
 
 The multi-canister profile demo includes a browser fleet view showing deployed
 canisters, declared relationships and operation evidence, so the team can inspect
@@ -77,15 +79,16 @@ direct-cycle funding and owner maintenance on local PocketIC instances. Run
 `make m0-artifact-test` separately proves retained-artifact installation while
 the operator is absent, including maintenance and callback-loss cases.
 
-Build the CLI from the repository root:
+Build and install the CLI from the repository root. `make canic` installs it into
+`~/.local/bin` and verifies that plain `canic` resolves to that installation:
 
 ```sh
 make canic
-./target/debug/canic --help
+canic --help
 ```
 
 To build the demo application after preparing the Wasm target, run
-`./target/debug/canic artifact build --package canic-hello`. Building does not deploy or spend cycles.
+`canic artifact build --package canic-hello`. Building does not deploy or spend cycles.
 
 Rust 1.100.0 is pinned in `rust-toolchain.toml`. Install it with Rustup, then run:
 
@@ -117,8 +120,9 @@ have no aliases.
 
 | Command | Input and scope |
 | --- | --- |
-| `app init APP --fleet FLEET --network ic` | Declare an app in `--config PATH`, or add `--source DIRECTORY --canic-source CHECKOUT` to generate a new standalone workspace and its own config. No deployment. |
-| `app list` | Read all apps from `--config PATH` (default `canic.json`). |
+| `app init APP --fleet FLEET --network ic` | Declare an app in `--config PATH`, or add `--source DIRECTORY` (checkout override: `--canic-source CHECKOUT`) to generate a new standalone workspace and its own config. No deployment. |
+| `app build` | Build the selected app’s declared workspace/package recipes, preparing missing Cargo locks once. Existing locks are preserved. |
+| `app list` | List apps in the current/direct-child configs, or only `--config PATH`. Duplicate names require explicit config selection. |
 | `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
 | `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
 | `fleet list` | Read fleet declarations; optional `--app APP` filters them. |
@@ -128,8 +132,9 @@ have no aliases.
 | `fleet canister bind SLOT --id PRINCIPAL` | Bind an existing ID in the selected fleet for observation only; refuses replacement and never changes controllers. |
 | `fleet canister list` | List the selected fleet's local slots and configured IDs, without reading journals or contacting canisters. |
 | `fleet show` | Observe the selected app/fleet; `--html PATH` saves a report, `--serve` serves it, and `--watch` refreshes it. |
-| `fleet plan --wasm WASM_FILE --controller PRINCIPAL` | Prepare one canister's deployment within the selected fleet, using the creation or upgrade arguments below. |
+| `fleet plan --identity IDENTITY` | Read the identity’s public controller principal and review a new Root-plus-app fleet using its declared Wasm inputs. `--controller PRINCIPAL` supports offline planning. `--canister SLOT` selects the existing single-canister workflow; unconfigured `--wasm` planning remains explicit. |
 | `fleet apply OPERATION --identity IDENTITY` | Approve/resume that exact retained operation, including its funding and network effects. |
+| `fleet cancel OPERATION` | Revoke a whole-fleet approval before any effect preparation, retaining its evidence. Once preparation begins, preserve and resume the same operation. |
 | `fleet status OPERATION` | Show the retained plan, effect evidence and historical receipt locally; `--json` returns the full structured evidence. |
 | `fleet call OPERATION --name NAME` | Query the hello demo deployed by that completed operation. This is not a general canister-method caller. |
 | `fleet view REPORT_HTML` | Serve an existing local HTML snapshot. No app/fleet selection, journal access or live observation. |
@@ -149,7 +154,14 @@ a fleet selection. There is no saved current context. `app list` and `fleet list
 still list all declarations unless filtered. New names in `app init` and
 `fleet init` must always be supplied.
 
-Planning creation requires `--canister SLOT` for an unbound configured slot.
+`--config PATH` selects that exact file. Otherwise listings and selection share
+a bounded catalog of current and direct-child `canic.json` files. `--app starter`
+matches the declared app name, independent of its directory name. Duplicate app
+names require explicit config selection. Paths and journals remain beside that
+config. Discovery skips hidden/generated trees and child symlinks, never searches
+ancestors or recursively scans, and refuses malformed discovered configs.
+
+Planning one canister requires `--canister SLOT` for an unbound configured slot.
 Planning an upgrade requires `--target PRINCIPAL --previous-module HASH`; the
 principal must belong to the selected fleet. These choices are mutually exclusive.
 The network comes from the fleet config, or from explicit `--network` and trust
@@ -175,7 +187,7 @@ canic fleet list --app profile
 canic fleet list --json
 ```
 
-Listings use `canic.json` in the current directory, or `--config PATH`. Counts are
+Listings show each config location from the same catalog used by `--app`. Counts are
 declared fleets/canister slots, not proof of deployment or health. Use
 `canic fleet show --app profile --fleet mainnet` for current deployment observations.
 
@@ -251,6 +263,13 @@ An optional `wasm` path belongs to the app definition and resolves relative to
 uses it when `--wasm` is omitted and refuses a competing CLI path. If no app path
 is defined, supply `--wasm` explicitly as before. Planning retains exact bytes;
 later config or source-file edits never change an approved operation.
+
+Generated starters also have a `build` recipe beside `wasm` on each app canister:
+`"build": {"manifest": "Cargo.toml", "package": "starter-app"}`. The manifest
+names a Cargo workspace and resolves beside the config; the supplied Root recipe
+points to its Canic workspace. `canic app build --app starter` builds all declared
+recipes and writes their Wasm outputs. Older/custom definitions need explicit
+recipes before using app build; Canic does not guess packages from roles.
 
 The current config is unversioned and requires `apps.APP.canisters`. The old
 versioned fleet-local layout is refused. For an existing external config, remove
@@ -419,17 +438,18 @@ Nondefault subaccounts and local-replica wallets are not supported by this slice
 
 Use the repo-pinned ICP CLI 1.7.0 for offline signing. It can use an existing
 encrypted identity such as `canic-mainnet`; Canic never imports or exports its key.
+Apply defaults to `.tools/ic/bin/icp` in the checkout used to build Canic;
+prepare it once with `make install-ic-tools`. `--icp-bin` is an optional override.
 This older explicit-plan recipe uses `--no-config` and the original journal.
 For a named deployment use the initialization guide above. Build the CLI and app, then create a plan:
 
 ```sh
 make canic
-export PATH="$PWD/target/debug:$PWD/.tools/ic/bin:$PATH"
 canic artifact build --package canic-hello --json > target/hello-build.json
 canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/hello-build.json)" \
   --network ic \
-  --controller "$(icp identity principal --identity canic-mainnet)" \
+  --controller "$(./.tools/ic/bin/icp identity principal --identity canic-mainnet)" \
   --cycles 1000000000000 > target/hello-plan.json
 cat target/hello-plan.json
 ```

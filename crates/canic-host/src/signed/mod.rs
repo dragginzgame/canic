@@ -170,22 +170,7 @@ fn sign(
             "plan has less than five minutes left; no new effect was signed".into(),
         ));
     }
-    let version = ic_host_process::tool::capture_group_command(
-        Command::new(icp).arg("--version"),
-        ic_host_process::tool::OutputLimits {
-            stdout: ic_host_process::tool::OutputLimit::Terminate(1024),
-            stderr: ic_host_process::tool::OutputLimit::Terminate(1024),
-            timeout: Some(Duration::from_secs(5)),
-        },
-    )
-    .map_err(supplier)?
-    .require_success()
-    .map_err(supplier)?;
-    if version.stdout != b"icp 1.7.0\n" {
-        return Err(Error::Invalid(
-            "signer must be repository-qualified ICP CLI 1.7.0; run make install-ic-tools".into(),
-        ));
-    }
+    admit_signer(icp)?;
     store::put(&path.join("arguments.bin"), &call.args)?;
     let output = path.join("signing.json");
     let mut command = Command::new(icp);
@@ -379,4 +364,50 @@ async fn execute_with(
         "request {} has no retained terminal reply; resume this operation only",
         attempt.id
     )))
+}
+
+fn admit_signer(icp: &Path) -> Result<()> {
+    let version = ic_host_process::tool::capture_group_command(
+        Command::new(icp).arg("--version"),
+        ic_host_process::tool::OutputLimits {
+            stdout: ic_host_process::tool::OutputLimit::Terminate(1024),
+            stderr: ic_host_process::tool::OutputLimit::Terminate(1024),
+            timeout: Some(Duration::from_secs(5)),
+        },
+    )
+    .map_err(supplier)?
+    .require_success()
+    .map_err(supplier)?;
+    if version.stdout != b"icp 1.7.0\n" {
+        return Err(Error::Invalid(
+            "signer must be repository-qualified ICP CLI 1.7.0; run make install-ic-tools".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Read a public controller principal from the qualified signer. No keys or signed calls are exported.
+/// # Errors
+/// Refuses an unavailable/unqualified signer, missing identity or invalid principal output.
+pub fn signing_principal(identity: &str, icp: &Path) -> Result<String> {
+    admit_signer(icp)?;
+    let output = ic_host_process::tool::capture_group_command(
+        Command::new(icp).args(["identity", "principal", "--identity", identity]),
+        ic_host_process::tool::OutputLimits {
+            stdout: ic_host_process::tool::OutputLimit::Terminate(1024),
+            stderr: ic_host_process::tool::OutputLimit::Terminate(4096),
+            timeout: Some(Duration::from_secs(30)),
+        },
+    )
+    .map_err(supplier)?
+    .require_success()
+    .map_err(supplier)?
+    .require_complete()
+    .map_err(supplier)?;
+    crate::network::principal(
+        std::str::from_utf8(&output.stdout)
+            .map_err(supplier)?
+            .trim(),
+    )
+    .map(|principal| principal.to_text())
 }

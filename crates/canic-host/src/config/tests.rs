@@ -1,6 +1,71 @@
 use super::*;
 use crate::tests::{directory, input};
 
+#[test]
+fn catalog_and_selection_share_declared_identity_and_reject_duplicates() {
+    let dir = directory();
+    let local = dir.join("canic.json");
+    let nested = dir.join("starter/canic.json");
+    std::fs::create_dir(dir.join("starter")).unwrap();
+    init_app(&nested, "starter", "mainnet", Network::Mainnet).unwrap();
+    assert_eq!(
+        resolve_config_path(&dir, None, Some("starter")).unwrap(),
+        nested
+    );
+    assert_eq!(resolve_config_path(&dir, None, None).unwrap(), nested);
+    init_app(&local, "profile", "mainnet", Network::Mainnet).unwrap();
+    assert_eq!(
+        resolve_config_path(&dir, None, Some("starter")).unwrap(),
+        nested
+    );
+    assert_eq!(
+        resolve_config_path(&dir, None, Some("profile")).unwrap(),
+        local
+    );
+    assert!(resolve_config_path(&dir, None, Some("missing")).is_err());
+    assert!(resolve_config_path(&dir, None, None).is_err());
+    assert_eq!(discover_configs(&dir, None).unwrap().len(), 2);
+    for explicit in [Path::new("canic.json"), Path::new("missing.json")] {
+        assert_eq!(
+            resolve_config_path(&dir, Some(explicit), Some("starter")).unwrap(),
+            dir.join(explicit)
+        );
+    }
+    let selected = load_config(&nested)
+        .unwrap()
+        .select(Some("starter"), None)
+        .unwrap();
+    assert_eq!(
+        selected.journal_path(&nested),
+        dir.join("starter/.canic/apps/starter/fleets/mainnet")
+    );
+    assert!(!selected.journal_path(&nested).exists());
+    // Duplicate identities never silently choose a different deployment journal.
+    init_app(&local, "starter", "mainnet", Network::Mainnet).unwrap();
+    assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
+    std::fs::write(&local, b"malformed").unwrap();
+    assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
+    assert_eq!(
+        resolve_config_path(&dir, Some(&nested), Some("starter")).unwrap(),
+        nested
+    );
+    std::fs::remove_file(&local).unwrap();
+    for app in ["../starter", "/starter", "bad\nname"] {
+        assert!(resolve_config_path(&dir, None, Some(app)).is_err());
+    }
+    // Directory names locate files; only the validated contents establish app identity.
+    std::fs::write(&nested, b"malformed").unwrap();
+    assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
+    std::fs::remove_file(&nested).unwrap();
+    init_app(&nested, "other", "mainnet", Network::Mainnet).unwrap();
+    assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
+    assert_eq!(
+        resolve_config_path(&dir, None, Some("other")).unwrap(),
+        nested
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
 fn config() -> SelectedFleet {
     SelectedFleet {
         app: "hello".into(),
@@ -11,6 +76,66 @@ fn config() -> SelectedFleet {
             canisters: BTreeMap::from([("backend".into(), CanisterConfig::default())]),
         },
     }
+}
+
+#[test]
+fn discovery_is_bounded_and_does_not_recurse_into_generated_trees() {
+    let dir = directory();
+    for child in [
+        "target",
+        "node_modules",
+        "vendor",
+        ".hidden",
+        "project/deeper",
+    ] {
+        std::fs::create_dir_all(dir.join(child)).unwrap();
+        std::fs::write(dir.join(child).join("canic.json"), b"not a config").unwrap();
+    }
+    assert!(discover_configs(&dir, None).unwrap().is_empty());
+    for index in 0..65 {
+        let child = dir.join(format!("app-{index}"));
+        std::fs::create_dir(&child).unwrap();
+        init_app(
+            &child.join("canic.json"),
+            &format!("app-{index}"),
+            "ic",
+            Network::Mainnet,
+        )
+        .unwrap();
+    }
+    assert!(
+        discover_configs(&dir, None)
+            .unwrap_err()
+            .to_string()
+            .contains("64 configs")
+    );
+    assert_eq!(
+        discover_configs(&dir, Some(Path::new("app-0/canic.json")))
+            .unwrap()
+            .len(),
+        1
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn discovery_does_not_follow_child_symlinks() {
+    let dir = directory();
+    let source = directory();
+    init_app(&source.join("canic.json"), "demo", "ic", Network::Mainnet).unwrap();
+    std::os::unix::fs::symlink(&source, dir.join("alias")).unwrap();
+    std::fs::create_dir(dir.join("child")).unwrap();
+    std::os::unix::fs::symlink(source.join("canic.json"), dir.join("child/canic.json")).unwrap();
+    assert!(discover_configs(&dir, None).unwrap().is_empty());
+    assert_eq!(
+        discover_configs(&dir, Some(Path::new("alias/canic.json")))
+            .unwrap()
+            .len(),
+        1
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+    std::fs::remove_dir_all(source).unwrap();
 }
 
 fn declaration(selected: &SelectedFleet) -> Config {
@@ -25,6 +150,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                     role: slot.role.clone(),
                     parent: slot.parent.clone(),
                     wasm: slot.wasm.clone(),
+                    build: None,
                 },
             )
         })
@@ -87,6 +213,7 @@ fn reusable_app_definitions_resolve_across_fleets_without_copying_bindings() {
             role: Some("worker".into()),
             parent: Some("backend".into()),
             wasm: Some("build/worker.wasm".into()),
+            build: None,
         },
     )
     .unwrap();

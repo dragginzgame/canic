@@ -88,35 +88,70 @@ pub(crate) fn canisters(
     Ok(Output::Text(format!("{title}\n\n{table}\n\n")))
 }
 
-pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) -> Result<Output> {
-    let config = canic_host::load_config(path)?;
-    if let Some(app) = app {
-        config.select_app(Some(app))?;
+pub(crate) fn list(
+    path: Option<&Path>,
+    app: Option<&str>,
+    apps_only: bool,
+    json: bool,
+) -> Result<Output> {
+    let configs = canic_host::discover_configs(Path::new(""), path)?;
+    if let Some(app) = app
+        && !configs
+            .iter()
+            .any(|item| item.config.apps.contains_key(app))
+    {
+        let names = configs
+            .iter()
+            .flat_map(|item| item.config.apps.keys().cloned())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(canic_host::Error::Invalid(format!(
+            "unknown app {app}; select --app from: {names}"
+        )));
     }
     let mut rows = Vec::new();
     let mut app_rows = Vec::new();
     let mut fleet_rows = Vec::new();
-    for (app_name, definition) in &config.apps {
-        if app.is_some_and(|selected| selected != app_name) {
-            continue;
-        }
-        if apps_only {
-            rows.push(serde_json::json!({"app":app_name, "fleets":definition.fleets.len()}));
-            app_rows.push([app_name.clone(), definition.fleets.len().to_string()]);
-        } else {
-            for (fleet, definition) in &definition.fleets {
-                let network = match &definition.network {
-                    Network::Mainnet => "ic / mainnet".into(),
-                    Network::Local { url, .. } => format!("local / {url}"),
-                };
-                let count = config.apps[app_name].canisters.len();
-                rows.push(serde_json::json!({"app":app_name, "fleet":fleet, "network":definition.network, "declared_canisters":count}));
-                fleet_rows.push([app_name.clone(), fleet.clone(), count.to_string(), network]);
+    for item in &configs {
+        let config = &item.config;
+        for (app_name, definition) in &config.apps {
+            if app.is_some_and(|selected| selected != app_name) {
+                continue;
+            }
+            if apps_only {
+                rows.push(serde_json::json!({"app":app_name, "fleets":definition.fleets.len(), "config_path":item.path}));
+                app_rows.push([
+                    app_name.clone(),
+                    definition.fleets.len().to_string(),
+                    item.path.display().to_string(),
+                ]);
+            } else {
+                for (fleet, definition) in &definition.fleets {
+                    let network = match &definition.network {
+                        Network::Mainnet => "ic / mainnet".into(),
+                        Network::Local { url, .. } => format!("local / {url}"),
+                    };
+                    let count = config.apps[app_name].canisters.len();
+                    rows.push(serde_json::json!({"app":app_name, "fleet":fleet, "network":definition.network, "declared_canisters":count, "config_path":item.path}));
+                    fleet_rows.push([
+                        app_name.clone(),
+                        fleet.clone(),
+                        count.to_string(),
+                        network,
+                        item.path.display().to_string(),
+                    ]);
+                }
             }
         }
     }
     if json {
-        let mut value = serde_json::json!({"scope":"local configuration only", "config_path":path});
+        let paths: Vec<_> = configs.iter().map(|item| &item.path).collect();
+        let path = if paths.len() == 1 {
+            Some(paths[0])
+        } else {
+            None
+        };
+        let mut value = serde_json::json!({"scope":"local configuration only", "config_path":path, "config_paths":paths});
         value[if apps_only { "apps" } else { "fleets" }] = serde_json::json!(rows);
         Ok(Output::Json(value))
     } else {
@@ -124,9 +159,9 @@ pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) 
             (
                 "Configured apps (local declarations)",
                 table::render(
-                    &["APP", "FLEETS"],
+                    &["APP", "FLEETS", "CONFIG"],
                     &app_rows,
-                    &[Alignment::Left, Alignment::Right],
+                    &[Alignment::Left, Alignment::Right, Alignment::Left],
                     TABLE_OPTIONS,
                 ),
             )
@@ -134,12 +169,13 @@ pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) 
             (
                 "Configured fleets (local declarations; slots are not a live canister count)",
                 table::render(
-                    &["APP", "FLEET", "SLOTS", "NETWORK"],
+                    &["APP", "FLEET", "SLOTS", "NETWORK", "CONFIG"],
                     &fleet_rows,
                     &[
                         Alignment::Left,
                         Alignment::Left,
                         Alignment::Right,
+                        Alignment::Left,
                         Alignment::Left,
                     ],
                     TABLE_OPTIONS,

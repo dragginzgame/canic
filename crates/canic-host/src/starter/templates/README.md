@@ -11,57 +11,49 @@ The operator is Root's external controller, outside this canister tree.
 
 ## Build
 
-From this directory, prepare and retain a Cargo lockfile, then build:
+From this directory, build and install the CLI from the selected Canic checkout,
+then build both canisters. The first build prepares a missing Cargo.lock; later builds preserve it. `make canic` makes the `canic`
+command available on PATH:
 
 ```sh
-cargo generate-lockfile
-canic artifact build --package starter-app --output artifacts/app.wasm
-canic artifact build --manifest {} --package canic-root --output artifacts/root.wasm
+make -C {source} canic
+canic app build
 canic app canister list
 canic fleet canister list
 ```
 
 The dependency uses your selected local Canic checkout. If it moves, update
-Cargo.toml and the Root build command. No crates.io Canic package is selected.
+Cargo.toml and the Root build manifest in canic.json. No crates.io Canic package is selected.
 
 ## Deploy through Root
 
 Generation deploys nothing. For mainnet, prepare the qualified ICP signer and
-manually fund its cycles-ledger account first. Replace OPERATOR_PRINCIPAL with
-your signing principal; use the identity that owns it in the apply commands.
+manually fund its cycles-ledger account first. Planning reads the public principal
+of your ICP identity; it signs nothing.
 These apply commands spend cycles and install code on the configured network.
 
-Bootstrap Root with 3T cycles, leaving room for its 1T child and 0.5T reserve:
+Review one approval for Root and the application. Its default 3T Root debit
+funds the 1T child attachment and leaves room for the 0.5T reserve:
 
 ```sh
-canic fleet plan --canister root --controller OPERATOR_PRINCIPAL --cycles 3000000000000
-canic fleet status ROOT_OPERATION
-canic fleet apply ROOT_OPERATION --identity canic-mainnet
-canic artifact inspect artifacts/root.wasm
+canic fleet plan --identity canic-mainnet
+canic fleet status OPERATION
+canic fleet apply OPERATION --identity canic-mainnet
 ```
 
-Copy ROOT_OPERATION from the plan output. Copy ROOT_SHA256 from the artifact
-inspection, then explicitly approve the child's Root owner:
-
-```sh
-canic fleet plan --canister app --controller OPERATOR_PRINCIPAL --root-module ROOT_SHA256
-canic fleet status CHILD_OPERATION
-canic fleet apply CHILD_OPERATION --identity canic-mainnet
-```
-
-Copy CHILD_OPERATION from this plan. Apply admits the retained artifact to Root;
-Root dispatches ten minutes after planning, then continues without the host.
-Review and submit promptly. `--execute-at UNIX_SECONDS` can choose another
-future dispatch for a new plan. Replanning a slot returns its original authority
-and schedule. Root's effect deadline is ten minutes after dispatch.
+Copy OPERATION from planning. Apply creates and installs Root, then admits the
+application using the retained Root result. It does not invent a principal or
+rewrite the approval. Root dispatches ten minutes after planning and may finish
+without the host; its effect deadline is ten minutes later. Review and apply
+promptly. Replanning preserves the original schedule, including after expiry.
 
 After dispatch, repeat the same apply to retain a replicated progress observation
 and, once ready, a verified completion receipt:
 
 ```sh
-canic fleet apply CHILD_OPERATION --identity canic-mainnet
+canic fleet apply OPERATION --identity canic-mainnet
 canic fleet show
-canic fleet call CHILD_OPERATION --name team
+canic fleet call OPERATION --name team
 ```
 
 To follow progress before retaining completion, use `canic fleet show`; it
@@ -74,30 +66,32 @@ Root must retain the approved code and sole operator controller. Its child has
 Root as its sole controller. Pending admission is not a completion receipt.
 Keep the config and its .canic journal; do not delete attempts to retry.
 
-## First application upgrade
+## Current boundary
 
-After the child has a completion receipt, edit the greeting and rebuild its
-app-defined artifact. Copy CHILD_PRINCIPAL and PREVIOUS_SHA256 from that receipt.
-Root must already run the upgrade-capable executable inspected above. Planning
-is local; apply admits an in-place upgrade on the selected network:
+This whole-fleet path accepts exactly one unbound Root and its application.
+Keep its original journal for resumption. It refuses larger trees, pre-existing
+identity bindings and competing single-canister approvals. Whole-fleet upgrades
+and adoption of previously deployed fleets are not implemented yet.
+
+## Recovery and cleanup
+
+If an approval expires before apply, cancel it explicitly, then plan again:
 
 ```sh
-canic artifact build --package starter-app --output artifacts/app.wasm
-canic fleet plan --canister app --target CHILD_PRINCIPAL --previous-module PREVIOUS_SHA256 --root-module ROOT_SHA256 --controller OPERATOR_PRINCIPAL
-canic fleet status UPGRADE_OPERATION
-canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
+canic fleet cancel OPERATION
+canic fleet plan --identity canic-mainnet
 ```
 
-After dispatch, repeat that apply to retain completion. The child keeps its
-principal and Root controller; the original creation receipt remains historical
-evidence. `fleet status UPGRADE_OPERATION` shows the retained upgrade phase.
-`fleet show` and `fleet show --watch` display separate creation and upgrade reports,
-matched to the planned authority and network. Public Ready cannot create a
-receipt; repeat the original apply to retain authenticated completion. Watch
-serves localhost without opening a browser and stops with Ctrl-C.
+Cancellation is allowed only before effect preparation. It retains the old approval
+and permanently prevents applying it. Once preparation starts, preserve and resume
+the same operation; expiry is not proof that nothing happened.
 
-This experimental owner has one permanent upgrade slot, separate from creation.
-It never retries an uncertain installation or replaces expired authority.
-Application persistence requires its own qualified upgrade lifecycle; this
-greeting app has no persistent data. Whole-fleet convergence, repeated upgrades
-and subtree operations remain future work.
+Back up canic.json and the entire hidden .canic directory together. The journal is
+ignored by Git and contains irreplaceable signed attempts and result evidence.
+Keep the signer identity separately through ICP's identity storage. Source and
+Cargo.lock are needed to reproduce and upgrade the app. target/ and artifacts/
+are replaceable build outputs; planning retains its own artifact copies.
+
+A never-planned starter can be deleted as an ordinary local project. After planning,
+archive its evidence first. Deleting local files never deletes mainnet canisters
+or refunds cycles.

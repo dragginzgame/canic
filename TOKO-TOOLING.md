@@ -413,6 +413,17 @@ for justified internal links, packaging and filesystem security boundaries.
 
 ## CLI applications
 
+When a release adds or changes a runnable CLI workflow, include a short
+`### ▶️ Try it` section directly in the root changelog's release summary, after
+any breaking-change notice. Show copyable setup/install and invocation commands,
+their working directory, and the expected result. Keep one-time setup distinct
+from normal use and identify credentials, network or paid/mutating effects.
+Do not hide this quick start in detailed notes or substitute a link to them;
+independently versioned groups also surface it in the root release index with
+the group/version identified. Use actual supported commands, not a mandatory
+`make m0-setup` convention. Omit it when no runnable workflow is affected;
+do not rewrite historical entries or add a release gate for presentation.
+
 Use Clap for as much Rust CLI behavior as its supported APIs can own, including
 typed values, validation, argument relationships, defaults, help and diagnostics.
 Check its built-ins and extension points before writing custom CLI mechanics.

@@ -5,6 +5,7 @@ mod catalog;
 #[cfg(test)]
 mod config_tests;
 mod fleet;
+mod progress;
 mod status;
 mod topology;
 mod view;
@@ -24,10 +25,20 @@ enum Output {
 
 async fn run(cli: &Cli) -> canic_host::Result<Output> {
     let result = match &cli.command {
+        Commands::App(AppCommand::Build { selection }) => {
+            let built = canic_host::build_app(
+                &selection.config.path(selection.app.as_deref())?,
+                selection.app.as_deref(),
+            )?;
+            if !cli.json {
+                return Ok(Output::Text(progress::built(&built)));
+            }
+            Ok(serde_json::json!({"canisters":built}))
+        }
         Commands::App(AppCommand::Canister(command)) => match command {
             AppCanisterCommand::List { selection } => {
                 return catalog::app_canisters(
-                    &selection.config.config,
+                    &selection.config.path(selection.app.as_deref())?,
                     selection.app.as_deref(),
                     cli.json,
                 );
@@ -39,34 +50,32 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 parent,
                 wasm,
             } => {
-                let declaration = canic_host::load_config(&selection.config.config)?;
+                let path = selection.config.path(selection.app.as_deref())?;
+                let declaration = canic_host::load_config(&path)?;
                 let (app, _) = declaration.select_app(selection.app.as_deref())?;
                 let config = canic_host::add_app_canister(
-                    &selection.config.config,
+                    &path,
                     app,
                     name,
                     canic_host::CanisterDefinition {
                         role: role.clone(),
                         parent: parent.clone(),
                         wasm: wasm.clone(),
+                        build: None,
                     },
                 )?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
                         "Defined app canister {name}\nApp: {}\nConfig: {}\nShared by all app fleets. Local files only; nothing deployed.\n",
                         app,
-                        ic_host_text::escape::terminal_text(
-                            &selection.config.config.to_string_lossy()
-                        ),
+                        ic_host_text::escape::terminal_text(&path.to_string_lossy()),
                     )));
                 }
-                Ok(
-                    serde_json::json!({"config_path":selection.config.config,"configuration":config,"deployed":false}),
-                )
+                Ok(serde_json::json!({"config_path":path,"configuration":config,"deployed":false}))
             }
         },
         Commands::App(AppCommand::List { config }) => {
-            return catalog::list(&config.config, None, true, cli.json);
+            return catalog::list(config.config.as_deref(), None, true, cli.json);
         }
         Commands::App(AppCommand::Init {
             name,
@@ -77,9 +86,8 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
             canic_source,
         }) => {
             if let Some(source) = source {
-                let canic_source = canic_source.as_deref().ok_or_else(|| {
-                    Error::Invalid("source generation requires --canic-source".into())
-                })?;
+                let default_source = args::checkout();
+                let canic_source = canic_source.as_deref().unwrap_or(&default_source);
                 let path = canic_host::create_starter(
                     source,
                     name,
@@ -97,17 +105,19 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                     serde_json::json!({"config_path":path,"configuration":canic_host::load_config(&path)?,"source":source,"deployed":false}),
                 ));
             }
+            let path = config
+                .config
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("canic.json"));
             let declaration =
-                canic_host::init_app(&config.config, name, fleet, network.clone().into_network()?)?;
+                canic_host::init_app(&path, name, fleet, network.clone().into_network()?)?;
             if !cli.json {
                 return Ok(Output::Text(format!(
                     "Initialized app {name}\nFleet: {fleet}\nConfig: {}\nNo canisters defined yet. Use app canister add.\nLocal files only; nothing deployed or funded.\n",
-                    ic_host_text::escape::terminal_text(&config.config.to_string_lossy()),
+                    ic_host_text::escape::terminal_text(&path.to_string_lossy()),
                 )));
             }
-            Ok(
-                serde_json::json!({"config_path":config.config,"configuration":declaration,"deployed":false}),
-            )
+            Ok(serde_json::json!({"config_path":path,"configuration":declaration,"deployed":false}))
         }
 
         Commands::Artifact(command) => match command {
@@ -142,9 +152,14 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
     let scope = command.scope();
-    let config_path = scope
-        .and_then(|scope| scope.config.clone())
-        .unwrap_or_else(|| "canic.json".into());
+    let config_path = match scope {
+        Some(scope) if !scope.no_config => canic_host::resolve_config_path(
+            std::path::Path::new(""),
+            scope.config.as_deref(),
+            scope.app.as_deref(),
+        )?,
+        _ => PathBuf::from("canic.json"),
+    };
     let configuration = if let Some(scope) = scope
         && !scope.no_config
         && (scope.config.is_some()
@@ -177,6 +192,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         });
     if let Some(config) = &configuration
         && let FleetCommand::Apply { digest, .. }
+        | FleetCommand::Cancel { digest, .. }
         | FleetCommand::Status { digest, .. }
         | FleetCommand::Call { digest, .. } = command
     {
@@ -189,10 +205,11 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 id,
                 selection,
             } => {
-                let scope = canic_host::load_config(&selection.config.config)?
+                let path = selection.config.path(selection.app.as_deref())?;
+                let scope = canic_host::load_config(&path)?
                     .select(selection.app.as_deref(), selection.fleet.as_deref())?;
                 let selected = canic_host::bind_canister(
-                    &selection.config.config,
+                    &path,
                     &scope.app,
                     &scope.fleet,
                     name,
@@ -206,9 +223,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         "Bound canister slot {name}\nApp: {}\nFleet: {}\nConfig: {}\nConfigured ID: {}\nObservation declaration only; no canister or journal created. Existence and control are not verified.\n",
                         selected.app,
                         selected.fleet,
-                        ic_host_text::escape::terminal_text(
-                            &selection.config.config.to_string_lossy()
-                        ),
+                        ic_host_text::escape::terminal_text(&path.to_string_lossy()),
                         selected.config.canisters[name]
                             .id
                             .as_deref()
@@ -216,12 +231,12 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     )));
                 }
                 Ok(
-                    serde_json::json!({"config_path":selection.config.config,"configuration":selected,"deployed":false}),
+                    serde_json::json!({"config_path":path,"configuration":selected,"deployed":false}),
                 )
             }
             CanisterCommand::List { selection } => {
                 return catalog::canisters(
-                    &selection.config.config,
+                    &selection.config.path(selection.app.as_deref())?,
                     selection.app.as_deref(),
                     selection.fleet.as_deref(),
                     cli.json,
@@ -234,28 +249,29 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             config,
             network,
         } => {
-            let declaration = canic_host::load_config(&config.config)?;
+            let path = config.path(app.as_deref())?;
+            let declaration = canic_host::load_config(&path)?;
             let (app, _) = declaration.select_app(app.as_deref())?;
             let selected =
-                canic_host::init_fleet(&config.config, app, name, network.clone().into_network()?)?;
+                canic_host::init_fleet(&path, app, name, network.clone().into_network()?)?;
             if !cli.json {
                 return Ok(Output::Text(format!(
                     "Initialized fleet {name}\nApp: {app}\nConfig: {}\nUsing shared app definitions with no existing ID bindings. Nothing deployed or funded.\n",
-                    ic_host_text::escape::terminal_text(&config.config.to_string_lossy()),
+                    ic_host_text::escape::terminal_text(&path.to_string_lossy()),
                 )));
             }
-            Ok(
-                serde_json::json!({"config_path":config.config,"configuration":selected,"deployed":false}),
-            )
+            Ok(serde_json::json!({"config_path":path,"configuration":selected,"deployed":false}))
         }
         FleetCommand::List { config, app } => {
-            return catalog::list(&config.config, app.as_deref(), false, cli.json);
+            return catalog::list(config.config.as_deref(), app.as_deref(), false, cli.json);
         }
         FleetCommand::Plan {
             canister,
             wasm,
             network,
             controller,
+            identity,
+            signer,
             target,
             previous_module,
             root_module,
@@ -263,8 +279,62 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             cycles,
             ..
         } => {
+            let controller = match (controller, identity) {
+                (Some(controller), None) => controller.clone(),
+                (None, Some(identity)) => canic_host::signing_principal(identity, &signer.icp_bin)?,
+                _ => return Err(Error::Invalid("select --identity or --controller".into())),
+            };
+            let dispatch = execute_at
+                .map(|seconds| {
+                    seconds
+                        .checked_mul(1_000_000_000)
+                        .ok_or_else(|| Error::Invalid("dispatch timestamp overflow".into()))
+                })
+                .transpose()?;
+            if canister.is_none()
+                && wasm.is_none()
+                && target.is_none()
+                && let Some(selected) = &configuration
+            {
+                if network.network.is_some()
+                    || network.url.is_some()
+                    || network.root_key.is_some()
+                    || network.routing_canister.is_some()
+                    || root_module.is_some()
+                {
+                    return Err(Error::Invalid(
+                        "whole-fleet planning uses the configured network and Root artifact".into(),
+                    ));
+                }
+                let (digest, plan) = canic_host::create_fleet_plan(
+                    &state_dir,
+                    &config_path,
+                    selected,
+                    &controller,
+                    cycles.unwrap_or(3_000_000_000_000),
+                    dispatch,
+                )?;
+                if !cli.json {
+                    let mut text = status::fleet_preview(&digest, &plan, &state_dir)?;
+                    text.push_str(&progress::next(
+                        command,
+                        &digest,
+                        "apply",
+                        identity.as_deref(),
+                    ));
+                    return Ok(Output::Text(text));
+                }
+                return Ok(Output::Json(
+                    serde_json::json!({"operation":digest,"fleet_plan":plan,"state_dir":state_dir}),
+                ));
+            }
+            if execute_at.is_some() && root_module.is_none() {
+                return Err(Error::Invalid(
+                    "--execute-at requires a whole-fleet plan or --root-module".into(),
+                ));
+            }
             let selected_network = if network.network.is_some() {
-                network.clone().into_network()?
+                network.as_ref().clone().into_network()?
             } else {
                 if network.url.is_some()
                     || network.root_key.is_some()
@@ -291,7 +361,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             }
             let input = PlanInput {
                 network: selected_network,
-                controller: controller.clone(),
+                controller,
                 target: target.clone(),
                 previous_module: previous_module.clone(),
                 creation_cycles: cycles.unwrap_or(if target.is_some() {
@@ -339,16 +409,40 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     .ok_or_else(|| Error::Invalid("this plan requires --wasm".into()))?;
                 canic_host::create_plan(&state_dir, wasm, input)?
             };
+            if !cli.json {
+                let state = canic_host::status(&state_dir, &digest)?;
+                let mut text = status::render(&state, &state_dir)?;
+                text.push_str(&progress::next(
+                    command,
+                    &digest,
+                    "apply",
+                    identity.as_deref(),
+                ));
+                return Ok(Output::Text(text));
+            }
             Ok(serde_json::json!({"operation": digest, "plan": plan,"state_dir":state_dir}))
         }
         FleetCommand::Apply {
             digest,
             identity,
-            icp_bin,
+            signer,
             ..
-        } => Ok(serde_json::json!(
-            canic_host::apply(&state_dir, digest, identity, icp_bin).await?
-        )),
+        } => {
+            let outcome = canic_host::apply(&state_dir, digest, identity, &signer.icp_bin).await?;
+            if !cli.json {
+                return Ok(Output::Text(progress::applied(&outcome, command)));
+            }
+            Ok(serde_json::json!(outcome))
+        }
+        FleetCommand::Cancel { digest, .. } => {
+            let cancelled = canic_host::cancel_fleet_plan(&state_dir, digest)?;
+            if !cli.json {
+                return Ok(Output::Text(format!(
+                    "Cancelled unsubmitted fleet approval {digest}\nEvidence retained. Plan again to review a new approval.\n"
+                )));
+            }
+            Ok(serde_json::json!(cancelled))
+        }
         FleetCommand::Status { digest, .. } => {
             let state = canic_host::status(&state_dir, digest)?;
             if !cli.json {
@@ -409,6 +503,11 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         }
         FleetCommand::Call { digest, name, .. } => {
             let state = canic_host::status(&state_dir, digest)?;
+            let state = if state.get("fleet_plan").is_some() {
+                &state["child"]
+            } else {
+                &state
+            };
             let receipt: canic_host::Receipt = serde_json::from_value(state["receipt"].clone())
                 .map_err(|_| {
                     Error::Invalid("operation has no completed deployment receipt".into())

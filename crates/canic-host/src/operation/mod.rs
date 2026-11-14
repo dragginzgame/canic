@@ -46,6 +46,15 @@ pub struct Receipt {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ApplyOutcome {
+    /// One fleet approval, composed from the existing Root and child effect owners.
+    Fleet {
+        /// Original whole-fleet approval digest.
+        operation: String,
+        /// Verified Root installation.
+        root: Receipt,
+        /// Child admission or verified completion; pending is not fleet completion.
+        child: Box<ApplyOutcome>,
+    },
     /// Verified completed installation; direct deployment JSON remains unchanged.
     Complete(Receipt),
     /// Root retains the exact work; apply again to retain a replicated observation.
@@ -179,10 +188,23 @@ pub(crate) async fn module(agent: &Agent, canister: Principal) -> Result<String>
 pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Result<ApplyOutcome> {
     let store = Store::open(root)?;
     let dir = store.operation(digest)?;
-    let (plan, wasm) = plan::load(&dir, digest)?;
+    if crate::fleet_plan::exists(&dir)? {
+        return crate::fleet_plan::apply(&dir, digest, identity, icp).await;
+    }
+    apply_at(&dir, digest, identity, icp).await
+}
+
+// Caller holds the journal lock; fleet composition uses this same effect owner.
+pub(crate) async fn apply_at(
+    dir: &Path,
+    digest: &str,
+    identity: &str,
+    icp: &Path,
+) -> Result<ApplyOutcome> {
+    let (plan, wasm) = plan::load(dir, digest)?;
     let agent = plan.network.agent()?;
     if plan.management.is_some() {
-        return crate::managed::apply(&dir, digest, &plan, &wasm, identity, icp, &agent).await;
+        return crate::managed::apply(dir, digest, &plan, &wasm, identity, icp, &agent).await;
     }
     if dir.join("receipt.json").try_exists().map_err(supplier)? {
         let receipt: Receipt = store::json(&dir.join("receipt.json"))?;
@@ -307,7 +329,14 @@ pub(crate) async fn verify_receipt(
 pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
     let store = Store::open(root)?;
     let dir = store.operation(digest)?;
-    let (plan, _) = plan::load(&dir, digest)?;
+    if crate::fleet_plan::exists(&dir)? {
+        return crate::fleet_plan::status(&dir, digest);
+    }
+    status_at(&dir, digest)
+}
+
+pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
+    let (plan, _) = plan::load(dir, digest)?;
     let mut effects = serde_json::Map::new();
     let effect_names: &[&str] = if plan.management.is_some() {
         &["stage"]
@@ -333,9 +362,9 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
         None
     };
     let managed = if plan.management.is_some() && plan.target.is_some() {
-        serde_json::to_value(crate::managed::upgrade::evidence(&dir, &plan)?).map_err(supplier)?
+        serde_json::to_value(crate::managed::upgrade::evidence(dir, &plan)?).map_err(supplier)?
     } else if plan.management.is_some() {
-        serde_json::to_value(crate::managed::evidence(&dir, &plan)?).map_err(supplier)?
+        serde_json::to_value(crate::managed::evidence(dir, &plan)?).map_err(supplier)?
     } else {
         serde_json::Value::Null
     };

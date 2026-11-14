@@ -495,7 +495,7 @@ async fn app_init_adds_a_second_app_and_requires_explicit_selection() {
     let listed = json(&["app", "list", "--config", config]).await;
     assert_eq!(
         listed["apps"],
-        serde_json::json!([{"app":"first", "fleets":1}, {"app":"second", "fleets":1}])
+        serde_json::json!([{"app":"first", "fleets":1,"config_path":config}, {"app":"second", "fleets":1,"config_path":config}])
     );
     let ambiguous = Cli::try_parse_from([
         "canic", "fleet", "show", "--fleet", "mainnet", "--config", config,
@@ -787,7 +787,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     let apps = json(&["app", "list", "--config", config]).await;
     assert_eq!(
         apps["apps"],
-        serde_json::json!([{"app":"hello", "fleets":1}])
+        serde_json::json!([{"app":"hello", "fleets":1,"config_path":config}])
     );
     assert!(!root.join(".canic").exists());
     let without_network = Cli::try_parse_from([
@@ -1044,7 +1044,7 @@ fn help_includes_version_and_sorted_commands_at_every_level() {
 }
 
 #[test]
-fn source_generation_requires_its_checkout_and_owns_its_new_config() {
+fn source_generation_defaults_its_checkout_and_owns_its_new_config() {
     let base = [
         "canic",
         "app",
@@ -1062,8 +1062,8 @@ fn source_generation_requires_its_checkout_and_owns_its_new_config() {
         )
         .is_ok()
     );
+    assert!(Cli::try_parse_from(base.into_iter().chain(["--source", "new"])).is_ok());
     for extra in [
-        vec!["--source", "new"],
         vec!["--canic-source", "."],
         vec![
             "--source",
@@ -1179,11 +1179,12 @@ fn managed_planning_arguments_require_the_named_child_context() {
     let base = ["canic", "fleet", "plan", "--controller", "2vxsx-fae"];
     for args in [
         vec!["--root-module", "00"],
-        vec!["--execute-at", "123"],
         vec!["--canister", "app", "--root-module", "00", "--no-config"],
     ] {
         assert!(Cli::try_parse_from(base.into_iter().chain(args)).is_err());
     }
+    // Dispatch also belongs to a whole-fleet plan; config-dependent admission is in Host.
+    assert!(Cli::try_parse_from(base.into_iter().chain(["--execute-at", "123"])).is_ok());
     assert!(
         Cli::try_parse_from(base.into_iter().chain([
             "--canister",

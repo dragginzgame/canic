@@ -318,8 +318,9 @@ The implemented unversioned declaration has reusable definitions at
 bindings at `apps.APP.fleets.FLEET.canisters.SLOT`. Every fleet resolves the shared
 definitions; its bindings cannot override topology or artifacts. Network and
 journal path remain fleet-owned. Wasm paths resolve beside the config; exact
-bytes are retained only when planning. This is not yet a generated-source
-starter, spawn-policy compiler, fleet-wide funding policy or whole-fleet planner.
+bytes are retained only when planning. The generated starter now has a bounded
+whole-fleet planner for one new Root and one new application. General spawn policy,
+larger fleet funding policy, adoption and upgrade convergence remain unimplemented.
 The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config.
 An existing shared journal may remain in place, but observations and operation
 selection must distinguish its fleets by exact retained names or known target
@@ -368,15 +369,22 @@ deployment; a selector may be omitted only when its choice is unique. See the
 | Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
 | Define reusable canisters | `canic app canister add SLOT --app APP [--role ROLE] [--parent SLOT] [--wasm PATH]`, `canic app canister list --app APP`; app-owned topology and artifact inputs, shared by all fleets |
 | Bind and list deployment identities | `canic fleet canister bind SLOT --app APP --fleet FLEET --id PRINCIPAL`, `canic fleet canister list --app APP --fleet FLEET`; observation declarations only, never controller or deployment approval; unknown definitions, occupied bindings and conflicting membership refuse |
-| Review and execute one deployment | `canic fleet plan`, `canic fleet apply DIGEST` |
+| Review and execute a starter fleet or one deployment | `canic fleet plan --controller PRINCIPAL` selects a new Root-plus-app fleet; `--canister SLOT` selects one deployment; `canic fleet apply DIGEST` resumes that exact approval |
 | Investigate or continue the original operation | `canic fleet status DIGEST`, `canic fleet apply DIGEST` |
 | Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |
 | Exercise the greeting or inspect the wallet | `canic fleet call DIGEST`, `canic wallet PRINCIPAL` |
 
 Only structured output (`--json`) is global. App/fleet selection and journal
 arguments belong to deployment actions, not artifact inspection, saved-report
-viewing or wallet queries. `fleet plan` prepares one canister, not an implicit
-whole-fleet rollout: a configured creation names an unbound slot, while an upgrade
+viewing or wallet queries. Without a canister, Wasm override or target,
+`fleet plan` consumes the selected fleet's two declared Root/app artifacts. It
+refuses other trees, existing bindings and competing individual plans rather than
+deploying a partial fleet. Its immutable approval names the future Root as the
+typed output of its approved creation. Root and child signing/evidence remain
+with the same existing effect owners; the journal lock covers their composition.
+Replanning identical desired inputs returns original authority, including after
+expiry. Existing single-canister planning remains explicit: a configured creation
+names an unbound slot, while an upgrade
 names an admitted principal and its previous module hash. Named creation uses the
 app-defined Wasm input when present and refuses a competing CLI override; otherwise
 an explicit `--wasm` remains required. `fleet call` currently
@@ -794,8 +802,10 @@ The first fleet CLI finish line is M2: initialize an app/fleet, build and review
 one plan for its declared tree, apply it, repeat with no unnecessary effects,
 inspect progress and recover supported interruptions through CLI commands,
 then upgrade while preserving the application's invariant. The same definition
-must serve a second isolated fleet. Current plan/apply operates on one canister;
-Root recovery still needs lower-level controller calls. These are remaining
+must serve a second isolated fleet. The initial whole-fleet path now deploys a
+new Root-plus-app tree and resumes the same authority. Existing-fleet adoption,
+whole-fleet upgrade planning and larger trees remain open; Root recovery still
+needs lower-level controller calls. These are remaining
 implementation requirements, not claims made by the existing command names.
 Subtree administration and optional scaling/sharding extend this boundary in M3.
 

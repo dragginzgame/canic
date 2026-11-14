@@ -16,14 +16,14 @@ canic-profile-protocol = { path = "../apps/profile/protocol" }
 ic-host-artifacts = { version = "0.78.0", default-features = false, features = ["wasm"] }
 ic-platform = { version = "0.33.0", default-features = false, features = ["management-canister-types"] }
 ic-platform-runtime = { version = "0.22.1", default-features = false, features = ["cdk"] }
-ic-testkit = { version = "0.104.0", default-features = false }
+ic-testkit = { version = "0.105.0", default-features = false }
 ic-wire = { version = "0.22.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.43.0"
+toko-tooling = "=0.43.1"
 
 [workspace.lints.cargo]
 unused_dependencies = "deny"

@@ -52,6 +52,10 @@ fn files(
                         CanisterDefinition {
                             role: Some("root".into()),
                             wasm: Some("artifacts/root.wasm".into()),
+                            build: Some(crate::BuildInput {
+                                manifest: source.join("Cargo.toml"),
+                                package: "canic-root".into(),
+                            }),
                             ..Default::default()
                         },
                     ),
@@ -61,6 +65,10 @@ fn files(
                             role: Some("app".into()),
                             parent: Some("root".into()),
                             wasm: Some("artifacts/app.wasm".into()),
+                            build: Some(crate::BuildInput {
+                                manifest: "Cargo.toml".into(),
+                                package: "starter-app".into(),
+                            }),
                         },
                     ),
                 ]),
@@ -132,7 +140,7 @@ fn files(
     });
     let readme = format!(
         include_str!("templates/README.md"),
-        shell_path(&source.join("Cargo.toml"))?
+        source = shell_path(source)?,
     );
     Ok(BTreeMap::from([
         ("canic.json".into(), config_bytes),

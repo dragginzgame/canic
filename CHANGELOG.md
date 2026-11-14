@@ -1,5 +1,106 @@
 # Changelog
 
+## [0.203.0] - 2026-11-14
+
+### ⚠️ Host API
+
+- Add the `ApplyOutcome::Fleet` outcome for composed approval results. Fleet
+  inventory contains deployment-step records sharing the parent approval digest;
+  use that digest for status/apply. No compatibility alias or new retry owner.
+- App/fleet listing rows include `config_path`; multi-config listings expose
+  `config_paths`. Duplicate app identities require explicit config selection.
+
+### ▶️ Try it
+
+From the Canic repository root, build the CLI and inspect the existing profile
+fleet. These inspection commands do not deploy or spend cycles:
+
+```sh
+make canic
+canic fleet canister list --app profile --fleet mainnet
+canic fleet show --app profile --fleet mainnet
+```
+
+To try the new Root-plus-app deployment, first generate and build a separate
+starter. Run this once from the same repository root; `./starter` must not exist.
+This setup writes local files and downloads build dependencies, but deploys nothing:
+
+```sh
+canic app init starter --fleet mainnet --network ic --source starter
+canic app build --app starter
+canic app list
+```
+
+Stay in the repository root. Prepare the signer and manually fund its cycles-ledger
+account first. Planning reads the public principal of `canic-mainnet`; copy
+the returned operation digest in place of OPERATION. `--app starter` locates
+`starter/canic.json`; its sole fleet is selected automatically:
+
+```sh
+canic fleet plan --app starter --identity canic-mainnet
+canic fleet status OPERATION --app starter
+canic fleet apply OPERATION --app starter --identity canic-mainnet
+```
+
+Plan/status only read or retain local evidence. Apply spends mainnet cycles, creates and installs Root,
+then admits the application; Root runs autonomously at the planned dispatch time.
+After Root reports Ready, repeat the **same** apply to retain completion:
+
+```sh
+canic fleet show --app starter
+canic fleet apply OPERATION --app starter --identity canic-mainnet
+canic fleet call OPERATION --app starter --name team
+```
+
+If the plan expires before any apply, cancel it before planning again:
+
+```sh
+canic fleet cancel OPERATION --app starter
+canic fleet plan --app starter --identity canic-mainnet
+```
+
+Back up `starter/canic.json` and the entire hidden `starter/.canic/` together.
+The journal is ignored by Git; deleting a project never removes mainnet canisters.
+
+The existing `profile` and `hello-world` fleets are inspection examples; this new
+deployment path cannot adopt them. No command above opens a browser.
+
+### ✨ One approval for a starter fleet
+
+- `make canic` builds and installs the CLI on PATH, verifies command resolution,
+  and leaves all demo instructions using plain `canic ...`.
+- Apply defaults to the qualified signer prepared in the checkout used to build
+  Canic. `--icp-bin` is an optional override, absent from normal demo commands.
+- `app build` builds the app and supplied Root from declared Cargo recipes,
+  preparing a missing lockfile once and preserving existing locks. Source
+  generation defaults to the checkout used to build Canic.
+- Listings, config edits and observations share current/direct-child discovery;
+  app identity comes from the config, and duplicate identities are refused.
+  Explicit `--config` wins; journals/artifacts stay beside the selected config.
+- Plan/apply output shows readable networks, budgets, UTC deadlines and exact
+  follow-up commands. `--identity` derives the controller without copying a principal.
+- `fleet cancel` releases only never-prepared whole-fleet approvals. Revoked
+  operations remain retained and cannot apply; uncertain attempts remain blocked.
+- Plan and apply the generated Root-plus-app fleet under one immutable approval.
+  Root's future principal is a typed creation output; both Wasm inputs, budgets,
+  network and deadlines are retained before effects. Replanning returns the same
+  authority, and completed replay verifies both installations without signing again.
+- Status, call and fleet views understand the composed operation. Existing
+  single-canister approvals keep their formats and recovery path. This first
+  fleet path requires a new, unbound two-canister fleet; existing-fleet adoption,
+  fleet upgrades and larger trees remain upcoming.
+
+### ⬆️ Dependencies
+
+- Adopt Toko Tooling 0.43.1 through its authenticated snapshot installer and
+  Testkit 0.105.0 for simulator qualification. Canic already uses fresh instances,
+  so removal of Testkit's baseline pools needs no consumer API migration.
+  Testkit now shares IC Host 0.78 with the qualification artifact reader,
+  removing the older Host copies and their `command-fds`/`nix` dependencies.
+
+- Qualify the selected Platform 0.33.3, Runtime 0.22.4 and Types 0.20.4 graph
+  alongside these Host and Testkit versions.
+
 ## [0.202.0] - 2026-11-14
 
 ### ⬆️ Dependencies
@@ -47,8 +148,8 @@ For an existing operation, retain the same config and journal selection. These
 commands only read local evidence; JSON remains unchanged:
 
 ```sh
-canic fleet status OPERATION --config starter/canic.json
-canic fleet status OPERATION --config starter/canic.json --json
+canic fleet status OPERATION
+canic fleet status OPERATION --json
 ```
 
 Root maintenance/reconciliation still has no qualified CLI command. The status
@@ -137,8 +238,8 @@ Once a child plan names its deployed Root, follow progress without signing or
 resubmitting work. The live view serves localhost and does not open a browser:
 
 ```sh
-canic fleet show --config starter/canic.json
-canic fleet show --config starter/canic.json --watch
+canic fleet show
+canic fleet show --watch
 ```
 
 Root reports are uncertified observations. A `Ready` report does not create a
@@ -150,8 +251,8 @@ deployment. The generated README has the build steps:
 
 ```sh
 canic app init starter --fleet mainnet --network ic --source ./starter --canic-source .
-canic app canister list --config starter/canic.json
-canic fleet canister list --config starter/canic.json
+canic app canister list
+canic fleet canister list
 ```
 
 After building the generated artifacts and deploying its Root, copy the reviewed
@@ -162,9 +263,9 @@ returned values; see [the complete journey](docs/demos/root.md):
 
 ```sh
 canic artifact inspect starter/artifacts/root.wasm
-canic fleet plan --config starter/canic.json --canister app --controller OPERATOR_PRINCIPAL --root-module ROOT_SHA256
-canic fleet status CHILD_OPERATION --config starter/canic.json
-canic fleet apply CHILD_OPERATION --config starter/canic.json --identity canic-mainnet
+canic fleet plan --canister app --controller OPERATOR_PRINCIPAL --root-module ROOT_SHA256
+canic fleet status CHILD_OPERATION
+canic fleet apply CHILD_OPERATION --identity canic-mainnet
 ```
 
 Build the experimental Root and its greeting application. These commands only

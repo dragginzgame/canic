@@ -1,8 +1,10 @@
 //! Native deployment planning and retained attempts; no application runtime dependency.
 
+mod app_build;
 mod artifact;
 mod config;
 mod fleet;
+mod fleet_plan;
 mod managed;
 mod network;
 mod operation;
@@ -14,21 +16,27 @@ mod store;
 mod tests;
 mod wallet;
 
+pub use app_build::{BuiltCanister, build_app};
 pub use artifact::{Artifact, build, inspect};
 pub use canic_management_protocol::Phase as ManagementPhase;
 pub use config::{
-    AppConfig, CanisterBinding, CanisterConfig, CanisterDefinition, Config, DeploymentName,
-    FleetConfig, FleetDeclaration, SelectedFleet, add_app_canister, bind_canister,
-    create_configured_plan, init_app, init_config, init_fleet, load_config,
+    AppConfig, BuildInput, CanisterBinding, CanisterConfig, CanisterDefinition, Config,
+    DeploymentName, DiscoveredConfig, FleetConfig, FleetDeclaration, SelectedFleet,
+    add_app_canister, bind_canister, create_configured_plan, discover_configs, init_app,
+    init_config, init_fleet, load_config, resolve_config_path,
 };
 pub use fleet::{
     Fleet, FleetCanister, FleetManager, FleetOperation, FleetUpgrade, fleet, fleet_with_config,
     fleet_with_managers,
 };
+pub use fleet_plan::{
+    Cancellation, CreatedCanister, FleetChild, FleetPlan, cancel_fleet_plan, create_fleet_plan,
+};
 pub use managed::create_managed_plan;
 pub use network::{Network, greet};
 pub use operation::{ApplyOutcome, Receipt, apply, status};
 pub use plan::{ManagedOwner, Plan, PlanInput, create_plan};
+pub use signed::signing_principal;
 pub use starter::create_starter;
 pub use wallet::{Wallet, WalletBalance, wallet, wallet_address};
 
