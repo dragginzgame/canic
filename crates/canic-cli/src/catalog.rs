@@ -9,48 +9,85 @@ const TABLE_OPTIONS: Options = Options {
     header_separator: true,
 };
 
-pub(crate) fn canisters(path: &Path, app: &str, fleet: &str, json: bool) -> Result<Output> {
-    let selected = canic_host::load_config(path)?.select(Some(app), Some(fleet))?;
+pub(crate) fn app_canisters(path: &Path, app: Option<&str>, json: bool) -> Result<Output> {
+    let config = canic_host::load_config(path)?;
+    let (app, definition) = config.select_app(app)?;
+    if json {
+        return Ok(Output::Json(
+            serde_json::json!({"scope":"local app definitions only", "config_path":path, "app":app, "canisters":definition.canisters}),
+        ));
+    }
+    // Any fleet resolves the same app-owned topology; no identity is displayed here.
+    let fleet = definition
+        .fleets
+        .first_key_value()
+        .ok_or_else(|| Error::Invalid("app has no fleets".into()))?
+        .0;
+    let selected = config.select(Some(app), Some(fleet))?;
+    let rows: Vec<_> = crate::topology::rows(&selected.config)
+        .into_iter()
+        .map(|(name, prefix)| {
+            let item = &definition.canisters[name];
+            [
+                format!("{prefix}{name}"),
+                item.role.clone().unwrap_or_else(|| "—".into()),
+                item.wasm
+                    .as_ref()
+                    .map_or_else(|| "—".into(), |path| path.display().to_string()),
+            ]
+        })
+        .collect();
+    let table = table::render(
+        &["CANISTER", "ROLE", "WASM INPUT"],
+        &rows,
+        &[Alignment::Left; 3],
+        TABLE_OPTIONS,
+    );
+    Ok(Output::Text(format!("App: {app}\n\n{table}\n\n")))
+}
+
+pub(crate) fn canisters(
+    path: &Path,
+    app: Option<&str>,
+    fleet: Option<&str>,
+    json: bool,
+) -> Result<Output> {
+    let selected = canic_host::load_config(path)?.select(app, fleet)?;
     if json {
         return Ok(Output::Json(serde_json::json!({
             "scope":"local configuration only", "config_path":path, "configuration":selected,
         })));
     }
-    let title = format!("Configured canister slots — app {app}, fleet {fleet}");
+    let title = format!("App: {} · Fleet: {}", selected.app, selected.fleet);
     if selected.config.canisters.is_empty() {
-        return Ok(Output::Text(format!("{title}\nNo slots declared.\n")));
+        return Ok(Output::Text(format!(
+            "{title}\n\nNo canisters defined.\n\n"
+        )));
     }
-    let rows: Vec<_> = selected
-        .config
-        .canisters
-        .iter()
-        .map(|(slot, config)| {
+    let rows: Vec<_> = crate::topology::rows(&selected.config)
+        .into_iter()
+        .map(|(slot, prefix)| {
+            let config = &selected.config.canisters[slot];
             [
-                slot.clone(),
+                format!("{prefix}{slot}"),
+                config.role.clone().unwrap_or_else(|| "—".into()),
                 config.id.clone().unwrap_or_else(|| "—".into()),
             ]
         })
         .collect();
     let table = table::render(
-        &["SLOT", "CONFIGURED ID"],
+        &["CANISTER", "ROLE", "PRINCIPAL"],
         &rows,
-        &[Alignment::Left, Alignment::Left],
+        &[Alignment::Left; 3],
         TABLE_OPTIONS,
     );
-    Ok(Output::Text(format!(
-        "{title}\n{table}\nConfiguration only; an unset ID does not mean undeployed. Use fleet show for deployment observations.\n"
-    )))
+    Ok(Output::Text(format!("{title}\n\n{table}\n\n")))
 }
 
 pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) -> Result<Output> {
     let config = canic_host::load_config(path)?;
-    if let Some(app) = app
-        && !config.apps.contains_key(app)
-    {
-        return Err(Error::Invalid(format!(
-            "unknown app; choose from: {}",
-            config.apps.keys().cloned().collect::<Vec<_>>().join(", ")
-        )));
+    if let Some(app) = app {
+        config.select_app(Some(app))?;
     }
     let mut rows = Vec::new();
     let mut app_rows = Vec::new();
@@ -68,13 +105,9 @@ pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) 
                     Network::Mainnet => "ic / mainnet".into(),
                     Network::Local { url, .. } => format!("local / {url}"),
                 };
-                rows.push(serde_json::json!({"app":app_name, "fleet":fleet, "network":definition.network, "declared_canisters":definition.canisters.len()}));
-                fleet_rows.push([
-                    app_name.clone(),
-                    fleet.clone(),
-                    definition.canisters.len().to_string(),
-                    network,
-                ]);
+                let count = config.apps[app_name].canisters.len();
+                rows.push(serde_json::json!({"app":app_name, "fleet":fleet, "network":definition.network, "declared_canisters":count}));
+                fleet_rows.push([app_name.clone(), fleet.clone(), count.to_string(), network]);
             }
         }
     }

@@ -2,6 +2,7 @@ use canic_host::Fleet;
 use ic_host_text::escape::terminal_text;
 use std::{collections::BTreeMap, fmt::Write as _};
 
+mod inventory;
 mod roles;
 #[cfg(test)]
 mod tests;
@@ -16,43 +17,34 @@ fn paint(value: &str, style: &str, color: bool) -> String {
 }
 
 pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: bool) -> String {
-    let mut output = format!(
-        "{}  |  {} canisters  |  {} operations  |  {} inventory issues\nSnapshot: {} Unix seconds. Read-only, sampled observations.\nScope: local journal and explicitly selected observations.\n",
-        paint("CANIC FLEET", "1", color),
-        snapshot.canisters.len(),
-        snapshot.operations.len(),
-        snapshot.issues.len(),
-        snapshot.finished_at_ns / 1_000_000_000,
-    );
-    if let Some(config) = &snapshot.configuration {
-        writeln!(
-            output,
-            "\n{} {}\n  {} {}",
-            paint("App:", "1;34", color),
-            terminal_text(&config.app),
-            paint("Fleet:", "1", color),
-            terminal_text(&config.fleet)
-        )
-        .expect("writing to String");
-        writeln!(
-            output,
-            "  Configured network: {}",
+    let mut output = if let Some(config) = &snapshot.configuration {
+        format!(
+            "{} / {} · {}\n",
+            paint(&config.app, "1", color),
+            terminal_text(&config.fleet),
             terminal_text(&super::configured_network(config))
         )
-        .expect("writing to String");
+    } else {
+        "Canic fleet\n".into()
+    };
+    if let Some(config) = &snapshot.configuration {
         if config.config.canisters.is_empty() {
-            output.push_str(
-                "    No canisters declared yet. Use fleet canister add to declare slots before planning.\n",
-            );
+            output.push_str("No canisters declared yet.\n");
         }
         for slot in config.config.canisters.keys() {
-            writeln!(
-                output,
-                "    {}: {}",
-                terminal_text(slot),
-                terminal_text(&super::slot_status(snapshot, slot))
-            )
-            .expect("writing to String");
+            if !snapshot.canisters.iter().any(|target| {
+                config.config.network.binding_id().ok().as_deref() == Some(&target.network_id)
+                    && super::slot_state(snapshot, slot).identity()
+                        == Some(target.canister.as_str())
+            }) {
+                writeln!(
+                    output,
+                    "  {}: {}",
+                    terminal_text(slot),
+                    terminal_text(&super::slot_status(snapshot, slot))
+                )
+                .expect("writing to String");
+            }
         }
     }
     let mut networks = BTreeMap::<_, Vec<_>>::new();
@@ -75,13 +67,20 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         .map(|(index, id)| (id, index + 1))
         .collect();
     for (network_id, canisters) in networks {
-        writeln!(
-            output,
-            "\nNetwork #{}: {}",
-            network_numbers[network_id],
-            terminal_text(&canisters[0].network),
-        )
-        .expect("writing to String");
+        if snapshot.configuration.as_ref().is_none_or(|config| {
+            network_numbers.len() != 1
+                || config.config.network.binding_id().ok().as_deref() != Some(network_id)
+        }) {
+            writeln!(
+                output,
+                "\nNetwork #{}: {}",
+                network_numbers[network_id],
+                terminal_text(&canisters[0].network),
+            )
+            .expect("writing to String");
+        } else {
+            output.push('\n');
+        }
         if details {
             writeln!(
                 output,
@@ -90,90 +89,47 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             )
             .expect("writing to String");
         }
-        let mut external = BTreeMap::<&str, usize>::new();
-        for target in &canisters {
-            if target.observation_error.is_none() {
-                for controller in target.controllers.iter().flatten() {
-                    if !canisters.iter().any(|item| item.canister == *controller) {
-                        *external.entry(controller).or_default() += 1;
-                    }
-                }
-            }
-        }
-        for (controller, count) in external {
-            writeln!(output, "  {} {}\n    Controls {count} known canister(s); principal outside this canister inventory.", paint("[EXTERNAL CONTROLLER]", "1;35", color), terminal_text(controller)).expect("writing to String");
-        }
-        for canister in canisters {
-            let observed = canister.observation_error.is_none()
-                && canister.module_hash.is_some()
-                && canister.controllers.is_some();
-            writeln!(
-                output,
-                "  {} {}  [{}]",
-                roles::badges(snapshot, canister, links, color),
-                terminal_text(&canister.canister),
-                paint(
-                    if observed {
-                        "verified code/controllers"
-                    } else {
-                        "UNKNOWN metadata"
-                    },
-                    if observed { "32" } else { "1;33" },
-                    color
-                )
-            )
-            .expect("writing to String");
-            if let Some(module) = &canister.module_hash
-                && details
-            {
-                writeln!(output, "    Module: {}", terminal_text(module))
-                    .expect("writing to String");
-            }
-            if let Some(controllers) = &canister.controllers {
-                let controllers = if controllers.is_empty() {
-                    "none".into()
-                } else {
-                    controllers
-                        .iter()
-                        .map(|value| terminal_text(value))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                };
-                writeln!(output, "    Controlled by: {controllers}").expect("writing to String");
-            }
-            if let Some(error) = &canister.observation_error {
-                writeln!(output, "    Observation: {}", terminal_text(error))
-                    .expect("writing to String");
-            }
-        }
+        output.push_str(&inventory::render(
+            snapshot, &canisters, links, details, color,
+        ));
     }
     if snapshot.canisters.is_empty() {
-        output
-            .push_str("\nNo known canisters. Retained plans may still have unresolved targets.\n");
+        output.push_str("\nNo known canisters.\n");
     }
-    output
-        .push_str("\nMetadata does not establish readiness, running status or canister cycles.\n");
-    output.push_str("Controller badges come from verified relationships. Manager roles are selected; worker roles are reported; entry routes are declared.\n");
+    if details {
+        writeln!(output, "\nSnapshot: {} Unix seconds. Read-only sampled observations.\nCode/control verification does not establish readiness, running status or canister cycles.\nTree and explicit roles are declared; fallback roles come from manager reports or routes. Controller relationships are observed separately.", snapshot.finished_at_ns / 1_000_000_000).expect("writing to String");
+    }
     for manager in &snapshot.managers {
-        writeln!(
+        let name = roles::name(snapshot, &manager.network_id, &manager.manager)
+            .unwrap_or_else(|| manager.manager.clone());
+        write!(
             output,
-            "\n{} {} (uncertified report, network #{})",
-            paint("MANAGER", "1;36", color),
-            terminal_text(&manager.manager),
-            network_numbers[&manager.network_id]
+            "\n{} report (uncertified): {}",
+            super::manager_kind(snapshot, manager),
+            terminal_text(&name)
         )
         .expect("writing to String");
-        if let Some(status) = &manager.reported {
-            writeln!(
+        if network_numbers.len() > 1 {
+            write!(
                 output,
-                "  Phase: {:?}; create/upload/install attempts: {}/{}/{}\n  Worker: {}",
-                status.phase,
-                status.attempts[0],
-                status.attempts[1],
-                status.attempts[2],
-                terminal_text(status.worker.as_deref().unwrap_or("No retained principal"))
+                " (network #{})",
+                network_numbers[&manager.network_id]
             )
             .expect("writing to String");
+        }
+        if let Some(status) = &manager.reported {
+            writeln!(output, " — {:?}", status.phase).expect("writing to String");
+            if details {
+                writeln!(
+                    output,
+                    "  Create/upload/install attempts: {}/{}/{}; child: {}",
+                    status.attempts[0],
+                    status.attempts[1],
+                    status.attempts[2],
+                    terminal_text(status.worker.as_deref().unwrap_or("unresolved"))
+                )
+                .expect("writing to String");
+            }
             if status.phase == canic_host::ProfileGrowthPhase::CreateIssued {
                 output.push_str("  Creation unresolved; no second creation is authorized.\n");
             }
@@ -181,7 +137,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 writeln!(output, "  Failure: {failure:?}").expect("writing to String");
             }
         } else {
-            output.push_str("  UNKNOWN manager state\n");
+            output.push_str(" — UNKNOWN\n");
         }
         if let Some(error) = &manager.observation_error {
             writeln!(output, "  Observation: {}", terminal_text(error)).expect("writing to String");
@@ -226,7 +182,8 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         .count();
     writeln!(
         output,
-        "\n{receipts} retained deployment receipts (historical evidence)."
+        "\n{} canisters · {receipts} retained receipts",
+        snapshot.canisters.len()
     )
     .expect("writing to String");
     for operation in snapshot
@@ -256,12 +213,14 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             )
             .expect("writing to String");
         }
-        writeln!(
-            output,
-            "    Inspect: {}",
-            terminal_text(&super::status_command(snapshot, &operation.operation))
-        )
-        .expect("writing to String");
+        if details {
+            writeln!(
+                output,
+                "    Inspect: {}",
+                terminal_text(&super::status_command(snapshot, &operation.operation))
+            )
+            .expect("writing to String");
+        }
     }
     if !snapshot.issues.is_empty() {
         output.push_str("\nPARTIAL INVENTORY:\n");
@@ -269,8 +228,6 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             writeln!(output, "  {}", terminal_text(issue)).expect("writing to String");
         }
     }
-    output.push_str(
-        "\nUse --details for code hashes/network identities, --json for structured evidence,\nor --watch for a localhost live view. Retain any --config/--state-dir path when inspecting status.\n",
-    );
+
     output
 }

@@ -4,6 +4,20 @@ Canic's first native CLI and deployable greeting application. The CLI lives in
 `crates/canic-cli`, deployment logic in `crates/canic-host`, the small shared
 Wire contract in `crates/canic`, and the demo in `apps/hello/canister`.
 
+The [one-child Root journey](docs/demos/root.md) generates a greeting workspace
+and deploys its application through explicit Root-owned plan/apply approval.
+The installed local journey qualifies admission, lost-reply recovery and completion
+receipts. Run `make root-test`
+after simulator preparation. Whole-fleet deployment remains upcoming; existing
+mainnet demos are unchanged.
+
+`canic fleet show` follows Roots named in retained child plans automatically.
+Add `--watch` for the read-only localhost view without opening a browser.
+Public Root reports remain distinct from completion receipts retained by apply.
+In this checkout, select `--app profile` or `--app hello-world`: both apps are
+configured. Bare commands infer scope only in a config with a sole app/fleet,
+such as a newly generated project. Use `--config PATH` when outside that project.
+
 The [persistent profile demo](docs/demos/profile.md) adds an application-owned
 worker, discovery entry, Wire contract and native client under `apps/profile/`.
 Start with `make profile` and `make profile-test`; the same Canic CLI deploys both
@@ -15,7 +29,7 @@ approve a worker once, let the host leave, then inspect the retained outcome wit
 This is the fresh Canic rewrite. The predecessor is maintained separately as
 [canic-legacy](https://github.com/dragginzgame/canic-legacy).
 
-The rewrite uses the **0.200.x** line, above the legacy crates.io release line.
+The rewrite uses versions **0.200.0 and later**, above the legacy crates.io release line.
 Development is shared through GitHub. We will not publish this rewrite to
 crates.io until it is mature; all workspace packages retain `publish = false`.
 Build from this repository in the meantime.
@@ -96,18 +110,20 @@ have no aliases.
 
 | Command | Input and scope |
 | --- | --- |
-| `app init APP --fleet FLEET --network ic` | Add a new app and its first fleet; create the config if missing. `--config PATH` chooses the file. Refuses existing app names. No deployment. |
+| `app init APP --fleet FLEET --network ic` | Declare an app in `--config PATH`, or add `--source DIRECTORY --canic-source CHECKOUT` to generate a new standalone workspace and its own config. No deployment. |
 | `app list` | Read all apps from `--config PATH` (default `canic.json`). |
-| `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. App names do not select packages. |
+| `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
 | `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
 | `fleet list` | Read fleet declarations; optional `--app APP` filters them. |
-| `fleet init FLEET --app APP --network ic` | Add an empty fleet to an existing app in `--config PATH`; refuses existing names and deploys nothing. |
-| `fleet canister add SLOT --app APP --fleet FLEET` | Declare a slot in that existing fleet; optional `--id PRINCIPAL` records an existing canister. Refuses existing slot names and deploys nothing. |
-| `fleet canister list --app APP --fleet FLEET` | List local slot declarations and explicitly configured IDs, without reading journals or contacting canisters. |
+| `fleet init FLEET --network ic` | Instantiate the selected app's shared definitions with no existing IDs; deploys nothing. |
+| `app canister add CANISTER` | Define a canister once for all selected app fleets; optional `--role`, `--parent` and `--wasm` describe its topology and artifact input. |
+| `app canister list` | List the selected app's shared definitions. |
+| `fleet canister bind SLOT --id PRINCIPAL` | Bind an existing ID in the selected fleet for observation only; refuses replacement and never changes controllers. |
+| `fleet canister list` | List the selected fleet's local slots and configured IDs, without reading journals or contacting canisters. |
 | `fleet show` | Observe the selected app/fleet; `--html PATH` saves a report, `--serve` serves it, and `--watch` refreshes it. |
 | `fleet plan --wasm WASM_FILE --controller PRINCIPAL` | Prepare one canister's deployment within the selected fleet, using the creation or upgrade arguments below. |
 | `fleet apply OPERATION --identity IDENTITY` | Approve/resume that exact retained operation, including its funding and network effects. |
-| `fleet status OPERATION` | Read that operation's retained local evidence. |
+| `fleet status OPERATION` | Show the retained plan, effect evidence and historical receipt locally; `--json` returns the full structured evidence. |
 | `fleet call OPERATION --name NAME` | Query the hello demo deployed by that completed operation. This is not a general canister-method caller. |
 | `fleet view REPORT_HTML` | Serve an existing local HTML snapshot. No app/fleet selection, journal access or live observation. |
 | `wallet PRINCIPAL` | Read a public mainnet wallet, or derive its receive address with `--address-only`. |
@@ -117,6 +133,14 @@ and optional `--config PATH` and `--state-dir PATH`. `--no-config` selects the
 original standalone journal flow. `fleet list` needs only the config and optional
 app filter; `fleet view` needs only its saved file and viewer options. Artifact,
 wallet and saved-view commands reject unrelated deployment selectors.
+
+Commands selecting an existing app accept `--app APP`; commands selecting an
+existing fleet also accept `--fleet FLEET`. Omit `--app` only when the config has
+one app, and `--fleet` only when that app has one fleet. Ambiguity or an unknown
+name is an error, including for config edits. App definition commands never need
+a fleet selection. There is no saved current context. `app list` and `fleet list`
+still list all declarations unless filtered. New names in `app init` and
+`fleet init` must always be supplied.
 
 Planning creation requires `--canister SLOT` for an unbound configured slot.
 Planning an upgrade requires `--target PRINCIPAL --previous-module HASH`; the
@@ -159,13 +183,13 @@ Initialization creates **only local declarations**. It creates `canic.json` if
 missing or adds the new app to an existing config, preserving other apps. It
 refuses an existing app name, does not access an identity, and performs no network
 calls or funding. Existing-file updates use the sidecar lock described below.
-Canister layout is declared later in the selected fleet:
+Canister layout is defined once at app scope:
 
 ```json
 {
-  "version": 2,
   "apps": {
     "hello": {
+      "canisters": {},
       "fleets": {
         "mainnet": {
           "network": { "kind": "Mainnet" },
@@ -185,12 +209,50 @@ canic fleet list --app hello
 canic fleet show --app hello --fleet staging
 ```
 
-This adds an empty fleet on the explicitly chosen network, preserving all other
-declarations. It refuses unknown apps and existing fleet names. No canisters are
+This adds a fleet on the explicitly chosen network using the app’s shared
+definitions, with no existing identity bindings. It preserves other declarations
+and refuses unknown apps and existing fleet names. No canisters are
 created and no journal is opened; its future default journal remains separate
 from the first fleet. A fleet name such as `staging` does not imply a network.
 Local fleets require the same explicit URL, root key and routing canister inputs
 as `app init`.
+
+Define application roles and parent/child structure once. Both `hello/mainnet`
+and `hello/staging` resolve the same definitions:
+
+```sh
+canic app canister add manager --app hello --role manager
+canic app canister add worker --app hello --role worker --parent manager
+canic app canister list --app hello
+canic fleet canister list --app hello --fleet staging
+```
+
+These are local declarations only. A parent must already be defined in that
+app; missing parents and cycles are refused. Roles are application-defined
+names and may repeat across slots. Declaring `manager`, `root` or any other role
+does not install code, select a query adapter or grant permissions. Existing
+definitions can be described by editing their optional `role` and `parent` fields
+under `apps.APP.canisters` in `canic.json`; changes are validated on load and do
+not rewrite retained plans.
+The fleet binding’s `profile_manager` field independently selects the profile
+demo query. Fleet bindings accept only `id` and `profile_manager`; they cannot
+override roles, parents or artifact inputs. A new app definition appears in every
+fleet’s desired layout, but does not create any canisters.
+
+An optional `wasm` path belongs to the app definition and resolves relative to
+`canic.json`, independent of the shell’s current directory. A named creation plan
+uses it when `--wasm` is omitted and refuses a competing CLI path. If no app path
+is defined, supply `--wasm` explicitly as before. Planning retains exact bytes;
+later config or source-file edits never change an approved operation.
+
+The current config is unversioned and requires `apps.APP.canisters`. The old
+versioned fleet-local layout is refused. For an existing external config, remove
+the top-level `version`, move `role`, `parent` and any shared artifact path into
+`apps.APP.canisters.NAME`, and retain only existing `id`/`profile_manager` bindings
+in each fleet’s `canisters` map. Omit unbound entries from that map. Resolve any
+conflicting definitions across fleets explicitly; do not silently pick one. Keep
+network, journal paths and existing IDs unchanged, and do not edit retained plans.
+This checkout’s config has already been migrated.
 
 Config updates use a persistent, Git-ignored `CONFIG.canic-lock` sidecar and an
 atomic file replacement. The lock coordinates Canic commands, not external text
@@ -231,12 +293,13 @@ local mistake prevention; controller/signature checks still supply authority.
 Editing a name is not a rename or transfer operation, and never rewrites existing
 approved plans or moves their journals.
 
-To prepare the first deployment in the app/fleet created above, declare an empty
-slot. Both slot commands require `--app` and `--fleet`; they accept `--config PATH`
-but no network override or journal options. The fleet already owns its network.
+To prepare a first deployment, add a shared app definition. Definition commands
+select an app; binding/list commands also select one of its fleets. Supply
+`--app` or `--fleet` whenever that choice is ambiguous. These commands accept
+`--config PATH`, not network overrides or journal options.
 
 ```sh
-canic fleet canister add backend --app hello --fleet mainnet
+canic app canister add backend --app hello
 canic fleet canister list --app hello --fleet mainnet
 ```
 
@@ -247,18 +310,18 @@ can still have a completed deployment in the journal. Use `fleet show` for that
 evidence and live observations.
 
 To include an already deployed canister, set `canic_existing_id` to its principal
-and choose an unused slot name in the fleet for its actual network:
+and define it in the app, then bind it in the fleet for its actual network:
 
 ```sh
-canic fleet canister add existing --app hello --fleet mainnet --id "$canic_existing_id"
+canic app canister add existing --app hello
+canic fleet canister bind existing --app hello --fleet mainnet --id "$canic_existing_id"
 canic fleet canister list --app hello --fleet mainnet
 ```
 
 This records local membership only. It does not contact the canister, verify
 existence or control, change controllers, fund it or modify its code. Invalid
 principals and duplicate membership on the same network are refused before the
-config is replaced. Existing slots cannot be rebound with `add`, including empty
-slots. An ID blocks creation in that slot; upgrading still requires a separate
+config is replaced. Existing identity bindings cannot be replaced with `bind`. An ID blocks creation in that slot; upgrading still requires a separate
 target/hash plan and approval. No journal is created or changed by this command.
 
 Set `canic_owner` to the controller principal and prepare the Wasm target, then
@@ -383,6 +446,14 @@ progress goes to stderr; JSON stdout stays machine-readable. The deployment
 receipt verifies the certified module hash and sole controller. The greeting
 is explicitly an **uncertified query**. `status` reports retained local evidence.
 
+The status summary shows the app/fleet/slot (when named), original network
+binding, planned artifact and controller, creation budget, and new-effect
+deadline. Its effect table distinguishes an unknown outcome from a retained
+reply or rejection. A retained reply alone does not prove success; a receipt
+records historical deployment evidence without checking current canister health.
+Expiry never proves that an uncertain attempt failed. Add `--json` to retain
+the complete structured output for scripts.
+
 Preserve `.canic/`: it contains approved artifacts, signed requests and receipts,
 with owner-only file permissions. It is ignored by Git and must survive process
 restarts. Protect it as authority-bearing state. Rerun **the same `apply` command**
@@ -403,28 +474,41 @@ canic fleet show --app profile --fleet mainnet --html target/fleet.html
 canic fleet view target/fleet.html
 ```
 
-`canic fleet show --app profile --fleet mainnet` prints a terminal summary of known canisters, controller roles,
+`canic fleet show --app profile --fleet mainnet` prints a terminal summary of known canisters, application roles and controller relationships,
 verified code/controller observations, and operations without a terminal receipt. Explicit
 `--manager`, `--wallet` and `--link` selections add their reports to the summary.
 Unknown observations and partial inventory stay visible; manager and wallet
 queries are labelled uncertified. No browser opens for this command.
+If a configured slot conflicts with a retained operation's network binding or
+principal, its summary reports the conflict. The original operation evidence
+remains visible below; editing configuration does not rebind it.
 Use `canic fleet show --app profile --fleet mainnet --json` for scripts and complete structured evidence; plain
 `canic fleet show --app profile --fleet mainnet` no longer prints JSON.
 
-Controller badges are **magenta**, selected managers **cyan**, and declared entries
-or reported/declared workers **blue**. Verified metadata is green; unknown metadata
-is yellow. Role names remain readable without colour. A **CONTROLLER CANISTER**
-controls another known canister on the same network, based on verified metadata.
-An **EXTERNAL CONTROLLER** is a principal outside that network's known canister
-inventory; it may be an identity or an unlisted canister. The current demo uses
-an operator identity and a manager, with no separately deployed root canister.
-Root roles are not inferred from an incomplete inventory.
+The default table follows the declared application tree and shows each canister's
+name and principal once, its role,
+controllers, and verified or unknown code/controller metadata. A controller
+inside the fleet uses its name; external principals get short references such
+as `external:1`, with the full principal listed once below the table. These
+references are local to the network section and may change between snapshots.
+An external principal may be an operator identity or an unlisted canister.
+
+Controller rows are **magenta**, selected managers **cyan**, and unknown metadata
+rows **yellow**; ordinary verified rows stay plain. Controlling another canister
+does not replace its application role: the profile manager stays `manager`.
+Declared roles take precedence; otherwise the view can use selected managers,
+reported workers and declared routes as before. Manager reports remain labelled
+uncertified. The tree uses explicit parent slots, never routing or controller
+inference. Root roles are not inferred. Missing or conflicted parent identities
+are reported, with affected children shown without nesting.
 
 Colours default to interactive terminals; redirected output stays plain. Auto mode
 honours nonempty `NO_COLOR` and `TERM=dumb`. Override with `--color always` or
 `--color never`; JSON stays colour-free. Network numbers distinguish separate
-environments within the current snapshot. Use `--details` to see full module
-hashes and diagnostic network identities:
+environments within the current snapshot. Routine help and badge stacks are
+omitted. Use `--details` for full module hashes, network identities, observation
+timestamps, manager attempt counts and evidence explanations. Conflicts,
+observation errors and unresolved operations remain visible in the compact view:
 
 ```sh
 canic fleet show --app profile --fleet mainnet --manager rk6n2-wyaaa-aaaad-qmoua-cai --color always

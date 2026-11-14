@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "apps": {
     "hello-world": {
       "fleets": {
@@ -14,6 +13,9 @@
             }
           }
         }
+      },
+      "canisters": {
+        "hello": {}
       }
     },
     "profile": {
@@ -38,6 +40,21 @@
               "id": "rn7lo-3aaaa-aaaad-qmouq-cai"
             }
           }
+        }
+      },
+      "canisters": {
+        "entry": {
+          "role": "entry"
+        },
+        "shared-worker": {
+          "role": "worker"
+        },
+        "manager": {
+          "role": "manager"
+        },
+        "managed-worker": {
+          "role": "worker",
+          "parent": "manager"
         }
       }
     }

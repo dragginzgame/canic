@@ -23,6 +23,43 @@ pub(crate) fn input() -> PlanInput {
 }
 
 #[test]
+fn network_binding_preserves_fleet_encoding_and_separates_trust_inputs() {
+    let original = Network::Local {
+        url: "http://localhost:8000".into(),
+        root_key: "00".repeat(133),
+        routing_canister: "aaaaa-aa".into(),
+    };
+    for network in [Network::Mainnet, original.clone()] {
+        assert_eq!(
+            network.binding_id().unwrap(),
+            crate::artifact::digest(&serde_json::to_vec(&network).unwrap())
+        );
+    }
+    for changed in [
+        Network::Local {
+            url: "http://localhost:8000".into(),
+            root_key: "01".repeat(133),
+            routing_canister: "aaaaa-aa".into(),
+        },
+        Network::Local {
+            url: "http://localhost:8001".into(),
+            root_key: "00".repeat(133),
+            routing_canister: "aaaaa-aa".into(),
+        },
+        Network::Local {
+            url: "http://localhost:8000".into(),
+            root_key: "00".repeat(133),
+            routing_canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        },
+    ] {
+        assert_ne!(
+            original.binding_id().unwrap(),
+            changed.binding_id().unwrap()
+        );
+    }
+}
+
+#[test]
 fn plan_identity_admission_and_artifact_custody() {
     let root = directory();
     let wasm = root.join("app.wasm");

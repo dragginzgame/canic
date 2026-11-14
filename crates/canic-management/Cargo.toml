@@ -1,0 +1,27 @@
+[package]
+name = "canic-management"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Reusable single-child management engine"
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[features]
+fault-injection = []
+maintenance-candidate = []
+
+[dependencies]
+canic-management-protocol.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ic-platform = { workspace = true, features = ["management-canister-types"] }
+ic-platform-runtime = { workspace = true, features = ["cdk"] }
+ic-storage.workspace = true
+ic-timers.workspace = true
+ic-wire.workspace = true
+
+[lints]
+workspace = true

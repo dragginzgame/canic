@@ -14,6 +14,7 @@ name = "canic-profile"
 path = "src/main.rs"
 
 [dependencies]
+canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
 clap.workspace = true
 ic-host-fs.workspace = true

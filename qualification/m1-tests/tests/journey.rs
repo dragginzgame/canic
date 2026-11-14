@@ -109,7 +109,7 @@ async fn deploy_call_resume_and_upgrade() {
     let added = cli(
         &root,
         &[
-            "fleet",
+            "app",
             "canister",
             "add",
             "backend",
@@ -117,8 +117,6 @@ async fn deploy_call_resume_and_upgrade() {
             config_path,
             "--app",
             "hello",
-            "--fleet",
-            "local-demo",
         ],
     );
     assert_eq!(added["deployed"], false);

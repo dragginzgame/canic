@@ -11,6 +11,7 @@ fn plan() -> Plan {
     Plan {
         deployment: None,
         version: 1,
+        management: None,
         network: Network::Mainnet,
         controller: input.controller,
         artifact: Artifact {
@@ -73,4 +74,30 @@ fn only_a_retained_creation_principal_can_advance_installation() {
         let bytes = candid_codec::encode_one(&result, 4096).unwrap();
         assert!(matches!(created(&plan, &bytes), Err(Error::Blocked(_))));
     }
+}
+
+#[test]
+fn direct_plan_encodings_keep_their_original_digests() {
+    let mut plan = plan();
+    assert!(
+        !serde_json::to_value(&plan)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("management")
+    );
+    assert_eq!(
+        plan.digest().unwrap(),
+        "9764c46f9d8e48c6b56215dddf2d53a71c8e656d4d8027b295917affe7eff5ba"
+    );
+    plan.version = 2;
+    plan.deployment = Some(crate::DeploymentName {
+        fleet: "mainnet".into(),
+        app: "hello".into(),
+        canister: "backend".into(),
+    });
+    assert_eq!(
+        plan.digest().unwrap(),
+        "6ef3bfb1ec1a4a16885a158003d0c5331607c8e788f029ae60210d1c32b7a8cb"
+    );
 }

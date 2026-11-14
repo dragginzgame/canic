@@ -321,7 +321,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "801927ee168e17809ab8901d9f01f700cd7d8d6a6527997fee44e4b0327a253c"
 dependencies = [
  "ahash",
- "hashbrown",
+ "hashbrown 0.15.5",
  "once_cell",
  "thiserror 2.0.21",
  "web-time",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "canic-host",
  "clap",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -398,11 +398,11 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
- "canic-profile-protocol",
+ "canic-management-protocol",
  "ic-host-fs",
  "ic-host-process",
  "ic-platform",
@@ -413,13 +413,39 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "toko-tooling",
+ "toml",
  "url",
 ]
 
 [[package]]
-name = "canic-profile-client"
-version = "0.200.1"
+name = "canic-management"
+version = "0.201.0"
 dependencies = [
+ "canic-management-protocol",
+ "ic-platform",
+ "ic-platform-runtime",
+ "ic-storage",
+ "ic-timers",
+ "ic-wire",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-management-protocol"
+version = "0.201.0"
+dependencies = [
+ "ic-wire",
+ "serde",
+ "serde_bytes",
+ "sha2 0.11.1",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-profile-client"
+version = "0.201.0"
+dependencies = [
+ "canic-management-protocol",
  "canic-profile-protocol",
  "clap",
  "ic-host-fs",
@@ -431,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-entry"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -442,37 +468,46 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-manager"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
+ "canic-management",
+ "canic-management-protocol",
  "canic-profile-protocol",
- "ic-platform",
  "ic-platform-runtime",
- "ic-storage",
- "ic-timers",
  "ic-wire",
  "toko-tooling",
 ]
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "ic-wire",
  "serde",
- "serde_bytes",
- "sha2 0.11.1",
  "toko-tooling",
 ]
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
  "ic-storage",
  "ic-wire",
  "serde",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-root"
+version = "0.201.0"
+dependencies = [
+ "canic",
+ "canic-management",
+ "canic-management-protocol",
+ "ic-platform-runtime",
+ "ic-wire",
  "toko-tooling",
 ]
 
@@ -1129,6 +1164,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1673,6 +1714,16 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "indexmap"
+version = "2.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
+dependencies = [
+ "equivalent",
+ "hashbrown 0.17.1",
 ]
 
 [[package]]
@@ -2547,6 +2598,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c187e0a369471c550af028cba56d4f4fa2a489ad28151ae95a4d340a2a8b782"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "sha2"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2886,6 +2946,45 @@ name = "toko-tooling"
 version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "060d3507b66eb290ce12bc2572098f7e7cb1e12e9d6697a9b1a5d1552fcb2588"
+
+[[package]]
+name = "toml"
+version = "1.2.1+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5755c51863cdac711f1956baf8eb9588e060755f7d3c4c979e70ea1e1f32cd7"
+dependencies = [
+ "indexmap",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_parser",
+ "toml_writer",
+ "winnow",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "1.1.3+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "173f25c883cd2176a2d8212155638c0a60d484a9d84546d270866f40f56b6e49"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
+name = "toml_parser"
+version = "1.1.5+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
+dependencies = [
+ "winnow",
+]
+
+[[package]]
+name = "toml_writer"
+version = "1.2.0+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "tower"
@@ -3244,6 +3343,12 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+[[package]]
+name = "winnow"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 
 [[package]]
 name = "writeable"

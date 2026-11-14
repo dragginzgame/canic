@@ -44,11 +44,17 @@ pub fn inspect(path: &Path) -> Result<Artifact> {
     admit(&ic_host_fs::read::read_file(path, MAX_WASM).map_err(supplier)?)
 }
 
-/// Build one repository package and select its Wasm from Cargo artifact records.
+/// Build one explicit Cargo package and select its Wasm from artifact records.
+/// An output path atomically receives a copy, replacing a prior build input.
 ///
 /// # Errors
 /// Refuses build failure, output overflow, timeout or ambiguous artifacts. Installs no tools.
-pub fn build(manifest: &Path, package: &str, features: &[String]) -> Result<PathBuf> {
+pub fn build(
+    manifest: &Path,
+    package: &str,
+    features: &[String],
+    destination: Option<&Path>,
+) -> Result<PathBuf> {
     let mut command = Command::new("cargo");
     command
         .args([
@@ -108,5 +114,25 @@ pub fn build(manifest: &Path, package: &str, features: &[String]) -> Result<Path
     }
     let path = paths.remove(0);
     inspect(&path)?;
+    if let Some(output) = destination {
+        let bytes = ic_host_fs::read::read_file(&path, MAX_WASM).map_err(supplier)?;
+        admit(&bytes)?;
+        if let Some(parent) = output
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            ic_host_fs::durable::prepare_private_parents(parent).map_err(supplier)?;
+        }
+        ic_host_fs::durable::write_bytes(
+            output,
+            ic_host_fs::durable::WriteOptions {
+                mode: ic_host_fs::durable::PublicationMode::Replace,
+                permissions: 0o600,
+            },
+            &bytes,
+        )
+        .map_err(supplier)?;
+        return Ok(output.into());
+    }
     Ok(path)
 }

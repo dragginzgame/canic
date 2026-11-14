@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.200.1"
+version = "0.201.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -256,6 +256,8 @@ dependencies = [
 name = "canic-m1-tests"
 version = "0.0.0"
 dependencies = [
+ "canic",
+ "canic-management-protocol",
  "canic-profile-protocol",
  "ic-host-artifacts",
  "ic-testkit",
@@ -266,13 +268,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-profile-protocol"
-version = "0.200.1"
+name = "canic-management-protocol"
+version = "0.201.0"
 dependencies = [
  "ic-wire",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
+]
+
+[[package]]
+name = "canic-profile-protocol"
+version = "0.201.0"
+dependencies = [
+ "ic-wire",
+ "serde",
 ]
 
 [[package]]

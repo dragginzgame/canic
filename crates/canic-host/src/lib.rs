@@ -3,28 +3,33 @@
 mod artifact;
 mod config;
 mod fleet;
+mod managed;
 mod network;
 mod operation;
 mod plan;
 mod signed;
+mod starter;
 mod store;
 #[cfg(test)]
 mod tests;
 mod wallet;
 
 pub use artifact::{Artifact, build, inspect};
-pub use canic_profile_protocol::growth::Phase as ProfileGrowthPhase;
+pub use canic_management_protocol::Phase as ProfileGrowthPhase;
 pub use config::{
-    AppConfig, CanisterConfig, Config, DeploymentName, FleetConfig, SelectedFleet, add_canister,
+    AppConfig, CanisterBinding, CanisterConfig, CanisterDefinition, Config, DeploymentName,
+    FleetConfig, FleetDeclaration, SelectedFleet, add_app_canister, bind_canister,
     create_configured_plan, init_app, init_config, init_fleet, load_config,
 };
 pub use fleet::{
     Fleet, FleetCanister, FleetManager, FleetOperation, fleet, fleet_with_config,
     fleet_with_managers,
 };
+pub use managed::create_managed_plan;
 pub use network::{Network, greet};
-pub use operation::{Receipt, apply, status};
-pub use plan::{Plan, PlanInput, create_plan};
+pub use operation::{ApplyOutcome, Receipt, apply, status};
+pub use plan::{ManagedCreation, Plan, PlanInput, create_plan};
+pub use starter::create_starter;
 pub use wallet::{Wallet, WalletBalance, wallet, wallet_address};
 
 use std::time::{SystemTime, UNIX_EPOCH};

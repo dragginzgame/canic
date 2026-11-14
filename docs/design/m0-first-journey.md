@@ -16,6 +16,304 @@ This record contains scoped decisions and evidence, not a second implementation
 backlog. The first product is the [M1 Hello World loop](../../README.md), followed
 by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
+## 0.201.0 release review
+
+The release review covers app-owned definitions versus fleet bindings, canister-only
+trees, shared management ownership, and the separation of public Root reports from
+authenticated completion evidence. The growth fixture's obsolete report-heading
+assertion now checks the explicit uncertified Manager label.
+The installed Root CLI fixture pauses automatic simulator progress around manual
+time advancement, preventing its clock from racing the live gateway.
+
+One naming cleanup remains: `crates/canic-host/src/lib.rs` exports the shared
+management protocol's `Phase` as `ProfileGrowthPhase`, used by CLI renderers and
+their tests. Rename that export and its callers to a management-owned name in the
+next increment, without a compatibility alias. It does not pull the profile
+application protocol into Host or change persisted/wire evidence.
+
+## Read-only Root progress
+
+The next 2026-11-14 increment closes the observation gap between Root admission
+and retained completion. The existing fleet collector now selects each planned
+Root by exact network binding and principal, alongside explicitly selected
+profile managers. Terminal output, saved reports and localhost watch reuse that
+collector; no new command, journal or polling owner is introduced. Automatic
+selection stays network-scoped even when two replicas reuse the same principal;
+explicit principal-only selection still refuses that ambiguity. The combined
+selection remains capped at sixteen owners and the existing snapshot deadline.
+
+Reuse the same pinned legacy component-operation and progress-rendering research
+recorded in the managed-child and readable-status sections below, including the
+request-correlation and unknown-readiness regressions and their inspected path
+history. Preserve their separation of reported progress and terminal evidence.
+A public report must match the retained approval before its child enters the
+observation inventory. Mismatches stay unknown; an empty pre-admission Root is
+allowed. Neither reported readiness nor independently observed child metadata
+establishes retained child custody, changes slot bindings or writes receipts.
+Trees still contain canisters only; external controllers remain metadata.
+
+Native tests cover exact network selection, explicit/automatic deduplication,
+selection budgets and refusal of foreign approvals and self-child reports.
+The installed CLI fixture observes Scheduled then Ready without applying,
+checks both terminal and HTML Root labels, and proves the child's retained
+identity and receipt remain absent until authenticated completion. Watching
+creates no signed observation attempt and spends no new management allowance.
+The simulator uses synthetic cycles and opens no browser. This is bounded
+single-level Root observation, not general cascading subtree discovery.
+
+## Managed-child CLI approval
+
+The next 2026-11-14 increment connects the generated app to the supplied Root
+through the existing fleet plan/apply/status workflow. Explicit `--root-module`
+selects Root-owned creation; parent declarations alone never authorize it.
+Resolve the immediate parent from a configured identity or a completed named
+receipt, reject ambiguous/conflicting identities and refuse multiple children
+for this one-slot owner. Each apply checks certified Root code and sole operator
+control. The child receipt and fleet projection name Root as its controller.
+
+Research at legacy revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` inspected
+[component operation workflow](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_operation/workflow/mod.rs),
+[operation regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_operation/tests.rs)
+and [transport selection tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_operation/ops/transport/tests/mod.rs).
+The path history includes `4176ee97405185bf4780b5ada0f9206ead750313`
+(native timer ownership) and `aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f`
+(the aligned supplier hard cut). Carry forward intent before submission,
+immutable review identity, incomplete successful progress, authority-drift
+refusal and monotonic output custody. The narrow Root needs no legacy release
+registry, capacity pool or generalized component-operation journal.
+
+The existing typed plan adds an optional management binding; absent bindings
+serialize exactly as before. Golden checks preserve retained direct v1/v2
+plan digests; no new format version, migration or parallel reader is introduced.
+The single retained plan owns Root identity/code, child bytes, signer, exact 1T
+attachment and schedule. New schedules default to ten minutes after planning,
+with an effect deadline ten minutes later. Reopening a named slot returns its
+original authority, including a past schedule; it cannot renew an allowance.
+A declared child refuses fresh direct-host creation. Existing direct operations
+remain recoverable by their original digest even if the declaration changes.
+
+Staging uses the existing exact signed-attempt owner. A successful pending result
+is separate from completion. Root adds a controller-guarded replicated
+`observe` endpoint that only reads committed status. Its retained reply can
+recover lost staging evidence without re-signing admission. Only that exact
+read method, recipient and payload may receive fresh signing authority after
+the effect deadline; it cannot reconcile or dispatch effects. Public queries do
+not establish created-principal custody. Observation attempts are bounded at 32;
+an uncertain expired observation stays blocked. Child identity, attempts,
+request commitments and outcome evidence cannot regress. Root readiness plus
+certified child module/controllers are required before retaining a receipt.
+
+Focused host/CLI tests cover planning, exact replay, changed authority, output
+substitution, signer scope and preserved direct-plan encodings. Installed CLI
+qualification creates the generated config, binds a fixture Root, plans and
+admits its app, loses the staging reply, reconstructs admission through a
+replicated read, observes one ready child, projects its fleet membership and
+recovers a missing completion receipt without invoking the signer. Existing
+Root maintenance qualification remains passing. No mainnet mutation or browser
+launch occurred. Whole-fleet convergence, child upgrades, arbitrary subtree
+operations and general infrastructure maintenance approvals remain separate.
+
+## Generated starter implementation
+
+The next 2026-11-14 increment extends the existing `app init` action with
+`--source DIRECTORY --canic-source CHECKOUT`. It generates a new standalone
+workspace, its config, an editable greeting application, and a declaration for
+the supplied Root. The default initialization path still edits declarations for
+existing code. Source generation cannot be combined with `--config`; it owns the
+new project's config rather than editing a second existing document.
+
+Reuse the pinned legacy scaffold implementation, tests and canonical-Root/source-
+alias history inspected in the Root section below. Carry forward refusal of
+occupied targets and validation before writes. Replace the legacy multi-file
+workspace mutation/rollback with one complete directory publication through
+Host FS: the new project's parent must exist, staging is private, publication
+cannot replace an existing name, and failures retain source/error/path evidence.
+The generator does not edit the containing Cargo workspace or current fleet
+config. Tests cover malformed names/source, existing and symlink destinations,
+source aliases, shared config semantics and competing initializers.
+
+The selected Canic checkout must match the CLI version and expose the supplied
+Root and greeting contract packages. Resolve its physical path before writing
+dependency and build references. The generated workspace inherits its selected
+compiler, supplier declarations and lint policy; it keeps publication disabled.
+The user prepares and retains the generated lockfile explicitly. Generation
+does not fetch dependencies, invoke Cargo, create journals or authorize effects.
+No crates.io Canic package or copied Root runtime is inserted into the app.
+
+`artifact build --output WASM_FILE` atomically publishes a replaceable build
+input after selecting and admitting the Cargo artifact. The generated config's
+`artifacts/root.wasm` and `artifacts/app.wasm` paths resolve beside that config.
+Existing planning continues to retain immutable bytes under its original owner;
+build outputs are not deployment receipts or new runtime authority.
+
+The focused host/CLI tests and installed Root fixture passed. The latter now uses
+the actual CLI generator and builder, prepares the generated lockfile offline,
+and installs the generated greeting under Root on PocketIC with synthetic cycles.
+It retains the controller, admission, maintenance and replay checks from the
+previous Root increment. Source generation and managed-child CLI approval are
+implemented; whole-fleet convergence remains pending. No mainnet mutation or
+browser launch occurred. See the [starter commands](../demos/root.md).
+
+## One-child Root implementation
+
+On 2026-11-14, the next local implementation supplies `canic-root` for one
+greeting application. The canister tree is `Root → application`; Root's external
+operator is controller metadata, not a canister node. This is a bounded Root
+implementation, not generated source or whole-fleet convergence.
+
+Legacy research used revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`:
+
+- [Canonical Root materialization](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/canonical_root/mod.rs)
+  and its [tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/canonical_root/tests.rs)
+  supply the ownership lesson: application generation must consume Canic's
+  supplied Root rather than fork its management implementation into each app.
+- [Root bootstrap](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/bootstrap/root/mod.rs)
+  establishes synchronous custody before deferred work and withholds readiness
+  while required releases/activation evidence are absent. Retain that ordering;
+  the selected one-child workload needs neither its Store nor its Coordinator
+  and capacity-import machinery.
+- [Scaffold implementation](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/scaffold/mod.rs)
+  and [regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/scaffold/tests.rs)
+  refuse existing targets and validate planned writes before mutation. Preserve
+  these cases when generation is implemented; they are not proved by this runtime
+  increment.
+- [History f2f88e1](https://github.com/dragginzgame/canic-legacy/commit/f2f88e1c89c38629aaff0a299f9e32c373dea1b0)
+  fixes canonical Root identity through retained source aliases. Future source
+  materialization must bind to the resolved config identity; this increment
+  builds explicit packages and adds no source-discovery mechanism.
+
+Extract the already installed profile manager's one-slot engine into
+`canic-management`, with Wire/evidence types in `canic-management-protocol`.
+The profile manager and Root each mount lifecycle and endpoints explicitly and
+supply their own bounded readiness decoder. The engine owns effect issuance,
+retained artifact bytes, journal transitions and reconciliation. Preserve RPC
+numbers, field/enum order, stable-memory keys and timer identity. Move every
+consumer to the single protocol owner without a compatibility re-export. The
+native host graph no longer depends on the profile application's protocol.
+
+`make root-test` passed with CLI-built Root and Hello World Wasm, synthetic cycles
+and an external identity controlling Root. Qualification proves unauthorized
+admission refusal, an upgrade while the original approval is scheduled, one
+created child with Root as sole controller, observed module binding, a greeting,
+exact replay and changed-approval refusal. `make growth-test` passed all five
+interruption windows, expiry/reserve refusal, artifact custody and maintenance
+against the extracted engine. Lost creation evidence remains blocked, not retried.
+
+An additional installed upgrade from the retained pre-extraction profile manager
+Wasm (`4fd7e504d88e4f0139a834f3b27f8aa027edb9a6a861284669411a37f0b0d1c4`)
+preserved its admitted authority and artifact, resumed creation and reached
+profile readiness through the new engine. Reproduce that evidence with an exact
+retained previous artifact using `CANIC_PREVIOUS_MANAGER` and the explicitly
+selected ignored test `previous_profile_manager_preserves_admitted_work` in
+`qualification/m1-tests/tests/root.rs`; the default Root test needs no historical
+binary. The shared protocol frame/budget regression moved with its owner.
+
+Root/management and affected native/Wasm callers passed Clippy; Root/management
+Rustdoc passed. No mainnet canister, signer, controller or balance was changed.
+Source generation, persistent application upgrades through Root and whole-fleet
+CLI convergence remain the next separate product outcomes. See the
+[hands-on Root guide](../demos/root.md).
+
+## Reusable app definition implementation
+
+The app-definition portion of 0.201.0 implements shared app definitions, independently
+of the Root and source generator. `apps.APP.canisters` owns roles, parent relationships
+and optional Wasm input paths; each fleet owns only network, journal selection
+and existing-ID bindings. A new fleet projects the app's complete declared layout
+without copying another fleet's IDs. The existing plan/apply and observation
+owners consume a resolved snapshot, and retained deployment-plan formats and
+digests remain unchanged.
+
+`app canister add/list` edits and inspects the shared model. `fleet canister
+bind/list` binds existing identities for observation and lists the resolved fleet.
+The retired fleet-local add command has no alias. The config is unversioned and
+rejects the previous layout; [README migration instructions](../../README.md#initialize-an-app-and-fleet)
+describe the explicit external edits. This checkout retains all original
+principals, network selections and `.canic` journal paths. Old source/layout
+examples later in this evidence record describe their historical increments.
+
+Research reuses the pinned declaration mutation/config regression and history
+review below, plus legacy
+[topology finalization](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_topology/mod.rs)
+and its [tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_topology/tests.rs).
+Retain shared logical definitions versus explicit deployment facts, deterministic
+projection, bounded validation and no fabricated principals. Do not import the
+general Spec catalogue, warm pools or Coordinator dependency to describe the
+current two demos. Static parent declarations still grant no spawning authority.
+
+Focused regressions cover two fleets sharing one definition with independent
+bindings/plans/journals, malformed/conflicting bindings, no fleet-level topology
+or artifact overrides, duplicate names, complete config limits, unchanged files
+on refusal, concurrent initialization, locks/symlinks, config-relative Wasm paths,
+source edits refusing new authority for occupied slots, and retained v1/v2 plan
+recovery. The installed M1 journey uses the new declaration command while retaining
+the same create/install/call/upgrade effect path. Generated source, generalized
+management ownership, whole-fleet convergence and runtime cascades are still
+separate unimplemented outcomes; this increment does not qualify them.
+
+Validation: 22 focused host config tests, nine CLI configuration/context tests,
+Host/CLI Clippy and Host Rustdoc passed. The rebuilt CLI passed the installed
+PocketIC create/call/replay/receipt-recovery/same-canister-upgrade journey. Its
+first launch was blocked by sandbox localhost binding; the rerun with localhost
+access passed. Formatting and tooling agreement passed. Actual checkout app/fleet
+listings preserve the profile tree and IDs. No mainnet mutation or push occurred.
+
+## Cascading and workflow scope review
+
+The maintainer's 2026-11-14 answers admit a reusable app definition, a generated
+Rust starter with one Root-controlled application canister, persistent local
+development, whole-fleet convergence, composable scaling/sharding, cascading
+discovery and project-subtree operations. ICP conversion is excluded; operators
+supply cycles manually. Application frontend work is deferred. The simple
+handover default retains workspace evidence and separately provisions signer
+authority; journal-free disaster recovery is not promised. These are accepted
+design requirements, not shipped CLI capabilities. The canonical scope is in
+[architecture section 1](canic-system-design.md#accepted-developer-and-operator-journeys).
+
+Evaluation used legacy revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`.
+The recommendation is to adapt the behavior through narrow owners, not move the
+old Core, Coordinator/Registry and Store dependencies wholesale:
+
+| Legacy evidence | Decision for the rewrite |
+| --- | --- |
+| [Topology cascade](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/cascade/topology.rs), [validation](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/ops/cascade/mod.rs) and its [tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/ops/cascade/tests/mod.rs) | Preserve exact receiver/role/parent checks, branch slicing, explicit leaf rows and refusal of missing/duplicate/foreign children. Adapt allocation-generation binding; do not add a Store just to retain its topology endpoint. |
+| [Component runtime discovery](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/component_runtime/mod.rs) and [regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/component_runtime/tests/mod.rs) | Preserve local validated lookup, all exact role matches in member-path order, exact replay, monotonic directory progression and conflict refusal. Discovery is not permission or a live health check. General group/service catalogues are not prerequisites. |
+| [Directory synchronization](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/component_directory_synchronization/mod.rs) | Preserve intent before dispatch and exact target coverage before marking synchronization complete. Replace required Coordinator/Fleet Registry ownership with the selected management owner's committed allocation projection for the initial single-subnet journey. |
+| [State cascade](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/cascade/state.rs) and [bounded report regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/ops/cascade_report/tests.rs) | Preserve local application versus descendant completion, per-target uncertainty, reconciliation failures, complete counts with bounded detail and no mutation on malformed aggregation. Use durable operation generations and bounded resumable scheduling rather than copying one recursive awaited call chain. |
+| [Installed partial-failure/retry fixture](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/src/pic/fleet_registry/baseline/tests/state_cascade/mod.rs) | Bring forward wrong-caller refusal, immediate-parent enforcement, stopped descendant with successful sibling outcomes, unchanged-state retry completing propagation, and recovery endpoints during logical pause. Add selected-subtree isolation and overlapping-transition tests. |
+
+History matters here: [commit c04cd56](https://github.com/dragginzgame/canic-legacy/commit/c04cd56c11d287cf5baebb472baac61706434dc5)
+replaced unit/first-error cascade results with bounded per-target reports,
+role-correct transport and a recheck before later sends. This addressed loss of
+partial outcome information; it was not cosmetic abstraction. The pinned native
+Wire implementation retains those lessons. Its
+[endpoint admission tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/domain/policy/pure/fleet_activation/native_cascade_admission_tests.rs)
+also show that the topology endpoint is Store-specific while managed components
+receive runtime configuration. Therefore "move cascading" must include both
+directory configuration and state propagation, not just the topology module.
+
+Changed assumptions and unproven paths:
+
+- Legacy's pre-send state-value comparison is useful but does not establish a
+  durable generation fence across pause/resume/pause or out-of-order delivery.
+  Bind commands and replies to generations and preserve pending work across upgrades.
+- The inspected installed fixture starts at a Root; it does not establish
+  arbitrary project-subtree selection, overlapping ancestor/descendant changes,
+  child creation during a pause, or atomic subtree upgrades. Qualify those directly.
+- The transport uses an unbounded response wait and sequential fanout. A stopped
+  child returning failure is not proof of progress past an indefinitely pending
+  call. Select and qualify bounded scheduling/in-flight exposure separately from
+  each effect's transport wait contract.
+- A configuration tree is currently descriptive. Do not reuse its `parent` field
+  as endpoint authorization or management authority without an installed binding.
+
+No legacy tests were run or copied for this documentation-only evaluation. Their
+source supplies regression cases for implementation, not new qualification.
+Search of current `crates/` and `apps/` found no ICP conversion implementation to
+delete. Removed its prospective effect contract and scope entries; preserved
+historical external conversion receipts, public wallet observations and required
+cycle-provider accounting. No mainnet authority or configuration changed.
+
 ## Domain and configuration review
 
 On 2026-11-14, the maintainer identified an implementation that put apps inside a
@@ -194,6 +492,159 @@ creation/funding interruption, owner maintenance, retained artifact custody,
 CLI deployment/recovery/upgrade, private profile preservation and autonomous
 growth through all five injected interruption windows. These use synthetic cycles;
 no mainnet deployment or browser launch occurred. Native macOS was not rerun.
+
+### Slot summaries preserve conflicting evidence
+
+The next increment corrects a presentation gap: the host already refused to
+rebind retained plans after a config network edit, but the slot summary could
+still label the old principal as the current slot identity. Both renderers now
+compare the exact network binding before presenting a configured or retained
+identity. A conflicting configured principal is also explicit beside the slot.
+Operations remain in the report, with their original network and principal; no
+stored plan, approval or receipt is rewritten.
+
+This review read legacy [network resolution](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/network/mod.rs)
+and [network regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/network/tests.rs),
+especially `changed_anchor_cannot_rebind_an_existing_profile` and contradictory
+anchor/digest refusal. Path history includes `8c87ae4c8e09cdbb6f2eb3562ecb0a821e871bcf`;
+the changed-anchor case already exists in its parent
+`fa92d886ef9beee824de3ec900832722fef85bd2`. Legacy derived a canonical network
+identity from enrolled trust bytes. Canic currently binds the exact URL, root
+key and routing principal, so it retains that existing digest encoding rather
+than importing environment profiles or silently changing identity semantics.
+
+The adapted regression keeps app, fleet, slot, URL and principal equal while
+changing only the root key. Terminal and HTML must show a network conflict and
+retain original evidence. It also checks same-network principal conflicts and
+an unresolved operation against a newly configured ID. Host checks preserve the
+previous fingerprint encoding and distinguish URL, root and routing changes.
+
+Validation passed: all 36 Host library tests and 22 CLI tests, plus
+`make m1-clippy m1-doc canic fmt-check toko-tooling-check`. The CLI tests use
+loopback viewer fixtures; this increment performs no mainnet deployment.
+
+### Readable retained-operation status
+
+The pending 0.200.2 CLI increment gives `fleet status OPERATION` a human summary
+of its existing local evidence. It uses IC Host's table and escaping APIs and
+leaves `--json`, scope admission and journal ownership unchanged. It does not
+query the network, infer success from retained replies, or treat an expired
+approval as evidence of no effect. Upgrade creation is inapplicable only when
+the retained creation class is `not_submitted`; contradictory evidence stays
+visible. Receipt details are labelled historical, without a current-health claim.
+
+Research at legacy revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` read
+[progress rendering](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/fleet/progress/render/mod.rs)
+and its [tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/fleet/progress/tests.rs),
+especially `unknown_readiness_and_all_applied_counts_never_claim_deployment_success`.
+The [Host progress projection](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_operation/ops/progress/mod.rs)
+and [operation tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_operation/tests.rs)
+also require exact request correlation and preserve uncertain intent. Path history
+includes `afc2521ed02744c1e1a376d59dae5e2b80d9dec5`; its parent
+`ac55e50334dd6479ec36f404e89e60bcfe9184d6` already has the same identity checks,
+with earlier package imports. This change adapts the truthful-output invariant
+to a local journal summary; it does not import legacy live progress machinery.
+
+Regression cases cover retained replies without receipts, expired uncertain
+attempts, upgrade evidence, historical receipt wording and hostile display text.
+The configured CLI journey checks human output alongside unchanged JSON and
+existing cross-fleet rejection.
+
+Validation passed: the three status renderer regressions, the configured CLI
+planning/inspection test, CLI Clippy and `make canic fmt-check`. A rebuilt-binary
+smoke check created an isolated local declaration and plan under `target/`,
+printed its status, and compared JSON with the original plan. It submitted no
+effect and used neither the private mainnet journal nor a browser.
+
+### Compact fleet terminal view
+
+Maintainer feedback on the four-canister mainnet profile display identified
+duplicated identities, stacked role badges, excessive colour and routine help
+text that obscured the fleet. The default view now uses one IC Host table per
+network binding, with named canisters, one principal per row, one role,
+controller references and code/controller evidence. External controller
+principals appear once below their network's table. Display references use
+`external:N`, which cannot collide with valid configured slot names. They are
+snapshot-local, not configuration or authority identifiers.
+
+Names resolve through the same slot-state decision as conflict summaries,
+including exact network binding. Conflicted or unresolved slots stay visible
+without lending their names to contradictory retained identities. Existing
+observation errors, unknowns, incomplete operations and inventory issues remain
+in the default view. Hashes, timestamps, manager attempt counts and explanatory
+text move to `--details`. The JSON and browser report remain unchanged.
+
+Legacy research reused revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, reading
+[list rendering](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/list/render.rs),
+[renderer regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/list/tests.rs)
+and [live-query failure tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/list/live/tests.rs).
+Its shared table owns escaping/alignment; caller-selected colour is applied
+after rendering, and failed observations remain explicit. Those mechanisms
+already exist before path-history commit `aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f`,
+in parent `3700c6e1bf78cb04a60dcfaf0f789d4dd992c9e0`. The initial compact view
+adapted that table approach. The following correction restores explicit tree
+semantics while keeping readiness claims separate.
+
+Validation passed: seven terminal regressions, the slot conflict regression,
+the configured CLI planning/inspection test, CLI Clippy and `make canic fmt-check`.
+The profile-shaped fixture checks a compact layout, one occurrence of each
+principal, colour-independent alignment, opt-in detail, preserved JSON, and
+name/role isolation across trust bindings. Existing escaping, failed observation
+and uncertain-effect regressions continue to pass.
+
+A read-only mainnet check with the rebuilt `canic fleet show --app profile`
+confirmed four named rows, verified code/controllers, the manager's uncertified
+Ready report, and five retained receipts. The command is available through the
+existing `~/.local/bin/canic` link; no browser or deployment was started.
+
+### Application tree and role correction
+
+The maintainer explicitly values legacy Canic's application tree design. Reading
+the actual [registry entry](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/registry/mod.rs)
+and [tree renderer](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/support/registry_tree.rs)
+showed independent `role` and `parent_pid` fields. Tree order follows immediate
+parents, not IC controllers or routing. The renderer sorts siblings, preserves
+parent-before-child ordering and exposes children whose parent is outside the
+visible inventory. Its [list regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/list/tests.rs)
+exercise nested branches, subtree selection and repeated-role ambiguity.
+Path history includes `d32fa61ed431e40fdda25c6dc05963f49b52e1f5`; the same tree
+and ambiguity handling exist in parent
+`51e99819cf55ddc7f9b5f27541a8185ad33d76e9` before its error-type migration.
+
+The research also read legacy [topology planning](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_topology/mod.rs),
+its [tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_topology/tests.rs)
+and [child-binding validation](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-contracts/src/deployment/topology/validation/mod.rs).
+Those protect admitted roles, immediate parent identities, placement and resource
+bounds. A display relationship cannot substitute for those authorities.
+
+Current concrete slot declarations now have optional application-defined `role`
+and immediate `parent` slot fields. Validation rejects absent/cross-fleet parents,
+self-parenting, cycles and invalid role names within the existing config bounds.
+`canister add --role ... --parent ...` uses the existing atomic config writer.
+Repeated roles are allowed; commands continue to select unique slots. Listings
+and HTML declarations share one tree layout, while observed rows bind names and
+roles only on the original exact network and unambiguous slot identity. A missing
+or conflicted parent is reported and its observed child remains visible without
+nesting. The renderer is bounded against malformed cyclic snapshots as well.
+
+The profile config declares entry, worker and manager responsibilities and only
+the manager/managed-worker parent edge. Entry/shared-worker discovery is still
+a routing relationship. Controller observations stay in their own column;
+controlling a child no longer renames a manager to `controller`. Config role
+names do not select query adapters, authorize effects or renew existing plans.
+General topology deployment and dynamic-child admission remain unimplemented;
+this increment preserves the model without importing a Root/Coordinator stack.
+
+Validation passed: 24 Host config tests, two tree regressions, seven terminal
+regressions, the slot conflict regression and eight CLI context/config tests;
+Host/CLI Clippy, Host Rustdoc and `make canic fmt-check toko-tooling-check`.
+The tests preserve named plan identity after role/parent edits, reject malformed
+topology without replacement, retain unknown observations and separate routes
+from parentage. Public canister identities, journals and network selections
+remain unchanged.
+The rebuilt read-only mainnet view confirmed the manager role and nested managed
+worker, with four observed canisters and five retained receipts. No management
+effects or browser launches were performed.
 
 ## First capability and consumer invariant
 

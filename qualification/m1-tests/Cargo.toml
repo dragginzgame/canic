@@ -13,6 +13,8 @@ toko-tooling.workspace = true
 category = "tests"
 
 [dev-dependencies]
+canic.workspace = true
+canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
 ic-host-artifacts.workspace = true
 ic-testkit.workspace = true

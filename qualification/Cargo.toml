@@ -11,6 +11,7 @@ publish = false
 canic = { path = "../crates/canic" }
 canic-m0-artifact = { path = "m0-artifact" }
 canic-m0-probe = { path = "m0-probe" }
+canic-management-protocol = { path = "../crates/canic-management-protocol" }
 canic-profile-protocol = { path = "../apps/profile/protocol" }
 ic-host-artifacts = { version = "0.77.1", default-features = false, features = ["wasm"] }
 ic-platform = { version = "0.33.0", default-features = false, features = ["management-canister-types"] }

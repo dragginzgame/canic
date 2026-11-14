@@ -11,6 +11,7 @@ help:
 	  'make profile             Build the profile demo client and deployment CLI' \
 	  'make profile-test        Qualify profile ownership, limits and persistent upgrade' \
 	  'make growth-test         Qualify one autonomous worker and interrupted effects' \
+	  'make root-test           Qualify Root controlling one greeting application' \
 	  'make check               Check the canic library' \
 	  'make test                Run canic tests' \
 	  'make clippy              Check canic lints' \
@@ -53,9 +54,9 @@ doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --no-deps
 
 # M1 owns product Clippy/Rustdoc coverage, including the shared canic library.
-lint: fmt-check toko-tooling-check m0-clippy m0-doc m0-artifact-clippy m0-artifact-doc m1-clippy m1-doc profile-clippy profile-doc
+lint: fmt-check toko-tooling-check m0-clippy m0-doc m0-artifact-clippy m0-artifact-doc m1-clippy m1-doc profile-clippy profile-doc root-clippy root-doc
 
-ci: lint test m0-test m0-artifact-test m1-test profile-test growth-test
+ci: lint test m0-test m0-artifact-test m1-test profile-test growth-test root-test
 
 # The runner selects the Wasm path from Cargo artifact messages.
 m0-setup:
@@ -117,3 +118,16 @@ profile-doc:
 .PHONY: growth-test
 growth-test:
 	bash scripts/dev/test-growth.sh
+
+.PHONY: root-test root-clippy root-doc
+root-test:
+	bash scripts/dev/test-root.sh
+
+root-clippy:
+	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --all-targets -- -D warnings
+	cargo clippy --locked -p canic-management -p canic-root --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --test root -- -D warnings
+
+root-doc:
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps

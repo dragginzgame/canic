@@ -16,8 +16,6 @@ const MAX_CONFIG_BYTES: usize = 32 * 1024;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Configuration format, currently two.
-    pub version: u32,
     /// Logical applications; each owns one or more fleets.
     #[serde(deserialize_with = "unique::map")]
     pub apps: BTreeMap<String, AppConfig>,
@@ -27,12 +25,55 @@ pub struct Config {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AppConfig {
+    /// Reusable canister definitions shared by every fleet of this app.
+    #[serde(deserialize_with = "unique::map")]
+    pub canisters: BTreeMap<String, CanisterDefinition>,
     /// Named deployments of this application.
     #[serde(deserialize_with = "unique::map")]
-    pub fleets: BTreeMap<String, FleetConfig>,
+    pub fleets: BTreeMap<String, FleetDeclaration>,
 }
 
-/// One deployed application instance on an explicitly trusted network.
+/// Application-owned topology and optional artifact input; never deployment authority.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CanisterDefinition {
+    /// Application responsibility, independent of controllers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Immediate parent definition in this app; no implicit controller or spawn grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Wasm input relative to the config file; exact bytes are retained by planning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm: Option<PathBuf>,
+}
+
+/// Fleet-owned observation binding; no application topology or artifact overrides.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CanisterBinding {
+    /// Existing identity for observation; does not prove existence or control.
+    pub id: String,
+    /// Select the profile demo's read-only status adapter for this identity.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub profile_manager: bool,
+}
+
+/// Deployment inputs for one instance of an app's shared definitions.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetDeclaration {
+    /// Explicit deployment network and trust anchor.
+    pub network: Network,
+    /// Journal path relative to the config file unless absolute.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub journal: Option<PathBuf>,
+    /// Existing identities by app definition name; absent entries remain unbound.
+    #[serde(deserialize_with = "unique::map")]
+    pub canisters: BTreeMap<String, CanisterBinding>,
+}
+
+/// Resolved app definitions and fleet bindings used by planning and observation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetConfig {
@@ -64,6 +105,16 @@ pub struct CanisterConfig {
     /// Existing canister to observe; blocks new creation in this slot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    /// Application responsibility, independent of IC controller relationships.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Immediate parent slot in this fleet's declared application tree.
+    /// This declaration grants no creation, management or routing authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// App-owned Wasm input, relative to the configuration file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm: Option<PathBuf>,
     /// Select the profile demo's read-only manager status adapter.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub profile_manager: bool,
@@ -109,10 +160,8 @@ impl Config {
     /// # Errors
     /// Refuses unsupported formats, invalid names, networks or oversized declarations.
     pub fn validate(&self) -> Result<()> {
-        if self.version != 2 || self.apps.is_empty() || self.apps.len() > 16 {
-            return Err(Error::Invalid(
-                "config needs version 2 and 1–16 apps".into(),
-            ));
+        if self.apps.is_empty() || self.apps.len() > 16 {
+            return Err(Error::Invalid("config needs 1–16 apps".into()));
         }
         let mut total = 0;
         let mut membership = BTreeMap::new();
@@ -123,6 +172,7 @@ impl Config {
             }
             for (fleet, config) in &definition.fleets {
                 name(fleet)?;
+                let config = definition.resolve(config)?;
                 config.validate()?;
                 total += config.canisters.len();
                 let network = serde_json::to_vec(&config.network).map_err(supplier)?;
@@ -146,18 +196,63 @@ impl Config {
         Ok(())
     }
 
+    /// Select an app independently of its fleets; only a unique choice may be inferred.
+    ///
+    /// # Errors
+    /// Refuses missing or ambiguous app names and invalid configuration.
+    pub fn select_app(&self, app: Option<&str>) -> Result<(&str, &AppConfig)> {
+        self.validate()?;
+        let (name, definition) = select(&self.apps, app, "app")?;
+        Ok((name.as_str(), definition))
+    }
+
     /// Select a fleet within its app; only a unique choice may be inferred.
     ///
     /// # Errors
     /// Refuses missing or ambiguous app/fleet names and invalid configuration.
     pub fn select(&self, app: Option<&str>, fleet: Option<&str>) -> Result<SelectedFleet> {
-        self.validate()?;
-        let (app, definition) = select(&self.apps, app, "app")?;
+        let (app, definition) = self.select_app(app)?;
         let (fleet, config) = select(&definition.fleets, fleet, "fleet")?;
         Ok(SelectedFleet {
-            app: app.clone(),
+            app: app.to_owned(),
             fleet: fleet.clone(),
-            config: config.clone(),
+            config: definition.resolve(config)?,
+        })
+    }
+}
+
+impl AppConfig {
+    fn resolve(&self, fleet: &FleetDeclaration) -> Result<FleetConfig> {
+        if fleet
+            .canisters
+            .keys()
+            .any(|slot| !self.canisters.contains_key(slot))
+        {
+            return Err(Error::Invalid(
+                "fleet binding must name an app canister definition".into(),
+            ));
+        }
+        let canisters = self
+            .canisters
+            .iter()
+            .map(|(slot, definition)| {
+                let binding = fleet.canisters.get(slot);
+                (
+                    slot.clone(),
+                    CanisterConfig {
+                        id: binding.map(|binding| binding.id.clone()),
+                        role: definition.role.clone(),
+                        parent: definition.parent.clone(),
+                        wasm: definition.wasm.clone(),
+                        profile_manager: binding.is_some_and(|binding| binding.profile_manager),
+                    },
+                )
+            })
+            .collect();
+        Ok(FleetConfig {
+            network: fleet.network.clone(),
+            journal: fleet.journal.clone(),
+            canisters,
         })
     }
 }
@@ -174,8 +269,13 @@ fn select<'a, T>(
     } else if values.len() == 1 {
         return Ok(values.first_key_value().expect("one entry"));
     }
+    let reason = if selected.is_some() {
+        format!("unknown {kind}")
+    } else {
+        format!("multiple {kind}s configured")
+    };
     Err(Error::Invalid(format!(
-        "select --{kind} from: {}",
+        "{reason}; select --{kind} from: {}",
         values.keys().cloned().collect::<Vec<_>>().join(", ")
     )))
 }
@@ -199,6 +299,34 @@ impl FleetConfig {
         let mut managers = 0;
         for (slot, declaration) in &self.canisters {
             name(slot)?;
+            if declaration
+                .wasm
+                .as_ref()
+                .is_some_and(|path| path.as_os_str().is_empty() || path.as_os_str().len() > 4096)
+            {
+                return Err(Error::Invalid("Wasm path must contain 1–4096 bytes".into()));
+            }
+            if let Some(role) = &declaration.role {
+                name(role)?;
+            }
+            let mut ancestors = std::collections::BTreeSet::from([slot.as_str()]);
+            let mut parent = declaration.parent.as_deref();
+            while let Some(next) = parent {
+                name(next)?;
+                if !ancestors.insert(next) {
+                    return Err(Error::Invalid(format!(
+                        "canister parent cycle at slot {slot}"
+                    )));
+                }
+                parent = self
+                    .canisters
+                    .get(next)
+                    .ok_or_else(|| {
+                        Error::Invalid(format!("parent slot {next} must exist in the same fleet"))
+                    })?
+                    .parent
+                    .as_deref();
+            }
             if let Some(id) = &declaration.id {
                 crate::network::principal(id)?;
                 if !identities.insert(id) {
@@ -224,6 +352,39 @@ impl FleetConfig {
 }
 
 impl SelectedFleet {
+    /// Resolve a named canister's app-owned Wasm input beside the config file.
+    ///
+    /// An explicit CLI path is allowed only when the app has no artifact path.
+    /// This selects input bytes, not installed code or approval authority.
+    ///
+    /// # Errors
+    /// Refuses unknown slots, missing input and competing artifact selections.
+    pub fn wasm_path(
+        &self,
+        config_path: &Path,
+        slot: &str,
+        explicit: Option<&Path>,
+    ) -> Result<PathBuf> {
+        let declaration = self
+            .config
+            .canisters
+            .get(slot)
+            .ok_or_else(|| Error::Invalid("unknown app canister definition".into()))?;
+        match (&declaration.wasm, explicit) {
+            (Some(_), Some(_)) => Err(Error::Invalid(
+                "Wasm input is defined by the app; omit --wasm instead of overriding it".into(),
+            )),
+            (Some(path), None) => Ok(config_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(path)),
+            (None, Some(path)) => Ok(path.into()),
+            (None, None) => Err(Error::Invalid(
+                "define the app canister's wasm input or supply --wasm".into(),
+            )),
+        }
+    }
+
     pub(crate) fn validate(&self) -> Result<()> {
         name(&self.app)?;
         name(&self.fleet)?;
@@ -330,7 +491,7 @@ pub fn init_config(path: &Path, config: &Config) -> Result<()> {
     store::put(path, &bytes)
 }
 
-fn encode_config(config: &Config) -> Result<Vec<u8>> {
+pub(super) fn encode_config(config: &Config) -> Result<Vec<u8>> {
     config.validate()?;
     let bytes = serde_json::to_vec_pretty(config).map_err(supplier)?;
     if bytes.len() > MAX_CONFIG_BYTES {
@@ -361,9 +522,10 @@ pub fn init_app(path: &Path, app: &str, fleet: &str, network: Network) -> Result
     name(fleet)?;
     network.validate()?;
     let definition = AppConfig {
+        canisters: BTreeMap::new(),
         fleets: BTreeMap::from([(
             fleet.into(),
-            FleetConfig {
+            FleetDeclaration {
                 network,
                 journal: None,
                 canisters: BTreeMap::new(),
@@ -382,7 +544,6 @@ pub fn init_app(path: &Path, app: &str, fleet: &str, network: Network) -> Result
         }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             let config = Config {
-                version: 2,
                 apps: BTreeMap::from([(app.into(), definition)]),
             };
             init_config(path, &config)?;
@@ -392,7 +553,7 @@ pub fn init_app(path: &Path, app: &str, fleet: &str, network: Network) -> Result
     }
 }
 
-/// Add an empty fleet to an existing app without changing other declarations or journals.
+/// Add a fleet using the app's shared definitions, with no identity bindings or journal creation.
 ///
 /// Canic writers serialize through a persistent sidecar lock and publish complete
 /// configuration bytes atomically. This does not coordinate external editors.
@@ -416,7 +577,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
         }
         definition.fleets.insert(
             fleet.into(),
-            FleetConfig {
+            FleetDeclaration {
                 network,
                 journal: None,
                 canisters: BTreeMap::new(),
@@ -426,52 +587,75 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
     })
 }
 
-/// Declare a canister slot, optionally naming an existing canister for observation.
+/// Add one reusable canister definition to an app and every fleet projection.
 ///
-/// Uses the same locked, atomic config update as [`init_fleet`]. Existing slot
-/// identities and journals are never replaced or reset. An ID is a local selection,
-/// not proof of existence or control. No network calls or journal access occur.
+/// Existing definitions, fleet bindings and journals are never overwritten.
+/// The shared locked writer validates the complete configuration before publication.
 ///
 /// # Errors
-/// Refuses missing apps/fleets, duplicate or invalid slot names, invalid principals,
-/// conflicting membership on the same network, config limits and lock contention.
-/// After-publication sync errors require inspecting the config.
-pub fn add_canister(
+/// Refuses unknown apps, occupied/invalid names, invalid topology, bounds and lock contention.
+pub fn add_app_canister(
+    path: &Path,
+    app: &str,
+    slot: &str,
+    definition: CanisterDefinition,
+) -> Result<Config> {
+    name(app)?;
+    name(slot)?;
+    edit_config(path, |config| {
+        let owner = config
+            .apps
+            .get_mut(app)
+            .ok_or_else(|| Error::Invalid("app does not exist".into()))?;
+        if owner.canisters.contains_key(slot) {
+            return Err(Error::Invalid(
+                "app canister already exists; nothing changed".into(),
+            ));
+        }
+        owner.canisters.insert(slot.into(), definition);
+        Ok(config.clone())
+    })
+}
+
+/// Bind an app canister to an existing identity in one fleet, for observation only.
+///
+/// No network calls, journal access or controller changes occur. Existing bindings
+/// cannot be replaced; a config edit never retargets approved operations.
+///
+/// # Errors
+/// Refuses unknown app/fleet/definition, occupied bindings, conflicting identities,
+/// invalid principals, config limits and lock contention.
+pub fn bind_canister(
     path: &Path,
     app: &str,
     fleet: &str,
     slot: &str,
-    id: Option<&str>,
+    mut binding: CanisterBinding,
 ) -> Result<SelectedFleet> {
     name(app)?;
     name(fleet)?;
     name(slot)?;
-    let id = id
-        .map(crate::network::principal)
-        .transpose()?
-        .map(|id| id.to_text());
+    binding.id = crate::network::principal(&binding.id)?.to_text();
     edit_config(path, |config| {
-        let definition = config
+        let owner = config
             .apps
             .get_mut(app)
-            .and_then(|app| app.fleets.get_mut(fleet))
-            .ok_or_else(|| {
-                Error::Invalid(
-                    "app/fleet does not exist; use fleet list to inspect this config".into(),
-                )
-            })?;
-        if definition.canisters.contains_key(slot) {
+            .ok_or_else(|| Error::Invalid("app does not exist".into()))?;
+        if !owner.canisters.contains_key(slot) {
             return Err(Error::Invalid(
-                "canister slot already exists; nothing changed".into(),
+                "declare the canister with app canister add before binding it".into(),
             ));
         }
-        definition.canisters.insert(
-            slot.into(),
-            CanisterConfig {
-                id,
-                profile_manager: false,
-            },
-        );
+        let deployment = owner
+            .fleets
+            .get_mut(fleet)
+            .ok_or_else(|| Error::Invalid("fleet does not exist".into()))?;
+        if deployment.canisters.contains_key(slot) {
+            return Err(Error::Invalid(
+                "canister identity is already bound; nothing changed".into(),
+            ));
+        }
+        deployment.canisters.insert(slot.into(), binding);
         config.select(Some(app), Some(fleet))
     })
 }
@@ -527,6 +711,16 @@ pub fn create_configured_plan(
     canister: &str,
 ) -> Result<(String, Plan)> {
     selection.validate()?;
+    if selection
+        .config
+        .canisters
+        .get(canister)
+        .is_some_and(|slot| slot.parent.is_some())
+    {
+        return Err(Error::Invalid(
+            "a child slot requires explicit Root-owned planning with --root-module".into(),
+        ));
+    }
     if input.network != selection.config.network
         || input.target.is_some()
         || input.previous_module.is_some()
@@ -547,5 +741,6 @@ pub fn create_configured_plan(
             app: selection.app.clone(),
             canister: canister.into(),
         }),
+        None,
     )
 }

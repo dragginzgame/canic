@@ -31,6 +31,7 @@ fn terminal_preserves_unknowns_network_identity_and_uncertain_effects() {
         });
     }
     snapshot.operations.push(FleetOperation {
+        management: None,
         deployment: None,
         operation: "original-operation".into(),
         network_id: "trust-b".into(),
@@ -47,13 +48,19 @@ fn terminal_preserves_unknowns_network_identity_and_uncertain_effects() {
     });
     snapshot.issues.push("bad record\u{202e}spoof".into());
     let output = render(&snapshot, &["entry:worker".into()], true, false);
-    assert_eq!(output.matches("same-principal").count(), 2);
+    assert_eq!(
+        output
+            .lines()
+            .filter(|line| line.starts_with('—') && line.contains("same-principal"))
+            .count(),
+        2
+    );
     for expected in [
         "Network identity (diagnostic): trust-a",
         "Network identity (diagnostic): trust-b",
-        "verified code/controllers",
-        "UNKNOWN metadata",
-        "Controlled by: none",
+        "verified",
+        "UNKNOWN",
+        "none",
         "approval expired",
         "target: unresolved",
         "signed_attempt_retained_outcome_unknown",
@@ -123,7 +130,7 @@ fn terminal_distinguishes_unknown_wallet_balance_and_uncertified_manager() {
     let output = render(&snapshot, &[], false, false);
     for expected in [
         "No known canisters",
-        "uncertified report",
+        "Manager report (uncertified",
         "no second creation is authorized",
         "0.00000000 ICP",
         "Cycles ledger: UNKNOWN",
@@ -170,7 +177,7 @@ async fn fleet_command_selects_text_or_json_without_a_browser() {
     assert_eq!(output["canisters"], serde_json::json!([]));
     assert_eq!(
         output["scope"],
-        "local deployment journal, configured identities and explicitly selected manager reports"
+        "local deployment journal, configured identities, planned Roots and selected manager reports"
     );
     assert!(output.get("started_at_ns").is_some());
     assert!(!output.to_string().contains('\u{1b}'));
@@ -205,31 +212,29 @@ fn roles_follow_observed_authority_without_inventing_root_or_crossing_networks()
     snapshot.managers[0].reported.as_mut().unwrap().worker = Some("worker".into());
     let links = ["entry:worker".into()];
     let output = render(&snapshot, &links, false, true);
-    assert!(output.contains("\x1b[1;35m[CONTROLLER CANISTER]\x1b[0m"));
-    assert!(output.contains("\x1b[1;35m[EXTERNAL CONTROLLER]\x1b[0m operator"));
-    assert!(output.contains("\x1b[1;36m[MANAGER / selected]\x1b[0m"));
-    assert!(output.contains("[WORKER / reported]"));
-    assert!(output.contains("[ENTRY / declared]"));
+    assert!(
+        output
+            .lines()
+            .any(|line| line.starts_with("\x1b[35m") && line.contains("manager"))
+    );
+    assert!(output.contains("external:1 = operator"));
+    assert!(output.contains("worker"));
+    assert!(output.contains("entry"));
     assert!(!output.contains("ROOT"));
     assert!(!output.contains("full-module-hash"));
     assert!(!output.contains("Network identity (diagnostic):"));
     assert!(output.contains("Network #1: same URL"));
     assert!(output.contains("Network #2: same URL"));
-    assert_eq!(
-        roles::badges(&snapshot, &snapshot.canisters[2], &links, false),
-        "[CANISTER]"
-    );
-    assert_eq!(
-        roles::badges(&snapshot, &snapshot.canisters[4], &links, false),
-        "[CANISTER]"
-    );
+    assert_eq!(roles::role(&snapshot, &snapshot.canisters[2], &links), "—");
+    assert_eq!(roles::role(&snapshot, &snapshot.canisters[4], &links), "—");
     let plain = render(&snapshot, &links, true, false);
     assert!(!plain.contains('\x1b'));
     assert!(plain.contains("full-module-hash"));
     snapshot.canisters[1].observation_error = Some("observation failed".into());
-    assert!(
-        !roles::badges(&snapshot, &snapshot.canisters[0], &links, false)
-            .contains("CONTROLLER CANISTER")
+    assert!(!roles::is_controller(&snapshot, &snapshot.canisters[0]));
+    assert_eq!(
+        roles::role(&snapshot, &snapshot.canisters[0], &links),
+        "manager"
     );
 }
 
@@ -242,4 +247,184 @@ fn automatic_colours_respect_redirection_no_color_and_dumb_terminals() {
     assert!(!ColorMode::Auto.enabled(true, false, true));
     assert!(ColorMode::Always.enabled(false, true, true));
     assert!(!ColorMode::Never.enabled(true, false, false));
+}
+
+#[test]
+fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
+    use canic_host::{CanisterConfig, FleetConfig, Network, SelectedFleet};
+    let mut snapshot = empty();
+    let network = Network::Mainnet.binding_id().unwrap();
+    let declarations = [
+        ("entry", "bisqm-biaaa-aaaas-qhfeq-cai"),
+        ("managed-worker", "rn7lo-3aaaa-aaaad-qmouq-cai"),
+        ("manager", "rk6n2-wyaaa-aaaad-qmoua-cai"),
+        ("shared-worker", "4pkhu-oaaaa-aaaai-ra2ta-cai"),
+    ];
+    let operator = "o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe";
+    snapshot.configuration = Some(SelectedFleet {
+        app: "profile".into(),
+        fleet: "mainnet".into(),
+        config: FleetConfig {
+            network: Network::Mainnet,
+            journal: None,
+            canisters: declarations
+                .iter()
+                .map(|(name, id)| {
+                    (
+                        (*name).into(),
+                        CanisterConfig {
+                            wasm: None,
+                            id: Some((*id).into()),
+                            profile_manager: *name == "manager",
+                            role: Some(
+                                if *name == "entry" {
+                                    "entry"
+                                } else if *name == "manager" {
+                                    "manager"
+                                } else {
+                                    "worker"
+                                }
+                                .into(),
+                            ),
+                            parent: (*name == "managed-worker").then(|| "manager".into()),
+                        },
+                    )
+                })
+                .collect(),
+        },
+    });
+    for (name, id) in declarations {
+        snapshot.canisters.push(FleetCanister {
+            network_id: network.clone(),
+            network: "ic / mainnet".into(),
+            canister: id.into(),
+            observed_at_ns: 0,
+            module_hash: Some("full-module-hash".into()),
+            controllers: Some(vec![
+                if name == "managed-worker" {
+                    declarations[2].1
+                } else {
+                    operator
+                }
+                .into(),
+            ]),
+            observation_error: None,
+        });
+    }
+    snapshot.managers.push(FleetManager {
+        network_id: network,
+        manager: declarations[2].1.into(),
+        reported: Some(Default::default()),
+        observation_error: None,
+    });
+    let status = snapshot.managers[0].reported.as_mut().unwrap();
+    status.phase = canic_host::ProfileGrowthPhase::Ready;
+    status.worker = Some(declarations[1].1.into());
+    let before = serde_json::to_value(&snapshot).unwrap();
+    let plain = render(&snapshot, &[], false, false);
+    println!("{plain}");
+    assert!(plain.starts_with("profile / mainnet · IC mainnet\n"));
+    assert!(plain.lines().count() <= 15, "{plain}");
+    for (name, id) in declarations {
+        assert_eq!(plain.matches(id).count(), 1);
+        assert!(
+            plain
+                .lines()
+                .any(|line| line.contains(name) && line.contains(id))
+        );
+    }
+    assert_eq!(plain.matches(operator).count(), 1);
+    let worker = plain
+        .lines()
+        .find(|line| line.starts_with("└─ managed-worker"))
+        .unwrap();
+    assert!(worker.contains("manager"));
+    assert_eq!(
+        roles::role(&snapshot, &snapshot.canisters[2], &[]),
+        "manager"
+    );
+    for noisy in [
+        "[",
+        "Use --",
+        "Snapshot:",
+        "full-module-hash",
+        "attempts:",
+        "metadata below",
+        "Controlled by:",
+    ] {
+        assert!(!plain.contains(noisy), "{noisy}: {plain}");
+    }
+    let colored = render(&snapshot, &[], false, true);
+    let stripped = colored
+        .replace("\x1b[1m", "")
+        .replace("\x1b[35m", "")
+        .replace("\x1b[0m", "");
+    assert_eq!(stripped, plain);
+    assert!(
+        colored
+            .lines()
+            .any(|line| line.starts_with("\x1b[35mmanager"))
+    );
+    let detailed = render(&snapshot, &[], true, false);
+    for expected in [
+        "full-module-hash",
+        "Snapshot:",
+        "attempts:",
+        "Network identity",
+    ] {
+        assert!(detailed.contains(expected));
+    }
+    assert_eq!(serde_json::to_value(&snapshot).unwrap(), before);
+    // Equal principals on another trust binding must never borrow these names.
+    assert_eq!(
+        roles::name(&snapshot, "another-binding", declarations[2].1),
+        None
+    );
+    let html = super::super::render(&snapshot, "");
+    assert!(html.contains("└─ managed-worker"));
+    assert!(html.contains("role: manager"));
+    // A routing link does not create a parent relationship.
+    let routed = render(
+        &snapshot,
+        &[format!("{}:{}", declarations[0].1, declarations[3].1)],
+        false,
+        false,
+    );
+    assert!(routed.lines().any(|line| line.starts_with("shared-worker")));
+    snapshot.canisters[1].observation_error = Some("provider unavailable".into());
+    let partial = render(&snapshot, &[], false, false);
+    assert!(partial.contains("UNKNOWN"));
+    assert!(partial.contains("provider unavailable"));
+    let mut missing = snapshot.configuration.as_ref().unwrap().clone();
+    missing.config.canisters.get_mut("manager").unwrap().id = None;
+    snapshot.configuration = Some(missing);
+    let orphan = render(&snapshot, &[], false, false);
+    assert!(orphan.contains("unresolved parent"));
+    assert!(
+        orphan
+            .lines()
+            .any(|line| line.starts_with("managed-worker"))
+    );
+    assert_eq!(
+        roles::role(&snapshot, &snapshot.canisters[2], &[]),
+        "manager"
+    );
+    let config = &mut snapshot.configuration.as_mut().unwrap().config;
+    let duplicate = config.canisters["managed-worker"].clone();
+    config.canisters.insert("ambiguous-child".into(), duplicate);
+    let ambiguous = render(&snapshot, &[], false, false);
+    assert!(
+        ambiguous
+            .lines()
+            .any(|line| line.starts_with('—') && line.contains(declarations[1].1))
+    );
+    assert_eq!(
+        roles::name(
+            &snapshot,
+            &snapshot.canisters[1].network_id,
+            declarations[1].1
+        ),
+        None,
+        "an ambiguous snapshot must not select one declaration arbitrarily"
+    );
 }

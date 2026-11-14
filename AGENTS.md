@@ -12,11 +12,33 @@ authenticated tooling installer.
   outcomes and platform constraints. Old code, terminology, package boundaries
   and roadmaps are research inputs; they may be discarded or redesigned. The
   current design is also revisable. Coverage does not require feature parity.
+- Preserve legacy Canic's distinction between application roles, immediate
+  parent/child topology and IC controller relationships. The maintainer values
+  that tree design. Do not replace an application role with `controller` or infer
+  application parentage from controllers or routing links. App definition `role`
+  and `parent` fields describe the tree instantiated in each fleet; they grant no effect authority.
+  Keep canister trees homogeneous: only canisters occupy indented tree nodes.
+  Show external operator/controller principals separately as controller metadata,
+  never as parents above Root in a canister tree. Apply this to CLI output,
+  visualizations, documentation and explanatory examples.
 - Keep the virtual Cargo workspace at the root and product packages in `crates/`.
 - Keep one canonical workflow for each task. Do not add convenience shortcuts,
   command aliases or parallel configuration mechanisms without a demonstrated need.
-  The hierarchy is App → Fleets → Canisters. Initialization declares an app and
-  its first fleet; canister layout belongs in that fleet's config.
+  The hierarchy is App → Fleets → Canisters. App definitions own shared
+  roles, parent relationships and optional Wasm input paths; fleets bind network
+  and existing identities. Spawn permissions, placement and budgets still require
+  their admitted management contracts. Initialization declares an app and its
+  first fleet; optional source generation creates a standalone greeting workspace.
+  Whole-fleet management remains upcoming work.
+- The next managed starter is a small buildable Rust app with one application
+  canister controlled by a Root/management owner. Whole-fleet reviewed convergence,
+  cascading discovery and subtree operations are admitted product requirements;
+  their general implementations are not yet shipped. Scaling and sharding should
+  be optional composable building blocks, with application-owned data semantics.
+- Exclude ICP conversion from Canic: operators supply cycles manually; bounded
+  distribution of those cycles remains in scope. Application frontend integration
+  is deferred. Keep operator handover based on retained workspace evidence and
+  separately provisioned signer authority; do not promise journal-free recovery.
 - Group CLI actions under `app`, `artifact` and `fleet`; wallet inspection takes
   a public principal. Keep command help alphabetical. Only `--json` is global;
   scope options belong after the action that actually consumes them. Reject
@@ -26,6 +48,27 @@ authenticated tooling installer.
   display widths and alignment. Do not hand-pad columns or add a formatter alias.
 - `crates/canic` owns the small greeting Wire contract. Host and CLI packages
   remain native; the demo canister is in `apps/hello/canister`.
+- `crates/canic-root` is the experimental one-child Root for the greeting app.
+  `canic-management` owns the shared creation/artifact/evidence engine;
+  `canic-management-protocol` owns its bounded Wire contract independently of
+  runtime dependencies. Root and the profile manager explicitly mount their own
+  lifecycle/endpoints and supply application readiness checks. Preserve existing
+  manager journal keys, authority and wire bytes across extraction and upgrades.
+  Use `make root-test`, `make root-clippy` and `make root-doc` for Root, and
+  `make growth-test` when changing the shared engine's effect boundaries.
+  One-child Root is not whole-fleet convergence, child upgrade or subtree control.
+  A named child plan requires explicit `--root-module` authority. Resolve its
+  parent from a configured identity or completed named deployment; check exact
+  Root code and sole operator control before admission and observation. Keep
+  staging's original signed attempt. Only Root's replicated, read-only `observe`
+  endpoint may receive fresh read authority after the effect deadline; public
+  queries cannot establish the created child's custody. Preserve existing direct
+  plan encodings/digests and keep Root as the child's receipt controller.
+  Fleet views automatically query planned Roots under their exact network binding.
+  Keep those public reports separate from retained output custody: mismatched
+  approvals cannot add a reported child, and watching must never sign, apply,
+  reconcile or publish completion receipts. Reuse the shared bounded collector
+  for terminal, saved reports and localhost refreshes.
 - `apps/profile/` owns the profile protocol, native client, discovery entry and
   persistent worker and one-slot autonomous manager. It uses IC Storage; Toko application integration is outside
   the current scope. Use `make profile-test`, `make profile-clippy` and
@@ -34,32 +77,48 @@ authenticated tooling installer.
   using synthetic cycles. Never select `fault-injection` for a live deployment.
 - Use Rust 1.100.0 and the inherited workspace lint policy.
 - Packages start with `publish = false`; no first-party public licence is selected.
-- The rewrite uses the 0.200.x version line to distinguish it from legacy Canic.
+- The rewrite uses versions 0.200.0 and later to distinguish it from legacy Canic.
   Keep crates.io publication disabled until the product is mature and the
   maintainer explicitly authorizes publication. GitHub pushes do not authorize it.
 - There are no local policy exceptions or release adapters. The experimental
   deployment path selects local/mainnet authority through an explicit plan.
-- `canic app init` creates local `canic.json` declarations only: it creates a missing
+- `canic app init` creates local `canic.json` declarations by default: it creates a missing
   config or adds a new app and its first fleet, refusing existing app names and
   preserving other apps. Configured journals are not created by initialization.
-  `canic fleet init` adds an empty fleet to an
-  existing app with an explicit network, using atomic config replacement and a
-  persistent `CONFIG.canic-lock` sidecar. It refuses existing fleet names.
-  `canic fleet canister add/list` declares and lists slots with explicit app/fleet
-  selection. These commands use configuration only; listing does not infer
-  deployment state from the presence or absence of a configured ID.
-  `add --id PRINCIPAL` records an existing identity for observation, with no
-  network calls or authority claim. It refuses occupied names and conflicting
-  membership on the same network; it never rebinds slots or rewrites journals.
-  Configured journals default to `.canic/apps/APP/fleets/FLEET/` beside the config. Preserve legacy `.canic/`
-  operations and their v1 digests; `--no-config` selects that original flow.
-  Named v2 plans bind fleet/app/canister names and never renew occupied-slot authority.
-  This checkout's version 2 `canic.json` declares `hello-world/mainnet` and
-  `profile/mainnet`; both select `journal: ".canic"`. Keep the original records
-  in place and filter observations by selected app/fleet membership. Fleet slots are objects:
-  `{}` for a future deployment, `{"id":"PRINCIPAL"}` for an existing canister.
-  Existing IDs are observation declarations and block new creation in that slot.
-  `profile_manager: true` selects only the demo's read-only status adapter.
+  `--source DIRECTORY --canic-source CHECKOUT` instead creates a new standalone
+  source workspace with its own config, supplied Root and generated app declarations.
+  It conflicts with `--config`, requires the destination's parent to exist, and
+  refuses occupied destinations. Publish source/config together through the Host
+  FS no-replace directory owner; preserve uncertain staging on publication errors.
+  Resolve the matching Canic checkout physically; use its contract dependency,
+  supplier selections, toolchain and inherited lints. Do not select legacy Canic
+  from crates.io or copy Root management code into generated apps. Lockfile/tool
+  preparation remains explicit. `artifact build --output` publishes a replaceable
+  build input; retained deployment artifacts still belong to the plan/journal owner.
+  `canic fleet init` adds a fleet projecting the shared app definitions, with
+  no existing identity bindings, journal creation or network effects. Config
+  updates use atomic replacement and a persistent `CONFIG.canic-lock` sidecar.
+  `canic app canister add/list` owns reusable definitions; `fleet canister bind/list`
+  owns observation bindings and resolved listings. There is no `fleet canister add`
+  alias. Definitions never grant controller or spawn authority. Binding an existing
+  ID is observation-only, refuses replacement and conflicting membership, and
+  never rewrites journals. App-defined Wasm paths resolve beside the config;
+  named creation refuses a competing `--wasm` override.
+  Existing-app selectors infer only a sole configured app; existing-fleet
+  selectors infer only a sole fleet within that app. Resolve app first, never
+  infer it from a fleet or canister name. Unknown explicit names and ambiguity
+  fail before effects. Keep selectors scoped to commands that use them, with
+  no aliases or saved current context. `app list` and unfiltered `fleet list`
+  list all declarations; names being created by initialization remain required.
+  The current config is unversioned, with `apps.APP.canisters` definitions and
+  `apps.APP.fleets.FLEET.canisters` identity bindings. Refuse the retired versioned
+  layout rather than maintaining a second reader. Retained v1/v2 deployment plans
+  are unchanged; preserve their digests and same-operation recovery.
+  Configured journals default to `.canic/apps/APP/fleets/FLEET/` beside the config.
+  This checkout's `hello-world/mainnet` and `profile/mainnet` retain `journal: ".canic"`.
+  Keep original records in place and filter observations by exact membership.
+  `profile_manager: true` on an existing-ID binding selects only the demo's
+  read-only status adapter.
 
 ## Legacy research before subsystem work
 

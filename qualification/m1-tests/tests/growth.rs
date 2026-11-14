@@ -1,11 +1,9 @@
 //! One operator-absent worker, real caller wiring, and irreversible effect boundaries.
-use canic_profile_protocol::{
-    PUT, ProfileResult, Put,
-    growth::{
-        Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, RECONCILE, Refusal, STAGE, STAGE_LIMITS,
-        STATUS, Stage, Status, digest,
-    },
+use canic_management_protocol::{
+    Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, RECONCILE, Refusal, STAGE, STAGE_LIMITS,
+    STATUS, Stage, Status, digest,
 };
+use canic_profile_protocol::{PUT, ProfileResult, Put};
 use ic_testkit::{
     pic::{PocketIcStartupConfig, server_assets},
     pocket_ic::{CanisterId, CreateCanisterParams, PocketIcBuilder, nonblocking::PocketIc},
@@ -302,7 +300,7 @@ async fn autonomous_growth_and_commit_boundaries() {
     assert!(
         std::fs::read_to_string(report)
             .unwrap()
-            .contains("Autonomous worker operations")
+            .contains("Manager report (uncertified)")
     );
     pic.stop_progress().await;
 

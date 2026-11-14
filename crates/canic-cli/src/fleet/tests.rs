@@ -2,6 +2,111 @@ use super::*;
 use std::process::Command;
 
 #[test]
+fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence() {
+    use canic_host::{
+        CanisterConfig, DeploymentName, FleetConfig, FleetOperation, Network, SelectedFleet,
+    };
+    use std::collections::BTreeMap;
+
+    let network = Network::Local {
+        url: "http://localhost:8000".into(),
+        root_key: "00".repeat(133),
+        routing_canister: "aaaaa-aa".into(),
+    };
+    let mut snapshot = Fleet {
+        configuration: Some(SelectedFleet {
+            app: "app".into(),
+            fleet: "demo".into(),
+            config: FleetConfig {
+                network: network.clone(),
+                journal: None,
+                canisters: BTreeMap::from([("worker".into(), CanisterConfig::default())]),
+            },
+        }),
+        started_at_ns: 0,
+        finished_at_ns: 0,
+        scope: "test",
+        canisters: vec![],
+        operations: vec![FleetOperation {
+            management: None,
+            deployment: Some(DeploymentName {
+                app: "app".into(),
+                fleet: "demo".into(),
+                canister: "worker".into(),
+            }),
+            operation: "original-operation".into(),
+            network_id: network.binding_id().unwrap(),
+            network: "local / http://localhost:8000".into(),
+            canister: Some("original-principal".into()),
+            approved_module: "original-module".into(),
+            approved_controller: "original-controller".into(),
+            effects: BTreeMap::new(),
+            receipt_retained: false,
+            approval_expired: true,
+        }],
+        issues: vec![],
+        managers: vec![],
+        wallet: None,
+    };
+    assert_eq!(
+        slot_status(&snapshot, "worker"),
+        "original-principal (retained deployment identity)"
+    );
+    // Same endpoint, app, fleet and principal: only the trust anchor changed.
+    let Network::Local { root_key, .. } =
+        &mut snapshot.configuration.as_mut().unwrap().config.network
+    else {
+        unreachable!()
+    };
+    *root_key = "01".repeat(133);
+    for configured_id in [None, Some("original-principal".into())] {
+        snapshot
+            .configuration
+            .as_mut()
+            .unwrap()
+            .config
+            .canisters
+            .get_mut("worker")
+            .unwrap()
+            .id = configured_id;
+        let before = serde_json::to_value(&snapshot).unwrap();
+        assert!(slot_status(&snapshot, "worker").starts_with("Network conflict"));
+        for output in [
+            render(&snapshot, ""),
+            terminal(&snapshot, &[], false, false),
+        ] {
+            assert!(output.contains("Network conflict"));
+            assert!(output.contains("original-principal"));
+            assert!(output.contains("original-operation"));
+        }
+        assert_eq!(serde_json::to_value(&snapshot).unwrap(), before);
+    }
+    snapshot.configuration.as_mut().unwrap().config.network = network;
+    assert_eq!(
+        slot_status(&snapshot, "worker"),
+        "original-principal (configured identity; metadata below)"
+    );
+    snapshot
+        .configuration
+        .as_mut()
+        .unwrap()
+        .config
+        .canisters
+        .get_mut("worker")
+        .unwrap()
+        .id = Some("replacement-principal".into());
+    for output in [
+        render(&snapshot, ""),
+        terminal(&snapshot, &[], false, false),
+    ] {
+        assert!(output.contains("Identity conflict"));
+        assert!(output.contains("original-principal"));
+    }
+    snapshot.operations[0].canister = None;
+    assert!(slot_status(&snapshot, "worker").starts_with("Identity conflict"));
+}
+
+#[test]
 fn report_escapes_untrusted_text_and_labels_partial_inventory() {
     let mut snapshot = Fleet {
         configuration: None,
@@ -51,9 +156,9 @@ fn report_escapes_untrusted_text_and_labels_partial_inventory() {
     assert!(html.contains("Regenerate the report to refresh"));
     assert!(html.contains("manager&lt;script&gt;"));
     assert!(html.contains("&lt;bad provider&gt;"));
-    assert!(html.contains("No retained principal"));
+    assert!(html.contains("No reported principal"));
     assert!(html.contains("No second creation is authorized"));
-    assert!(html.contains("Uncertified manager report"));
+    assert!(html.contains("Manager report (uncertified)"));
     assert!(html.contains("Uncertified balance queries"));
     assert!(html.contains("owner&lt;script&gt;"));
     assert!(html.contains("address&lt;unsafe&gt;"));

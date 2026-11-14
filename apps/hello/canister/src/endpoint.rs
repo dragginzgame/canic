@@ -37,3 +37,14 @@ fn encode(value: Greeting) -> Vec<u8> {
 fn greet(name: String) -> Greeting {
     crate::greeting(&name)
 }
+
+// Inter-canister readiness uses a replicated method; it shares greeting admission
+// and application behavior rather than introducing a second readiness contract.
+#[cdk::update(guard = "bounded", decode_with = "decode", encode_with = "encode")]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the entrypoint owns its decoded request"
+)]
+fn probe(name: String) -> Greeting {
+    crate::greeting(&name)
+}

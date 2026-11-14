@@ -1,4 +1,4 @@
-use crate::{Error, Network, Plan, Receipt, Result, artifact, network, operation, store, supplier};
+use crate::{Error, Network, Plan, Receipt, Result, network, operation, store, supplier};
 use serde::Serialize;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -24,13 +24,13 @@ pub struct Fleet {
     pub operations: Vec<FleetOperation>,
     /// Local records that could not be admitted. Other records remain visible.
     pub issues: Vec<String>,
-    /// Explicitly selected profile-manager reports, each an uncertified query.
+    /// Planned Roots and explicitly selected managers, each an uncertified query.
     pub managers: Vec<FleetManager>,
     /// Optional, explicitly selected mainnet default wallet; separate from canister balances.
     pub wallet: Option<crate::Wallet>,
 }
 
-/// Application-specific demo adapter; reports do not grant management authority.
+/// Management protocol observation; reports do not grant authority or output custody.
 #[derive(Debug, Serialize)]
 pub struct FleetManager {
     /// Exact network binding from the manager's local plan or configuration.
@@ -38,7 +38,7 @@ pub struct FleetManager {
     /// Known manager principal.
     pub manager: String,
     /// Uncertified operation projection; child metadata is independently observed.
-    pub reported: Option<canic_profile_protocol::growth::Status>,
+    pub reported: Option<canic_management_protocol::Status>,
     /// Observation failure, never interpreted as an empty slot.
     pub observation_error: Option<String>,
 }
@@ -46,6 +46,9 @@ pub struct FleetManager {
 /// One admitted operation's public observation projection, excluding signed requests.
 #[derive(Debug, Serialize)]
 pub struct FleetOperation {
+    /// Exact planned Root-owned work, used only to select and check read-only reports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub management: Option<canic_management_protocol::Approval>,
     /// Names committed in the approved plan, if created through a fleet configuration.
     pub deployment: Option<crate::DeploymentName>,
     /// Digest of the original approved plan.
@@ -104,7 +107,9 @@ pub(crate) fn local_operation(
     let receipt: Option<Receipt> =
         serde_json::from_value(state["receipt"].clone()).map_err(supplier)?;
     let dir = root.join(id);
-    let canister = if let Some(target) = &plan.target {
+    let canister = if plan.management.is_some() {
+        crate::managed::evidence(&dir, &plan)?.and_then(|status| status.worker)
+    } else if let Some(target) = &plan.target {
         Some(target.clone())
     } else if dir
         .join("create/reply.bin")
@@ -126,22 +131,28 @@ pub(crate) fn local_operation(
         && (receipt.operation != id
             || Some(&receipt.canister) != canister.as_ref()
             || receipt.module_hash != plan.artifact.sha256
-            || receipt.controller != plan.controller)
+            || receipt.controller != plan.application_controller())
     {
         return Err(Error::Invalid(
             "receipt does not match retained plan and target evidence".into(),
         ));
     }
-    let network_id = artifact::digest(&serde_json::to_vec(&plan.network).map_err(supplier)?);
+    let network_id = plan.network.binding_id()?;
+    let approved_controller = plan.application_controller().to_owned();
     Ok((
         FleetOperation {
+            management: plan
+                .management
+                .as_ref()
+                .map(|_| crate::managed::approval(&plan))
+                .transpose()?,
             deployment: plan.deployment,
             operation: id.into(),
             network_id,
             network: label(&plan.network),
             canister,
             approved_module: plan.artifact.sha256,
-            approved_controller: plan.controller,
+            approved_controller,
             effects: serde_json::from_value(state["effects"].clone()).map_err(supplier)?,
             receipt_retained: receipt.is_some(),
             approval_expired: now >= plan.expires_at_ns,
@@ -168,6 +179,89 @@ async fn observe(network: &Network, canister: &str) -> Result<(String, Vec<Strin
         crate::hex(&module),
         controllers.iter().map(|value| value.to_text()).collect(),
     ))
+}
+
+fn select_managers(
+    operations: &[FleetOperation],
+    targets: &BTreeMap<(String, String), Network>,
+    explicit: &std::collections::BTreeSet<String>,
+) -> Result<BTreeMap<(String, String), Network>> {
+    let mut selected = BTreeMap::new();
+    for operation in operations {
+        if let Some(approval) = &operation.management {
+            let key = (operation.network_id.clone(), approval.manager.clone());
+            let network = targets
+                .get(&key)
+                .ok_or_else(|| Error::Invalid("planned Root has no network binding".into()))?;
+            selected.insert(key, network.clone());
+        }
+    }
+    // Explicit principal-only selection still requires one unambiguous network.
+    // Automatic selection carries the exact network from each admitted plan.
+    for principal in explicit {
+        network::principal(principal)?;
+        let matches: Vec<_> = targets
+            .iter()
+            .filter(|((_, target), _)| target == principal)
+            .collect();
+        let [(key, network)] = matches.as_slice() else {
+            return Err(Error::Invalid(
+                "manager must be a known target on one unambiguous network".into(),
+            ));
+        };
+        selected.insert((*key).clone(), (*network).clone());
+    }
+    if selected.len() > 16 {
+        return Err(Error::Invalid(
+            "at most sixteen network-bound managers per snapshot".into(),
+        ));
+    }
+    Ok(selected)
+}
+
+fn check_report(
+    operations: &[FleetOperation],
+    network_id: &str,
+    manager: &str,
+    report: &canic_management_protocol::Status,
+) -> Result<()> {
+    if report
+        .approval
+        .as_ref()
+        .is_some_and(|approval| approval.manager != manager)
+    {
+        return Err(Error::Invalid(
+            "reported approval names another manager".into(),
+        ));
+    }
+    let empty = report
+        == &canic_management_protocol::Status {
+            stable_pages: report.stable_pages,
+            maintenance_candidate: report.maintenance_candidate,
+            ..Default::default()
+        };
+    if !empty
+        && operations
+            .iter()
+            .filter(|operation| operation.network_id == network_id)
+            .filter_map(|operation| operation.management.as_ref())
+            .filter(|approval| approval.manager == manager)
+            .any(|approval| report.approval.as_ref() != Some(approval))
+    {
+        return Err(Error::Invalid("Root report differs from retained child approval; reported child not admitted to inventory".into()));
+    }
+    if let Some(child) = &report.worker {
+        let child = network::principal(child)?;
+        if child == network::principal(manager)?
+            || child == network::principal("aaaaa-aa")?
+            || child == network::principal("2vxsx-fae")?
+        {
+            return Err(Error::Invalid(
+                "reported child is not a distinct canister".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub(crate) struct Inventory {
@@ -234,7 +328,7 @@ pub async fn fleet(root: &Path) -> Result<Fleet> {
     fleet_with_managers(root, &[]).await
 }
 
-/// Include up to sixteen explicit profile managers and their reported workers.
+/// Include planned Roots and explicit managers, at most sixteen network-bound owners.
 ///
 /// Managers must be unambiguous known deployments. Public status is uncertified;
 /// worker module/controller metadata is independently read through certified state.
@@ -281,6 +375,12 @@ pub async fn fleet_with_config(
                 issues.push(format!("{id}: retained deployment network differs from fleet configuration; original evidence is preserved"));
             }
         }
+        if let Some(approval) = &operation.management {
+            targets.insert(
+                (operation.network_id.clone(), approval.manager.clone()),
+                network.clone(),
+            );
+        }
         if let Some(canister) = &operation.canister {
             targets.insert((operation.network_id.clone(), canister.clone()), network);
         }
@@ -288,8 +388,7 @@ pub async fn fleet_with_config(
     }
     let mut selected: std::collections::BTreeSet<_> = selected.iter().cloned().collect();
     if let Some(config) = configuration {
-        let network_id =
-            artifact::digest(&serde_json::to_vec(&config.config.network).map_err(supplier)?);
+        let network_id = config.config.network.binding_id()?;
         for (slot, declaration) in &config.config.canisters {
             if let Some(id) = &declaration.id {
                 targets.insert(
@@ -312,36 +411,19 @@ pub async fn fleet_with_config(
             }
         }
     }
-    if selected.len() > 16 {
-        return Err(Error::Invalid(
-            "at most sixteen managers per snapshot".into(),
-        ));
-    }
+    let selected = select_managers(&operations, &targets, &selected)?;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     let mut managers = Vec::new();
-    for manager in &selected {
-        network::principal(manager)?;
-        let matches: Vec<_> = targets
-            .iter()
-            .filter(|((_, target), _)| target == manager)
-            .collect();
-        if matches.len() != 1 {
-            return Err(Error::Invalid(
-                "manager must be a known target on one unambiguous network".into(),
-            ));
-        }
-        let ((network_id, _), network) = matches[0];
-        let network_id = network_id.clone();
-        let network = network.clone();
+    for ((network_id, manager), network) in selected {
         let budget = deadline
             .saturating_duration_since(tokio::time::Instant::now())
             .min(Duration::from_secs(5));
         let report = tokio::time::timeout(budget, async {
             let agent = network.agent()?;
             let bytes = ic_wire::native::encode_request(
-                canic_profile_protocol::growth::STATUS,
+                canic_management_protocol::STATUS,
                 &(),
-                canic_profile_protocol::growth::LIMITS,
+                canic_management_protocol::LIMITS,
             )
             .map_err(supplier)?;
             let response = agent
@@ -350,24 +432,13 @@ pub async fn fleet_with_config(
                 .call()
                 .await
                 .map_err(supplier)?;
-            let report: canic_profile_protocol::growth::Status = ic_wire::native::decode_response(
-                canic_profile_protocol::growth::STATUS,
+            let report: canic_management_protocol::Status = ic_wire::native::decode_response(
+                canic_management_protocol::STATUS,
                 &response,
-                canic_profile_protocol::growth::LIMITS,
+                canic_management_protocol::LIMITS,
             )
             .map_err(supplier)?;
-            if report
-                .approval
-                .as_ref()
-                .is_some_and(|a| a.manager != *manager)
-            {
-                return Err(Error::Invalid(
-                    "reported approval names another manager".into(),
-                ));
-            }
-            if let Some(child) = &report.worker {
-                network::principal(child)?;
-            }
+            check_report(&operations, &network_id, &manager, &report)?;
             Ok::<_, Error>(report)
         })
         .await
@@ -384,7 +455,7 @@ pub async fn fleet_with_config(
         };
         managers.push(FleetManager {
             network_id,
-            manager: manager.clone(),
+            manager,
             reported,
             observation_error,
         });
@@ -428,7 +499,7 @@ pub async fn fleet_with_config(
         configuration: configuration.cloned(),
         started_at_ns,
         finished_at_ns: crate::now()?,
-        scope: "local deployment journal, configured identities and explicitly selected manager reports",
+        scope: "local deployment journal, configured identities, planned Roots and selected manager reports",
         canisters,
         operations,
         issues,

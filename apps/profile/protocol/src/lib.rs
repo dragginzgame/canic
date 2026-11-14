@@ -1,11 +1,6 @@
 //! Bounded application contracts for the standalone profile demo.
 use serde::{Deserialize, Serialize};
 
-pub mod growth;
-
-#[cfg(test)]
-mod tests;
-
 /// Update a caller-owned profile with optimistic revision checking.
 pub const PUT: u64 = 1;
 /// Read the caller's private profile.

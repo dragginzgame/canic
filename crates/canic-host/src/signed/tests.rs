@@ -12,6 +12,7 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     let plan = Plan {
         deployment: None,
         version: 1,
+        management: None,
         network: Network::Local {
             url: "http://127.0.0.1:8000/".into(),
             root_key: "00".repeat(133),
@@ -76,17 +77,17 @@ fn fixture() -> (Vec<u8>, Plan, Call<'static>) {
 #[test]
 fn exact_attempt_binding_rejects_changed_authority_argument_network_and_id() {
     let (bytes, plan, call) = fixture();
-    assert!(admit(&bytes, &plan, &call).is_ok());
+    assert!(admit(&bytes, &super::Authority::from(&plan), &call).is_ok());
     let mut different = plan.clone();
     different.controller = "aaaaa-aa".into();
     assert!(matches!(
-        admit(&bytes, &different, &call),
+        admit(&bytes, &super::Authority::from(&different), &call),
         Err(Error::Invalid(_))
     ));
     let mut different = plan.clone();
     different.network = Network::Mainnet;
     assert!(matches!(
-        admit(&bytes, &different, &call),
+        admit(&bytes, &super::Authority::from(&different), &call),
         Err(Error::Invalid(_))
     ));
     let changed = Call {
@@ -94,13 +95,17 @@ fn exact_attempt_binding_rejects_changed_authority_argument_network_and_id() {
         ..call
     };
     assert!(matches!(
-        admit(&bytes, &plan, &changed),
+        admit(&bytes, &super::Authority::from(&plan), &changed),
         Err(Error::Invalid(_))
     ));
     let mut changed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     changed["request"]["request_id"] = "00".repeat(32).into();
     assert!(matches!(
-        admit(&serde_json::to_vec(&changed).unwrap(), &plan, &call),
+        admit(
+            &serde_json::to_vec(&changed).unwrap(),
+            &super::Authority::from(&plan),
+            &call
+        ),
         Err(Error::Invalid(_))
     ));
 }
@@ -111,7 +116,11 @@ fn status_authority_must_bind_the_same_request() {
     let mut changed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     changed["request"]["status_check"] = changed["request"]["envelope"].clone();
     assert!(matches!(
-        admit(&serde_json::to_vec(&changed).unwrap(), &plan, &call),
+        admit(
+            &serde_json::to_vec(&changed).unwrap(),
+            &super::Authority::from(&plan),
+            &call
+        ),
         Err(Error::Invalid(_))
     ));
 }
@@ -147,4 +156,49 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
         bytes
     );
     assert!(!path.join("reply.bin").exists());
+}
+
+#[tokio::test]
+async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
+    let (_, mut plan, mut call) = fixture_expiry(false);
+    plan.management = Some(crate::ManagedCreation {
+        root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        root_module: "00".repeat(32),
+        execute_at_ns: 1,
+    });
+    plan.expires_at_ns = 1;
+    call.canister = principal("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+    call.effective = call.canister;
+    let agent = plan.network.agent().unwrap();
+    let dir = crate::tests::directory();
+    for method in ["stage", "reconcile", "install_code"] {
+        call.method = method;
+        assert!(matches!(
+            super::observe(
+                &dir,
+                &plan,
+                &call,
+                "must-not-run",
+                std::path::Path::new("must-not-run"),
+                &agent
+            )
+            .await,
+            Err(Error::Invalid(_))
+        ));
+    }
+    call.method = "observe";
+    assert!(matches!(
+        super::observe(
+            &dir,
+            &plan,
+            &call,
+            "must-not-run",
+            std::path::Path::new("must-not-run"),
+            &agent
+        )
+        .await,
+        Err(Error::Invalid(_))
+    ));
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    std::fs::remove_dir(dir).unwrap();
 }

@@ -3,7 +3,7 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
 mkdir -p target/growth
-cargo test --locked -p canic-profile-protocol --lib
+cargo test --locked -p canic-management-protocol --lib
 records=$(mktemp target/growth/clients.XXXXXX.jsonl)
 cargo build --locked -p canic-cli -p canic-profile-client --message-format=json-render-diagnostics > "$records"
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected CLI") end' "$records")

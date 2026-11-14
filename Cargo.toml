@@ -9,12 +9,15 @@ members = [
     "crates/canic",
     "crates/canic-cli",
     "crates/canic-host",
+    "crates/canic-management",
+    "crates/canic-management-protocol",
+    "crates/canic-root",
 ]
 exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.200.1"
+version = "0.201.0"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
@@ -23,6 +26,8 @@ publish = false
 base64 = "0.23.1"
 canic = { path = "crates/canic" }
 canic-host = { path = "crates/canic-host" }
+canic-management = { path = "crates/canic-management" }
+canic-management-protocol = { path = "crates/canic-management-protocol" }
 canic-profile-protocol = { path = "apps/profile/protocol" }
 clap = { version = "4.6.7", features = ["derive"] }
 ic-host-fs = { version = "0.77.1", default-features = false }
@@ -42,6 +47,7 @@ tiny_http = { version = "0.12.0", default-features = false }
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
 # Development tooling (source distribution; not a runtime dependency).
 toko-tooling = "=0.43.0"
+toml = "1.2.1"
 url = "2.5.8"
 
 [workspace.lints.cargo]

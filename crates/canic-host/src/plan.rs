@@ -16,7 +16,7 @@ pub struct Plan {
     pub version: u32,
     /// Exact network trust binding.
     pub network: Network,
-    /// Sole controller and required signing principal.
+    /// Required signer; sole direct controller, or sole operator controller of Root.
     pub controller: String,
     /// Exact installation bytes.
     pub artifact: Artifact,
@@ -24,7 +24,7 @@ pub struct Plan {
     pub target: Option<String>,
     /// Required previous module hash for upgrade; absent for fresh installation.
     pub previous_module: Option<String>,
-    /// Approved creation budget including the expected ledger fee, checked before dispatch.
+    /// Direct ledger debit including fee, or the exact Root-owned child attachment.
     pub creation_cycles: u64,
     /// Stable creation deduplication timestamp and plan identity component.
     pub created_at_ns: u64,
@@ -33,6 +33,21 @@ pub struct Plan {
     /// Optional named slot; absent in legacy v1 plans, required in v2 plans.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deployment: Option<crate::DeploymentName>,
+    /// Explicit Root-owned creation; absent plans retain their original encoding and digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub management: Option<ManagedCreation>,
+}
+
+/// Exact enduring effect owner for a single approved child.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManagedCreation {
+    /// Root principal, resolved from the selected parent slot.
+    pub root: String,
+    /// Exact reviewed Root executable hash, checked before admission and observation.
+    pub root_module: String,
+    /// Earliest autonomous dispatch, as Unix nanoseconds.
+    pub execute_at_ns: u64,
 }
 
 /// Operator-selected inputs for a one-canister plan.
@@ -73,6 +88,22 @@ impl Plan {
                 "mainnet requires an authenticated controller".into(),
             ));
         }
+        if let Some(managed) = &self.management {
+            let root = principal(&managed.root)?;
+            if self.version != 2
+                || self.target.is_some()
+                || self.previous_module.is_some()
+                || self.creation_cycles != canic_management_protocol::CREATION_CYCLES
+                || self.artifact.bytes > canic_management_protocol::MAX_WASM
+                || crate::unhex(&managed.root_module)?.len() != 32
+                || root == principal("aaaaa-aa")?
+                || root == principal("2vxsx-fae")?
+                || managed.execute_at_ns <= self.created_at_ns
+                || self.expires_at_ns.checked_sub(managed.execute_at_ns) != Some(600_000_000_000)
+            {
+                return Err(Error::Invalid("invalid Root-owned child approval".into()));
+            }
+        }
         match (&self.target, &self.previous_module) {
             (None, None) if (500_000_000_000..=5_000_000_000_000).contains(&self.creation_cycles) => {},
             (Some(target), Some(hash)) if self.creation_cycles == 0 && crate::unhex(hash)?.len() == 32 => { principal(target)?; },
@@ -91,6 +122,14 @@ impl Plan {
         bytes.extend(serde_json::to_vec(self).map_err(supplier)?);
         Ok(artifact::digest(&bytes))
     }
+
+    /// Sole controller of the resulting application canister.
+    #[must_use]
+    pub fn application_controller(&self) -> &str {
+        self.management
+            .as_ref()
+            .map_or(&self.controller, |owner| &owner.root)
+    }
 }
 
 /// Retain a reviewable plan and its immutable artifact without network mutations.
@@ -98,7 +137,7 @@ impl Plan {
 /// # Errors
 /// Refuses invalid budgets, occupied records, concurrent operators or failed durable publication.
 pub fn create_plan(root: &Path, wasm: &Path, input: PlanInput) -> Result<(String, Plan)> {
-    retain(root, wasm, input, None)
+    retain(root, wasm, input, None, None)
 }
 
 pub(crate) fn retain(
@@ -106,6 +145,7 @@ pub(crate) fn retain(
     wasm: &Path,
     input: PlanInput,
     deployment: Option<crate::DeploymentName>,
+    management: Option<ManagedCreation>,
 ) -> Result<(String, Plan)> {
     let bytes = store::read(wasm, artifact::MAX_WASM)?;
     let now = now()?;
@@ -119,9 +159,16 @@ pub(crate) fn retain(
         previous_module: input.previous_module,
         creation_cycles: input.creation_cycles,
         created_at_ns: now,
-        expires_at_ns: now + 3_600_000_000_000,
+        expires_at_ns: management
+            .as_ref()
+            .map_or(Ok(now + 3_600_000_000_000), |owner| {
+                owner
+                    .execute_at_ns
+                    .checked_add(600_000_000_000)
+                    .ok_or_else(|| Error::Invalid("dispatch deadline overflow".into()))
+            })?,
+        management,
     };
-    let id = plan.digest()?;
     let store = Store::open(root)?;
     if let Some(name) = &plan.deployment {
         // The journal lock spans lookup and publication, including an interrupted earlier plan.
@@ -146,6 +193,18 @@ pub(crate) fn retain(
             if existing.digest()? != existing_id {
                 return Err(Error::Invalid("retained plan digest mismatch".into()));
             }
+            if existing.deployment.as_ref() != Some(name)
+                && existing.network == plan.network
+                && existing
+                    .management
+                    .as_ref()
+                    .zip(plan.management.as_ref())
+                    .is_some_and(|(old, new)| old.root == new.root)
+            {
+                return Err(Error::Blocked(format!(
+                    "Root's single child slot already belongs to operation {existing_id}"
+                )));
+            }
             if existing.deployment.as_ref() == Some(name) {
                 let (existing, _) = load(&entry.path(), &existing_id)?;
                 if existing.network == plan.network
@@ -154,6 +213,14 @@ pub(crate) fn retain(
                     && existing.creation_cycles == plan.creation_cycles
                     && existing.target == plan.target
                     && existing.previous_module == plan.previous_module
+                    && existing
+                        .management
+                        .as_ref()
+                        .map(|owner| (&owner.root, &owner.root_module))
+                        == plan
+                            .management
+                            .as_ref()
+                            .map(|owner| (&owner.root, &owner.root_module))
                 {
                     return Ok((existing_id, existing));
                 }
@@ -163,6 +230,9 @@ pub(crate) fn retain(
             }
         }
     }
+    // Reopening returns the original authority before checking a new schedule.
+    // A past requested dispatch cannot renew or replace that retained operation.
+    let id = plan.digest()?;
     let dir = store.operation(&id)?;
     ic_host_fs::durable::prepare_private_parents(&dir).map_err(supplier)?;
     store::put(&dir.join("module.wasm"), &bytes)?;

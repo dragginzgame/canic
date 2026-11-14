@@ -10,19 +10,18 @@ description = "One-slot autonomous profile worker manager"
 toko-tooling.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+canic-management.workspace = true
+canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
-ic-platform = { workspace = true, features = ["management-canister-types"] }
 ic-platform-runtime = { workspace = true, features = ["cdk"] }
-ic-storage.workspace = true
-ic-timers.workspace = true
 ic-wire.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-fault-injection = []
-maintenance-candidate = []
+fault-injection = ["canic-management/fault-injection"]
+maintenance-candidate = ["canic-management/maintenance-candidate"]
 
 [lints]
 workspace = true

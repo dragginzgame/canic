@@ -1,4 +1,7 @@
-//! Single-use profile-worker growth authority, distinct from user profile RPCs.
+//! Single-use child creation authority and retained evidence; no application data or runtime.
+
+#[cfg(test)]
+mod tests;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -21,7 +24,7 @@ pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     allocation: 65_536,
     nodes: 1024,
     depth: 12,
-    ..crate::LIMITS
+    bytes: 4096,
 };
 /// Large staging envelope; observations use the separate small evidence policy.
 pub const STAGE_LIMITS: ic_wire::Limits = ic_wire::Limits {

@@ -1,5 +1,202 @@
 # Changelog
 
+## [0.201.0] - 2026-11-14
+
+### ▶️ Try it
+
+From this Canic checkout, select the existing profile app. Its sole `mainnet`
+fleet is inferred; these commands only observe deployments. Watch serves
+localhost without opening a browser:
+
+```sh
+canic fleet show --app profile
+canic fleet show --app profile --watch
+```
+
+Bare `fleet show` works only when the selected config has one app and one fleet.
+This checkout contains `hello-world` and `profile`; generated projects have
+their own config, selected by working directory or `--config`.
+
+Once a child plan names its deployed Root, follow progress without signing or
+resubmitting work. The live view serves localhost and does not open a browser:
+
+```sh
+canic fleet show --config starter/canic.json
+canic fleet show --config starter/canic.json --watch
+```
+
+Root reports are uncertified observations. A `Ready` report does not create a
+completion receipt; use the original `fleet apply` operation to retain one.
+
+From this checkout, generate a new project in an unused directory. This writes
+source and configuration only; the `mainnet` name selects a declaration, not a
+deployment. The generated README has the build steps:
+
+```sh
+canic app init starter --fleet mainnet --network ic --source ./starter --canic-source .
+canic app canister list --config starter/canic.json
+canic fleet canister list --config starter/canic.json
+```
+
+After building the generated artifacts and deploying its Root, copy the reviewed
+Root hash from `artifact inspect` and use your operator principal. Planning is
+local; apply admits one 1T-cycle child creation to Root and changes mainnet when
+the selected fleet is mainnet. Replace the uppercase placeholders with the
+returned values; see [the complete journey](docs/demos/root.md):
+
+```sh
+canic artifact inspect starter/artifacts/root.wasm
+canic fleet plan --config starter/canic.json --canister app --controller OPERATOR_PRINCIPAL --root-module ROOT_SHA256
+canic fleet status CHILD_OPERATION --config starter/canic.json
+canic fleet apply CHILD_OPERATION --config starter/canic.json --identity canic-mainnet
+```
+
+Build the experimental Root and its greeting application. These commands only
+build local Wasm; they do not create canisters. With the prepared PocketIC server
+(`make m0-setup`), `make root-test` exercises their installed controller graph
+and Root maintenance using synthetic cycles, without opening windows:
+
+```sh
+canic artifact build --package canic-root
+canic artifact build --package canic-hello
+```
+
+With one fleet configured for `profile`, omit its fleet selector. These commands
+read local configuration only; if you add another fleet, supply `--fleet NAME`:
+
+```sh
+canic app canister list --app profile
+canic fleet canister list --app profile
+```
+
+In a config containing just one app, `--app` can also be omitted. No current
+app or fleet is saved between commands.
+
+Inspect this checkout's configured profile fleet. These commands perform read-only
+network observations; they do not fund, deploy or open a browser:
+
+```sh
+canic fleet show --app profile --fleet mainnet
+canic fleet show --app profile --fleet mainnet --details
+canic fleet show --app profile --fleet mainnet --json
+```
+
+Inspect the profile demo's explicit roles and parent/child declarations, without
+network access:
+
+```sh
+canic fleet canister list --app profile --fleet mainnet
+```
+
+Inspect app definitions, then create a new `profile/staging` fleet inheriting
+them. Choose an unused fleet name. These commands do not deploy anything:
+
+```sh
+canic app canister list --app profile
+canic fleet init staging --app profile --network ic
+canic fleet canister list --app profile --fleet staging
+```
+
+For a new app, declare its topology once for all its fleets. This is configuration
+only: a `root` role does not install a Root or grant controller authority.
+
+```sh
+canic app init starter --fleet mainnet --network ic
+canic app canister add root --app starter --role root
+canic app canister add backend --app starter --role app --parent root
+canic app canister list --app starter
+```
+
+With this checkout's original private journal, inspect the retained manager
+maintenance operation. Both forms read local evidence only, with no network
+calls or browser launches:
+
+```sh
+operation=8b54397d04474aa916e93bcb89f46b8db7e96fccd05391d4eeb4224930f601d6
+canic fleet status --app profile --fleet mainnet "$operation"
+canic fleet status --app profile --fleet mainnet "$operation" --json
+```
+
+### 🔄 Changed
+
+- Clarify ambiguous app/fleet selection errors and distinguish unknown explicit
+  names. Lead checkout examples with `--app profile`; infer only unique choices,
+  without changing config or saving a default app.
+- Automatically observe Roots named by the selected fleet's retained child plans
+  in terminal and localhost views. Keep exact network bindings, reject reports
+  for different approvals, and distinguish Root/child labels from profile
+  managers/workers. Public reports never establish retained child identity or
+  write completion receipts; watching consumes no signed observation attempts.
+- Connect generated children to Root-owned `fleet plan` and `fleet apply`.
+  Pin the parent identity/code, signer, child bytes, schedule and 1T attachment;
+  retain exact staging attempts and replicated child evidence across response
+  loss. Apply reports pending work separately from verified completion. Preserve
+  direct-plan digests and project Root as the child's controller in receipts
+  and fleet views. A declared child cannot silently use direct host creation.
+- Extend `app init` with optional standalone source generation, a supplied Root
+  declaration and an editable greeting app. Publish the complete directory
+  without replacing existing paths; inherit the selected checkout's compiler,
+  supplier and lint policies. Add `artifact build --output` for configured Wasm
+  inputs. The installed Root fixture now builds the generated app through the
+  CLI. Whole-fleet convergence remains upcoming.
+- Add an experimental Root for one approved greeting application. Extract the
+  profile manager's creation, artifact custody and recovery engine into
+  `canic-management`, with a separate runtime-free management protocol. Both
+  canisters own their lifecycle/endpoints and choose application readiness checks.
+  Preserve the manager's wire/state formats. Child upgrades and whole-fleet
+  convergence remain separate work. See
+  [Root qualification](docs/demos/root.md).
+- Infer a sole app/fleet consistently for definition and binding commands and
+  `fleet init`. Require explicit selectors when ambiguous; reject unknown names
+  before editing config. App commands do not require a unique fleet. Apply the
+  same app-name validation to `fleet list --app`; qualify selection refusals
+  before plan, apply, status, call and show proceed.
+- Give app/fleet canister listings consistent headings and column names, blank
+  lines around their tables, and no trailing help text.
+- Move reusable role, parent and optional Wasm inputs into `apps.APP.canisters`;
+  every fleet resolves them with its own network, journal and existing-ID bindings.
+  Add `app canister add/list` and replace `fleet canister add` with
+  `fleet canister bind SLOT --id PRINCIPAL`. No aliases or fleet overrides.
+  Named creation can consume an app-defined Wasm path relative to the config;
+  exact artifact retention and existing deployment-plan digests are unchanged.
+  This is a breaking config change in 0.201.0. The old versioned config is refused;
+  this checkout is migrated, and the README describes external config edits.
+  General Root management and whole-fleet convergence remain upcoming.
+- Record the accepted next product journeys: one reusable app definition across
+  fleets, a generated Root-controlled Rust starter, whole-fleet convergence,
+  cascading discovery and subtree operations. Evaluate legacy cascade source,
+  regression tests and history; whole-fleet convergence, cascading discovery and
+  subtree operations are not implemented yet.
+  Exclude ICP conversion from the design in favor of manually supplied cycles;
+  defer application frontend integration and keep operator handover simple.
+- Simplify `fleet show` to one named row per canister, using IC Host tables.
+  Controller references use fleet names or a short external reference, with each
+  external principal listed once, separated from the table by a blank line.
+  Remove badge stacks and routine help text;
+  limit colour to controller/manager rows and unknown metadata. `--details`
+  retains hashes, timestamps and manager attempt counts. Conflicts, failed
+  observations and unresolved operations remain visible by default.
+- Restore explicit application roles and immediate parent/child topology,
+  following legacy Canic's separation from IC controllers. `app canister add` accepts
+  `--role` and `--parent`; declaration listings and reports show the tree.
+  Reject missing parents and cycles. The profile manager keeps its `manager`
+  role, with `managed-worker` beneath it; entry/shared-worker routing does not
+  create parentage. Existing principal bindings and retained plans are unchanged.
+- `fleet status OPERATION` now prints a readable retained-plan summary and an
+  IC Host table of retained effect evidence. Unknown outcomes stay explicit,
+  upgrade creation is labelled inapplicable only when no creation was submitted,
+  and receipts are historical evidence rather than current health checks.
+  `--json` preserves the existing structured output.
+
+### 🩹 Fixed
+
+- Correct the growth fixture's report-label expectation and pause the Root
+  fixture's automatic simulator clock during manual time advancement.
+- Show network and identity conflicts directly beside a fleet's canister slots
+  in terminal and browser reports. A retained operation on another trust binding
+  is no longer presented as that slot's current identity, even when the URL and
+  principal match. Original operation evidence remains visible and unchanged.
+
 ## [0.200.1] - 2026-11-14 (GitHub snapshot)
 
 ### ▶️ Try it

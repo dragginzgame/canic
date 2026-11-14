@@ -4,6 +4,8 @@ mod catalog;
 #[cfg(test)]
 mod config_tests;
 mod fleet;
+mod status;
+mod topology;
 mod view;
 
 use canic_host::{Error, Network, PlanInput};
@@ -44,7 +46,7 @@ impl ColorMode {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize or list local application declarations.
+    /// Initialize apps and manage their reusable canister definitions.
     #[command(subcommand)]
     App(AppCommand),
     /// Build or inspect local Wasm artifacts.
@@ -78,7 +80,7 @@ struct FleetScope {
     /// Fleet config; defaults to canic.json when present. No config keeps the legacy journal flow.
     #[arg(long)]
     config: Option<PathBuf>,
-    /// Select a logical application; required when the config has multiple apps.
+    /// Select an app; required when the config has multiple apps.
     #[arg(long, conflicts_with = "no_config")]
     app: Option<String>,
     /// Select a fleet within the app; required when the app has multiple fleets.
@@ -91,6 +93,9 @@ struct FleetScope {
 
 #[derive(Subcommand)]
 enum AppCommand {
+    /// Define or list reusable app canisters; affects declarations for every fleet.
+    #[command(subcommand)]
+    Canister(AppCanisterCommand),
     /// Add a new app and its first fleet, creating the config if missing; no deployment.
     #[command(mut_arg("network", |arg| arg.required(true)))]
     Init {
@@ -104,11 +109,56 @@ enum AppCommand {
         fleet: String,
         #[command(flatten)]
         network: NetworkArgs,
+        /// Generate a new standalone source workspace and its config in this directory.
+        #[arg(
+            long,
+            value_name = "DIRECTORY",
+            conflicts_with = "config",
+            requires = "canic_source"
+        )]
+        source: Option<PathBuf>,
+        /// Matching local Canic checkout supplying the runtime and greeting contract.
+        #[arg(long, value_name = "DIRECTORY", requires = "source")]
+        canic_source: Option<PathBuf>,
     },
     /// List apps declared in the local config; makes no network calls.
     List {
         #[command(flatten)]
         config: ConfigArgs,
+    },
+}
+
+#[derive(Args)]
+struct AppConfigArgs {
+    #[command(flatten)]
+    config: ConfigArgs,
+    /// Select an app; required when the config has multiple apps.
+    #[arg(long)]
+    app: Option<String>,
+}
+
+#[derive(Subcommand)]
+enum AppCanisterCommand {
+    /// Add a shared definition; deploys nothing and grants no management authority.
+    Add {
+        #[arg(value_name = "CANISTER")]
+        name: String,
+        #[command(flatten)]
+        selection: AppConfigArgs,
+        /// Application role, independent of controllers.
+        #[arg(long)]
+        role: Option<String>,
+        /// Parent definition in this app; does not grant control or permission to spawn.
+        #[arg(long, value_name = "CANISTER")]
+        parent: Option<String>,
+        /// Wasm input relative to the config file; planning retains the exact bytes.
+        #[arg(long, value_name = "WASM_FILE")]
+        wasm: Option<PathBuf>,
+    },
+    /// List shared app definitions; no network or journal access.
+    List {
+        #[command(flatten)]
+        selection: AppConfigArgs,
     },
 }
 
@@ -123,6 +173,9 @@ enum ArtifactCommand {
         package: String,
         #[arg(long, value_delimiter = ',')]
         features: Vec<String>,
+        /// Atomically write the built Wasm here, replacing a previous build input.
+        #[arg(long, value_name = "WASM_FILE")]
+        output: Option<PathBuf>,
     },
     /// Report the SHA-256 and size of a local Wasm file; no network calls.
     Inspect {
@@ -133,18 +186,18 @@ enum ArtifactCommand {
 
 #[derive(Subcommand)]
 enum FleetCommand {
-    /// Declare or list canister slots in a fleet's local config; no deployment or observation.
+    /// Bind existing canister IDs or list this fleet's app-defined slots; local config only.
     #[command(subcommand)]
     Canister(CanisterCommand),
-    /// Add an empty fleet to an existing app's local config; deploys nothing.
+    /// Add a fleet using the app's definitions, with no existing IDs; deploys nothing.
     #[command(mut_arg("network", |arg| arg.required(true)))]
     Init {
         /// New fleet name within the selected app.
         #[arg(value_name = "FLEET")]
         name: String,
-        /// Existing app that will own this fleet.
+        /// Select an existing app; required when the config has multiple apps.
         #[arg(long)]
-        app: String,
+        app: Option<String>,
         #[command(flatten)]
         config: ConfigArgs,
         #[command(flatten)]
@@ -165,9 +218,9 @@ enum FleetCommand {
         /// Named slot for its first deployment; repeats reuse the original plan.
         #[arg(long, value_name = "SLOT", conflicts_with_all = ["target", "no_config"])]
         canister: Option<String>,
-        /// Local uncompressed Wasm file to install.
+        /// Local Wasm input; omit for a named canister with an app-defined Wasm path.
         #[arg(long, value_name = "WASM_FILE")]
-        wasm: PathBuf,
+        wasm: Option<PathBuf>,
         #[command(flatten)]
         network: NetworkArgs,
         /// Controller principal to bind into this exact plan.
@@ -179,6 +232,13 @@ enum FleetCommand {
         /// Certified module hash from the previous deployment receipt.
         #[arg(long, requires = "target")]
         previous_module: Option<String>,
+        /// Admit the named child through its Root parent, pinned to this reviewed module hash.
+        #[arg(long, value_name = "SHA256", requires = "canister", conflicts_with_all = ["target", "previous_module"])]
+        root_module: Option<String>,
+        /// Unix seconds for a new Root plan's dispatch; default is ten minutes from planning.
+        /// Reopening a slot keeps its original schedule.
+        #[arg(long, value_name = "UNIX_SECONDS", requires = "root_module")]
+        execute_at: Option<u64>,
         /// Creation debit ceiling, including ledger fee; defaults to 1T for creation, zero for upgrade.
         #[arg(long, value_parser = clap::value_parser!(u64).range(0..=5_000_000_000_000))]
         cycles: Option<u64>,
@@ -267,24 +327,24 @@ enum FleetCommand {
 struct CanisterConfigArgs {
     #[command(flatten)]
     config: ConfigArgs,
-    /// App that owns the fleet.
+    /// Select an app; required when the config has multiple apps.
     #[arg(long)]
-    app: String,
-    /// Fleet that owns these canister declarations.
+    app: Option<String>,
+    /// Select a fleet within the app; required when the app has multiple fleets.
     #[arg(long)]
-    fleet: String,
+    fleet: Option<String>,
 }
 
 #[derive(Subcommand)]
 enum CanisterCommand {
-    /// Declare a local slot, optionally with an existing ID; creates no canister or journal.
-    Add {
-        /// New slot name within the selected fleet.
+    /// Bind an app-defined slot to an existing ID for observation; does not verify control.
+    Bind {
+        /// Existing app canister definition.
         #[arg(value_name = "SLOT")]
         name: String,
         /// Existing canister to observe on this fleet's network; does not verify control or deploy.
         #[arg(long, value_name = "PRINCIPAL")]
-        id: Option<String>,
+        id: String,
         #[command(flatten)]
         selection: CanisterConfigArgs,
     },
@@ -368,6 +428,47 @@ enum Output {
 
 async fn run(cli: &Cli) -> canic_host::Result<Output> {
     let result = match &cli.command {
+        Commands::App(AppCommand::Canister(command)) => match command {
+            AppCanisterCommand::List { selection } => {
+                return catalog::app_canisters(
+                    &selection.config.config,
+                    selection.app.as_deref(),
+                    cli.json,
+                );
+            }
+            AppCanisterCommand::Add {
+                name,
+                selection,
+                role,
+                parent,
+                wasm,
+            } => {
+                let declaration = canic_host::load_config(&selection.config.config)?;
+                let (app, _) = declaration.select_app(selection.app.as_deref())?;
+                let config = canic_host::add_app_canister(
+                    &selection.config.config,
+                    app,
+                    name,
+                    canic_host::CanisterDefinition {
+                        role: role.clone(),
+                        parent: parent.clone(),
+                        wasm: wasm.clone(),
+                    },
+                )?;
+                if !cli.json {
+                    return Ok(Output::Text(format!(
+                        "Defined app canister {name}\nApp: {}\nConfig: {}\nShared by all app fleets. Local files only; nothing deployed.\n",
+                        app,
+                        ic_host_text::escape::terminal_text(
+                            &selection.config.config.to_string_lossy()
+                        ),
+                    )));
+                }
+                Ok(
+                    serde_json::json!({"config_path":selection.config.config,"configuration":config,"deployed":false}),
+                )
+            }
+        },
         Commands::App(AppCommand::List { config }) => {
             return catalog::list(&config.config, None, true, cli.json);
         }
@@ -376,12 +477,35 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
             config,
             fleet,
             network,
+            source,
+            canic_source,
         }) => {
+            if let Some(source) = source {
+                let canic_source = canic_source.as_deref().ok_or_else(|| {
+                    Error::Invalid("source generation requires --canic-source".into())
+                })?;
+                let path = canic_host::create_starter(
+                    source,
+                    name,
+                    fleet,
+                    network.clone().into_network()?,
+                    canic_source,
+                )?;
+                if !cli.json {
+                    return Ok(Output::Text(format!(
+                        "Initialized app {name}\nFleet: {fleet}\nConfig: {}\n\nRoot\n└─ Application\n\nSource created; nothing built or deployed. See the generated README for build steps.\n",
+                        ic_host_text::escape::terminal_text(&path.to_string_lossy()),
+                    )));
+                }
+                return Ok(Output::Json(
+                    serde_json::json!({"config_path":path,"configuration":canic_host::load_config(&path)?,"source":source,"deployed":false}),
+                ));
+            }
             let declaration =
                 canic_host::init_app(&config.config, name, fleet, network.clone().into_network()?)?;
             if !cli.json {
                 return Ok(Output::Text(format!(
-                    "Initialized app {name}\nFleet: {fleet}\nConfig: {}\nNo canisters declared yet. Use fleet canister add to declare slots.\nLocal files only; nothing deployed or funded. See: canic fleet canister add --help\n",
+                    "Initialized app {name}\nFleet: {fleet}\nConfig: {}\nNo canisters defined yet. Use app canister add.\nLocal files only; nothing deployed or funded.\n",
                     ic_host_text::escape::terminal_text(&config.config.to_string_lossy()),
                 )));
             }
@@ -395,8 +519,9 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 manifest,
                 package,
                 features,
+                output,
             } => {
-                let path = canic_host::build(manifest, package, features)?;
+                let path = canic_host::build(manifest, package, features, output.as_deref())?;
                 let artifact = canic_host::inspect(&path)?;
                 Ok(serde_json::json!({"wasm": path, "artifact": artifact}))
             }
@@ -463,21 +588,26 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
     }
     let result = match command {
         FleetCommand::Canister(command) => match command {
-            CanisterCommand::Add {
+            CanisterCommand::Bind {
                 name,
                 id,
                 selection,
             } => {
-                let selected = canic_host::add_canister(
+                let scope = canic_host::load_config(&selection.config.config)?
+                    .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+                let selected = canic_host::bind_canister(
                     &selection.config.config,
-                    &selection.app,
-                    &selection.fleet,
+                    &scope.app,
+                    &scope.fleet,
                     name,
-                    id.as_deref(),
+                    canic_host::CanisterBinding {
+                        id: id.clone(),
+                        ..Default::default()
+                    },
                 )?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
-                        "Declared canister slot {name}\nApp: {}\nFleet: {}\nConfig: {}\nConfigured ID: {}\nLocal declaration only; no canister or journal created. Existence and control are not verified.\n",
+                        "Bound canister slot {name}\nApp: {}\nFleet: {}\nConfig: {}\nConfigured ID: {}\nObservation declaration only; no canister or journal created. Existence and control are not verified.\n",
                         selected.app,
                         selected.fleet,
                         ic_host_text::escape::terminal_text(
@@ -496,8 +626,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             CanisterCommand::List { selection } => {
                 return catalog::canisters(
                     &selection.config.config,
-                    &selection.app,
-                    &selection.fleet,
+                    selection.app.as_deref(),
+                    selection.fleet.as_deref(),
                     cli.json,
                 );
             }
@@ -508,11 +638,13 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             config,
             network,
         } => {
+            let declaration = canic_host::load_config(&config.config)?;
+            let (app, _) = declaration.select_app(app.as_deref())?;
             let selected =
                 canic_host::init_fleet(&config.config, app, name, network.clone().into_network()?)?;
             if !cli.json {
                 return Ok(Output::Text(format!(
-                    "Initialized fleet {name}\nApp: {app}\nConfig: {}\nNo canisters declared yet. Local files only; nothing deployed or funded.\n",
+                    "Initialized fleet {name}\nApp: {app}\nConfig: {}\nUsing shared app definitions with no existing ID bindings. Nothing deployed or funded.\n",
                     ic_host_text::escape::terminal_text(&config.config.to_string_lossy()),
                 )));
             }
@@ -530,6 +662,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             controller,
             target,
             previous_module,
+            root_module,
+            execute_at,
             cycles,
             ..
         } => {
@@ -574,7 +708,27 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 let config = configuration.as_ref().ok_or_else(|| {
                     Error::Invalid("named deployment requires a fleet config".into())
                 })?;
-                canic_host::create_configured_plan(&state_dir, wasm, input, config, canister)?
+                let wasm = config.wasm_path(&config_path, canister, wasm.as_deref())?;
+                if let Some(root_module) = root_module {
+                    let execute_at = execute_at
+                        .map(|seconds| {
+                            seconds
+                                .checked_mul(1_000_000_000)
+                                .ok_or_else(|| Error::Invalid("dispatch timestamp overflow".into()))
+                        })
+                        .transpose()?;
+                    canic_host::create_managed_plan(
+                        &state_dir,
+                        &wasm,
+                        input,
+                        config,
+                        canister,
+                        root_module,
+                        execute_at,
+                    )?
+                } else {
+                    canic_host::create_configured_plan(&state_dir, &wasm, input, config, canister)?
+                }
             } else {
                 if configuration.is_some() && target.is_none() {
                     return Err(Error::Invalid(
@@ -584,6 +738,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 if let (Some(config), Some(target)) = (&configuration, target) {
                     config.check_target(&state_dir, target)?;
                 }
+                let wasm = wasm
+                    .as_ref()
+                    .ok_or_else(|| Error::Invalid("this plan requires --wasm".into()))?;
                 canic_host::create_plan(&state_dir, wasm, input)?
             };
             Ok(serde_json::json!({"operation": digest, "plan": plan,"state_dir":state_dir}))
@@ -596,7 +753,13 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         } => Ok(serde_json::json!(
             canic_host::apply(&state_dir, digest, identity, icp_bin).await?
         )),
-        FleetCommand::Status { digest, .. } => canic_host::status(&state_dir, digest),
+        FleetCommand::Status { digest, .. } => {
+            let state = canic_host::status(&state_dir, digest)?;
+            if !cli.json {
+                return status::render(&state, &state_dir).map(Output::Text);
+            }
+            Ok(state)
+        }
         FleetCommand::View { report, port, open } => {
             view::serve(report, *port, *open)?;
             Ok(serde_json::json!({"viewer": "stopped"}))

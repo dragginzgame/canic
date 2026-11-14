@@ -21,6 +21,21 @@ pub enum Network {
 }
 
 impl Network {
+    /// Digest of the exact deployment binding used in fleet evidence.
+    ///
+    /// Local bindings include the URL, pinned root key and routing principal.
+    /// This preserves the existing fleet digest encoding; it is not a canonical
+    /// network identity shared by different gateway configurations.
+    ///
+    /// # Errors
+    /// Refuses invalid network settings or failed serialization.
+    pub fn binding_id(&self) -> Result<String> {
+        self.validate()?;
+        Ok(crate::artifact::digest(
+            &serde_json::to_vec(self).map_err(supplier)?,
+        ))
+    }
+
     pub(crate) fn validate(&self) -> Result<()> {
         if let Self::Local {
             url,

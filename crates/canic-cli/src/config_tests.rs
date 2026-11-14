@@ -10,6 +10,418 @@ async fn json(args: &[&str]) -> serde_json::Value {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn selectors_infer_only_unique_apps_and_fleets() {
+    async fn refuses(path: &std::path::Path, args: &[&str], message: &str) {
+        let before = std::fs::read(path).unwrap();
+        let parent = path.parent().unwrap();
+        let entries = || {
+            std::fs::read_dir(parent)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect::<std::collections::BTreeSet<_>>()
+        };
+        let files = entries();
+        let cli = Cli::try_parse_from(
+            ["canic"]
+                .into_iter()
+                .chain(args.iter().copied())
+                .chain(["--config", path.to_str().unwrap()]),
+        )
+        .unwrap();
+        let Err(error) = run(&cli).await else {
+            panic!("expected selection refusal");
+        };
+        assert!(error.to_string().contains(message), "{error}");
+        assert_eq!(std::fs::read(path).unwrap(), before);
+        assert_eq!(entries(), files);
+    }
+
+    let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/init-cli-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = ic_host_fs::directory::create_unique_directory(
+        &parent,
+        "selectors",
+        0o700,
+        std::num::NonZeroUsize::new(32),
+    )
+    .unwrap();
+    let path = root.join("custom.json");
+    let config = path.to_str().unwrap();
+    let report = root.join("report.html");
+    let journal = root.join("journal");
+    let deployment_commands: [&[&str]; 5] = [
+        &["fleet", "show", "--html", report.to_str().unwrap()],
+        &[
+            "fleet",
+            "plan",
+            "--canister",
+            "backend",
+            "--controller",
+            "aaaaa-aa",
+        ],
+        &["fleet", "apply", "operation", "--identity", "unused"],
+        &["fleet", "status", "operation"],
+        &["fleet", "call", "operation"],
+    ];
+    json(&[
+        "app",
+        "init",
+        "hello",
+        "--fleet",
+        "mainnet",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    json(&["app", "canister", "add", "backend", "--config", config]).await;
+    let app = json(&["app", "canister", "list", "--config", config]).await;
+    assert_eq!(app["app"], "hello");
+    assert_eq!(
+        app,
+        json(&[
+            "app", "canister", "list", "--app", "hello", "--config", config
+        ])
+        .await
+    );
+    let bound = json(&[
+        "fleet", "canister", "bind", "backend", "--id", "aaaaa-aa", "--config", config,
+    ])
+    .await;
+    assert_eq!(bound["configuration"]["app"], "hello");
+    assert_eq!(bound["configuration"]["fleet"], "mainnet");
+    assert_eq!(
+        json(&["fleet", "canister", "list", "--config", config]).await,
+        json(&[
+            "fleet", "canister", "list", "--app", "hello", "--fleet", "mainnet", "--config",
+            config,
+        ])
+        .await
+    );
+    for args in [
+        vec!["app", "canister", "add", "extra", "--app", "typo"],
+        vec!["fleet", "init", "extra", "--network", "ic", "--app", "typo"],
+        vec!["fleet", "canister", "list", "--app", "typo"],
+        vec!["fleet", "list", "--app", "typo"],
+    ] {
+        refuses(&path, &args, "select --app from: hello").await;
+    }
+    refuses(
+        &path,
+        &[
+            "fleet", "canister", "bind", "backend", "--id", "aaaaa-aa", "--fleet", "typo",
+        ],
+        "select --fleet from: mainnet",
+    )
+    .await;
+    // Scope refusal precedes plan/evidence access, signing and report output.
+    for command in deployment_commands {
+        for (selector, message) in [
+            ("--app", "select --app from: hello"),
+            ("--fleet", "select --fleet from: mainnet"),
+        ] {
+            let mut args = command.to_vec();
+            args.extend(["--state-dir", journal.to_str().unwrap(), selector, "typo"]);
+            refuses(&path, &args, message).await;
+            args.push("--no-config");
+            assert!(Cli::try_parse_from(std::iter::once("canic").chain(args)).is_err());
+        }
+    }
+
+    let staging = json(&[
+        "fleet",
+        "init",
+        "staging",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    assert_eq!(staging["configuration"]["app"], "hello");
+    assert_eq!(staging["configuration"]["fleet"], "staging");
+    json(&["app", "canister", "add", "worker", "--config", config]).await;
+    let app = json(&["app", "canister", "list", "--config", config]).await;
+    assert!(app["canisters"].get("worker").is_some());
+    for args in [
+        vec!["fleet", "canister", "list"],
+        vec!["fleet", "canister", "bind", "worker", "--id", "aaaaa-aa"],
+    ] {
+        refuses(&path, &args, "select --fleet from: mainnet, staging").await;
+    }
+    for command in deployment_commands {
+        let mut args = command.to_vec();
+        args.extend(["--state-dir", journal.to_str().unwrap()]);
+        refuses(&path, &args, "select --fleet from: mainnet, staging").await;
+    }
+    let staging = json(&[
+        "fleet", "canister", "list", "--fleet", "staging", "--config", config,
+    ])
+    .await;
+    assert_eq!(staging["configuration"]["fleet"], "staging");
+
+    json(&[
+        "app",
+        "init",
+        "other",
+        "--fleet",
+        "othernet",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    for args in [
+        vec!["app", "canister", "list"],
+        vec!["app", "canister", "add", "extra"],
+        vec!["fleet", "init", "extra", "--network", "ic"],
+        vec!["fleet", "canister", "list", "--fleet", "staging"],
+        vec![
+            "fleet", "canister", "bind", "worker", "--id", "aaaaa-aa", "--fleet", "staging",
+        ],
+    ] {
+        refuses(&path, &args, "select --app from: hello, other").await;
+    }
+    for command in deployment_commands {
+        let mut args = command.to_vec();
+        args.extend([
+            "--state-dir",
+            journal.to_str().unwrap(),
+            "--fleet",
+            "staging",
+        ]);
+        refuses(&path, &args, "select --app from: hello, other").await;
+    }
+    let listed = json(&[
+        "fleet", "canister", "list", "--app", "other", "--config", config,
+    ])
+    .await;
+    assert_eq!(listed["configuration"]["fleet"], "othernet");
+    assert_eq!(
+        json(&["app", "list", "--config", config]).await["apps"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        json(&["fleet", "list", "--config", config]).await["fleets"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert!(!root.join(".canic").exists());
+    assert!(!journal.exists());
+    assert!(!report.exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent() {
+    let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/init-cli-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = ic_host_fs::directory::create_unique_directory(
+        &parent,
+        "shared-app",
+        0o700,
+        std::num::NonZeroUsize::new(32),
+    )
+    .unwrap();
+    let path = root.join("canic.json");
+    let config = path.to_str().unwrap();
+    std::fs::write(root.join("app.wasm"), b"\0asm\x01\0\0\0").unwrap();
+    json(&[
+        "app",
+        "init",
+        "hello",
+        "--fleet",
+        "first",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    json(&[
+        "app", "canister", "add", "backend", "--app", "hello", "--role", "worker", "--wasm",
+        "app.wasm", "--config", config,
+    ])
+    .await;
+    json(&[
+        "fleet",
+        "init",
+        "second",
+        "--app",
+        "hello",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    let listed = json(&[
+        "app", "canister", "list", "--app", "hello", "--config", config,
+    ])
+    .await;
+    assert_eq!(listed["canisters"]["backend"]["wasm"], "app.wasm");
+    let fleets = json(&["fleet", "list", "--app", "hello", "--config", config]).await;
+    assert!(
+        fleets["fleets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|fleet| fleet["declared_canisters"] == 1)
+    );
+    let owner = "o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe";
+    let mut operations = Vec::new();
+    for fleet in ["first", "second"] {
+        let args = [
+            "fleet",
+            "plan",
+            "--app",
+            "hello",
+            "--fleet",
+            fleet,
+            "--canister",
+            "backend",
+            "--controller",
+            owner,
+            "--config",
+            config,
+        ];
+        let plan = json(&args).await;
+        assert_eq!(json(&args).await, plan);
+        let id = plan["operation"].as_str().unwrap();
+        assert_eq!(
+            std::fs::read(root.join(format!(".canic/apps/hello/fleets/{fleet}/{id}/module.wasm")))
+                .unwrap(),
+            b"\0asm\x01\0\0\0"
+        );
+        operations.push(id.to_string());
+        let conflicting = Cli::try_parse_from(
+            ["canic"]
+                .into_iter()
+                .chain(args)
+                .chain(["--wasm", "override.wasm"]),
+        )
+        .unwrap();
+        assert!(run(&conflicting).await.is_err());
+    }
+    assert_ne!(operations[0], operations[1]);
+    std::fs::write(root.join("app.wasm"), b"\0asm\x01\0\0\0\0\x01\0").unwrap();
+    let changed = Cli::try_parse_from([
+        "canic",
+        "fleet",
+        "plan",
+        "--app",
+        "hello",
+        "--fleet",
+        "first",
+        "--canister",
+        "backend",
+        "--controller",
+        owner,
+        "--config",
+        config,
+    ])
+    .unwrap();
+    assert!(matches!(run(&changed).await, Err(Error::Blocked(_))));
+    let status = json(&[
+        "fleet",
+        "status",
+        &operations[0],
+        "--app",
+        "hello",
+        "--fleet",
+        "first",
+        "--config",
+        config,
+    ])
+    .await;
+    assert_eq!(status["effects"]["install"], "not_submitted");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn canister_declarations_retain_roles_and_parents_without_effect_authority() {
+    let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/init-cli-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = ic_host_fs::directory::create_unique_directory(
+        &parent,
+        "topology",
+        0o700,
+        std::num::NonZeroUsize::new(32),
+    )
+    .unwrap();
+    let path = root.join("canic.json");
+    let config = path.to_str().unwrap();
+    json(&[
+        "app",
+        "init",
+        "profiles",
+        "--fleet",
+        "demo",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    json(&[
+        "app", "canister", "add", "owner", "--role", "manager", "--app", "profiles", "--config",
+        config,
+    ])
+    .await;
+    let args = [
+        "app", "canister", "add", "child", "--role", "worker", "--parent", "owner", "--app",
+        "profiles", "--config", config,
+    ];
+    let added = json(&args).await;
+    assert_eq!(
+        added["configuration"]["apps"]["profiles"]["canisters"]["child"],
+        serde_json::json!({"role":"worker", "parent":"owner"})
+    );
+    assert_eq!(added["deployed"], false);
+    assert!(!root.join(".canic").exists());
+    let args = [
+        "fleet", "canister", "list", "--app", "profiles", "--fleet", "demo", "--config", config,
+    ];
+    let cli = Cli::try_parse_from(std::iter::once("canic").chain(args)).unwrap();
+    let Output::Text(text) = run(&cli).await.unwrap() else {
+        panic!("expected declaration tree");
+    };
+    assert!(text.contains("└─ child"));
+    assert!(text.contains("manager"));
+    let listed = json(&args).await;
+    assert_eq!(
+        listed["configuration"]["config"]["canisters"],
+        added["configuration"]["apps"]["profiles"]["canisters"]
+    );
+    let bytes = std::fs::read(&path).unwrap();
+    let cli = Cli::try_parse_from([
+        "canic", "app", "canister", "add", "other", "--parent", "missing", "--app", "profiles",
+        "--config", config,
+    ])
+    .unwrap();
+    assert!(run(&cli).await.is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn app_init_adds_a_second_app_and_requires_explicit_selection() {
     let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -107,9 +519,15 @@ async fn existing_canister_declaration_lists_exact_id_without_deployment_authori
         config,
     ])
     .await;
+    for slot in ["existing", "another"] {
+        json(&[
+            "app", "canister", "add", slot, "--app", "hello", "--config", config,
+        ])
+        .await;
+    }
     let id = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     let args = [
-        "fleet", "canister", "add", "existing", "--id", id, "--app", "hello", "--fleet", "demo",
+        "fleet", "canister", "bind", "existing", "--id", id, "--app", "hello", "--fleet", "demo",
         "--config", config,
     ];
     for forbidden in ["--identity", "--network", "--state-dir", "--apply"] {
@@ -144,7 +562,7 @@ async fn existing_canister_declaration_lists_exact_id_without_deployment_authori
     let added = json(&[
         "fleet",
         "canister",
-        "add",
+        "bind",
         "another",
         "--id",
         "ryjl3-tyaaa-aaaaa-aaaba-cai",
@@ -193,9 +611,7 @@ async fn declaration_messages_escape_paths_while_json_retains_original_paths() {
                 "--network",
                 "ic",
             ],
-            vec![
-                "fleet", "canister", "add", "worker", "--app", "hello", "--fleet", "staging",
-            ],
+            vec!["app", "canister", "add", "worker", "--app", "hello"],
         ] {
             let mut cli = Cli::try_parse_from(
                 ["canic"]
@@ -282,7 +698,7 @@ async fn fleet_init_adds_a_second_fleet_without_journals_or_network_calls() {
     assert!(run(&repeat).await.is_err());
     assert_eq!(std::fs::read(&path).unwrap(), before);
     for invalid in [
-        vec!["fleet", "init", "missing-app", "--network", "ic"],
+        vec!["fleet", "init", "--network", "ic"],
         vec!["fleet", "init", "missing-network", "--app", "hello"],
         vec![
             "fleet",
@@ -398,8 +814,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     };
     assert!(text.contains("No canisters declared yet"));
     let slot_args = [
-        "fleet", "canister", "add", "backend", "--app", "hello", "--fleet", "demo", "--config",
-        config,
+        "app", "canister", "add", "backend", "--app", "hello", "--config", config,
     ];
     let added = json(&slot_args).await;
     assert_eq!(added["deployed"], false);
@@ -421,7 +836,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
         panic!("expected text")
     };
     assert!(text.contains("backend"));
-    assert!(text.contains("an unset ID does not mean undeployed"));
+    assert!(text.starts_with("App: hello · Fleet: demo\n\nCANISTER"));
     let mut declared = canic_host::load_config(std::path::Path::new(config)).unwrap();
     let first = json(&args).await;
     let repeated = json(&args).await;
@@ -436,6 +851,19 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     let status = json(&["fleet", "status", "--config", config, id]).await;
     assert_eq!(status["plan"]["deployment"]["app"], "hello");
     assert_eq!(status["effects"]["create"], "not_submitted");
+    let status_cli =
+        Cli::try_parse_from(["canic", "fleet", "status", "--config", config, id]).unwrap();
+    let Output::Text(text) = run(&status_cli).await.unwrap() else {
+        panic!("expected readable operation status");
+    };
+    assert!(text.contains(id));
+    assert!(text.contains("App: hello\nFleet: demo\nCanister slot: backend"));
+    assert!(text.contains("Not submitted"));
+    assert!(text.contains("Receipt: none retained"));
+    assert_eq!(
+        json(&["fleet", "status", "--config", config, id]).await,
+        status
+    );
     let cli = Cli::try_parse_from([
         "canic", "fleet", "show", "--config", config, "--color", "never",
     ])
@@ -443,12 +871,10 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     let Output::Text(text) = run(&cli).await.unwrap() else {
         panic!("expected text");
     };
-    assert!(text.contains("Fleet: demo"));
-    assert!(text.contains("App: hello"));
-    assert!(text.find("App: hello").unwrap() < text.find("Fleet: demo").unwrap());
+    assert!(text.contains("hello / demo · IC mainnet"));
     assert!(text.contains("backend: Awaiting deployment"));
-    assert!(text.contains("canic fleet status --app hello --fleet demo"));
-    assert!(text.contains("Configured network: IC mainnet"));
+    assert!(!text.contains("canic fleet status"));
+    assert!(text.contains("IC mainnet"));
     let report = root.join("fleet.html");
     json(&[
         "fleet",
@@ -593,10 +1019,63 @@ fn help_includes_version_and_sorted_commands_at_every_level() {
 }
 
 #[test]
+fn source_generation_requires_its_checkout_and_owns_its_new_config() {
+    let base = [
+        "canic",
+        "app",
+        "init",
+        "hello",
+        "--fleet",
+        "mainnet",
+        "--network",
+        "ic",
+    ];
+    assert!(
+        Cli::try_parse_from(
+            base.into_iter()
+                .chain(["--source", "new", "--canic-source", "."])
+        )
+        .is_ok()
+    );
+    for extra in [
+        vec!["--source", "new"],
+        vec!["--canic-source", "."],
+        vec![
+            "--source",
+            "new",
+            "--canic-source",
+            ".",
+            "--config",
+            "existing.json",
+        ],
+        vec![
+            "--source",
+            "new",
+            "--canic-source",
+            ".",
+            "--app",
+            "existing",
+        ],
+    ] {
+        assert!(Cli::try_parse_from(base.into_iter().chain(extra)).is_err());
+    }
+}
+
+#[test]
 fn commands_reject_context_they_do_not_use() {
     for args in [
+        vec![
+            "app", "canister", "add", "backend", "--app", "hello", "--fleet", "mainnet",
+        ],
+        vec![
+            "app", "canister", "add", "backend", "--app", "hello", "--id", "aaaaa-aa",
+        ],
+        vec![
+            "fleet", "canister", "bind", "backend", "--app", "hello", "--fleet", "mainnet", "--id",
+            "aaaaa-aa", "--role", "worker",
+        ],
         vec!["fleet", "canister", "add", "backend", "--app", "hello"],
-        vec!["fleet", "canister", "list", "--fleet", "mainnet"],
+        vec!["fleet", "canister", "list", "--network", "ic"],
         vec![
             "fleet",
             "canister",
@@ -682,4 +1161,37 @@ fn commands_reject_context_they_do_not_use() {
             "{args:?}"
         );
     }
+}
+
+#[test]
+fn managed_planning_arguments_require_the_named_child_context() {
+    let base = ["canic", "fleet", "plan", "--controller", "2vxsx-fae"];
+    for args in [
+        vec!["--root-module", "00"],
+        vec!["--execute-at", "123"],
+        vec!["--canister", "app", "--root-module", "00", "--no-config"],
+        vec![
+            "--canister",
+            "app",
+            "--root-module",
+            "00",
+            "--target",
+            "aaaaa-aa",
+            "--previous-module",
+            "00",
+        ],
+    ] {
+        assert!(Cli::try_parse_from(base.into_iter().chain(args)).is_err());
+    }
+    assert!(
+        Cli::try_parse_from(base.into_iter().chain([
+            "--canister",
+            "app",
+            "--root-module",
+            "00",
+            "--execute-at",
+            "123"
+        ]))
+        .is_ok()
+    );
 }

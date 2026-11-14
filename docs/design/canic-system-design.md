@@ -56,6 +56,42 @@ The application owns logical user routing and data semantics. Begin with explici
 
 For each mechanism, record the need, failure being prevented, simplest candidate, state/effects introduced and acceptance witness. Compare direct host-controlled installation with a subnet-local executor before selecting the first managed topology. Autonomous growth requires a surviving on-chain effect owner; a permanently running operator process is not an equivalent substitute. Choose one initial topology after this comparison rather than implementing speculative deployment modes.
 
+### Accepted developer and operator journeys
+
+The maintainer's 2026-11-14 workflow review admits the following product outcomes.
+These refine the destination; they do not claim that today's CLI implements them
+or require replacing the existing mainnet demos before their successor qualifies.
+
+- Define the app's artifacts, roles and permitted relationships once. Instantiate
+  that definition in several fleets with distinct networks, identities and budgets.
+- Generate a small buildable Rust application with one application canister
+  controlled by one Root/management owner. Support a persistent local development
+  loop and the same reviewed deployment semantics on mainnet. A separate
+  Coordinator or Store is not part of this starter.
+- Build, review and converge the complete selected fleet through one plan/apply
+  path. Repeating a completed convergence has no mutation effects. Individual
+  canister changes use the same owners and evidence.
+- Preserve cascading discovery and make scaling and sharding optional composable
+  building blocks. No particular growth workload is selected yet; the existing
+  profile consumer supplies the first bounded extension, not a Toko port.
+- Treat a subtree as an operational scope: it could represent an entire project.
+  Support reviewed inspection, drain/suspend/resume and persistent upgrade journeys
+  without affecting siblings outside that scope. This does not add a new App/Fleet
+  ownership level or import Toko-specific data semantics.
+- Operators supply cycles manually. Canic may distribute those cycles within
+  explicit grants; ICP conversion is excluded, not an optional adapter backlog.
+- Keep initial operator handover simple: retain configuration, exact artifacts and
+  journals, then provision the receiving operator's signer authority separately.
+  This is the working default, not a promise of reconstruction from on-chain data
+  after losing the journals. Application frontend integration remains deferred;
+  the existing read-only fleet visualization stays in scope.
+
+Deliver these as small usable increments within M2/M3. The first is the reusable
+app definition and generated Root-plus-app local journey; whole-fleet convergence
+then uses that same definition. Qualify discovery and subtree state propagation
+before broadening growth or subtree upgrades. No new command aliases, generic
+workflow engine or package catalogue follows merely from this scope decision.
+
 ### Adoption levels
 
 | Level | Useful result | Required commitment |
@@ -124,6 +160,24 @@ implicitly owned fleet member. Within a declaration, the same canister under the
 same exact network binding cannot belong to two fleets. Shared services require
 explicit external references when that consumer need is admitted.
 
+Preserve the useful legacy distinction between a canister's application role,
+its immediate parent in the application tree, and its IC controller set. A
+manager remains a manager when it controls children. Routing from an entry to a
+worker does not itself establish parentage. Current concrete fleet declarations
+may carry optional `role` and `parent` slot references; parents must exist in
+the same fleet and the tree must be acyclic. These fields support inspection
+before deployment as well as the deployed view. They are descriptive, not
+spawn grants or controller policy, and do not modify an existing approved plan.
+Applying topology through autonomous management still requires the explicit
+admission and custody contracts below.
+
+Canister trees contain only canister nodes. Root appears at the top of that
+tree, with its application descendants below it. Show an external operator's
+controller relationship separately as metadata, not as an indented ancestor
+of Root. This presentation rule applies to terminal output, visualizations and
+documentation; the controller relationship remains explicit without mixing
+identity principals into the application tree.
+
 Names select scope; they do not grant controller rights or prove ownership. A
 configured principal is a declaration, a certified controller read is an
 observation, and an approved operation supplies bounded effect authority. These
@@ -189,7 +243,18 @@ Use direct functions and domain modules first. A module may contain its transiti
 
 ### Infrastructure roles
 
-Select infrastructure deployment from actual authority and availability requirements. For one subnet, evaluate one local management owner before adding a global Coordinator. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
+The next generated starter selects one Root/management owner controlling one application canister. Retain an explicit external controller for that owner's maintenance and recovery; qualify its exact controller graph before deployment. This selects the responsibility and minimal topology, not a public rename or the old Root implementation. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
+
+The experimental `canic-root` now qualifies the one-child greeting path locally,
+using the same bounded management engine as the profile manager. Its controller
+is the external operator; its created application's sole controller is Root.
+Lifecycle mounting and application readiness remain explicit in each canister.
+The CLI now generates a standalone greeting workspace whose artifact passes that
+same installed qualification. Managed-child CLI plan/apply now pins Root code,
+retains exact admission attempts and recovers completion through replicated
+observations. Child upgrades, whole-fleet convergence and subtree operations
+remain unqualified. See the
+[managed-child evidence](m0-first-journey.md#managed-child-cli-approval).
 
 Artifact distribution is a responsibility to assign, not a mandatory Store canister. Compare direct reviewed uploads and executor-local storage against a separate service using artifact size, retention, autonomous installation, memory pressure and recurring canister cost. Select the simplest qualified arrangement for the first workload. A separate service earns its place through demonstrated distribution or isolation needs. Artifact possession never supplies approval authority.
 
@@ -197,7 +262,7 @@ External governance retains the controller hierarchy it approves. A governance i
 
 Later sections use Coordinator, executor and Store to name these responsibilities in larger deployments. Their contracts apply where selected; the names do not override the topology decision here.
 
-The implemented narrow topology is recorded in M0: the operator directly
+The existing mainnet topology is recorded in M0: the operator directly
 controls Hello World, the profile entry/shared worker, and the profile manager;
 only the manager's autonomous worker is controlled by that manager. This is not a
 fleet-wide executor or a general Root. Its artifact bytes are retained in the
@@ -233,14 +298,27 @@ Separate three categories of input by writer; this does not require three files 
 - Deployment policy: network trust, topology targets, placement restrictions, budgets, admission and governance.
 - Local execution settings: credential references, paths, tool configuration and presentation. Secrets never enter canister configuration or artifact metadata.
 
+The application specification is reusable across fleets: fleets reference its
+logical components rather than copying artifact/role/child definitions. Concrete
+allocations, network trust, placement, funding and controller assignments remain
+fleet-owned. The generated starter and whole-fleet planner consume this same
+model. Migration from today's concrete slot declarations must preserve retained
+principal bindings and plan digests; editing source configuration cannot amend an
+already approved operation. Reusable app definitions do not require a generic
+group catalogue or independently deployed group canisters.
+
 The compiler validates the explicit deployment graph, normalizes sets and produces typed desired state. Service selections have one source of truth; any features or capability descriptions are derived from it. Group expansion is added only if reusable groups are selected. Unknown keys, impossible combinations, unavailable services, contradictory placement and unbounded effects are errors before network mutation. Static policy and mutable deployment policy each have one owner; any override must be explicitly modeled as a narrowing operation.
 
 Keep semantic configuration identity separate from source-file identity. Reformatting a file should not change its meaning; exact source bytes still belong to build evidence when a build can consume them. After approval, the exact compiled plan and selected schema are immutable.
 
-The implemented declaration is `apps.APP.fleets.FLEET.canisters.SLOT`, with the
-network and optional journal path on each fleet. It deliberately does not yet
-implement a reusable component-specification compiler or fleet-wide funding
-policy. The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config.
+The implemented unversioned declaration has reusable definitions at
+`apps.APP.canisters.SLOT` (role, parent and optional Wasm input) and existing-ID
+bindings at `apps.APP.fleets.FLEET.canisters.SLOT`. Every fleet resolves the shared
+definitions; its bindings cannot override topology or artifacts. Network and
+journal path remain fleet-owned. Wasm paths resolve beside the config; exact
+bytes are retained only when planning. This is not yet a generated-source
+starter, spawn-policy compiler, fleet-wide funding policy or whole-fleet planner.
+The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config.
 An existing shared journal may remain in place, but observations and operation
 selection must distinguish its fleets by exact retained names or known target
 and network evidence. Unassigned uncertain records remain visible as such.
@@ -285,8 +363,9 @@ deployment; a selector may be omitted only when its choice is unique. See the
 | --- | --- |
 | Initialize and build | `canic app init APP --fleet FLEET --network NETWORK`, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
 | List local declarations | `canic app list`, `canic fleet list`, optionally `--app APP` for fleets |
-| Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` adds an empty fleet to an existing app, without creating canisters or journals |
-| Declare canister slots | `canic fleet canister add SLOT --app APP --fleet FLEET [--id PRINCIPAL]`, `canic fleet canister list --app APP --fleet FLEET`; local configuration only. An optional existing ID is an observation declaration, not verified existence, controller authority or deployment approval; occupied names and conflicting membership are refused |
+| Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
+| Define reusable canisters | `canic app canister add SLOT --app APP [--role ROLE] [--parent SLOT] [--wasm PATH]`, `canic app canister list --app APP`; app-owned topology and artifact inputs, shared by all fleets |
+| Bind and list deployment identities | `canic fleet canister bind SLOT --app APP --fleet FLEET --id PRINCIPAL`, `canic fleet canister list --app APP --fleet FLEET`; observation declarations only, never controller or deployment approval; unknown definitions, occupied bindings and conflicting membership refuse |
 | Review and execute one deployment | `canic fleet plan`, `canic fleet apply DIGEST` |
 | Investigate or continue the original operation | `canic fleet status DIGEST`, `canic fleet apply DIGEST` |
 | Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |
@@ -296,7 +375,9 @@ Only structured output (`--json`) is global. App/fleet selection and journal
 arguments belong to deployment actions, not artifact inspection, saved-report
 viewing or wallet queries. `fleet plan` prepares one canister, not an implicit
 whole-fleet rollout: a configured creation names an unbound slot, while an upgrade
-names an admitted principal and its previous module hash. `fleet call` currently
+names an admitted principal and its previous module hash. Named creation uses the
+app-defined Wasm input when present and refuses a competing CLI override; otherwise
+an explicit `--wasm` remains required. `fleet call` currently
 exercises the hello demo by its completed operation digest; it does not promise a
 generic application call interface. See the [command contexts](../../README.md#command-contexts).
 
@@ -335,7 +416,7 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The general managed-topology candidate is an explicitly trusted operator recovery authority R controlling a subnet executor E, which controls managed applications. R is an external principal with retained host custody, not another infrastructure canister required by this design. R performs E's maintenance; its power to replace E is explicit transitive trust. The implemented one-slot manager qualifies only its narrow form of this graph. Generalizing it to an executor requires validation of the management path, surviving custody and artifact availability for the admitted workload. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
+The next generated starter selects an explicitly trusted operator recovery authority R controlling one Root/management owner E, which controls the application canister. R is an external principal with retained host custody, not another infrastructure canister required by this design. R performs E's maintenance; its power to replace E is explicit transitive trust. The implemented one-slot manager qualifies only its narrow form of this graph. Generalizing it to an executor requires validation of the management path, surviving custody and artifact availability for the admitted workload. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |
@@ -384,7 +465,7 @@ Host custody and remote authority have different records. The host retains signe
 
 ### First effect contracts
 
-The table specifies required evidence, not provider guarantees already demonstrated. M0 pins the actual provider/API and qualifies the first managed path. Optional Ledger/CMC rows become implementation gates only when those adapters enter scope. Each adapter retains exact request bytes or commitment, caller, network, target, authority, amount and transport identity before dispatch. A Canic operation ID provides no provider deduplication by itself.
+The table specifies required evidence, not provider guarantees already demonstrated. M0 pins the actual provider/API and qualifies the first managed path. Ledger effects apply only to the selected cycle-funding/creation provider; no ICP conversion adapter is planned. Each adapter retains exact request bytes or commitment, caller, network, target, authority, amount and transport identity before dispatch. A Canic operation ID provides no provider deduplication by itself.
 
 | Effect and initial API | Wait and retained identity | Success evidence | Non-execution evidence and permitted recovery |
 | --- | --- | --- | --- |
@@ -393,7 +474,6 @@ The table specifies required evidence, not provider guarantees already demonstra
 | Installation: management `install_code` or selected chunked install API | Unbounded response wait candidate; target generation, mode, exact module/configuration and attempt | Retained completion, verified current module hash and accepted installation binding | Current hash alone does not identify which attempt initialized state. Reconcile the binding and execution evidence; never repeat initialization or reinstall merely after a timeout |
 | Controllers: management `update_settings` | Unbounded response wait candidate; exact old/new sets and transition operation | Retained completion and authoritative new-controller evidence available to surviving custody | Reobserve through an authorized controller; losing read authority is not failure proof. Never erase the outgoing sole custodian before the successor is confirmed |
 | Ledger transfer: selected ledger's transfer API | Declare selected transport wait; retain exact source/subaccount, destination, amount, fee, memo and provider timestamp/duplicate tuple | Correlated block/transaction receipt or provider duplicate response identifying the original transfer | Replay only the identical request within the provider's qualified duplicate horizon. After expiry, query admissible evidence or remain blocked; never refresh timestamp to manufacture a retry |
-| CMC conversion: `notify_top_up` or `notify_mint_cycles` | Declare selected transport wait; retain original payment block, method, destination/subaccount and memo where applicable | Correlated notification result and conversion/credit evidence under the selected method | Reconcile or renotify the same original payment only under qualified provider semantics; never make a replacement payment to resolve notification uncertainty |
 
 Creation result custody is an M0 go/no-go experiment: interrupt dispatch, callback and durable result retention separately. If the chosen API cannot reconstruct a lost principal, either choose a qualified recoverable provider path or explicitly accept bounded blocked exposure. Do not advertise automatic creation recovery without this proof. The early successful recovery witness must name an interruption the selected provider can actually reconcile.
 
@@ -434,6 +514,13 @@ Same-subnet work is the preferred execution path. Protected placement classifies
 
 Shared tenancy is a first-class qualification workload. Do not equate one logical user with one canister. Placement policy accepts application capacity signals without requiring Canic to understand user records. Subnet outages, pressure and lack of funding cause bounded queueing or typed refusal; no hidden unbounded backlog.
 
+Scaling and sharding are admitted composable building blocks, not mandatory
+runtime features. Both use the same allocation, funding, readiness and discovery
+owners. Scaling selects equivalent workers; sharding retains application-key
+assignments. The first concrete policy follows the smallest useful profile-demo
+extension. This decision does not select unlimited recursive spawning, automatic
+rebalancing or a general pool catalogue.
+
 Multi-Fleet operation initially means isolated Fleets inspected by the same host. Cross-Fleet movement is not required for multi-subnet operation. Controlled cycle disposition between Fleets remains a separate experiment with its own physical proof and budget.
 
 ### Delegated capacity and reclamation
@@ -446,7 +533,7 @@ For a limit of 100 delegated as 60 to A and 40 to B, losing contact with A creat
 
 ## 9 Funding and economics
 
-Use distinct types and ledgers for ICP amounts, cycles, fees, grants and observations. Separate operator assets, Coordinator treasury, executor operating reserve, estate creation accounts, canister balances and application/player balances. Reservations are liabilities, not expenditure. Deposited cycles are not all consumed cost.
+Use distinct types and ledgers for cycles, fees, grants and observations. Separate operator assets, Coordinator treasury when selected, executor operating reserve, estate creation accounts, canister balances and application/player balances. Reservations are liabilities, not expenditure. Deposited cycles are not all consumed cost. Read-only public ICP balance/address inspection does not introduce an ICP spending or conversion owner.
 
 Funding follows the selected custody graph: external treasury or governance grants finite authority to the owner that actually executes payments. A subnet executor can fund its managed children; an additional Coordinator treasury is justified only by a real global funding need. Creation funding remains distinguishable from operating funds even if both accounts share an owner. Applications may express demand; they cannot select arbitrary infrastructure destinations or mint treasury authority.
 
@@ -458,7 +545,13 @@ Retain prompt demand-triggered funding for active components plus coarse bounded
 
 Estate replenishment uses the same grant and transfer owners with a distinct purpose and account. It must not be implemented as a second treasury or queue. Exhausted authority pauses growth and reports the required renewal. A new operator-approved grant may extend future work but cannot overwrite an uncertain old transfer.
 
-ICP conversion is explicit opt-in. Review the exact account, quoted rate source/freshness, separate ICP and cycle ceilings, fees, original ledger request and notification identity. A local rate check is a pre-dispatch guard. The current CMC `NotifyTopUpArg` and `NotifyMintCyclesArg` provide no caller-selected minimum output or locked quote; local freshness cannot guarantee the eventual conversion rate ([CMC interface](https://raw.githubusercontent.com/dfinity/ic/master/rs/nns/cmc/cmc.did)). Claim stronger slippage protection only for a qualified provider that enforces it. Reconcile transfer, conversion and credit separately. A balance increase alone does not prove which conversion credited it. Stale rates or inaccessible receipts produce a bounded refusal, not an alternative payment. The initial journey uses direct cycles and does not depend on conversion.
+ICP conversion is excluded by the maintainer's 2026-11-14 decision. Operators
+manually supply cycles to the explicitly identified ledger account or native
+canister balance required by the selected path; these are different balances.
+Canic reports the destination and shortfall and pauses when funded authority is
+exhausted. It never purchases cycles, converts ICP or falls back to another
+account. Bounded parent-to-child cycle distribution remains in scope. Previously
+recorded external conversions remain historical evidence, not a Canic feature.
 
 ### Conservation
 
@@ -473,6 +566,46 @@ The application owns one lifecycle composition root. It declares participants, t
 Startup synchronously restores required local state and installs authority fences before scheduling fallible work. Async initialization advances a durable readiness operation with explicit failure and retry. An installed module is not automatically ready for publication. A failed participant cannot be hidden behind an apparently healthy framework status.
 
 Keep lifecycle state distinct from operation progress and scheduler activity. A component may be initializing, ready, draining or suspended while a particular management operation is uncertain. Fleet-wide state changes use a retained target generation and participant acknowledgements; observing the Root in a new state does not prove every descendant has converged. Draining rejects new discretionary work while allowing original-effect reconciliation. Suspension reconstructs explicit participant state on resume rather than treating a restarted timer as application readiness.
+
+### Cascading discovery and subtree operations
+
+Adapt the legacy behavior as three narrow responsibilities: authenticated
+topology/direct-child projection, locally readable role/service discovery, and
+operational-state propagation. They share committed allocation identities, not
+one universal mutable snapshot. Directory lookup returns all exact role matches
+in deterministic path order within its explicit scope; a unique-target request
+refuses ambiguity. Discovery neither grants access nor proves live readiness.
+
+Propagate validated bindings to affected descendants after admission/activation;
+do not require applications to wire every principal manually. Preserve exact
+parent, receiver, role, allocation generation, revision and content commitments.
+Exact replay is harmless; conflicting or stale projections refuse. Dynamic
+children join through the same publication owner. Global directories, Coordinator
+and legacy Store-specific topology transport are not prerequisites.
+
+A subtree operation binds its selected root, tree revision, complete bounded
+target set, action and operation generation. Authorize the request at its owner
+and authenticate each propagation hop; neither a role nor an IC controller edge
+substitutes for application parentage. Fence overlapping transitions and new child
+admission while capturing the target set. Later children must inherit the active
+restrictions before publication; they cannot silently enlarge an approved upgrade
+plan. Sibling subtrees outside the selection remain unaffected.
+
+Retain per-target pending/applied/unconfirmed outcomes and reconciliation failures.
+Bound fanout, payloads and report detail without reporting omitted targets as
+complete. Retry the original operation; recheck its generation after awaits so an
+older pause cannot overwrite a later resume, even if a state value repeats.
+Recovery/control endpoints remain usable during application suspension. IC-level
+stop/start is a separate management effect, not a synonym for logical suspension.
+Subtree upgrades use section 13's persistent release and management-effect custody;
+a state cascade cannot install code or imply an atomic distributed upgrade.
+
+First qualify two sibling branches, a grandchild, repeated roles, a failed/lost
+reply and retry, stale delivery, upgrade recovery and concurrent child admission.
+The [legacy evaluation](m0-first-journey.md#cascading-and-workflow-scope-review)
+records source/history evidence and the differences needing new qualification.
+
+### Memory and scheduling
 
 Memory ownership uses IC Storage allocations and stable names, not copied hardcoded IDs. Compile and validate one allocation manifest. Optional roles do not open unused stores during startup, diagnostics or sampling. Measure fresh physical allocation as well as logical usage. Reopening state must validate its schema, allocation owner and bounds before granting access.
 
@@ -659,8 +792,8 @@ The [M0 decision and evidence record](m0-first-journey.md) scopes the initial in
 | --- | --- | --- |
 | M0 First deployment contract and baseline | Specify the Hello World walkthrough and finite budget; choose its topology/controller graph, approval representation and provider contracts; identify the later stateful consumer and preservation requirements | Exercise the selected operator management path and creation-result custody in small fixtures; classify unavoidable uncertainty; defer unrelated governance/composition decisions to their owning implementation gates |
 | M1 Hands-on Hello World | Deliver usable CLI/artifact inspection and a narrow build, plan, apply, call and status journey locally and on mainnet, then deploy a changed greeting | Team follows public instructions; exact approval and retained effect custody, explicit identity/state semantics, bounded spending and truthful status; one parsing/artifact identity and operation path; passive preview alone is insufficient |
-| M2 Composed managed application | Single-subnet bootstrap/allocation with real consumer state, IcyDB or another actual stateful participant, endpoint/lifecycle integration, interrupted-effect reconciliation and a runnable demo fleet visualization | Team inspects actual topology and operation evidence in the view from the first multi-canister increment; explicit memory/timer ownership, first adoption/footprint comparison and terminal replay; no second provisioning path; prepare the second-release witness |
-| M3 Autonomous bounded operation and early persistence | Finite grants, demand scheduling, protected recovery resources and second executable preserving application state and uncertain-operation evidence | Operator absence, full uncertainty budget, late replies and recovery after upgrade; no duplicate retry/funding owner; live Rust futures need not migrate |
+| M2 Composed managed application | Reusable app definition, generated Root-plus-app starter and persistent local loop; whole-fleet convergence; real consumer state, stateful supplier composition, cascading discovery and runnable fleet visualization | Same app definition serves two fleets; repeated convergence has no mutations; exact authority and interrupted-effect recovery; explicit memory/timer ownership and first adoption comparison; no second provisioning path |
+| M3 Autonomous bounded operation and early persistence | Finite grants, composable growth, subtree drain/suspend/resume and narrow persistent subtree upgrade with surviving operation evidence | Sibling isolation, descendant acknowledgements, concurrent growth fencing, operator absence, late replies and recovery after upgrade; no duplicate retry/funding owner; live Rust futures need not migrate |
 | M4 Multi-subnet scale, when admitted | Consumer-required coordination, dynamic inventory, shared tenancy and explicit delegation reclamation | Admit the consumer's multi-subnet need first; unreachable executor cannot release allowance; fence/reconciliation and selected revocation semantics are proven; no central round trip per local continuation |
 | M5 Expanded composition, when admitted | Complete the selected Auth, Blob or frontend journeys building on M2's composition | Admit each integration's consumer need separately and qualify its selected arrangement; supplier independence; no copied engine or second lifecycle owner |
 | M6A Reusable capacity | Independently qualify release/reset and retained custody | Original obligations settled, late callbacks fenced and cycles conserved; checkpoint qualification does not gate this outcome |
@@ -700,18 +833,18 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Runtime core and universal layers | Replace with owned domain modules, sections 2–4 | Required — small runtime only | Small leaf dependency and Wasm graph |
 | Contracts, identifiers and DTOs | Retain bounded semantics; reduce redundant representations, sections 3, 12 | Required — protocols actually spoken | Codec bounds and identity tests |
 | App config, roles, capabilities and environment | Replace redundant controls with explicit selections and derived facts, section 5 | Required — minimal input model | Invalid combinations fail before effects |
-| Specs, groups and deployments | Begin with explicit canisters; add reusable grouping only for demonstrated repetition, sections 3, 8 | Required — explicit canisters; groups consumer-gated | Exact deterministic desired graph |
+| Specs, groups and deployments | Reusable app definition instantiated by fleets, sections 3, 5, 8 | Required — app blueprint and explicit instances; generic groups remain consumer-gated | Two fleets share definitions without sharing identities, journals or budgets |
 | Coordinator and Registry | Conditional global authority with bounded delegation, sections 4, 6, 8 | Consumer-gated — global constraints | Demonstrated global constraint and membership/reservation concurrency |
-| Root control plane | Surviving management-effect owner; subnet executor is the preferred candidate, sections 4, 7–9 | Required — effect ownership for admitted autonomous work; physical placement selected in M0 | Installed management journey and custody/artifact availability during operator absence |
+| Root control plane | One surviving Root/management owner controls the generated starter's app, sections 4, 7–9 | Required — selected starter topology; general executor behavior still needs qualification | Installed management journey and custody/artifact availability during operator absence |
 | Wasm Store and templates | Preserve artifact integrity; select physical distribution after comparison, sections 4, 12 | Required — integrity; separate Store consumer-gated | Integrity/retention proof and justified deployment overhead |
 | Network enrollment and subnet catalog | Retain exact trust and typed evidence, sections 5–6 | Required — selected network and subnet | Wrong network and stale evidence refusal |
-| Fleet generation and Ensure | One compiler and plan/apply owner, sections 5, 7 | Required — one plan/apply path | Repeated convergence has no effects |
+| Fleet generation and Ensure | One compiler and plan/apply owner, sections 5, 7 | Required — whole selected fleet; current CLI still plans one canister | Repeated convergence has no effects; interrupted apply retains exact targets |
 | Infrastructure bootstrap and supplied IDs | Explicit retained operation, section 7 | Required — bootstrap; supplied-ID breadth consumer-gated | Lost reply and controller mismatch |
 | Capacity import, reset and recycling | Rebuild around asset/allocation identity, sections 8, 13 | Consumer-gated — reusable-capacity need | Reuse with late callbacks and exact custody |
 | Component lifecycle and application initialization | One provisioning/readiness operation, sections 7, 10 | Required — first stateful consumer | Installed but unready stays unpublished |
 | Pools, child trees and scaling | Retain bounded demand-driven allocation, sections 8–10 | Required — bounded child path; general pools consumer-gated | Capacity race, idle quiescence and rearm |
-| Sharding and placement indexes | Retain assignment integrity; application owns movement, section 8 | Consumer-gated — actual sharding workload | Old allocation cannot alter replacement |
-| Service publication and Group Directory | Generation-bound projections, sections 3, 8 | Required — minimal binding; global directory consumer-gated | Dynamic children and consistent pages |
+| Sharding and placement indexes | Composable assignment policy over shared allocation; application owns movement, section 8 | Required — optional narrow building block qualified with a selected consumer; general policies consumer-gated | Old allocation cannot alter replacement; no implicit movement |
+| Service publication and Group Directory | Cascading generation-bound projections and scoped local lookup, sections 3, 8, 10 | Required — tree discovery; global directory consumer-gated | Dynamic children, repeated roles, exact replay and stale/conflicting projection refusal |
 | Fleet ingress whitelist/admission | Optional deployment policy with selected consistency semantics, section 6 | Consumer-gated — extra Fleet admission | Application access works without it; selected revocation promise is qualified |
 | Caller/topology access checks and RPC replay | Retain explicit authority and effect identity, sections 6–7, 12 | Required — selected commands and effects | Wrong caller, stale generation and duplicate |
 | Optional IC Relay communication | Independent supplier plus explicit Canic adapter alongside direct calls, sections 11–12 | Supplier-owned — design admitted; narrow multi-canister pilot before adoption | Managed lifecycle/recovery proof and measured direct-call comparison; no automatic fallback |
@@ -719,7 +852,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Root proofs, attestation and issuer enrollment | Retain narrow infrastructure identity; delegate generic Auth, section 11 | Consumer-gated — enrollment requirement | Enrollment/revocation/renewal journey |
 | Application login/session/receiver/logout | IC Auth composition, section 11 | Supplier-owned — IC Auth; full journey M5 if selected | Browser, issuer, receiver and device logout |
 | Root/Coordinator and child funding | Unified grant mechanics with distinct purposes, section 9 | Required — direct-cycle funding path | Reservation, accepted credit and no duplicate |
-| ICP refill, conversion and Ledger receipts | Explicit qualified financial adapters, section 9 | Consumer-gated — conversion not needed initially | Original transfer/notification recovery |
+| ICP refill and conversion | Removed from product scope, section 9 | Excluded — operators supply cycles manually | No conversion or alternate-account fallback; cycle-provider receipts remain required |
 | Funding policy rotation and kill switches | New authority cannot reset old exposure, sections 6, 9 | Required — exposure survives authority changes | Revoke new work; settle original uncertainty |
 | Stable memory and allocation manifest | IC Storage ownership, section 10 | Supplier-owned — IC Storage; narrow integration required | No unused-role allocation; schema reopen |
 | Lifecycle restoration, readiness and timers | One composition root plus durable demand, section 10 | Required — first consumer and persistence rehearsal | Restore, trap, stale callback and watchdog |
@@ -734,12 +867,12 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | ICRC standards | Explicit external adapter only, section 11 | Consumer-gated — named standard requirement | Required external schema and guard tests |
 | Build tools, generated packages and caches | Delegate mechanics; bind exact artifacts, section 12 | Supplier-owned — build mechanics; artifact binding required | Cold/warm, mutation and concurrent publication |
 | Evidence envelopes and policy gates | Passive inspection plus explicit approval, sections 5, 12 | Required — canonical approval and evidence | A report cannot authorize mutation |
-| Frontend environment handoff | Verified read-only projection, section 14 | Consumer-gated — frontend journey | Wrong network/protocol and unready targets |
+| Frontend environment handoff | Verified read-only projection, section 14 | Consumer-gated — explicitly deferred by maintainer; no current frontend work | Wrong network/protocol and unready targets if later admitted |
 | Local replica and persistent local Fleet | Same semantics, explicit provider capabilities, section 14 | Required — narrow installed fixture provider | Start preserves; reset is explicit |
 | Medic, info, inspect, diagnostic, state and list | Consolidated observation/operation vocabulary, sections 5, 14 | Required — status/reconcile; broader commands consumer-gated | Errors identify actual next owner/action |
-| Scaffold, local workspace status and toolchain installation | Source templates and explicit preparation, sections 5, 12, 14 | Consumer-gated — packaged scaffolding experience | Generated consumer builds; checks never install tools implicitly |
+| Scaffold, local workspace status and toolchain installation | Small Root-controlled app template and explicit preparation, sections 1, 5, 12, 14 | Required — generated Rust starter and persistent local loop; broader templates remain gated | Generated consumer builds and deploys; restart preserves state; checks never install tools implicitly |
 | Token balance and transfer wrappers | Delegate generic token tools; retain only Fleet-bound financial operations, section 9 | Supplier-owned — no generic Canic wallet | No duplicate generic wallet; exact signer/account boundary |
-| Fleet state cascades, suspend and resume | Generation-bound lifecycle transitions, section 10 | Consumer-gated — distributed lifecycle policy | Descendant acknowledgement and original-effect recovery |
+| Fleet/subtree state cascades, suspend and resume | Generation-bound scoped lifecycle transitions, section 10 | Required — project-subtree operation journey | Sibling isolation, descendant acknowledgement, stale-command refusal and original-effect recovery |
 | Test support, probes and downstream fixtures | Public consumer journeys in qualification workspace, section 15 | Required — public first-consumer fixtures | No private-core reconstruction |
 | CI, releases, packaging, docs and scripts | Toko mechanics plus product acceptance, sections 15–16 | Required — selected graph and current documentation | Reproducible selected graph and complete docs |
 | Release, retirement and destruction | Separate reuse, persistent release and deletion, section 13 | Consumer-gated — reuse/destruction; early persistent release required | Custody, application and conservation gates |
@@ -760,7 +893,7 @@ All twelve topics are accounted for. Their old release positions are not carried
 | Immutable test checkout lease | Defer optimization | Measure remaining resolution cost; enforce real immutable source before shared reuse |
 | Inspect-message admission | Retain implemented direction, rebuild thin catalog integration | Endpoint checks remain authoritative; stale-state and recovery-access tests |
 | OpenChat-class support | Adopt strategic acceptance workload and incremental adoption goal | Shared tenancy, governance, persistent lifecycle and measured burden reduction |
-| Operator funding conversion | Adopt explicit optional conversion protocol | Exact quote/debit/receipt and uncertainty proof; no automatic account substitution |
+| Operator funding conversion | Excluded; operators supply cycles manually | Maintainer decision 2026-11-14; no conversion adapter or fallback |
 | Release-binding finalization | Select separate code and approval identities; exclude structural finalization initially | A new executable-binding requirement needs a fresh decision, not a second implemented deployment mode |
 | Role-specific stable initialization | Adopt from first implementation | Physical allocation measurements and observation paths that do not allocate |
 | Swappable Wire encoding | Preserve narrow boundary; defer second codec | Current Wire policy remains; explicit policy decision and full two-build proof needed |
@@ -780,7 +913,7 @@ All twelve topics are accounted for. Their old release positions are not carried
 | 0.110 FR1 paused release to capacity | First-class reusable-capacity outcome, section 13 | Deletion-heavy retirement and self-owned pools |
 | 0.110 CS1 paused simplification | Single owners for bootstrap, parsing, formatting and persistence mechanics | Porting duplicated old flows before consolidating them |
 | 0.110 OP1–OP4 | Component operations, frontend export, host Observatory and local Fleet | Separate journals and orchestration per CLI command |
-| 0.110 RF2 and staging import follow-ups | Exact conversion receipts, bounded observation and typed exhaustion | Balance-only proofs and replacement recovery budgets |
+| 0.110 RF2 and staging import follow-ups | Bounded observation and typed exhaustion; conversion receipts remain historical | Conversion implementation, balance-only proofs and replacement recovery budgets |
 | 0.110 CR1 | Canonical infrastructure entrypoints | Application-maintained infrastructure source copies |
 | 0.112 Blob/Wire and upstream ownership | Independent services and coherent protocol changes | Embedded service engines and stale Auth/Backup availability claims |
 | Cancelled stateful-adoption proposal | Persistent production need reconsidered explicitly in section 13 | Its cancelled schemas, schedule or implied migration authority |
@@ -799,11 +932,11 @@ The architecture is accepted as the basis for M0. The choices below still requir
 | Governance profile | Direct operator for M1; hierarchical governance over infrastructure owners as proposed in section 6 | M0 proves the operator path; prove governance feasibility before that integration; direct SNS registration of every descendant would require a different effect owner |
 | Artifact binding | Separate executable identity from release approval; one activation evidence chain | Structural finalization excluded from initial product |
 | Restore boundary | Application rollback with surviving authoritative control plane | Whole-Fleet/control-plane rollback needs a separately qualified external authority/evidence procedure |
-| Physical infrastructure | Choose the minimum topology satisfying custody and autonomous operation | Compare direct-host and local-executor paths; add Coordinator/Store only for demonstrated needs |
+| Physical infrastructure | Next generated starter: operator → one Root/management owner → one application canister | Qualify owner maintenance and application deployment through the existing effect path; add Coordinator/Store only for demonstrated needs |
 | Fleet admission | Optional extra deployment policy | Application authentication works independently; select propagation semantics before adding machinery |
 | Package and repository boundaries | One product repository/workspace with separate host/runtime graphs | Split further for demonstrated compilation, dependency or ownership needs |
 | Application framework ownership | Application owns lifecycle and participant composition | Combined framework fixture before public composability claims |
-| Funding autonomy | Finite renewable grants, reactive funding plus coarse idle coverage | Budget exhaustion pauses; no hidden unlimited authority |
+| Funding autonomy | Manually supplied cycles with finite distribution grants, reactive funding plus coarse idle coverage | Budget exhaustion pauses; no ICP conversion or hidden unlimited authority |
 | Protocol optionality | Wire initially; keep domain free of codec choices | Alternate owned Candid requires explicit policy decision |
 | Application communication | Direct calls plus optional IC Relay adapter | Qualify a bounded multi-canister pilot and workload-specific gains before adoption; no mandatory Relay dependency |
 | Capacity reuse versus deletion | Preserve controlled empty capacity by explicit choice | Retained custody and costs must be visible; deletion never a recovery fallback |

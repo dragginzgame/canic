@@ -18,6 +18,28 @@ fn escape(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+fn manager_kind(snapshot: &Fleet, manager: &canic_host::FleetManager) -> &'static str {
+    let planned_root = snapshot.operations.iter().any(|operation| {
+        operation.network_id == manager.network_id
+            && operation
+                .management
+                .as_ref()
+                .is_some_and(|approval| approval.manager == manager.manager)
+    });
+    let declared_root = snapshot.configuration.as_ref().is_some_and(|config| {
+        config.config.network.binding_id().ok().as_deref() == Some(&manager.network_id)
+            && config.config.canisters.iter().any(|(name, slot)| {
+                slot.role.as_deref() == Some("root")
+                    && slot_state(snapshot, name).identity() == Some(manager.manager.as_str())
+            })
+    });
+    if planned_root || declared_root {
+        "Root"
+    } else {
+        "Manager"
+    }
+}
+
 fn declared_routes(snapshot: &Fleet, links: &[String]) -> Result<String> {
     if links.is_empty() {
         return Ok(String::new());
@@ -67,11 +89,13 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
             );
         }
         html.push_str("<ul>");
-        for slot in config.config.canisters.keys() {
+        for (slot, prefix) in crate::topology::rows(&config.config) {
             write!(
                 html,
-                "<li><strong>{}</strong>: {}</li>",
+                "<li><strong style=\"white-space:pre\">{}{}</strong> · role: {} · {}</li>",
+                escape(&prefix),
                 escape(slot),
+                escape(config.config.canisters[slot].role.as_deref().unwrap_or("—")),
                 escape(&slot_status(snapshot, slot))
             )
             .expect("writing to String");
@@ -129,16 +153,17 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
     html.push_str("</div>");
     html.push_str(routes);
     if !snapshot.managers.is_empty() {
-        html.push_str("<h2>Autonomous worker operations</h2><p>Manager journals below are uncertified application reports. Module and controller observations above are independently certified. Observation does not resume or retry work.</p><div class=grid>");
+        html.push_str("<h2>Autonomous child operations</h2><p>Root and manager reports below are uncertified. Module and controller observations above are independently certified. Observation does not resume work or create completion receipts.</p><div class=grid>");
         for manager in &snapshot.managers {
             write!(
                 html,
-                "<article><span class=badge>Uncertified manager report</span><h3>{}</h3>",
+                "<article><span class=badge>{} report (uncertified)</span><h3>{}</h3>",
+                manager_kind(snapshot, manager),
                 escape(&manager.manager)
             )
             .expect("writing to String");
             if let Some(status) = &manager.reported {
-                write!(html, "<p>Phase: <strong>{:?}</strong></p><p>Create / upload / install attempts: {} / {} / {}</p><div class=topology><code>{}</code><span class=arrow>↓ reports worker</span><code>{}</code></div>", status.phase, status.attempts[0], status.attempts[1], status.attempts[2], escape(&manager.manager), escape(status.worker.as_deref().unwrap_or("No retained principal"))).expect("writing to String");
+                write!(html, "<p>Phase: <strong>{:?}</strong></p><p>Create / upload / install attempts: {} / {} / {}</p><div class=topology><code>{}</code><span class=arrow>↓ reports child</span><code>{}</code></div>", status.phase, status.attempts[0], status.attempts[1], status.attempts[2], escape(&manager.manager), escape(status.worker.as_deref().unwrap_or("No reported principal"))).expect("writing to String");
                 if status.phase == canic_host::ProfileGrowthPhase::CreateIssued {
                     html.push_str("<p class=warning>Creation outcome unresolved. The original 1T attachment remains uncertain unless a correlated refund is retained. No second creation is authorized.</p>");
                 }
@@ -229,32 +254,79 @@ fn configured_network(config: &canic_host::SelectedFleet) -> String {
     }
 }
 
+enum SlotState<'a> {
+    Configured(&'a str),
+    Retained(&'a str),
+    Pending(&'a str),
+    Unplanned,
+    Issue(String),
+}
+
+impl SlotState<'_> {
+    fn identity(&self) -> Option<&str> {
+        match self {
+            Self::Configured(id) | Self::Retained(id) => Some(id),
+            Self::Pending(_) | Self::Unplanned | Self::Issue(_) => None,
+        }
+    }
+}
+
 fn slot_status(snapshot: &Fleet, slot: &str) -> String {
+    match slot_state(snapshot, slot) {
+        SlotState::Configured(id) => format!("{id} (configured identity; metadata below)"),
+        SlotState::Retained(id) => format!("{id} (retained deployment identity)"),
+        SlotState::Pending(id) => format!("Awaiting deployment; operation {id}"),
+        SlotState::Unplanned => "Not planned".into(),
+        SlotState::Issue(message) => message,
+    }
+}
+
+fn slot_state<'a>(snapshot: &'a Fleet, slot: &str) -> SlotState<'a> {
     let Some(config) = &snapshot.configuration else {
-        return "No fleet configuration".into();
+        return SlotState::Issue("No fleet configuration".into());
     };
-    if let Some(id) = config
+    let configured_id = config
         .config
         .canisters
         .get(slot)
-        .and_then(|slot| slot.id.as_ref())
-    {
-        return format!("{id} (configured identity; metadata below)");
-    }
-    let mut matches = snapshot.operations.iter().filter(|operation| {
-        operation.deployment.as_ref().is_some_and(|name| {
-            name.fleet == config.fleet && name.app == config.app && name.canister == slot
-        })
-    });
-    let Some(operation) = matches.next() else {
-        return "Not planned".into();
+        .and_then(|slot| slot.id.as_ref());
+    let network_id = match config.config.network.binding_id() {
+        Ok(id) => id,
+        Err(error) => return SlotState::Issue(format!("Invalid configured network: {error}")),
     };
-    if matches.next().is_some() {
-        return "Conflicting named operations; inspect JSON evidence".into();
+    let matches: Vec<_> = snapshot
+        .operations
+        .iter()
+        .filter(|operation| {
+            operation.deployment.as_ref().is_some_and(|name| {
+                name.fleet == config.fleet && name.app == config.app && name.canister == slot
+            })
+        })
+        .collect();
+    if matches
+        .iter()
+        .any(|operation| operation.network_id != network_id)
+    {
+        return SlotState::Issue("Network conflict; retained operation uses a different network binding. Inspect original evidence below".into());
     }
+    if let Some(id) = configured_id {
+        if matches
+            .iter()
+            .any(|operation| operation.canister.as_ref() != Some(id))
+        {
+            return SlotState::Issue("Identity conflict; configured ID disagrees with retained operation. Inspect original evidence below".into());
+        }
+        return SlotState::Configured(id);
+    }
+    if matches.len() > 1 {
+        return SlotState::Issue("Conflicting named operations; inspect JSON evidence".into());
+    }
+    let Some(operation) = matches.first() else {
+        return SlotState::Unplanned;
+    };
     match &operation.canister {
-        Some(id) => format!("{id} (retained deployment identity)"),
-        None => format!("Awaiting deployment; operation {}", operation.operation),
+        Some(id) => SlotState::Retained(id),
+        None => SlotState::Pending(&operation.operation),
     }
 }
 

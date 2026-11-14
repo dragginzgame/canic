@@ -61,7 +61,23 @@ struct Attempt {
     expiry: u64,
 }
 
-fn admit(bytes: &[u8], plan: &Plan, call: &Call<'_>) -> Result<Attempt> {
+struct Authority<'a> {
+    network: &'a crate::Network,
+    controller: &'a str,
+    expires_at_ns: u64,
+}
+
+impl<'a> From<&'a Plan> for Authority<'a> {
+    fn from(plan: &'a Plan) -> Self {
+        Self {
+            network: &plan.network,
+            controller: &plan.controller,
+            expires_at_ns: plan.expires_at_ns,
+        }
+    }
+}
+
+fn admit(bytes: &[u8], plan: &Authority<'_>, call: &Call<'_>) -> Result<Attempt> {
     let message: Message = serde_json::from_slice(bytes).map_err(supplier)?;
     if message.format != "icp-signed-message"
         || message.version != 1
@@ -94,7 +110,7 @@ fn admit(bytes: &[u8], plan: &Plan, call: &Call<'_>) -> Result<Attempt> {
             ingress_expiry,
             sender_info,
             ..
-        } if sender.as_slice() == principal(&plan.controller)?.as_slice()
+        } if sender.as_slice() == principal(plan.controller)?.as_slice()
             && canister_id.as_slice() == call.canister.as_slice()
             && method_name == call.method
             && arg == call.args
@@ -122,7 +138,7 @@ fn admit(bytes: &[u8], plan: &Plan, call: &Call<'_>) -> Result<Attempt> {
             sender,
             ingress_expiry,
             paths,
-        } if sender.as_slice() == principal(&plan.controller)?.as_slice()
+        } if sender.as_slice() == principal(plan.controller)?.as_slice()
             && *ingress_expiry == expiry
             && paths.len() == 1
             && paths[0].len() == 2
@@ -142,7 +158,13 @@ fn admit(bytes: &[u8], plan: &Plan, call: &Call<'_>) -> Result<Attempt> {
     })
 }
 
-fn sign(path: &Path, plan: &Plan, call: &Call<'_>, identity: &str, icp: &Path) -> Result<Vec<u8>> {
+fn sign(
+    path: &Path,
+    plan: &Authority<'_>,
+    call: &Call<'_>,
+    identity: &str,
+    icp: &Path,
+) -> Result<Vec<u8>> {
     if now()? + 300_000_000_000 > plan.expires_at_ns {
         return Err(Error::Blocked(
             "plan has less than five minutes left; no new effect was signed".into(),
@@ -211,6 +233,60 @@ struct Rejection {
 pub(crate) async fn execute(
     path: &Path,
     plan: &Plan,
+    call: &Call<'_>,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+) -> Result<Vec<u8>> {
+    execute_with(path, &Authority::from(plan), call, identity, icp, agent).await
+}
+
+/// Only the fixed Root observation method receives fresh read authority after plan expiry.
+pub(crate) async fn observe(
+    path: &Path,
+    plan: &Plan,
+    call: &Call<'_>,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+) -> Result<Vec<u8>> {
+    let owner = plan
+        .management
+        .as_ref()
+        .ok_or_else(|| Error::Invalid("observation needs Root binding".into()))?;
+    let args = ic_wire::native::encode_request(
+        canic_management_protocol::STATUS,
+        &(),
+        canic_management_protocol::LIMITS,
+    )
+    .map_err(supplier)?;
+    if call.canister != principal(&owner.root)?
+        || call.effective != call.canister
+        || call.method != "observe"
+        || call.args != args
+    {
+        return Err(Error::Invalid(
+            "read authority cannot authorize another method or payload".into(),
+        ));
+    }
+    execute_with(
+        path,
+        &Authority {
+            network: &plan.network,
+            controller: &plan.controller,
+            expires_at_ns: now()? + 600_000_000_000,
+        },
+        call,
+        identity,
+        icp,
+        agent,
+    )
+    .await
+}
+
+async fn execute_with(
+    path: &Path,
+    plan: &Authority<'_>,
     call: &Call<'_>,
     identity: &str,
     icp: &Path,

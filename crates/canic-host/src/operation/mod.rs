@@ -42,6 +42,23 @@ pub struct Receipt {
     pub controller: String,
 }
 
+/// Applying may admit autonomous work before the child is ready.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum ApplyOutcome {
+    /// Verified completed installation; direct deployment JSON remains unchanged.
+    Complete(Receipt),
+    /// Root retains the exact work; apply again to retain a replicated observation.
+    Pending {
+        /// Original deployment digest.
+        operation: String,
+        /// Enduring effect owner.
+        root: String,
+        /// Authenticated historical progress, not a completion receipt.
+        status: Box<canic_management_protocol::Status>,
+    },
+}
+
 fn create_call(plan: &Plan) -> Result<Call<'static>> {
     let controller = principal(&plan.controller)?;
     if plan.network == Network::Mainnet {
@@ -116,14 +133,18 @@ pub(crate) fn created(plan: &Plan, bytes: &[u8]) -> Result<Principal> {
     }
 }
 
-async fn controllers(agent: &Agent, canister: Principal, plan: &Plan) -> Result<()> {
+pub(crate) async fn controllers(
+    agent: &Agent,
+    canister: Principal,
+    controller: &str,
+) -> Result<()> {
     let bytes = bounded(
         agent
             .read_state_canister_info(canister.to_text().parse().map_err(supplier)?, "controllers"),
     )
     .await?;
     let values = ic_platform::ic_protocol::decode_controllers(&bytes, 4096).map_err(supplier)?;
-    if values != [principal(&plan.controller)?] {
+    if values != [principal(controller)?] {
         return Err(Error::Blocked(
             "certified controllers differ from the approved sole controller".into(),
         ));
@@ -131,7 +152,7 @@ async fn controllers(agent: &Agent, canister: Principal, plan: &Plan) -> Result<
     Ok(())
 }
 
-async fn module(agent: &Agent, canister: Principal) -> Result<String> {
+pub(crate) async fn module(agent: &Agent, canister: Principal) -> Result<String> {
     Ok(crate::hex(
         &bounded(agent.read_state_canister_info(
             canister.to_text().parse().map_err(supplier)?,
@@ -146,11 +167,14 @@ async fn module(agent: &Agent, canister: Principal) -> Result<String> {
 /// # Errors
 /// Refuses altered plans, authority/artifact mismatch, expired unresolved attempts,
 /// concurrent operators and provider failures. Retained signed requests must never be deleted to retry.
-pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Result<Receipt> {
+pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Result<ApplyOutcome> {
     let store = Store::open(root)?;
     let dir = store.operation(digest)?;
     let (plan, wasm) = plan::load(&dir, digest)?;
     let agent = plan.network.agent()?;
+    if plan.management.is_some() {
+        return crate::managed::apply(&dir, digest, &plan, &wasm, identity, icp, &agent).await;
+    }
     if dir.join("receipt.json").try_exists().map_err(supplier)? {
         let receipt: Receipt = store::json(&dir.join("receipt.json"))?;
         let expected = if let Some(target) = &plan.target {
@@ -167,7 +191,7 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
             ));
         }
         verify_receipt(&agent, &plan, digest, &receipt).await?;
-        return Ok(receipt);
+        return Ok(ApplyOutcome::Complete(receipt));
     }
     let canister = if let Some(target) = &plan.target {
         principal(target)?
@@ -199,7 +223,7 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
             signed::execute(&dir.join("create"), &plan, &call, identity, icp, &agent).await?;
         created(&plan, &reply)?
     };
-    controllers(&agent, canister, &plan).await?;
+    controllers(&agent, canister, &plan.controller).await?;
     // Before the first install signature, enforce the exact old module for an
     // upgrade. On resume, the retained attempt owns settlement; do not replace it.
     if !dir
@@ -240,20 +264,25 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
     };
     verify_receipt(&agent, &plan, digest, &receipt).await?;
     store::put_json(&dir.join("receipt.json"), &receipt)?;
-    Ok(receipt)
+    Ok(ApplyOutcome::Complete(receipt))
 }
 
-async fn verify_receipt(agent: &Agent, plan: &Plan, digest: &str, receipt: &Receipt) -> Result<()> {
+pub(crate) async fn verify_receipt(
+    agent: &Agent,
+    plan: &Plan,
+    digest: &str,
+    receipt: &Receipt,
+) -> Result<()> {
     if receipt.operation != digest
         || receipt.module_hash != plan.artifact.sha256
-        || receipt.controller != plan.controller
+        || receipt.controller != plan.application_controller()
     {
         return Err(Error::Invalid(
             "receipt does not match approved plan".into(),
         ));
     }
     let canister = principal(&receipt.canister)?;
-    controllers(agent, canister, plan).await?;
+    controllers(agent, canister, plan.application_controller()).await?;
     if module(agent, canister).await? != plan.artifact.sha256 {
         return Err(Error::Blocked(
             "certified module differs from approved artifact".into(),
@@ -271,7 +300,12 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
     let dir = store.operation(digest)?;
     let (plan, _) = plan::load(&dir, digest)?;
     let mut effects = serde_json::Map::new();
-    for effect in ["create", "install"] {
+    let effect_names: &[&str] = if plan.management.is_some() {
+        &["stage"]
+    } else {
+        &["create", "install"]
+    };
+    for effect in effect_names {
         let path = dir.join(effect);
         let state = if path.join("reply.bin").try_exists().map_err(supplier)? {
             "reply_retained"
@@ -282,14 +316,19 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
         } else {
             "not_submitted"
         };
-        effects.insert(effect.into(), state.into());
+        effects.insert((*effect).into(), state.into());
     }
     let receipt: Option<Receipt> = if dir.join("receipt.json").try_exists().map_err(supplier)? {
         Some(store::json(&dir.join("receipt.json"))?)
     } else {
         None
     };
+    let managed = if plan.management.is_some() {
+        crate::managed::evidence(&dir, &plan)?
+    } else {
+        None
+    };
     Ok(
-        serde_json::json!({"operation": digest, "plan": plan, "effects": effects, "receipt": receipt}),
+        serde_json::json!({"operation": digest, "plan": plan, "effects": effects, "receipt": receipt, "management": managed}),
     )
 }
