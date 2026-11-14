@@ -18,6 +18,167 @@ This record contains scoped decisions and evidence, not a second implementation
 backlog. The first product is the [M1 Hello World loop](../../README.md), followed
 by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
+## 0.203.1 supplier adoption and delivery
+
+The final batch adopts published Host Text 0.76.0 and qualification Testkit
+0.106.0. Registry source provenance identifies Text commit
+`16bdd537d6652fb7e1987e3cdac5d5d0ce70a8d1` and Testkit commit
+`d12b0174cd04c556f065c39bc12dd366628cc6df` in IC Tooling. Text's removed
+quantity/timestamp APIs had two fleet-plan callers: Canic now formats exact
+cycle budgets and uses Time 0.3.55 (already in the host graph) for UTC calendar
+conversion. Tables, widths and escaping stay with Host Text. Testkit's removed
+diagnostic APIs have no callers here; its 0.79 Host dependencies remove the
+qualification graph's duplicate 0.78 family. No compatibility wrappers or new
+runtime supplier enter the canister graphs.
+
+Registry freshness review on 2026-11-14 confirmed the selected Host family
+0.79.0, Text 0.76.0, Testkit 0.106.0, Platform 0.33.4, Runtime 0.22.4,
+Storage 0.74.1, Timers 0.44.2, Wire 0.22.1 and Toko Tooling 0.43.1 against
+current publications. Types 0.20.4 is also current. Unrelated supplier selections
+stay unchanged.
+
+Release validation completed the configured `make ci` obligations: `make lint`
+first, then the library, M0, artifact, M1, profile, growth, Root and endpoint
+checks. All enabled tests passed on Linux with synthetic cycles, including 63
+host tests and 40 CLI tests. Two historical Root migration tests remain explicitly
+ignored without their retained older Wasm inputs; this release does not renew
+that historical-artifact evidence. The locked Root/manager normal-build Wasm
+graphs exclude Host, Testkit, Time and tooling dependencies. Validation logs are
+retained at `target/release-0.203.1-{lint,tests}.log`. Version 0.203.1 is prepared
+for GitHub delivery only; crates.io publication remains disabled.
+
+## Explicit CLI reconciliation
+
+The next M2 increment exposes `fleet reconcile OPERATION` for retained Root
+creation and child-upgrade approvals, including resolved whole-fleet children.
+It cannot deploy a missing Root, materialize an unadmitted child or reset slots.
+The host checks the exact Root module and sole operator controller, then signs
+only a request carrying the original approval. Root checks that approval before
+observation, volatile fencing or scheduling. The request may continue originally
+approved work; the engine retains its original dispatch deadlines and ceilings.
+
+Legacy research reused revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`,
+`crates/canic-host/src/component_operation/{workflow/mod.rs,ops/mod.rs,tests.rs}`,
+and the previously reviewed operation history
+`4176ee97405185bf4780b5ada0f9206ead750313` /
+`0509ec870891515923f79d3932ece127b351cd15`. Preserve its immutable operation,
+lock, retained intent and lost-response cases. Reuse the rewrite's existing
+signed-attempt owner and evidence validation; omit legacy pool/capacity workflow
+machinery. A failed read remains unknown, never permission for a replacement.
+
+Recovery has a retained ten-minute submission ceiling, independent of effect
+authority. Its exact signed request precedes submission and is reused on resume;
+expiry without a terminal reply remains blocked. It shares the existing 32
+ordered observation slots: each slot may retain a recovery reply before its
+normal observation. No observation can overtake unresolved recovery, and recovery
+cannot be inserted ahead of an already signed observation. A committed recovery
+result survives a host interruption even before the next observation/receipt.
+Read-only status shows its retained request state; show/watch never invoke it.
+
+This changes the recovery wire contract: IDs 27/28 carry exact approvals, replacing
+unit IDs 22/26. Stage/status bytes and stable journals remain unchanged. Old owners
+reject new requests before acting; there is no legacy fallback or automatic owner
+upgrade/rebinding. Existing mainnet owners have not been upgraded. Maintenance of
+a trapped owner, lost creation principals, expired effects and depleted reserved
+slots remain outside what this command can repair.
+
+Focused validation passed: native host/CLI checks (including expired request
+custody, retained recovery evidence, scope and cancelled/unadmitted fleets),
+installed endpoint rejection/rollback, autonomous creation and interrupted child
+upgrades, and the two real CLI journeys covering managed children/upgrades and
+whole-fleet composition. The upgrade rejection fixture now permits already
+scheduled timers to advance while checking that refused approvals cannot replace
+the retained one. CLI fixtures distinguish retained recovery evidence from a
+missing staging reply and confirm public watching adds no observations.
+
+Native/Wasm and fixture Clippy, affected Rustdoc, formatting and tooling-snapshot
+checks passed. Three localhost-only CLI tests needed execution outside the socket
+sandbox and passed there. `make canic` installed the updated CLI on PATH. No
+mainnet effects, automatic windows, publication or push were performed.
+
+## IC Host 0.79 adoption
+
+The requested 2026-11-14 refresh selects published FS/Process/Artifacts 0.79.0;
+Text 0.75.0 is independently current. Review used IC Tooling revision
+`ccea377e144f3c5212dc274ef8812995e3f64d24` and its
+[Foundation ledger](https://github.com/dragginzgame/ic-tooling/blob/ccea377e144f3c5212dc274ef8812995e3f64d24/releases/foundation/CHANGELOG.md).
+This release retires HTTP and the standalone Wasm inspector, neither of which
+Canic selects. The published retained packages' `src/` trees match 0.78.0.
+The product graph selects only 0.79; direct qualification Wasm inspection selects
+Artifacts 0.79, while Testkit 0.105.0 still requires its internal 0.78 family.
+No artifact types cross that boundary. Preserve the other supplier selections.
+
+A parallel host test initially encountered journal-lock contention; its isolated
+rerun passed. The shared timestamp-based test-directory helper could reuse a
+path, so it now uses IC Host's atomic unique-directory allocator. This changes
+test isolation only; production locking and custody policy remain unchanged.
+
+Validation passed: 60 host tests and 39 CLI tests, profile-client compilation,
+focused native Clippy, qualification growth-test compilation with the two
+Artifacts versions, formatting and tooling-snapshot agreement. The dependency
+delta is limited to the requested Host family. Earlier installed simulator results
+are not renewed by this compile-only qualification check. `make canic` rebuilt
+and installed the CLI on PATH; version and local app listing passed.
+
+## Endpoint composition ownership decision
+
+On 2026-11-14 the maintainer selected [Canic-owned actor endpoint composition](canic-system-design.md#endpoint-ownership-and-actor-composition),
+Platform-owned generic IC entrypoint macros and endpoint-independent Wire codecs.
+This supersedes the proposed adoption/extension of Wire Endpoint for Canic #2.
+The first local implementation now mounts Root and profile-manager management
+methods with `canic_management::mount_endpoints!`. Each canister selects its
+exports; one fixed management adapter binds the handlers, request limits, access
+decisions and passive protocol IDs to Platform's existing hooks. It invokes Wire
+directly and replaces the 14 handwritten codec functions. Application lifecycle
+and readiness remain outside mounting. No new crate or dependency was added.
+
+`make endpoint-test` builds the actual Root, normal/fault/maintenance managers and
+profile worker. The installed fixture covers unauthorized and oversized frames,
+malformed/wrong-ID/wrong-direction frames, exact envelope admission boundaries,
+asymmetric stage budgets, public reads and replicated observation sharing the
+declared IDs. Fault-only points 9/10 force the real response encoder to fail:
+synchronous staging rolls back journal/artifact writes and its creation timer;
+reconciliation after a real readiness call retains the previously committed
+child principal, approval and spent attempts. Maintenance clears volatile
+callback fencing and resumes observation/replay without another child.
+
+The sandbox initially blocked PocketIC's localhost bind; rerunning the focused
+installed fixture with local networking passed. The existing `make growth-test`
+protocol and installed creation/upgrade recovery cases also passed, including
+uncertain effects and infrastructure maintenance. Wasm Clippy, focused test
+Clippy and management Rustdoc passed. This is local synthetic-cycle evidence;
+there was no mainnet mutation. Supplier retirement and general actor declarations
+or catalogue generation remain upcoming work; this adapter mounts a fixed
+management surface rather than introducing a general registry.
+
+Read-only legacy research used revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: the endpoint
+[pipeline](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-macros/src/endpoint/mod.rs),
+[expansion](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-macros/src/endpoint/expand/mod.rs),
+[typed tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-macros/src/endpoint/typed_tests.rs)
+and [raw Wire tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-macros/src/endpoint/raw_wire_tests.rs).
+Path history includes `8c87ae4c`, `ccae09b4` and `aa02dc0d`; this review does
+not establish which historical release qualified each execution path.
+The code couples explicit contracts and access/startup decisions to generated
+adapters; its tests reject missing contracts and conflicting payload declarations.
+Retain those invariants and relevant regression cases. Replace its hidden Core
+plumbing and raw execution generation with current Platform hooks, and preserve
+the current rewrite's actual authorization/admission ordering rather than blindly
+copying legacy order. The initial documentation decision ran no tests; the local
+implementation evidence above qualifies the selected current paths.
+
+## Post-push review: 0.203.0
+
+Reviewed published commit a45a2e3f3606e03ba628524850a31ed99ab3728a against its
+plan/apply/status/cancel and inventory callers, app discovery/build ownership,
+and starter documentation before opening 0.203.1. No new duplicate workflow,
+authority owner or stale alias was identified in that scope. Build inputs remain
+app-owned; network/journal selection remains fleet-owned. Cancellation retains
+revocation and cannot reset an issued effect. The two-canister limit and lack of
+whole-fleet upgrades remain explicit. This is a scoped design review, not a claim
+of full production qualification. Opening the next version initially changed only
+metadata; the later endpoint ownership decision is recorded above.
+
 ## 0.203.0 release qualification
 
 The complete local Linux gate, `make ci`, passed before version preparation:

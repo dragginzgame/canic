@@ -56,6 +56,11 @@ authenticated tooling installer.
   display widths and alignment. Do not hand-pad columns or add a formatter alias.
 - `crates/canic` owns the small greeting Wire contract. Host and CLI packages
   remain native; the demo canister is in `apps/hello/canister`.
+- Follow the accepted [endpoint ownership boundary](docs/design/canic-system-design.md#endpoint-ownership-and-actor-composition):
+  Canic composes actor endpoints, Platform owns generic IC entrypoint macros,
+  and Wire owns codecs without endpoint knowledge. Keep shared protocols passive
+  and Testkit Wire test-only. Migrate callers before retiring Wire Endpoint;
+  do not add another codec/executor implementation or implicit lifecycle owner.
 - `crates/canic-root` is the experimental one-child Root for the greeting app.
   `canic-management` owns the shared creation/artifact/evidence engine;
   `canic-management-protocol` owns its bounded Wire contract independently of
@@ -64,6 +69,11 @@ authenticated tooling installer.
   manager journal keys, authority and wire bytes across extraction and upgrades.
   Use `make root-test`, `make root-clippy` and `make root-doc` for Root, and
   `make growth-test` when changing the shared engine's effect boundaries.
+  `make endpoint-test` focuses on installed management mounts, authorization,
+  frame admission and reply-encoding rollback using synthetic cycles. Root and
+  the profile manager select exports with `canic_management::mount_endpoints!`;
+  their lifecycle and readiness remain explicit. Fault points 9/10 exercise
+  staging/reconciliation reply encoding only in `fault-injection` builds.
   Root admits one child creation and one separately retained upgrade of that child;
   neither slot resets, including after expiry or failure. Whole-fleet convergence
   and subtree control remain separate scope. Keep creation evidence immutable.
@@ -76,7 +86,13 @@ authenticated tooling installer.
   Root code and sole operator control before admission and observation. Keep
   staging's original signed attempt. Only Root's matching replicated, read-only
   `observe` or `observe_upgrade` endpoint may receive fresh read authority after the effect deadline; public
-  queries cannot establish the created child's custody. Preserve existing direct
+  queries cannot establish the created child's custody. Explicit `fleet reconcile`
+  has separate, short-lived request authority bound to the exact retained approval;
+  it never renews effect deadlines, budgets or spent slots. Keep its signed attempt
+  and deadline under the existing journal lock, ordered before the next observation.
+  Unresolved recovery cannot be overtaken or re-signed. New reconciliation IDs
+  27/28 replace unbound 22/26 without fallback; old owners require separate
+  qualified maintenance, never automatic rebinding. Preserve existing direct
   plan encodings/digests and keep Root as the child's receipt controller.
   Fleet views automatically query planned Roots under their exact network binding.
   Query upgrade progress only for a retained upgrade plan and match its full

@@ -9,8 +9,8 @@ mod tests;
 pub const STAGE: u64 = 24;
 /// Read committed upgrade evidence.
 pub const STATUS: u64 = 25;
-/// Reconstruct uncertain upload/install outcomes without repeating effects.
-pub const RECONCILE: u64 = 26;
+/// Reconstruct outcomes for the exact retained `Approval`; legacy unbound ID 26 is retired.
+pub const RECONCILE: u64 = 28;
 
 /// Exact child, code transition and finite dispatch interval.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

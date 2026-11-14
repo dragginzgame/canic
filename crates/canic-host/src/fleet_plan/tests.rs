@@ -173,6 +173,10 @@ async fn expired_unsubmitted_fleet_cannot_start_root_or_renew_its_schedule() {
     }
     store::put_json(&path.join("root/plan.json"), &value.root).unwrap();
     store::put_json(&path.join("fleet.json"), &value).unwrap();
+    let error = crate::reconcile(&journal, &id, "unused", Path::new("must-not-run"))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("retained child admission"));
     let error = crate::apply(&journal, &id, "unused", Path::new("must-not-run"))
         .await
         .unwrap_err();
@@ -205,6 +209,10 @@ async fn cancellation_retains_evidence_and_permanently_revokes_only_unprepared_w
     assert_eq!(before, std::fs::read(path.join("fleet.json")).unwrap());
     assert!(crate::status(&journal, &id).unwrap()["cancellation"].is_object());
     let failure = crate::apply(&journal, &id, "unused", Path::new("must-not-run"))
+        .await
+        .unwrap_err();
+    assert!(failure.to_string().contains("cancelled"));
+    let failure = crate::reconcile(&journal, &id, "unused", Path::new("must-not-run"))
         .await
         .unwrap_err();
     assert!(failure.to_string().contains("cancelled"));

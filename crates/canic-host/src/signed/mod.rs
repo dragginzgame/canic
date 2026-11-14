@@ -273,6 +273,40 @@ pub(crate) async fn observe(
     .await
 }
 
+/// Explicit operator request to reconcile only the plan's exact retained approval.
+/// Its short submission window is independent of, and cannot extend, effect authority.
+pub(crate) async fn reconcile(
+    path: &Path,
+    plan: &Plan,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+) -> Result<Vec<u8>> {
+    let call = crate::managed::recovery::call(plan)?;
+    ic_host_fs::durable::prepare_private_parents(path).map_err(supplier)?;
+    let authority = path.join("authority.json");
+    let expires_at_ns = if authority.try_exists().map_err(supplier)? {
+        store::json::<u64>(&authority)?
+    } else {
+        let deadline = now()? + 600_000_000_000;
+        store::put_json(&authority, &deadline)?;
+        deadline
+    };
+    execute_with(
+        path,
+        &Authority {
+            network: &plan.network,
+            controller: &plan.controller,
+            expires_at_ns,
+        },
+        &call,
+        identity,
+        icp,
+        agent,
+    )
+    .await
+}
+
 async fn execute_with(
     path: &Path,
     plan: &Authority<'_>,

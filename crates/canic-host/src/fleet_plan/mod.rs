@@ -384,6 +384,36 @@ pub(crate) async fn apply(
     })
 }
 
+pub(crate) async fn reconcile(
+    dir: &Path,
+    id: &str,
+    identity: &str,
+    icp: &Path,
+) -> Result<ApplyOutcome> {
+    let value = load(dir, id)?;
+    if cancelled(dir, id)? {
+        return Err(Error::Blocked(
+            "this fleet approval was cancelled; plan and review a new operation".into(),
+        ));
+    }
+    if !dir.join("child/plan.json").try_exists().map_err(supplier)? {
+        return Err(Error::Blocked("reconciliation requires this fleet's retained child admission; use the original apply first".into()));
+    }
+    let root = root_receipt(dir, &value)?.ok_or_else(invalid)?;
+    let child = operation::reconcile_at(
+        &dir.join("child"),
+        &value.child_plan(&root)?.digest()?,
+        identity,
+        icp,
+    )
+    .await?;
+    Ok(ApplyOutcome::Fleet {
+        operation: id.into(),
+        root,
+        child: Box::new(child),
+    })
+}
+
 pub(crate) fn status(dir: &Path, id: &str) -> Result<serde_json::Value> {
     let value = load(dir, id)?;
     let root = operation::status_at(&dir.join("root"), &value.child.parent.operation)?;

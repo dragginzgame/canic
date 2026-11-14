@@ -192,6 +192,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         });
     if let Some(config) = &configuration
         && let FleetCommand::Apply { digest, .. }
+        | FleetCommand::Reconcile { digest, .. }
         | FleetCommand::Cancel { digest, .. }
         | FleetCommand::Status { digest, .. }
         | FleetCommand::Call { digest, .. } = command
@@ -429,6 +430,19 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             ..
         } => {
             let outcome = canic_host::apply(&state_dir, digest, identity, &signer.icp_bin).await?;
+            if !cli.json {
+                return Ok(Output::Text(progress::applied(&outcome, command)));
+            }
+            Ok(serde_json::json!(outcome))
+        }
+        FleetCommand::Reconcile {
+            digest,
+            identity,
+            signer,
+            ..
+        } => {
+            let outcome =
+                canic_host::reconcile(&state_dir, digest, identity, &signer.icp_bin).await?;
             if !cli.json {
                 return Ok(Output::Text(progress::applied(&outcome, command)));
             }

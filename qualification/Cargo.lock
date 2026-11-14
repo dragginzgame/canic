@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -840,9 +840,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.78.0"
+version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97b20433ae31b443a2e8f270e07508b5fefb8cb9aa75c5461e5d0266dc3c13cd"
+checksum = "80c115b14974a670676e62940473886a1b2b289ee1ca1258aae89534f1fddb22"
 dependencies = [
  "flate2",
  "leb128",
@@ -852,9 +852,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-fs"
-version = "0.78.0"
+version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e55cb58f52c5e81a8c73043ffff1c6095feb59a97dbc40c76c5cd776e0e73eaf"
+checksum = "9ef7770c178efe33ca0d9fcb54e78ad45f0c9c3d499f2e1bac70fb1ba5bba182"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -863,9 +863,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.78.0"
+version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e709d0e7566a1a68364724f3abf0704fc6cca71cdb4b9f0dfd92a4f2540813b"
+checksum = "3bfc02220bee55d050f8ebedce5f5ff71764028afcef8b58c1ae2bceb945e650"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -886,9 +886,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform"
-version = "0.33.3"
+version = "0.33.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74c6e194ce3a80487320edef0041e286fd89d6d96e8a9f641811c7e38b856e51"
+checksum = "959cfca0933238dfb426f3deb356b7d5c27ee594f714cb61eca1a610b3e4ae44"
 dependencies = [
  "ic-platform-types",
  "num-bigint 0.5.1",
@@ -944,9 +944,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.105.0"
+version = "0.106.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf262da9066c039d1e875754379c3f5c2f61ab14a1f6eee779515c2f15eabb13"
+checksum = "090cea21af2208dad7a359e99fe803b356fe8daa27cdc52d545df7de3b32c43e"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",

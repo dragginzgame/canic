@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -382,6 +382,7 @@ dependencies = [
  "ic-host-process",
  "ic-host-text",
  "serde_json",
+ "time",
  "tiny_http",
  "tokio",
  "toko-tooling",
@@ -389,7 +390,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -399,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -420,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic-management-protocol",
  "ic-platform",
@@ -433,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -444,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-client"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic-management-protocol",
  "canic-profile-protocol",
@@ -458,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-entry"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -469,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-manager"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic-management",
  "canic-management-protocol",
@@ -481,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -490,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -502,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.203.0"
+version = "0.203.1"
 dependencies = [
  "canic",
  "canic-management",
@@ -1389,18 +1390,18 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.78.0"
+version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97b20433ae31b443a2e8f270e07508b5fefb8cb9aa75c5461e5d0266dc3c13cd"
+checksum = "80c115b14974a670676e62940473886a1b2b289ee1ca1258aae89534f1fddb22"
 dependencies = [
  "sha2 0.11.1",
 ]
 
 [[package]]
 name = "ic-host-fs"
-version = "0.78.0"
+version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e55cb58f52c5e81a8c73043ffff1c6095feb59a97dbc40c76c5cd776e0e73eaf"
+checksum = "9ef7770c178efe33ca0d9fcb54e78ad45f0c9c3d499f2e1bac70fb1ba5bba182"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -1409,9 +1410,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.78.0"
+version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e709d0e7566a1a68364724f3abf0704fc6cca71cdb4b9f0dfd92a4f2540813b"
+checksum = "3bfc02220bee55d050f8ebedce5f5ff71764028afcef8b58c1ae2bceb945e650"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -1421,9 +1422,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-text"
-version = "0.75.0"
+version = "0.76.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df16fad97f3e46454e45c55470326a0f8c3a39087ee50c95e20e118f8454ffc8"
+checksum = "7e4ca740ecd5342a449b401fca5ce2521e34ea3ab482dc67d989de3862b75c4a"
 dependencies = [
  "unicode-width",
 ]
@@ -1436,9 +1437,9 @@ checksum = "d6030a6a40c100314b396c96add8a414a3d1415b446729b54c8a4e97c0a05969"
 
 [[package]]
 name = "ic-platform"
-version = "0.33.3"
+version = "0.33.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74c6e194ce3a80487320edef0041e286fd89d6d96e8a9f641811c7e38b856e51"
+checksum = "959cfca0933238dfb426f3deb356b7d5c27ee594f714cb61eca1a610b3e4ae44"
 dependencies = [
  "crc32fast",
  "data-encoding",

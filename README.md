@@ -134,6 +134,7 @@ have no aliases.
 | `fleet show` | Observe the selected app/fleet; `--html PATH` saves a report, `--serve` serves it, and `--watch` refreshes it. |
 | `fleet plan --identity IDENTITY` | Read the identity’s public controller principal and review a new Root-plus-app fleet using its declared Wasm inputs. `--controller PRINCIPAL` supports offline planning. `--canister SLOT` selects the existing single-canister workflow; unconfigured `--wasm` planning remains explicit. |
 | `fleet apply OPERATION --identity IDENTITY` | Approve/resume that exact retained operation, including its funding and network effects. |
+| `fleet reconcile OPERATION --identity IDENTITY` | Request recovery of admitted work on the exact compatible Root; retain original effect limits and signed-request custody. |
 | `fleet cancel OPERATION` | Revoke a whole-fleet approval before any effect preparation, retaining its evidence. Once preparation begins, preserve and resume the same operation. |
 | `fleet status OPERATION` | Show the retained plan, effect evidence and historical receipt locally; `--json` returns the full structured evidence. |
 | `fleet call OPERATION --name NAME` | Query the hello demo deployed by that completed operation. This is not a general canister-method caller. |

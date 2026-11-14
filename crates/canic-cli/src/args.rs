@@ -270,6 +270,17 @@ pub(super) enum FleetCommand {
         #[command(flatten)]
         signer: SignerArgs,
     },
+    /// Reconcile this retained Root approval without renewing effect limits or deadlines.
+    Reconcile {
+        #[command(flatten)]
+        scope: FleetScope,
+        #[arg(value_name = "OPERATION")]
+        digest: String,
+        #[arg(long)]
+        identity: String,
+        #[command(flatten)]
+        signer: SignerArgs,
+    },
     /// Inspect local retained progress; makes no network calls.
     Status {
         #[command(flatten)]
@@ -376,6 +387,7 @@ impl FleetCommand {
             Self::Plan { scope, .. }
             | Self::Cancel { scope, .. }
             | Self::Apply { scope, .. }
+            | Self::Reconcile { scope, .. }
             | Self::Status { scope, .. }
             | Self::Show { scope, .. }
             | Self::Call { scope, .. } => Some(scope),

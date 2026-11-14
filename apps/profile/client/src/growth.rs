@@ -148,17 +148,30 @@ pub(super) fn run(cli: &Cli) -> Result<serde_json::Value, Box<dyn std::error::Er
             )?,
             true,
         ),
-        Action::GrowthReconcile => (
-            RECONCILE,
-            invoke(
+        Action::GrowthReconcile => {
+            let reply = invoke(
                 cli,
                 manager,
-                "reconcile",
-                &ic_wire::native::encode_request(RECONCILE, &(), LIMITS)?,
+                "status",
+                &ic_wire::native::encode_request(STATUS, &(), LIMITS)?,
+                true,
+            )?;
+            let current: Status = ic_wire::native::decode_response(STATUS, &reply, LIMITS)?;
+            let approval = current
+                .approval
+                .ok_or("manager has no admitted work to reconcile")?;
+            (
+                RECONCILE,
+                invoke(
+                    cli,
+                    manager,
+                    "reconcile",
+                    &ic_wire::native::encode_request(RECONCILE, &approval, LIMITS)?,
+                    false,
+                )?,
                 false,
-            )?,
-            false,
-        ),
+            )
+        }
         _ => unreachable!("growth command selected"),
     };
     let status = if id == STAGE {

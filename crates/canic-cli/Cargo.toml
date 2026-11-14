@@ -22,6 +22,7 @@ ic-host-fs.workspace = true
 ic-host-process.workspace = true
 ic-host-text.workspace = true
 serde_json.workspace = true
+time.workspace = true
 tiny_http.workspace = true
 tokio.workspace = true
 

@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.203.1] - 2026-11-14
+
+Root and the profile manager now explicitly mount their management endpoints
+through one Canic adapter. Replace 14 handwritten codec functions with shared
+generation using Platform's IC entrypoint hooks and Wire's bounded codecs.
+Keep method names, controller checks and request/reply limits;
+lifecycle and application readiness remain explicit. This completes the first
+local migration for [#2](https://github.com/dragginzgame/canic/issues/2), with no
+new crate or supplier dependency. Wire Endpoint retirement remains supplier work.
+
+Add `make endpoint-test` for installed request admission, query/observation
+contracts, production fault-export exclusion and synchronous/async reply failure
+recovery. Reply faults are restricted to synthetic `fault-injection` builds.
+No mainnet upgrade has been performed.
+
+Adopt published IC Host FS, Process and Artifacts 0.79.0 in the product and direct
+qualification selections, Text 0.76.0 for terminal rendering, and Testkit 0.106.0
+for qualification. Testkit now shares the 0.79 Host family, removing the older
+duplicate graph. Keep readable UTC deadlines through the existing Time supplier
+and render cycle budgets exactly, without rounded-up authority. Replace
+timestamp-based host test directories with the supplier's unique-directory
+allocator after a parallel fixture encountered lock contention.
+
+Add `canic fleet reconcile OPERATION` for explicitly requesting recovery of a
+retained Root creation or child upgrade, including the child of a whole-fleet
+operation. Preserve the exact approval, original effect deadlines and spent
+slots. Retain the signed recovery request before submission; an unresolved
+expired request remains blocked. Status and fleet watching remain read-only.
+
+**Recovery contract change:** reconciliation now requires the exact approval
+(method IDs 27/28). Retire the unbound unit requests 22/26 without a fallback.
+Older owners reject the new request; existing journals, stage/status contracts
+and deployed mainnet canisters remain unchanged. Use the command only with a
+compatible, reviewed Root matching the operation's pinned module.
+
+### ▶️ Try it
+
+With an existing configuration, list local declarations without network effects:
+
+```sh
+canic app list
+canic fleet list
+```
+
+For admitted work on a compatible Root, use the original operation digest.
+`status` reads local evidence; `reconcile` signs a recovery request and may let
+Root continue previously approved work. It does not renew spending authority:
+
+```sh
+canic fleet status OPERATION --app starter
+canic fleet reconcile OPERATION --app starter --identity canic-mainnet
+```
+
 ## [0.203.0] - 2026-11-14
 
 ### ⚠️ Host API

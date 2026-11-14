@@ -11,8 +11,8 @@ pub mod upgrade;
 pub const STAGE: u64 = 20;
 /// Read a small evidence projection without artifact bytes.
 pub const STATUS: u64 = 21;
-/// Reconstruct upload/install outcomes through observations, never repeat them.
-pub const RECONCILE: u64 = 22;
+/// Reconstruct outcomes for the exact retained `Approval`; legacy unbound ID 22 is retired.
+pub const RECONCILE: u64 = 27;
 /// Test-build-only fault endpoint; production managers do not export it.
 pub const INJECT: u64 = 23;
 /// Maximum worker artifact (uncompressed).

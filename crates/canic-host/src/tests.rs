@@ -6,10 +6,9 @@ pub(crate) fn directory() -> PathBuf {
         .ancestors()
         .nth(2)
         .unwrap()
-        .join("target/host-tests")
-        .join(format!("{}-{}", std::process::id(), crate::now().unwrap()));
+        .join("target/host-tests");
     std::fs::create_dir_all(&root).unwrap();
-    root
+    ic_host_fs::directory::create_unique_directory(&root, "case", 0o700, None).unwrap()
 }
 
 pub(crate) fn input() -> PlanInput {

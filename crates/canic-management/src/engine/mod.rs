@@ -306,8 +306,18 @@ pub fn inject_fault(value: u8) {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    assert!(value <= 8);
+    assert!(value <= 10);
     FAULT.set(value);
+}
+
+// Endpoint faults fail the real Wire encoder after the handler returns: staging
+// is synchronous, while reconciliation can already have committed an outgoing call.
+#[cfg(feature = "fault-injection")]
+pub(crate) fn reply_fault(method: u64) -> bool {
+    matches!(
+        (FAULT.get(), method),
+        (9, canic_management_protocol::STAGE) | (10, canic_management_protocol::RECONCILE)
+    )
 }
 
 fn failure(error: CallFailed) -> Failure {
@@ -534,11 +544,16 @@ async fn observation() -> Result<(), Failure> {
 }
 /// Reconstruct observable outcomes without reissuing uncertain effects.
 /// # Panics
-/// Traps for noncontrollers, uninitialized storage or failed durable writes.
-pub async fn reconcile() -> Status {
+/// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
+pub async fn reconcile(expected: canic_management_protocol::Approval) -> Status {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
+    );
+    assert_eq!(
+        snapshot().approval,
+        Some(expected),
+        "reconciliation approval mismatch"
     );
     if OBSERVING.replace(true) {
         return status();

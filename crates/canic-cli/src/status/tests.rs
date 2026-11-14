@@ -156,12 +156,12 @@ fn upgrade_diagnostics_do_not_turn_failure_expiry_or_funding_into_retry_permissi
         (
             Phase::InstallIssued,
             Failure::Rejected(5),
-            "persistent uncertainty requires owner recovery review",
+            "original effect limits still apply",
         ),
         (
             Phase::Verified,
             Failure::Mismatch,
-            "no CLI recovery command is qualified yet",
+            "A trapped owner may still need maintenance",
         ),
         (
             Phase::Expired,
@@ -226,4 +226,30 @@ fn ready_root_evidence_requires_a_separate_receipt_and_unknown_evidence_stays_un
     assert!(!text.contains("Root readiness alone is not a receipt"));
     state["management"]["failure"] = "future-unknown-failure".into();
     assert!(render(&state, Path::new("journal")).is_err());
+}
+#[test]
+fn fleet_budget_and_utc_labels_preserve_exact_boundaries() {
+    assert_eq!(super::cycles(0), "0 cycles");
+    assert_eq!(
+        super::cycles(3_000_000_000_000),
+        "3T cycles (3000000000000)"
+    );
+    assert_eq!(
+        super::cycles(999_999_999_999),
+        "999.999999999B cycles (999999999999)"
+    );
+    assert_eq!(
+        super::cycles(1_000_000_000_001),
+        "1.000000000001T cycles (1000000000001)"
+    );
+    assert_eq!(
+        super::cycles(u64::MAX),
+        "18446744.073709551615T cycles (18446744073709551615)"
+    );
+    assert_eq!(super::utc(0), "1970-01-01 00:00:00 UTC");
+    assert_eq!(
+        super::utc(951_782_400_000_000_000),
+        "2000-02-29 00:00:00 UTC"
+    );
+    assert_eq!(super::utc(u64::MAX), "2554-07-21 23:34:33 UTC");
 }

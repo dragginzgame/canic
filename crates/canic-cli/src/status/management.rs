@@ -82,8 +82,8 @@ const READY: &str = "apply this original operation with its operator identity to
 const COMPLETE: &str =
     "use fleet show for current observations; the retained receipt is historical evidence.";
 const UNKNOWN: &str = "review the original host attempt; missing admission evidence does not authorize a replacement operation.";
-const UNCERTAIN: &str = "observe Root with fleet show, then use the original apply to refresh retained evidence. Apply does not reconcile Root or reissue its effects; persistent uncertainty requires owner recovery review.";
-const FAILED: &str = "review the retained failure and observe Root with fleet show. Owner maintenance/reconciliation may be required; no CLI recovery command is qualified yet. Preserve this operation.";
+const UNCERTAIN: &str = "apply this original operation to refresh retained evidence. Use fleet reconcile with this operation and its operator identity to request Root recovery; original effect limits still apply.";
+const FAILED: &str = "review the retained failure. Use fleet reconcile with this operation and its operator identity for supported recovery. A trapped owner may still need maintenance; preserve this operation.";
 const EXPIRED: &str = "retain this operation for owner recovery review. Root stopped before another effect; expiry does not undo issued effects or renew its consumed slot.";
 const RESERVE: &str = "retain this operation for owner recovery review. Root stopped at its cycle reserve; adding cycles does not reset this consumed slot.";
 

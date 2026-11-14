@@ -60,7 +60,12 @@ async fn reconcile(pic: &PocketIc, manager: CanisterId) -> Status {
             manager,
             CanisterId::anonymous(),
             "reconcile",
-            ic_wire::native::encode_request(RECONCILE, &(), LIMITS).unwrap(),
+            ic_wire::native::encode_request(
+                RECONCILE,
+                &status(pic, manager).await.approval.unwrap(),
+                LIMITS,
+            )
+            .unwrap(),
         )
         .await
         .unwrap();
@@ -476,12 +481,39 @@ async fn stage_upgrade(
         .unwrap()
 }
 async fn reconcile_upgrade(pic: &PocketIc, manager: CanisterId) {
+    let retained = upgrade_status(pic, manager).await;
+    let mut other = retained.approval.clone().unwrap();
+    other.expires_at_ns += 1;
+    for frame in [
+        ic_wire::native::encode_request(
+            canic_management_protocol::upgrade::RECONCILE,
+            &other,
+            LIMITS,
+        )
+        .unwrap(),
+        ic_wire::native::encode_request(26, &(), LIMITS).unwrap(),
+    ] {
+        assert!(
+            pic.update_call(manager, CanisterId::anonymous(), "reconcile_upgrade", frame)
+                .await
+                .is_err()
+        );
+        // Existing autonomous timers may advance while the refused call runs.
+        assert_eq!(
+            upgrade_status(pic, manager).await.approval,
+            retained.approval
+        );
+    }
     pic.update_call(
         manager,
         CanisterId::anonymous(),
         "reconcile_upgrade",
-        ic_wire::native::encode_request(canic_management_protocol::upgrade::RECONCILE, &(), LIMITS)
-            .unwrap(),
+        ic_wire::native::encode_request(
+            canic_management_protocol::upgrade::RECONCILE,
+            &upgrade_status(pic, manager).await.approval.unwrap(),
+            LIMITS,
+        )
+        .unwrap(),
     )
     .await
     .unwrap();

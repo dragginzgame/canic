@@ -14,11 +14,12 @@ use canic_management_protocol::{
 use ic_platform::agent::Agent;
 use std::path::Path;
 
+pub(crate) mod recovery;
 #[cfg(test)]
 mod tests;
 pub(crate) mod upgrade;
 
-const OBSERVATIONS: usize = 32;
+pub(crate) const OBSERVATIONS: usize = 32;
 
 /// Retain one Root-owned creation or first upgrade for a declared parent/child pair.
 /// The parent must be bound or have a completed named deployment in this journal.
@@ -263,19 +264,24 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
         }
     }
     for index in 0..OBSERVATIONS {
-        let reply = dir.join(format!("observe/{index}/reply.bin"));
-        if reply.try_exists().map_err(supplier)? {
-            let status: Status = ic_wire::native::decode_response(
-                STATUS,
-                &store::read(&reply, LIMITS.bytes)?,
-                LIMITS,
-            )
-            .map_err(supplier)?;
-            if status.phase == Phase::Empty && status.approval.is_none() && latest.is_none() {
-                continue;
+        for (name, method) in [
+            ("reconcile/reply.bin", canic_management_protocol::RECONCILE),
+            ("reply.bin", STATUS),
+        ] {
+            let reply = dir.join(format!("observe/{index}/{name}"));
+            if reply.try_exists().map_err(supplier)? {
+                let status: Status = ic_wire::native::decode_response(
+                    method,
+                    &store::read(&reply, LIMITS.bytes)?,
+                    LIMITS,
+                )
+                .map_err(supplier)?;
+                if status.phase == Phase::Empty && status.approval.is_none() && latest.is_none() {
+                    continue;
+                }
+                validate(plan, latest.as_ref(), &status)?;
+                latest = Some(status);
             }
-            validate(plan, latest.as_ref(), &status)?;
-            latest = Some(status);
         }
     }
     Ok(latest)
@@ -338,6 +344,7 @@ pub(crate) async fn apply(
             method: "observe",
             args: ic_wire::native::encode_request(STATUS, &(), LIMITS).map_err(supplier)?,
         };
+        recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &call, identity, icp, agent).await?;
         let observed: Status =
             ic_wire::native::decode_response(STATUS, &bytes, LIMITS).map_err(supplier)?;

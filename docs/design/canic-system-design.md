@@ -414,7 +414,7 @@ Remove synonyms unless they serve genuinely different audiences. Do not retain `
 
 Fleet membership never grants resource access. An application session never grants treasury or controller authority. Discovery never grants either. Local endpoint checks remain mandatory even when an early ingress filter exists.
 
-Each managed method declaration supplies access class, payload bounds, protocol identity and an explicit public/protected classification. One declaration generates the endpoint adapter, interface catalog and permissible inspection predicate. Duplicate methods, missing access decisions and incompatible mounted names fail compilation. `inspect_message` is only a cheap early filter; it cannot replace update authorization or reserve resources. Its platform restrictions are defined by the [IC system API](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/).
+Each Canic-owned managed method declaration supplies access class, payload bounds, protocol identity and an explicit public/protected classification. One declaration generates the endpoint adapter, interface catalog and permissible inspection predicate, using Platform's generic IC entrypoint machinery and Wire's codec functions under the [endpoint ownership boundary](#endpoint-ownership-and-actor-composition). Duplicate methods, missing access decisions and incompatible mounted names fail compilation. `inspect_message` is only a cheap early filter; it cannot replace update authorization or reserve resources. Its platform restrictions are defined by the [IC system API](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/).
 
 ### Policy distribution
 
@@ -648,7 +648,69 @@ Qualify the selected service arrangement, embedded or separately deployed. If bo
 
 ## 12 Protocols transport and artifact identity
 
-Domain transitions consume logical bounded values. Endpoint adapters own decoding and encoding, and call adapters own a single attempt. Application operations own retry and consistency. A decode failure after a remote mutation must not trigger a second request using another codec.
+Domain transitions consume logical bounded values. Endpoint adapters select and invoke supplier-owned codecs, and call adapters own a single attempt. Application operations own retry and consistency. A decode failure after a remote mutation must not trigger a second request using another codec.
+
+### Endpoint ownership and actor composition
+
+Accepted direction, 2026-11-14: Canic owns endpoint composition for explicitly
+mounted actor capabilities. Platform owns generic IC entrypoint macros. Wire
+owns message encoding and validation without knowledge of deployed endpoints.
+This is the implementation destination, not a claim that the migration has shipped.
+
+| Owner | Responsibility | Boundary |
+| --- | --- | --- |
+| IC Wire | Bounded framing, serialization, decoding and validation of caller-supplied protocol identities | No exported-method catalogue, endpoint mounting, IC entrypoint macros, authorization or lifecycle |
+| IC Platform / Runtime | Generic IC entrypoint macros, exports, execution context, argument handling, guard invocation and reply machinery | Explicit codec/guard hooks; no Wire-specific endpoint policy or Canic actor model |
+| Canic | Compose selected actor adapters; bind exported names, protocol contracts, access rules and readiness requirements; derive the managed endpoint catalogue | Delegate codecs to Wire and IC execution to Platform; no copied codec, executor or universal Core |
+| IC Testkit Wire | Optional native encode/call/decode convenience over Testkit's simulator client | Test-only; no Canic runtime, endpoint catalogue, installation, lifecycle or retry policy |
+
+Suppliers expose ordinary typed capabilities and remain usable without Canic.
+The application explicitly mounts a Canic adapter for a selected capability;
+Canic binds its handler to an exported name, passive protocol contract and access
+decision. Platform generates the actual IC entrypoint and invokes the selected
+hooks. Wire encodes and validates bytes. Endpoint mounting adds no implicit
+timers, storage allocations, lifecycle participants or management authority;
+those remain explicit at the application's composition root.
+
+Keep protocol types, stable method IDs and directional limits passive and usable
+by hosts and tests without a runtime dependency. An exported method name and a
+Wire method ID are distinct: multiple exports may intentionally use one protocol
+contract. Wire may check that supplied ID without knowing any exported function.
+Canic derives endpoint views from the mounted declarations rather than maintaining
+a second authoritative catalogue. Any Canic-specific declaration macro belongs
+in Canic and emits Platform hooks; it must not implement IC execution itself.
+Use the smallest declaration mechanism demonstrated by the selected actor adapters.
+
+Retire the separate `ic-wire-endpoint` and endpoint-macro implementation after
+inventorying and migrating its supported consumers. Canic consumes Wire's codec
+API directly through its composition path, rather than adding a guard hook to
+Wire Endpoint as the long-term solution. Non-Canic consumers can compose
+Platform's explicit codec hooks directly. Preserve Wire's independent codec and
+value-schema functionality; removing endpoint ownership is not a frame-format change.
+
+The first Canic migration covers the shared management endpoints mounted by Root
+and the profile manager, including creation and upgrade. Remove superseded
+handwritten codec wrappers while preserving export names, exact bytes, explicit
+IDs/limits, authorization-before-copy ordering, rejection versus trap behaviour,
+one dispatch/reply path and synchronous/async callback rollback boundaries.
+Qualify valid and malformed calls, wrong identity/direction, oversized frames,
+unauthorized callers and relevant reply-encoding failures through installed
+endpoints. Supplier retirement follows migrated caller evidence; no package
+rename, compatibility facade or replacement generic adapter framework is required.
+
+Track the implementation in [Canic #2](https://github.com/dragginzgame/canic/issues/2),
+supplier retirement in [Wire #61](https://github.com/dragginzgame/ic-wire/issues/61),
+generic hooks in [Platform #164](https://github.com/dragginzgame/ic-platform/issues/164),
+and test adapter alignment in [IC Tooling #359](https://github.com/dragginzgame/ic-tooling/issues/359).
+
+The first local Canic implementation now explicitly mounts Root and profile-manager
+management methods through `canic_management::mount_endpoints!`, using the existing
+Platform hooks and Wire codec API. Its [installed evidence](m0-first-journey.md#endpoint-composition-ownership-decision)
+covers admission and reply rollback. This fixed management adapter does not yet
+supply general actor declarations or catalogue generation; supplier retirement
+remains separate work.
+
+### Protocol and artifact contracts
 
 Separate four identities: logical protocol/schema, transport encoding, canonical signed or hashed bytes, and stable storage representation. Changing one does not silently change the others. Owned Canic contracts use Wire initially; external management, ledgers and standard interfaces retain their required encodings. Optional Candid selection is a contingency requiring policy approval and two complete qualified builds, with no runtime negotiation or fallback.
 
@@ -804,8 +866,10 @@ inspect progress and recover supported interruptions through CLI commands,
 then upgrade while preserving the application's invariant. The same definition
 must serve a second isolated fleet. The initial whole-fleet path now deploys a
 new Root-plus-app tree and resumes the same authority. Existing-fleet adoption,
-whole-fleet upgrade planning and larger trees remain open; Root recovery still
-needs lower-level controller calls. These are remaining
+whole-fleet upgrade planning and larger trees remain open. `fleet reconcile`
+requests recovery of an exact retained creation/upgrade approval on a compatible
+Root, retaining original effect limits and ordered signed-attempt custody.
+Infrastructure-owner maintenance still needs lower-level controller calls. These are remaining
 implementation requirements, not claims made by the existing command names.
 Subtree administration and optional scaling/sharding extend this boundary in M3.
 
@@ -850,7 +914,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 
 | Existing surface or responsibility | Disposition and destination | Initial product disposition | Acceptance witness |
 | --- | --- | --- | --- |
-| Facade, start/build macros, endpoint macros | Redesign as thin declaration/composition tooling, sections 4, 10, 12 | Required — thin explicit declarations | Generated exports match explicit declarations |
+| Facade, start/build macros, endpoint macros | Canic owns actor/endpoint declarations; Platform owns generic IC entrypoint macros; Wire owns codecs, sections 4, 10, 12 | Required — thin explicit composition | Generated exports match declarations; one Platform execution path; no separate Wire endpoint owner |
 | Runtime core and universal layers | Replace with owned domain modules, sections 2–4 | Required — small runtime only | Small leaf dependency and Wasm graph |
 | Contracts, identifiers and DTOs | Retain bounded semantics; reduce redundant representations, sections 3, 12 | Required — protocols actually spoken | Codec bounds and identity tests |
 | App config, roles, capabilities and environment | Replace redundant controls with explicit selections and derived facts, section 5 | Required — minimal input model | Invalid combinations fail before effects |
@@ -957,6 +1021,7 @@ The architecture is accepted as the basis for M0. The choices below still requir
 | Fleet admission | Optional extra deployment policy | Application authentication works independently; select propagation semantics before adding machinery |
 | Package and repository boundaries | One product repository/workspace with separate host/runtime graphs | Split further for demonstrated compilation, dependency or ownership needs |
 | Application framework ownership | Application owns lifecycle and participant composition | Combined framework fixture before public composability claims |
+| Endpoint ownership | Canic composes actor endpoints; Platform owns generic IC entrypoint macros; Wire owns codecs | Migrate existing consumers before retiring Wire Endpoint; preserve protocol, authorization, admission and reply semantics; optional Testkit Wire remains test-only |
 | Funding autonomy | Manually supplied cycles with finite distribution grants, reactive funding plus coarse idle coverage | Budget exhaustion pauses; no ICP conversion or hidden unlimited authority |
 | Protocol optionality | Wire initially; keep domain free of codec choices | Alternate owned Candid requires explicit policy decision |
 | Application communication | Direct calls plus optional IC Relay adapter | Qualify a bounded multi-canister pilot and workload-specific gains before adoption; no mandatory Relay dependency |

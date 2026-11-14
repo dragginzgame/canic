@@ -40,7 +40,7 @@ pub(crate) fn approval(plan: &Plan) -> Result<Approval> {
         expires_at_ns: plan.expires_at_ns,
     })
 }
-fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<()> {
+pub(super) fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<()> {
     if status.approval.as_ref() != Some(&approval(plan)?)
         || status.phase == Phase::Empty
         || status.attempts.iter().any(|n| *n > 1)
@@ -108,19 +108,27 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
         }
     }
     for index in 0..OBSERVATIONS {
-        let path = dir.join(format!("observe/{index}/reply.bin"));
-        if path.try_exists().map_err(supplier)? {
-            let status: Status = ic_wire::native::decode_response(
-                STATUS,
-                &store::read(&path, LIMITS.bytes)?,
-                LIMITS,
-            )
-            .map_err(supplier)?;
-            if status == Status::default() && latest.is_none() {
-                continue;
+        for (name, method) in [
+            (
+                "reconcile/reply.bin",
+                canic_management_protocol::upgrade::RECONCILE,
+            ),
+            ("reply.bin", STATUS),
+        ] {
+            let path = dir.join(format!("observe/{index}/{name}"));
+            if path.try_exists().map_err(supplier)? {
+                let status: Status = ic_wire::native::decode_response(
+                    method,
+                    &store::read(&path, LIMITS.bytes)?,
+                    LIMITS,
+                )
+                .map_err(supplier)?;
+                if status == Status::default() && latest.is_none() {
+                    continue;
+                }
+                validate(plan, latest.as_ref(), &status)?;
+                latest = Some(status);
             }
-            validate(plan, latest.as_ref(), &status)?;
-            latest = Some(status);
         }
     }
     Ok(latest)
@@ -202,6 +210,7 @@ pub(super) async fn apply(
             method: "observe_upgrade",
             args: ic_wire::native::encode_request(STATUS, &(), LIMITS).map_err(supplier)?,
         };
+        super::recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &read, identity, icp, agent).await?;
         let observed: Status =
             ic_wire::native::decode_response(STATUS, &bytes, LIMITS).map_err(supplier)?;

@@ -33,6 +33,96 @@ fn selection() -> SelectedFleet {
     }
 }
 
+#[tokio::test]
+async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
+    let dir = directory();
+    let wasm = dir.join("app.wasm");
+    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
+    let (id, plan) = create_managed_plan(
+        &dir,
+        &wasm,
+        input(),
+        &selection(),
+        "app",
+        &"01".repeat(32),
+        None,
+    )
+    .unwrap();
+    let before = plan.clone();
+    let result = crate::reconcile(&dir, &id, "must-not-run", Path::new("must-not-run")).await;
+    assert!(matches!(result, Err(Error::Blocked(_))));
+    assert!(!dir.join(&id).join("observe").exists());
+    assert!(!dir.join(&id).join("stage").exists());
+    assert_eq!(plan::load(&dir.join(&id), &id).unwrap().0, before);
+    let call = recovery::call(&plan).unwrap();
+    assert_eq!(call.method, "reconcile");
+    assert_eq!(
+        call.canister,
+        principal(plan.application_controller()).unwrap()
+    );
+    let bound: Approval =
+        ic_wire::native::decode_request(canic_management_protocol::RECONCILE, &call.args, LIMITS)
+            .unwrap();
+    assert_eq!(bound, approval(&plan).unwrap());
+    let mut unmanaged = plan;
+    unmanaged.management = None;
+    assert!(recovery::call(&unmanaged).is_err());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn recovery_evidence_survives_before_observation_and_rejects_later_regression() {
+    let dir = directory();
+    let wasm = dir.join("app.wasm");
+    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
+    let (id, plan) = create_managed_plan(
+        &dir,
+        &wasm,
+        input(),
+        &selection(),
+        "app",
+        &"01".repeat(32),
+        None,
+    )
+    .unwrap();
+    let operation = dir.join(&id);
+    let slot = operation.join("observe/0");
+    ic_host_fs::durable::prepare_private_parents(&slot.join("reconcile")).unwrap();
+    store::put_json(&slot.join("reconcile/authority.json"), &1_u64).unwrap();
+    assert!(recovery::require_settled(&slot).is_err());
+    let retained = Status {
+        approval: Some(approval(&plan).unwrap()),
+        phase: Phase::Created,
+        worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
+        attempts: [1, 0, 0],
+        ..Default::default()
+    };
+    store::put(
+        &slot.join("reconcile/reply.bin"),
+        &ic_wire::native::encode_response(canic_management_protocol::RECONCILE, &retained, LIMITS)
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(recovery::require_settled(&slot).is_ok());
+    assert_eq!(evidence(&operation, &plan).unwrap(), Some(retained.clone()));
+    assert_eq!(
+        crate::status(&dir, &id).unwrap()["effects"]["reconcile/0"],
+        "reply_retained"
+    );
+    let earlier = Status {
+        approval: retained.approval,
+        phase: Phase::Scheduled,
+        ..Default::default()
+    };
+    store::put(
+        &slot.join("reply.bin"),
+        &ic_wire::native::encode_response(STATUS, &earlier, LIMITS).unwrap(),
+    )
+    .unwrap();
+    assert!(evidence(&operation, &plan).is_err());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
 #[test]
 fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
     let dir = directory();

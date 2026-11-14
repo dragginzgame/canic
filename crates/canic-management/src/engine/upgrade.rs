@@ -366,11 +366,16 @@ async fn observation() -> Result<(), Failure> {
 }
 /// Recover observations and resume only effects that were never issued.
 /// # Panics
-/// Traps for noncontrollers, uninitialized storage or failed durable writes.
-pub async fn reconcile() -> UpgradeStatus {
+/// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
+pub async fn reconcile(expected: canic_management_protocol::upgrade::Approval) -> UpgradeStatus {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
+    );
+    assert_eq!(
+        status().approval,
+        Some(expected),
+        "reconciliation approval mismatch"
     );
     if OBSERVING.replace(true) {
         return status();

@@ -35,21 +35,34 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
         method: "test_effect",
         args: vec![1, 2, 3],
     };
+    let bytes = signed_fixture(
+        &plan,
+        &call,
+        if expired {
+            time - 1
+        } else {
+            time + 300_000_000_000
+        },
+    );
+    (bytes, plan, call)
+}
+
+fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u8> {
     let agent = Agent::builder()
-        .with_url("http://127.0.0.1:8000")
+        .with_url(plan.network.url())
         .build()
         .unwrap();
     let mut update = agent
-        .update(&"aaaaa-aa".parse().unwrap(), call.method)
+        .update(&call.canister.to_text().parse().unwrap(), call.method)
         .with_arg(call.args.as_slice())
         .sign()
         .unwrap();
-    if expired {
+    {
         let mut envelope = ic_protocol::decode_envelope(&update.signed_update, 4096).unwrap();
         let EnvelopeContent::Call { ingress_expiry, .. } = envelope.content.to_mut() else {
             unreachable!()
         };
-        *ingress_expiry = time - 1;
+        *ingress_expiry = expiry;
         update.ingress_expiry = *ingress_expiry;
         update.request_id = ic_platform::agent::to_request_id(envelope.content.as_ref()).unwrap();
         update.signed_update = ic_protocol::encode_envelope(&envelope, 4096).unwrap();
@@ -66,12 +79,58 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     let status = ic_protocol::encode_envelope(&status, 4096).unwrap();
     let message = serde_json::json!({"format":"icp-signed-message", "version":1,
         "request": {"type":"update", "envelope":BASE64_STANDARD.encode(&update.signed_update), "request_id":crate::hex(update.request_id.as_slice()), "status_check":BASE64_STANDARD.encode(&status)},
-        "network":{"url":plan.network.url(),"root_key":plan.network.root()}, "destination":{"canister":"aaaaa-aa"}});
-    (serde_json::to_vec(&message).unwrap(), plan, call)
+        "network":{"url":plan.network.url(),"root_key":plan.network.root()}, "destination":{"canister":call.effective.to_text()}});
+    serde_json::to_vec(&message).unwrap()
 }
 
 fn fixture() -> (Vec<u8>, Plan, Call<'static>) {
     fixture_expiry(false)
+}
+
+#[tokio::test]
+async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
+    let (_, mut plan, _) = fixture();
+    plan.management = Some(crate::ManagedOwner {
+        root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        root_module: "00".repeat(32),
+        execute_at_ns: 1,
+    });
+    plan.expires_at_ns = 2;
+    let before = plan.clone();
+    let call = crate::managed::recovery::call(&plan).unwrap();
+    let expiry = crate::now().unwrap() - 1;
+    let signed = signed_fixture(&plan, &call, expiry);
+    let dir = crate::tests::directory();
+    crate::store::put_json(&dir.join("authority.json"), &expiry).unwrap();
+    crate::store::put(&dir.join("signed.json"), &signed).unwrap();
+    let agent = plan.network.agent().unwrap();
+    let signer = std::path::Path::new("must-not-run");
+    for _ in 0..2 {
+        assert!(matches!(
+            super::reconcile(&dir, &plan, "unused", signer, &agent).await,
+            Err(Error::Blocked(_))
+        ));
+        assert_eq!(std::fs::read(dir.join("signed.json")).unwrap(), signed);
+        assert_eq!(
+            crate::store::json::<u64>(&dir.join("authority.json")).unwrap(),
+            expiry
+        );
+    }
+    // A result already committed before host interruption can be read after expiry.
+    crate::store::put(&dir.join("reply.bin"), b"retained reply").unwrap();
+    assert_eq!(
+        super::reconcile(&dir, &plan, "unused", signer, &agent)
+            .await
+            .unwrap(),
+        b"retained reply"
+    );
+    assert_eq!(plan, before);
+    plan.expires_at_ns += 1;
+    assert!(matches!(
+        super::reconcile(&dir, &plan, "unused", signer, &agent).await,
+        Err(Error::Invalid(_))
+    ));
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

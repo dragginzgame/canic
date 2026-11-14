@@ -54,7 +54,7 @@ async fn selectors_infer_only_unique_apps_and_fleets() {
     let config = path.to_str().unwrap();
     let report = root.join("report.html");
     let journal = root.join("journal");
-    let deployment_commands: [&[&str]; 5] = [
+    let deployment_commands: [&[&str]; 6] = [
         &["fleet", "show", "--html", report.to_str().unwrap()],
         &[
             "fleet",
@@ -65,6 +65,7 @@ async fn selectors_infer_only_unique_apps_and_fleets() {
             "aaaaa-aa",
         ],
         &["fleet", "apply", "operation", "--identity", "unused"],
+        &["fleet", "reconcile", "operation", "--identity", "unused"],
         &["fleet", "status", "operation"],
         &["fleet", "call", "operation"],
     ];

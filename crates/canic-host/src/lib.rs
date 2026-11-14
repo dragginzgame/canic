@@ -34,7 +34,7 @@ pub use fleet_plan::{
 };
 pub use managed::create_managed_plan;
 pub use network::{Network, greet};
-pub use operation::{ApplyOutcome, Receipt, apply, status};
+pub use operation::{ApplyOutcome, Receipt, apply, reconcile, status};
 pub use plan::{ManagedOwner, Plan, PlanInput, create_plan};
 pub use signed::signing_principal;
 pub use starter::create_starter;

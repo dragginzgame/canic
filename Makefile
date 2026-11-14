@@ -11,6 +11,7 @@ help:
 	  'make profile             Build the profile demo client and deployment CLI' \
 	  'make profile-test        Qualify profile ownership, limits and persistent upgrade' \
 	  'make growth-test         Qualify one autonomous worker and interrupted effects' \
+	  'make endpoint-test       Qualify management mounts, guards and reply rollback' \
 	  'make root-test           Qualify Root controlling one greeting application' \
 	  'make check               Check the canic library' \
 	  'make test                Run canic tests' \
@@ -58,7 +59,7 @@ doc:
 # M1 owns product Clippy/Rustdoc coverage, including the shared canic library.
 lint: fmt-check toko-tooling-check m0-clippy m0-doc m0-artifact-clippy m0-artifact-doc m1-clippy m1-doc profile-clippy profile-doc root-clippy root-doc
 
-ci: lint test m0-test m0-artifact-test m1-test profile-test growth-test root-test
+ci: lint test m0-test m0-artifact-test m1-test profile-test growth-test root-test endpoint-test
 
 # The runner selects the Wasm path from Cargo artifact messages.
 m0-setup:
@@ -121,6 +122,11 @@ profile-doc:
 growth-test:
 	bash scripts/dev/test-growth.sh
 
+# Focused management mounting/admission and reply rollback; no CLI journey suite.
+.PHONY: endpoint-test
+endpoint-test:
+	bash scripts/dev/test-endpoints.sh
+
 .PHONY: root-test root-clippy root-doc
 root-test:
 	bash scripts/dev/test-root.sh
@@ -128,7 +134,7 @@ root-test:
 root-clippy:
 	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --all-targets -- -D warnings
 	cargo clippy --locked -p canic-management -p canic-root --target wasm32-unknown-unknown --all-features -- -D warnings
-	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --test root -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --test root --test endpoints -- -D warnings
 
 root-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --no-deps

@@ -46,9 +46,11 @@ pub(crate) fn next(
             }
         }
     }
-    if action == "apply" {
+    if matches!(action, "apply" | "reconcile") {
         parts.extend(["--identity".into(), quote(identity.unwrap_or("IDENTITY"))]);
-        if let FleetCommand::Plan { signer, .. } | FleetCommand::Apply { signer, .. } = command
+        if let FleetCommand::Plan { signer, .. }
+        | FleetCommand::Apply { signer, .. }
+        | FleetCommand::Reconcile { signer, .. } = command
             && signer.icp_bin != crate::args::checkout().join(".tools/ic/bin/icp")
         {
             parts.extend(["--icp-bin".into(), quote(&signer.icp_bin.to_string_lossy())]);
@@ -114,9 +116,12 @@ fn outcome(value: &ApplyOutcome, text: &mut String) -> bool {
 }
 
 pub(crate) fn applied(value: &ApplyOutcome, command: &FleetCommand) -> String {
-    let FleetCommand::Apply {
+    let (FleetCommand::Apply {
         digest, identity, ..
-    } = command
+    }
+    | FleetCommand::Reconcile {
+        digest, identity, ..
+    }) = command
     else {
         unreachable!("apply renderer")
     };

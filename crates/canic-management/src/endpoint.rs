@@ -1,12 +1,19 @@
-//! Shared Wire codecs and pre-decode admission; exports are mounted by each canister.
-#[cfg(feature = "fault-injection")]
-use canic_management_protocol::INJECT;
-use canic_management_protocol::{
-    LIMITS, RECONCILE, Refusal, STAGE, STAGE_LIMITS, STATUS, Stage, Status,
-};
-use ic_platform_runtime::cdk::api;
-fn guard(limit: usize, private: bool) -> Result<(), String> {
-    if private && !api::is_controller(&api::msg_caller()) {
+//! Explicit management endpoint mounting. Platform owns execution; Wire owns codecs.
+
+#[doc(hidden)]
+pub use canic_management_protocol as protocol;
+#[doc(hidden)]
+pub use ic_platform_runtime::cdk;
+#[doc(hidden)]
+pub use ic_wire as wire;
+
+/// Admission before Platform copies arguments. Authorization deliberately comes first.
+///
+/// # Errors
+/// Refuses non-controllers on private methods, then oversized request frames.
+#[doc(hidden)]
+pub fn admit(limit: usize, private: bool) -> Result<(), String> {
+    if private && !cdk::api::is_controller(&cdk::api::msg_caller()) {
         return Err("controller required".into());
     }
     if ic_platform_runtime::ic0::msg_arg_data_size() > limit {
@@ -14,188 +21,117 @@ fn guard(limit: usize, private: bool) -> Result<(), String> {
     }
     Ok(())
 }
-/// Bound stage input and require a current controller before decoding.
-///
-/// # Errors
-/// Refuses oversized frames or missing controller authority.
-pub fn uploader() -> Result<(), String> {
-    guard(STAGE_LIMITS.bytes, true)
-}
-/// Bound control input and require a current controller before decoding.
-///
-/// # Errors
-/// Refuses oversized frames or missing controller authority.
-pub fn controller() -> Result<(), String> {
-    guard(LIMITS.bytes, true)
-}
-/// Bound public status input before decoding.
-///
-/// # Errors
-/// Refuses oversized frames or missing controller authority.
-pub fn public() -> Result<(), String> {
-    guard(LIMITS.bytes, false)
-}
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-/// Decode the bounded staging frame.
-///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
+
+/// Response policy, with a deliberately impossible frame budget in fault builds.
+#[doc(hidden)]
 #[must_use]
-pub fn decode_stage(bytes: Vec<u8>) -> Stage {
-    ic_wire::native::decode_request(STAGE, &bytes, STAGE_LIMITS).expect("bounded stage")
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
-/// Encode admission evidence.
-///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
-#[must_use]
-pub fn encode_stage(value: Result<Status, Refusal>) -> Vec<u8> {
-    ic_wire::native::encode_response(STAGE, &value, LIMITS).expect("bounded status")
-}
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-/// Decode a status request.
-///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
-pub fn decode_status(bytes: Vec<u8>) {
-    ic_wire::native::decode_request::<()>(STATUS, &bytes, LIMITS).expect("status frame");
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
-/// Encode status evidence.
-///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
-#[must_use]
-pub fn encode_status(value: Status) -> Vec<u8> {
-    ic_wire::native::encode_response(STATUS, &value, LIMITS).expect("bounded status")
-}
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-/// Decode a reconciliation request.
-///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
-pub fn decode_reconcile(bytes: Vec<u8>) {
-    ic_wire::native::decode_request::<()>(RECONCILE, &bytes, LIMITS).expect("reconcile frame");
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
-/// Encode reconciled evidence.
-///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
-#[must_use]
-pub fn encode_reconcile(value: Status) -> Vec<u8> {
-    ic_wire::native::encode_response(RECONCILE, &value, LIMITS).expect("bounded status")
+pub fn response_limits(method: u64) -> wire::Limits {
+    #[cfg(feature = "fault-injection")]
+    if crate::engine::reply_fault(method) {
+        return wire::Limits {
+            bytes: 0,
+            ..protocol::LIMITS
+        };
+    }
+    #[cfg(not(feature = "fault-injection"))]
+    let _ = method;
+    protocol::LIMITS
 }
 
-#[cfg(feature = "fault-injection")]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-/// Decode a test-only fault request.
+/// Mount explicitly selected management methods using Platform's IC entrypoints.
 ///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
-#[must_use]
-pub fn decode_inject(bytes: Vec<u8>) -> u8 {
-    ic_wire::native::decode_request(INJECT, &bytes, LIMITS).expect("fault frame")
-}
-#[cfg(feature = "fault-injection")]
-/// Encode the test-only fault acknowledgement.
+/// Names are the existing exports: `status`, `observe`, `stage`, `reconcile`,
+/// `stage_upgrade`, `upgrade_status`, `observe_upgrade`, `reconcile_upgrade`,
+/// and (only with the supplier's `fault-injection` feature) `inject_fault`.
+/// Duplicate selections fail compilation. Unknown names have no expansion.
+/// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
-/// # Panics
-/// Traps if the frame or result cannot satisfy the protocol bounds.
-#[must_use]
-pub fn encode_inject() -> Vec<u8> {
-    ic_wire::native::encode_response(INJECT, &(), LIMITS).expect("fault reply")
-}
+/// ```ignore
+/// canic_management::mount_endpoints! {
+///     status, observe, stage, reconcile,
+///     stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
+/// }
+/// ```
+#[macro_export]
+macro_rules! mount_endpoints {
+    ($($name:ident),+ $(,)?) => { $($crate::mount_endpoints!(@select $name);)+ };
+    (@select status) => {
+        $crate::mount_endpoints!(@method status, query, false, STATUS, LIMITS,
+            [] () -> $crate::endpoint::protocol::Status,
+            $crate::status(), "status frame", "bounded status");
+    };
+    (@select observe) => {
+        $crate::mount_endpoints!(@method observe, update, true, STATUS, LIMITS,
+            [] () -> $crate::endpoint::protocol::Status,
+            $crate::status(), "status frame", "bounded status");
+    };
+    (@select stage) => {
+        $crate::mount_endpoints!(@method stage, update, true, STAGE, STAGE_LIMITS,
+            [] (input: $crate::endpoint::protocol::Stage)
+                -> Result<$crate::endpoint::protocol::Status, $crate::endpoint::protocol::Refusal>,
+            $crate::stage(input), "bounded stage", "bounded status");
+    };
+    (@select reconcile) => {
+        $crate::mount_endpoints!(@method reconcile, update, true, RECONCILE, LIMITS,
+            [async] (expected: $crate::endpoint::protocol::Approval) -> $crate::endpoint::protocol::Status,
+            $crate::reconcile(expected).await, "reconcile frame", "bounded status");
+    };
+    (@select stage_upgrade) => {
+        $crate::mount_endpoints!(@method stage_upgrade, update, true, upgrade::STAGE, STAGE_LIMITS,
+            [] (input: $crate::endpoint::protocol::upgrade::Stage)
+                -> Result<$crate::endpoint::protocol::upgrade::Status, $crate::endpoint::protocol::Refusal>,
+            $crate::stage_upgrade(input), "upgrade frame", "upgrade reply");
+    };
+    (@select upgrade_status) => {
+        $crate::mount_endpoints!(@method upgrade_status, query, false, upgrade::STATUS, LIMITS,
+            [] () -> $crate::endpoint::protocol::upgrade::Status,
+            $crate::upgrade_status(), "upgrade status frame", "upgrade status reply");
+    };
+    (@select observe_upgrade) => {
+        $crate::mount_endpoints!(@method observe_upgrade, update, true, upgrade::STATUS, LIMITS,
+            [] () -> $crate::endpoint::protocol::upgrade::Status,
+            $crate::upgrade_status(), "upgrade status frame", "upgrade status reply");
+    };
+    (@select reconcile_upgrade) => {
+        $crate::mount_endpoints!(@method reconcile_upgrade, update, true, upgrade::RECONCILE, LIMITS,
+            [async] (expected: $crate::endpoint::protocol::upgrade::Approval) -> $crate::endpoint::protocol::upgrade::Status,
+            $crate::reconcile_upgrade(expected).await, "upgrade reconciliation frame", "upgrade reconciliation reply");
+    };
+    (@select inject_fault) => {
+        $crate::mount_endpoints!(@method inject_fault, update, true, INJECT, LIMITS,
+            [] (value: u8) -> (),
+            $crate::inject_fault(value), "fault frame", "fault reply");
+    };
+    // One expansion for this actor's fixed endpoint surface, not a public generic
+    // endpoint framework. The response alias keeps Platform's owned encoder
+    // signature uniform, including the unit fault acknowledgement.
+    (@method $name:ident, $kind:ident, $private:literal, $($id:ident)::+, $limits:ident,
+        [$($asynchronous:ident)?] ($($input:ident: $request:ty)?) -> $reply:ty,
+        $body:expr, $decode_error:literal, $encode_error:literal) => {
+        mod $name {
+            use $crate::endpoint::{cdk, protocol, wire};
+            type Reply = $reply;
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-/// Decode a bounded child upgrade envelope.
-/// # Panics
-/// Traps if the request exceeds its protocol contract.
-#[must_use]
-pub fn decode_upgrade(bytes: Vec<u8>) -> canic_management_protocol::upgrade::Stage {
-    ic_wire::native::decode_request(
-        canic_management_protocol::upgrade::STAGE,
-        &bytes,
-        STAGE_LIMITS,
-    )
-    .expect("upgrade frame")
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
-/// Encode upgrade admission or refusal.
-/// # Panics
-/// Traps if evidence exceeds the protocol bounds.
-#[must_use]
-pub fn encode_upgrade(
-    value: Result<canic_management_protocol::upgrade::Status, Refusal>,
-) -> Vec<u8> {
-    ic_wire::native::encode_response(canic_management_protocol::upgrade::STAGE, &value, LIMITS)
-        .expect("upgrade reply")
-}
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-/// Decode an upgrade status request.
-/// # Panics
-/// Traps if the request exceeds its protocol contract.
-pub fn decode_upgrade_status(bytes: Vec<u8>) {
-    ic_wire::native::decode_request::<()>(
-        canic_management_protocol::upgrade::STATUS,
-        &bytes,
-        LIMITS,
-    )
-    .expect("upgrade status frame");
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
-/// Encode committed upgrade evidence.
-/// # Panics
-/// Traps if evidence exceeds protocol bounds.
-#[must_use]
-pub fn encode_upgrade_status(value: canic_management_protocol::upgrade::Status) -> Vec<u8> {
-    ic_wire::native::encode_response(canic_management_protocol::upgrade::STATUS, &value, LIMITS)
-        .expect("upgrade status reply")
-}
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-/// Decode an upgrade reconciliation request.
-/// # Panics
-/// Traps if the request exceeds its protocol contract.
-pub fn decode_upgrade_reconcile(bytes: Vec<u8>) {
-    ic_wire::native::decode_request::<()>(
-        canic_management_protocol::upgrade::RECONCILE,
-        &bytes,
-        LIMITS,
-    )
-    .expect("upgrade reconciliation frame");
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
-/// Encode reconciled upgrade evidence.
-/// # Panics
-/// Traps if evidence exceeds protocol bounds.
-#[must_use]
-pub fn encode_upgrade_reconcile(value: canic_management_protocol::upgrade::Status) -> Vec<u8> {
-    ic_wire::native::encode_response(
-        canic_management_protocol::upgrade::RECONCILE,
-        &value,
-        LIMITS,
-    )
-    .expect("upgrade reconciliation reply")
+            fn admit() -> Result<(), String> {
+                $crate::endpoint::admit(protocol::$limits.bytes, $private)
+            }
+            #[expect(clippy::needless_pass_by_value, reason = "Platform transfers the argument buffer to its decoder")]
+            fn decode(bytes: Vec<u8>) -> ($($request)?) {
+                wire::native::decode_request(protocol::$($id)::+, &bytes, protocol::$limits)
+                    .expect($decode_error)
+            }
+            #[allow(clippy::needless_pass_by_value, reason = "Platform passes an owned reply; selected reply types include both Copy and non-Copy values")]
+            fn encode(value: Reply) -> Vec<u8> {
+                wire::native::encode_response(
+                    protocol::$($id)::+, &value,
+                    $crate::endpoint::response_limits(protocol::$($id)::+),
+                )
+                    .expect($encode_error)
+            }
+            #[cdk::$kind(crate = "cdk", guard = "admit", decode_with = "decode", encode_with = "encode")]
+            $($asynchronous)? fn $name($($input: $request)?) -> Reply {
+                $body
+            }
+        }
+    };
 }

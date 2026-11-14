@@ -496,6 +496,16 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         std::fs::read(journal.join(id).join("stage/signed.json")).unwrap(),
         signed
     );
+    let mut recovery = apply;
+    recovery[1] = "reconcile";
+    assert_eq!(cli(&config, &recovery)["status"]["phase"], "Scheduled");
+    let retained_recovery = journal.join(id).join("observe/1/reconcile");
+    assert!(retained_recovery.join("signed.json").exists());
+    assert!(retained_recovery.join("reply.bin").exists());
+    assert_eq!(
+        cli(&config, &["fleet", "status", id])["effects"]["reconcile/1"],
+        "reply_retained"
+    );
     // Manual time changes must not race the live gateway's automatic clock.
     owner.instance().stop_progress().await;
     owner.instance().advance_time(Duration::from_secs(35)).await;
@@ -530,7 +540,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     assert!(child_operation["canister"].is_null());
     assert_eq!(child_operation["receipt_retained"], false);
     assert!(!journal.join(id).join("receipt.json").exists());
-    assert!(!journal.join(id).join("observe/1").exists());
+    assert!(!journal.join(id).join("observe/2").exists());
     assert_eq!(
         std::fs::read(journal.join(id).join("stage/signed.json")).unwrap(),
         signed
@@ -816,6 +826,9 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         cli(&config, &upgrade_apply)["upgrade"]["phase"],
         "Scheduled"
     );
+    let mut recovery = upgrade_apply;
+    recovery[1] = "reconcile";
+    assert_eq!(cli(&config, &recovery)["upgrade"]["phase"], "Scheduled");
     let pending_text = status_text(&config, upgrade_id, "local");
     assert!(pending_text.contains("Retained Root phase: Scheduled"));
     assert!(pending_text.contains("ROOT EFFECT"));
@@ -857,17 +870,16 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
             .contains("Upgrade phase: <strong>Ready</strong>")
     );
     assert!(!upgrade_dir.join("stage/reply.bin").exists());
-    assert!(!upgrade_dir.join("observe").exists());
+    assert!(!upgrade_dir.join("observe/1").exists());
     assert!(!upgrade_dir.join("receipt.json").exists());
     let retained = cli(
         &config,
         &["fleet", "status", upgrade_id, "--fleet", "local"],
     );
-    assert!(retained["management"].is_null());
+    // Recovery evidence still establishes admission even without the staging reply.
+    assert_eq!(retained["management"]["phase"], "Scheduled");
     assert!(retained["receipt"].is_null());
-    assert!(
-        status_text(&config, upgrade_id, "local").contains("admission and progress are unknown")
-    );
+    assert!(status_text(&config, upgrade_id, "local").contains("Retained Root phase: Scheduled"));
     let other = cli(&config, &["fleet", "show", "--fleet", "second"]);
     assert!(other["managers"][0].get("upgrade").is_none());
     assert_eq!(other["operations"].as_array().unwrap().len(), 2);
@@ -1093,6 +1105,12 @@ async fn whole_fleet_cli_binds_future_root_and_replays_without_new_effects() {
         let pending = cli(&config, &apply);
         assert_eq!(pending["operation"], id);
         assert_eq!(pending["child"]["status"]["phase"], "Scheduled");
+        let mut recovery = apply;
+        recovery[1] = "reconcile";
+        assert_eq!(
+            cli(&config, &recovery)["child"]["status"]["phase"],
+            "Scheduled"
+        );
         let root = CanisterId::from_text(pending["root"]["canister"].as_str().unwrap()).unwrap();
         let child_dir = journal.join(id).join("child");
         let signed = std::fs::read(child_dir.join("stage/signed.json")).unwrap();

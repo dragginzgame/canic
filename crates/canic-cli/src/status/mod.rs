@@ -145,6 +145,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
                     "Not applicable to this upgrade (not submitted)"
                 }
                 "not_submitted" => "Not submitted",
+                "authority_retained_not_signed" => "Recovery request prepared; not signed",
                 "signed_attempt_retained_outcome_unknown" => {
                     "Signed attempt retained; outcome UNKNOWN"
                 }
@@ -254,23 +255,38 @@ fn deadline(ns: u64) -> String {
     } else {
         "expired".into()
     };
+    format!("{} ({relative})", utc(ns))
+}
+
+fn utc(ns: u64) -> String {
+    // Every u64 nanosecond timestamp fits within Time's supported calendar range.
+    let date = time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(ns))
+        .expect("u64 nanoseconds are within the supported UTC range");
     format!(
-        "{} ({relative})",
-        ic_host_text::timestamp::format_utc_timestamp_secs(seconds)
+        "{} {:02}:{:02}:{:02} UTC",
+        date.date(),
+        date.hour(),
+        date.minute(),
+        date.second()
     )
 }
 
 fn cycles(value: u64) -> String {
-    let scaled = ic_host_text::quantity::scaled_quantity_text(
-        u128::from(value),
-        &[
-            (1_000_000_000_000, "T cycles"),
-            (1_000_000_000, "B cycles"),
-            (1, "cycles"),
-        ],
-    );
-    scaled.map_or_else(
-        |_| format!("{value} cycles"),
-        |text| format!("{text} ({value})"),
-    )
+    let (divisor, width, unit) = if value >= 1_000_000_000_000 {
+        (1_000_000_000_000, 12, "T")
+    } else if value >= 1_000_000_000 {
+        (1_000_000_000, 9, "B")
+    } else {
+        return format!("{value} cycles");
+    };
+    // Budgets are exact amounts: never round a fractional unit up to more authority.
+    let fraction = format!("{:0width$}", value % divisor);
+    let fraction = fraction.trim_end_matches('0');
+    let whole = value / divisor;
+    let amount = if fraction.is_empty() {
+        whole.to_string()
+    } else {
+        format!("{whole}.{fraction}")
+    };
+    format!("{amount}{unit} cycles ({value})")
 }

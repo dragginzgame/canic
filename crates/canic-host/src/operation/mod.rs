@@ -194,6 +194,36 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
     apply_at(&dir, digest, identity, icp).await
 }
 
+/// Request recovery of the named Root approval, retaining the exact signed request.
+/// This does not renew its effect budgets or deadlines and cannot bootstrap a fleet.
+///
+/// # Errors
+/// Refuses unmanaged or unadmitted work, changed Root authority and unresolved expired attempts.
+pub async fn reconcile(
+    root: &Path,
+    digest: &str,
+    identity: &str,
+    icp: &Path,
+) -> Result<ApplyOutcome> {
+    let store = Store::open(root)?;
+    let dir = store.operation(digest)?;
+    if crate::fleet_plan::exists(&dir)? {
+        return crate::fleet_plan::reconcile(&dir, digest, identity, icp).await;
+    }
+    reconcile_at(&dir, digest, identity, icp).await
+}
+
+pub(crate) async fn reconcile_at(
+    dir: &Path,
+    digest: &str,
+    identity: &str,
+    icp: &Path,
+) -> Result<ApplyOutcome> {
+    let (plan, wasm) = plan::load(dir, digest)?;
+    let agent = plan.network.agent()?;
+    crate::managed::recovery::reconcile(dir, digest, &plan, &wasm, identity, icp, &agent).await
+}
+
 // Caller holds the journal lock; fleet composition uses this same effect owner.
 pub(crate) async fn apply_at(
     dir: &Path,
@@ -345,16 +375,15 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     };
     for effect in effect_names {
         let path = dir.join(effect);
-        let state = if path.join("reply.bin").try_exists().map_err(supplier)? {
-            "reply_retained"
-        } else if path.join("rejected.json").try_exists().map_err(supplier)? {
-            "rejection_retained"
-        } else if path.join("signed.json").try_exists().map_err(supplier)? {
-            "signed_attempt_retained_outcome_unknown"
-        } else {
-            "not_submitted"
-        };
-        effects.insert((*effect).into(), state.into());
+        effects.insert((*effect).into(), attempt_state(&path)?.into());
+    }
+    if plan.management.is_some() {
+        for index in 0..crate::managed::OBSERVATIONS {
+            let path = dir.join(format!("observe/{index}/reconcile"));
+            if path.join("authority.json").try_exists().map_err(supplier)? {
+                effects.insert(format!("reconcile/{index}"), attempt_state(&path)?.into());
+            }
+        }
     }
     let receipt: Option<Receipt> = if dir.join("receipt.json").try_exists().map_err(supplier)? {
         Some(store::json(&dir.join("receipt.json"))?)
@@ -371,4 +400,18 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     Ok(
         serde_json::json!({"operation": digest, "plan": plan, "effects": effects, "receipt": receipt, "management": managed}),
     )
+}
+
+fn attempt_state(path: &Path) -> Result<&'static str> {
+    for (file, state) in [
+        ("reply.bin", "reply_retained"),
+        ("rejected.json", "rejection_retained"),
+        ("signed.json", "signed_attempt_retained_outcome_unknown"),
+        ("authority.json", "authority_retained_not_signed"),
+    ] {
+        if path.join(file).try_exists().map_err(supplier)? {
+            return Ok(state);
+        }
+    }
+    Ok("not_submitted")
 }
