@@ -13,6 +13,17 @@ authenticated tooling installer.
   and roadmaps are research inputs; they may be discarded or redesigned. The
   current design is also revisable. Coverage does not require feature parity.
 - Keep the virtual Cargo workspace at the root and product packages in `crates/`.
+- Keep one canonical workflow for each task. Do not add convenience shortcuts,
+  command aliases or parallel configuration mechanisms without a demonstrated need.
+  The hierarchy is App → Fleets → Canisters. Initialization declares an app and
+  its first fleet; canister layout belongs in that fleet's config.
+- Group CLI actions under `app`, `artifact` and `fleet`; wallet inspection takes
+  a public principal. Keep command help alphabetical. Only `--json` is global;
+  scope options belong after the action that actually consumes them. Reject
+  unrelated context rather than silently ignoring it.
+- Render terminal tables with IC Host's `ic-host-text::table` API. Canic owns
+  columns, cell values and output policy; the shared renderer owns escaping,
+  display widths and alignment. Do not hand-pad columns or add a formatter alias.
 - `crates/canic` owns the small greeting Wire contract. Host and CLI packages
   remain native; the demo canister is in `apps/hello/canister`.
 - `apps/profile/` owns the profile protocol, native client, discovery entry and
@@ -28,6 +39,24 @@ authenticated tooling installer.
   maintainer explicitly authorizes publication. GitHub pushes do not authorize it.
 - There are no local policy exceptions or release adapters. The experimental
   deployment path selects local/mainnet authority through an explicit plan.
+- `canic app init` creates local `canic.json` declarations only. Configured journals
+  default to `.canic/apps/APP/fleets/FLEET/` beside the config. Preserve legacy `.canic/`
+  operations and their v1 digests; `--no-config` selects that original flow.
+  Named v2 plans bind fleet/app/canister names and never renew occupied-slot authority.
+  This checkout's version 2 `canic.json` declares `hello-world/mainnet` and
+  `profile/mainnet`; both select `journal: ".canic"`. Keep the original records
+  in place and filter observations by selected app/fleet membership. Fleet slots are objects:
+  `{}` for a future deployment, `{"id":"PRINCIPAL"}` for an existing canister.
+  Existing IDs are observation declarations and block new creation in that slot.
+  `profile_manager: true` selects only the demo's read-only status adapter.
+
+## Changelog examples
+
+At each user-facing increment, include a few short, copyable `canic` command
+examples in fenced `sh` blocks in the root `CHANGELOG.md`. Place them near the
+top of the current entry or beside the relevant feature, rather than burying
+usage in prose or only linking to another document. Show supported fleet tasks,
+state necessary prerequisites and effects, and keep browser launches opt-in.
 
 ## Development checks
 
@@ -38,8 +67,8 @@ maintainer a clickable `http://localhost:PORT/` URL; do not offer a filesystem
 HTML link or expect VS Code to render it. If explicitly requested, open previews
 in the normal external desktop browser, not VS Code's embedded browser.
 Keep a requested viewer running for review and state how to stop it. Use
-`canic view REPORT` for a saved fleet snapshot, `canic fleet --serve` for a fresh
-saved view, or `canic fleet --watch` for bounded, read-only automatic observations.
+`canic fleet view REPORT` for a saved fleet snapshot, `canic fleet show --serve` for a fresh
+saved view, or `canic fleet show --watch` for bounded, read-only automatic observations.
 Omit `--open` unless a browser launch is explicitly requested.
 
 Use `make check`, `make test`, `make clippy` or `make doc` for the affected library

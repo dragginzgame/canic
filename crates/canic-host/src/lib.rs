@@ -1,6 +1,7 @@
 //! Native deployment planning and retained attempts; no application runtime dependency.
 
 mod artifact;
+mod config;
 mod fleet;
 mod network;
 mod operation;
@@ -13,7 +14,14 @@ mod wallet;
 
 pub use artifact::{Artifact, build, inspect};
 pub use canic_profile_protocol::growth::Phase as ProfileGrowthPhase;
-pub use fleet::{Fleet, FleetCanister, FleetManager, FleetOperation, fleet, fleet_with_managers};
+pub use config::{
+    AppConfig, CanisterConfig, Config, DeploymentName, FleetConfig, SelectedFleet,
+    create_configured_plan, init_config, load_config,
+};
+pub use fleet::{
+    Fleet, FleetCanister, FleetManager, FleetOperation, fleet, fleet_with_config,
+    fleet_with_managers,
+};
 pub use network::{Network, greet};
 pub use operation::{Receipt, apply, status};
 pub use plan::{Plan, PlanInput, create_plan};

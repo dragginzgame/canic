@@ -19,10 +19,10 @@ use std::{
 
 fn cli(root: &Path, args: &[&str]) -> Value {
     let output = Command::new(std::env::var_os("CANIC_CLI").unwrap())
+        .args(args)
         .arg("--json")
         .arg("--state-dir")
         .arg(root)
-        .args(args)
         .output()
         .unwrap();
     assert!(
@@ -159,6 +159,7 @@ async fn autonomous_growth_and_commit_boundaries() {
     let plan = cli(
         &root,
         &[
+            "fleet",
             "plan",
             "--wasm",
             artifacts.join("manager.wasm").to_str().unwrap(),
@@ -179,6 +180,7 @@ async fn autonomous_growth_and_commit_boundaries() {
     let receipt = cli(
         &root,
         &[
+            "fleet",
             "apply",
             plan["operation"].as_str().unwrap(),
             "--identity",
@@ -288,6 +290,7 @@ async fn autonomous_growth_and_commit_boundaries() {
         &root,
         &[
             "fleet",
+            "show",
             "--manager",
             manager_text,
             "--html",

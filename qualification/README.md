@@ -170,7 +170,7 @@ by observation after maintenance. All cycles are synthetic.
 
 The test also qualifies maximum artifact/evidence codec budgets and emits a fleet
 snapshot under `target/growth/journey-N/fleet.html`. Serve the selected snapshot
-with `canic view PATH --port 8788 --open`, then use **http://localhost:8788/** in
+with `canic fleet view PATH --port 8788 --open`, then use **http://localhost:8788/** in
 the normal desktop browser. Ctrl-C stops the viewer; the replica has already
 closed. See the [growth guide](../docs/demos/growth.md) for the selected topology,
 limits, fresh mainnet instructions and recovery limitations. The focused lint and

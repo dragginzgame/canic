@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "apps": {
+    "hello-world": {
+      "fleets": {
+        "mainnet": {
+          "network": {
+            "kind": "Mainnet"
+          },
+          "journal": ".canic",
+          "canisters": {
+            "hello": {
+              "id": "z4fqh-uqaaa-aaaan-q6yrq-cai"
+            }
+          }
+        }
+      }
+    },
+    "profile": {
+      "fleets": {
+        "mainnet": {
+          "network": {
+            "kind": "Mainnet"
+          },
+          "journal": ".canic",
+          "canisters": {
+            "entry": {
+              "id": "bisqm-biaaa-aaaas-qhfeq-cai"
+            },
+            "shared-worker": {
+              "id": "4pkhu-oaaaa-aaaai-ra2ta-cai"
+            },
+            "manager": {
+              "id": "rk6n2-wyaaa-aaaad-qmoua-cai",
+              "profile_manager": true
+            },
+            "managed-worker": {
+              "id": "rn7lo-3aaaa-aaaad-qmouq-cai"
+            }
+          }
+        }
+      }
+    }
+  }
+}

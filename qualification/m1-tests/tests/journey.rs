@@ -13,10 +13,20 @@ use std::{
 
 fn cli(root: &Path, args: &[&str]) -> Value {
     let output = Command::new(std::env::var_os("CANIC_CLI").expect("run make m1-test"))
-        .arg("--state-dir")
-        .arg(root)
-        .arg("--json")
         .args(args)
+        .arg("--json")
+        .args(if args.first() == Some(&"fleet") {
+            vec!["--state-dir", root.to_str().unwrap()]
+        } else {
+            vec![]
+        })
+        .args(
+            if args.first() == Some(&"fleet") && !args.contains(&"--config") {
+                vec!["--no-config"]
+            } else {
+                vec![]
+            },
+        )
         .output()
         .unwrap();
     assert!(
@@ -66,10 +76,53 @@ async fn deploy_call_resume_and_upgrade() {
     let wasm = std::env::var("CANIC_HELLO_V1").unwrap();
     let wasm_v2 = std::env::var("CANIC_HELLO_V2").unwrap();
     let icp = repo.join(".tools/ic/bin/icp");
+    let config_path = root.join("canic.json");
+    let config_path = config_path.to_str().unwrap();
+    let initialized = cli(
+        &root,
+        &[
+            "app",
+            "init",
+            "--config",
+            config_path,
+            "hello",
+            "--fleet",
+            "local-demo",
+            "--network",
+            "local",
+            "--url",
+            &url,
+            "--root-key",
+            &root_key,
+            "--routing-canister",
+            &routing_canister,
+        ],
+    );
+    assert_eq!(initialized["deployed"], false);
+    assert_eq!(
+        initialized["configuration"]["apps"]["hello"]["fleets"]["local-demo"]["canisters"],
+        serde_json::json!({})
+    );
+    let mut declaration: Value =
+        serde_json::from_slice(&std::fs::read(config_path).unwrap()).unwrap();
+    declaration["apps"]["hello"]["fleets"]["local-demo"]["canisters"] =
+        serde_json::json!({"backend": {}});
+    std::fs::write(
+        config_path,
+        serde_json::to_vec_pretty(&declaration).unwrap(),
+    )
+    .unwrap();
     let plan = cli(
         &root,
         &[
+            "fleet",
             "plan",
+            "--config",
+            config_path,
+            "--app",
+            "hello",
+            "--canister",
+            "backend",
             "--wasm",
             &wasm,
             "--network",
@@ -88,6 +141,7 @@ async fn deploy_call_resume_and_upgrade() {
     let receipt = cli(
         &root,
         &[
+            "fleet",
             "apply",
             id,
             "--identity",
@@ -97,6 +151,13 @@ async fn deploy_call_resume_and_upgrade() {
         ],
     );
     let target = receipt["canister"].as_str().unwrap();
+    let configured = cli(&root, &["fleet", "show", "--config", config_path]);
+    assert_eq!(configured["configuration"]["fleet"], "local-demo");
+    assert_eq!(
+        configured["operations"][0]["deployment"]["canister"],
+        "backend"
+    );
+    assert_eq!(configured["operations"][0]["canister"], target);
     let target_id = CanisterId::from_text(target).unwrap();
     let subnet = owner.instance().get_subnet(target_id).await.unwrap();
     let count = owner
@@ -106,7 +167,7 @@ async fn deploy_call_resume_and_upgrade() {
         .unwrap()
         .num_canisters;
     assert_eq!(
-        cli(&root, &["call", id, "--name", "team"])["greeting"],
+        cli(&root, &["fleet", "call", id, "--name", "team"])["greeting"],
         "Hello from Canic, team!"
     );
     // Completed replay neither signs nor creates another canister.
@@ -114,6 +175,7 @@ async fn deploy_call_resume_and_upgrade() {
         cli(
             &root,
             &[
+                "fleet",
                 "apply",
                 id,
                 "--identity",
@@ -140,6 +202,7 @@ async fn deploy_call_resume_and_upgrade() {
         cli(
             &root,
             &[
+                "fleet",
                 "apply",
                 id,
                 "--identity",
@@ -160,6 +223,7 @@ async fn deploy_call_resume_and_upgrade() {
         cli(
             &root,
             &[
+                "fleet",
                 "apply",
                 id,
                 "--identity",
@@ -183,7 +247,10 @@ async fn deploy_call_resume_and_upgrade() {
     let upgrade = cli(
         &root,
         &[
+            "fleet",
             "plan",
+            "--config",
+            config_path,
             "--wasm",
             &wasm_v2,
             "--network",
@@ -206,7 +273,10 @@ async fn deploy_call_resume_and_upgrade() {
     let upgraded = cli(
         &root,
         &[
+            "fleet",
             "apply",
+            "--config",
+            config_path,
             upgrade_id,
             "--identity",
             "anonymous",
@@ -217,14 +287,14 @@ async fn deploy_call_resume_and_upgrade() {
     assert_eq!(upgraded["canister"], target);
     assert_ne!(upgraded["module_hash"], receipt["module_hash"]);
     assert_eq!(
-        cli(&root, &["call", upgrade_id, "--name", "team"])["greeting"],
+        cli(&root, &["fleet", "call", upgrade_id, "--name", "team"])["greeting"],
         "Hello again from Canic, team!"
     );
     let signed_path = root.join(upgrade_id).join("install/signed.json");
     let original_signed = std::fs::read(&signed_path).unwrap();
     std::fs::remove_file(root.join(upgrade_id).join("receipt.json")).unwrap();
     std::fs::remove_file(root.join(upgrade_id).join("install/reply.bin")).unwrap();
-    let uncertain = cli(&root, &["fleet"]);
+    let uncertain = cli(&root, &["fleet", "show"]);
     assert_eq!(uncertain["canisters"].as_array().unwrap().len(), 1);
     assert_eq!(uncertain["operations"].as_array().unwrap().len(), 2);
     let pending = uncertain["operations"]
@@ -243,6 +313,7 @@ async fn deploy_call_resume_and_upgrade() {
         cli(
             &root,
             &[
+                "fleet",
                 "apply",
                 upgrade_id,
                 "--identity",
@@ -267,6 +338,7 @@ async fn deploy_call_resume_and_upgrade() {
     let second_plan = cli(
         &root,
         &[
+            "fleet",
             "plan",
             "--wasm",
             &wasm,
@@ -286,6 +358,7 @@ async fn deploy_call_resume_and_upgrade() {
     let second_receipt = cli(
         &root,
         &[
+            "fleet",
             "apply",
             second_id,
             "--identity",
@@ -296,7 +369,10 @@ async fn deploy_call_resume_and_upgrade() {
     );
     assert_ne!(second_receipt["canister"], target);
     let report = root.join("fleet.html");
-    let snapshot = cli(&root, &["fleet", "--html", report.to_str().unwrap()]);
+    let snapshot = cli(
+        &root,
+        &["fleet", "show", "--html", report.to_str().unwrap()],
+    );
     assert_eq!(snapshot["canisters"].as_array().unwrap().len(), 2);
     assert_eq!(snapshot["operations"].as_array().unwrap().len(), 3);
     assert_eq!(snapshot["issues"].as_array().unwrap().len(), 0);
@@ -327,7 +403,7 @@ async fn deploy_call_resume_and_upgrade() {
         "deployed {target}, retained replay and receipt recovery passed, upgraded same canister to greeting v2"
     );
     owner.close().await;
-    let offline = cli(&root, &["fleet"]);
+    let offline = cli(&root, &["fleet", "show"]);
     assert_eq!(offline["canisters"].as_array().unwrap().len(), 2);
     assert!(offline["canisters"].as_array().unwrap().iter().all(
         |item| item["module_hash"].is_null()

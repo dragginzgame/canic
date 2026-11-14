@@ -2,9 +2,11 @@ use canic_host::{Error, Fleet, Result};
 use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use std::{fmt::Write as _, num::NonZeroUsize, path::Path};
 
+mod terminal;
 #[cfg(test)]
 mod tests;
 mod watch;
+pub(crate) use terminal::render as terminal;
 pub(crate) use watch::{collect, watch};
 
 fn escape(value: &str) -> String {
@@ -24,7 +26,7 @@ fn declared_routes(snapshot: &Fleet, links: &[String]) -> Result<String> {
         return Err(Error::Invalid("at most 32 declared routes".into()));
     }
     let mut html = String::from(
-        "<h2>Declared application routes</h2><p>Operator-supplied topology, not an on-chain route or readiness observation. Each endpoint is known in this journal under the same network trust binding.</p><div class=grid>",
+        "<h2>Declared application routes</h2><p>Operator-supplied topology, not an on-chain route or readiness observation. Each endpoint is in this inventory under the same network trust binding.</p><div class=grid>",
     );
     for link in links {
         let (entry, worker) = link
@@ -57,6 +59,25 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
         snapshot.finished_at_ns, snapshot.finished_at_ns / 1_000_000_000,
         snapshot.canisters.len(), snapshot.operations.len(), snapshot.issues.len()
     ).expect("writing to a String");
+    if let Some(config) = &snapshot.configuration {
+        write!(html, "<h2>App: {}</h2><h3>Fleet: {}</h3><p>Local declarations; deployment evidence is shown separately.</p><p>Configured network: {}</p>", escape(&config.app), escape(&config.fleet), escape(&configured_network(config))).expect("writing to String");
+        if config.config.canisters.is_empty() {
+            html.push_str(
+                "<p>No canisters declared yet. Add slots to this fleet before planning.</p>",
+            );
+        }
+        html.push_str("<ul>");
+        for slot in config.config.canisters.keys() {
+            write!(
+                html,
+                "<li><strong>{}</strong>: {}</li>",
+                escape(slot),
+                escape(&slot_status(snapshot, slot))
+            )
+            .expect("writing to String");
+        }
+        html.push_str("</ul>");
+    }
     if let Some(wallet) = &snapshot.wallet {
         write!(html, "<h2>Mainnet wallet</h2><article><span class=badge>Uncertified balance queries</span><span class=label>Owner principal · default subaccount</span><code>{}</code><span class=label>Receive ICP · Internet Computer mainnet</span><code>{}</code><p>Wallet balances exclude cycles already held by canisters. This view makes no transfers or conversions.</p><div class=grid>", escape(&wallet.principal), escape(&wallet.icp_address)).expect("writing to String");
         for (label, balance) in [("ICP", &wallet.icp), ("Cycles ledger", &wallet.cycles)] {
@@ -175,7 +196,7 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
             )
             .expect("writing to a String");
         }
-        html.push_str("</dl><p class=muted>Use <code>canic status DIGEST</code> for retained details. This report never resumes or retries an operation.</p></article>");
+        write!(html, "</dl><p class=muted>Use <code>{}</code> with the same config/journal path for retained details. This report never resumes or retries an operation.</p></article>", escape(&status_command(snapshot, &operation.operation))).expect("writing to String");
     }
     html.push_str("</div>");
     if !snapshot.issues.is_empty() {
@@ -187,6 +208,54 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
     }
     html.push_str("<footer>Canic · Read-only snapshot · No keys, signed attempts or artifact bytes exported</footer></main><script>document.querySelectorAll('time[data-ns]').forEach(t=>{t.textContent=new Date(Number(t.dataset.ns)/1e6).toISOString()})</script></body></html>");
     html
+}
+
+fn status_command(snapshot: &Fleet, operation: &str) -> String {
+    snapshot.configuration.as_ref().map_or_else(
+        || format!("canic fleet status --no-config {operation}"),
+        |config| {
+            format!(
+                "canic fleet status --app {} --fleet {} {operation}",
+                config.app, config.fleet
+            )
+        },
+    )
+}
+
+fn configured_network(config: &canic_host::SelectedFleet) -> String {
+    match &config.config.network {
+        canic_host::Network::Mainnet => "IC mainnet".into(),
+        canic_host::Network::Local { url, .. } => format!("Local replica: {url}"),
+    }
+}
+
+fn slot_status(snapshot: &Fleet, slot: &str) -> String {
+    let Some(config) = &snapshot.configuration else {
+        return "No fleet configuration".into();
+    };
+    if let Some(id) = config
+        .config
+        .canisters
+        .get(slot)
+        .and_then(|slot| slot.id.as_ref())
+    {
+        return format!("{id} (configured identity; metadata below)");
+    }
+    let mut matches = snapshot.operations.iter().filter(|operation| {
+        operation.deployment.as_ref().is_some_and(|name| {
+            name.fleet == config.fleet && name.app == config.app && name.canister == slot
+        })
+    });
+    let Some(operation) = matches.next() else {
+        return "Not planned".into();
+    };
+    if matches.next().is_some() {
+        return "Conflicting named operations; inspect JSON evidence".into();
+    }
+    match &operation.canister {
+        Some(id) => format!("{id} (retained deployment identity)"),
+        None => format!("Awaiting deployment; operation {}", operation.operation),
+    }
 }
 
 fn write(path: &Path, snapshot: &Fleet, routes: &str) -> Result<()> {

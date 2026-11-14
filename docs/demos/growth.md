@@ -39,7 +39,7 @@ User 1 belongs to `canic-mainnet`, with revision 1 and display name
 ```sh
 ./target/debug/canic-profile --manager rk6n2-wyaaa-aaaad-qmoua-cai growth-status
 ./target/debug/canic-profile --canister rn7lo-3aaaa-aaaad-qmouq-cai get 1
-canic fleet --watch --manager rk6n2-wyaaa-aaaad-qmoua-cai \
+canic fleet show --app profile --fleet mainnet --watch --manager rk6n2-wyaaa-aaaad-qmoua-cai \
   --wallet o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe \
   --link bisqm-biaaa-aaaas-qhfeq-cai:4pkhu-oaaaa-aaaai-ra2ta-cai
 ```
@@ -50,6 +50,8 @@ is already running, use that URL or choose another `--port`. Live checks begin
 30 seconds after each completed check, and the browser reloads every 30 seconds.
 Failed refreshes retain the prior snapshot with a visible warning. Ctrl-C in its
 terminal stops both observation and serving.
+For a one-shot terminal summary, omit `--watch` from the fleet command above.
+Add `--json` when consuming the complete observation in a script.
 It includes all five known canisters: Hello World, the original entry/worker,
 the manager and the autonomous worker. Manager queries and private profile reads
 are explicitly uncertified; update replies and module/controller metadata use
@@ -86,7 +88,7 @@ The test retains `target/growth/journey-N/fleet.html`; use the directory from
 your run and serve that snapshot in the normal browser:
 
 ```sh
-canic view target/growth/journey-N/fleet.html --port 8788 --open
+canic fleet view target/growth/journey-N/fleet.html --port 8788 --open
 ```
 
 Open **http://localhost:8788/** if the desktop opener is unavailable. Leave the
@@ -104,16 +106,16 @@ guarantee of indefinite operation or a quoted total cost.
 
 ```sh
 mkdir -p target/growth
-canic --json build --package canic-profile-manager > target/growth/mainnet-manager.json
+canic artifact build --json --package canic-profile-manager > target/growth/mainnet-manager.json
 cp "$(jq -r .wasm target/growth/mainnet-manager.json)" target/growth/mainnet-manager.wasm
-canic --json build --package canic-profile-worker > target/growth/mainnet-worker.json
+canic artifact build --json --package canic-profile-worker > target/growth/mainnet-worker.json
 cp "$(jq -r .wasm target/growth/mainnet-worker.json)" target/growth/mainnet-worker.wasm
-canic --json plan --wasm target/growth/mainnet-manager.wasm \
+canic fleet plan --no-config --json --wasm target/growth/mainnet-manager.wasm \
   --network ic \
   --controller "$(./.tools/ic/bin/icp identity principal --identity canic-mainnet)" \
   --cycles 2500000000000 > target/growth/mainnet-plan.json
 cat target/growth/mainnet-plan.json
-canic --json apply "$(jq -r .operation target/growth/mainnet-plan.json)" \
+canic fleet apply --no-config --json "$(jq -r .operation target/growth/mainnet-plan.json)" \
   --identity canic-mainnet --icp-bin ./.tools/ic/bin/icp \
   > target/growth/mainnet-receipt.json
 ```
@@ -150,7 +152,7 @@ cannot admit a second worker. The client never retries automatically.
 ```sh
 ./target/debug/canic-profile --manager "$manager" growth-status
 ./target/debug/canic-profile --manager "$manager" growth-reconcile
-canic fleet --manager "$manager" --port 8788 --open
+canic fleet show --no-config --manager "$manager" --port 8788 --open
 ```
 
 `growth-status` and fleet manager reports are explicitly uncertified queries.
@@ -190,8 +192,8 @@ upgrade plan with the manager's exact principal, controller and previous module
 hash. Never reinstall to resolve an uncertain slot: that destroys its authority
 history. Creation-result loss has no automated recovery, even after maintenance.
 
-If `canic apply` stops after retaining an installation reply but before writing
-its terminal receipt, inspect `canic status OPERATION` and resume that same
+If `canic fleet apply` stops after retaining an installation reply but before writing
+its terminal receipt, inspect `canic fleet status OPERATION` and resume that same
 operation. The retained reply owns settlement; preserve its files and original
 digest. The mainnet maintenance run exercised this path and recovered its receipt
 using certified reads with the signer unavailable. It did not issue another

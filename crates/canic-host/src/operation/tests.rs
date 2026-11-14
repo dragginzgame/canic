@@ -9,6 +9,7 @@ use ic_platform::{
 fn plan() -> Plan {
     let input = crate::tests::input();
     Plan {
+        deployment: None,
         version: 1,
         network: Network::Mainnet,
         controller: input.controller,

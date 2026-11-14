@@ -4,6 +4,7 @@ use std::process::Command;
 #[test]
 fn report_escapes_untrusted_text_and_labels_partial_inventory() {
     let mut snapshot = Fleet {
+        configuration: None,
         started_at_ns: 0,
         finished_at_ns: 0,
         scope: "local deployment journal only",
@@ -65,6 +66,7 @@ fn report_escapes_untrusted_text_and_labels_partial_inventory() {
 #[test]
 fn declared_routes_require_unambiguous_known_network_and_escape_text() {
     let mut snapshot = Fleet {
+        configuration: None,
         started_at_ns: 0,
         finished_at_ns: 0,
         scope: "local deployment journal only",

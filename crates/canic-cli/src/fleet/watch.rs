@@ -13,13 +13,14 @@ pub(crate) async fn collect(
     root: &Path,
     managers: &[String],
     wallet: Option<&str>,
+    configuration: Option<&canic_host::SelectedFleet>,
 ) -> Result<Fleet> {
     let wallet = if let Some(principal) = wallet {
         Some(canic_host::wallet(principal).await?)
     } else {
         None
     };
-    let mut snapshot = canic_host::fleet_with_managers(root, managers).await?;
+    let mut snapshot = canic_host::fleet_with_config(root, managers, configuration).await?;
     snapshot.wallet = wallet;
     Ok(snapshot)
 }
@@ -125,7 +126,10 @@ pub(crate) async fn watch(
         // Waiting is part of this single future: no overlapping scans or catch-up bursts.
         let next = async {
             tokio::time::sleep(INTERVAL).await;
-            report(&collect(root, managers, wallet).await?, links)
+            report(
+                &collect(root, managers, wallet, initial.configuration.as_ref()).await?,
+                links,
+            )
         };
         let result = refresh_while_serving(&viewer, &page.current, next).await?;
         if let Err(error) = &result {

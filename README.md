@@ -10,7 +10,7 @@ Start with `make profile` and `make profile-test`; the same Canic CLI deploys bo
 canisters. The entry resolves the worker while private calls keep the user's identity.
 The [bounded growth demo](docs/demos/growth.md) adds one autonomous manager:
 approve a worker once, let the host leave, then inspect the retained outcome with
-`canic fleet --manager MANAGER --open`. Run `make growth-test` locally first.
+`canic fleet show --app profile --fleet mainnet --manager MANAGER --open`. Run `make growth-test` locally first.
 
 This is the fresh Canic rewrite. The predecessor is maintained separately as
 [canic-legacy](https://github.com/dragginzgame/canic-legacy).
@@ -47,7 +47,7 @@ is available now; canister cycle-balance reporting remains future work. An optio
 wallet panel shows public ICP and cycles-ledger balances. Explicitly selected
 managers report their created worker for independent metadata observation. The profile demo supplies
 an explicit direct readiness check and a declared entry-to-worker arrow through
-`canic fleet --link ENTRY:WORKER --open`. See
+`canic fleet show --app profile --fleet mainnet --link ENTRY:WORKER --open`. See
 the [visualization acceptance contract](docs/design/canic-system-design.md#demo-fleet-visualization-from-the-first-multi-canister-increment).
 
 The runnable [M0 experiments](qualification/README.md) exercise creation,
@@ -64,7 +64,7 @@ make canic
 ```
 
 To build the demo application after preparing the Wasm target, run
-`./target/debug/canic build`. Building does not deploy or spend cycles.
+`./target/debug/canic artifact build --package canic-hello`. Building does not deploy or spend cycles.
 
 Rust 1.100.0 is pinned in `rust-toolchain.toml`. Install it with Rustup, then run:
 
@@ -88,13 +88,172 @@ PocketIC: create, install, greet, recover retained requests and upgrade the same
 canister. It uses synthetic cycles only. The simulator invokes the compiled CLI
 as a process, keeping its older pinned dependency graph separate from Host.
 
+## Command contexts
+
+Help lists commands alphabetically. Only `--json` is global; other options follow
+the action they belong to. Earlier top-level verbs and plural listing commands
+have no aliases.
+
+| Command | Input and scope |
+| --- | --- |
+| `app init APP --fleet FLEET --network ic` | Create a new local config; `--config PATH` chooses its destination. No deployment. |
+| `app list` | Read all apps from `--config PATH` (default `canic.json`). |
+| `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. App names do not select packages. |
+| `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
+| `fleet list` | Read fleet declarations; optional `--app APP` filters them. |
+| `fleet show` | Observe the selected app/fleet; `--html PATH` saves a report, `--serve` serves it, and `--watch` refreshes it. |
+| `fleet plan --wasm WASM_FILE --controller PRINCIPAL` | Prepare one canister's deployment within the selected fleet, using the creation or upgrade arguments below. |
+| `fleet apply OPERATION --identity IDENTITY` | Approve/resume that exact retained operation, including its funding and network effects. |
+| `fleet status OPERATION` | Read that operation's retained local evidence. |
+| `fleet call OPERATION --name NAME` | Query the hello demo deployed by that completed operation. This is not a general canister-method caller. |
+| `fleet view REPORT_HTML` | Serve an existing local HTML snapshot. No app/fleet selection, journal access or live observation. |
+| `wallet PRINCIPAL` | Read a public mainnet wallet, or derive its receive address with `--address-only`. |
+
+`fleet show`, `plan`, `apply`, `status` and `call` accept `--app APP --fleet FLEET`
+and optional `--config PATH` and `--state-dir PATH`. `--no-config` selects the
+original standalone journal flow. `fleet list` needs only the config and optional
+app filter; `fleet view` needs only its saved file and viewer options. Artifact,
+wallet and saved-view commands reject unrelated deployment selectors.
+
+Planning creation requires `--canister SLOT` for an unbound configured slot.
+Planning an upgrade requires `--target PRINCIPAL --previous-module HASH`; the
+principal must belong to the selected fleet. These choices are mutually exclusive.
+The network comes from the fleet config, or from explicit `--network` and trust
+inputs for standalone use. An explicit network must match the selected fleet.
+Plans preserve their exact artifact, controller, cycle ceiling and operation digest.
+
+Viewers use `--port PORT` (default 8787); `--open` is always opt-in. For a live
+view, use `fleet show --serve` or `fleet show --watch`. For a saved view, use
+`fleet view REPORT_HTML`. Neither opens a browser unless `--open` is supplied.
+
+## Initialize an app and fleet
+
+The hierarchy is **App → Fleets → Canisters**. An app is the logical application;
+its fleets are separate deployments, such as `profile/mainnet` and
+`profile/staging`. Each fleet has its own network, canister identities and journal.
+
+List the local declarations without contacting the network or opening a journal:
+
+```sh
+canic app list
+canic fleet list
+canic fleet list --app profile
+canic fleet list --json
+```
+
+Listings use `canic.json` in the current directory, or `--config PATH`. Counts are
+declared fleets/canister slots, not proof of deployment or health. Use
+`canic fleet show --app profile --fleet mainnet` for current deployment observations.
+
+In a project without `canic.json`, initialize an app and its first fleet:
+
+```sh
+canic app init hello --fleet mainnet --network ic
+canic fleet show --app hello --fleet mainnet
+```
+
+Initialization creates **only `canic.json`**. It refuses to overwrite an existing
+file, does not access an identity, and performs no network calls or funding.
+Canister layout is declared later in the selected fleet:
+
+```json
+{
+  "version": 2,
+  "apps": {
+    "hello": {
+      "fleets": {
+        "mainnet": {
+          "network": { "kind": "Mainnet" },
+          "canisters": {}
+        }
+      }
+    }
+  }
+}
+```
+
+Add further fleets under the same app's `fleets` object. Add separate applications
+under `apps`. The CLI discovers `canic.json` in the current directory, or accepts
+`--config PATH`. Select `--app NAME --fleet NAME`; either may be omitted only
+when its choice is unique. Ambiguous selection fails with the available names.
+The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config. A fleet's
+optional `journal` path selects an existing journal relative to the config (or an
+absolute path); `--state-dir PATH` overrides it. Configured observations and
+operation access still require membership in the selected app/fleet.
+
+Names contain 1–64 ASCII letters, digits, hyphens or underscores. Configuration
+admits at most 16 apps, 16 fleets per app, 32 canisters per fleet and 128 canisters
+total, within a 32 KiB file. Local initialization requires `--network local --url
+URL --root-key HEX --routing-canister PRINCIPAL`; it does not start a simulator.
+
+Duplicate app, fleet or canister keys are errors. A canister ID under the same
+exact network binding may appear in only one fleet in this config. An external
+controller or shared service is not implicitly a fleet member. Selection provides
+local mistake prevention; controller/signature checks still supply authority.
+Editing a name is not a rename or transfer operation, and never rewrites existing
+approved plans or moves their journals.
+
+To prepare the first deployment, set `apps.hello.fleets.mainnet.canisters` to
+`{"backend": {}}`. Set `canic_owner` to the controller principal and prepare the
+Wasm target, then build and review the plan:
+
+```sh
+canic artifact build --json --package canic-hello > target/hello-build.json
+canic fleet plan --app hello --fleet mainnet --json --canister backend \
+  --wasm "$(jq -r .wasm target/hello-build.json)" \
+  --controller "$canic_owner" > target/hello-plan.json
+canic fleet status --app hello --fleet mainnet "$(jq -r .operation target/hello-plan.json)"
+```
+
+Review artifact, controller, network and cycle ceiling. Applying the reviewed
+digest authorizes deployment and its funding:
+
+```sh
+canic fleet apply --app hello --fleet mainnet "$(jq -r .operation target/hello-plan.json)" --identity canic-mainnet
+canic fleet show --app hello --fleet mainnet
+```
+
+Named plans retain app/fleet/canister names under the approval digest. Repeating
+an identical plan returns the original operation and expiry. Conflicting inputs
+cannot replace an occupied slot or renew expired/uncertain authority. Inspect
+and resume the original operation; do not delete its journal to retry. Explicit
+`--target`/`--previous-module` upgrade plans remain available without slot flags.
+Configured upgrade targets must already be declared in that fleet or identified
+by its retained named operations; unrelated targets are rejected before a plan
+is written.
+
+This checkout's [canic.json](canic.json) declares two applications:
+
+- `hello-world/mainnet`: the greeting canister.
+- `profile/mainnet`: entry, shared worker, manager and managed worker.
+
+Both select the original `.canic/` journal in place. Existing slots use
+`{"id": "CANISTER_PRINCIPAL"}`, which blocks new creation in that slot.
+Names are local declarations; they do not grant ownership or rewrite signed
+plans. `profile_manager: true` selects the manager's read-only status query.
+Certified code/controller observations and uncertified manager reports remain
+distinct. A clone without the private journal can observe the public canisters
+but has no retained receipts.
+
+```sh
+canic fleet show --app hello-world --fleet mainnet
+canic fleet show --app profile --fleet mainnet
+canic fleet status --app profile --fleet mainnet 8b54397d04474aa916e93bcb89f46b8db7e96fccd05391d4eeb4224930f601d6
+```
+
+The status example needs the original private journal. Initialization does not
+automatically adopt canisters. `canic fleet show --no-config` inspects all original
+journal operations, including unassigned records. Observation retains the selected
+configuration for its run; restart a watcher after edits. Never place seed words,
+keys or signed attempts in the shareable config.
+
 ## Check the mainnet wallet
 
 ```sh
 canic_owner=o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe
 canic wallet "$canic_owner"
 canic wallet "$canic_owner" --address-only
-canic fleet --wallet "$canic_owner" --manager rk6n2-wyaaa-aaaad-qmoua-cai --open
+canic fleet show --app profile --fleet mainnet --wallet "$canic_owner" --manager rk6n2-wyaaa-aaaad-qmoua-cai --open
 ```
 
 `wallet` takes a public principal, not an identity name. It observes the default
@@ -122,13 +281,14 @@ Nondefault subaccounts and local-replica wallets are not supported by this slice
 
 Use the repo-pinned ICP CLI 1.7.0 for offline signing. It can use an existing
 encrypted identity such as `canic-mainnet`; Canic never imports or exports its key.
-Build the CLI and app, then create a plan:
+This older explicit-plan recipe uses `--no-config` and the original journal.
+For a named deployment use the initialization guide above. Build the CLI and app, then create a plan:
 
 ```sh
 make canic
 export PATH="$PWD/target/debug:$PWD/.tools/ic/bin:$PATH"
-canic --json build > target/hello-build.json
-canic --json plan \
+canic artifact build --package canic-hello --json > target/hello-build.json
+canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/hello-build.json)" \
   --network ic \
   --controller "$(icp identity principal --identity canic-mainnet)" \
@@ -144,10 +304,10 @@ this experimental path assumes that fee remains unchanged during submission.
 Plans expire after one hour. Applying the exact digest is the spending approval:
 
 ```sh
-canic --json apply "$(jq -r .operation target/hello-plan.json)" \
+canic fleet apply --no-config --json "$(jq -r .operation target/hello-plan.json)" \
   --identity canic-mainnet > target/hello-receipt.json
-canic call "$(jq -r .operation target/hello-plan.json)" --name team
-canic status "$(jq -r .operation target/hello-plan.json)"
+canic fleet call --no-config "$(jq -r .operation target/hello-plan.json)" --name team
+canic fleet status --no-config "$(jq -r .operation target/hello-plan.json)"
 ```
 
 Enter the identity password in ICP CLI's terminal prompt when requested. Signing
@@ -166,12 +326,41 @@ The CLI does not currently renew read-state authority after that window.
 ## Inspect the fleet
 
 ```sh
-canic --json fleet
-canic fleet --open
-canic fleet --watch
-canic fleet --serve
-canic fleet --html target/fleet.html
-canic view target/fleet.html
+canic fleet show --app profile --fleet mainnet
+canic fleet show --app profile --fleet mainnet --json
+canic fleet show --app profile --fleet mainnet --open
+canic fleet show --app profile --fleet mainnet --watch
+canic fleet show --app profile --fleet mainnet --serve
+canic fleet show --app profile --fleet mainnet --html target/fleet.html
+canic fleet view target/fleet.html
+```
+
+`canic fleet show --app profile --fleet mainnet` prints a terminal summary of known canisters, controller roles,
+verified code/controller observations, and operations without a terminal receipt. Explicit
+`--manager`, `--wallet` and `--link` selections add their reports to the summary.
+Unknown observations and partial inventory stay visible; manager and wallet
+queries are labelled uncertified. No browser opens for this command.
+Use `canic fleet show --app profile --fleet mainnet --json` for scripts and complete structured evidence; plain
+`canic fleet show --app profile --fleet mainnet` no longer prints JSON.
+
+Controller badges are **magenta**, selected managers **cyan**, and declared entries
+or reported/declared workers **blue**. Verified metadata is green; unknown metadata
+is yellow. Role names remain readable without colour. A **CONTROLLER CANISTER**
+controls another known canister on the same network, based on verified metadata.
+An **EXTERNAL CONTROLLER** is a principal outside that network's known canister
+inventory; it may be an identity or an unlisted canister. The current demo uses
+an operator identity and a manager, with no separately deployed root canister.
+Root roles are not inferred from an incomplete inventory.
+
+Colours default to interactive terminals; redirected output stays plain. Auto mode
+honours nonempty `NO_COLOR` and `TERM=dumb`. Override with `--color always` or
+`--color never`; JSON stays colour-free. Network numbers distinguish separate
+environments within the current snapshot. Use `--details` to see full module
+hashes and diagnostic network identities:
+
+```sh
+canic fleet show --app profile --fleet mainnet --manager rk6n2-wyaaa-aaaad-qmoua-cai --color always
+canic fleet show --app profile --fleet mainnet --details --color never
 ```
 
 `--open` creates a fresh report under `target/fleet/`, serves it at
@@ -181,13 +370,13 @@ Keep the command running while reviewing; Ctrl-C stops the viewer. Use `--port`
 to choose another port (`--port 0` chooses a free one). Browser launch failure
 leaves the localhost viewer available at the printed URL.
 
-`canic view PATH` serves a previously saved snapshot without contacting canisters.
+`canic fleet view PATH` serves a previously saved snapshot without contacting canisters.
 It serves only that report, not the containing directory or deployment journal.
 Use `--html PATH --open` to choose where a fresh report is also retained.
 Without `--watch`, these are saved observations: browser refresh does not make
 new network reads.
 
-`canic fleet --watch` keeps the localhost page up to date and prints its URL
+`canic fleet show --app profile --fleet mainnet --watch` keeps the localhost page up to date and prints its URL
 without opening a browser. Add `--open` to launch the normal browser. The host waits
 30 seconds after each completed check before beginning the next one; the browser
 reloads every 30 seconds. Observation rounds never overlap, and browser requests
@@ -197,7 +386,7 @@ next round runs. Ctrl-C stops both the viewer and observation loop.
 Use the existing mainnet demo and wallet with:
 
 ```sh
-canic fleet --watch --manager rk6n2-wyaaa-aaaad-qmoua-cai \
+canic fleet show --app profile --fleet mainnet --watch --manager rk6n2-wyaaa-aaaad-qmoua-cai \
   --wallet o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe \
   --link bisqm-biaaa-aaaas-qhfeq-cai:4pkhu-oaaaa-aaaai-ra2ta-cai
 ```
@@ -209,7 +398,7 @@ timestamps; a later successful refresh clears that warning. At most one current
 report and its last completed source are retained in memory, with a 4 MiB page
 limit. There is no disk history or automatic deployment/funding action.
 If `--html PATH` is supplied, it saves only the initial static snapshot and is
-never overwritten by the watcher. `canic view PATH` always remains a saved view.
+never overwritten by the watcher. `canic fleet view PATH` always remains a saved view.
 
 The self-contained report shows known
 canisters and certified controller relationships, current module hashes, original
@@ -236,8 +425,8 @@ The second executable changes the greeting. It preserves the canister ID and
 controller; this stateless demo promises no application-data migration.
 
 ```sh
-canic --json build --features greeting-v2 > target/hello-build-v2.json
-canic --json plan \
+canic artifact build --package canic-hello --json --features greeting-v2 > target/hello-build-v2.json
+canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/hello-build-v2.json)" \
   --network ic \
   --controller "$(icp identity principal --identity canic-mainnet)" \
@@ -245,9 +434,9 @@ canic --json plan \
   --previous-module "$(jq -r .module_hash target/hello-receipt.json)" \
   > target/hello-upgrade-plan.json
 cat target/hello-upgrade-plan.json
-canic --json apply "$(jq -r .operation target/hello-upgrade-plan.json)" \
+canic fleet apply --no-config --json "$(jq -r .operation target/hello-upgrade-plan.json)" \
   --identity canic-mainnet > target/hello-upgrade-receipt.json
-canic call "$(jq -r .operation target/hello-upgrade-plan.json)" --name team
+canic fleet call --no-config "$(jq -r .operation target/hello-upgrade-plan.json)" --name team
 ```
 
 An upgrade requires the exact prior module hash and sole controller before its

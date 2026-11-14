@@ -1,7 +1,7 @@
 # Canic system design
 
 Status: accepted architectural basis; M0 is underway and the first M1 CLI/demo path is implemented. See the [current evidence record](m0-first-journey.md) for qualified paths and remaining work.
-Date: 2026-11-13.
+Date: 2026-11-14. Domain/configuration consistency reviewed against the implemented CLI; see the [review evidence](m0-first-journey.md#domain-and-configuration-review).
 
 Naming: Canic is this fresh rewrite. Legacy Canic is the predecessor now hosted
 as [canic-legacy](https://github.com/dragginzgame/canic-legacy). Historical package
@@ -109,6 +109,28 @@ Reintroducing one requires a concrete need and a fresh design decision. Importan
 
 ## 3 Domain model
 
+The hierarchy is **App → Fleets → Canisters**. One logical application may have
+multiple fleets, each a deployment on an explicitly trusted network with its own
+canister identities and retained operations. Fleet names are scoped to their app;
+for example, `profile/mainnet` and `profile/staging` are deployments of `profile`.
+
+An app owns code and application semantics; a fleet owns one deployment's selected
+network, canister membership, management policy and bounded effect authority.
+Several fleets may use the same network and executable. One fleet may eventually
+span several subnets; neither network nor subnet is an app or fleet identity.
+Canister roles describe responsibilities inside that deployment, not additional
+ownership levels. An external controller or service is a relationship, not an
+implicitly owned fleet member. Within a declaration, the same canister under the
+same exact network binding cannot belong to two fleets. Shared services require
+explicit external references when that consumer need is admitted.
+
+Names select scope; they do not grant controller rights or prove ownership. A
+configured principal is a declaration, a certified controller read is an
+observation, and an approved operation supplies bounded effect authority. These
+must remain distinct even when displayed together. The current CLI has no rename,
+fleet-transfer or identity-migration operation: editing a name does not retag an
+approved plan, move a journal, renew an allowance or move a deployed canister.
+
 | Concept | Meaning and owner |
 | --- | --- |
 | Application specification | Logical component types, relationships, service exports, permitted child patterns and readiness contracts; application-owned |
@@ -175,6 +197,13 @@ External governance retains the controller hierarchy it approves. A governance i
 
 Later sections use Coordinator, executor and Store to name these responsibilities in larger deployments. Their contracts apply where selected; the names do not override the topology decision here.
 
+The implemented narrow topology is recorded in M0: the operator directly
+controls Hello World, the profile entry/shared worker, and the profile manager;
+only the manager's autonomous worker is controlled by that manager. This is not a
+fleet-wide executor or a general Root. Its artifact bytes are retained in the
+manager; no separate Coordinator or Store has been selected. Generalizing that
+owner remains subject to the custody and workload gates below.
+
 ### Repository and workspace boundary
 
 Keep one repository and one product workspace initially. CLI depends on Host, Host depends on passive Contracts, and the application runtime depends on Contracts and selected suppliers. Host communicates with deployed roles through contracts without depending on their runtime implementations. Add role crates when the topology requires separately compiled artifacts, and adapter crates with their first complete consumer journey.
@@ -208,6 +237,22 @@ The compiler validates the explicit deployment graph, normalizes sets and produc
 
 Keep semantic configuration identity separate from source-file identity. Reformatting a file should not change its meaning; exact source bytes still belong to build evidence when a build can consume them. After approval, the exact compiled plan and selected schema are immutable.
 
+The implemented declaration is `apps.APP.fleets.FLEET.canisters.SLOT`, with the
+network and optional journal path on each fleet. It deliberately does not yet
+implement a reusable component-specification compiler or fleet-wide funding
+policy. The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config.
+An existing shared journal may remain in place, but observations and operation
+selection must distinguish its fleets by exact retained names or known target
+and network evidence. Unassigned uncertain records remain visible as such.
+
+Reject ambiguous selections, duplicate JSON names, conflicting physical
+membership and upgrades outside the selected fleet before retaining a new plan.
+Approval still binds the exact network, target, artifact, controller and budget;
+mutable config cannot change those inputs during apply or recovery. These local
+selection checks are not an authorization boundary against an operator who
+already controls the signing identity. `--no-config` uses explicit retained
+plans; it does not bypass signature, controller, deadline or evidence checks.
+
 ### Approval and admission contract
 
 One canonical approval record binds its schema, network trust identity, normalized plan digest, approver and authority generation, validity policy, effect graph, artifact/configuration identities and cumulative resource ceilings. An effect names its operation ID, prerequisites, permitted caller, target reference, request commitment and result schema. Preview and execution consume this same representation.
@@ -227,29 +272,38 @@ The executor validates its current authority and atomically reserves its owned c
 
 An autonomous grant is separate from a deployment plan. It permits bounded future instantiations of an exact component specification under a named parent allocation/generation, policy generation, destination derivation and finite capacity/funding allowances. It is not an informal extension of a completed deployment approval. Activation uses the evidence chain in section 12.
 
-### Proposed command vocabulary
+### Current command contract
 
-The spelling below is the proposed wider interface. The first one-canister CLI
-currently implements `build`, `inspect`, `plan`, `apply`, `status` and `call`;
-see the [runnable journey](../../README.md#first-mainnet-deployment). These use
-one retained plan/apply implementation. Grouped Fleet and optional-service
-commands below remain proposals:
+Keep the shipped vocabulary canonical. `canic app init APP --fleet FLEET --network
+NETWORK` creates a local declaration. `--app APP --fleet FLEET` selects an existing
+deployment; a selector may be omitted only when its choice is unique. See the
+[runnable configuration journey](../../README.md#initialize-an-app-and-fleet).
 
 | Journey | Commands |
 | --- | --- |
-| Create and build | `canic app init`, `canic build`, `canic artifact inspect` |
-| Review deployment | `canic fleet plan`, `canic fleet apply <digest>` |
-| Continue or investigate | `canic operation status`, `canic operation resume`, `canic operation reconcile` |
-| Observe | `canic fleet status`, `canic fleet inspect`, `canic fleet doctor` |
-| Change admission or funding | `canic admission plan/apply`, `canic funding plan/apply/status` |
-| Operate one component | `canic component plan/apply/status` using the same operation contract |
-| Reuse or retire | `canic fleet release plan/apply`, explicit `canic capacity import` |
-| Local development | `canic local start/status/stop/reset` |
-| Integrations | `canic frontend export`, later qualified `canic checkpoint` and `canic restore` |
+| Initialize and build | `canic app init APP --fleet FLEET --network NETWORK`, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
+| List local declarations | `canic app list`, `canic fleet list`, optionally `--app APP` for fleets |
+| Review and execute one deployment | `canic fleet plan`, `canic fleet apply DIGEST` |
+| Investigate or continue the original operation | `canic fleet status DIGEST`, `canic fleet apply DIGEST` |
+| Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |
+| Exercise the greeting or inspect the wallet | `canic fleet call DIGEST`, `canic wallet PRINCIPAL` |
+
+Only structured output (`--json`) is global. App/fleet selection and journal
+arguments belong to deployment actions, not artifact inspection, saved-report
+viewing or wallet queries. `fleet plan` prepares one canister, not an implicit
+whole-fleet rollout: a configured creation names an unbound slot, while an upgrade
+names an admitted principal and its previous module hash. `fleet call` currently
+exercises the hello demo by its completed operation digest; it does not promise a
+generic application call interface. See the [command contexts](../../README.md#command-contexts).
+
+Wider admission, funding, capacity, restore and integration commands have no
+reserved spelling or implementation backlog merely because their responsibilities
+appear in this design. Admit their consumer need first; do not add aliases or a
+parallel command hierarchy speculatively.
 
 Read-only commands must clearly disclose paid observations where applicable; planning is mutation-free, not necessarily cost-free at every remote provider. Automatic discovery has bounded calls and bytes. Preparation never silently installs tools inside validation.
 
-Every mutating operation has a human-readable preview and a structured JSON form binding the same digest. JSON stdout is stable machine output; progress uses stderr. Errors include a typed cause, operation identity, effect certainty, current owner, and admissible next action. `resume` means continue original authority; it never means invent a new retry allowance.
+Every mutating operation requires a human-readable preview and a structured JSON form binding the same digest. JSON stdout is machine output; progress uses stderr, and experimental schema changes must be documented. Errors need a typed cause, operation identity, effect certainty, current owner, and admissible next action. Resuming means continuing original authority; it never means inventing a new retry allowance. Broader error/preview contracts remain qualification requirements where the current one-canister CLI does not yet implement them.
 
 Remove synonyms unless they serve genuinely different audiences. Do not retain `ensure`, `deploy`, `apply` and an internal repair command as independent orchestration owners. An eventual shorthand may call the same plan/apply flow.
 
@@ -277,7 +331,7 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The preferred candidate for the first managed topology is an explicitly trusted operator recovery authority R controlling a subnet executor E, which controls managed applications. R is an external principal with retained host custody, not another infrastructure canister required by this design. R performs E's maintenance; its power to replace E is explicit transitive trust. M0 must validate the following candidate's management path, surviving custody and artifact availability during operator absence before selecting it for product implementation. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
+The general managed-topology candidate is an explicitly trusted operator recovery authority R controlling a subnet executor E, which controls managed applications. R is an external principal with retained host custody, not another infrastructure canister required by this design. R performs E's maintenance; its power to replace E is explicit transitive trust. The implemented one-slot manager qualifies only its narrow form of this graph. Generalizing it to an executor requires validation of the management path, surviving custody and artifact availability for the admitted workload. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |
@@ -772,4 +826,4 @@ Examples of conflicting source status matter to the rewrite: the ideas index cla
 
 The review incorporated on 2026-11-13 also checked the linked primary IC execution properties, management interface, CMC interface and SNS Root registration source. Those platform references are distinct from the frozen historical corpus; moving source documents do not prove a particular deployed canister version. M0 and each provider adapter must pin the interface/implementation evidence relevant to their qualification. The read-only Toko manifest observation identifies a consumer candidate only; it neither expands the historical inventory nor proves consumer approval or compatibility.
 
-This document resolves ownership proposals, not those old release claims. Canic has no runtime implementation yet. No old test result establishes a Canic guarantee. Its first implementation must satisfy the acceptance witnesses above with its own selected source, suppliers and installed fixtures.
+This document resolves ownership proposals, not those old release claims. Canic now has a direct-host CLI and narrow profile canister/manager implementations with the qualified paths recorded in M0; it has no general production management framework. No legacy test result establishes a new Canic guarantee. Each implemented responsibility must satisfy its own acceptance witnesses with the selected source, suppliers and installed fixtures.

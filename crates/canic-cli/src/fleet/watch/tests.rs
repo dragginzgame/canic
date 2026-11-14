@@ -55,6 +55,7 @@ fn failed_refresh_preserves_last_report_and_recovery_clears_warning() {
 #[test]
 fn oversized_refresh_cannot_replace_the_current_page() {
     let snapshot = Fleet {
+        configuration: None,
         started_at_ns: 0,
         finished_at_ns: 0,
         scope: "local journal",

@@ -16,6 +16,45 @@ This record contains scoped decisions and evidence, not a second implementation
 backlog. The first product is the [M1 Hello World loop](../../README.md), followed
 by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
+## Domain and configuration review
+
+On 2026-11-14, the maintainer identified an implementation that put apps inside a
+fleet, contradicting the existing definition of a fleet as one application
+instance. The implementation and declaration were corrected to **App → Fleets →
+Canisters**. This review compared domain/configuration ownership, host planning,
+operation selection and recovery, inventory projections, and the narrow manager
+custody graph with the architecture. It is not a full security audit of every
+supplier or a production qualification claim.
+
+| Finding | Resolution and witness |
+| --- | --- |
+| Hierarchy and deployment boundaries were implemented inconsistently | App/fleet selection, independent default journals and shared-journal filtering; tests cover two fleets of one app and a second app |
+| Upgrade planning could retain an unrelated target before apply refused it | Refuse outside-fleet targets before writing the plan; installed CLI still upgrades an admitted target and preserves recovery |
+| One physical identity could be declared in two fleets on one exact network binding | Reject conflicting membership across the declaration; equal principals on different trust bindings remain valid |
+| Duplicate JSON map keys silently replaced declarations | Reject duplicate app, fleet and canister keys before selection |
+| Speculative command names and stale implementation claims obscured the actual product | Keep the shipped vocabulary canonical and distinguish the one-slot manager from a general executor/Root; remove the obsolete claim that no implementation exists |
+
+The architectural distinctions remain: local names do not grant controller
+authority; config edits cannot rewrite approved requests; a shared operator or
+executable does not merge fleet budgets; a report does not establish readiness or
+authorize a retry. The current declarations are local selection, not an on-chain
+membership registry. Rename/transfer, general activation bindings, distributed
+fencing and production restore require their own admitted contracts.
+
+The existing dispatch/callback distinction and wait-policy exposure remain
+consistent with the reviewed [IC system API](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/)
+and [execution properties](https://docs.internetcomputer.org/references/message-execution-properties/).
+This source review does not extend the previously qualified provider windows.
+
+Validation: 24 host tests, 15 CLI tests, the installed PocketIC deployment/upgrade/
+recovery journey, M1 Clippy/Rustdoc, formatting and tooling agreement passed.
+Regression cases live in [host config tests](../../crates/canic-host/src/config/tests.rs),
+[CLI config tests](../../crates/canic-cli/src/config_tests.rs) and the
+[installed journey](../../qualification/m1-tests/tests/journey.rs). Mainnet
+canister code and operation evidence were not changed by these fixes. Comparative
+adoption measurements and broader production lifecycle remain unqualified; this
+review does not close M0 or admit the optional capability catalogue.
+
 ## First capability and consumer invariant
 
 M1 exercises build, reviewed installation, invocation and status of one greeting
@@ -33,7 +72,7 @@ delivered with that increment and no later than M2. The team must be able to
 inspect deployed canisters, their relationships, observed state and interrupted
 operations. The [visualization acceptance contract](canic-system-design.md#demo-fleet-visualization-from-the-first-multi-canister-increment)
 owns the scope; the local growth slice extends the same view to an autonomous
-worker using `--manager`. The CLI supplies a read-only `canic fleet` JSON/HTML snapshot,
+worker using `--manager`. The CLI supplies a read-only `canic fleet show` JSON/HTML snapshot,
 qualified against two local greeting deployments, retained uncertain upgrades and
 an unavailable provider. It groups principals by exact network trust binding and
 shows certified module/controller observations separately from historical receipts.

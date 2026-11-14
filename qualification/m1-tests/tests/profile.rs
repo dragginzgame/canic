@@ -16,10 +16,11 @@ use std::{
 
 fn cli(root: &Path, args: &[&str]) -> Value {
     let output = Command::new(std::env::var_os("CANIC_CLI").expect("run make profile-test"))
+        .args(args)
+        .arg("--json")
         .arg("--state-dir")
         .arg(root)
-        .arg("--json")
-        .args(args)
+        .arg("--no-config")
         .output()
         .unwrap();
     assert!(
@@ -95,6 +96,7 @@ async fn entry_journey(
     )
     .unwrap();
     let mut args = vec![
+        "fleet",
         "plan",
         "--wasm",
         wasm.to_str().unwrap(),
@@ -106,6 +108,7 @@ async fn entry_journey(
     let receipt = cli(
         root,
         &[
+            "fleet",
             "apply",
             plan["operation"].as_str().unwrap(),
             "--identity",
@@ -367,6 +370,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     let plan = cli(
         &root,
         &[
+            "fleet",
             "plan",
             "--wasm",
             artifacts.join("v1.wasm").to_str().unwrap(),
@@ -386,6 +390,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     let receipt = cli(
         &root,
         &[
+            "fleet",
             "apply",
             id,
             "--identity",
@@ -552,6 +557,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     let upgrade = cli(
         &root,
         &[
+            "fleet",
             "plan",
             "--wasm",
             artifacts.join("v2.wasm").to_str().unwrap(),
@@ -575,6 +581,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     let upgraded = cli(
         &root,
         &[
+            "fleet",
             "apply",
             upgrade_id,
             "--identity",
@@ -613,6 +620,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     let replay = cli(
         &root,
         &[
+            "fleet",
             "apply",
             upgrade_id,
             "--identity",
@@ -645,6 +653,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
         &root,
         &[
             "fleet",
+            "show",
             "--html",
             report.to_str().unwrap(),
             "--link",

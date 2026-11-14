@@ -7,9 +7,11 @@ mod tests;
 
 const MAX_OPERATIONS: usize = 128;
 
-/// Read-only observations of the deployments known to one local journal.
+/// Read-only observations selected by a local journal and optional configuration.
 #[derive(Debug, Serialize)]
 pub struct Fleet {
+    /// Optional local declaration; separate from observed deployment evidence.
+    pub configuration: Option<crate::SelectedFleet>,
     /// UTC Unix nanoseconds when inventory collection began; observations are not atomic.
     pub started_at_ns: u64,
     /// UTC Unix nanoseconds when this snapshot finished.
@@ -31,7 +33,7 @@ pub struct Fleet {
 /// Application-specific demo adapter; reports do not grant management authority.
 #[derive(Debug, Serialize)]
 pub struct FleetManager {
-    /// Exact network binding from the manager's local deployment plan.
+    /// Exact network binding from the manager's local plan or configuration.
     pub network_id: String,
     /// Known manager principal.
     pub manager: String,
@@ -44,6 +46,8 @@ pub struct FleetManager {
 /// One admitted operation's public observation projection, excluding signed requests.
 #[derive(Debug, Serialize)]
 pub struct FleetOperation {
+    /// Names committed in the approved plan, if created through a fleet configuration.
+    pub deployment: Option<crate::DeploymentName>,
     /// Digest of the original approved plan.
     pub operation: String,
     /// Digest of the exact network trust binding.
@@ -90,7 +94,11 @@ fn label(network: &Network) -> String {
     }
 }
 
-fn local_operation(root: &Path, id: &str, now: u64) -> Result<(FleetOperation, Network)> {
+pub(crate) fn local_operation(
+    root: &Path,
+    id: &str,
+    now: u64,
+) -> Result<(FleetOperation, Network)> {
     let state = operation::status(root, id)?;
     let plan: Plan = serde_json::from_value(state["plan"].clone()).map_err(supplier)?;
     let receipt: Option<Receipt> =
@@ -127,6 +135,7 @@ fn local_operation(root: &Path, id: &str, now: u64) -> Result<(FleetOperation, N
     let network_id = artifact::digest(&serde_json::to_vec(&plan.network).map_err(supplier)?);
     Ok((
         FleetOperation {
+            deployment: plan.deployment,
             operation: id.into(),
             network_id,
             network: label(&plan.network),
@@ -161,6 +170,56 @@ async fn observe(network: &Network, canister: &str) -> Result<(String, Vec<Strin
     ))
 }
 
+pub(crate) struct Inventory {
+    pub records: Vec<(FleetOperation, Network)>,
+    pub issues: Vec<String>,
+}
+
+pub(crate) fn inventory(
+    root: &Path,
+    missing_allowed: bool,
+    started_at_ns: u64,
+) -> Result<Inventory> {
+    let mut ids = Vec::new();
+    let mut issues = Vec::new();
+    let entries = match std::fs::read_dir(root) {
+        Ok(entries) => Some(entries),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound && missing_allowed => None,
+        Err(error) => return Err(supplier(error)),
+    };
+    for entry in entries.into_iter().flatten() {
+        let entry = entry.map_err(supplier)?;
+        let name = entry.file_name();
+        let Some(id) = name.to_str() else { continue };
+        if id.len() != 64
+            || !id
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            continue;
+        }
+        if !entry.file_type().map_err(supplier)?.is_dir() {
+            issues.push(format!("{id}: operation path is not a regular directory"));
+        } else {
+            ids.push(id.to_owned());
+        }
+        if ids.len() + issues.len() > MAX_OPERATIONS {
+            return Err(Error::Invalid(
+                "fleet inventory exceeds 128 operations; select a smaller state directory".into(),
+            ));
+        }
+    }
+    ids.sort();
+    let mut records = Vec::new();
+    for id in ids {
+        match local_operation(root, &id, started_at_ns) {
+            Ok(record) => records.push(record),
+            Err(error) => issues.push(format!("{id}: {error}")),
+        }
+    }
+    Ok(Inventory { records, issues })
+}
+
 /// Observe locally retained deployments using anonymous certified metadata reads.
 ///
 /// No signer, update call, reconciliation or retry is invoked. Each target has a
@@ -184,53 +243,83 @@ pub async fn fleet(root: &Path) -> Result<Fleet> {
 /// # Errors
 /// Refuses invalid/ambiguous manager selection or unreadable/oversized inventory.
 pub async fn fleet_with_managers(root: &Path, selected: &[String]) -> Result<Fleet> {
+    fleet_with_config(root, selected, None).await
+}
+
+/// Observe a configured fleet, including undeployed named slots in its declaration.
+///
+/// # Errors
+/// Refuses invalid configuration and the same inventory/selection failures as [`fleet_with_managers`].
+pub async fn fleet_with_config(
+    root: &Path,
+    selected: &[String],
+    configuration: Option<&crate::SelectedFleet>,
+) -> Result<Fleet> {
+    if let Some(config) = configuration {
+        config.validate()?;
+    }
+    let started_at_ns = crate::now()?;
+    let Inventory {
+        records,
+        mut issues,
+    } = inventory(root, configuration.is_some(), started_at_ns)?;
+    let known = configuration
+        .map(|config| config.known_targets(&records))
+        .unwrap_or_default();
+    let mut operations = Vec::new();
+    let mut targets = BTreeMap::new();
+    for (operation, network) in records {
+        let id = &operation.operation;
+        if let Some(config) = configuration {
+            if !config.contains(&operation, &network, &known) {
+                if operation.deployment.is_none() && operation.canister.is_none() {
+                    issues.push(format!("{id}: unassigned legacy operation remains in this journal; inspect with --no-config status {id}"));
+                }
+                continue;
+            }
+            if config.config.network != network {
+                issues.push(format!("{id}: retained deployment network differs from fleet configuration; original evidence is preserved"));
+            }
+        }
+        if let Some(canister) = &operation.canister {
+            targets.insert((operation.network_id.clone(), canister.clone()), network);
+        }
+        operations.push(operation);
+    }
+    let mut selected: std::collections::BTreeSet<_> = selected.iter().cloned().collect();
+    if let Some(config) = configuration {
+        let network_id =
+            artifact::digest(&serde_json::to_vec(&config.config.network).map_err(supplier)?);
+        for (slot, declaration) in &config.config.canisters {
+            if let Some(id) = &declaration.id {
+                targets.insert(
+                    (network_id.clone(), id.clone()),
+                    config.config.network.clone(),
+                );
+                if declaration.profile_manager {
+                    selected.insert(id.clone());
+                }
+                if operations.iter().any(|operation| {
+                    operation.deployment.as_ref().is_some_and(|name| {
+                        name.fleet == config.fleet
+                            && name.app == config.app
+                            && name.canister == *slot
+                    }) && (operation.network_id != network_id
+                        || operation.canister.as_ref() != Some(id))
+                }) {
+                    issues.push(format!("{slot}: configured identity conflicts with a retained named operation; original evidence is preserved"));
+                }
+            }
+        }
+    }
     if selected.len() > 16 {
         return Err(Error::Invalid(
             "at most sixteen managers per snapshot".into(),
         ));
     }
-    let started_at_ns = crate::now()?;
-    let mut ids = Vec::new();
-    let mut issues = Vec::new();
-    for entry in std::fs::read_dir(root).map_err(supplier)? {
-        let entry = entry.map_err(supplier)?;
-        let name = entry.file_name();
-        let Some(id) = name.to_str() else { continue };
-        if id.len() != 64
-            || !id
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        {
-            continue;
-        }
-        if !entry.file_type().map_err(supplier)?.is_dir() {
-            issues.push(format!("{id}: operation path is not a regular directory"));
-        } else {
-            ids.push(id.to_owned());
-        }
-        if ids.len() + issues.len() > MAX_OPERATIONS {
-            return Err(Error::Invalid(
-                "fleet inventory exceeds 128 operations; select a smaller state directory".into(),
-            ));
-        }
-    }
-    ids.sort();
-    let mut operations = Vec::new();
-    let mut targets = BTreeMap::new();
-    for id in ids {
-        match local_operation(root, &id, started_at_ns) {
-            Ok((operation, network)) => {
-                if let Some(canister) = &operation.canister {
-                    targets.insert((operation.network_id.clone(), canister.clone()), network);
-                }
-                operations.push(operation);
-            }
-            Err(error) => issues.push(format!("{id}: {error}")),
-        }
-    }
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     let mut managers = Vec::new();
-    for manager in selected {
+    for manager in &selected {
         network::principal(manager)?;
         let matches: Vec<_> = targets
             .iter()
@@ -336,9 +425,10 @@ pub async fn fleet_with_managers(root: &Path, selected: &[String]) -> Result<Fle
         });
     }
     Ok(Fleet {
+        configuration: configuration.cloned(),
         started_at_ns,
         finished_at_ns: crate::now()?,
-        scope: "local deployment journal only",
+        scope: "local deployment journal, configured identities and explicitly selected manager reports",
         canisters,
         operations,
         issues,

@@ -19,6 +19,7 @@ canic-host.workspace = true
 clap.workspace = true
 ic-host-fs.workspace = true
 ic-host-process.workspace = true
+ic-host-text.workspace = true
 serde_json.workspace = true
 tiny_http.workspace = true
 tokio.workspace = true

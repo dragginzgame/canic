@@ -27,6 +27,7 @@ canic-profile-protocol = { path = "apps/profile/protocol" }
 clap = { version = "4.6.7", features = ["derive"] }
 ic-host-fs = { version = "0.77.1", default-features = false }
 ic-host-process = { version = "0.77.1", default-features = false }
+ic-host-text = { version = "0.75.0", default-features = false }
 ic-platform = { version = "0.32.1", default-features = false }
 ic-platform-runtime = { version = "0.22.1", default-features = false }
 ic-storage = "0.74.0"

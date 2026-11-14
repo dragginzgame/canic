@@ -30,6 +30,9 @@ pub struct Plan {
     pub created_at_ns: u64,
     /// Latest time at which a new effect may be signed under this approval.
     pub expires_at_ns: u64,
+    /// Optional named slot; absent in legacy v1 plans, required in v2 plans.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deployment: Option<crate::DeploymentName>,
 }
 
 /// Operator-selected inputs for a one-canister plan.
@@ -50,8 +53,10 @@ impl Plan {
     pub(crate) fn validate(&self) -> Result<()> {
         self.network.validate()?;
         let controller = principal(&self.controller)?;
-        if self.version != 1
-            || self.artifact.bytes > artifact::MAX_WASM
+        if !matches!(
+            (self.version, self.deployment.is_some()),
+            (1, false) | (2, true)
+        ) || self.artifact.bytes > artifact::MAX_WASM
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
             || self.expires_at_ns - self.created_at_ns > 3_600_000_000_000
@@ -59,6 +64,9 @@ impl Plan {
             return Err(Error::Invalid(
                 "unsupported or unbounded deployment plan".into(),
             ));
+        }
+        if let Some(deployment) = &self.deployment {
+            deployment.validate()?;
         }
         if self.network == Network::Mainnet && controller == principal("2vxsx-fae")? {
             return Err(Error::Invalid(
@@ -79,7 +87,7 @@ impl Plan {
     /// Refuses an invalid plan or serialization failure.
     pub fn digest(&self) -> Result<String> {
         self.validate()?;
-        let mut bytes = b"canic:deployment-plan:v1\0".to_vec();
+        let mut bytes = format!("canic:deployment-plan:v{}\0", self.version).into_bytes();
         bytes.extend(serde_json::to_vec(self).map_err(supplier)?);
         Ok(artifact::digest(&bytes))
     }
@@ -90,10 +98,20 @@ impl Plan {
 /// # Errors
 /// Refuses invalid budgets, occupied records, concurrent operators or failed durable publication.
 pub fn create_plan(root: &Path, wasm: &Path, input: PlanInput) -> Result<(String, Plan)> {
+    retain(root, wasm, input, None)
+}
+
+pub(crate) fn retain(
+    root: &Path,
+    wasm: &Path,
+    input: PlanInput,
+    deployment: Option<crate::DeploymentName>,
+) -> Result<(String, Plan)> {
     let bytes = store::read(wasm, artifact::MAX_WASM)?;
     let now = now()?;
     let plan = Plan {
-        version: 1,
+        version: if deployment.is_some() { 2 } else { 1 },
+        deployment,
         network: input.network,
         controller: input.controller,
         artifact: artifact::admit(&bytes)?,
@@ -105,6 +123,46 @@ pub fn create_plan(root: &Path, wasm: &Path, input: PlanInput) -> Result<(String
     };
     let id = plan.digest()?;
     let store = Store::open(root)?;
+    if let Some(name) = &plan.deployment {
+        // The journal lock spans lookup and publication, including an interrupted earlier plan.
+        let mut count = 0;
+        for entry in std::fs::read_dir(root).map_err(supplier)? {
+            let entry = entry.map_err(supplier)?;
+            let existing_id = entry.file_name().to_string_lossy().into_owned();
+            if existing_id.len() != 64
+                || !existing_id
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                continue;
+            }
+            count += 1;
+            if count > 128 {
+                return Err(Error::Invalid(
+                    "named planning inventory exceeds 128 operations".into(),
+                ));
+            }
+            let existing: Plan = store::json(&entry.path().join("plan.json"))?;
+            if existing.digest()? != existing_id {
+                return Err(Error::Invalid("retained plan digest mismatch".into()));
+            }
+            if existing.deployment.as_ref() == Some(name) {
+                let (existing, _) = load(&entry.path(), &existing_id)?;
+                if existing.network == plan.network
+                    && existing.controller == plan.controller
+                    && existing.artifact == plan.artifact
+                    && existing.creation_cycles == plan.creation_cycles
+                    && existing.target == plan.target
+                    && existing.previous_module == plan.previous_module
+                {
+                    return Ok((existing_id, existing));
+                }
+                return Err(Error::Blocked(format!(
+                    "named slot already belongs to operation {existing_id}; inspect its status instead of creating new authority"
+                )));
+            }
+        }
+    }
     let dir = store.operation(&id)?;
     ic_host_fs::durable::prepare_private_parents(&dir).map_err(supplier)?;
     store::put(&dir.join("module.wasm"), &bytes)?;

@@ -10,6 +10,7 @@ use std::borrow::Cow;
 fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     let time = crate::now().unwrap();
     let plan = Plan {
+        deployment: None,
         version: 1,
         network: Network::Local {
             url: "http://127.0.0.1:8000/".into(),

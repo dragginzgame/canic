@@ -379,6 +379,7 @@ dependencies = [
  "clap",
  "ic-host-fs",
  "ic-host-process",
+ "ic-host-text",
  "serde_json",
  "tiny_http",
  "tokio",
@@ -1385,6 +1386,15 @@ dependencies = [
  "ic-host-fs",
  "libc",
  "rustix",
+]
+
+[[package]]
+name = "ic-host-text"
+version = "0.75.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df16fad97f3e46454e45c55470326a0f8c3a39087ee50c95e20e118f8454ffc8"
+dependencies = [
+ "unicode-width",
 ]
 
 [[package]]

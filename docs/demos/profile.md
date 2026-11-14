@@ -22,7 +22,7 @@ v1-to-v2 upgrade with the same owner, name and user ID. Read it from this checko
 ```sh
 ./target/debug/canic-profile --entry bisqm-biaaa-aaaas-qhfeq-cai get 1
 ./target/debug/canic-profile --entry bisqm-biaaa-aaaas-qhfeq-cai check
-canic fleet --link bisqm-biaaa-aaaas-qhfeq-cai:4pkhu-oaaaa-aaaai-ra2ta-cai --open
+canic fleet show --app profile --fleet mainnet --link bisqm-biaaa-aaaas-qhfeq-cai:4pkhu-oaaaa-aaaai-ra2ta-cai --open
 ```
 
 The fleet opens in the normal desktop browser at **http://localhost:8787/**.
@@ -53,7 +53,7 @@ It also deploys the entry, tests controller-only binding and direct readiness
 checks, preserves the route across an entry upgrade, and retains the same route
 when the worker is unavailable. It exercises the native client and emits a fleet HTML snapshot under
 `target/profile/journey-*/fleet.html`. The local replica stops when the test ends.
-Serve that retained snapshot with `canic view target/profile/journey-N/fleet.html`
+Serve that retained snapshot with `canic fleet view target/profile/journey-N/fleet.html`
 (use the directory from your run), then open **http://localhost:8787/**.
 Keep the viewer running; Ctrl-C stops it. No editor HTML preview is required.
 
@@ -63,14 +63,14 @@ The worker has its own storage format. Create a new canister; it cannot be
 installed as an upgrade over the stateless Hello World canister.
 
 ```sh
-canic --json build --package canic-profile-worker > target/profile-build.json
-canic --json plan \
+canic artifact build --json --package canic-profile-worker > target/profile-build.json
+canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/profile-build.json)" \
   --network ic \
   --controller "$(./.tools/ic/bin/icp identity principal --identity canic-mainnet)" \
   --cycles 1000000000000 > target/profile-plan.json
 cat target/profile-plan.json
-canic --json apply "$(jq -r .operation target/profile-plan.json)" \
+canic fleet apply --no-config --json "$(jq -r .operation target/profile-plan.json)" \
   --identity canic-mainnet --icp-bin ./.tools/ic/bin/icp \
   > target/profile-receipt.json
 ```
@@ -90,7 +90,7 @@ profile_canister=$(jq -r .canister target/profile-receipt.json)
 ./target/debug/canic-profile --canister "$profile_canister" put 1 --name "My profile"
 ./target/debug/canic-profile --canister "$profile_canister" get 1
 ./target/debug/canic-profile --canister "$profile_canister" put 1 --revision 1 --name "Updated profile"
-canic fleet --open
+canic fleet show --no-config --open
 ```
 
 The client defaults to identity `canic-mainnet`, network `ic` and the prepared
@@ -112,9 +112,9 @@ normal certified request-status path. Passwords remain in its terminal prompt.
 Build the second executable, then use the existing Canic plan/apply path:
 
 ```sh
-canic --json build --package canic-profile-worker --features profile-v2 \
+canic artifact build --json --package canic-profile-worker --features profile-v2 \
   > target/profile-v2-build.json
-canic --json plan \
+canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/profile-v2-build.json)" \
   --network ic \
   --controller "$(jq -r .controller target/profile-receipt.json)" \
@@ -122,7 +122,7 @@ canic --json plan \
   --previous-module "$(jq -r .module_hash target/profile-receipt.json)" \
   > target/profile-upgrade-plan.json
 cat target/profile-upgrade-plan.json
-canic --json apply "$(jq -r .operation target/profile-upgrade-plan.json)" \
+canic fleet apply --no-config --json "$(jq -r .operation target/profile-upgrade-plan.json)" \
   --identity canic-mainnet --icp-bin ./.tools/ic/bin/icp \
   > target/profile-upgrade-receipt.json
 ./target/debug/canic-profile --canister "$profile_canister" info
@@ -139,14 +139,14 @@ Deploy the worker above first, then create the entry using another reviewed
 1T-cycle creation ceiling:
 
 ```sh
-canic --json build --package canic-profile-entry > target/profile-entry-build.json
-canic --json plan \
+canic artifact build --json --package canic-profile-entry > target/profile-entry-build.json
+canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/profile-entry-build.json)" \
   --network ic \
   --controller "$(jq -r .controller target/profile-receipt.json)" \
   --cycles 1000000000000 > target/profile-entry-plan.json
 cat target/profile-entry-plan.json
-canic --json apply "$(jq -r .operation target/profile-entry-plan.json)" \
+canic fleet apply --no-config --json "$(jq -r .operation target/profile-entry-plan.json)" \
   --identity canic-mainnet --icp-bin ./.tools/ic/bin/icp \
   > target/profile-entry-receipt.json
 profile_entry=$(jq -r .canister target/profile-entry-receipt.json)
@@ -154,7 +154,7 @@ profile_entry=$(jq -r .canister target/profile-entry-receipt.json)
 ./target/debug/canic-profile --entry "$profile_entry" route
 ./target/debug/canic-profile --entry "$profile_entry" check
 ./target/debug/canic-profile --entry "$profile_entry" get 1
-canic fleet --link "$profile_entry:$profile_canister" --open
+canic fleet show --no-config --link "$profile_entry:$profile_canister" --open
 ```
 
 The fleet command prints a localhost URL and stays running to serve it. Use
