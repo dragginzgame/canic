@@ -1,5 +1,121 @@
 # Changelog
 
+## [0.202.0] - 2026-11-14
+
+### ⬆️ Dependencies
+
+- Adopt IC Host FS, Process and Artifacts 0.78.0 in the product and direct
+  qualification dependencies. Text remains at its current independent 0.75.0
+  release. Testkit retains its own private Host 0.77 dependencies. No replacement
+  wrappers, command aliases or journal-format changes accompany this adoption.
+
+### ⚠️ Breaking changes
+
+- Host consumers must replace `Phase` imports with `ManagementPhase` and
+  `ManagedCreation` with `ManagedOwner`; no compatibility aliases remain.
+  Fleet projections add optional upgrade approval/report fields.
+- Upgrading Root or the profile manager migrates its stable payload to v2 within
+  the existing allocations. Older executables cannot read this payload; downgrade
+  is unsupported. Existing creation authority, keys and Wire messages are retained.
+
+### 👀 Live upgrade progress
+
+- `fleet show`, saved reports and localhost watch now show the planned Root
+  upgrade alongside creation. Reports must match the full retained approval and
+  exact network. Failed queries remain unknown; watching never signs, reconciles
+  or publishes a completion receipt.
+
+From a project with a retained child-upgrade plan, select its fleet. Both commands
+only observe; watch serves localhost until Ctrl-C without opening a browser:
+
+```sh
+canic fleet show --fleet mainnet
+canic fleet show --fleet mainnet --watch
+```
+
+Use `canic fleet status UPGRADE_OPERATION --fleet mainnet` for retained evidence;
+a live `Ready` report still requires the original apply to retain completion.
+
+### 🔎 Retained Root diagnostics
+
+- `fleet status` now shows Root dispatch counts, retained request evidence,
+  creation identity/refund, upgrade versions and failure reasons. Its next-step
+  guidance distinguishes pending work, receipt completion and owner recovery
+  review, without treating expiry or added cycles as renewed authority.
+
+For an existing operation, retain the same config and journal selection. These
+commands only read local evidence; JSON remains unchanged:
+
+```sh
+canic fleet status OPERATION --config starter/canic.json
+canic fleet status OPERATION --config starter/canic.json --json
+```
+
+Root maintenance/reconciliation still has no qualified CLI command. The status
+view explains this limit and never retries effects or opens a browser.
+
+### ✨ Root-owned child upgrade
+
+- Admit one in-place child upgrade through the existing fleet plan/apply/status
+  workflow. Bind the completed creation receipt, previous and replacement code,
+  Root authority and deadline. Preserve creation evidence and issue installation
+  at most once, including recovery after a lost callback.
+- Qualify persistent profile ownership/data, rejected application upgrades and
+  infrastructure maintenance. Migrate existing Root/manager payloads within their
+  original checked allocations; no directory rewrite or second storage owner.
+
+From a generated project with a completed child receipt and an upgrade-capable
+Root, edit the greeting and rebuild. Replace the uppercase placeholders with the
+receipt and reviewed Root values. Planning is local; apply changes the selected
+network. Repeat apply after scheduled dispatch to retain completion:
+
+```sh
+canic artifact build --package starter-app --output artifacts/app.wasm
+canic fleet plan --canister app --target CHILD_PRINCIPAL --previous-module PREVIOUS_SHA256 --root-module ROOT_SHA256 --controller OPERATOR_PRINCIPAL
+canic fleet status UPGRADE_OPERATION
+canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
+```
+
+The experimental Root has one permanent upgrade slot. Application persistence
+must be qualified by its own lifecycle. `fleet show` separates the Root's creation
+and upgrade reports from the operation's retained status. No
+mainnet deployment, publication or browser launch accompanies this increment.
+
+### 🧪 Qualification
+
+- Exercise the generated starter through public CLI Root bootstrap and child
+  deployment, resolving Root from its receipt without a configured ID. Deploy the
+  same app into two fleets; check separate journals, identities and observations,
+  exact replay, lost-reply recovery and refusal of cross-fleet apply before signing.
+
+From a generated project, choose an unused fleet name. These commands add local
+declarations only; the second fleet shares app definitions and deploys nothing:
+
+```sh
+canic fleet init second --network ic
+canic fleet list
+canic fleet canister list --fleet second
+```
+
+Use explicit `--fleet NAME` for subsequent deployment commands. See the
+[two-fleet walkthrough](docs/demos/root.md#reuse-the-app-in-another-fleet).
+
+### 🧹 Cleanup
+
+- Render app trees directly from app definitions, without selecting a fleet.
+  Keep generic route labels free of Profile-specific behaviour claims.
+- Separate Clap declarations from command execution and rename the Host phase
+  export to `ManagementPhase`, with no compatibility alias. Update stale starter
+  documentation; command syntax and retained deployment formats are unchanged.
+
+With this checkout's config, these commands inspect local declarations only;
+they make no network calls and open no browser:
+
+```sh
+canic app canister list --app profile
+canic fleet canister list --app profile --fleet mainnet
+```
+
 ## [0.201.0] - 2026-11-14
 
 ### ▶️ Try it

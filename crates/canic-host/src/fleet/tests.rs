@@ -91,7 +91,7 @@ fn root_operation(network: Network) -> FleetOperation {
             fleet: "demo".into(),
             canister: "app".into(),
         }),
-        Some(crate::ManagedCreation {
+        Some(crate::ManagedOwner {
             root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
             root_module: "01".repeat(32),
             execute_at_ns: crate::now().unwrap() + 600_000_000_000,
@@ -192,4 +192,160 @@ fn manager_observation_budget_includes_every_network_bound_owner() {
         select_managers(&[], &targets, &explicit),
         Err(Error::Invalid(_))
     ));
+}
+
+fn upgrade_operation(network: Network) -> FleetOperation {
+    let mut operation = root_operation(network);
+    let creation = operation.management.take().unwrap();
+    let child = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+    operation.canister = Some(child.into());
+    operation.upgrade = Some(canic_management_protocol::upgrade::Approval {
+        manager: creation.manager,
+        child: child.into(),
+        previous_module: creation.module_hash,
+        module_hash: [9; 32],
+        execute_at_ns: creation.execute_at_ns,
+        expires_at_ns: creation.expires_at_ns,
+    });
+    operation
+}
+
+#[test]
+fn upgrade_only_inventory_selects_roots_by_exact_network() {
+    let first = Network::Mainnet;
+    let second = Network::Local {
+        url: "http://localhost:8000".into(),
+        root_key: "ab".repeat(133),
+        routing_canister: "aaaaa-aa".into(),
+    };
+    let operations = [
+        upgrade_operation(first.clone()),
+        upgrade_operation(second.clone()),
+    ];
+    let targets = BTreeMap::from([
+        (
+            (
+                operations[0].network_id.clone(),
+                operations[0].management_owner().unwrap().into(),
+            ),
+            first,
+        ),
+        (
+            (
+                operations[1].network_id.clone(),
+                operations[1].management_owner().unwrap().into(),
+            ),
+            second,
+        ),
+    ]);
+    assert_eq!(
+        select_managers(&operations, &targets, &Default::default()).unwrap(),
+        targets
+    );
+    assert!(operations.iter().all(|op| op.management.is_none()));
+}
+
+#[test]
+fn upgrade_reports_must_match_the_entire_retained_approval() {
+    use canic_management_protocol::upgrade::{Phase, Status};
+    let operation = upgrade_operation(Network::Mainnet);
+    let expected = operation.upgrade.as_ref().unwrap();
+    assert!(check_upgrade_report(expected, &Status::default()).is_ok());
+    let matching = Status {
+        approval: Some(expected.clone()),
+        phase: Phase::Scheduled,
+        ..Default::default()
+    };
+    assert!(check_upgrade_report(expected, &matching).is_ok());
+    for field in 0..7 {
+        let mut changed = matching.clone();
+        let a = changed.approval.as_mut().unwrap();
+        match field {
+            0 => a.manager = a.child.clone(),
+            1 => a.child = a.manager.clone(),
+            2 => a.module_hash[0] ^= 1,
+            3 => a.previous_module[0] ^= 1,
+            4 => a.execute_at_ns += 1,
+            5 => a.expires_at_ns += 1,
+            _ => changed.approval = None,
+        }
+        assert!(
+            check_upgrade_report(expected, &changed).is_err(),
+            "field {field}"
+        );
+    }
+    assert!(!operation.receipt_retained);
+}
+
+#[test]
+fn upgrade_target_also_constrains_creation_report_inventory() {
+    let operation = upgrade_operation(Network::Mainnet);
+    let expected = operation.upgrade.as_ref().unwrap();
+    let manager = expected.manager.clone();
+    let network = operation.network_id.clone();
+    let mut report = canic_management_protocol::Status {
+        phase: canic_management_protocol::Phase::Ready,
+        worker: Some(expected.child.clone()),
+        approval: Some(canic_management_protocol::Approval {
+            manager: manager.clone(),
+            module_hash: expected.previous_module,
+            creation_cycles: canic_management_protocol::CREATION_CYCLES,
+            execute_at_ns: 1,
+            expires_at_ns: 2,
+        }),
+        ..Default::default()
+    };
+    let operations = [operation];
+    assert!(check_report(&operations, &network, &manager, &report).is_ok());
+    report.approval.as_mut().unwrap().module_hash = [8; 32];
+    assert!(check_report(&operations, &network, &manager, &report).is_err());
+    report.approval.as_mut().unwrap().module_hash =
+        operations[0].upgrade.as_ref().unwrap().previous_module;
+    report.worker = Some("r7inp-6aaaa-aaaaa-aaabq-cai".into());
+    assert!(check_report(&operations, &network, &manager, &report).is_err());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
+    let network = Network::Mainnet;
+    let operation = upgrade_operation(network.clone());
+    let root = operation.management_owner().unwrap().to_owned();
+    let id = operation.network_id.clone();
+    let future = tokio::time::Instant::now() + Duration::from_secs(5);
+    assert!(
+        observe_upgrade(&[], &id, &root, &network, future)
+            .await
+            .is_none()
+    );
+    let operations = [operation];
+    assert!(
+        observe_upgrade(&operations, "another-network", &root, &network, future)
+            .await
+            .is_none()
+    );
+    assert!(
+        observe_upgrade(&operations, &id, "another-root", &network, future)
+            .await
+            .is_none()
+    );
+    let before = serde_json::to_value(&operations).unwrap();
+    let expired = observe_upgrade(
+        &operations,
+        &id,
+        &root,
+        &network,
+        tokio::time::Instant::now(),
+    )
+    .await
+    .unwrap();
+    assert!(expired.reported.is_none());
+    assert!(expired.observation_error.is_some());
+    assert_eq!(serde_json::to_value(&operations).unwrap(), before);
+    let [operation] = operations;
+    let ambiguous = [operation, upgrade_operation(network.clone())];
+    let unknown = observe_upgrade(&ambiguous, &id, &root, &network, future)
+        .await
+        .unwrap();
+    assert!(unknown.reported.is_none());
+    assert!(unknown.observation_error.is_some());
 }

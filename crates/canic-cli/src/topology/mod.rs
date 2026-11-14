@@ -1,36 +1,34 @@
 //! Layout of the declared application tree, independent of controller observations.
 
-use canic_host::FleetConfig;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]
 mod tests;
 
 /// Slots and branch prefixes in stable parent-before-child order.
-pub(crate) fn rows(config: &FleetConfig) -> Vec<(&str, String)> {
+pub(crate) fn rows<'a>(
+    parents: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
+) -> Vec<(&'a str, String)> {
+    let parents: BTreeMap<_, _> = parents.into_iter().collect();
     let mut rows = Vec::new();
     let mut visited = BTreeSet::new();
-    for (slot, declaration) in &config.canisters {
-        if declaration
-            .parent
-            .as_ref()
-            .is_none_or(|parent| !config.canisters.contains_key(parent))
-        {
-            walk(config, slot, "", "", &mut visited, &mut rows);
+    for (slot, parent) in &parents {
+        if parent.is_none_or(|parent| !parents.contains_key(parent)) {
+            walk(&parents, slot, "", "", &mut visited, &mut rows);
         }
     }
     // Loaded configuration is validated. Keep malformed synthetic/partial snapshots
     // finite and visible rather than dropping an entire cycle from a report.
-    for slot in config.canisters.keys() {
-        if !visited.contains(slot.as_str()) {
-            walk(config, slot, "", "", &mut visited, &mut rows);
+    for slot in parents.keys() {
+        if !visited.contains(slot) {
+            walk(&parents, slot, "", "", &mut visited, &mut rows);
         }
     }
     rows
 }
 
 fn walk<'a>(
-    config: &'a FleetConfig,
+    parents: &BTreeMap<&'a str, Option<&'a str>>,
     slot: &'a str,
     prefix: &str,
     carry: &str,
@@ -41,16 +39,15 @@ fn walk<'a>(
         return;
     }
     rows.push((slot, prefix.into()));
-    let children: Vec<_> = config
-        .canisters
+    let children: Vec<_> = parents
         .iter()
-        .filter(|(_, child)| child.parent.as_deref() == Some(slot))
-        .map(|(name, _)| name.as_str())
+        .filter(|(_, parent)| **parent == Some(slot))
+        .map(|(name, _)| *name)
         .collect();
     for (index, child) in children.iter().enumerate() {
         let last = index + 1 == children.len();
         walk(
-            config,
+            parents,
             child,
             &format!("{carry}{}", if last { "└─ " } else { "├─ " }),
             &format!("{carry}{}", if last { "   " } else { "│  " }),

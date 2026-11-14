@@ -57,6 +57,15 @@ pub enum ApplyOutcome {
         /// Authenticated historical progress, not a completion receipt.
         status: Box<canic_management_protocol::Status>,
     },
+    /// Root retains a child upgrade; completion requires its authenticated evidence.
+    UpgradePending {
+        /// Retained operation digest.
+        operation: String,
+        /// Enduring management owner.
+        root: String,
+        /// Committed upgrade progress.
+        upgrade: Box<canic_management_protocol::upgrade::Status>,
+    },
 }
 
 fn create_call(plan: &Plan) -> Result<Call<'static>> {
@@ -323,10 +332,12 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
     } else {
         None
     };
-    let managed = if plan.management.is_some() {
-        crate::managed::evidence(&dir, &plan)?
+    let managed = if plan.management.is_some() && plan.target.is_some() {
+        serde_json::to_value(crate::managed::upgrade::evidence(&dir, &plan)?).map_err(supplier)?
+    } else if plan.management.is_some() {
+        serde_json::to_value(crate::managed::evidence(&dir, &plan)?).map_err(supplier)?
     } else {
-        None
+        serde_json::Value::Null
     };
     Ok(
         serde_json::json!({"operation": digest, "plan": plan, "effects": effects, "receipt": receipt, "management": managed}),

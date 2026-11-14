@@ -33,7 +33,15 @@ pub(super) fn render(
         })
     });
     let tree = configuration
-        .map(|config| crate::topology::rows(&config.config))
+        .map(|config| {
+            crate::topology::rows(
+                config
+                    .config
+                    .canisters
+                    .iter()
+                    .map(|(name, slot)| (name.as_str(), slot.parent.as_deref())),
+            )
+        })
         .unwrap_or_default();
     let mut canisters = canisters.to_vec();
     canisters.sort_by_cached_key(|target| {

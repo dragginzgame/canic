@@ -1,6 +1,8 @@
 # M0 first journey decisions and evidence
 
-Status: M0 in progress, 2026-11-14. The [architecture](canic-system-design.md)
+Status: working toward M2, 2026-11-14, with narrow M3 paths qualified. This
+record retains the initial M0 decisions alongside subsequent journey evidence;
+it does not declare the full milestone gates complete. The [architecture](canic-system-design.md)
 is accepted; local creation and direct-cycle funding commit-boundary experiments
 pass. The M1 CLI now exercises retained signed host attempts, deployment and
 same-canister upgrade locally. Mainnet creation, installation, greeting and the
@@ -16,6 +18,186 @@ This record contains scoped decisions and evidence, not a second implementation
 backlog. The first product is the [M1 Hello World loop](../../README.md), followed
 by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
+## 0.202.0 release scope and supplier review
+
+This release contains the completed one-child upgrade, live progress, retained
+failure diagnostics and CLI cleanup. Whole-fleet plan/apply, cascading discovery
+and CLI owner recovery remain the next M2 work; no partial fleet executor is
+added to meet a version deadline. The explicit finish line is in the
+[delivery plan](canic-system-design.md#16-delivery-plan-with-deletion-gates).
+
+Adopt published IC Host FS/Process/Artifacts 0.78.0 after reviewing the
+[Foundation release](https://github.com/dragginzgame/ic-tooling/blob/dcd7159e5cbb5df24d209c8ff4f8306f51a1b2cc/releases/foundation/CHANGELOG.md).
+Canic uses none of its removed APIs. Product FS/Process and direct qualification
+artifact inspection select 0.78; Testkit 0.104.1 retains private 0.77 dependencies.
+Those native types are not exchanged at Canic's artifact boundary. Text 0.75.0
+is current independently. The product graph drops `command-fds` and `nix`.
+
+The 2026-11-14 registry freshness review also found the locked Platform 0.33.2,
+Runtime 0.22.3, Storage 0.74.1, Timers 0.44.2, Wire 0.22.1 and Testkit 0.104.1
+current. Toko Tooling 0.43.1 is available; retain the verified 0.43.0 snapshot
+and defer that optional refresh to the next tooling-maintenance batch. The
+requested adoption is IC Host; no unresolved compatibility blocker is asserted.
+Existing Platform and Testkit lockfile updates are preserved and qualified with
+this release rather than attributed to the Host update.
+
+The full Linux `make ci` gate passed on this selected graph: native/Wasm Clippy,
+Rustdoc, formatting, tooling agreement, 52 Host tests, 37 CLI tests and all
+installed creation/funding/maintenance, artifact, deployment, profile, growth
+and Root journeys. The installed two-fleet CLI scenario passed in 17.97 seconds.
+Both explicitly selected retained-binary migration cases also passed (6.86
+seconds), using the previous Root and manager artifact hashes recorded below.
+Raw logs remain in `target/evidence/0.202.0/`. No macOS or mainnet qualification
+is implied by this Linux release gate. Crates.io publication remains disabled.
+
+## Retained Root failure diagnostics
+
+The CLI status projection now decodes the existing management Wire types to
+show dispatch counts, retained request-hash presence, child/refund custody,
+upgrade versions and failure reasons. Its direct dependency is the narrow
+management protocol, already present transitively; no runtime graph or external
+supplier is added. Host JSON, journal bytes, effect authority and recovery
+mechanics are unchanged. Unknown evidence remains distinct from zero or success.
+
+Reuse the pinned legacy progress renderer and tests described under
+[readable retained-operation status](#readable-retained-operation-status), at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, including the inspected
+`afc2521ed02744c1e1a376d59dae5e2b80d9dec5` history. Keep the unknown-readiness
+and exact-request-correlation invariants; no live progress engine is needed
+inside the local status renderer.
+
+Guidance separates observation, original-operation completion and owner recovery
+review. An issued effect is not retry permission. Expiry does not prove absence;
+reserve funding does not reset a consumed slot. Missing creation output remains
+unresolved, and Ready without a receipt still requires current metadata checks
+through apply. Owner maintenance/reconciliation has no qualified CLI command yet.
+This increment improves diagnosis; it does not close that execution gap.
+
+Validation passed: six focused CLI status tests, CLI and Root-fixture Clippy,
+formatting, Toko Tooling snapshot/dependency agreement and the installed two-fleet
+CLI scenario (17.93 seconds). The scenario checks human status before admission
+evidence, during scheduled work and after completion, with unchanged retained
+JSON before and after each read. The CLI was rebuilt with `make canic`; runtime
+code and stable payloads are unchanged by this diagnostic increment.
+
+## Read-only child-upgrade progress
+
+The next increment extends the existing fleet collector and terminal/HTML/watch
+projections. A retained upgrade plan selects its Root by exact network and
+principal. Only those owners receive `upgrade_status` queries; older or unrelated
+fleets without an upgrade plan receive none. A report must be empty before
+admission or match the full approved manager, child, old/new code and schedule.
+Missing, mismatched, ambiguous or timed-out reports remain unknown. Creation and
+upgrade share the existing five-second owner budget and thirty-second snapshot
+deadline; neither failure erases the other's available evidence.
+
+Reuse the pinned legacy component-operation/regression and progress-rendering
+research recorded below at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, including
+the inspected `4176ee97405185bf4780b5ada0f9206ead750313` and
+`aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f` path history. Preserve request/approval
+correlation, separate reported progress from completion custody, and keep reads
+out of the effect owner. No generic progress engine or second watcher is needed.
+
+Upgrade reports never add identities, change slot bindings or publish receipts.
+When an upgrade is the only retained operation, its child and previous code also
+constrain any creation report before that report can add a child to inventory.
+Native regressions cover all approval fields, exact-network selection, absent/
+exhausted/ambiguous observation, escaped errors and unknown upgrade presentation
+alongside available creation. The installed two-fleet CLI fixture observes Empty,
+Scheduled and Ready, proving that no admission, replicated observation or receipt
+is written by fleet viewing. Authenticated apply still settles completion.
+Validation passed: 52 Host and 34 CLI tests, focused native/Root-fixture Clippy,
+Host Rustdoc, formatting and the installed two-fleet CLI scenario (17.85 seconds).
+The CLI was rebuilt with `make canic`. Runtime code and stable payloads are
+unchanged by this observation increment, so its creation/upgrade fault fixtures
+were not rerun.
+
+The batch is named 0.202.0 because the earlier Host API renames and one-way
+runtime payload migration change consumer contracts. Release preparation follows
+the qualification above; the observation increment itself did not deploy any
+canisters. Existing dependency lockfile edits were preserved, with the later
+requested IC Host adoption qualified in the release gate.
+
+## First Root-owned child upgrade
+
+The next narrow journey admits one upgrade of the already-created child. It
+uses the existing CLI plan/apply/status and signed-attempt owner. The plan binds
+the creation receipt, child principal, old/new module hashes, Root code and
+operator, schedule and deadline. A separate permanent upgrade slot retains its
+own approval, two dispatch commitments and old/new canister versions. Creation
+authority, output identity and artifact bytes remain immutable. No slot reset,
+general workflow engine, automatic install retry or repeated-upgrade history is
+introduced. Application data preservation belongs to its lifecycle.
+
+Legacy research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` inspected:
+
+- [component operations](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_operation/ops/mod.rs)
+  and [regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/component_operation/tests.rs):
+  immutable review identity, intent before submission, drift refusal and retained uncertainty.
+- [installation workflow](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/runtime/install/mod.rs),
+  `crates/canic-core/src/ops/ic/mgmt/lifecycle.rs` and
+  `crates/canic-core/src/infra/ic/mgmt/lifecycle.rs`: exact approved bytes, target,
+  chunk store and permit boundary. That pinned install path selects Install;
+  it is not evidence of a working persistent child-upgrade flow.
+- [lifecycle boundary tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/tests/lifecycle_boundary.rs):
+  failed post-upgrade rollback, retained preparation and foreign-release refusal.
+  Carry forward the preservation invariant, without copying test retries or
+  byte-patched executable fixtures into the new effect owner.
+- Path history `aed32be2afbaf66d7e2867292da52f75ce028e41` moves installation
+  initialization from generic Candid values to explicitly encoded protocol bytes.
+  Keep exact encoding at the effect boundary; the narrow profile/greeting upgrade
+  needs no legacy release catalogue, permit engine or generic lifecycle participant.
+
+Dispatch first observes old code, sole Root control and child version. Upgrade
+intent and outgoing `install_chunked_code` enqueue share one local commit boundary.
+Successful callback evidence commits separately; later observation requires new
+code and exactly one version increment before readiness. If the callback is lost,
+controller reconciliation can reconstruct that outcome without another install.
+A rejected application post-upgrade leaves the old application usable while the
+upgrade slot remains blocked with one issued attempt. Host recovery uses only
+the matching replicated `observe_upgrade`; fresh read authority cannot dispatch
+effects or extend the original deadline.
+
+The first migration experiment rejected extra storage allocations: IC Storage
+0.74.1 intersects reopen limits with the directory capacity fixed at creation
+(`runtime/directory_model/persistence/mod.rs`). Increasing `StorageConfig` cannot
+expand that directory. The final layout retains the original two checked keys,
+three-extent capacity and 64-page bound. Versioned payloads pack both journals
+and both bounded artifacts inside them. Lifecycle strictly decodes/validates the
+old schema before committing the v2 payload; existing Wire messages are unchanged.
+There is no backing-directory rewrite, second owner or silent reinstall.
+Older binaries cannot read the new payload; downgrade is not qualified.
+
+Installed qualification covers normal profile upgrade, upload callback loss,
+pre-install dispatch trap, install callback loss and rejected application upgrade.
+Every path retains private profile ownership/data, original creation custody and
+at most one installation attempt. Owner maintenance preserves the upgrade journal.
+The CLI fixture replaces one greeting without affecting the second fleet, recovers
+a lost stage reply, retains both receipts and replays completion without signing.
+Native evidence checks reject missing version proof, changed request commitments,
+foreign child bindings and regressing observations.
+
+Migration also passes from retained Root SHA-256
+`691b6e1cfd14498be542ca98e8f4bf379c2912ebaada548c8c5b53f293ea5a08`
+after completed creation, and profile manager
+`4fd7e504d88e4f0139a834f3b27f8aa027edb9a6a861284669411a37f0b0d1c4`
+while scheduled. Reproduce with the two ignored `previous_` Root fixtures and
+`CANIC_PREVIOUS_ROOT` / `CANIC_PREVIOUS_MANAGER` naming those retained Wasm files.
+Both passed in 7.03 seconds. The normal growth plus upgrade boundary fixtures
+passed in 13.49 seconds; the manager uses 18 stable pages after creation.
+Final checks passed: 48 Host, 33 CLI and two management-protocol tests; both
+normal Root fixtures (15.92 seconds); focused native/Wasm and qualification
+Clippy, native/Wasm Rustdoc and repository formatting. `make canic` rebuilt the
+local executable. The two retained-binary migration checks ran explicitly,
+despite remaining opt-in/ignored in the ordinary Root target.
+
+At this stage the live Root report covered creation only; the read-only progress
+increment above adds separately matched upgrade reports. Recovery from engine callback traps
+is qualified through controller Wire calls and owner maintenance, with no CLI
+maintenance command yet. One successful upgrade is not an arbitrary migration,
+subtree operation, repeated-upgrade product or production persistence claim.
+No mainnet mutation or release accompanies this local increment.
+
 ## 0.201.0 release review
 
 The release review covers app-owned definitions versus fleet bindings, canister-only
@@ -25,11 +207,52 @@ assertion now checks the explicit uncertified Manager label.
 The installed Root CLI fixture pauses automatic simulator progress around manual
 time advancement, preventing its clock from racing the live gateway.
 
-One naming cleanup remains: `crates/canic-host/src/lib.rs` exports the shared
-management protocol's `Phase` as `ProfileGrowthPhase`, used by CLI renderers and
-their tests. Rename that export and its callers to a management-owned name in the
-next increment, without a compatibility alias. It does not pull the profile
-application protocol into Host or change persisted/wire evidence.
+The follow-up cleanup renames Host's phase export to `ManagementPhase` and updates
+all callers without a compatibility alias. App listings now feed app-owned names
+and parent links directly to the tree renderer; fleet views project those same
+links from their resolved snapshot. The layout helper no longer requires fleet
+selection, network bindings or controller data. Generic routes use source and
+destination labels, without assuming Profile behaviour or private-data ownership.
+Clap declarations and their argument conversion live in `args.rs`, separately
+from command execution; command names, selectors and help ordering are unchanged.
+
+This reuses the pinned legacy configuration/topology and CLI research below at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: preserve immediate parents, separate
+app definitions from fleet bindings, and reject ambiguous command context. The
+cleanup changes presentation and source ownership, not effect or persistence
+contracts. Existing tree, partial-inventory, route-admission and CLI-context
+regressions remain the relevant checks.
+Validation passed: all 33 CLI tests, Host/CLI Clippy, Host Rustdoc and repository
+formatting checks. No runtime engine changes required another simulator run.
+
+## CLI bootstrap and two-fleet qualification
+
+The installed starter fixture now creates Root through the same public plan/apply
+path used by operators. Previously it installed Root directly through PocketIC
+and configured its ID before testing the child. Only the local subnet routing
+canister remains fixture setup. The child now resolves its Root from the completed
+named receipt, and successful deployment leaves config identity bindings empty.
+The separate configured-Root authority-drift cases remain covered.
+
+Reuse the pinned Root-bootstrap and component-operation research below at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, plus the app/fleet configuration
+research: retain creation custody before using a parent output, reuse approved
+operations, and keep fleet membership distinct from shared app definitions.
+No new deployment owner, config format, command or lifecycle mechanism is added.
+
+The same generated app then deploys into a second fleet on the same local network.
+The fixture proves distinct Roots and children, separate default journals and
+observations, unchanged first-fleet evidence, and refusal of cross-fleet apply
+before signer invocation. Replanning and replay retain the original operations;
+the subnet contains exactly the routing canister and the four fleet canisters.
+Lost staging reply and completion receipt recovery remain in this installed path.
+
+Validation passed: focused Root-fixture Clippy and the installed CLI scenario
+`managed_child_cli_retains_admission_and_recovers_lost_reply` (14.20 seconds).
+The first sandbox attempt could not bind localhost; the permitted simulator run
+passed. This uses the unchanged generated-app and Root build artifacts, synthetic
+cycles and the rebuilt CLI. Mainnet deployment, persistent child upgrades and
+whole-fleet convergence are not qualified by this check.
 
 ## Read-only Root progress
 
@@ -210,8 +433,8 @@ binary. The shared protocol frame/budget regression moved with its owner.
 
 Root/management and affected native/Wasm callers passed Clippy; Root/management
 Rustdoc passed. No mainnet canister, signer, controller or balance was changed.
-Source generation, persistent application upgrades through Root and whole-fleet
-CLI convergence remain the next separate product outcomes. See the
+Source generation and managed-child CLI approval shipped in 0.201.0. Persistent
+application upgrades through Root and whole-fleet CLI convergence remain upcoming. See the
 [hands-on Root guide](../demos/root.md).
 
 ## Reusable app definition implementation

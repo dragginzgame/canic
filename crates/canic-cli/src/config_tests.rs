@@ -1,4 +1,5 @@
 use super::*;
+use clap::Parser as _;
 
 async fn json(args: &[&str]) -> serde_json::Value {
     let cli =
@@ -411,6 +412,30 @@ async fn canister_declarations_retain_roles_and_parents_without_effect_authority
         listed["configuration"]["config"]["canisters"],
         added["configuration"]["apps"]["profiles"]["canisters"]
     );
+    let app_list = Cli::try_parse_from([
+        "canic", "app", "canister", "list", "--app", "profiles", "--config", config,
+    ])
+    .unwrap();
+    let Output::Text(before) = run(&app_list).await.unwrap() else {
+        panic!("expected app tree");
+    };
+    assert!(before.contains("└─ child"));
+    json(&[
+        "fleet",
+        "init",
+        "another",
+        "--app",
+        "profiles",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    let Output::Text(after) = run(&app_list).await.unwrap() else {
+        panic!("expected app tree with multiple fleets");
+    };
+    assert_eq!(after, before);
     let bytes = std::fs::read(&path).unwrap();
     let cli = Cli::try_parse_from([
         "canic", "app", "canister", "add", "other", "--parent", "missing", "--app", "profiles",
@@ -1136,20 +1161,6 @@ fn commands_reject_context_they_do_not_use() {
             "app.wasm",
             "--controller",
             "2vxsx-fae",
-            "--canister",
-            "backend",
-            "--target",
-            "aaaaa-aa",
-            "--previous-module",
-            "00",
-        ],
-        vec![
-            "fleet",
-            "plan",
-            "--wasm",
-            "app.wasm",
-            "--controller",
-            "2vxsx-fae",
             "--target",
             "aaaaa-aa",
         ],
@@ -1170,16 +1181,6 @@ fn managed_planning_arguments_require_the_named_child_context() {
         vec!["--root-module", "00"],
         vec!["--execute-at", "123"],
         vec!["--canister", "app", "--root-module", "00", "--no-config"],
-        vec![
-            "--canister",
-            "app",
-            "--root-module",
-            "00",
-            "--target",
-            "aaaaa-aa",
-            "--previous-module",
-            "00",
-        ],
     ] {
         assert!(Cli::try_parse_from(base.into_iter().chain(args)).is_err());
     }
@@ -1191,6 +1192,19 @@ fn managed_planning_arguments_require_the_named_child_context() {
             "00",
             "--execute-at",
             "123"
+        ]))
+        .is_ok()
+    );
+    assert!(
+        Cli::try_parse_from(base.into_iter().chain([
+            "--canister",
+            "app",
+            "--root-module",
+            "00",
+            "--target",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
+            "--previous-module",
+            "01"
         ]))
         .is_ok()
     );

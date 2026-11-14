@@ -252,7 +252,9 @@ Lifecycle mounting and application readiness remain explicit in each canister.
 The CLI now generates a standalone greeting workspace whose artifact passes that
 same installed qualification. Managed-child CLI plan/apply now pins Root code,
 retains exact admission attempts and recovers completion through replicated
-observations. Child upgrades, whole-fleet convergence and subtree operations
+observations. One child upgrade is now locally qualified, including persistent
+application state and interrupted callbacks. Each Root has one permanent creation
+slot and one permanent upgrade slot; whole-fleet convergence and subtree operations
 remain unqualified. See the
 [managed-child evidence](m0-first-journey.md#managed-child-cli-approval).
 
@@ -787,6 +789,15 @@ Record accepted workload bounds before claiming scale: occupied subnets, physica
 These are implementation milestones after design acceptance, not a version allocation or authorization to release the old repository. Each is a coherent outcome with its own narrow checks and a team-usable result. Deliver runnable increments within milestones instead of withholding the CLI until the architecture is complete. M0 produces a concrete walkthrough and small executable provider experiments; M1 completes the first product deployment loop. Do not create a package or framework solely to prepare for a later milestone.
 
 The [M0 decision and evidence record](m0-first-journey.md) scopes the initial investigation. Section 17 governs admission: a later milestone names a possible delivery boundary, not permission to implement every integration with a documented owner.
+
+The first fleet CLI finish line is M2: initialize an app/fleet, build and review
+one plan for its declared tree, apply it, repeat with no unnecessary effects,
+inspect progress and recover supported interruptions through CLI commands,
+then upgrade while preserving the application's invariant. The same definition
+must serve a second isolated fleet. Current plan/apply operates on one canister;
+Root recovery still needs lower-level controller calls. These are remaining
+implementation requirements, not claims made by the existing command names.
+Subtree administration and optional scaling/sharding extend this boundary in M3.
 
 | Milestone | Deliverable | Completion and subtraction gate |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 //! Local declaration listings, independent of journals and live observations.
 use crate::Output;
-use canic_host::{Error, Network, Result};
+use canic_host::{Network, Result};
 use ic_host_text::table::{self, Alignment, Options};
 use std::path::Path;
 
@@ -17,26 +17,24 @@ pub(crate) fn app_canisters(path: &Path, app: Option<&str>, json: bool) -> Resul
             serde_json::json!({"scope":"local app definitions only", "config_path":path, "app":app, "canisters":definition.canisters}),
         ));
     }
-    // Any fleet resolves the same app-owned topology; no identity is displayed here.
-    let fleet = definition
-        .fleets
-        .first_key_value()
-        .ok_or_else(|| Error::Invalid("app has no fleets".into()))?
-        .0;
-    let selected = config.select(Some(app), Some(fleet))?;
-    let rows: Vec<_> = crate::topology::rows(&selected.config)
-        .into_iter()
-        .map(|(name, prefix)| {
-            let item = &definition.canisters[name];
-            [
-                format!("{prefix}{name}"),
-                item.role.clone().unwrap_or_else(|| "—".into()),
-                item.wasm
-                    .as_ref()
-                    .map_or_else(|| "—".into(), |path| path.display().to_string()),
-            ]
-        })
-        .collect();
+    let rows: Vec<_> = crate::topology::rows(
+        definition
+            .canisters
+            .iter()
+            .map(|(name, slot)| (name.as_str(), slot.parent.as_deref())),
+    )
+    .into_iter()
+    .map(|(name, prefix)| {
+        let item = &definition.canisters[name];
+        [
+            format!("{prefix}{name}"),
+            item.role.clone().unwrap_or_else(|| "—".into()),
+            item.wasm
+                .as_ref()
+                .map_or_else(|| "—".into(), |path| path.display().to_string()),
+        ]
+    })
+    .collect();
     let table = table::render(
         &["CANISTER", "ROLE", "WASM INPUT"],
         &rows,
@@ -64,17 +62,23 @@ pub(crate) fn canisters(
             "{title}\n\nNo canisters defined.\n\n"
         )));
     }
-    let rows: Vec<_> = crate::topology::rows(&selected.config)
-        .into_iter()
-        .map(|(slot, prefix)| {
-            let config = &selected.config.canisters[slot];
-            [
-                format!("{prefix}{slot}"),
-                config.role.clone().unwrap_or_else(|| "—".into()),
-                config.id.clone().unwrap_or_else(|| "—".into()),
-            ]
-        })
-        .collect();
+    let rows: Vec<_> = crate::topology::rows(
+        selected
+            .config
+            .canisters
+            .iter()
+            .map(|(name, slot)| (name.as_str(), slot.parent.as_deref())),
+    )
+    .into_iter()
+    .map(|(slot, prefix)| {
+        let config = &selected.config.canisters[slot];
+        [
+            format!("{prefix}{slot}"),
+            config.role.clone().unwrap_or_else(|| "—".into()),
+            config.id.clone().unwrap_or_else(|| "—".into()),
+        ]
+    })
+    .collect();
     let table = table::render(
         &["CANISTER", "ROLE", "PRINCIPAL"],
         &rows,

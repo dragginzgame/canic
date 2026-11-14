@@ -5,6 +5,8 @@ mod tests;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+pub mod upgrade;
+
 /// Admit one immutable approval with its artifact bytes.
 pub const STAGE: u64 = 20;
 /// Read a small evidence projection without artifact bytes.

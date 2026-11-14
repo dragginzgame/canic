@@ -161,7 +161,7 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
 #[tokio::test]
 async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     let (_, mut plan, mut call) = fixture_expiry(false);
-    plan.management = Some(crate::ManagedCreation {
+    plan.management = Some(crate::ManagedOwner {
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
@@ -171,7 +171,17 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     call.effective = call.canister;
     let agent = plan.network.agent().unwrap();
     let dir = crate::tests::directory();
-    for method in ["stage", "reconcile", "install_code"] {
+    for (upgrade, method) in [
+        (false, "stage"),
+        (false, "reconcile"),
+        (false, "install_code"),
+        (false, "observe_upgrade"),
+        (true, "stage_upgrade"),
+        (true, "reconcile_upgrade"),
+        (true, "install_chunked_code"),
+        (true, "observe"),
+    ] {
+        plan.target = upgrade.then(|| "ryjl3-tyaaa-aaaaa-aaaba-cai".into());
         call.method = method;
         assert!(matches!(
             super::observe(
@@ -186,7 +196,8 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
             Err(Error::Invalid(_))
         ));
     }
-    call.method = "observe";
+    // Even the correct read method cannot use arbitrary payload bytes.
+    call.method = "observe_upgrade";
     assert!(matches!(
         super::observe(
             &dir,

@@ -33,15 +33,15 @@ pub struct Plan {
     /// Optional named slot; absent in legacy v1 plans, required in v2 plans.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deployment: Option<crate::DeploymentName>,
-    /// Explicit Root-owned creation; absent plans retain their original encoding and digest.
+    /// Explicit Root-owned creation or upgrade; absent bindings retain their original encoding.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub management: Option<ManagedCreation>,
+    pub management: Option<ManagedOwner>,
 }
 
 /// Exact enduring effect owner for a single approved child.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct ManagedCreation {
+pub struct ManagedOwner {
     /// Root principal, resolved from the selected parent slot.
     pub root: String,
     /// Exact reviewed Root executable hash, checked before admission and observation.
@@ -90,10 +90,17 @@ impl Plan {
         }
         if let Some(managed) = &self.management {
             let root = principal(&managed.root)?;
+            let kind_valid = match (&self.target, &self.previous_module) {
+                (None, None) => self.creation_cycles == canic_management_protocol::CREATION_CYCLES,
+                (Some(child), Some(previous)) => {
+                    self.creation_cycles == 0
+                        && previous != &self.artifact.sha256
+                        && principal(child)? != root
+                }
+                _ => false,
+            };
             if self.version != 2
-                || self.target.is_some()
-                || self.previous_module.is_some()
-                || self.creation_cycles != canic_management_protocol::CREATION_CYCLES
+                || !kind_valid
                 || self.artifact.bytes > canic_management_protocol::MAX_WASM
                 || crate::unhex(&managed.root_module)?.len() != 32
                 || root == principal("aaaaa-aa")?
@@ -145,7 +152,7 @@ pub(crate) fn retain(
     wasm: &Path,
     input: PlanInput,
     deployment: Option<crate::DeploymentName>,
-    management: Option<ManagedCreation>,
+    management: Option<ManagedOwner>,
 ) -> Result<(String, Plan)> {
     let bytes = store::read(wasm, artifact::MAX_WASM)?;
     let now = now()?;
@@ -207,6 +214,18 @@ pub(crate) fn retain(
             }
             if existing.deployment.as_ref() == Some(name) {
                 let (existing, _) = load(&entry.path(), &existing_id)?;
+                // Creation and the first child upgrade retain separate approvals.
+                // Never overwrite either; subsequent upgrades still hit the occupied slot.
+                if existing.network == plan.network
+                    && existing
+                        .management
+                        .as_ref()
+                        .zip(plan.management.as_ref())
+                        .is_some_and(|(old, new)| old.root == new.root)
+                    && existing.target.is_some() != plan.target.is_some()
+                {
+                    continue;
+                }
                 if existing.network == plan.network
                     && existing.controller == plan.controller
                     && existing.artifact == plan.artifact

@@ -41,6 +41,20 @@ pub struct FleetManager {
     pub reported: Option<canic_management_protocol::Status>,
     /// Observation failure, never interpreted as an empty slot.
     pub observation_error: Option<String>,
+    /// Upgrade report only when a retained plan selects this owner and network.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upgrade: Option<FleetUpgrade>,
+}
+
+/// Public progress matched to a retained upgrade plan; never completion custody.
+#[derive(Debug, Serialize)]
+pub struct FleetUpgrade {
+    /// Digest of the local upgrade operation being observed.
+    pub operation: String,
+    /// Uncertified report, admitted only if its approval matches the selected plan.
+    pub reported: Option<canic_management_protocol::upgrade::Status>,
+    /// Unavailable or mismatched reports remain unknown, never empty or complete.
+    pub observation_error: Option<String>,
 }
 
 /// One admitted operation's public observation projection, excluding signed requests.
@@ -49,6 +63,9 @@ pub struct FleetOperation {
     /// Exact planned Root-owned work, used only to select and check read-only reports.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub management: Option<canic_management_protocol::Approval>,
+    /// Exact planned child upgrade; separate from historical creation authority.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upgrade: Option<canic_management_protocol::upgrade::Approval>,
     /// Names committed in the approved plan, if created through a fleet configuration.
     pub deployment: Option<crate::DeploymentName>,
     /// Digest of the original approved plan.
@@ -69,6 +86,17 @@ pub struct FleetOperation {
     pub receipt_retained: bool,
     /// Whether this plan's original admission deadline has passed.
     pub approval_expired: bool,
+}
+
+impl FleetOperation {
+    /// Enduring owner explicitly named by creation or upgrade authority.
+    #[must_use]
+    pub fn management_owner(&self) -> Option<&str> {
+        self.management
+            .as_ref()
+            .map(|a| a.manager.as_str())
+            .or_else(|| self.upgrade.as_ref().map(|a| a.manager.as_str()))
+    }
 }
 
 /// One canister's current certified management metadata, or an explicit unknown observation.
@@ -107,10 +135,10 @@ pub(crate) fn local_operation(
     let receipt: Option<Receipt> =
         serde_json::from_value(state["receipt"].clone()).map_err(supplier)?;
     let dir = root.join(id);
-    let canister = if plan.management.is_some() {
-        crate::managed::evidence(&dir, &plan)?.and_then(|status| status.worker)
-    } else if let Some(target) = &plan.target {
+    let canister = if let Some(target) = &plan.target {
         Some(target.clone())
+    } else if plan.management.is_some() {
+        crate::managed::evidence(&dir, &plan)?.and_then(|status| status.worker)
     } else if dir
         .join("create/reply.bin")
         .try_exists()
@@ -141,9 +169,16 @@ pub(crate) fn local_operation(
     let approved_controller = plan.application_controller().to_owned();
     Ok((
         FleetOperation {
+            upgrade: plan
+                .management
+                .as_ref()
+                .filter(|_| plan.target.is_some())
+                .map(|_| crate::managed::upgrade::approval(&plan))
+                .transpose()?,
             management: plan
                 .management
                 .as_ref()
+                .filter(|_| plan.target.is_none())
                 .map(|_| crate::managed::approval(&plan))
                 .transpose()?,
             deployment: plan.deployment,
@@ -188,8 +223,8 @@ fn select_managers(
 ) -> Result<BTreeMap<(String, String), Network>> {
     let mut selected = BTreeMap::new();
     for operation in operations {
-        if let Some(approval) = &operation.management {
-            let key = (operation.network_id.clone(), approval.manager.clone());
+        if let Some(manager) = operation.management_owner() {
+            let key = (operation.network_id.clone(), manager.to_owned());
             let network = targets
                 .get(&key)
                 .ok_or_else(|| Error::Invalid("planned Root has no network binding".into()))?;
@@ -250,6 +285,22 @@ fn check_report(
     {
         return Err(Error::Invalid("Root report differs from retained child approval; reported child not admitted to inventory".into()));
     }
+    if !empty
+        && operations
+            .iter()
+            .filter(|operation| operation.network_id == network_id)
+            .filter_map(|operation| operation.upgrade.as_ref())
+            .filter(|approval| approval.manager == manager)
+            .any(|approval| {
+                report.worker.as_ref() != Some(&approval.child)
+                    || report
+                        .approval
+                        .as_ref()
+                        .is_none_or(|creation| creation.module_hash != approval.previous_module)
+            })
+    {
+        return Err(Error::Invalid("Root creation report differs from retained upgrade target; reported child not admitted to inventory".into()));
+    }
     if let Some(child) = &report.worker {
         let child = network::principal(child)?;
         if child == network::principal(manager)?
@@ -262,6 +313,82 @@ fn check_report(
         }
     }
     Ok(())
+}
+
+fn check_upgrade_report(
+    expected: &canic_management_protocol::upgrade::Approval,
+    report: &canic_management_protocol::upgrade::Status,
+) -> Result<()> {
+    if report != &Default::default() && report.approval.as_ref() != Some(expected) {
+        return Err(Error::Invalid(
+            "Root upgrade report differs from retained approval".into(),
+        ));
+    }
+    Ok(())
+}
+
+async fn observe_upgrade(
+    operations: &[FleetOperation],
+    network_id: &str,
+    manager: &str,
+    network: &Network,
+    deadline: tokio::time::Instant,
+) -> Option<FleetUpgrade> {
+    let mut matching = operations.iter().filter_map(|operation| {
+        operation
+            .upgrade
+            .as_ref()
+            .filter(|approval| operation.network_id == network_id && approval.manager == manager)
+            .map(|approval| (operation, approval))
+    });
+    // Older managers and unrelated fleets receive no speculative upgrade query.
+    let (operation, approval) = matching.next()?;
+    let result = if matching.next().is_some() {
+        Err(Error::Invalid(
+            "multiple retained upgrades select this Root; no upgrade queried".into(),
+        ))
+    } else if tokio::time::Instant::now() >= deadline {
+        Err(Error::Blocked(
+            "manager observation budget exhausted; upgrade not observed".into(),
+        ))
+    } else {
+        tokio::time::timeout_at(deadline, async {
+            let agent = network.agent()?;
+            let bytes = ic_wire::native::encode_request(
+                canic_management_protocol::upgrade::STATUS,
+                &(),
+                canic_management_protocol::LIMITS,
+            )
+            .map_err(supplier)?;
+            let response = agent
+                .query(&manager.parse().map_err(supplier)?, "upgrade_status")
+                .with_arg(bytes)
+                .call()
+                .await
+                .map_err(supplier)?;
+            let report = ic_wire::native::decode_response(
+                canic_management_protocol::upgrade::STATUS,
+                &response,
+                canic_management_protocol::LIMITS,
+            )
+            .map_err(supplier)?;
+            check_upgrade_report(approval, &report)?;
+            Ok(report)
+        })
+        .await
+        .map_err(|_| Error::Blocked("upgrade observation timed out".into()))
+        .and_then(|value| value)
+    };
+    let (reported, observation_error) = match result {
+        Ok(report) => (Some(report), None),
+        Err(error) => (None, Some(error.to_string().chars().take(500).collect())),
+    };
+    // Public upgrade reports never add identities or mutate operation custody.
+    Some(FleetUpgrade {
+        operation: operation.operation.clone(),
+        reported,
+        observation_error,
+    })
 }
 
 pub(crate) struct Inventory {
@@ -375,9 +502,9 @@ pub async fn fleet_with_config(
                 issues.push(format!("{id}: retained deployment network differs from fleet configuration; original evidence is preserved"));
             }
         }
-        if let Some(approval) = &operation.management {
+        if let Some(manager) = operation.management_owner() {
             targets.insert(
-                (operation.network_id.clone(), approval.manager.clone()),
+                (operation.network_id.clone(), manager.to_owned()),
                 network.clone(),
             );
         }
@@ -415,7 +542,9 @@ pub async fn fleet_with_config(
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     let mut managers = Vec::new();
     for ((network_id, manager), network) in selected {
-        let budget = deadline
+        // Creation and upgrade share this owner's existing five-second budget.
+        let owner_deadline = deadline.min(tokio::time::Instant::now() + Duration::from_secs(5));
+        let budget = owner_deadline
             .saturating_duration_since(tokio::time::Instant::now())
             .min(Duration::from_secs(5));
         let report = tokio::time::timeout(budget, async {
@@ -447,17 +576,20 @@ pub async fn fleet_with_config(
         let (reported, observation_error) = match report {
             Ok(report) => {
                 if let Some(child) = &report.worker {
-                    targets.insert((network_id.clone(), child.clone()), network);
+                    targets.insert((network_id.clone(), child.clone()), network.clone());
                 }
                 (Some(report), None)
             }
             Err(error) => (None, Some(error.to_string().chars().take(500).collect())),
         };
+        let upgrade =
+            observe_upgrade(&operations, &network_id, &manager, &network, owner_deadline).await;
         managers.push(FleetManager {
             network_id,
             manager,
             reported,
             observation_error,
+            upgrade,
         });
     }
     let mut canisters = Vec::new();

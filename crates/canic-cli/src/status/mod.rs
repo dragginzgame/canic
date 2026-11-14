@@ -12,6 +12,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+mod management;
 #[cfg(test)]
 mod tests;
 
@@ -51,7 +52,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        if plan.management.is_some() { "Root creates and installs its child" } else if plan.target.is_some() { "upgrade existing canister" } else { "create and install canister" },
+        if plan.management.is_some() && plan.target.is_some() { "Root upgrades its existing child" } else if plan.management.is_some() { "Root creates and installs its child" } else if plan.target.is_some() { "upgrade existing canister" } else { "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
@@ -72,10 +73,11 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             owner.execute_at_ns / 1_000_000_000
         )
         .expect("writing to String");
-        if let Some(phase) = state["management"]["phase"].as_str() {
-            writeln!(output, "Retained Root phase: {}", terminal_text(phase))
-                .expect("writing to String");
-        }
+        output.push_str(&management::render(
+            &state["management"],
+            plan.target.is_some(),
+            receipt.is_some(),
+        )?);
     }
     if let Some(target) = &plan.target {
         writeln!(output, "Upgrade target: {}", terminal_text(target)).expect("writing to String");

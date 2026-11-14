@@ -118,7 +118,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             .expect("writing to String");
         }
         if let Some(status) = &manager.reported {
-            writeln!(output, " — {:?}", status.phase).expect("writing to String");
+            writeln!(output, " — creation {:?}", status.phase).expect("writing to String");
             if details {
                 writeln!(
                     output,
@@ -130,7 +130,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 )
                 .expect("writing to String");
             }
-            if status.phase == canic_host::ProfileGrowthPhase::CreateIssued {
+            if status.phase == canic_host::ManagementPhase::CreateIssued {
                 output.push_str("  Creation unresolved; no second creation is authorized.\n");
             }
             if let Some(failure) = &status.failure {
@@ -141,6 +141,48 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         }
         if let Some(error) = &manager.observation_error {
             writeln!(output, "  Observation: {}", terminal_text(error)).expect("writing to String");
+        }
+        if let Some(upgrade) = &manager.upgrade {
+            if let Some(status) = &upgrade.reported {
+                let phase = if status.approval.is_none() {
+                    "not admitted".into()
+                } else {
+                    format!("{:?}", status.phase)
+                };
+                writeln!(output, "  Upgrade: {phase}").expect("writing to String");
+                if details {
+                    writeln!(
+                        output,
+                        "  Upload/install attempts: {}/{}; version: {} → {}",
+                        status.attempts[0],
+                        status.attempts[1],
+                        status
+                            .previous_version
+                            .map_or_else(|| "unknown".into(), |v| v.to_string()),
+                        status
+                            .observed_version
+                            .map_or_else(|| "unknown".into(), |v| v.to_string())
+                    )
+                    .expect("writing to String");
+                }
+                if let Some(failure) = &status.failure {
+                    writeln!(output, "  Upgrade failure: {failure:?}").expect("writing to String");
+                }
+            } else {
+                output.push_str("  Upgrade: UNKNOWN\n");
+            }
+            if let Some(error) = &upgrade.observation_error {
+                writeln!(output, "  Upgrade observation: {}", terminal_text(error))
+                    .expect("writing to String");
+            }
+            if details {
+                writeln!(
+                    output,
+                    "  Upgrade operation: {}",
+                    terminal_text(&upgrade.operation)
+                )
+                .expect("writing to String");
+            }
         }
     }
     if let Some(wallet) = &snapshot.wallet {

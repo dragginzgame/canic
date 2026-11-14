@@ -14,6 +14,8 @@ cargo fmt --all --manifest-path "$scratch/project/Cargo.toml" -- --check
 cargo clippy --locked --manifest-path "$scratch/project/Cargo.toml" --target wasm32-unknown-unknown -- -D warnings
 "$cli" artifact build --json --manifest "$scratch/project/Cargo.toml" --package starter-app --output "$scratch/project/artifacts/app.wasm" > target/root/app.json
 cp -- "$(jq -r .wasm target/root/app.json)" target/root/app.wasm
+"$cli" artifact build --json --package canic-hello --features greeting-v2 > target/root/app-v2.json
+cp -- "$(jq -r .wasm target/root/app-v2.json)" target/root/app-v2.wasm
 "$cli" artifact build --json --package canic-root --output "$scratch/project/artifacts/root.wasm" > target/root/root.json
 cp -- "$(jq -r .wasm target/root/root.json)" target/root/root.wasm
 "$cli" artifact build --json --package canic-root --features maintenance-candidate > target/root/maintenance.json

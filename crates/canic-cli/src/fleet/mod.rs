@@ -21,10 +21,7 @@ fn escape(value: &str) -> String {
 fn manager_kind(snapshot: &Fleet, manager: &canic_host::FleetManager) -> &'static str {
     let planned_root = snapshot.operations.iter().any(|operation| {
         operation.network_id == manager.network_id
-            && operation
-                .management
-                .as_ref()
-                .is_some_and(|approval| approval.manager == manager.manager)
+            && operation.management_owner() == Some(manager.manager.as_str())
     });
     let declared_root = snapshot.configuration.as_ref().is_some_and(|config| {
         config.config.network.binding_id().ok().as_deref() == Some(&manager.network_id)
@@ -68,7 +65,7 @@ fn declared_routes(snapshot: &Fleet, links: &[String]) -> Result<String> {
         if candidates.len() != 1 {
             return Err(Error::Invalid("declared route requires two distinct known targets on one unambiguous network; select a smaller state directory".into()));
         }
-        write!(html, "<article><span class=badge>Declared · not verified</span><p>{}</p><div class=topology><span class=label>Profile entry</span><code>{}</code><span class=arrow>↓ discovers / checks</span><span class=label>Profile worker · owns private data</span><code>{}</code></div></article>", escape(&candidates[0].network), escape(entry), escape(worker)).expect("writing to a String");
+        write!(html, "<article><span class=badge>Declared · not verified</span><p>{}</p><div class=topology><span class=label>Source canister</span><code>{}</code><span class=arrow>↓ declared route</span><span class=label>Destination canister</span><code>{}</code></div></article>", escape(&candidates[0].network), escape(entry), escape(worker)).expect("writing to a String");
     }
     html.push_str("</div>");
     Ok(html)
@@ -85,11 +82,17 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
         write!(html, "<h2>App: {}</h2><h3>Fleet: {}</h3><p>Local declarations; deployment evidence is shown separately.</p><p>Configured network: {}</p>", escape(&config.app), escape(&config.fleet), escape(&configured_network(config))).expect("writing to String");
         if config.config.canisters.is_empty() {
             html.push_str(
-                "<p>No canisters declared yet. Add slots to this fleet before planning.</p>",
+                "<p>No canisters declared yet. Add canister definitions to this app before planning.</p>",
             );
         }
         html.push_str("<ul>");
-        for (slot, prefix) in crate::topology::rows(&config.config) {
+        for (slot, prefix) in crate::topology::rows(
+            config
+                .config
+                .canisters
+                .iter()
+                .map(|(name, slot)| (name.as_str(), slot.parent.as_deref())),
+        ) {
             write!(
                 html,
                 "<li><strong style=\"white-space:pre\">{}{}</strong> · role: {} · {}</li>",
@@ -163,8 +166,8 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
             )
             .expect("writing to String");
             if let Some(status) = &manager.reported {
-                write!(html, "<p>Phase: <strong>{:?}</strong></p><p>Create / upload / install attempts: {} / {} / {}</p><div class=topology><code>{}</code><span class=arrow>↓ reports child</span><code>{}</code></div>", status.phase, status.attempts[0], status.attempts[1], status.attempts[2], escape(&manager.manager), escape(status.worker.as_deref().unwrap_or("No reported principal"))).expect("writing to String");
-                if status.phase == canic_host::ProfileGrowthPhase::CreateIssued {
+                write!(html, "<p>Creation phase: <strong>{:?}</strong></p><p>Create / upload / install attempts: {} / {} / {}</p><div class=topology><code>{}</code><span class=arrow>↓ reports child</span><code>{}</code></div>", status.phase, status.attempts[0], status.attempts[1], status.attempts[2], escape(&manager.manager), escape(status.worker.as_deref().unwrap_or("No reported principal"))).expect("writing to String");
+                if status.phase == canic_host::ManagementPhase::CreateIssued {
                     html.push_str("<p class=warning>Creation outcome unresolved. The original 1T attachment remains uncertain unless a correlated refund is retained. No second creation is authorized.</p>");
                 }
                 if let Some(error) = &status.failure {
@@ -173,6 +176,32 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
             }
             if let Some(error) = &manager.observation_error {
                 write!(html, "<p class=warning>{}</p>", escape(error)).expect("writing to String");
+            }
+            if let Some(upgrade) = &manager.upgrade {
+                if let Some(status) = &upgrade.reported {
+                    let phase = if status.approval.is_none() {
+                        "not admitted".into()
+                    } else {
+                        format!("{:?}", status.phase)
+                    };
+                    write!(html, "<p>Upgrade phase: <strong>{phase}</strong></p><p>Upload / install attempts: {} / {}</p>", status.attempts[0], status.attempts[1]).expect("writing to String");
+                    if let Some(failure) = &status.failure {
+                        write!(html, "<p class=warning>Upgrade failure: {failure:?}</p>")
+                            .expect("writing to String");
+                    }
+                } else {
+                    html.push_str("<p>Upgrade phase: <strong>UNKNOWN</strong></p>");
+                }
+                if let Some(error) = &upgrade.observation_error {
+                    write!(html, "<p class=warning>{}</p>", escape(error))
+                        .expect("writing to String");
+                }
+                write!(
+                    html,
+                    "<details><summary>Upgrade operation</summary><code>{}</code></details>",
+                    escape(&upgrade.operation)
+                )
+                .expect("writing to String");
             }
             html.push_str("</article>");
         }

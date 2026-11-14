@@ -28,6 +28,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
         scope: "test",
         canisters: vec![],
         operations: vec![FleetOperation {
+            upgrade: None,
             management: None,
             deployment: Some(DeploymentName {
                 app: "app".into(),
@@ -120,13 +121,14 @@ fn report_escapes_untrusted_text_and_labels_partial_inventory() {
         wallet: None,
     };
     snapshot.managers.push(canic_host::FleetManager {
+        upgrade: None,
         network_id: "local".into(),
         manager: "manager<script>".into(),
         reported: Some(Default::default()),
         observation_error: Some("<bad provider>".into()),
     });
     let status = snapshot.managers[0].reported.as_mut().unwrap();
-    status.phase = canic_host::ProfileGrowthPhase::CreateIssued;
+    status.phase = canic_host::ManagementPhase::CreateIssued;
     status.attempts = [1, 0, 0];
     snapshot.wallet = Some(canic_host::Wallet {
         principal: "owner<script>".into(),
@@ -196,6 +198,10 @@ fn declared_routes_require_unambiguous_known_network_and_escape_text() {
     }
     let html = declared_routes(&snapshot, std::slice::from_ref(&link)).unwrap();
     assert!(html.contains("Declared · not verified"));
+    assert!(html.contains("Source canister"));
+    assert!(html.contains("Destination canister"));
+    assert!(!html.contains("Profile"));
+    assert!(!html.contains("owns private data"));
     assert!(html.contains("entry&lt;script&gt;"));
     assert!(!html.contains("entry<script>"));
     snapshot.canisters[1].network_id = "network-b".into();

@@ -10,6 +10,12 @@ cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "
 client=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-profile") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected client") end' "$records")
 "$cli" artifact build --json --package canic-profile-worker > target/growth/worker.json
 cp -- "$(jq -r .wasm target/growth/worker.json)" target/growth/worker.wasm
+for variant in v2 reject; do
+    feature=profile-v2
+    if [[ "$variant" == reject ]]; then feature=reject-upgrade; fi
+    "$cli" artifact build --json --package canic-profile-worker --features "$feature" > "target/growth/worker-$variant.json"
+    cp -- "$(jq -r .wasm "target/growth/worker-$variant.json")" "target/growth/worker-$variant.wasm"
+done
 for variant in manager faults maintenance; do
     features=()
     case "$variant" in

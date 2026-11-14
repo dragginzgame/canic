@@ -72,5 +72,32 @@ and watching consumes no signed observation attempts.
 
 Root must retain the approved code and sole operator controller. Its child has
 Root as its sole controller. Pending admission is not a completion receipt.
-Keep the config and its .canic journal; do not delete attempts to retry. Whole-fleet
-convergence, child upgrades and subtree operations remain future work.
+Keep the config and its .canic journal; do not delete attempts to retry.
+
+## First application upgrade
+
+After the child has a completion receipt, edit the greeting and rebuild its
+app-defined artifact. Copy CHILD_PRINCIPAL and PREVIOUS_SHA256 from that receipt.
+Root must already run the upgrade-capable executable inspected above. Planning
+is local; apply admits an in-place upgrade on the selected network:
+
+```sh
+canic artifact build --package starter-app --output artifacts/app.wasm
+canic fleet plan --canister app --target CHILD_PRINCIPAL --previous-module PREVIOUS_SHA256 --root-module ROOT_SHA256 --controller OPERATOR_PRINCIPAL
+canic fleet status UPGRADE_OPERATION
+canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
+```
+
+After dispatch, repeat that apply to retain completion. The child keeps its
+principal and Root controller; the original creation receipt remains historical
+evidence. `fleet status UPGRADE_OPERATION` shows the retained upgrade phase.
+`fleet show` and `fleet show --watch` display separate creation and upgrade reports,
+matched to the planned authority and network. Public Ready cannot create a
+receipt; repeat the original apply to retain authenticated completion. Watch
+serves localhost without opening a browser and stops with Ctrl-C.
+
+This experimental owner has one permanent upgrade slot, separate from creation.
+It never retries an uncertain installation or replaces expired authority.
+Application persistence requires its own qualified upgrade lifecycle; this
+greeting app has no persistent data. Whole-fleet convergence, repeated upgrades
+and subtree operations remain future work.

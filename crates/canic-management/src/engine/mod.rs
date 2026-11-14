@@ -1,7 +1,6 @@
 use crate::Readiness;
 use canic_management_protocol::{
-    CREATION_CYCLES, Failure, LIMITS, MAX_WASM, Phase, RESERVE_CYCLES, Refusal, STAGE_LIMITS,
-    Stage, Status, digest,
+    CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, STAGE_LIMITS, Stage, Status, digest,
 };
 use ic_platform::{
     candid_codec::{self, decoder},
@@ -17,13 +16,16 @@ use ic_platform_runtime::{
 };
 use ic_storage::{
     AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
-    MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig,
-    adapter::{Bound, CodecError, StableCell, Storable},
+    MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig, adapter::StableCell,
 };
 use ic_timers::{
     OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
 };
-use std::{borrow::Cow, cell::RefCell};
+use std::cell::RefCell;
+use storage::{ARTIFACT_BYTES, Artifact, JOURNAL_BYTES, Journal};
+mod storage;
+
+pub(crate) mod upgrade;
 
 const MAX_PAGES: u64 = 64;
 const MANAGEMENT_LIMITS: decoder::Limits = decoder::Limits {
@@ -34,36 +36,6 @@ const MANAGEMENT_LIMITS: decoder::Limits = decoder::Limits {
     allocation: 65_536,
 };
 
-struct Journal(Status);
-impl Storable for Journal {
-    const BOUND: Bound = Bound::Bounded {
-        max_size: 4096,
-        is_fixed_size: false,
-    };
-    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, CodecError> {
-        ic_wire::native::encode(&self.0, LIMITS)
-            .map(Cow::Owned)
-            .map_err(|_| CodecError::Invalid("journal"))
-    }
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        ic_wire::native::decode(&bytes, LIMITS)
-            .map(Self)
-            .map_err(|_| CodecError::Invalid("journal"))
-    }
-}
-struct Artifact(Vec<u8>);
-impl Storable for Artifact {
-    const BOUND: Bound = Bound::Bounded {
-        max_size: MAX_WASM as u32,
-        is_fixed_size: false,
-    };
-    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, CodecError> {
-        Ok(Cow::Borrowed(&self.0))
-    }
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        Ok(Self(bytes.into_owned()))
-    }
-}
 struct State {
     journal: StableCell<Journal>,
     artifact: StableCell<Artifact>,
@@ -94,13 +66,15 @@ pub fn open(fresh: bool, readiness: Readiness) {
         },
     )
     .expect("admit manager backing");
-    if !fresh {
-        assert_eq!(
-            runtime.diagnostics().expect("integrity").allocations,
-            2,
-            "missing manager stores"
-        );
-    }
+    let allocations = runtime.diagnostics().expect("integrity").allocations;
+    assert!(
+        if fresh {
+            allocations == 0
+        } else {
+            allocations == 2
+        },
+        "missing manager stores"
+    );
     runtime
         .bootstrap(
             &SealedDeclarationSnapshot::new(vec![
@@ -122,24 +96,29 @@ pub fn open(fresh: bool, readiness: Readiness) {
         .open_memory(&StableKey::parse("manager.artifact.v1").expect("constant key"))
         .expect("artifact lease");
     let journal = if fresh {
-        StableCell::create(journal, Journal(Status::default()))
+        StableCell::create(journal, Journal::default())
     } else {
-        StableCell::load(journal, 4096)
+        StableCell::load(journal, JOURNAL_BYTES)
     }
     .expect("strict journal opening");
     let artifact = if fresh {
-        StableCell::create(artifact, Artifact(vec![]))
+        StableCell::create(artifact, Artifact::default())
     } else {
-        StableCell::load(artifact, MAX_WASM)
+        StableCell::load(artifact, ARTIFACT_BYTES)
     }
     .expect("strict artifact opening");
-    let state = State {
+    let mut state = State {
         journal,
         artifact,
         readiness,
         _runtime: runtime,
     };
     validate(&state);
+    upgrade::validate(&state);
+    // Commit the bounded v2 payloads only after strict old/new schema validation.
+    // A post-upgrade trap rolls back both writes with the executable change.
+    state.journal.set(state.journal.get().clone());
+    state.artifact.set(state.artifact.get().clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     ic_timers::initialize_runtime().expect("one timer runtime");
     schedule();
@@ -221,9 +200,9 @@ fn snapshot() -> Status {
 fn mutate(f: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
-        let mut journal = state.journal.get().0.clone();
-        f(&mut journal);
-        state.journal.set(Journal(journal));
+        let mut journal = state.journal.get().clone();
+        f(&mut journal.0);
+        state.journal.set(journal);
     });
 }
 fn next(s: &Status) -> Option<u64> {
@@ -237,7 +216,9 @@ fn next(s: &Status) -> Option<u64> {
     }
 }
 fn schedule() {
-    let desired = next(&snapshot()).map(TimerSchedule::At);
+    let desired = next(&snapshot())
+        .or_else(upgrade::next)
+        .map(TimerSchedule::At);
     TIMER.with_borrow_mut(|slot| {
         ic_timers::reconcile_once(
             slot,
@@ -247,10 +228,15 @@ fn schedule() {
                 if OBSERVING.replace(true) {
                     return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
                 }
-                step().await;
+                if snapshot().phase == Phase::Ready {
+                    upgrade::step().await;
+                } else {
+                    step().await;
+                }
                 OBSERVING.set(false);
-                let decision =
-                    next(&snapshot()).map_or(OnceDecision::Stop, OnceDecision::ScheduleAt);
+                let decision = next(&snapshot())
+                    .or_else(upgrade::next)
+                    .map_or(OnceDecision::Stop, OnceDecision::ScheduleAt);
                 OnceRunResult::new(TimerCompletion::success(1), decision)
             },
         )
@@ -293,7 +279,7 @@ pub fn stage(input: Stage) -> Result<Status, Refusal> {
             .as_mut()
             .expect("initialized manager")
             .artifact
-            .set(Artifact(input.wasm));
+            .set(Artifact(input.wasm, vec![]));
     });
     mutate(|s| {
         s.approval = Some(input.approval);
@@ -320,7 +306,7 @@ pub fn inject_fault(value: u8) {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    assert!(value <= 5);
+    assert!(value <= 8);
     FAULT.set(value);
 }
 

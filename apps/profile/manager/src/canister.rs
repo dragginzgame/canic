@@ -68,3 +68,38 @@ fn readiness() -> Readiness {
 fn inject_fault(value: u8) {
     management::inject_fault(value);
 }
+
+#[cdk::update(
+    guard = "endpoint::uploader",
+    decode_with = "endpoint::decode_upgrade",
+    encode_with = "endpoint::encode_upgrade"
+)]
+fn stage_upgrade(
+    input: canic_management_protocol::upgrade::Stage,
+) -> Result<canic_management_protocol::upgrade::Status, Refusal> {
+    management::stage_upgrade(input)
+}
+#[cdk::query(
+    guard = "endpoint::public",
+    decode_with = "endpoint::decode_upgrade_status",
+    encode_with = "endpoint::encode_upgrade_status"
+)]
+fn upgrade_status() -> canic_management_protocol::upgrade::Status {
+    management::upgrade_status()
+}
+#[cdk::update(
+    guard = "endpoint::controller",
+    decode_with = "endpoint::decode_upgrade_status",
+    encode_with = "endpoint::encode_upgrade_status"
+)]
+fn observe_upgrade() -> canic_management_protocol::upgrade::Status {
+    management::upgrade_status()
+}
+#[cdk::update(
+    guard = "endpoint::controller",
+    decode_with = "endpoint::decode_upgrade_reconcile",
+    encode_with = "endpoint::encode_upgrade_reconcile"
+)]
+async fn reconcile_upgrade() -> canic_management_protocol::upgrade::Status {
+    management::reconcile_upgrade().await
+}

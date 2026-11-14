@@ -254,15 +254,19 @@ pub(crate) async fn observe(
         .management
         .as_ref()
         .ok_or_else(|| Error::Invalid("observation needs Root binding".into()))?;
-    let args = ic_wire::native::encode_request(
-        canic_management_protocol::STATUS,
-        &(),
-        canic_management_protocol::LIMITS,
-    )
-    .map_err(supplier)?;
+    let (method, method_id) = if plan.target.is_some() {
+        (
+            "observe_upgrade",
+            canic_management_protocol::upgrade::STATUS,
+        )
+    } else {
+        ("observe", canic_management_protocol::STATUS)
+    };
+    let args = ic_wire::native::encode_request(method_id, &(), canic_management_protocol::LIMITS)
+        .map_err(supplier)?;
     if call.canister != principal(&owner.root)?
         || call.effective != call.canister
-        || call.method != "observe"
+        || call.method != method
         || call.args != args
     {
         return Err(Error::Invalid(

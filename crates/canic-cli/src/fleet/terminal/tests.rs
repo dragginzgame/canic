@@ -31,6 +31,7 @@ fn terminal_preserves_unknowns_network_identity_and_uncertain_effects() {
         });
     }
     snapshot.operations.push(FleetOperation {
+        upgrade: None,
         management: None,
         deployment: None,
         operation: "original-operation".into(),
@@ -100,13 +101,14 @@ fn terminal_escapes_external_unicode_controls_without_changing_evidence() {
 fn terminal_distinguishes_unknown_wallet_balance_and_uncertified_manager() {
     let mut snapshot = empty();
     snapshot.managers.push(FleetManager {
+        upgrade: None,
         network_id: "mainnet".into(),
         manager: "manager".into(),
         reported: Some(Default::default()),
         observation_error: None,
     });
     snapshot.managers[0].reported.as_mut().unwrap().phase =
-        canic_host::ProfileGrowthPhase::CreateIssued;
+        canic_host::ManagementPhase::CreateIssued;
     snapshot.wallet = Some(Wallet {
         principal: "owner".into(),
         icp_address: "receive-address".into(),
@@ -204,6 +206,7 @@ fn roles_follow_observed_authority_without_inventing_root_or_crossing_networks()
         });
     }
     snapshot.managers.push(FleetManager {
+        upgrade: None,
         network_id: "a".into(),
         manager: "manager".into(),
         reported: Some(Default::default()),
@@ -240,7 +243,7 @@ fn roles_follow_observed_authority_without_inventing_root_or_crossing_networks()
 
 #[test]
 fn automatic_colours_respect_redirection_no_color_and_dumb_terminals() {
-    use crate::ColorMode;
+    use crate::args::ColorMode;
     assert!(ColorMode::Auto.enabled(true, false, false));
     assert!(!ColorMode::Auto.enabled(false, false, false));
     assert!(!ColorMode::Auto.enabled(true, true, false));
@@ -312,13 +315,14 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
         });
     }
     snapshot.managers.push(FleetManager {
+        upgrade: None,
         network_id: network,
         manager: declarations[2].1.into(),
         reported: Some(Default::default()),
         observation_error: None,
     });
     let status = snapshot.managers[0].reported.as_mut().unwrap();
-    status.phase = canic_host::ProfileGrowthPhase::Ready;
+    status.phase = canic_host::ManagementPhase::Ready;
     status.worker = Some(declarations[1].1.into());
     let before = serde_json::to_value(&snapshot).unwrap();
     let plain = render(&snapshot, &[], false, false);
@@ -427,4 +431,54 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
         None,
         "an ambiguous snapshot must not select one declaration arbitrarily"
     );
+}
+
+#[test]
+fn upgrade_progress_stays_uncertified_and_unknowns_do_not_hide_creation() {
+    let mut snapshot = empty();
+    snapshot.managers.push(FleetManager {
+        network_id: "mainnet".into(),
+        manager: "root".into(),
+        reported: Some(Default::default()),
+        observation_error: None,
+        upgrade: Some(canic_host::FleetUpgrade {
+            operation: "upgrade<id>\u{1b}[2J".into(),
+            reported: Some(Default::default()),
+            observation_error: None,
+        }),
+    });
+    snapshot.managers[0].reported.as_mut().unwrap().phase = canic_host::ManagementPhase::Ready;
+    assert!(render(&snapshot, &[], false, false).contains("Upgrade: not admitted"));
+    let upgrade = snapshot.managers[0].upgrade.as_mut().unwrap();
+    upgrade.reported = Some(
+        serde_json::from_value(serde_json::json!({
+            "approval": {"manager":"root", "child":"child", "previous_module":vec![0;32],
+                "module_hash":vec![1;32], "execute_at_ns":1, "expires_at_ns":2},
+            "phase":"Ready", "attempts":[1,1], "requests":[null,null],
+            "previous_version":1, "observed_version":2, "failure":null
+        }))
+        .unwrap(),
+    );
+    let before = serde_json::to_value(&snapshot).unwrap();
+    let text = render(&snapshot, &[], true, false);
+    let html = super::super::render(&snapshot, "");
+    for expected in ["report (uncertified)", "creation Ready", "Upgrade: Ready"] {
+        assert!(text.contains(expected), "{text}");
+    }
+    assert!(html.contains("Upgrade phase: <strong>Ready</strong>"));
+    assert!(html.contains("upgrade&lt;id&gt;"));
+    assert!(!text.contains('\u{1b}'));
+    assert!(!text.contains("Receipt: retained"));
+    assert_eq!(serde_json::to_value(&snapshot).unwrap(), before);
+    let upgrade = snapshot.managers[0].upgrade.as_mut().unwrap();
+    upgrade.reported = None;
+    upgrade.observation_error = Some("<provider>\u{1b}[2J\nforged".into());
+    let text = render(&snapshot, &[], false, false);
+    let html = super::super::render(&snapshot, "");
+    assert!(text.contains("creation Ready"));
+    assert!(text.contains("Upgrade: UNKNOWN"));
+    assert!(!text.contains('\u{1b}'));
+    assert!(!text.contains("\nforged"));
+    assert!(html.contains("Upgrade phase: <strong>UNKNOWN</strong>"));
+    assert!(!html.contains("<provider>"));
 }

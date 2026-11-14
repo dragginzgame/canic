@@ -1,7 +1,7 @@
 //! Root admission and authenticated child evidence. No host-owned child effects.
 
 use crate::{
-    ApplyOutcome, DeploymentName, Error, ManagedCreation, Plan, PlanInput, Receipt, Result,
+    ApplyOutcome, DeploymentName, Error, ManagedOwner, Plan, PlanInput, Receipt, Result,
     SelectedFleet,
     network::principal,
     operation, plan,
@@ -16,10 +16,11 @@ use std::path::Path;
 
 #[cfg(test)]
 mod tests;
+pub(crate) mod upgrade;
 
 const OBSERVATIONS: usize = 32;
 
-/// Retain one Root-owned child approval for a declared parent/child pair.
+/// Retain one Root-owned creation or first upgrade for a declared parent/child pair.
 /// The parent must be bound or have a completed named deployment in this journal.
 /// `execute_at_ns` selects a new plan's schedule (default: ten minutes from now);
 /// reopening preserves the original schedule.
@@ -44,12 +45,10 @@ pub fn create_managed_plan(
     let parent = child
         .parent
         .as_ref()
-        .ok_or_else(|| Error::Invalid("Root-owned creation requires a declared parent".into()))?;
+        .ok_or_else(|| Error::Invalid("Root-owned work requires a declared parent".into()))?;
     let owner = &selection.config.canisters[parent];
     if input.network != selection.config.network
-        || child.id.is_some()
-        || input.target.is_some()
-        || input.previous_module.is_some()
+        || (input.target.is_none() && (child.id.is_some() || input.previous_module.is_some()))
         || owner.role.as_deref() != Some("root")
         || owner.parent.is_some()
         || selection
@@ -61,7 +60,7 @@ pub fn create_managed_plan(
             != 1
     {
         return Err(Error::Invalid(
-            "select one unbound child of a top-level Root on this fleet's network".into(),
+            "select one child of a top-level Root on this fleet's network; creation requires an unbound slot".into(),
         ));
     }
     let inventory = crate::fleet::inventory(journal, true, crate::now()?)?;
@@ -71,10 +70,40 @@ pub fn create_managed_plan(
         ));
     }
     let mut roots = std::collections::BTreeSet::new();
+    let mut creation = None;
     if let Some(id) = &owner.id {
         roots.insert(id.clone());
     }
     for (record, network) in inventory.records {
+        if input.target.is_some()
+            && record.management.is_some()
+            && record.deployment.as_ref().is_some_and(|name| {
+                name.app == selection.app
+                    && name.fleet == selection.fleet
+                    && name.canister == canister
+            })
+        {
+            if network != input.network
+                || !record.receipt_retained
+                || record.canister != input.target
+                || input.previous_module.as_ref() != Some(&record.approved_module)
+                || child
+                    .id
+                    .as_ref()
+                    .is_some_and(|id| Some(id) != input.target.as_ref())
+            {
+                return Err(Error::Invalid(
+                    "upgrade needs this child's completed creation receipt and original module"
+                        .into(),
+                ));
+            }
+            if creation
+                .replace(record.approved_controller.clone())
+                .is_some()
+            {
+                return Err(Error::Invalid("ambiguous child creation evidence".into()));
+            }
+        }
         if record.deployment.as_ref().is_some_and(|name| {
             name.app == selection.app && name.fleet == selection.fleet && name.canister == *parent
         }) {
@@ -95,6 +124,11 @@ pub fn create_managed_plan(
             "parent needs one unambiguous configured or retained deployment identity".into(),
         ));
     }
+    if input.target.is_some() && creation.as_ref() != roots.first() {
+        return Err(Error::Invalid(
+            "child upgrade requires retained creation custody under this Root".into(),
+        ));
+    }
     let execute_at_ns = execute_at_ns.unwrap_or(crate::now()? + 600_000_000_000);
     plan::retain(
         journal,
@@ -105,7 +139,7 @@ pub fn create_managed_plan(
             fleet: selection.fleet.clone(),
             canister: canister.into(),
         }),
-        Some(ManagedCreation {
+        Some(ManagedOwner {
             root: roots
                 .pop_first()
                 .ok_or_else(|| Error::Invalid("missing Root identity".into()))?,
@@ -256,6 +290,9 @@ pub(crate) async fn apply(
     icp: &Path,
     agent: &Agent,
 ) -> Result<ApplyOutcome> {
+    if plan.target.is_some() {
+        return upgrade::apply(dir, id, plan, wasm, identity, icp, agent).await;
+    }
     let owner = plan.management.as_ref().expect("managed dispatcher");
     let root = principal(&owner.root)?;
     operation::controllers(agent, root, &plan.controller).await?;
@@ -337,9 +374,19 @@ async fn finish(
         .worker
         .as_ref()
         .ok_or_else(|| Error::Invalid("ready evidence has no child".into()))?;
+    complete(dir, id, plan, child, agent).await
+}
+
+async fn complete(
+    dir: &Path,
+    id: &str,
+    plan: &Plan,
+    child: &str,
+    agent: &Agent,
+) -> Result<ApplyOutcome> {
     let receipt = Receipt {
         operation: id.into(),
-        canister: child.clone(),
+        canister: child.into(),
         module_hash: plan.artifact.sha256.clone(),
         controller: plan.application_controller().into(),
     };

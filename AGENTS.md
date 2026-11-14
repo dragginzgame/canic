@@ -30,7 +30,7 @@ authenticated tooling installer.
   their admitted management contracts. Initialization declares an app and its
   first fleet; optional source generation creates a standalone greeting workspace.
   Whole-fleet management remains upcoming work.
-- The next managed starter is a small buildable Rust app with one application
+- The managed starter is a small buildable Rust app with one application
   canister controlled by a Root/management owner. Whole-fleet reviewed convergence,
   cascading discovery and subtree operations are admitted product requirements;
   their general implementations are not yet shipped. Scaling and sharding should
@@ -56,15 +56,24 @@ authenticated tooling installer.
   manager journal keys, authority and wire bytes across extraction and upgrades.
   Use `make root-test`, `make root-clippy` and `make root-doc` for Root, and
   `make growth-test` when changing the shared engine's effect boundaries.
-  One-child Root is not whole-fleet convergence, child upgrade or subtree control.
+  Root admits one child creation and one separately retained upgrade of that child;
+  neither slot resets, including after expiry or failure. Whole-fleet convergence
+  and subtree control remain separate scope. Keep creation evidence immutable.
+  The original two IC Storage allocations have fixed capacity: the qualified
+  v1-to-v2 payload migration retains both journals and artifacts inside those
+  checked allocations. Never rewrite the supplier's directory or add a second
+  backing owner. Downgrading the payload to an older executable is unsupported.
   A named child plan requires explicit `--root-module` authority. Resolve its
   parent from a configured identity or completed named deployment; check exact
   Root code and sole operator control before admission and observation. Keep
-  staging's original signed attempt. Only Root's replicated, read-only `observe`
-  endpoint may receive fresh read authority after the effect deadline; public
+  staging's original signed attempt. Only Root's matching replicated, read-only
+  `observe` or `observe_upgrade` endpoint may receive fresh read authority after the effect deadline; public
   queries cannot establish the created child's custody. Preserve existing direct
   plan encodings/digests and keep Root as the child's receipt controller.
   Fleet views automatically query planned Roots under their exact network binding.
+  Query upgrade progress only for a retained upgrade plan and match its full
+  approval. Creation and upgrade queries share the existing owner deadline;
+  unavailable/mismatched upgrade reports remain unknown without erasing creation.
   Keep those public reports separate from retained output custody: mismatched
   approvals cannot add a reported child, and watching must never sign, apply,
   reconcile or publish completion receipts. Reuse the shared bounded collector

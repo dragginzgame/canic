@@ -11,6 +11,11 @@ receipts. Run `make root-test`
 after simulator preparation. Whole-fleet deployment remains upcoming; existing
 mainnet demos are unchanged.
 
+The current increment also qualifies one Root-owned child upgrade locally,
+including retained outcomes, callback-loss recovery and application persistence.
+The experimental Root has one creation slot and one upgrade slot; neither resets.
+See the [upgrade walkthrough](docs/demos/root.md).
+
 `canic fleet show` follows Roots named in retained child plans automatically.
 Add `--watch` for the read-only localhost view without opening a browser.
 Public Root reports remain distinct from completion receipts retained by apply.
@@ -36,8 +41,10 @@ Build from this repository in the meantime.
 
 The accepted [Canic system design](docs/design/canic-system-design.md) defines
 the restart: product scope, architecture, capability ownership, deferred ideas,
-qualification and delivery milestones. Work is in
-[M0 decisions and experiments](docs/design/m0-first-journey.md). The first M1
+qualification and delivery milestones. Current evidence is recorded in
+[the journey notes](docs/design/m0-first-journey.md). Development is working toward
+M2's complete fleet workflow; narrow M3 autonomy and preservation paths are already
+qualified. This is not formal completion of either milestone. The first M1
 deployment path is implemented. Mainnet creation, installation and greeting have
 passed, followed by a profile entry/worker deployment and a worker upgrade that
 preserved its private profile. A separate manager has now created and installed

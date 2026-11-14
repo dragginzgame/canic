@@ -119,3 +119,83 @@ pub fn decode_inject(bytes: Vec<u8>) -> u8 {
 pub fn encode_inject() -> Vec<u8> {
     ic_wire::native::encode_response(INJECT, &(), LIMITS).expect("fault reply")
 }
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "entrypoint owns decoder bytes"
+)]
+/// Decode a bounded child upgrade envelope.
+/// # Panics
+/// Traps if the request exceeds its protocol contract.
+#[must_use]
+pub fn decode_upgrade(bytes: Vec<u8>) -> canic_management_protocol::upgrade::Stage {
+    ic_wire::native::decode_request(
+        canic_management_protocol::upgrade::STAGE,
+        &bytes,
+        STAGE_LIMITS,
+    )
+    .expect("upgrade frame")
+}
+#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
+/// Encode upgrade admission or refusal.
+/// # Panics
+/// Traps if evidence exceeds the protocol bounds.
+#[must_use]
+pub fn encode_upgrade(
+    value: Result<canic_management_protocol::upgrade::Status, Refusal>,
+) -> Vec<u8> {
+    ic_wire::native::encode_response(canic_management_protocol::upgrade::STAGE, &value, LIMITS)
+        .expect("upgrade reply")
+}
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "entrypoint owns decoder bytes"
+)]
+/// Decode an upgrade status request.
+/// # Panics
+/// Traps if the request exceeds its protocol contract.
+pub fn decode_upgrade_status(bytes: Vec<u8>) {
+    ic_wire::native::decode_request::<()>(
+        canic_management_protocol::upgrade::STATUS,
+        &bytes,
+        LIMITS,
+    )
+    .expect("upgrade status frame");
+}
+#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
+/// Encode committed upgrade evidence.
+/// # Panics
+/// Traps if evidence exceeds protocol bounds.
+#[must_use]
+pub fn encode_upgrade_status(value: canic_management_protocol::upgrade::Status) -> Vec<u8> {
+    ic_wire::native::encode_response(canic_management_protocol::upgrade::STATUS, &value, LIMITS)
+        .expect("upgrade status reply")
+}
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "entrypoint owns decoder bytes"
+)]
+/// Decode an upgrade reconciliation request.
+/// # Panics
+/// Traps if the request exceeds its protocol contract.
+pub fn decode_upgrade_reconcile(bytes: Vec<u8>) {
+    ic_wire::native::decode_request::<()>(
+        canic_management_protocol::upgrade::RECONCILE,
+        &bytes,
+        LIMITS,
+    )
+    .expect("upgrade reconciliation frame");
+}
+#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns reply")]
+/// Encode reconciled upgrade evidence.
+/// # Panics
+/// Traps if evidence exceeds protocol bounds.
+#[must_use]
+pub fn encode_upgrade_reconcile(value: canic_management_protocol::upgrade::Status) -> Vec<u8> {
+    ic_wire::native::encode_response(
+        canic_management_protocol::upgrade::RECONCILE,
+        &value,
+        LIMITS,
+    )
+    .expect("upgrade reconciliation reply")
+}
