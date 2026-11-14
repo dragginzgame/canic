@@ -1,31 +1,17 @@
 use canic_host::Fleet;
+use ic_host_text::escape::terminal_text;
 use std::{collections::BTreeMap, fmt::Write as _};
 
 mod roles;
 #[cfg(test)]
 mod tests;
 
-// Provider diagnostics and journal labels must not control terminal rendering.
-fn text(value: &str) -> String {
-    let mut output = String::new();
-    for character in value.chars() {
-        if character.is_control()
-            || matches!(character, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
-        {
-            write!(output, "{}", character.escape_unicode()).expect("writing to String");
-        } else {
-            output.push(character);
-        }
-    }
-    output
-}
-
 fn paint(value: &str, style: &str, color: bool) -> String {
-    let value = text(value);
+    let value = terminal_text(value);
     if color {
         format!("\x1b[{style}m{value}\x1b[0m")
     } else {
-        value
+        value.into_owned()
     }
 }
 
@@ -43,28 +29,28 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             output,
             "\n{} {}\n  {} {}",
             paint("App:", "1;34", color),
-            text(&config.app),
+            terminal_text(&config.app),
             paint("Fleet:", "1", color),
-            text(&config.fleet)
+            terminal_text(&config.fleet)
         )
         .expect("writing to String");
         writeln!(
             output,
             "  Configured network: {}",
-            text(&super::configured_network(config))
+            terminal_text(&super::configured_network(config))
         )
         .expect("writing to String");
         if config.config.canisters.is_empty() {
             output.push_str(
-                "    No canisters declared yet. Add slots to this fleet before planning.\n",
+                "    No canisters declared yet. Use fleet canister add to declare slots before planning.\n",
             );
         }
         for slot in config.config.canisters.keys() {
             writeln!(
                 output,
                 "    {}: {}",
-                text(slot),
-                text(&super::slot_status(snapshot, slot))
+                terminal_text(slot),
+                terminal_text(&super::slot_status(snapshot, slot))
             )
             .expect("writing to String");
         }
@@ -93,14 +79,14 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             output,
             "\nNetwork #{}: {}",
             network_numbers[network_id],
-            text(&canisters[0].network),
+            terminal_text(&canisters[0].network),
         )
         .expect("writing to String");
         if details {
             writeln!(
                 output,
                 "Network identity (diagnostic): {}",
-                text(network_id)
+                terminal_text(network_id)
             )
             .expect("writing to String");
         }
@@ -115,7 +101,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             }
         }
         for (controller, count) in external {
-            writeln!(output, "  {} {}\n    Controls {count} known canister(s); principal outside this canister inventory.", paint("[EXTERNAL CONTROLLER]", "1;35", color), text(controller)).expect("writing to String");
+            writeln!(output, "  {} {}\n    Controls {count} known canister(s); principal outside this canister inventory.", paint("[EXTERNAL CONTROLLER]", "1;35", color), terminal_text(controller)).expect("writing to String");
         }
         for canister in canisters {
             let observed = canister.observation_error.is_none()
@@ -125,7 +111,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 output,
                 "  {} {}  [{}]",
                 roles::badges(snapshot, canister, links, color),
-                text(&canister.canister),
+                terminal_text(&canister.canister),
                 paint(
                     if observed {
                         "verified code/controllers"
@@ -140,7 +126,8 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             if let Some(module) = &canister.module_hash
                 && details
             {
-                writeln!(output, "    Module: {}", text(module)).expect("writing to String");
+                writeln!(output, "    Module: {}", terminal_text(module))
+                    .expect("writing to String");
             }
             if let Some(controllers) = &canister.controllers {
                 let controllers = if controllers.is_empty() {
@@ -148,14 +135,15 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 } else {
                     controllers
                         .iter()
-                        .map(|value| text(value))
+                        .map(|value| terminal_text(value))
                         .collect::<Vec<_>>()
                         .join(", ")
                 };
                 writeln!(output, "    Controlled by: {controllers}").expect("writing to String");
             }
             if let Some(error) = &canister.observation_error {
-                writeln!(output, "    Observation: {}", text(error)).expect("writing to String");
+                writeln!(output, "    Observation: {}", terminal_text(error))
+                    .expect("writing to String");
             }
         }
     }
@@ -171,7 +159,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             output,
             "\n{} {} (uncertified report, network #{})",
             paint("MANAGER", "1;36", color),
-            text(&manager.manager),
+            terminal_text(&manager.manager),
             network_numbers[&manager.network_id]
         )
         .expect("writing to String");
@@ -183,7 +171,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 status.attempts[0],
                 status.attempts[1],
                 status.attempts[2],
-                text(status.worker.as_deref().unwrap_or("No retained principal"))
+                terminal_text(status.worker.as_deref().unwrap_or("No retained principal"))
             )
             .expect("writing to String");
             if status.phase == canic_host::ProfileGrowthPhase::CreateIssued {
@@ -196,38 +184,39 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             output.push_str("  UNKNOWN manager state\n");
         }
         if let Some(error) = &manager.observation_error {
-            writeln!(output, "  Observation: {}", text(error)).expect("writing to String");
+            writeln!(output, "  Observation: {}", terminal_text(error)).expect("writing to String");
         }
     }
     if let Some(wallet) = &snapshot.wallet {
         writeln!(
             output,
             "\nWallet: {} (uncertified mainnet balances)",
-            text(&wallet.principal)
+            terminal_text(&wallet.principal)
         )
         .expect("writing to String");
         for (label, balance) in [("ICP", &wallet.icp), ("Cycles ledger", &wallet.cycles)] {
             writeln!(
                 output,
                 "  {label}: {}",
-                text(balance.display.as_deref().unwrap_or("UNKNOWN"))
+                terminal_text(balance.display.as_deref().unwrap_or("UNKNOWN"))
             )
             .expect("writing to String");
             if let Some(error) = &balance.observation_error {
-                writeln!(output, "    Observation: {}", text(error)).expect("writing to String");
+                writeln!(output, "    Observation: {}", terminal_text(error))
+                    .expect("writing to String");
             }
         }
         writeln!(
             output,
             "  Receive ICP: {}\n  Ledger balances exclude cycles held by canisters.",
-            text(&wallet.icp_address)
+            terminal_text(&wallet.icp_address)
         )
         .expect("writing to String");
     }
     if !links.is_empty() {
         output.push_str("\nDeclared routes (not verified on-chain):\n");
         for link in links {
-            writeln!(output, "  {}", text(link)).expect("writing to String");
+            writeln!(output, "  {}", terminal_text(link)).expect("writing to String");
         }
     }
     let receipts = snapshot
@@ -248,9 +237,9 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         writeln!(
             output,
             "  No terminal receipt: {}\n    Network #{}; target: {}; approval {}",
-            text(&operation.operation),
+            terminal_text(&operation.operation),
             network_numbers[&operation.network_id],
-            text(operation.canister.as_deref().unwrap_or("unresolved")),
+            terminal_text(operation.canister.as_deref().unwrap_or("unresolved")),
             if operation.approval_expired {
                 "expired"
             } else {
@@ -259,20 +248,25 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         )
         .expect("writing to String");
         for (effect, evidence) in &operation.effects {
-            writeln!(output, "    {}: {}", text(effect), text(evidence))
-                .expect("writing to String");
+            writeln!(
+                output,
+                "    {}: {}",
+                terminal_text(effect),
+                terminal_text(evidence)
+            )
+            .expect("writing to String");
         }
         writeln!(
             output,
             "    Inspect: {}",
-            text(&super::status_command(snapshot, &operation.operation))
+            terminal_text(&super::status_command(snapshot, &operation.operation))
         )
         .expect("writing to String");
     }
     if !snapshot.issues.is_empty() {
         output.push_str("\nPARTIAL INVENTORY:\n");
         for issue in &snapshot.issues {
-            writeln!(output, "  {}", text(issue)).expect("writing to String");
+            writeln!(output, "  {}", terminal_text(issue)).expect("writing to String");
         }
     }
     output.push_str(

@@ -4,6 +4,44 @@ use canic_host::{Error, Network, Result};
 use ic_host_text::table::{self, Alignment, Options};
 use std::path::Path;
 
+const TABLE_OPTIONS: Options = Options {
+    column_gap: 2,
+    header_separator: true,
+};
+
+pub(crate) fn canisters(path: &Path, app: &str, fleet: &str, json: bool) -> Result<Output> {
+    let selected = canic_host::load_config(path)?.select(Some(app), Some(fleet))?;
+    if json {
+        return Ok(Output::Json(serde_json::json!({
+            "scope":"local configuration only", "config_path":path, "configuration":selected,
+        })));
+    }
+    let title = format!("Configured canister slots — app {app}, fleet {fleet}");
+    if selected.config.canisters.is_empty() {
+        return Ok(Output::Text(format!("{title}\nNo slots declared.\n")));
+    }
+    let rows: Vec<_> = selected
+        .config
+        .canisters
+        .iter()
+        .map(|(slot, config)| {
+            [
+                slot.clone(),
+                config.id.clone().unwrap_or_else(|| "—".into()),
+            ]
+        })
+        .collect();
+    let table = table::render(
+        &["SLOT", "CONFIGURED ID"],
+        &rows,
+        &[Alignment::Left, Alignment::Left],
+        TABLE_OPTIONS,
+    );
+    Ok(Output::Text(format!(
+        "{title}\n{table}\nConfiguration only; an unset ID does not mean undeployed. Use fleet show for deployment observations.\n"
+    )))
+}
+
 pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) -> Result<Output> {
     let config = canic_host::load_config(path)?;
     if let Some(app) = app
@@ -45,10 +83,6 @@ pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) 
         value[if apps_only { "apps" } else { "fleets" }] = serde_json::json!(rows);
         Ok(Output::Json(value))
     } else {
-        let options = Options {
-            column_gap: 2,
-            header_separator: true,
-        };
         let (title, rendered) = if apps_only {
             (
                 "Configured apps (local declarations)",
@@ -56,7 +90,7 @@ pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) 
                     &["APP", "FLEETS"],
                     &app_rows,
                     &[Alignment::Left, Alignment::Right],
-                    options,
+                    TABLE_OPTIONS,
                 ),
             )
         } else {
@@ -71,7 +105,7 @@ pub(crate) fn list(path: &Path, app: Option<&str>, apps_only: bool, json: bool) 
                         Alignment::Right,
                         Alignment::Left,
                     ],
-                    options,
+                    TABLE_OPTIONS,
                 ),
             )
         };

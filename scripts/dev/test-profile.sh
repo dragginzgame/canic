@@ -14,10 +14,10 @@ for variant in v1 v2 reject; do
         v2) features=(--features profile-v2) ;;
         reject) features=(--features reject-upgrade) ;;
     esac
-    "$cli" --json build --package canic-profile-worker "${features[@]}" > "target/profile/$variant.json"
+    "$cli" artifact build --json --package canic-profile-worker "${features[@]}" > "target/profile/$variant.json"
     cp -- "$(jq -r .wasm "target/profile/$variant.json")" "target/profile/$variant.wasm"
 done
-"$cli" --json build --package canic-profile-entry > target/profile/entry.json
+"$cli" artifact build --json --package canic-profile-entry > target/profile/entry.json
 cp -- "$(jq -r .wasm target/profile/entry.json)" target/profile/entry.wasm
 CANIC_CLI="$cli" CANIC_PROFILE_CLIENT="$client" cargo test --locked \
     --manifest-path qualification/Cargo.toml -p canic-m1-tests --test profile -- --nocapture

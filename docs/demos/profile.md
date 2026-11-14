@@ -27,8 +27,9 @@ canic fleet show --app profile --fleet mainnet --link bisqm-biaaa-aaaas-qhfeq-ca
 
 The fleet opens in the normal desktop browser at **http://localhost:8787/**.
 Keep its terminal running; Ctrl-C stops it. If the viewer is already running,
-open that URL or use another `--port`. The snapshot also includes the earlier
-Hello World canister. Private profile reads are explicitly uncertified queries;
+open that URL or use another `--port`. This selects the `profile/mainnet` fleet;
+the Hello World canister belongs to `hello-world/mainnet` and is shown separately.
+Private profile reads are explicitly uncertified queries;
 deployment metadata and update replies use the certified paths described below.
 
 The creation and upgrade receipts are retained in `.canic/` under their original

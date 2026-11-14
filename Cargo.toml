@@ -14,7 +14,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.200.0"
+version = "0.200.1"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
@@ -28,7 +28,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 ic-host-fs = { version = "0.77.1", default-features = false }
 ic-host-process = { version = "0.77.1", default-features = false }
 ic-host-text = { version = "0.75.0", default-features = false }
-ic-platform = { version = "0.32.1", default-features = false }
+ic-platform = { version = "0.33.0", default-features = false }
 ic-platform-runtime = { version = "0.22.1", default-features = false }
 ic-storage = "0.74.0"
 ic-timers = "0.44.1"

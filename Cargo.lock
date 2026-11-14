@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "canic-host",
  "clap",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-client"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "canic-profile-protocol",
  "clap",
@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-entry"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -442,7 +442,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-manager"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform",
@@ -455,7 +455,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -466,7 +466,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.200.0"
+version = "0.200.1"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -1405,9 +1405,9 @@ checksum = "d6030a6a40c100314b396c96add8a414a3d1415b446729b54c8a4e97c0a05969"
 
 [[package]]
 name = "ic-platform"
-version = "0.32.2"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79bcb8879666931fe9f4c660a34cc8f8a93cc6b5f4e7de6301e08daafb4259f4"
+checksum = "1ff16542d2cb6c8307afced4b0b1dc10b31640ea49f26304de6ff94e02eeb8bf"
 dependencies = [
  "crc32fast",
  "data-encoding",
@@ -1427,9 +1427,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-macros"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2456be7c9f0644790586c8747b0a8736c893d6ee51155843f1f9a7997b15b49e"
+checksum = "9a6c3a52b67009afa4a23812f259d1044a49f27709a5463964617b85579f77c7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1438,9 +1438,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d944798d08e67036406aea05a6fa73f34734b43e7e4b860840bc5fc0fa210ce"
+checksum = "24137d99e2cda1d691a8d73250487f4fb0aec240b124539ef13268f1e7736697"
 dependencies = [
  "ic-platform-macros",
  "ic-platform-runtime-guard",
@@ -1454,15 +1454,15 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime-guard"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf31cb93b4ece0be8a5ddc0bc522a49b2ff3d7a67294fe6c806b7a15104d56d6"
+checksum = "99c931bf5143162b4c059f3581092b3b23ab3d88e44c5fb9b63feca0dcf1d70a"
 
 [[package]]
 name = "ic-platform-types"
-version = "0.20.2"
+version = "0.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56d5223a1ef82ca053ea34b3937bea03f147d459708b7e58a270ec5605f96cc0"
+checksum = "6985b97bc8996c25cedccf61fc3147b6494aad620daabea6bbfa06287c02ec1a"
 dependencies = [
  "crc32fast",
  "data-encoding",
@@ -1484,9 +1484,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.44.1"
+version = "0.44.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a6d38ea900adf725693d6950fbed363301620ad92168714a7fa95670ce98716"
+checksum = "eac91f25103cb232f1075c34a9516fc32bcfc9d01fb3a8a86d3ca5e77e2bac51"
 dependencies = [
  "ic-metrics",
  "ic-platform-runtime",

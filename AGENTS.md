@@ -39,8 +39,19 @@ authenticated tooling installer.
   maintainer explicitly authorizes publication. GitHub pushes do not authorize it.
 - There are no local policy exceptions or release adapters. The experimental
   deployment path selects local/mainnet authority through an explicit plan.
-- `canic app init` creates local `canic.json` declarations only. Configured journals
-  default to `.canic/apps/APP/fleets/FLEET/` beside the config. Preserve legacy `.canic/`
+- `canic app init` creates local `canic.json` declarations only: it creates a missing
+  config or adds a new app and its first fleet, refusing existing app names and
+  preserving other apps. Configured journals are not created by initialization.
+  `canic fleet init` adds an empty fleet to an
+  existing app with an explicit network, using atomic config replacement and a
+  persistent `CONFIG.canic-lock` sidecar. It refuses existing fleet names.
+  `canic fleet canister add/list` declares and lists slots with explicit app/fleet
+  selection. These commands use configuration only; listing does not infer
+  deployment state from the presence or absence of a configured ID.
+  `add --id PRINCIPAL` records an existing identity for observation, with no
+  network calls or authority claim. It refuses occupied names and conflicting
+  membership on the same network; it never rebinds slots or rewrites journals.
+  Configured journals default to `.canic/apps/APP/fleets/FLEET/` beside the config. Preserve legacy `.canic/`
   operations and their v1 digests; `--no-config` selects that original flow.
   Named v2 plans bind fleet/app/canister names and never renew occupied-slot authority.
   This checkout's version 2 `canic.json` declares `hello-world/mainnet` and
@@ -49,6 +60,30 @@ authenticated tooling installer.
   `{}` for a future deployment, `{"id":"PRINCIPAL"}` for an existing canister.
   Existing IDs are observation declarations and block new creation in that slot.
   `profile_manager: true` selects only the demo's read-only status adapter.
+
+## Legacy research before subsystem work
+
+Before substantive subsystem implementation or redesign, inspect the relevant
+`canic-legacy` implementation, regression tests and Git history. Treat it as
+accumulated engineering evidence, not merely a source of feature names.
+
+- Identify the problem the legacy solution addressed, its failure cases and
+  safety requirements, and which platform or consumer assumptions have changed.
+- Reuse or adapt sound solutions where they fit the current Canic design. Explain
+  why a relevant solution is being replaced or omitted rather than rediscovering
+  the same failure through trial and error.
+- Bring applicable regression cases into Canic and run them against the new
+  implementation. Preserve the demonstrated invariant, not incidental legacy
+  structure or terminology.
+- Record the inspected revision, relevant source/test paths and the resulting
+  decision in the subsystem's existing design/work notes. Reuse prior research
+  when it covers the same revision and question; identify gaps in the evidence.
+
+This research does not require feature parity or give an existing mechanism a
+presumption of inclusion. Derive the implementation from current user outcomes
+and platform constraints, retaining protections for threats that still apply.
+Inspect the legacy repository read-only unless changes there are separately
+authorized.
 
 ## Post-push design review
 

@@ -275,7 +275,9 @@ An autonomous grant is separate from a deployment plan. It permits bounded futur
 ### Current command contract
 
 Keep the shipped vocabulary canonical. `canic app init APP --fleet FLEET --network
-NETWORK` creates a local declaration. `--app APP --fleet FLEET` selects an existing
+NETWORK` adds a new app and its first fleet, creating the config if missing and
+preserving other apps if present. Existing app names are refused.
+`--app APP --fleet FLEET` selects an existing
 deployment; a selector may be omitted only when its choice is unique. See the
 [runnable configuration journey](../../README.md#initialize-an-app-and-fleet).
 
@@ -283,6 +285,8 @@ deployment; a selector may be omitted only when its choice is unique. See the
 | --- | --- |
 | Initialize and build | `canic app init APP --fleet FLEET --network NETWORK`, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
 | List local declarations | `canic app list`, `canic fleet list`, optionally `--app APP` for fleets |
+| Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` adds an empty fleet to an existing app, without creating canisters or journals |
+| Declare canister slots | `canic fleet canister add SLOT --app APP --fleet FLEET [--id PRINCIPAL]`, `canic fleet canister list --app APP --fleet FLEET`; local configuration only. An optional existing ID is an observation declaration, not verified existence, controller authority or deployment approval; occupied names and conflicting membership are refused |
 | Review and execute one deployment | `canic fleet plan`, `canic fleet apply DIGEST` |
 | Investigate or continue the original operation | `canic fleet status DIGEST`, `canic fleet apply DIGEST` |
 | Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |

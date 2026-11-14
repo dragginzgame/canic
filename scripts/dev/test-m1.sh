@@ -8,10 +8,10 @@ cargo test --locked -p canic-cli --bin canic
 records=$(mktemp target/m1/build.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected one CLI") end' "$records")
-"$cli" --json build > target/m1/v1.json
+"$cli" artifact build --json --package canic-hello > target/m1/v1.json
 v1=$(jq -r '.wasm' target/m1/v1.json)
 cp "$v1" target/m1/hello-v1.wasm
-"$cli" --json build --features greeting-v2 > target/m1/v2.json
+"$cli" artifact build --json --package canic-hello --features greeting-v2 > target/m1/v2.json
 v2=$(jq -r '.wasm' target/m1/v2.json)
 cp "$v2" target/m1/hello-v2.wasm
 CANIC_CLI="$cli" CANIC_HELLO_V1="$root/target/m1/hello-v1.wasm" CANIC_HELLO_V2="$root/target/m1/hello-v2.wasm" \

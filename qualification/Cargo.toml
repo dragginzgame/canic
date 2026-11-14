@@ -13,7 +13,7 @@ canic-m0-artifact = { path = "m0-artifact" }
 canic-m0-probe = { path = "m0-probe" }
 canic-profile-protocol = { path = "../apps/profile/protocol" }
 ic-host-artifacts = { version = "0.77.1", default-features = false, features = ["wasm"] }
-ic-platform = { version = "0.32.1", default-features = false, features = ["management-canister-types"] }
+ic-platform = { version = "0.33.0", default-features = false, features = ["management-canister-types"] }
 ic-platform-runtime = { version = "0.22.1", default-features = false, features = ["cdk"] }
 ic-testkit = { version = "0.104.0", default-features = false }
 ic-wire = { version = "0.22.0", default-features = false }

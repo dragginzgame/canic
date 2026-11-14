@@ -10,6 +10,306 @@ async fn json(args: &[&str]) -> serde_json::Value {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn app_init_adds_a_second_app_and_requires_explicit_selection() {
+    let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/init-cli-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = ic_host_fs::directory::create_unique_directory(
+        &parent,
+        "second-app",
+        0o700,
+        std::num::NonZeroUsize::new(32),
+    )
+    .unwrap();
+    let path = root.join("canic.json");
+    let config = path.to_str().unwrap();
+    let first = json(&[
+        "app",
+        "init",
+        "first",
+        "--fleet",
+        "mainnet",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    let args = [
+        "app",
+        "init",
+        "second",
+        "--fleet",
+        "mainnet",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ];
+    let added = json(&args).await;
+    assert_eq!(added["deployed"], false);
+    assert_eq!(
+        added["configuration"]["apps"]["first"],
+        first["configuration"]["apps"]["first"]
+    );
+    let listed = json(&["app", "list", "--config", config]).await;
+    assert_eq!(
+        listed["apps"],
+        serde_json::json!([{"app":"first", "fleets":1}, {"app":"second", "fleets":1}])
+    );
+    let ambiguous = Cli::try_parse_from([
+        "canic", "fleet", "show", "--fleet", "mainnet", "--config", config,
+    ])
+    .unwrap();
+    assert!(matches!(run(&ambiguous).await, Err(Error::Invalid(_))));
+    let selected = json(&[
+        "fleet", "show", "--app", "second", "--fleet", "mainnet", "--config", config,
+    ])
+    .await;
+    assert_eq!(selected["configuration"]["app"], "second");
+    assert_eq!(selected["canisters"], serde_json::json!([]));
+    let before = std::fs::read(&path).unwrap();
+    let repeated = Cli::try_parse_from(["canic"].into_iter().chain(args)).unwrap();
+    assert!(matches!(run(&repeated).await, Err(Error::Invalid(_))));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert!(!root.join(".canic").exists());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn existing_canister_declaration_lists_exact_id_without_deployment_authority() {
+    let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/init-cli-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = ic_host_fs::directory::create_unique_directory(
+        &parent,
+        "existing-id",
+        0o700,
+        std::num::NonZeroUsize::new(32),
+    )
+    .unwrap();
+    let path = root.join("canic.json");
+    let config = path.to_str().unwrap();
+    json(&[
+        "app",
+        "init",
+        "hello",
+        "--fleet",
+        "demo",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    let id = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+    let args = [
+        "fleet", "canister", "add", "existing", "--id", id, "--app", "hello", "--fleet", "demo",
+        "--config", config,
+    ];
+    for forbidden in ["--identity", "--network", "--state-dir", "--apply"] {
+        assert!(
+            Cli::try_parse_from(
+                ["canic"]
+                    .into_iter()
+                    .chain(args)
+                    .chain([forbidden, "unused"])
+            )
+            .is_err()
+        );
+    }
+    let cli = Cli::try_parse_from(["canic"].into_iter().chain(args)).unwrap();
+    let Output::Text(output) = run(&cli).await.unwrap() else {
+        panic!("expected text")
+    };
+    assert!(output.contains(&format!("Configured ID: {id}")));
+    assert!(output.contains("Existence and control are not verified"));
+    let listed = json(&[
+        "fleet", "canister", "list", "--app", "hello", "--fleet", "demo", "--config", config,
+    ])
+    .await;
+    assert_eq!(
+        listed["configuration"]["config"]["canisters"]["existing"]["id"],
+        id
+    );
+    assert_eq!(listed["scope"], "local configuration only");
+    let before = std::fs::read(&path).unwrap();
+    assert!(run(&cli).await.is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let added = json(&[
+        "fleet",
+        "canister",
+        "add",
+        "another",
+        "--id",
+        "ryjl3-tyaaa-aaaaa-aaaba-cai",
+        "--app",
+        "hello",
+        "--fleet",
+        "demo",
+        "--config",
+        config,
+    ])
+    .await;
+    assert_eq!(added["deployed"], false);
+    assert_eq!(
+        added["configuration"]["config"]["canisters"]["another"]["id"],
+        "ryjl3-tyaaa-aaaaa-aaaba-cai"
+    );
+    assert!(!root.join(".canic").exists());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn declaration_messages_escape_paths_while_json_retains_original_paths() {
+    let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/init-cli-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = ic_host_fs::directory::create_unique_directory(
+        &parent,
+        "escaped-path",
+        0o700,
+        std::num::NonZeroUsize::new(32),
+    )
+    .unwrap();
+    for structured in [false, true] {
+        let path = root.join(format!("config-{structured}-café\n\u{1b}[2J\u{202e}.json"));
+        let config = path.to_str().unwrap();
+        for args in [
+            vec!["app", "init", "hello", "--fleet", "demo", "--network", "ic"],
+            vec![
+                "fleet",
+                "init",
+                "staging",
+                "--app",
+                "hello",
+                "--network",
+                "ic",
+            ],
+            vec![
+                "fleet", "canister", "add", "worker", "--app", "hello", "--fleet", "staging",
+            ],
+        ] {
+            let mut cli = Cli::try_parse_from(
+                ["canic"]
+                    .into_iter()
+                    .chain(args)
+                    .chain(["--config", config]),
+            )
+            .unwrap();
+            cli.json = structured;
+            match run(&cli).await.unwrap() {
+                Output::Json(value) => {
+                    assert!(structured);
+                    assert_eq!(value["config_path"], config);
+                    assert_eq!(value["deployed"], false);
+                }
+                Output::Text(value) => {
+                    assert!(!structured);
+                    assert!(value.contains(&format!(
+                        "config-{structured}-café\\n\\u{{1b}}[2J\\u{{202e}}.json"
+                    )));
+                    assert!(!value.contains('\u{1b}'));
+                    assert!(!value.contains('\u{202e}'));
+                }
+            }
+        }
+        let selected = canic_host::load_config(&path)
+            .unwrap()
+            .select(Some("hello"), Some("staging"))
+            .unwrap();
+        assert!(selected.config.canisters.contains_key("worker"));
+    }
+    assert!(!root.join(".canic").exists());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn fleet_init_adds_a_second_fleet_without_journals_or_network_calls() {
+    let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/init-cli-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = ic_host_fs::directory::create_unique_directory(
+        &parent,
+        "second-fleet",
+        0o700,
+        std::num::NonZeroUsize::new(32),
+    )
+    .unwrap();
+    let path = root.join("canic.json");
+    let config = path.to_str().unwrap();
+    json(&[
+        "app",
+        "init",
+        "hello",
+        "--fleet",
+        "mainnet",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
+    let args = [
+        "fleet",
+        "init",
+        "staging",
+        "--app",
+        "hello",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ];
+    let result = json(&args).await;
+    assert_eq!(result["deployed"], false);
+    assert_eq!(result["configuration"]["app"], "hello");
+    assert_eq!(result["configuration"]["fleet"], "staging");
+    assert!(!root.join(".canic").exists());
+    let listed = json(&["fleet", "list", "--config", config, "--app", "hello"]).await;
+    assert_eq!(listed["fleets"].as_array().unwrap().len(), 2);
+    let before = std::fs::read(&path).unwrap();
+    let repeat = Cli::try_parse_from(std::iter::once("canic").chain(args)).unwrap();
+    assert!(run(&repeat).await.is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    for invalid in [
+        vec!["fleet", "init", "missing-app", "--network", "ic"],
+        vec!["fleet", "init", "missing-network", "--app", "hello"],
+        vec![
+            "fleet",
+            "init",
+            "local",
+            "--app",
+            "hello",
+            "--network",
+            "local",
+        ],
+        vec![
+            "fleet",
+            "init",
+            "extra",
+            "--app",
+            "hello",
+            "--network",
+            "ic",
+            "--state-dir",
+            "journal",
+        ],
+    ] {
+        assert!(Cli::try_parse_from(std::iter::once("canic").chain(invalid)).is_err());
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -97,17 +397,32 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
         panic!("expected text");
     };
     assert!(text.contains("No canisters declared yet"));
+    let slot_args = [
+        "fleet", "canister", "add", "backend", "--app", "hello", "--fleet", "demo", "--config",
+        config,
+    ];
+    let added = json(&slot_args).await;
+    assert_eq!(added["deployed"], false);
+    assert!(!root.join(".canic").exists());
+    let before = std::fs::read(config).unwrap();
+    let duplicate = Cli::try_parse_from(std::iter::once("canic").chain(slot_args)).unwrap();
+    assert!(run(&duplicate).await.is_err());
+    assert_eq!(std::fs::read(config).unwrap(), before);
+    let list_args = [
+        "fleet", "canister", "list", "--app", "hello", "--fleet", "demo", "--config", config,
+    ];
+    let listed = json(&list_args).await;
+    assert_eq!(
+        listed["configuration"]["config"]["canisters"],
+        serde_json::json!({"backend":{}})
+    );
+    let list = Cli::try_parse_from(std::iter::once("canic").chain(list_args)).unwrap();
+    let Output::Text(text) = run(&list).await.unwrap() else {
+        panic!("expected text")
+    };
+    assert!(text.contains("backend"));
+    assert!(text.contains("an unset ID does not mean undeployed"));
     let mut declared = canic_host::load_config(std::path::Path::new(config)).unwrap();
-    declared
-        .apps
-        .get_mut("hello")
-        .unwrap()
-        .fleets
-        .get_mut("demo")
-        .unwrap()
-        .canisters
-        .insert("backend".into(), canic_host::CanisterConfig::default());
-    std::fs::write(config, serde_json::to_vec_pretty(&declared).unwrap()).unwrap();
     let first = json(&args).await;
     let repeated = json(&args).await;
     assert_eq!(first, repeated);
@@ -280,6 +595,31 @@ fn help_includes_version_and_sorted_commands_at_every_level() {
 #[test]
 fn commands_reject_context_they_do_not_use() {
     for args in [
+        vec!["fleet", "canister", "add", "backend", "--app", "hello"],
+        vec!["fleet", "canister", "list", "--fleet", "mainnet"],
+        vec![
+            "fleet",
+            "canister",
+            "list",
+            "--app",
+            "hello",
+            "--fleet",
+            "mainnet",
+            "--state-dir",
+            "journal",
+        ],
+        vec![
+            "fleet",
+            "canister",
+            "add",
+            "backend",
+            "--app",
+            "hello",
+            "--fleet",
+            "mainnet",
+            "--network",
+            "ic",
+        ],
         vec!["app", "list", "--fleet", "mainnet"],
         vec![
             "app",

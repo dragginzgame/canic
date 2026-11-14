@@ -66,7 +66,27 @@ fn terminal_preserves_unknowns_network_identity_and_uncertain_effects() {
     assert!(!output.contains('\u{1b}'));
     assert!(!output.contains("\nforged line"));
     assert!(!output.contains('\u{202e}'));
-    assert!(output.contains("\\u{1b}[2J\\u{a}forged line"));
+    assert!(output.contains("\\u{1b}[2J\\nforged line"));
+}
+
+#[test]
+fn terminal_escapes_external_unicode_controls_without_changing_evidence() {
+    let mut snapshot = empty();
+    let diagnostic =
+        "provider café\u{61c}\u{200e}\u{200f}\u{2028}\u{2029}\u{202e}\u{2066}\n\u{1b}[2J";
+    snapshot.issues.push(diagnostic.into());
+    let before = serde_json::to_value(&snapshot).unwrap();
+    let output = render(&snapshot, &[diagnostic.into()], false, false);
+    assert!(output.contains(
+        "provider café\\u{61c}\\u{200e}\\u{200f}\\u{2028}\\u{2029}\\u{202e}\\u{2066}\\n\\u{1b}[2J"
+    ));
+    for control in [
+        '\u{61c}', '\u{200e}', '\u{200f}', '\u{2028}', '\u{2029}', '\u{202e}', '\u{2066}', '\u{1b}',
+    ] {
+        assert!(!output.contains(control));
+    }
+    assert_eq!(serde_json::to_value(&snapshot).unwrap(), before);
+    assert_eq!(before["issues"][0], diagnostic);
 }
 
 #[test]

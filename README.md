@@ -15,7 +15,7 @@ approve a worker once, let the host leave, then inspect the retained outcome wit
 This is the fresh Canic rewrite. The predecessor is maintained separately as
 [canic-legacy](https://github.com/dragginzgame/canic-legacy).
 
-The rewrite starts at **0.200.0**, above the legacy crates.io release line.
+The rewrite uses the **0.200.x** line, above the legacy crates.io release line.
 Development is shared through GitHub. We will not publish this rewrite to
 crates.io until it is mature; all workspace packages retain `publish = false`.
 Build from this repository in the meantime.
@@ -96,11 +96,14 @@ have no aliases.
 
 | Command | Input and scope |
 | --- | --- |
-| `app init APP --fleet FLEET --network ic` | Create a new local config; `--config PATH` chooses its destination. No deployment. |
+| `app init APP --fleet FLEET --network ic` | Add a new app and its first fleet; create the config if missing. `--config PATH` chooses the file. Refuses existing app names. No deployment. |
 | `app list` | Read all apps from `--config PATH` (default `canic.json`). |
 | `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. App names do not select packages. |
 | `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
 | `fleet list` | Read fleet declarations; optional `--app APP` filters them. |
+| `fleet init FLEET --app APP --network ic` | Add an empty fleet to an existing app in `--config PATH`; refuses existing names and deploys nothing. |
+| `fleet canister add SLOT --app APP --fleet FLEET` | Declare a slot in that existing fleet; optional `--id PRINCIPAL` records an existing canister. Refuses existing slot names and deploys nothing. |
+| `fleet canister list --app APP --fleet FLEET` | List local slot declarations and explicitly configured IDs, without reading journals or contacting canisters. |
 | `fleet show` | Observe the selected app/fleet; `--html PATH` saves a report, `--serve` serves it, and `--watch` refreshes it. |
 | `fleet plan --wasm WASM_FILE --controller PRINCIPAL` | Prepare one canister's deployment within the selected fleet, using the creation or upgrade arguments below. |
 | `fleet apply OPERATION --identity IDENTITY` | Approve/resume that exact retained operation, including its funding and network effects. |
@@ -152,8 +155,10 @@ canic app init hello --fleet mainnet --network ic
 canic fleet show --app hello --fleet mainnet
 ```
 
-Initialization creates **only `canic.json`**. It refuses to overwrite an existing
-file, does not access an identity, and performs no network calls or funding.
+Initialization creates **only local declarations**. It creates `canic.json` if
+missing or adds the new app to an existing config, preserving other apps. It
+refuses an existing app name, does not access an identity, and performs no network
+calls or funding. Existing-file updates use the sidecar lock described below.
 Canister layout is declared later in the selected fleet:
 
 ```json
@@ -172,8 +177,41 @@ Canister layout is declared later in the selected fleet:
 }
 ```
 
-Add further fleets under the same app's `fleets` object. Add separate applications
-under `apps`. The CLI discovers `canic.json` in the current directory, or accepts
+Add another fleet to an existing app without editing JSON:
+
+```sh
+canic fleet init staging --app hello --network ic
+canic fleet list --app hello
+canic fleet show --app hello --fleet staging
+```
+
+This adds an empty fleet on the explicitly chosen network, preserving all other
+declarations. It refuses unknown apps and existing fleet names. No canisters are
+created and no journal is opened; its future default journal remains separate
+from the first fleet. A fleet name such as `staging` does not imply a network.
+Local fleets require the same explicit URL, root key and routing canister inputs
+as `app init`.
+
+Config updates use a persistent, Git-ignored `CONFIG.canic-lock` sidecar and an
+atomic file replacement. The lock coordinates Canic commands, not external text
+editors; avoid simultaneous manual edits. Do not delete the sidecar while an edit
+is running. A filesystem sync failure can occur after the complete update becomes
+visible; inspect `fleet list` before retrying.
+
+Add another app with its own first fleet through the same command:
+
+```sh
+canic app init another-app --fleet mainnet --network ic
+canic app list
+canic fleet list --app another-app
+```
+
+Choose an unused app name. Repeating `app init` cannot reset an app or add fleets
+to it; use `fleet init` for another fleet within an existing app. A malformed
+existing config is refused, never replaced with an empty one. Concurrent creation
+of the first config can refuse one initializer; inspect `app list` before retrying.
+
+The CLI discovers `canic.json` in the current directory, or accepts
 `--config PATH`. Select `--app NAME --fleet NAME`; either may be omitted only
 when its choice is unique. Ambiguous selection fails with the available names.
 The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config. A fleet's
@@ -193,12 +231,42 @@ local mistake prevention; controller/signature checks still supply authority.
 Editing a name is not a rename or transfer operation, and never rewrites existing
 approved plans or moves their journals.
 
-To prepare the first deployment, set `apps.hello.fleets.mainnet.canisters` to
-`{"backend": {}}`. Set `canic_owner` to the controller principal and prepare the
-Wasm target, then build and review the plan:
+To prepare the first deployment in the app/fleet created above, declare an empty
+slot. Both slot commands require `--app` and `--fleet`; they accept `--config PATH`
+but no network override or journal options. The fleet already owns its network.
+
+```sh
+canic fleet canister add backend --app hello --fleet mainnet
+canic fleet canister list --app hello --fleet mainnet
+```
+
+Adding an empty slot does not create a canister or bind a principal. Duplicate names are
+refused even for empty slots; existing identities and retained operations cannot
+be reset by repeating the command. The list reads only declarations: an unset ID
+can still have a completed deployment in the journal. Use `fleet show` for that
+evidence and live observations.
+
+To include an already deployed canister, set `canic_existing_id` to its principal
+and choose an unused slot name in the fleet for its actual network:
+
+```sh
+canic fleet canister add existing --app hello --fleet mainnet --id "$canic_existing_id"
+canic fleet canister list --app hello --fleet mainnet
+```
+
+This records local membership only. It does not contact the canister, verify
+existence or control, change controllers, fund it or modify its code. Invalid
+principals and duplicate membership on the same network are refused before the
+config is replaced. Existing slots cannot be rebound with `add`, including empty
+slots. An ID blocks creation in that slot; upgrading still requires a separate
+target/hash plan and approval. No journal is created or changed by this command.
+
+Set `canic_owner` to the controller principal and prepare the Wasm target, then
+build, inspect and review the plan (requires `jq`):
 
 ```sh
 canic artifact build --json --package canic-hello > target/hello-build.json
+canic artifact inspect "$(jq -r .wasm target/hello-build.json)"
 canic fleet plan --app hello --fleet mainnet --json --canister backend \
   --wasm "$(jq -r .wasm target/hello-build.json)" \
   --controller "$canic_owner" > target/hello-plan.json

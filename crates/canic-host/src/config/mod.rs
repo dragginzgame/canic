@@ -10,6 +10,8 @@ use std::{
 mod tests;
 mod unique;
 
+const MAX_CONFIG_BYTES: usize = 32 * 1024;
+
 /// Applications and their independently selected deployment fleets.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -318,14 +320,188 @@ impl SelectedFleet {
 /// # Errors
 /// Refuses invalid declarations and existing destination files.
 pub fn init_config(path: &Path, config: &Config) -> Result<()> {
-    config.validate()?;
+    let bytes = encode_config(config)?;
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
     {
         ic_host_fs::durable::prepare_private_parents(parent).map_err(supplier)?;
     }
-    store::put_json(path, config)
+    store::put(path, &bytes)
+}
+
+fn encode_config(config: &Config) -> Result<Vec<u8>> {
+    config.validate()?;
+    let bytes = serde_json::to_vec_pretty(config).map_err(supplier)?;
+    if bytes.len() > MAX_CONFIG_BYTES {
+        return Err(Error::Invalid("config exceeds 32 KiB".into()));
+    }
+    Ok(bytes)
+}
+
+fn lock_path(path: &Path) -> PathBuf {
+    let mut value = path.as_os_str().to_os_string();
+    value.push(".canic-lock");
+    value.into()
+}
+
+/// Initialize a new app and its first empty fleet, preserving any existing apps.
+///
+/// Creates a missing config exclusively; edits an existing config under the same
+/// sidecar lock as [`init_fleet`]. Never opens journals or contacts a network.
+/// Concurrent first-time initializers may lose the create race and must inspect
+/// the resulting config before retrying.
+///
+/// # Errors
+/// Refuses existing app names, invalid names/networks, unreadable or invalid
+/// configs, symlinks, config limits and lock contention. A publication sync failure
+/// can leave the complete update visible; inspect the config before retrying.
+pub fn init_app(path: &Path, app: &str, fleet: &str, network: Network) -> Result<Config> {
+    name(app)?;
+    name(fleet)?;
+    network.validate()?;
+    let definition = AppConfig {
+        fleets: BTreeMap::from([(
+            fleet.into(),
+            FleetConfig {
+                network,
+                journal: None,
+                canisters: BTreeMap::new(),
+            },
+        )]),
+    };
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => edit_config(path, |config| {
+            if config.apps.contains_key(app) {
+                return Err(Error::Invalid(
+                    "app already exists; use fleet init to add a fleet".into(),
+                ));
+            }
+            config.apps.insert(app.into(), definition);
+            Ok(config.clone())
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let config = Config {
+                version: 2,
+                apps: BTreeMap::from([(app.into(), definition)]),
+            };
+            init_config(path, &config)?;
+            Ok(config)
+        }
+        Err(error) => Err(supplier(error)),
+    }
+}
+
+/// Add an empty fleet to an existing app without changing other declarations or journals.
+///
+/// Canic writers serialize through a persistent sidecar lock and publish complete
+/// configuration bytes atomically. This does not coordinate external editors.
+///
+/// # Errors
+/// Refuses missing apps, existing fleets, invalid or oversized declarations, symlink
+/// inputs and lock contention. A publication sync failure can leave the complete
+/// updated file visible; inspect the config before retrying.
+pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Result<SelectedFleet> {
+    name(app)?;
+    name(fleet)?;
+    network.validate()?;
+    edit_config(path, |config| {
+        let definition = config.apps.get_mut(app).ok_or_else(|| {
+            Error::Invalid("app does not exist in this config; use app list to inspect it".into())
+        })?;
+        if definition.fleets.contains_key(fleet) {
+            return Err(Error::Invalid(
+                "fleet already exists; nothing changed".into(),
+            ));
+        }
+        definition.fleets.insert(
+            fleet.into(),
+            FleetConfig {
+                network,
+                journal: None,
+                canisters: BTreeMap::new(),
+            },
+        );
+        config.select(Some(app), Some(fleet))
+    })
+}
+
+/// Declare a canister slot, optionally naming an existing canister for observation.
+///
+/// Uses the same locked, atomic config update as [`init_fleet`]. Existing slot
+/// identities and journals are never replaced or reset. An ID is a local selection,
+/// not proof of existence or control. No network calls or journal access occur.
+///
+/// # Errors
+/// Refuses missing apps/fleets, duplicate or invalid slot names, invalid principals,
+/// conflicting membership on the same network, config limits and lock contention.
+/// After-publication sync errors require inspecting the config.
+pub fn add_canister(
+    path: &Path,
+    app: &str,
+    fleet: &str,
+    slot: &str,
+    id: Option<&str>,
+) -> Result<SelectedFleet> {
+    name(app)?;
+    name(fleet)?;
+    name(slot)?;
+    let id = id
+        .map(crate::network::principal)
+        .transpose()?
+        .map(|id| id.to_text());
+    edit_config(path, |config| {
+        let definition = config
+            .apps
+            .get_mut(app)
+            .and_then(|app| app.fleets.get_mut(fleet))
+            .ok_or_else(|| {
+                Error::Invalid(
+                    "app/fleet does not exist; use fleet list to inspect this config".into(),
+                )
+            })?;
+        if definition.canisters.contains_key(slot) {
+            return Err(Error::Invalid(
+                "canister slot already exists; nothing changed".into(),
+            ));
+        }
+        definition.canisters.insert(
+            slot.into(),
+            CanisterConfig {
+                id,
+                profile_manager: false,
+            },
+        );
+        config.select(Some(app), Some(fleet))
+    })
+}
+
+fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) -> Result<T> {
+    use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
+
+    // Refuse missing/invalid input before creating a sidecar; reload under lock.
+    load_config(path)?;
+    let lock = durable::open_private_regular_lock_file(&lock_path(path)).map_err(supplier)?;
+    durable::try_lock_exclusive(&lock).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::WouldBlock {
+            Error::Invalid("config is being edited by another Canic command".into())
+        } else {
+            supplier(error)
+        }
+    })?;
+    let mut config = load_config(path)?;
+    let result = update(&mut config)?;
+    let bytes = encode_config(&config)?;
+    durable::write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o600,
+        },
+        &bytes,
+    )
+    .map_err(supplier)?;
+    Ok(result)
 }
 
 /// Read one bounded local declaration without following a file symlink.
@@ -334,7 +510,7 @@ pub fn init_config(path: &Path, config: &Config) -> Result<()> {
 /// Refuses missing, malformed, unsupported or oversized configuration files.
 pub fn load_config(path: &Path) -> Result<Config> {
     let config: Config =
-        serde_json::from_slice(&store::read(path, 32 * 1024)?).map_err(supplier)?;
+        serde_json::from_slice(&store::read(path, MAX_CONFIG_BYTES)?).map_err(supplier)?;
     config.validate()?;
     Ok(config)
 }

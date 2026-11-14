@@ -1,6 +1,95 @@
 # Changelog
 
-## [0.200.0] - Unreleased
+## [0.200.1] - 2026-11-14 (GitHub snapshot)
+
+### ▶️ Try it
+
+After `make canic`, check the version and list this checkout's declarations.
+These commands make no network calls and open no browser:
+
+```sh
+canic --version
+canic app list
+canic fleet list --app profile
+```
+
+Add another app and its first fleet to this config, choosing an unused app name.
+Existing apps are preserved; these commands deploy nothing:
+
+```sh
+canic app init another-app --fleet mainnet --network ic
+canic app list
+canic fleet list --app another-app
+```
+
+To add a second, empty mainnet fleet to the existing `profile` app, choose an
+unused name. This edits `canic.json` only; it creates no journal or canister:
+
+```sh
+canic fleet init staging --app profile --network ic
+canic fleet list --app profile
+canic fleet show --app profile --fleet staging
+```
+
+Once that fleet exists, declare its first slot and inspect the declarations.
+These commands do not create or contact canisters:
+
+```sh
+canic fleet canister add backend --app profile --fleet staging
+canic fleet canister list --app profile --fleet staging
+canic fleet plan --help
+```
+
+For an existing canister, set `canic_existing_id` to its principal and choose an
+unused slot in the fleet for its actual network. This records a local declaration
+only; it performs no network calls or controller changes:
+
+```sh
+canic fleet canister add existing --app profile --fleet staging --id "$canic_existing_id"
+canic fleet canister list --app profile --fleet staging
+```
+
+### ➕ Added
+
+- Extend `app init` to add a new app and its first fleet to an existing config,
+  preserving other declarations through the locked atomic writer. Missing configs
+  are created exclusively. Existing app names, malformed configs and capacity
+  violations are refused; initialization never opens deployment journals.
+- Allow `fleet canister add --id PRINCIPAL` to declare an existing canister without
+  editing JSON. Refuse invalid principals, occupied slot names and duplicate
+  membership on the same network. Declaration does not verify existence or control
+  and does not authorize creation, funding or upgrades.
+- Add `fleet canister add SLOT` and `fleet canister list`, both with explicit
+  `--app APP --fleet FLEET`. Adding refuses existing slot names, preserves configured
+  identities and uses the same atomic config update as fleet initialization.
+  Listings show configured IDs only; use `fleet show` for deployment observations.
+- Add `fleet init FLEET --app APP --network NETWORK` to declare another fleet
+  under an existing app. It requires an explicit network, refuses existing names,
+  and preserves other declarations and operation journals. Concurrent Canic edits
+  are serialized; complete config updates are published atomically.
+
+### 🔧 Changed
+
+- Adopt published `ic-platform 0.33.0` in the product and qualification workspaces.
+  Existing feature selections and stored deployment records are unchanged;
+  rebuild with `make canic`. Testkit retains its independent native Platform 0.32
+  dependency. The new registry codecs are not enabled by this increment.
+
+### 🩹 Fixed
+
+- Escape config paths in declaration messages and external text in fleet output
+  through the shared IC Host renderer, including Unicode direction and line
+  controls. JSON retains original values. Adapt legacy regression cases for
+  display escaping, stable configuration snapshots and malformed edit refusal.
+- Update the demo test runners to use `artifact build` with an explicit package.
+  The local deployment journey now declares its slot through the CLI instead of
+  editing JSON, and checks the inspected artifact against the retained plan.
+  Demo instructions now describe the selected profile fleet rather than implying
+  that its view also includes the separate Hello World fleet.
+- Enforce the reader's 32 KiB limit before writing configuration, so initialization
+  cannot leave a file that Canic subsequently refuses to load.
+
+## [0.200.0] - 2026-11-14 (GitHub snapshot)
 
 ### ▶️ Try it
 

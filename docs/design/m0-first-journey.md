@@ -55,6 +55,146 @@ canister code and operation evidence were not changed by these fixes. Comparativ
 adoption measurements and broader production lifecycle remain unqualified; this
 review does not close M0 or admit the optional capability catalogue.
 
+### Legacy evidence applied to configuration and terminal output
+
+The 0.200.1 configuration increment was compared with committed legacy revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`. This is a scoped source and history
+review, separate from the earlier working-tree inventory in the architecture.
+
+- [Declaration mutation](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/release_set/config/mutation/declare.rs)
+  checked app identity, rejected duplicate names and validated the resulting
+  configuration before publishing it. Current app/fleet/slot edits retain those
+  protections. The legacy package bindings, reserved roles and topology compiler
+  are not requirements of the current local slot declaration.
+- [Configuration implementation](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/release_set/config/mod.rs)
+  and its [regression tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/release_set/config/tests.rs)
+  keep projections on one validated snapshot, retain decoding evidence and refuse
+  malformed mutations. Canic's owned `Config` and `SelectedFleet` provide the
+  snapshot boundary; the existing shared durable writer owns atomic publication.
+  A single-file edit does not need legacy's multi-file package-rename rollback.
+- [Discovery diagnostics tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-host/src/config_discovery/tests.rs)
+  escape hostile paths while preserving original evidence. This exposed raw
+  config paths in Canic's three declaration success messages and incomplete
+  Unicode escaping in its private fleet renderer. Both now use
+  `ic_host_text::escape::terminal_text`; paths, configuration and JSON retain
+  their original values. Explicit config selection needs no recursive discovery
+  or directory traversal subsystem.
+- [CLI configuration tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/list/config/tests/mod.rs)
+  distinguish a fleet name from its bound app. Current tests already exercise
+  `hello/demo`, multiple fleets and multiple apps. Local declarations remain
+  distinct from live membership and authority observations.
+
+History comparison included the config tests before `aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f`
+(parent `3700c6e1bf78cb04a60dcfaf0f789d4dd992c9e0`) and the CLI config module before
+`e8605c44ffaf77ceb7ddaf85b374f42b7a48703d`
+(parent `e6a061999dfae207bc20917ffefa2082e7ffe2e7`). The snapshot, escaping and
+app/fleet regression cases predate those reorganizations; moving ownership did
+not create the underlying guarantees.
+
+Adapted witnesses in the current normal test paths:
+
+| Legacy invariant | Current regression |
+| --- | --- |
+| One loaded snapshot survives a later config edit | `loaded_config_and_selection_retain_one_validated_snapshot` |
+| Nested malformed input refuses mutation and retains its decoding source | `nested_unknown_fields_refuse_edits_without_changing_config` |
+| Display escaping preserves original paths and machine output | `declaration_messages_escape_paths_while_json_retains_original_paths` |
+| External diagnostics cannot inject terminal direction or line controls | `terminal_escapes_external_unicode_controls_without_changing_evidence` |
+
+Validation: 19 host configuration tests and all 19 CLI tests passed, along with
+M1 Clippy/Rustdoc, formatting and tooling agreement. The CLI was rebuilt with
+`make canic`. Viewer tests required localhost access; no browser was launched.
+The installed deployment simulator was already qualified for the preceding slot
+declaration change and was not rerun for this presentation-only production edit.
+
+This review qualifies local declarations and fleet text presentation, not all
+legacy subsystems, every CLI error path or production management authority.
+
+### Existing canister declarations from the CLI
+
+The same 0.200.1 declaration path now accepts `fleet canister add --id PRINCIPAL`.
+This closes the documented manual JSON step for observing an existing canister.
+It uses the existing config schema, principal parser, membership validation and
+atomic writer. It does not read journals or contact a provider. Existing names
+remain immutable through `add`; creation in a declared-ID slot remains refused.
+The same principal on another exact network binding remains a separate identity.
+
+The declaration research above applies unchanged. The additional boundary check
+read legacy [fleet import](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/fleet/import/mod.rs)
+and its [tests](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-cli/src/fleet/import/tests.rs).
+That workflow reviews exact source identities, controller transfer, code/state
+clearing and bounded debits, then applies retained approval. Its tests keep new
+review inputs separate from replay authority. The path history includes
+`aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f`; comparing the tests with parent
+`3700c6e1bf78cb04a60dcfaf0f789d4dd992c9e0` found them unchanged.
+
+Local observation declarations do not have those destructive effects, so this
+increment introduces no import command, Root, capacity enrollment or approval
+mechanism. The applicable invariant is that declaring an identity cannot silently
+approve effects: CLI tests reject identity/network/apply inputs on `add`; host
+tests refuse new creation in the declared slot and preserve config bytes on
+invalid IDs, duplicate membership and attempted rebinding. Controller authority
+and existence still require independent evidence at the existing observation and
+deployment boundaries.
+
+Validation: all 20 host configuration tests and 6 CLI configuration/help tests
+passed, including `existing_id_declarations_are_network_scoped_and_do_not_authorize_creation`
+and `existing_canister_declaration_lists_exact_id_without_deployment_authority`.
+M1 Clippy/Rustdoc, formatting and tooling agreement passed; `make canic` rebuilt
+the CLI. No deployment, mainnet observation or browser launch was needed.
+
+### Initializing additional apps
+
+`app init` now also adds a new app to an existing config. This closes the manual
+`apps` map edit while retaining a single initialization command. The declaration
+and snapshot research above remains applicable at the same pinned legacy
+revision: refuse duplicate identities, validate the whole result, preserve
+unrelated declarations and keep local configuration separate from effects.
+Legacy's one-app configuration assumption does not apply to the selected
+App → Fleets → Canisters catalogue; its ownership and refusal invariants do.
+
+The host owns both initialization branches. A missing file uses exclusive
+creation; an existing file uses the current sidecar lock, reload and atomic
+replacement. A first-creation race may refuse one caller, but cannot overwrite a
+successful declaration. Invalid existing files and symlinks are never treated as
+missing configs. Duplicate app names direct the operator to `fleet init` rather
+than modifying the app's fleets implicitly. JSON returns the complete resulting
+config from that mutation, without an independent reload.
+
+Regression cases cover preservation of existing IDs and journal bytes, separate
+default journals for the same fleet name under different apps, concurrent first
+creation, lock contention, duplicate names, malformed/oversized config, symlinks
+including dangling links, the 16-app ceiling, and explicit app selection through
+the CLI. This changes local declaration behavior only.
+
+Validation: 23 host configuration tests and 7 CLI configuration/help tests passed,
+along with M1 Clippy/Rustdoc, formatting and tooling agreement. The CLI was rebuilt
+with `make canic`; the checkout's mainnet config and deployments were unchanged.
+
+### Platform 0.33 adoption for the 0.200.1 GitHub snapshot
+
+Registry availability was checked on 2026-11-14: Platform 0.33.0 is published
+and non-yanked. Both workspace manifests now select it; unchanged feature sets
+leave its new `nns-registry-types` codecs disabled. Testkit 0.104.0 retains
+Platform 0.32.3 in its independent native harness. Canic's host graph uses 0.33.0;
+the manager and M0 Wasm graphs select one Runtime/guard 0.22.3 and Types 0.20.3,
+without Agent, PocketIC or Testkit in those Wasm graphs. Locked offline metadata
+and consumer compilation admit both workspaces, rather than requiring matching
+facade versions across independent executables.
+
+The first-party registry review found the retained locks current: Host
+FS/Process/Artifacts 0.77.2, Text 0.75.0, Storage 0.74.1, Timers 0.44.2, Wire
+0.22.1, Testkit 0.104.0 and Toko Tooling 0.43.0, alongside Runtime and Types
+above. Compatible manifest minimums remain unchanged; this is not a bulk
+dependency refresh. Publication remains disabled for every Canic package.
+
+Validation on Linux passed: both locked offline metadata graphs, the scoped
+host/manager/M0 dependency checks, `make lint`, and `make test m0-test
+m0-artifact-test m1-test profile-test growth-test`. The installed fixtures cover
+creation/funding interruption, owner maintenance, retained artifact custody,
+CLI deployment/recovery/upgrade, private profile preservation and autonomous
+growth through all five injected interruption windows. These use synthetic cycles;
+no mainnet deployment or browser launch occurred. Native macOS was not rerun.
+
 ## First capability and consumer invariant
 
 M1 exercises build, reviewed installation, invocation and status of one greeting

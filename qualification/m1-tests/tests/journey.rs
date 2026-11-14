@@ -12,21 +12,24 @@ use std::{
 };
 
 fn cli(root: &Path, args: &[&str]) -> Value {
+    let uses_journal = args.first() == Some(&"fleet")
+        && matches!(
+            args.get(1),
+            Some(&"plan" | &"apply" | &"status" | &"call" | &"show")
+        );
     let output = Command::new(std::env::var_os("CANIC_CLI").expect("run make m1-test"))
         .args(args)
         .arg("--json")
-        .args(if args.first() == Some(&"fleet") {
+        .args(if uses_journal {
             vec!["--state-dir", root.to_str().unwrap()]
         } else {
             vec![]
         })
-        .args(
-            if args.first() == Some(&"fleet") && !args.contains(&"--config") {
-                vec!["--no-config"]
-            } else {
-                vec![]
-            },
-        )
+        .args(if uses_journal && !args.contains(&"--config") {
+            vec!["--no-config"]
+        } else {
+            vec![]
+        })
         .output()
         .unwrap();
     assert!(
@@ -103,15 +106,41 @@ async fn deploy_call_resume_and_upgrade() {
         initialized["configuration"]["apps"]["hello"]["fleets"]["local-demo"]["canisters"],
         serde_json::json!({})
     );
-    let mut declaration: Value =
-        serde_json::from_slice(&std::fs::read(config_path).unwrap()).unwrap();
-    declaration["apps"]["hello"]["fleets"]["local-demo"]["canisters"] =
-        serde_json::json!({"backend": {}});
-    std::fs::write(
-        config_path,
-        serde_json::to_vec_pretty(&declaration).unwrap(),
-    )
-    .unwrap();
+    let added = cli(
+        &root,
+        &[
+            "fleet",
+            "canister",
+            "add",
+            "backend",
+            "--config",
+            config_path,
+            "--app",
+            "hello",
+            "--fleet",
+            "local-demo",
+        ],
+    );
+    assert_eq!(added["deployed"], false);
+    let slots = cli(
+        &root,
+        &[
+            "fleet",
+            "canister",
+            "list",
+            "--config",
+            config_path,
+            "--app",
+            "hello",
+            "--fleet",
+            "local-demo",
+        ],
+    );
+    assert_eq!(
+        slots["configuration"]["config"]["canisters"],
+        serde_json::json!({"backend": {}})
+    );
+    let artifact = cli(&root, &["artifact", "inspect", &wasm]);
     let plan = cli(
         &root,
         &[
@@ -138,6 +167,7 @@ async fn deploy_call_resume_and_upgrade() {
         ],
     );
     let id = plan["operation"].as_str().unwrap();
+    assert_eq!(plan["plan"]["artifact"], artifact);
     let receipt = cli(
         &root,
         &[

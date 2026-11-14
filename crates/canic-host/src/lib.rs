@@ -15,8 +15,8 @@ mod wallet;
 pub use artifact::{Artifact, build, inspect};
 pub use canic_profile_protocol::growth::Phase as ProfileGrowthPhase;
 pub use config::{
-    AppConfig, CanisterConfig, Config, DeploymentName, FleetConfig, SelectedFleet,
-    create_configured_plan, init_config, load_config,
+    AppConfig, CanisterConfig, Config, DeploymentName, FleetConfig, SelectedFleet, add_canister,
+    create_configured_plan, init_app, init_config, init_fleet, load_config,
 };
 pub use fleet::{
     Fleet, FleetCanister, FleetManager, FleetOperation, fleet, fleet_with_config,

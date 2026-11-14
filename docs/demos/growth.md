@@ -52,8 +52,9 @@ Failed refreshes retain the prior snapshot with a visible warning. Ctrl-C in its
 terminal stops both observation and serving.
 For a one-shot terminal summary, omit `--watch` from the fleet command above.
 Add `--json` when consuming the complete observation in a script.
-It includes all five known canisters: Hello World, the original entry/worker,
-the manager and the autonomous worker. Manager queries and private profile reads
+It includes the four canisters in `profile/mainnet`: the original entry/worker,
+the manager and the autonomous worker. Hello World belongs to the separate
+`hello-world/mainnet` fleet. Manager queries and private profile reads
 are explicitly uncertified; update replies and module/controller metadata use
 their certified paths.
 The optional wallet panel also shows the default ICP receive address and public
