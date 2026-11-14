@@ -431,6 +431,14 @@ when adding, changing or reviewing metrics and logging.
 
 ## IC application encoding
 
+Reusable libraries own domain operations, data contracts and retained-data codecs.
+Adapters or applications own public canister endpoint registration, caller guards,
+framework lifecycle composition and deployment policy. Canic owns those bindings
+for Canic-managed applications; independent services retain their own host adapter.
+Wire encoding, bounded types or schema generation alone do not make a dependency
+an endpoint-ownership violation. Keep native domain use independent of mounting
+an endpoint; do not move domain engines into Canic to remove a codec dependency.
+
 Hashing choices follow the [shared algorithm/purpose inventory](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/hashing.md).
 Review new algorithms and direct hashing packages explicitly; pure hashing may
 use approved direct dependencies without a Platform facade. Preserve existing

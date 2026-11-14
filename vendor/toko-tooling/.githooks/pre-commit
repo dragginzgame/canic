@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Shared companions: scripts/ci/check-make-execution.sh
 set -euo pipefail
-tooling_root="$(cd -P "${BASH_SOURCE[0]%/*}/.." && printf '%s/.' "$PWD")"
+tooling_root="${BASH_SOURCE[0]}"
+[[ "$tooling_root" == /* ]] || tooling_root="$PWD/$tooling_root"
+tooling_root="$(CDPATH='' cd -P -- "${tooling_root%/*}/.." && printf '%s/.' "$PWD")"
 tooling_root="${tooling_root%/.}"
 
 # Format the selected index payload, without exposing unrelated working edits.
@@ -11,7 +13,7 @@ root="$(git rev-parse --show-toplevel && printf '.')"
 root="${root%$'\n.'}"
 cd "$root"
 snapshot="$(mktemp -d "${TMPDIR:-/tmp}/pre-commit-format.XXXXXX")"
-snapshot="$(cd -P "$snapshot" && printf '%s/.' "$PWD")"
+snapshot="$(CDPATH='' cd -P -- "$snapshot" && printf '%s/.' "$PWD")"
 snapshot="${snapshot%/.}"
 trap 'rm -rf -- "$snapshot"' EXIT
 

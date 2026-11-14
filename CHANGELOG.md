@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.200.0] - Unreleased
+
+### ➕ Added
+
+- Add `canic fleet --watch` for automatic read-only observations and a refreshing
+  localhost page. Keep one observation round in flight, preserve the last snapshot
+  with a visible warning on failure, and stop all monitoring with Ctrl-C.
+  Print the localhost URL by default; launch a browser only with explicit `--open`.
+- Add read-only `canic wallet PRINCIPAL`, offline receive-address derivation and
+  an optional `fleet --wallet PRINCIPAL` panel. Keep exact ICP/cycles amounts,
+  explicit uncertified observations and per-ledger unknown results.
+- Add a one-slot profile manager with retained Wasm, IC Timers scheduling and
+  a 1T worker-creation attachment. Add native growth approval/observation commands
+  and `canic fleet --manager` for the manager and its reported worker.
+- Serve fleet reports at localhost URLs: `canic fleet --open` starts the viewer
+  and browser, `--serve` prints the link, and `canic view PATH` serves a saved
+  snapshot without reconnecting to canisters. Ctrl-C stops the viewer.
+- Add a persistent profile discovery entry with controller-only immutable binding,
+  certified client resolution and bounded direct worker checks. Profile calls keep
+  the original user identity. Show the pair with `canic fleet --link ENTRY:WORKER`.
+- Add a Canic-owned persistent profile demo with a native client, owner-only
+  reads/writes, immutable user mappings, bounded capacity and idempotent revisions.
+  Deploy it through the existing CLI and qualify preservation across two executables.
+- Add `canic fleet` and optional HTML snapshots of locally known deployments,
+  with certified module/controller observations, retained operation evidence,
+  distinct network trust bindings and explicit partial/unavailable results.
+  `canic fleet --open` creates a fresh snapshot and launches the default browser.
+
+### 🔧 Changed
+
+- Start the rewrite's version line at 0.200.0, distinct from legacy Canic.
+  Share development through GitHub and defer crates.io publication until mature;
+  keep publication disabled for all packages.
+- Adopt Toko Tooling 0.43.0 through the authenticated installer in both workspaces,
+  retaining the existing executable selection and lint policy. Use `toko-cloc`
+  instead of the retired `make cloc` command.
+- Adopt IC Testkit 0.104.0 in qualification, retaining raw PocketIC calls and
+  directly owned Wire encoding without adding the optional typed-call adapter.
+
+### 🧪 Testing
+
+- Verify mainnet manager maintenance preserves its complete journal, spent
+  approval and worker profile. Recover an interrupted post-install receipt from
+  the original retained reply with no signer or second installation.
+- Add `make growth-test`: operator-absent worker creation, authenticated use,
+  five interruption boundaries, manager upgrade preservation, network binding,
+  expiry, reserve refusal and no duplicate paid effects.
+- Verify the normal autonomous growth path on mainnet: one manager-created worker,
+  exact module/controller bindings, retained effect evidence and authenticated
+  profile use. Extend the mainnet fleet snapshot to all five known canisters.
+- Qualify mainnet entry/worker deployment, original-caller profile operations,
+  direct readiness checks and a worker upgrade preserving the complete profile.
+- Add `make profile-test` for real deployment, authorization, limits, failed-upgrade
+  rollback and retained application data; measure Wasm and stable-memory footprint.
+- Extend the CLI journey to two deployed canisters and fleet observation across
+  uncertain upgrades, historical receipts and an unavailable local provider.
+
 ## [0.1.1] - 2026-11-13
 
 ### ➕ Added

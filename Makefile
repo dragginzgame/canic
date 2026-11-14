@@ -8,6 +8,9 @@ include vendor/toko-tooling/make/cargo-dependencies.mk
 help:
 	@printf '%s\n' \
 	  'make canic               Build the Canic CLI (target/debug/canic)' \
+	  'make profile             Build the profile demo client and deployment CLI' \
+	  'make profile-test        Qualify profile ownership, limits and persistent upgrade' \
+	  'make growth-test         Qualify one autonomous worker and interrupted effects' \
 	  'make check               Check the canic library' \
 	  'make test                Run canic tests' \
 	  'make clippy              Check canic lints' \
@@ -50,9 +53,9 @@ doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --no-deps
 
 # M1 owns product Clippy/Rustdoc coverage, including the shared canic library.
-lint: fmt-check toko-tooling-check m0-clippy m0-doc m0-artifact-clippy m0-artifact-doc m1-clippy m1-doc
+lint: fmt-check toko-tooling-check m0-clippy m0-doc m0-artifact-clippy m0-artifact-doc m1-clippy m1-doc profile-clippy profile-doc
 
-ci: lint test m0-test m0-artifact-test m1-test
+ci: lint test m0-test m0-artifact-test m1-test profile-test growth-test
 
 # The runner selects the Wasm path from Cargo artifact messages.
 m0-setup:
@@ -89,8 +92,28 @@ m1-test:
 m1-clippy:
 	cargo clippy --locked -p canic -p canic-host -p canic-cli -p canic-hello --all-targets -- -D warnings
 	cargo clippy --locked -p canic-hello --target wasm32-unknown-unknown --all-features -- -D warnings
-	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --all-targets -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --lib --test journey -- -D warnings
 
 m1-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic -p canic-host -p canic-hello --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --no-deps
+
+.PHONY: profile profile-test profile-clippy profile-doc
+profile: canic
+	cargo build --locked -p canic-profile-client --bin canic-profile
+	@printf '%s\n' 'Run: ./target/debug/canic-profile --help'
+
+profile-test:
+	bash scripts/dev/test-profile.sh
+
+profile-clippy:
+	cargo clippy --locked -p canic-profile-protocol -p canic-profile-worker -p canic-profile-entry -p canic-profile-client -p canic-profile-manager --all-targets -- -D warnings
+	cargo clippy --locked -p canic-profile-worker -p canic-profile-entry -p canic-profile-manager --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --test profile --test growth -- -D warnings
+
+profile-doc:
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-profile-protocol -p canic-profile-worker -p canic-profile-entry -p canic-profile-client -p canic-profile-manager --no-deps
+
+.PHONY: growth-test
+growth-test:
+	bash scripts/dev/test-growth.sh

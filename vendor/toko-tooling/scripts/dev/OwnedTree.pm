@@ -35,7 +35,19 @@ sub inventory {
 }
 sub remove_owned {
     my ($p,$before,$scratch_links)=@_;
-    $json->encode(inventory($p,$scratch_links)) eq $json->encode($before) or die "maintenance tree changed: $p\n";
+    my $now=inventory($p,$scratch_links);
+    my %paths=map { $_=>1 } (keys %$before,keys %$now);
+    my @fields=qw(device inode mode links size mtime ctime blocks symlink-target);
+    for my $path (sort keys %paths) {
+        exists($before->{$path}) && exists($now->{$path})
+            or die "maintenance tree changed: $p (path added or removed: $path)\n";
+        for my $field (0..$#fields) {
+            my ($old,$new)=($before->{$path}[$field],$now->{$path}[$field]);
+            next if !defined($old) && !defined($new);
+            defined($old) && defined($new) && $old eq $new
+                or die "maintenance tree changed: $p ($fields[$field] changed: $path)\n";
+        }
+    }
     remove_tree($p,{safe=>1,error=>\my $errors});
     @$errors && die "maintenance removal failed: ".$json->encode($errors)."\n";
 }

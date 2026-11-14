@@ -380,6 +380,7 @@ run_setup_phase() {
 
 install_selected() (
     stage=''
+    maintenance_destination=''
     store_lock=''
     lock_owned=false
     # Common setup captures this function in a conditional substitution, where
@@ -424,8 +425,14 @@ install_selected() (
             check_locked_selection || exit $?
             perl "$ROOT/scripts/dev/tool-store-maintenance.pl" register "$store_root" "$selection_consumer" \
                 "${selection_key:-$package:$kind:$target:$profile}" "$destination" || exit $?
-            printf '%s/bin/%s\n' "$active" "$target" || exit $?
-            exit 0
+            if [[ ! -e "$destination/build" && ! -L "$destination/build" &&
+                  ! -e "$destination/home" && ! -L "$destination/home" ]]; then
+                printf '%s/bin/%s\n' "$active" "$target" || exit $?
+                exit 0
+            fi
+            # Re-admit under installation custody below before retrying cleanup.
+            maintenance_destination="$destination"
+            echo 'Admitted Cargo tool has retained build scratch; retrying maintenance without recompilation.' >&2
         fi
     elif [[ -e "$active" ]]; then
         echo "unmanaged Cargo tool selection: $active" >&2; exit 1
@@ -452,7 +459,13 @@ install_selected() (
         check_build_inputs || exit $?
         check_locked_selection || exit $?
     fi
-    if destination="$(tool_store_cached)" && run_setup_phase cache-reuse '' check_selected; then
+    if [[ -n "$maintenance_destination" ]]; then
+        # The shared current hint may have moved or disappeared. Recover this
+        # consumer's admitted generation, and refuse changed evidence, not rebuild.
+        destination="$maintenance_destination"
+        run_setup_phase maintenance-admission '' check_selected || exit $?
+        tool_store_reference "$destination" || exit $?
+    elif destination="$(tool_store_cached)" && run_setup_phase cache-reuse '' check_selected; then
         tool_store_reference "$destination" || exit $?
     else
         tool_store_new || exit $?
@@ -479,7 +492,14 @@ install_selected() (
     tool_store_activate "$destination" || exit $?
     perl "$ROOT/scripts/dev/tool-store-maintenance.pl" register "$store_root" "$selection_consumer" \
         "${selection_key:-$package:$kind:$target:$profile}" "$destination" || exit $?
-    perl "$ROOT/scripts/dev/tool-store-maintenance.pl" trim "$store_root" "$destination" "$$" || exit $?
+    run_setup_phase maintenance '' perl "$ROOT/scripts/dev/tool-store-maintenance.pl" \
+        trim "$store_root" "$destination" "$$" || {
+        status=$?
+        printf 'Cargo tool activated and admitted: %s/bin/%s\n' "$active" "$target" >&2
+        printf 'Post-activation maintenance failed; evidence retained: %s\n' "$destination" >&2
+        echo 'Retry the same setup command to re-admit and reuse this tool, retrying any retained scratch cleanup under installation custody.' >&2
+        exit "$status"
+    }
     printf '%s/bin/%s\n' "$active" "$target"
 )
 

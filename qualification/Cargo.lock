@@ -149,9 +149,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.20.3"
+version = "3.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+checksum = "87a0cf66fd1eb2fb7b822cb78370d82303750809bc6ba855f3f58e517d3238db"
 
 [[package]]
 name = "bytemuck"
@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.1.1"
+version = "0.200.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -256,10 +256,23 @@ dependencies = [
 name = "canic-m1-tests"
 version = "0.0.0"
 dependencies = [
+ "canic-profile-protocol",
+ "ic-host-artifacts",
  "ic-testkit",
+ "ic-wire",
  "serde_json",
  "tokio",
  "toko-tooling",
+]
+
+[[package]]
+name = "canic-profile-protocol"
+version = "0.200.0"
+dependencies = [
+ "ic-wire",
+ "serde",
+ "serde_bytes",
+ "sha2 0.11.1",
 ]
 
 [[package]]
@@ -827,19 +840,21 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.77.1"
+version = "0.77.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63ea652217df6a14e95eac535226d414eb24ebd534b9ba6420e7cf34944a0113"
+checksum = "ba9a43bf50ce4f4330a8731c0fa9c7e88bdae6cf3d6b4a4489e38ff7d22b22cf"
 dependencies = [
  "flate2",
+ "leb128",
  "sha2 0.11.1",
+ "wasmparser",
 ]
 
 [[package]]
 name = "ic-host-fs"
-version = "0.77.1"
+version = "0.77.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd156afe23a214e53fd4066f8fb313315bbd2c682d62d5370223692a37cea41e"
+checksum = "c8fbc8faa9e616e863662dc5b061198e5238af46bf383c76438d4463d9e8bc13"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -848,9 +863,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.77.1"
+version = "0.77.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "827ecd1002400d30e733565ef3bdebb99eb50cd3d6439126d3acd9d461b4588f"
+checksum = "b8e4b3a6b32e0bc13bd7b0e920809961afcf410a424e2a3757b90cc331cccdc8"
 dependencies = [
  "command-fds",
  "ic-host-artifacts",
@@ -930,9 +945,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.102.0"
+version = "0.104.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9cf1b45bf1c4a96367020a2ece68239d6684993d6cdeb47d9f71d2e67d1ac50"
+checksum = "e75c9e8a1ee80ccbcfba19c62bf260ab807f0483aa09ca256ebae317eb3e8135"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -2343,9 +2358,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.42.2"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e87d8595b7ef9347392756c567467a1bb0b71d54f436bd65de05ca3c37fcd0cc"
+checksum = "060d3507b66eb290ce12bc2572098f7e7cb1e12e9d6697a9b1a5d1552fcb2588"
 
 [[package]]
 name = "tower"
@@ -2652,6 +2667,16 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.263.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f5fa0a054ae153606df820eb0a84213e28cda41bbe04ba2628e71b6ba100fcb"
+dependencies = [
+ "bitflags",
+ "indexmap",
 ]
 
 [[package]]

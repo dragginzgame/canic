@@ -12,7 +12,7 @@ if [[ -n "${TMPDIR:-}" && "$TMPDIR" != /* ]]; then export TMPDIR="$PWD/$TMPDIR";
 
 usage() {
     cat <<'EOF'
-Usage: cloc.sh [options] [directory | crate[::module]]
+Usage: toko-cloc [options] [directory | crate[::module]]
 
 Count Rust LOC by category. Defaults to the current repository's product and
 qualification workspaces, counting shared source paths once;
@@ -27,9 +27,9 @@ Options:
   -h, --help      Show this help
 
 Examples:
-  cloc.sh -d 1    Top-level modules beneath each crate
-  cloc.sh -d 2 .. Sibling crates with two module levels
-  cloc.sh -d 1 my-crate::parser  Drill into one module
+  toko-cloc -d 1    Top-level modules beneath each crate
+  toko-cloc -d 2 .. Sibling crates with two module levels
+  toko-cloc -d 1 my-crate::parser  Drill into one module
 
 ??? = unclassified LOC. Counting details: docs/fleet/fleet-tools.md
 EOF

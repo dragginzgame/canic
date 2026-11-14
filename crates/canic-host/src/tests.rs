@@ -1,7 +1,7 @@
 use crate::{Error, Network, PlanInput, create_plan, plan, store};
 use std::path::PathBuf;
 
-fn directory() -> PathBuf {
+pub(crate) fn directory() -> PathBuf {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)

@@ -1,16 +1,20 @@
 # M0 first journey decisions and evidence
 
-Status: M0 in progress, 2026-11-13. The [architecture](canic-system-design.md)
+Status: M0 in progress, 2026-11-14. The [architecture](canic-system-design.md)
 is accepted; local creation and direct-cycle funding commit-boundary experiments
 pass. The M1 CLI now exercises retained signed host attempts, deployment and
-same-canister upgrade locally. Mainnet creation, installation and greeting have
-passed. A local infrastructure-owner maintenance window now preserves both effect
+same-canister upgrade locally. Mainnet creation, installation, greeting and the
+profile entry/worker deployment and persistent worker upgrade have passed.
+A local infrastructure-owner maintenance window now preserves both effect
 journals across a changed executable and failed upgrades. A bounded artifact
-fixture also installs a retained worker module without the operator. Mainnet
-upgrade, production owner persistence and adoption measurements remain unqualified.
+fixture also installs a retained worker module without the operator. The profile
+demo now qualifies a one-slot manager that creates and installs its worker
+after admission without the host, including normal mainnet growth and successful
+mainnet manager maintenance. Production
+management-owner persistence and comparative adoption measurements remain unqualified.
 This record contains scoped decisions and evidence, not a second implementation
-backlog. The first product is the [M1 Hello World loop](../../README.md), with the
-mainnet upgrade prepared for the operator's local identity unlock.
+backlog. The first product is the [M1 Hello World loop](../../README.md), followed
+by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
 ## First capability and consumer invariant
 
@@ -21,14 +25,21 @@ It needs no database, browser frontend, Fleet admission or autonomous scaling.
 The proposed M2 capability is managed installation and readiness of a shared
 stateful worker, followed in M3 by a qualified maintenance-window upgrade.
 The application retains user registration, routing, database schema and resource
-authorization. This is a narrow adoption proposal, not a full Toko shard port.
+authorization. The selected consumer is the Canic-owned profile demo; Toko
+integration is outside the requested scope.
 
 The first multi-canister demo also requires a runnable browser fleet view,
 delivered with that increment and no later than M2. The team must be able to
 inspect deployed canisters, their relationships, observed state and interrupted
 operations. The [visualization acceptance contract](canic-system-design.md#demo-fleet-visualization-from-the-first-multi-canister-increment)
-owns the scope; M3 extends the same view to autonomous workers. This is planned
-work and is not part of the currently implemented single-canister CLI.
+owns the scope; the local growth slice extends the same view to an autonomous
+worker using `--manager`. The CLI supplies a read-only `canic fleet` JSON/HTML snapshot,
+qualified against two local greeting deployments, retained uncertain upgrades and
+an unavailable provider. It groups principals by exact network trust binding and
+shows certified module/controller observations separately from historical receipts.
+The report remains a point-in-time view of locally retained deployments; stateful
+cycle balances, broader application call edges and general autonomous discovery still belong
+to the full multi-canister acceptance gate.
 
 The design also admits an optional `ic-relay` module alongside direct platform
 calls. Its [managed pilot and comparison](canic-system-design.md#direct-calls-and-optional-ic-relay)
@@ -38,30 +49,130 @@ latency, storage and recovery against the direct path before adoption. Relay's
 existing supplier experiments do not qualify this rewrite. This choice neither
 adds a Relay dependency to M1 nor expands the M0 closure conditions.
 
-The candidate invariant is concrete: an application-supplied user ID remains
-unchanged; its wallet and delegation principal mappings resolve to that same
-user; private-record reads by another user remain rejected. The upgrade witness
-also preserves a profile value written before the transition. Canic must not
-acquire ownership of these records or reinterpret their routing keys.
+The selected invariant is concrete: an application-supplied user ID and its owner
+principal mapping remain unchanged; private reads/writes by another caller remain
+rejected. The upgrade preserves the profile name and revision. The application
+owns these records; Canic's deployment layer does not reinterpret them.
 
-Read-only inspection of Toko at commit
-`44d4e2c6d41e3575b2503e79ffa369129ff3ecf2` identifies these source inputs:
-
-- `fleets/toko/user/shard/src/lib.rs`: explicit IcyDB lifecycle participation,
-  registration endpoints, session resolution and private-record ownership check.
-- `fleets/toko/user/shard/src/ops/user.rs`: supplied-ID registration, principal
-  mappings, profile persistence and registration retry tests.
-- `fleets/toko/user/shard/src/tests/ownership_unit_tests.rs`: owner and foreign-user
-  cases for the private-record check.
-- `fleets/toko/user/shard/Cargo.toml`: Canic/IcyDB runtime and build dependencies.
-
-The inspected source files match that commit. The working manifest additionally
-sets `publish = false`, and the working lockfile is modified. These observations
-establish an invariant candidate, not a build baseline or a passing test result.
-Pin the agreed consumer manifest, lockfile, toolchain and selected dependency
-graph before measuring adoption. Toko source changes remain outside this scope.
+On 2026-11-13 the maintainer selected a simple Canic-focused journey and excluded
+Toko integration. The earlier read-only Toko observation at
+`44d4e2c6d41e3575b2503e79ffa369129ff3ecf2` remains research only. No Toko build,
+port, dependency update or adoption measurement is needed to advance this demo.
 
 ## Topology candidate and retained responsibilities
+
+### Runnable stateful baseline
+
+Use a Canic-owned profile demo: a standalone worker owns a
+supplied nonzero user ID, immutable caller-to-user mapping, private profile read,
+bounded display name and optimistic revision. The native demo client invokes
+that application's Wire contract through ICP CLI. The existing Canic deployment
+path installs the worker; its domain, storage and endpoints remain application-owned.
+This is the selected hands-on consumer and baseline for subsequent managed
+composition. A standalone worker does not by itself complete M2's multi-canister,
+management-effect and composition requirements.
+
+Before implementation, select these initial qualification ceilings: 16 profiles,
+128 UTF-8 bytes per display name, 4 KiB RPC frames, two declared Storage
+allocations and at most 32 physical stable pages (2 MiB). The complete worker
+must fit the current CLI's 1,500,000-byte install limit. No timers or idle work
+are admitted. Measure installation and full-capacity footprint against these
+bounds; report supplier overhead separately from profile payloads. IC Storage
+0.74.0 owns the backing and collection engines. Do not reuse raw-memory M0
+fixtures as the worker's persistence implementation.
+
+Executable B changes its reported application version while keeping the same
+record format. Qualification must preserve IDs, owners, names and revisions,
+reject unauthorized reads/writes and stale revisions, permit exact replay without
+another revision, and refuse the first profile beyond capacity. A failed upgrade
+must retain executable A and its data. The entry increment is recorded below;
+management autonomy remains separate. This baseline creates no
+Coordinator, Store or generic runtime framework.
+
+The original standalone rehearsal passed on 2026-11-13 (`make profile-test`). Canic created
+and installed the worker on PocketIC; the native client read readiness through
+ICP CLI. Distinct PocketIC caller identities exercised private reads, immutable
+ownership, bounded registration and revision replay. At full capacity, a failed
+post-upgrade retained executable A and its records; a subsequent Canic upgrade
+to B preserved all records and refused further registration. Reapplying the
+completed operation with no signer returned its retained receipt. The generated
+fleet view identified the current module and both deployment operations.
+
+| Baseline measurement | Observed | Selected ceiling |
+| --- | ---: | ---: |
+| Raw worker Wasm | 238,598 bytes | 1,500,000 bytes |
+| Code section / functions | 162,328 bytes / 394 | Included in total Wasm |
+| Initial stable memory | 1,179,648 bytes (18 pages) | 2,097,152 bytes (32 pages) |
+| Stable memory with 16 profiles | 1,179,648 bytes (18 pages) | 2,097,152 bytes (32 pages) |
+| Initial / full-capacity Wasm memory | 1,179,648 / 1,179,648 bytes | Measured baseline |
+
+The initial stable allocation is supplier/collection overhead with no profiles.
+The filled fixture adds fifteen maximum-length names and one shorter updated
+name (less than 2,048 name bytes), plus IDs, owners, revisions and record encoding,
+without another physical page. This measures allocated
+memory, not exact live heap or a comparative efficiency claim. There are no
+application timers. The worker owns both endpoints and lifecycle hooks; Storage
+owns backing, allocation admission and collections. The native client imports
+the application protocol and host process supplier, not the worker implementation.
+
+Original standalone inputs (SHA-256; preceding the entry increment):
+
+- Root lockfile: `924c4a447808a40964daf8e326635a8bc493df6ffcc139748e8e83750902ea65`.
+- Qualification lockfile: `03c2afa061914716f75d673b2ad2957dfa8b548ec3ecb5df3fa67bbb24925553`.
+- Executable A: `1ec70bb3652ed781ac08476e9d36fd9fc067b223f36d33a651a25d6ca6f3c774`.
+- Executable B: `edbb2137db47e6bd1d9802d5b90bb104ac5424b3cc5a74e895f54bc9876aefa4`.
+
+The test source is `qualification/m1-tests/tests/profile.rs`; the build entrypoint
+is `scripts/dev/test-profile.sh`. This qualifies the unchanged storage schema
+across two executables, not management-operation preservation or entry/worker
+composition. Mainnet use is described in [the demo guide](../demos/profile.md).
+
+### Entry and worker composition
+
+The next installed increment passed on 2026-11-13 using the same focused
+`make profile-test` entrypoint. Canic deploys both canisters. The entry owns one
+immutable worker address in an IC Storage cell; its controller may bind it once
+or replay the exact binding. Other callers, invalid targets and replacement
+bindings are refused. Its separate lifecycle strictly restores the binding on
+upgrade. The worker's storage schema and ownership rules remain unchanged.
+
+The client resolves that route through a certified replicated response, then
+sends the original user's signed operation directly to the worker. No forwarded
+caller assertion or impersonation authority is introduced. The entry separately
+makes a controller-requested, bounded direct `probe` call to the worker. One
+active check, a five-second wait, zero attached cycles and no retries bound that
+observation; a callback failure can occupy the volatile slot until an entry
+upgrade clears it. No management effects or spending allowance depend on that slot.
+
+Qualification covers unbound and unauthorized requests, same-binding replay,
+replacement refusal, oversized frames, native-client resolution, anonymous
+identity preservation, direct worker readiness, strict entry upgrade restoration,
+stopped-worker failure and successful observation after restart. The generated
+fleet report contains two canisters, three deployment operations and an explicitly
+operator-declared route. That arrow is not an on-chain observation. Existing
+profile preservation and wrong-owner rejection cases remain in the same journey.
+
+The current worker is 238,276 raw Wasm bytes (162,903 code-section bytes, 391
+functions), with unchanged 18-page stable allocation. The entry is 325,566 raw
+Wasm bytes (229,961 code-section bytes, 446 functions) and uses 10 stable pages
+(655,360 bytes), within its selected
+1,500,000-byte install and 16-page stable ceilings. It owns one named allocation
+and no timers. These are allocation/size measurements, not a performance comparison.
+
+Current input SHA-256 values:
+
+- Root lockfile: `19685a9502f37b44116b7c37540bbc0f530ac91d66745f79246c6c2639eabf5c`.
+- Qualification lockfile: `69b432f33babce34bd1badba9fee5a7d80800500c4ce0939b3a7f249ca183c14`.
+- Worker A: `16dcabb91273504d2bc4f4cced4d0f68b2525a14c398fd8b3914aea5b520b638`.
+- Worker B: `2017e8b6d4fe89ff7bd1fbd6f18ea0faa9f6b413ffc49ef3e5cfef0140aa8e85`.
+- Entry: `9a8fe4927940940512f99fef91fa8784ea835aca2202622dc0453188d1bf8bfd`.
+
+This proves discovery, direct observation and separate persistent ownership.
+It does not yet qualify managed growth, surviving management-operation custody,
+Relay transport or fleet-wide admission. M0/M2 remain open for those selected
+management requirements; the entry is not the management-effect owner E.
+
+### Management-effect owner candidate
 
 Use R → E → application as the first experiment candidate. R is the operator
 principal; E is one subnet-local management owner. Compare direct-host bootstrap
@@ -300,7 +411,8 @@ digests identify their own qualification runs, not this expanded lockfile.
 The direct-host arrangement is selected for the stateless M1 greeting: one
 operator controls one application canister. Host retains the approval, artifact,
 signed attempts and returned results in `.canic/`; ICP CLI retains key custody.
-This does not select the enduring owner needed for M2/M3 autonomous work.
+The application-scoped manager selected below supplies the first bounded enduring
+owner; this host-only path remains its bootstrap and comparison.
 
 `make m1-test` passed on Linux x86-64 with Rust 1.100.0, PocketIC 16.1.0 and
 repository-prepared ICP CLI 1.7.0. Eight host checks cover plan/artifact admission,
@@ -354,10 +466,49 @@ The next executable's hash is
 `187f6d99668f93609c8adc72a800fb6c0ca1f8ff2d85147f22497137f0f7832c`.
 Its prepared upgrade binds the same canister and exact previous module, with
 zero creation funding. Mainnet execution of that upgrade remains pending; the
-local same-canister rehearsal already passed. Authority-bearing signed files
+local same-canister rehearsal already passed. A subsequent read-only fleet
+snapshot found the original one-hour upgrade approval expired with both effects
+still `not_submitted`; a new reviewed plan is needed before signing. This does
+not authorize replacement of an uncertain submitted attempt. Authority-bearing signed files
 remain in `.canic/`, outside Git; these observations are not a backup of them.
 
 ## Bounds and preservation witness
+
+### Profile mainnet deployment and preservation
+
+On 2026-11-13 the operator unlocked `canic-mainnet` directly in a desktop terminal.
+ICP CLI minted 2,000,000,012,799 cycles (rounding around the requested 2T), bringing
+the ledger balance to 2,405,555,110,034. The conversion result is retained in
+`.canic/profile-mainnet-funding/result.json`; it must not be used to justify
+repeating a payment after uncertainty. Each following creation had an approved
+1,000,000,000,000-cycle debit ceiling, including the ledger fee.
+
+| Step | Canister | Operation digest |
+| --- | --- | --- |
+| Worker creation/install | `4pkhu-oaaaa-aaaai-ra2ta-cai` | `fe6ff221535c6938683da088b22abd72b94776e166b094988dbae1dad85a4563` |
+| Entry creation/install | `bisqm-biaaa-aaaas-qhfeq-cai` | `b2aa17980e465da49cd9f416f5665161ad972aee00b6d0c6167ede4d5a4be3e7` |
+| Worker upgrade | `4pkhu-oaaaa-aaaai-ra2ta-cai` | `96c32c1933b72bb68ea99475497f09fe1d885c5251418dd407b877f9fe7f9be3` |
+
+The creation artifacts match the worker A and entry hashes recorded above. The
+upgrade installed worker B (`2017e8b6d4fe89ff7bd1fbd6f18ea0faa9f6b413ffc49ef3e5cfef0140aa8e85`).
+Certified metadata independently confirmed both current modules and the original
+sole controller. All three terminal receipts and exact attempts remain under
+their original operation directories in `.canic/`.
+
+The entry's binding and direct readiness check succeeded. User 1 was created,
+updated to revision 2, read, and then read again after the worker upgrade. The
+owner bytes, user ID, display name and revision matched exactly. These private
+reads remain uncertified queries; the write replies, deployment metadata and
+entry's replicated readiness response use certified paths. The post-upgrade
+readiness response reported `profile-v2` and `ready: true` under the same route.
+
+The final account observation was 405,555,110,034 cycles and 6.42852601 ICP. The
+browser snapshot contained both profile canisters and the existing Hello World
+canister, with no inventory or metadata-observation failures. Its declared route
+remains distinct from observed controller/module metadata. Localhost serving
+does not imply that the canisters themselves are local.
+
+### Remaining management witness
 
 Start with one executor, one application and at most one unresolved paid attempt;
 an unresolved creation pauses new creation instead of replenishing its allowance.
@@ -374,7 +525,7 @@ work. Record numeric acceptance budgets before implementing that adoption slice;
 no footprint or cost advantage has yet been measured.
 
 For M3, executable B changes observable application behavior while preserving
-the user ID, principal mappings, profile and private-read rule from executable A.
+the user ID, owner mapping, profile revision and private-read rule from executable A.
 Across the transition, an interrupted management operation retains its original
 identity, evidence and outstanding exposure at its surviving owner; B cannot
 turn it into a new allowance. Separate this from the experiment upgrading E:
@@ -383,8 +534,170 @@ application preservation does not prove infrastructure-owner recovery.
 M0 closes on the bounded effect results, selected topology/custody/artifact path,
 agreed consumer scope and baseline, numeric budgets and this concrete preservation
 scenario. A documented blocked window is acceptable only with a bounded exposure
-and an explicit disposition; it is not automatic recovery. The mainnet CLI
-upgrade remains ready for local identity unlock. The next M0 decisions concern
-the consumer baseline and numeric budgets, and the product custody/scheduling
-path beyond these bounded maintenance and artifact experiments. These
+and an explicit disposition; it is not automatic recovery. The profile mainnet
+upgrade is now qualified above; the earlier expired Hello World plan remains
+unsubmitted. The standalone
+consumer baseline and budgets are now recorded above. The manager below selects
+the first product custody/scheduling path. Normal mainnet growth has passed;
+comparative adoption measurements remain outstanding, and broader lifecycle work
+needs consumer admission. These
 results alone do not close M0.
+
+## Application-scoped autonomous manager: local qualification
+
+On 2026-11-13, select `operator → profile manager → one new profile worker` for
+the first autonomous slice. The manager owns management authority, the immutable
+one-use approval, retained worker Wasm and operation journal. The worker owns
+its application lifecycle and private records. The existing mainnet entry keeps
+its immutable original route; the new worker is addressed directly. This is not
+a subnet-wide executor or general scaling policy.
+
+Two IC Storage cells and one IC Timers 0.44.1 registration retain the work through
+operator absence and manager maintenance. No separate Store or Coordinator is
+needed for this bounded artifact set. The operator's controller authority supplies
+the maintenance path; no governance arrangement is selected.
+
+Qualification bounds: one approval; one create/upload/install issuance each;
+1T creation attachment; at least 0.5T liquid reserve before each effect (plus the
+attachment before creation); 512 KiB raw worker Wasm; 64 stable pages. Status
+frames remain 4 KiB, with a 64 KiB allocation allowance and 1,024 nodes. The larger
+staging envelope accounts for Wire's conservative allocation charge; native tests
+cover maximum artifact size and fully populated evidence. These are resource
+ceilings, not a lifetime funding or total execution-cost guarantee.
+
+`make growth-test` passed with the actual Canic CLI and profile client:
+
+| Evidence | Observed result |
+| --- | --- |
+| Admit once, then no mutating operator ingress | One ready worker, sole manager controller, same subnet; counts `[1, 1, 1]` |
+| Authenticated profile write on the created worker | Original caller owns the retained profile |
+| Distinct manager maintenance executable | Original authority, child and dispatch counts survive; no additional child |
+| Trap before create dispatch commit | No child or committed attempt; original scheduled authority resumes after maintenance |
+| Create callback writes then traps | Child exists, principal/refund absent; `CreateIssued` never creates again |
+| Separate upload message traps before dispatch | Previously committed child principal survives |
+| Upload callback writes then traps | Stored-chunk observation reconstructs outcome without another upload |
+| Install callback writes then traps | Module/controller observation reconstructs outcome without another installation |
+| Changed approval, unauthorized caller, bad hash | Refused without replacing original authority |
+| Wrong native network/root key, expired dispatch, inadequate admission reserve | Refused or stopped; no extra child |
+| Exact approval replay, including after maintenance | Same slot and evidence; no new allowance |
+
+Independent subnet counts verify effects; the manager is never given that oracle
+to recover a lost principal. Creation-result loss remains blocked with full 1T
+attachment exposure after maintenance. This is an experimental limitation, not
+automatic recovery or production approval. Intent and outgoing-call issuance
+commit with their IC message; callback writes commit only on successful message
+completion. The next effect starts in a separate timer message, so a later
+failure cannot erase a committed outcome.
+
+The native growth file binds the selected network/root key and exact Wire request,
+retaining both before invoking ICP CLI. Manager bootstrap uses the existing signed
+host-attempt journal. Growth admission instead relies on the manager's identical-
+approval idempotence; the client does not claim custody of ICP CLI's signed ingress.
+
+Measured default manager: 684,139 raw Wasm bytes, 500,616 code-section bytes,
+875 defined functions and 18 physical stable pages (1,179,648 bytes), including
+retained worker bytes. The management chunk store additionally retains one worker
+module; its bytes are outside the stable-page measurement. SHA-256:
+`dd316c9ab7bc628abea68a5384eff3c689a12476382b413f26b8841e17e925b8`.
+Worker: 238,329 raw bytes, SHA-256
+`0be0704fb8e13a43650b457a98dfb88ee4a409ff349c6a03b53ab5603845b2a5`.
+These are whole-artifact measurements, not supplier attribution or evidence of
+size/cost savings. Earlier mainnet artifact hashes remain historical.
+
+The fleet snapshot reports both manager and created worker. The manager journal
+is labelled uncertified; module/controller metadata is independently certified.
+Observation never resumes work. See the [growth guide](../demos/growth.md) for
+reproduction, mainnet preparation and maintenance limits. No autonomous manager
+was deployed to mainnet in this qualification run.
+
+## Autonomous mainnet worker
+
+On 2026-11-13, deploy the exact default manager qualified above through operation
+`2cfe76adf294be8d03c2afeca2f5f64dc4be51ca4ba470dd66517f629dd6ce42`:
+
+| Role | Principal | Sole controller |
+| --- | --- | --- |
+| Manager | `rk6n2-wyaaa-aaaad-qmoua-cai` | `canic-mainnet` (`o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe`) |
+| Worker | `rn7lo-3aaaa-aaaad-qmouq-cai` | `rk6n2-wyaaa-aaaad-qmoua-cai` |
+
+The initial wallet observation was 6.42852601 ICP and 405,555,110,034 cycles.
+The single requested 2.5T conversion deposited 2,500,000,005,152 cycles; the small
+rounding difference is retained in `.canic/growth-mainnet/funding.json`.
+The manager's creation budget was 2.5T. Its single immutable worker approval
+attached 1T with the selected 0.5T minimum liquid reserve check. Transfers and
+provider fees remain separate concepts; no cost advantage is claimed.
+
+The certified admission reply was `Scheduled` with counts `[0, 0, 0]`. Scheduled
+dispatch was 21:00:24 UTC. Until an anonymous query reported `Ready`, host commands
+were observations only. A subsequent controller update returned certified
+`Ready` evidence: counts `[1, 1, 1]`, all three request commitments retained, zero
+creation refund, no failure, matching approved/observed worker hash and 18 stable
+pages. The maintenance executable marker was false.
+
+Independent certified fleet observations matched the manager hash
+`dd316c9ab7bc628abea68a5384eff3c689a12476382b413f26b8841e17e925b8`
+and worker hash
+`0be0704fb8e13a43650b457a98dfb88ee4a409ff349c6a03b53ab5603845b2a5`,
+with the controller graph above. The snapshot contained five canisters, six host
+operations and no inventory or observation failures. Historical expired Hello
+World approval remains unsubmitted; it is not this manager's authority.
+
+An authenticated update created user 1 on the new worker at revision 1 with the
+name `Canic autonomous mainnet worker`. Its private query returned the same full
+profile. The write reply was certified; the private read was explicitly an
+uncertified query. Existing entry routing and its original worker were unchanged.
+
+The final wallet observation was **5.10925125 ICP** and **405,555,115,186 cycles**.
+Host signed attempts remain in the operation directory; approval, admission,
+anonymous observation sequence, certified outcome, profile checks and fleet
+snapshot are retained in `.canic/growth-mainnet/`. The completed execution artifact
+reported exit zero. Do not rerun its funding payment or replace the spent slot.
+
+This qualifies the normal one-worker mainnet path. At this point, interruption
+and maintenance evidence was local; the subsequent mainnet maintenance run is
+recorded below. General worker lifecycle is not qualified. The [current demo commands](../demos/growth.md#current-mainnet-demo)
+use the existing canisters without another deployment.
+
+## Mainnet manager maintenance
+
+On 2026-11-14, upgrade `rk6n2-wyaaa-aaaad-qmoua-cai` in place using the exact
+maintenance artifact from the passing local growth fixture: 684,263 raw bytes,
+SHA-256 `5824826b6b715762223e5a0cec21239379d4ff415478341dddfa1b5a12078118`.
+Operation `8b54397d04474aa916e93bcb89f46b8db7e96fccd05391d4eeb4224930f601d6`
+binds the original manager module, same controller and zero creation funding.
+Only `maintenance-candidate` was selected; no fault-injection build was used.
+
+The first apply stopped after retaining the successful installation reply and
+before persisting its terminal receipt. The exact cause of that initial
+verification failure was not retained. A subsequent query observed the changed
+executable. Resuming the original operation with identity `anonymous` and an
+unavailable signer path `/nonexistent/canic-no-signer` settled the receipt through
+fresh certified module/controller reads. The existing reply was reused; there
+was no second signature, installation or replacement operation. This is direct
+mainnet evidence of post-install receipt recovery, not a generic retry guarantee.
+
+Certified manager observations before and after maintenance matched in every
+field except the intended executable marker (`false` → `true`). This includes
+the original approval and deadlines, worker principal, `[1, 1, 1]` dispatch
+counts, all request commitments, zero refund, matching observed module, no
+failure, `Ready` phase and 18 stable pages. Replaying the original, now expired,
+approval returned identical certified evidence; it did not renew the spent slot.
+
+The worker `rn7lo-3aaaa-aaaad-qmouq-cai` kept its exact module hash and sole manager
+controller. Its before/after private profile queries matched the full record:
+user 1, original owner, revision 1 and `Canic autonomous mainnet worker`. These
+private reads remain explicitly uncertified. The fleet snapshot contained five
+canisters and seven host operations, with no inventory or observation failures.
+
+Retained evidence lives in `.canic/growth-mainnet-maintenance/`, including the
+before/after observations, recovered receipt, replay result, profile checks and
+fleet snapshot. The first execution artifact records exit 1; the subsequent
+verification records exit 0. The original host operation directory retains its
+signed attempt, reply and now-complete receipt.
+
+The wallet preflight remained 5.10925125 ICP and 405,555,115,186 cycles; no new
+deposit was visible. Maintenance used the manager's existing cycles, without a
+wallet conversion or new canister creation. The preservation guarantee remains
+limited to this same-format upgrade. Injected failures and blocked-creation
+preservation were tested locally; cross-schema migration and general worker
+administration remain separate scope.

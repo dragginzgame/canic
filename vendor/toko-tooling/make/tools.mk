@@ -1,5 +1,5 @@
 # Include once from the consumer Makefile after any local path overrides.
-# Shared companions: make/execution.mk scripts/ci/check-make-execution.sh scripts/dev/install-host-tools.sh scripts/dev/install-ic-tools.sh scripts/dev/install-rust-tools.sh scripts/dev/cloc.sh scripts/ci/run-validation-targets.sh
+# Shared companions: make/execution.mk scripts/ci/check-make-execution.sh scripts/dev/install-host-tools.sh scripts/dev/install-ic-tools.sh scripts/dev/install-rust-tools.sh scripts/dev/cloc.sh scripts/dev/toko-cloc scripts/ci/run-validation-targets.sh
 # TOKO_TOOLING_ROOT must name a reviewed local snapshot, never a sibling checkout.
 # Preserve the consumer's default goal, including when it is declared after us.
 _toko_tooling_default_goal := $(.DEFAULT_GOAL)
@@ -16,15 +16,11 @@ IC_TOOLS ?=
 # Product-owned tool targets run in this order after the complete common set.
 LOCAL_TOOL_INSTALL_TARGETS ?=
 LOCAL_TOOL_CHECK_TARGETS ?=
-CLOC_REPORT ?= $(TOKO_TOOLING_ROOT)/scripts/dev/cloc.sh
-CLOC_ROOT ?= $(CURDIR)
-CLOC_MANIFEST ?=
-CLOC_DEPTH ?=
 export PATH := $(CURDIR)/.tools/host/bin:$(CURDIR)/.tools/rust/common/bin:$(PATH)
 
-.PHONY: install-tools tools-check install-host-tools host-tools-check install-ic-tools ic-tools-check cloc
+.PHONY: install-tools tools-check install-host-tools host-tools-check install-ic-tools ic-tools-check
 .PHONY: install-rust-tools rust-tools-check
-install-tools tools-check tools-report install-host-tools host-tools-check install-ic-tools ic-tools-check install-rust-tools rust-tools-check cloc: | toko-execution-check
+install-tools tools-check tools-report install-host-tools host-tools-check install-ic-tools ic-tools-check install-rust-tools rust-tools-check: | toko-execution-check
 
 install-tools:
 ifneq ($(filter install-ic-tools,$(LOCAL_TOOL_INSTALL_TARGETS)),)
@@ -66,10 +62,5 @@ install-rust-tools:
 
 rust-tools-check:
 	$(_toko_recursive_prefix)bash "$(TOKO_TOOLING_ROOT)/scripts/dev/install-rust-tools.sh" --consumer "$(CURDIR)" --versions "$(RUST_TOOL_VERSIONS)" --check
-
-cloc:
-	$(_toko_recursive_prefix)@if [ -n "$(CLOC_MANIFEST)" ]; then \
-		bash "$(TOKO_TOOLING_ROOT)/scripts/dev/cloc.sh" $(if $(strip $(CLOC_DEPTH)),-d "$(CLOC_DEPTH)") --manifest "$(CLOC_MANIFEST)" "$(CLOC_ROOT)"; \
-	else bash "$(CLOC_REPORT)" $(if $(strip $(CLOC_DEPTH)),-d "$(CLOC_DEPTH)") "$(CLOC_ROOT)"; fi
 
 .DEFAULT_GOAL := $(_toko_tooling_default_goal)

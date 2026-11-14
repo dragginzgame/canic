@@ -107,6 +107,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "ascii"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d92bec98840b8f03a5ff5413de5293bfcd8bf96467cf5452609f939ec6f5de16"
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -286,9 +292,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.20.3"
+version = "3.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+checksum = "87a0cf66fd1eb2fb7b822cb78370d82303750809bc6ba855f3f58e517d3238db"
 
 [[package]]
 name = "bytemuck"
@@ -358,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.1.1"
+version = "0.200.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -367,18 +373,21 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.1.1"
+version = "0.200.0"
 dependencies = [
  "canic-host",
  "clap",
+ "ic-host-fs",
+ "ic-host-process",
  "serde_json",
+ "tiny_http",
  "tokio",
  "toko-tooling",
 ]
 
 [[package]]
 name = "canic-hello"
-version = "0.1.1"
+version = "0.200.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -388,10 +397,11 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.1.1"
+version = "0.200.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
+ "canic-profile-protocol",
  "ic-host-fs",
  "ic-host-process",
  "ic-platform",
@@ -403,6 +413,66 @@ dependencies = [
  "tokio",
  "toko-tooling",
  "url",
+]
+
+[[package]]
+name = "canic-profile-client"
+version = "0.200.0"
+dependencies = [
+ "canic-profile-protocol",
+ "clap",
+ "ic-host-fs",
+ "ic-host-process",
+ "ic-wire",
+ "serde_json",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-profile-entry"
+version = "0.200.0"
+dependencies = [
+ "canic-profile-protocol",
+ "ic-platform-runtime",
+ "ic-storage",
+ "ic-wire",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-profile-manager"
+version = "0.200.0"
+dependencies = [
+ "canic-profile-protocol",
+ "ic-platform",
+ "ic-platform-runtime",
+ "ic-storage",
+ "ic-timers",
+ "ic-wire",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-profile-protocol"
+version = "0.200.0"
+dependencies = [
+ "ic-wire",
+ "serde",
+ "serde_bytes",
+ "sha2 0.11.1",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-profile-worker"
+version = "0.200.0"
+dependencies = [
+ "canic-profile-protocol",
+ "ic-platform-runtime",
+ "ic-storage",
+ "ic-wire",
+ "serde",
+ "toko-tooling",
 ]
 
 [[package]]
@@ -439,6 +509,12 @@ dependencies = [
  "cpufeatures 0.3.1",
  "rand_core 0.10.1",
 ]
+
+[[package]]
+name = "chunked_transfer"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e4de3bc4ea267985becf712dc6d9eed8b04c953b3fcfb339ebc87acd9804901"
 
 [[package]]
 name = "clap"
@@ -1127,6 +1203,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "httpdate"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1274,18 +1356,18 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.77.1"
+version = "0.77.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63ea652217df6a14e95eac535226d414eb24ebd534b9ba6420e7cf34944a0113"
+checksum = "ba9a43bf50ce4f4330a8731c0fa9c7e88bdae6cf3d6b4a4489e38ff7d22b22cf"
 dependencies = [
  "sha2 0.11.1",
 ]
 
 [[package]]
 name = "ic-host-fs"
-version = "0.77.1"
+version = "0.77.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd156afe23a214e53fd4066f8fb313315bbd2c682d62d5370223692a37cea41e"
+checksum = "c8fbc8faa9e616e863662dc5b061198e5238af46bf383c76438d4463d9e8bc13"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -1294,9 +1376,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.77.1"
+version = "0.77.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "827ecd1002400d30e733565ef3bdebb99eb50cd3d6439126d3acd9d461b4588f"
+checksum = "b8e4b3a6b32e0bc13bd7b0e920809961afcf410a424e2a3757b90cc331cccdc8"
 dependencies = [
  "command-fds",
  "ic-host-artifacts",
@@ -1306,19 +1388,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-metrics"
+version = "0.30.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6030a6a40c100314b396c96add8a414a3d1415b446729b54c8a4e97c0a05969"
+
+[[package]]
 name = "ic-platform"
 version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79bcb8879666931fe9f4c660a34cc8f8a93cc6b5f4e7de6301e08daafb4259f4"
 dependencies = [
+ "crc32fast",
+ "data-encoding",
+ "hex",
  "ic-agent",
  "ic-certification",
  "ic-platform-types",
  "ic-transport-types",
  "num-bigint 0.5.1",
+ "num-traits",
  "serde",
  "serde_bytes",
  "serde_cbor",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
 ]
 
@@ -1365,6 +1458,28 @@ dependencies = [
  "data-encoding",
  "serde",
  "serde_bytes",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "ic-storage"
+version = "0.74.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26d2520d368ccea2560cd496efce6408652ad681296111f9fe45561796c92ed0"
+dependencies = [
+ "ic-platform-runtime",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "ic-timers"
+version = "0.44.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a6d38ea900adf725693d6950fbed363301620ad92168714a7fa95670ce98716"
+dependencies = [
+ "ic-metrics",
+ "ic-platform-runtime",
  "thiserror 2.0.21",
 ]
 
@@ -2680,6 +2795,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
 
 [[package]]
+name = "tiny_http"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "389915df6413a2e74fb181895f933386023c71110878cd0825588928e64cdc82"
+dependencies = [
+ "ascii",
+ "chunked_transfer",
+ "httpdate",
+ "log",
+]
+
+[[package]]
 name = "tinystr"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2746,9 +2873,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.42.2"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e87d8595b7ef9347392756c567467a1bb0b71d54f436bd65de05ca3c37fcd0cc"
+checksum = "060d3507b66eb290ce12bc2572098f7e7cb1e12e9d6697a9b1a5d1552fcb2588"
 
 [[package]]
 name = "tower"

@@ -1,5 +1,8 @@
 //! Canic command line interface.
 
+mod fleet;
+mod view;
+
 use canic_host::{Error, Network, PlanInput};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
@@ -59,6 +62,50 @@ enum Commands {
     },
     /// Inspect local retained progress; makes no network calls.
     Status { digest: String },
+    /// Show a mainnet wallet's default receive address and public ICP/cycles balances.
+    Wallet {
+        /// Public owner principal; never an identity name or seed phrase.
+        principal: String,
+        /// Derive only the receive address locally, without network access.
+        #[arg(long)]
+        address_only: bool,
+    },
+    /// Observe known deployments and optionally write a self-contained browser snapshot.
+    Fleet {
+        /// Include this mainnet wallet's public default-account balances and receive address.
+        #[arg(long, value_name = "PRINCIPAL")]
+        wallet: Option<String>,
+        /// Read a known profile manager's public journal and observe its reported worker.
+        #[arg(long)]
+        manager: Vec<String>,
+        /// Show a declared application route ENTRY:WORKER between known targets (not an on-chain observation).
+        #[arg(long, value_name = "ENTRY:WORKER")]
+        link: Vec<String>,
+        /// Write a new HTML report; existing files are preserved. No signed requests are exported.
+        #[arg(long)]
+        html: Option<PathBuf>,
+        /// Serve a fresh report on localhost and launch the default browser; Ctrl-C stops the viewer.
+        #[arg(long)]
+        open: bool,
+        /// Serve on localhost without opening a browser; Ctrl-C stops the viewer.
+        #[arg(long)]
+        serve: bool,
+        /// Refresh the localhost view continuously; add --open to launch a browser.
+        #[arg(long)]
+        watch: bool,
+        /// Local viewer port; zero selects a free port.
+        #[arg(long, default_value_t = 8787)]
+        port: u16,
+    },
+    /// Serve one saved HTML snapshot at a localhost URL; Ctrl-C stops the viewer.
+    View {
+        report: PathBuf,
+        #[arg(long, default_value_t = 8787)]
+        port: u16,
+        /// Also launch the default browser.
+        #[arg(long)]
+        open: bool,
+    },
     /// Call the deployed demo's read-only, uncertified greeting query.
     Call {
         digest: String,
@@ -165,6 +212,50 @@ async fn run(cli: &Cli) -> canic_host::Result<serde_json::Value> {
             canic_host::apply(&cli.state_dir, digest, identity, icp_bin).await?
         )),
         Commands::Status { digest } => canic_host::status(&cli.state_dir, digest),
+        Commands::Wallet {
+            principal,
+            address_only,
+        } => {
+            if *address_only {
+                Ok(
+                    serde_json::json!({"network":"ic / mainnet", "icp_address":canic_host::wallet_address(principal)?}),
+                )
+            } else {
+                Ok(serde_json::json!(canic_host::wallet(principal).await?))
+            }
+        }
+        Commands::View { report, port, open } => {
+            view::serve(report, *port, *open)?;
+            Ok(serde_json::json!({"viewer": "stopped"}))
+        }
+        Commands::Fleet {
+            html,
+            open,
+            link,
+            serve,
+            port,
+            manager,
+            wallet,
+            watch,
+        } => {
+            let snapshot = fleet::collect(&cli.state_dir, manager, wallet.as_deref()).await?;
+            if *watch {
+                fleet::publish(&snapshot, html.as_deref(), false, false, *port, link)?;
+                fleet::watch(
+                    &cli.state_dir,
+                    manager,
+                    wallet.as_deref(),
+                    link,
+                    &snapshot,
+                    *port,
+                    *open,
+                )
+                .await?;
+                return Ok(serde_json::json!({"viewer":"stopped"}));
+            }
+            fleet::publish(&snapshot, html.as_deref(), *open, *serve, *port, link)?;
+            Ok(serde_json::json!(snapshot))
+        }
         Commands::Call { digest, name } => {
             let state = canic_host::status(&cli.state_dir, digest)?;
             let receipt: canic_host::Receipt = serde_json::from_value(state["receipt"].clone())

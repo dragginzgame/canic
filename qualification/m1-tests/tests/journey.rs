@@ -224,6 +224,21 @@ async fn deploy_call_resume_and_upgrade() {
     let original_signed = std::fs::read(&signed_path).unwrap();
     std::fs::remove_file(root.join(upgrade_id).join("receipt.json")).unwrap();
     std::fs::remove_file(root.join(upgrade_id).join("install/reply.bin")).unwrap();
+    let uncertain = cli(&root, &["fleet"]);
+    assert_eq!(uncertain["canisters"].as_array().unwrap().len(), 1);
+    assert_eq!(uncertain["operations"].as_array().unwrap().len(), 2);
+    let pending = uncertain["operations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|operation| operation["operation"] == upgrade_id)
+        .unwrap();
+    assert_eq!(
+        pending["effects"]["install"],
+        "signed_attempt_retained_outcome_unknown"
+    );
+    assert_eq!(pending["receipt_retained"], false);
+    assert!(!root.join(upgrade_id).join("receipt.json").exists());
     assert_eq!(
         cli(
             &root,
@@ -248,8 +263,78 @@ async fn deploy_call_resume_and_upgrade() {
             .num_canisters,
         count
     );
+    // A second real deployment exercises inventory grouping and the browser report.
+    let second_plan = cli(
+        &root,
+        &[
+            "plan",
+            "--wasm",
+            &wasm,
+            "--network",
+            "local",
+            "--url",
+            &url,
+            "--root-key",
+            &root_key,
+            "--routing-canister",
+            &routing_canister,
+            "--controller",
+            "2vxsx-fae",
+        ],
+    );
+    let second_id = second_plan["operation"].as_str().unwrap();
+    let second_receipt = cli(
+        &root,
+        &[
+            "apply",
+            second_id,
+            "--identity",
+            "anonymous",
+            "--icp-bin",
+            icp.to_str().unwrap(),
+        ],
+    );
+    assert_ne!(second_receipt["canister"], target);
+    let report = root.join("fleet.html");
+    let snapshot = cli(&root, &["fleet", "--html", report.to_str().unwrap()]);
+    assert_eq!(snapshot["canisters"].as_array().unwrap().len(), 2);
+    assert_eq!(snapshot["operations"].as_array().unwrap().len(), 3);
+    assert_eq!(snapshot["issues"].as_array().unwrap().len(), 0);
+    let first = snapshot["canisters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["canister"] == target)
+        .unwrap();
+    assert_eq!(first["module_hash"], upgraded["module_hash"]);
+    assert_eq!(first["controllers"], serde_json::json!(["2vxsx-fae"]));
+    assert!(first["observation_error"].is_null());
+    let html = std::fs::read_to_string(&report).unwrap();
+    assert!(html.contains(target));
+    assert!(html.contains(second_receipt["canister"].as_str().unwrap()));
+    assert!(html.contains("Current metadata differs from this approval"));
+    assert_eq!(std::fs::read(&signed_path).unwrap(), original_signed);
+    assert_eq!(
+        owner
+            .instance()
+            .get_subnet_metrics(subnet)
+            .await
+            .unwrap()
+            .num_canisters,
+        count + 1
+    );
     println!(
         "deployed {target}, retained replay and receipt recovery passed, upgraded same canister to greeting v2"
     );
     owner.close().await;
+    let offline = cli(&root, &["fleet"]);
+    assert_eq!(offline["canisters"].as_array().unwrap().len(), 2);
+    assert!(offline["canisters"].as_array().unwrap().iter().all(
+        |item| item["module_hash"].is_null()
+            && item["controllers"].is_null()
+            && item["observation_error"].is_string()
+    ));
+    println!(
+        "two-canister fleet report, unresolved-operation visibility and unavailable-provider observations passed"
+    );
 }

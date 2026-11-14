@@ -125,13 +125,25 @@ Neither proves production Storage integration, a production scheduling policy,
 multi-chunk handling, chunk cleanup, callback-in-flight upgrades, application
 readiness or a mainnet cost estimate. The worker is pre-created by the harness;
 combining creation and installation into the product path remains M2 work. The
-first team-facing multi-canister demo still requires the planned fleet view.
+first team-facing multi-canister demo still requires the full fleet-view gate.
+The CLI's initial JSON/HTML inventory is separately exercised by `make m1-test`
+against two greeting deployments, an uncertain upgrade and a stopped provider.
 
 Focused checks are `make m0-artifact-clippy` and `make m0-artifact-doc`.
 The aggregate `make ci` includes the artifact experiment separately from
 `make m0-test`.
 
 ## Checks and evidence
+
+`make profile-test` runs the [Canic-owned profile demo](../docs/demos/profile.md)
+through the existing deployment CLI, with private ownership, bounded capacity,
+failed-upgrade rollback and preservation across two executables. It also deploys
+the discovery entry, checks immutable binding and upgrade preservation, exercises
+direct worker observation and unavailable-worker recovery, and renders the pair.
+Its entry, worker and client are products under `apps/profile/`; only its installed harness belongs
+to this qualification workspace. `make profile-clippy` and `make profile-doc`
+cover its native and Wasm graphs. These targets are included in the corresponding
+repository aggregates.
 
 Focused checks are `make m0-clippy`, `make m0-doc`, `make fmt-check` and
 `make toko-tooling-check`. The aggregate `make ci` includes the fixture and
@@ -144,3 +156,22 @@ The [M0 record](../docs/design/m0-first-journey.md) reports observed results and
 remaining decisions. Passing this experiment does not complete M0 or establish
 general effect recovery. Local dispatch-resource failures, cross-subnet funding
 and production approval of blocked exposure remain unqualified.
+
+## Application-owned growth journey
+
+`make growth-test` composes the real profile worker with a one-slot manager,
+IC Storage and IC Timers. It uses the Canic deployment CLI and native profile
+approval client, then creates and installs one worker without another mutating
+operator command. It exercises authenticated application use, five interruption
+boundaries, a distinct manager executable, exact replay, network binding, expiry
+and insufficient reserve. Subnet counts independently detect duplicate creation.
+Lost creation replies remain blocked; upload/install outcomes can be reconstructed
+by observation after maintenance. All cycles are synthetic.
+
+The test also qualifies maximum artifact/evidence codec budgets and emits a fleet
+snapshot under `target/growth/journey-N/fleet.html`. Serve the selected snapshot
+with `canic view PATH --port 8788 --open`, then use **http://localhost:8788/** in
+the normal desktop browser. Ctrl-C stops the viewer; the replica has already
+closed. See the [growth guide](../docs/demos/growth.md) for the selected topology,
+limits, fresh mainnet instructions and recovery limitations. The focused lint and
+documentation checks are `make profile-clippy` and `make profile-doc`.

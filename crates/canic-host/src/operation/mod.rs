@@ -95,7 +95,7 @@ fn create_call(plan: &Plan) -> Result<Call<'static>> {
     }
 }
 
-fn created(plan: &Plan, bytes: &[u8]) -> Result<Principal> {
+pub(crate) fn created(plan: &Plan, bytes: &[u8]) -> Result<Principal> {
     if plan.network == Network::Mainnet {
         let result: ledger::CreateCanisterResult =
             decoder::decode_one(bytes, DECODE).map_err(Error::Decode)?;

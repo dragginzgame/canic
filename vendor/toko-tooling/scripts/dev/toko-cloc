@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This PATH launcher selects the current checkout's reporter, never its own copy.
+if ! root="$(git rev-parse --show-toplevel 2>/dev/null && printf '.')"; then
+    echo 'toko-cloc: run inside a repository with Toko Tooling installed.' >&2
+    exit 2
+fi
+root="${root%$'\n.'}"
+tooling="$root/vendor/toko-tooling"
+if [[ ! -d "$tooling" && -f "$root/scripts/dev/toko-cloc" ]]; then
+    # The producer owns its scripts at root; consumers use the vendor payload.
+    tooling="$root"
+fi
+reporter="$tooling/scripts/dev/cloc.sh"
+if [[ ! -f "$reporter" ]]; then
+    echo 'toko-cloc: this repository has no installed LOC reporter; adopt scripts/dev/cloc.sh through Toko Tooling.' >&2
+    exit 2
+fi
+export PATH="$root/.tools/host/bin:$root/.tools/rust/common/bin:$PATH"
+exec bash "$reporter" "$@"

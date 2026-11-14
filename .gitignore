@@ -1,6 +1,6 @@
 /target/
 /qualification/target/
-/.canic/
+.canic/
 /.tools/
 /.agents/
 /.aws/

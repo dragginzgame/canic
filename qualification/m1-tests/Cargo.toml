@@ -13,7 +13,10 @@ toko-tooling.workspace = true
 category = "tests"
 
 [dev-dependencies]
+canic-profile-protocol.workspace = true
+ic-host-artifacts.workspace = true
 ic-testkit.workspace = true
+ic-wire.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 

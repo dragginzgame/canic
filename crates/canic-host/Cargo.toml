@@ -12,9 +12,10 @@ toko-tooling.workspace = true
 [dependencies]
 base64.workspace = true
 canic.workspace = true
+canic-profile-protocol.workspace = true
 ic-host-fs.workspace = true
 ic-host-process.workspace = true
-ic-platform = { workspace = true, features = ["agent", "ic-protocol", "management-canister-types", "cycles-ledger-types"] }
+ic-platform = { workspace = true, features = ["agent", "ic-protocol", "management-canister-types", "cycles-ledger-types", "icp-ledger-types", "icrc-ledger-types"] }
 ic-wire.workspace = true
 serde.workspace = true
 serde_json.workspace = true
