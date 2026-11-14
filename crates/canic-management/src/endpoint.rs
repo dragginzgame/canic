@@ -26,6 +26,9 @@ pub fn admit(limit: usize, private: bool) -> Result<(), String> {
 #[doc(hidden)]
 #[must_use]
 pub fn response_limits(method: u64) -> wire::Limits {
+    if method == protocol::custody::OBSERVE {
+        return protocol::custody::LIMITS;
+    }
     #[cfg(feature = "fault-injection")]
     if crate::engine::reply_fault(method) {
         return wire::Limits {
@@ -40,7 +43,7 @@ pub fn response_limits(method: u64) -> wire::Limits {
 
 /// Mount explicitly selected management methods using Platform's IC entrypoints.
 ///
-/// Names are the existing exports: `status`, `observe`, `stage`, `reconcile`,
+/// Names are the existing exports: `status`, `observe`, `observe_custody`, `stage`, `reconcile`,
 /// `stage_upgrade`, `upgrade_status`, `observe_upgrade`, `reconcile_upgrade`,
 /// and (only with the supplier's `fault-injection` feature) `inject_fault`.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
@@ -48,13 +51,18 @@ pub fn response_limits(method: u64) -> wire::Limits {
 ///
 /// ```ignore
 /// canic_management::mount_endpoints! {
-///     status, observe, stage, reconcile,
+///     status, observe, observe_custody, stage, reconcile,
 ///     stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
 /// }
 /// ```
 #[macro_export]
 macro_rules! mount_endpoints {
     ($($name:ident),+ $(,)?) => { $($crate::mount_endpoints!(@select $name);)+ };
+    (@select observe_custody) => {
+        $crate::mount_endpoints!(@method observe_custody, update, true, custody::OBSERVE, LIMITS,
+            [] () -> $crate::endpoint::protocol::custody::Custody,
+            $crate::custody(), "custody frame", "custody reply");
+    };
     (@select status) => {
         $crate::mount_endpoints!(@method status, query, false, STATUS, LIMITS,
             [] () -> $crate::endpoint::protocol::Status,
@@ -88,9 +96,9 @@ macro_rules! mount_endpoints {
             $crate::upgrade_status(), "upgrade status frame", "upgrade status reply");
     };
     (@select observe_upgrade) => {
-        $crate::mount_endpoints!(@method observe_upgrade, update, true, upgrade::STATUS, LIMITS,
-            [] () -> $crate::endpoint::protocol::upgrade::Status,
-            $crate::upgrade_status(), "upgrade status frame", "upgrade status reply");
+        $crate::mount_endpoints!(@method observe_upgrade, update, true, upgrade::OBSERVE, LIMITS,
+            [] (expected: $crate::endpoint::protocol::upgrade::Approval) -> $crate::endpoint::protocol::upgrade::Status,
+            $crate::observe_upgrade(&expected), "upgrade status frame", "upgrade status reply");
     };
     (@select reconcile_upgrade) => {
         $crate::mount_endpoints!(@method reconcile_upgrade, update, true, upgrade::RECONCILE, LIMITS,

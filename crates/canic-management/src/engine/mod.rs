@@ -27,6 +27,24 @@ mod storage;
 
 pub(crate) mod upgrade;
 
+/// Read all retained approvals without scheduling or dispatching work.
+/// # Panics
+/// Traps when lifecycle has not opened the engine.
+#[must_use]
+pub fn custody() -> canic_management_protocol::custody::Custody {
+    STATE.with_borrow(|state| {
+        let journal = state.as_ref().expect("open engine").journal.get();
+        let mut upgrades = journal.2.clone();
+        if journal.1.approval.is_some() {
+            upgrades.push(journal.1.clone());
+        }
+        canic_management_protocol::custody::Custody {
+            creation: journal.0.clone(),
+            upgrades,
+        }
+    })
+}
+
 const MAX_PAGES: u64 = 64;
 const MANAGEMENT_LIMITS: decoder::Limits = decoder::Limits {
     bytes: 16_384,
@@ -115,7 +133,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
     };
     validate(&state);
     upgrade::validate(&state);
-    // Commit the bounded v2 payloads only after strict old/new schema validation.
+    // Commit the bounded v3 journal and v2 artifact payloads only after strict old/new schema validation.
     // A post-upgrade trap rolls back both writes with the executable change.
     state.journal.set(state.journal.get().clone());
     state.artifact.set(state.artifact.get().clone());

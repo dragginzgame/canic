@@ -9,9 +9,12 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 mod cancellation;
+mod convergence;
 #[cfg(test)]
 mod tests;
 pub use cancellation::{Cancellation, cancel_fleet_plan};
+pub use convergence::FleetPlanning;
+pub(crate) use convergence::permits_upgrade;
 
 /// A typed result reference, never a guessed principal or a mutable config lookup.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -127,6 +130,7 @@ impl FleetPlan {
             created_at_ns: self.root.created_at_ns,
             expires_at_ns: self.child.execute_at_ns + 600_000_000_000,
             deployment: Some(self.child.deployment.clone()),
+            maintenance: None,
             management: Some(ManagedOwner {
                 root: receipt.canister.clone(),
                 root_module: self.root.artifact.sha256.clone(),
@@ -190,19 +194,19 @@ fn root_receipt(dir: &Path, value: &FleetPlan) -> Result<Option<Receipt>> {
     Ok(Some(receipt))
 }
 
-/// Retain one complete fleet approval, without network calls or fabricated identities.
-/// Identical replanning returns its original schedule and authority, even after expiry.
+/// Compare artifacts with retained completion and approve creation, child upgrade or Root maintenance.
+/// Unfinished identical work retains its original schedule, even after expiry. No network calls.
 /// # Errors
 /// Refuses anything other than an unbound Root-plus-app tree, occupied fleet authority,
 /// unavailable artifacts, invalid budgets, journal corruption or concurrent writers.
-pub fn create_fleet_plan(
+pub fn plan_fleet(
     journal: &Path,
     config_path: &Path,
     selected: &SelectedFleet,
     controller: &str,
-    cycles: u64,
+    cycles: Option<u64>,
     execute_at_ns: Option<u64>,
-) -> Result<(String, FleetPlan)> {
+) -> Result<FleetPlanning> {
     selected.validate()?;
     let slots = &selected.config.canisters;
     if slots.len() != 2 || slots.values().any(|s| s.id.is_some() || s.profile_manager) {
@@ -238,10 +242,11 @@ pub fn create_fleet_plan(
         artifact: artifact::admit(&root_bytes)?,
         target: None,
         previous_module: None,
-        creation_cycles: cycles,
+        creation_cycles: cycles.unwrap_or(3_000_000_000_000),
         created_at_ns: now,
         expires_at_ns: dispatch.checked_add(600_000_000_000).ok_or_else(invalid)?,
         deployment: Some(name(root_name)),
+        maintenance: None,
         management: None,
     };
     let mut value = FleetPlan {
@@ -266,6 +271,7 @@ pub fn create_fleet_plan(
         ));
     }
     let mut retained = None;
+    let mut individual = Vec::new();
     for id in ids {
         let dir = store.operation(&id)?;
         if exists(&dir)? {
@@ -276,9 +282,7 @@ pub fn create_fleet_plan(
             if old.reserves(&name(root_name)) {
                 if old.belongs(selected)
                     && old.root.controller == controller
-                    && old.root.creation_cycles == cycles
-                    && old.root.artifact == value.root.artifact
-                    && old.child.artifact == value.child.artifact
+                    && cycles.is_none_or(|budget| old.root.creation_cycles == budget)
                     && old.root.deployment == value.root.deployment
                     && old.child.deployment == value.child.deployment
                 {
@@ -302,12 +306,22 @@ pub fn create_fleet_plan(
                 .as_ref()
                 .is_some_and(|n| n.app == selected.app && n.fleet == selected.fleet)
             {
-                return Err(Error::Blocked("fleet contains single-canister operations; this first fleet path requires a new fleet".into()));
+                individual.push((id, old));
             }
         }
     }
-    if let Some(retained) = retained {
-        return Ok(retained);
+    if let Some((id, old)) = retained {
+        return convergence::plan(
+            &store,
+            &id,
+            old,
+            value,
+            (&root_bytes, &child_bytes),
+            &individual,
+        );
+    }
+    if !individual.is_empty() {
+        return Err(Error::Blocked("fleet contains single-canister operations; whole-fleet planning requires its retained creation approval".into()));
     }
     value.child.parent.operation = value.root.digest()?;
     let id = value.digest()?;
@@ -333,7 +347,10 @@ pub fn create_fleet_plan(
         |_, _| Ok(()),
     )
     .map_err(supplier)?;
-    Ok((id, value))
+    Ok(FleetPlanning::Create {
+        operation: id,
+        fleet_plan: value,
+    })
 }
 
 pub(crate) async fn apply(

@@ -9,7 +9,7 @@ use crate::{
 };
 use canic_management_protocol::{
     LIMITS, Refusal, STAGE_LIMITS,
-    upgrade::{Approval, Phase, STAGE, STATUS, Stage, Status},
+    upgrade::{Approval, OBSERVE, Phase, STAGE, STATUS, Stage, Status},
 };
 use ic_platform::agent::Agent;
 use std::path::Path;
@@ -113,16 +113,21 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
                 "reconcile/reply.bin",
                 canic_management_protocol::upgrade::RECONCILE,
             ),
-            ("reply.bin", STATUS),
+            ("reply.bin", OBSERVE),
         ] {
             let path = dir.join(format!("observe/{index}/{name}"));
             if path.try_exists().map_err(supplier)? {
-                let status: Status = ic_wire::native::decode_response(
-                    method,
-                    &store::read(&path, LIMITS.bytes)?,
-                    LIMITS,
-                )
-                .map_err(supplier)?;
+                let bytes = store::read(&path, LIMITS.bytes)?;
+                let status: Status = ic_wire::native::decode_response(method, &bytes, LIMITS)
+                    .or_else(|error| {
+                        // Historical on-disk unit observations remain readable; no live fallback.
+                        if method == OBSERVE {
+                            ic_wire::native::decode_response(STATUS, &bytes, LIMITS)
+                        } else {
+                            Err(error)
+                        }
+                    })
+                    .map_err(supplier)?;
                 if status == Status::default() && latest.is_none() {
                     continue;
                 }
@@ -208,12 +213,13 @@ pub(super) async fn apply(
             canister: root,
             effective: root,
             method: "observe_upgrade",
-            args: ic_wire::native::encode_request(STATUS, &(), LIMITS).map_err(supplier)?,
+            args: ic_wire::native::encode_request(OBSERVE, &approval(plan)?, LIMITS)
+                .map_err(supplier)?,
         };
         super::recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &read, identity, icp, agent).await?;
         let observed: Status =
-            ic_wire::native::decode_response(STATUS, &bytes, LIMITS).map_err(supplier)?;
+            ic_wire::native::decode_response(OBSERVE, &bytes, LIMITS).map_err(supplier)?;
         if observed == Status::default() && retained.is_none() {
             stage_reply(&signed::execute(&stage, plan, &call, identity, icp, agent).await?)?
         } else {

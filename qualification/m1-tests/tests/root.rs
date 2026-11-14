@@ -963,6 +963,20 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn whole_fleet_cli_binds_future_root_and_replays_without_new_effects() {
+    qualify_whole_fleet(false, false).await;
+}
+
+#[tokio::test]
+async fn whole_fleet_upgrade_preserves_private_profile_state() {
+    qualify_whole_fleet(true, false).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn whole_fleet_maintenance_refuses_untracked_child_work() {
+    qualify_whole_fleet(false, true).await;
+}
+
+async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     let mut owner = PocketIcStartupConfig::Spawn {
         server_binary: server_assets::check(&repo().join("target/m0/server")).unwrap(),
         timeout: Duration::from_secs(30),
@@ -989,7 +1003,7 @@ async fn whole_fleet_cli_binds_future_root_and_replays_without_new_effects() {
         .collect();
     let artifacts = repo().join("target/root");
     let workspace = artifacts.join(format!(
-        "whole-{}-{}",
+        "whole-{profile}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1044,7 +1058,21 @@ async fn whole_fleet_cli_binds_future_root_and_replays_without_new_effects() {
             &routing.to_text(),
         ],
     );
+    if profile {
+        std::fs::copy(
+            artifacts.join("profile-manager.wasm"),
+            workspace.join("artifacts/root.wasm"),
+        )
+        .unwrap();
+        std::fs::copy(
+            artifacts.join("profile-worker.wasm"),
+            workspace.join("artifacts/app.wasm"),
+        )
+        .unwrap();
+    }
     let config_bytes = std::fs::read(&config).unwrap();
+    let alice = CanisterId::self_authenticating(b"whole fleet profile owner");
+    let mut retained_profile = None;
     let mut identities = Vec::new();
     for fleet in ["first", "second"] {
         let dispatch = (owner
@@ -1155,15 +1183,431 @@ async fn whole_fleet_cli_binds_future_root_and_replays_without_new_effects() {
         );
         assert_eq!(repeat, completed);
         assert_eq!(status(owner.instance(), root).await.attempts, calls);
-        assert_eq!(cli(&config, &plan_args), planned);
+        let unchanged = cli(&config, &plan_args);
+        assert_eq!(unchanged["action"], "unchanged");
+        assert_eq!(unchanged["operation"], id);
+        if !profile {
+            assert_eq!(
+                cli(
+                    &config,
+                    &["fleet", "call", id, "--fleet", fleet, "--name", "fleet"]
+                )["greeting"],
+                "Hello from Canic, fleet!"
+            );
+        } else if fleet == "first" {
+            let reply = owner
+                .instance()
+                .update_call(
+                    child,
+                    alice,
+                    "put",
+                    ic_wire::native::encode_request(
+                        canic_profile_protocol::PUT,
+                        &canic_profile_protocol::Put {
+                            user_id: 7,
+                            expected_revision: 0,
+                            display_name: "Keep this profile".into(),
+                        },
+                        canic_profile_protocol::LIMITS,
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            retained_profile = Some(
+                ic_wire::native::decode_response::<canic_profile_protocol::ProfileResult>(
+                    canic_profile_protocol::PUT,
+                    &reply,
+                    canic_profile_protocol::LIMITS,
+                )
+                .unwrap()
+                .unwrap(),
+            );
+        }
+        identities.push((root, child));
+    }
+    // Rebuild only the app input. The planner derives Root, child and old code from custody.
+    let replacement = artifacts.join(if profile {
+        "profile-worker-v2.wasm"
+    } else {
+        "app-v2.wasm"
+    });
+    std::fs::copy(&replacement, workspace.join("artifacts/app.wasm")).unwrap();
+    let dispatch = (owner
+        .instance()
+        .get_time()
+        .await
+        .as_nanos_since_unix_epoch()
+        / 1_000_000_000
+        + 40)
+        .to_string();
+    let plan_args = [
+        "fleet",
+        "plan",
+        "--fleet",
+        "first",
+        "--identity",
+        "anonymous",
+        "--execute-at",
+        &dispatch,
+    ];
+    let upgraded = cli(&config, &plan_args);
+    assert_eq!(upgraded["action"], "upgrade");
+    assert_eq!(upgraded["plan"]["target"], identities[0].1.to_text());
+    assert_eq!(
+        upgraded["plan"]["management"]["root"],
+        identities[0].0.to_text()
+    );
+    assert_eq!(upgraded["plan"]["creation_cycles"], 0);
+    assert_eq!(cli(&config, &plan_args), upgraded);
+    let id = upgraded["operation"].as_str().unwrap();
+    let operation_dir = PathBuf::from(upgraded["state_dir"].as_str().unwrap()).join(id);
+    let apply = [
+        "fleet",
+        "apply",
+        id,
+        "--fleet",
+        "first",
+        "--identity",
+        "anonymous",
+    ];
+    assert_eq!(cli(&config, &apply)["upgrade"]["phase"], "Scheduled");
+    let signed = std::fs::read(operation_dir.join("stage/signed.json")).unwrap();
+    std::fs::remove_file(operation_dir.join("stage/reply.bin")).unwrap();
+    // First recover authenticated admission through a read; recovery cannot assume it.
+    assert_eq!(cli(&config, &apply)["upgrade"]["phase"], "Scheduled");
+    let mut reconcile = apply;
+    reconcile[1] = "reconcile";
+    assert_eq!(cli(&config, &reconcile)["upgrade"]["phase"], "Scheduled");
+    assert_eq!(cli(&config, &plan_args), upgraded);
+    owner.instance().stop_progress().await;
+    owner.instance().advance_time(Duration::from_secs(45)).await;
+    settle(owner.instance()).await;
+    owner.instance().auto_progress().await;
+    let receipt = cli(&config, &apply);
+    assert_eq!(receipt["canister"], identities[0].1.to_text());
+    assert_eq!(receipt["controller"], identities[0].0.to_text());
+    assert_eq!(
+        std::fs::read(operation_dir.join("stage/signed.json")).unwrap(),
+        signed
+    );
+    assert_eq!(cli(&config, &apply), receipt);
+    let unchanged = cli(&config, &plan_args);
+    assert_eq!(unchanged["action"], "unchanged");
+    assert_eq!(unchanged["operation"], id);
+    let first_code = owner
+        .instance()
+        .canister_status(identities[0].1, Some(identities[0].0))
+        .await
+        .unwrap()
+        .module_hash;
+    let second_code = owner
+        .instance()
+        .canister_status(identities[1].1, Some(identities[1].0))
+        .await
+        .unwrap()
+        .module_hash;
+    assert_eq!(
+        first_code,
+        Some(digest(&std::fs::read(&replacement).unwrap()).to_vec())
+    );
+    assert_ne!(first_code, second_code);
+    // Root maintenance uses the ordinary plan/apply workflow and preserves the complete journal.
+    let original_root = std::fs::read(workspace.join("artifacts/root.wasm")).unwrap();
+    std::fs::copy(
+        artifacts.join(if profile {
+            "profile-maintenance.wasm"
+        } else {
+            "maintenance.wasm"
+        }),
+        workspace.join("artifacts/root.wasm"),
+    )
+    .unwrap();
+    let maintenance = cli(&config, &plan_args);
+    assert_eq!(maintenance["action"], "maintenance");
+    assert_eq!(maintenance["plan"]["target"], identities[0].0.to_text());
+    assert_eq!(
+        maintenance["plan"]["maintenance"]["upgrades"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(cli(&config, &plan_args), maintenance);
+    let maintenance_id = maintenance["operation"].as_str().unwrap();
+    let maintenance_dir =
+        PathBuf::from(maintenance["state_dir"].as_str().unwrap()).join(maintenance_id);
+    let saved_child = std::fs::read(workspace.join("artifacts/app.wasm")).unwrap();
+    std::fs::copy(
+        artifacts.join(if profile {
+            "profile-worker.wasm"
+        } else {
+            "app.wasm"
+        }),
+        workspace.join("artifacts/app.wasm"),
+    )
+    .unwrap();
+    let competing = std::process::Command::new(&executable)
+        .args(plan_args)
+        .args(["--config", config.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    assert!(!competing.status.success());
+    let error: serde_json::Value = serde_json::from_slice(&competing.stderr).unwrap();
+    assert_eq!(error["error"], "blocked");
+    std::fs::write(workspace.join("artifacts/app.wasm"), saved_child).unwrap();
+    assert_eq!(cli(&config, &plan_args), maintenance);
+    let maintenance_apply = [
+        "fleet",
+        "apply",
+        maintenance_id,
+        "--fleet",
+        "first",
+        "--identity",
+        "anonymous",
+    ];
+    if untracked {
+        let wasm = std::fs::read(artifacts.join("app.wasm")).unwrap();
+        let input = canic_management_protocol::upgrade::Stage {
+            approval: canic_management_protocol::upgrade::Approval {
+                manager: identities[0].0.to_text(),
+                child: identities[0].1.to_text(),
+                previous_module: digest(&std::fs::read(&replacement).unwrap()),
+                module_hash: digest(&wasm),
+                execute_at_ns: owner
+                    .instance()
+                    .get_time()
+                    .await
+                    .as_nanos_since_unix_epoch()
+                    + 40_000_000_000,
+                expires_at_ns: owner
+                    .instance()
+                    .get_time()
+                    .await
+                    .as_nanos_since_unix_epoch()
+                    + 640_000_000_000,
+            },
+            wasm,
+        };
+        let response = owner
+            .instance()
+            .update_call(
+                identities[0].0,
+                CanisterId::anonymous(),
+                "stage_upgrade",
+                ic_wire::native::encode_request(
+                    canic_management_protocol::upgrade::STAGE,
+                    &input,
+                    STAGE_LIMITS,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        let admitted: Result<canic_management_protocol::upgrade::Status, Refusal> =
+            ic_wire::native::decode_response(
+                canic_management_protocol::upgrade::STAGE,
+                &response,
+                LIMITS,
+            )
+            .unwrap();
+        assert_eq!(
+            admitted.unwrap().phase,
+            canic_management_protocol::upgrade::Phase::Scheduled
+        );
+        let refused = std::process::Command::new(&executable)
+            .args(maintenance_apply)
+            .args(["--config", config.to_str().unwrap(), "--json"])
+            .output()
+            .unwrap();
+        assert!(!refused.status.success());
+        let error: serde_json::Value = serde_json::from_str(
+            String::from_utf8(refused.stderr)
+                .unwrap()
+                .lines()
+                .last()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(error["error"], "blocked");
+        assert!(!maintenance_dir.join("install/signed.json").exists());
+        assert!(!maintenance_dir.join("receipt.json").exists());
+        assert!(maintenance_dir.join("custody-before/reply.bin").exists());
+        assert_eq!(
+            owner
+                .instance()
+                .canister_status(identities[0].0, None)
+                .await
+                .unwrap()
+                .module_hash,
+            Some(digest(&original_root).to_vec())
+        );
+        owner.close().await;
+        return;
+    }
+    let maintained = cli(&config, &maintenance_apply);
+    assert_eq!(maintained["canister"], identities[0].0.to_text());
+    assert_eq!(maintained["controller"], "2vxsx-fae");
+    // A receipt without the retained post-install journal cannot unlock future work.
+    let after_reply = maintenance_dir.join("custody-after/reply.bin");
+    let saved_reply = maintenance_dir.join("custody-after/fixture-held-reply.bin");
+    std::fs::rename(&after_reply, &saved_reply).unwrap();
+    let missing = std::process::Command::new(&executable)
+        .args(plan_args)
+        .args(["--config", config.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    let error: serde_json::Value = serde_json::from_slice(&missing.stderr).unwrap();
+    assert_eq!(error["error"], "invalid");
+    std::fs::rename(saved_reply, after_reply).unwrap();
+    let install_attempt = std::fs::read(maintenance_dir.join("install/signed.json")).unwrap();
+    let root_version = owner
+        .instance()
+        .canister_status(identities[0].0, None)
+        .await
+        .unwrap()
+        .version;
+    // Lost host completion after an accepted install resumes the original signed attempt.
+    std::fs::remove_file(maintenance_dir.join("receipt.json")).unwrap();
+    std::fs::remove_file(maintenance_dir.join("install/reply.bin")).unwrap();
+    assert_eq!(cli(&config, &maintenance_apply), maintained);
+    assert_eq!(
+        std::fs::read(maintenance_dir.join("install/signed.json")).unwrap(),
+        install_attempt
+    );
+    assert_eq!(
+        owner
+            .instance()
+            .canister_status(identities[0].0, None)
+            .await
+            .unwrap()
+            .version,
+        root_version
+    );
+    assert_eq!(cli(&config, &plan_args)["action"], "unchanged");
+    assert_eq!(
+        owner
+            .instance()
+            .canister_status(identities[1].0, None)
+            .await
+            .unwrap()
+            .module_hash,
+        Some(digest(&original_root).to_vec())
+    );
+    // Two more approvals exercise a code-hash cycle without replaying old work.
+    let old_receipt = std::fs::read(operation_dir.join("receipt.json")).unwrap();
+    for input_file in [
+        if profile {
+            "profile-worker.wasm"
+        } else {
+            "app.wasm"
+        },
+        if profile {
+            "profile-worker-v2.wasm"
+        } else {
+            "app-v2.wasm"
+        },
+    ] {
+        std::fs::copy(
+            artifacts.join(input_file),
+            workspace.join("artifacts/app.wasm"),
+        )
+        .unwrap();
+        let dispatch = (owner
+            .instance()
+            .get_time()
+            .await
+            .as_nanos_since_unix_epoch()
+            / 1_000_000_000
+            + 40)
+            .to_string();
+        let args = [
+            "fleet",
+            "plan",
+            "--fleet",
+            "first",
+            "--identity",
+            "anonymous",
+            "--execute-at",
+            &dispatch,
+        ];
+        let next = cli(&config, &args);
+        assert_eq!(next["action"], "upgrade");
+        assert_eq!(
+            next["plan"]["management"]["root_module"],
+            maintained["module_hash"]
+        );
+        let next_id = next["operation"].as_str().unwrap();
+        assert_ne!(next_id, id);
+        assert_eq!(cli(&config, &args), next);
+        let apply = [
+            "fleet",
+            "apply",
+            next_id,
+            "--fleet",
+            "first",
+            "--identity",
+            "anonymous",
+        ];
+        assert_eq!(cli(&config, &apply)["upgrade"]["phase"], "Scheduled");
+        owner.instance().stop_progress().await;
+        owner.instance().advance_time(Duration::from_secs(45)).await;
+        settle(owner.instance()).await;
+        owner.instance().auto_progress().await;
+        let completed = cli(&config, &apply);
+        assert_eq!(completed["canister"], identities[0].1.to_text());
+        assert_eq!(cli(&config, &args)["action"], "unchanged");
+        let view = cli(&config, &["fleet", "show", "--fleet", "first"]);
+        assert_eq!(view["issues"], serde_json::json!([]));
+        assert_eq!(view["managers"][0]["upgrade"]["operation"], next_id);
+        assert_eq!(view["managers"][0]["upgrade"]["reported"]["phase"], "Ready");
+        assert_eq!(
+            std::fs::read(operation_dir.join("receipt.json")).unwrap(),
+            old_receipt
+        );
+    }
+    if let Some(expected) = retained_profile {
+        for (caller, expected) in [
+            (alice, Ok(expected)),
+            (
+                CanisterId::self_authenticating(b"outsider"),
+                Err(canic_profile_protocol::ProfileError::Forbidden),
+            ),
+        ] {
+            let reply = owner
+                .instance()
+                .query_call(
+                    identities[0].1,
+                    caller,
+                    "get",
+                    ic_wire::native::encode_request(
+                        canic_profile_protocol::GET,
+                        &7_u64,
+                        canic_profile_protocol::LIMITS,
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                ic_wire::native::decode_response::<canic_profile_protocol::ProfileResult>(
+                    canic_profile_protocol::GET,
+                    &reply,
+                    canic_profile_protocol::LIMITS,
+                )
+                .unwrap(),
+                expected
+            );
+        }
+    } else {
         assert_eq!(
             cli(
                 &config,
-                &["fleet", "call", id, "--fleet", fleet, "--name", "fleet"]
+                &["fleet", "call", id, "--fleet", "first", "--name", "fleet"]
             )["greeting"],
-            "Hello from Canic, fleet!"
+            "Hello again from Canic, fleet!"
         );
-        identities.push((root, child));
     }
     assert_ne!(identities[0].0, identities[1].0);
     assert_ne!(identities[0].1, identities[1].1);

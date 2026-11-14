@@ -1,6 +1,71 @@
 use super::*;
 
 #[test]
+fn full_upgrade_history_fits_original_journal_budget() {
+    let approval = Approval {
+        manager: "a".repeat(63),
+        child: "b".repeat(63),
+        previous_module: [255; 32],
+        module_hash: [254; 32],
+        execute_at_ns: u64::MAX - 1,
+        expires_at_ns: u64::MAX,
+    };
+    let completed = Status {
+        approval: Some(approval),
+        phase: Phase::Ready,
+        attempts: [1; 2],
+        requests: [Some([255; 32]); 2],
+        previous_version: Some(u64::MAX - 1),
+        observed_version: Some(u64::MAX),
+        failure: None,
+    };
+    let creation = crate::Status {
+        approval: Some(crate::Approval {
+            manager: "a".repeat(63),
+            module_hash: [255; 32],
+            creation_cycles: u64::MAX,
+            execute_at_ns: u64::MAX - 1,
+            expires_at_ns: u64::MAX,
+        }),
+        phase: crate::Phase::Ready,
+        worker: Some("b".repeat(63)),
+        attempts: [1; 3],
+        requests: [Some([255; 32]); 3],
+        observed_module: Some(vec![255; 32]),
+        creation_refund: Some(u128::MAX),
+        ..Default::default()
+    };
+    let history = vec![completed.clone(); MAX_UPGRADES - 1];
+    let limits = ic_wire::Limits {
+        bytes: 8188,
+        allocation: (1 + MAX_UPGRADES) * crate::LIMITS.allocation,
+        nodes: (1 + MAX_UPGRADES) * crate::LIMITS.nodes,
+        depth: crate::LIMITS.depth + 2,
+    };
+    let payload = (&creation, &completed, &history);
+    let bytes = ic_wire::native::encode(&payload, limits).unwrap();
+    let decoded: (crate::Status, Status, Vec<Status>) =
+        ic_wire::native::decode(&bytes, limits).unwrap();
+    assert_eq!(decoded.2.len(), MAX_UPGRADES - 1);
+    let custody = crate::custody::Custody {
+        creation,
+        upgrades: vec![completed; MAX_UPGRADES],
+    };
+    let response =
+        ic_wire::native::encode_response(crate::custody::OBSERVE, &custody, crate::custody::LIMITS)
+            .unwrap();
+    assert_eq!(
+        ic_wire::native::decode_response::<crate::custody::Custody>(
+            crate::custody::OBSERVE,
+            &response,
+            crate::custody::LIMITS
+        )
+        .unwrap(),
+        custody
+    );
+}
+
+#[test]
 fn upgrade_binds_original_child_old_and_new_code_and_time() {
     let wasm = b"\0asm\x01\0\0\0".to_vec();
     let input = Stage {

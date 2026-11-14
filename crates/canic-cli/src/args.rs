@@ -216,7 +216,7 @@ pub(super) enum FleetCommand {
         #[arg(long)]
         app: Option<String>,
     },
-    /// Plan a Root-plus-app fleet, or select one canister; writes only local evidence.
+    /// Plan fleet creation, child upgrade or Root maintenance from retained completion.
     #[command(mut_arg("icp_bin", |arg| arg.conflicts_with("controller")))]
     Plan {
         #[command(flatten)]

@@ -9,12 +9,22 @@ and deploys Root and its application through one fleet plan/apply approval.
 The installed local journey qualifies admission, lost-reply recovery and completion
 receipts. Run `make root-test`
 after simulator preparation. The first fleet path supports a new Root-plus-app
-tree. Larger trees, adopting existing deployments and whole-fleet upgrades remain
-upcoming; existing mainnet demos are unchanged.
+tree and plans successive child upgrades from retained completion. Identical artifacts
+produce no new approval; unfinished work retains its original authority. Larger
+trees and adopting existing deployments remain upcoming; existing
+mainnet demos are unchanged.
 
-The current increment also qualifies one Root-owned child upgrade locally,
+Root maintenance uses the same plan/apply flow in a separate window after all
+child work completes. It verifies the full retained journal before and after
+installation, then binds future child approvals to the new Root code. Both
+executables must support the custody observation contract; older deployed Roots
+are refused before installation. See the [maintenance walkthrough](docs/demos/root.md#root-maintenance).
+
+The current increment also qualifies bounded serial Root-owned child upgrades locally,
 including retained outcomes, callback-loss recovery and application persistence.
-The experimental Root has one creation slot and one upgrade slot; neither resets.
+The experimental Root has one creation slot and retains up to eight upgrades.
+Only successful completion permits a successor; failed or uncertain work remains
+blocked, and full history is never cleared.
 See the [upgrade walkthrough](docs/demos/root.md).
 
 `canic fleet show` follows Roots named in retained child plans automatically.
@@ -132,7 +142,7 @@ have no aliases.
 | `fleet canister bind SLOT --id PRINCIPAL` | Bind an existing ID in the selected fleet for observation only; refuses replacement and never changes controllers. |
 | `fleet canister list` | List the selected fleet's local slots and configured IDs, without reading journals or contacting canisters. |
 | `fleet show` | Observe the selected app/fleet; `--html PATH` saves a report, `--serve` serves it, and `--watch` refreshes it. |
-| `fleet plan --identity IDENTITY` | Read the identity’s public controller principal and review a new Root-plus-app fleet using its declared Wasm inputs. `--controller PRINCIPAL` supports offline planning. `--canister SLOT` selects the existing single-canister workflow; unconfigured `--wasm` planning remains explicit. |
+| `fleet plan --identity IDENTITY` | Read the identity’s public controller principal and review creation or the next child upgrade using declared Wasm inputs and retained fleet completion. `--controller PRINCIPAL` supports offline planning. `--canister SLOT` selects the existing single-canister workflow; unconfigured `--wasm` planning remains explicit. |
 | `fleet apply OPERATION --identity IDENTITY` | Approve/resume that exact retained operation, including its funding and network effects. |
 | `fleet reconcile OPERATION --identity IDENTITY` | Request recovery of admitted work on the exact compatible Root; retain original effect limits and signed-request custody. |
 | `fleet cancel OPERATION` | Revoke a whole-fleet approval before any effect preparation, retaining its evidence. Once preparation begins, preserve and resume the same operation. |

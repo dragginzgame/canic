@@ -66,12 +66,37 @@ Root must retain the approved code and sole operator controller. Its child has
 Root as its sole controller. Pending admission is not a completion receipt.
 Keep the config and its .canic journal; do not delete attempts to retry.
 
+## Upgrade the application
+
+After retaining creation completion, edit `app/src/lib.rs`, then rebuild and review
+the next plan. Canic resolves the existing child and previous code from its journal:
+
+```sh
+canic app build
+canic fleet plan --identity canic-mainnet
+canic fleet status UPGRADE_OPERATION
+canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
+```
+
+Copy UPGRADE_OPERATION from planning and apply again after dispatch to retain
+completion. The child keeps its identity and Root controller. Unchanged artifacts
+report no changes against retained completion; this is not a fresh network check.
+Pending work retains its original schedule. Change Root and child artifacts in
+separate reviewed windows. A Root-only change plans maintenance once all child
+work completes, verifying the full journal before and after installation.
+
 ## Current boundary
 
 This whole-fleet path accepts exactly one unbound Root and its application.
 Keep its original journal for resumption. It refuses larger trees, pre-existing
-identity bindings and competing single-canister approvals. Whole-fleet upgrades
-and adoption of previously deployed fleets are not implemented yet.
+identity bindings and unrelated single-canister approvals. Root retains at most
+eight serial child upgrades. A successor requires verified successful completion;
+failed, expired or uncertain work stays blocked. Full history cannot be reset.
+Rebuild and repeat the same plan/apply flow for the next change. Root maintenance
+requires both executables to support the full custody observation contract;
+older Roots are refused before installation. Adoption of previously deployed
+fleets is not implemented. The greeting is stateless; application data preservation
+requires its own lifecycle and qualification.
 
 ## Recovery and cleanup
 

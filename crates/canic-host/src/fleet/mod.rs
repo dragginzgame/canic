@@ -167,7 +167,8 @@ pub(crate) fn local_operation_at(
         && (receipt.operation != id
             || Some(&receipt.canister) != canister.as_ref()
             || receipt.module_hash != plan.artifact.sha256
-            || receipt.controller != plan.application_controller())
+            || receipt.controller != plan.application_controller()
+            || !crate::maintenance::retained(dir, &plan)?)
     {
         return Err(Error::Invalid(
             "receipt does not match retained plan and target evidence".into(),
@@ -293,19 +294,17 @@ fn check_report(
     {
         return Err(Error::Invalid("Root report differs from retained child approval; reported child not admitted to inventory".into()));
     }
+    let upgrades = ordered_upgrades(operations, network_id, manager);
+    validate_upgrade_order(&upgrades)?;
     if !empty
-        && operations
-            .iter()
-            .filter(|operation| operation.network_id == network_id)
-            .filter_map(|operation| operation.upgrade.as_ref())
-            .filter(|approval| approval.manager == manager)
-            .any(|approval| {
-                report.worker.as_ref() != Some(&approval.child)
-                    || report
-                        .approval
-                        .as_ref()
-                        .is_none_or(|creation| creation.module_hash != approval.previous_module)
-            })
+        && upgrades.first().is_some_and(|operation| {
+            let approval = operation.upgrade.as_ref().expect("selected upgrade");
+            report.worker.as_ref() != Some(&approval.child)
+                || report
+                    .approval
+                    .as_ref()
+                    .is_none_or(|creation| creation.module_hash != approval.previous_module)
+        })
     {
         return Err(Error::Invalid("Root creation report differs from retained upgrade target; reported child not admitted to inventory".into()));
     }
@@ -335,6 +334,49 @@ fn check_upgrade_report(
     Ok(())
 }
 
+fn ordered_upgrades<'a>(
+    operations: &'a [FleetOperation],
+    network_id: &str,
+    manager: &str,
+) -> Vec<&'a FleetOperation> {
+    let mut matching: Vec<_> = operations
+        .iter()
+        .filter(|operation| {
+            operation.network_id == network_id
+                && operation
+                    .upgrade
+                    .as_ref()
+                    .is_some_and(|a| a.manager == manager)
+        })
+        .collect();
+    matching.sort_by_key(|operation| {
+        operation
+            .upgrade
+            .as_ref()
+            .expect("selected upgrade")
+            .execute_at_ns
+    });
+    matching
+}
+
+fn validate_upgrade_order(operations: &[&FleetOperation]) -> Result<()> {
+    if operations.len() > canic_management_protocol::upgrade::MAX_UPGRADES {
+        return Err(Error::Invalid("upgrade history bound exceeded".into()));
+    }
+    for pair in operations.windows(2) {
+        let previous = pair[0].upgrade.as_ref().expect("selected upgrade");
+        let next = pair[1].upgrade.as_ref().expect("selected upgrade");
+        if !pair[0].receipt_retained
+            || previous.child != next.child
+            || previous.module_hash != next.previous_module
+            || previous.execute_at_ns >= next.execute_at_ns
+        {
+            return Err(Error::Invalid("multiple retained upgrades do not form a completed predecessor chain; no upgrade queried".into()));
+        }
+    }
+    Ok(())
+}
+
 async fn observe_upgrade(
     operations: &[FleetOperation],
     network_id: &str,
@@ -342,19 +384,12 @@ async fn observe_upgrade(
     network: &Network,
     deadline: tokio::time::Instant,
 ) -> Option<FleetUpgrade> {
-    let mut matching = operations.iter().filter_map(|operation| {
-        operation
-            .upgrade
-            .as_ref()
-            .filter(|approval| operation.network_id == network_id && approval.manager == manager)
-            .map(|approval| (operation, approval))
-    });
-    // Older managers and unrelated fleets receive no speculative upgrade query.
-    let (operation, approval) = matching.next()?;
-    let result = if matching.next().is_some() {
-        Err(Error::Invalid(
-            "multiple retained upgrades select this Root; no upgrade queried".into(),
-        ))
+    let matching = ordered_upgrades(operations, network_id, manager);
+    // Observe only the tip of a proven local chain; historical rows remain in inventory.
+    let operation = *matching.last()?;
+    let approval = operation.upgrade.as_ref().expect("selected upgrade");
+    let result = if let Err(error) = validate_upgrade_order(&matching) {
+        Err(error)
     } else if tokio::time::Instant::now() >= deadline {
         Err(Error::Blocked(
             "manager observation budget exhausted; upgrade not observed".into(),

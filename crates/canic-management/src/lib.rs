@@ -9,10 +9,11 @@ mod engine;
 pub use engine::inject_fault;
 #[cfg(target_arch = "wasm32")]
 pub use engine::upgrade::{
-    reconcile as reconcile_upgrade, stage as stage_upgrade, status as upgrade_status,
+    observe as observe_upgrade, reconcile as reconcile_upgrade, stage as stage_upgrade,
+    status as upgrade_status,
 };
 #[cfg(target_arch = "wasm32")]
-pub use engine::{open, reconcile, stage, status};
+pub use engine::{custody, open, reconcile, stage, status};
 
 /// Application-owned bounded readiness request and response admission.
 /// The engine observes the exact installed module and controller before calling this method.

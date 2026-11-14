@@ -29,20 +29,39 @@ authenticated tooling installer.
   and existing identities. Spawn permissions, placement and budgets still require
   their admitted management contracts. Initialization declares an app and its
   first fleet; optional source generation creates a standalone greeting workspace.
-  Whole-fleet plan/apply currently accepts a new Root-plus-app tree only. One
+  Whole-fleet plan/apply accepts a new Root-plus-app tree and bounded serial child upgrades. One
   immutable fleet approval binds both artifacts and the Root's typed creation
   output; both steps reuse the existing signer/effect owners under the journal
   lock. Retain nested Root/child attempts, preserve original deadlines on replan,
   and refuse competing individual plans. `fleet cancel` may release an approval
   only before effect preparation; retain its revocation and never apply it again.
   Once any effect preparation begins, preserve the reservation and resume it.
-  Larger trees, existing-fleet adoption
-  and whole-fleet upgrades remain upcoming work.
+  Completed creation and upgrade receipts permit the next bound child upgrade through the existing
+  managed Plan contract, under the same journal lock. Resolve target, previous code
+  and Root authority from retained completion; require matching authenticated Ready
+  evidence. Pending upgrades take precedence over creation receipts. No-change
+  compares retained completion only, never claims fresh network convergence. Root
+  maintenance is a separate direct upgrade after completed child work; larger
+  trees and existing-fleet adoption remain unsupported.
+  Whole-fleet planning validates one ordered chain under the journal lock before
+  publishing each existing managed Plan; a pending tip cannot be overtaken.
+  Individually created children retain their existing first-upgrade planning path.
+  Change Root and child artifacts in separate approvals. Maintenance binds the
+  exact completed journal, reads it through controller-only `observe_custody`
+  before installation and verifies preservation before retaining a receipt.
+  Reuse direct install/signed-attempt custody; never reset slots or rewrite prior
+  approvals. Only completed maintenance advances the Root hash for future child
+  plans. Both executables must support this observation contract; old owners have
+  no fallback. The operator must keep the maintenance window exclusive.
 - The managed starter is a small buildable Rust app with one application
   canister controlled by a Root/management owner. Whole-fleet reviewed convergence,
   cascading discovery and subtree operations are admitted product requirements;
   their general implementations are not yet shipped. Scaling and sharding should
   be optional composable building blocks, with application-owned data semantics.
+  Preserve all four admitted allocation patterns in design section 8: singleton,
+  scaling workers, shards and keyed instances. Keep cardinality/assignment separate
+  from subnet placement, application parentage and controller authority. Each
+  selected pattern must qualify upgrades and recovery, not creation alone.
 - Exclude ICP conversion from Canic: operators supply cycles manually; bounded
   distribution of those cycles remains in scope. Application frontend integration
   is deferred. Keep operator handover based on retained workspace evidence and
@@ -74,19 +93,25 @@ authenticated tooling installer.
   the profile manager select exports with `canic_management::mount_endpoints!`;
   their lifecycle and readiness remain explicit. Fault points 9/10 exercise
   staging/reconciliation reply encoding only in `fault-injection` builds.
-  Root admits one child creation and one separately retained upgrade of that child;
-  neither slot resets, including after expiry or failure. Whole-fleet convergence
-  and subtree control remain separate scope. Keep creation evidence immutable.
-  The original two IC Storage allocations have fixed capacity: the qualified
-  v1-to-v2 payload migration retains both journals and artifacts inside those
-  checked allocations. Never rewrite the supplier's directory or add a second
+  Root admits one child creation and at most eight serial upgrades. Each new
+  approval requires a Ready predecessor without failure; retain every historical
+  approval, request commitment and outcome. Uncertain, expired or failed work
+  cannot be replaced, and history exhaustion never evicts records. Keep creation
+  evidence immutable. The v3 journal migrates v1/v2 payloads inside the original
+  two fixed IC Storage allocations; current and creation artifact bytes stay
+  there, while historical artifact hashes and host-retained bytes preserve custody.
+  Never rewrite the supplier's directory or add a second
   backing owner. Downgrading the payload to an older executable is unsupported.
   A named child plan requires explicit `--root-module` authority. Resolve its
   parent from a configured identity or completed named deployment; check exact
   Root code and sole operator control before admission and observation. Keep
   staging's original signed attempt. Only Root's matching replicated, read-only
-  `observe` or `observe_upgrade` endpoint may receive fresh read authority after the effect deadline; public
-  queries cannot establish the created child's custody. Explicit `fleet reconcile`
+  `observe`, `observe_upgrade` or maintenance `observe_custody` endpoint may receive
+  fresh read authority after the effect deadline; public
+  queries cannot establish the created child's custody. Upgrade observations use
+  approval-bound ID 29; unit ID 25 remains public latest-status only. Read old
+  on-disk responses without rewriting them; do not fall back to unbound live
+  observations or re-sign an old pending request. Explicit `fleet reconcile`
   has separate, short-lived request authority bound to the exact retained approval;
   it never renews effect deadlines, budgets or spent slots. Keep its signed attempt
   and deadline under the existing journal lock, ordered before the next observation.
@@ -96,7 +121,9 @@ authenticated tooling installer.
   plan encodings/digests and keep Root as the child's receipt controller.
   Fleet views automatically query planned Roots under their exact network binding.
   Query upgrade progress only for a retained upgrade plan and match its full
-  approval. Creation and upgrade queries share the existing owner deadline;
+  approval. Multiple upgrades must form a completed predecessor chain; query
+  only its tip and retain historical rows. Creation and upgrade queries share
+  the existing owner deadline;
   unavailable/mismatched upgrade reports remain unknown without erasing creation.
   Keep those public reports separate from retained output custody: mismatched
   approvals cannot add a reported child, and watching must never sign, apply,

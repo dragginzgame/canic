@@ -254,7 +254,7 @@ same installed qualification. Managed-child CLI plan/apply now pins Root code,
 retains exact admission attempts and recovers completion through replicated
 observations. One child upgrade is now locally qualified, including persistent
 application state and interrupted callbacks. Each Root has one permanent creation
-slot and one permanent upgrade slot; whole-fleet convergence and subtree operations
+slot and bounded history for eight serial child upgrades; whole-fleet convergence and subtree operations
 remain unqualified. See the
 [managed-child evidence](m0-first-journey.md#managed-child-cli-approval).
 
@@ -369,7 +369,7 @@ deployment; a selector may be omitted only when its choice is unique. See the
 | Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
 | Define reusable canisters | `canic app canister add SLOT --app APP [--role ROLE] [--parent SLOT] [--wasm PATH]`, `canic app canister list --app APP`; app-owned topology and artifact inputs, shared by all fleets |
 | Bind and list deployment identities | `canic fleet canister bind SLOT --app APP --fleet FLEET --id PRINCIPAL`, `canic fleet canister list --app APP --fleet FLEET`; observation declarations only, never controller or deployment approval; unknown definitions, occupied bindings and conflicting membership refuse |
-| Review and execute a starter fleet or one deployment | `canic fleet plan --controller PRINCIPAL` selects a new Root-plus-app fleet; `--canister SLOT` selects one deployment; `canic fleet apply DIGEST` resumes that exact approval |
+| Review and execute a starter fleet or one deployment | `canic fleet plan --controller PRINCIPAL` selects Root-plus-app creation or its next child upgrade; `--canister SLOT` selects one deployment; `canic fleet apply DIGEST` resumes that exact approval |
 | Investigate or continue the original operation | `canic fleet status DIGEST`, `canic fleet apply DIGEST` |
 | Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |
 | Exercise the greeting or inspect the wallet | `canic fleet call DIGEST`, `canic wallet PRINCIPAL` |
@@ -518,18 +518,75 @@ Applications request capacity with a component specification, parent allocation,
 
 Executors own bounded indexed asset tables. Useful states are held, preparing, ready, reserved, installed, draining, uncertain and released; exact variants should follow the implemented operations rather than preserve old names. Counters and reverse indexes update atomically with their authoritative rows. Full scans are bounded repair/diagnostic operations, never the normal allocation path.
 
-Scaling pools add equivalent workers. Sharding assigns application keys under an explicit application policy. Canic preserves assignment identity and capacity accounting, but does not infer data movement, repartition existing keys or invent replication semantics. A removed allocation invalidates its routes. Releasing an old binding must not decrement a replacement's counts. Recheck capacity at assignment commit to handle concurrent completions.
+### Application allocation patterns
+
+Retain these four application patterns as admitted product requirements. They
+describe cardinality and assignment, independently of physical subnet placement,
+application role, immediate parentage and IC controller authority. They are
+optional compositions over the same allocation, funding, readiness, discovery
+and upgrade owners; their names do not require four runtime engines or preserve
+legacy configuration syntax.
+
+| Pattern | Meaning and example | Required identity and maintenance behavior |
+| --- | --- | --- |
+| Singleton | At most one live allocation of a declared role per concrete parent; for example, a project's settings canister | Concurrent creation resolves the same admitted slot. Upgrade preserves its identity and application state. A singleton under each project is not a Fleet-wide singleton. |
+| Scaling workers (legacy `replica`) | Bounded interchangeable workers serving equivalent requests | Retain worker identities and capacity accounting. Qualify bounded rollout, drain and readiness before routing new work. The name grants no data replication, leader election or failover semantics. |
+| Shards | Many application keys share each capacity-bounded canister; for example, user records across user shards | Retain each key's exact allocation through growth and upgrades. Application lifecycle preserves shard contents; Canic does not silently move existing keys when capacity changes. |
+| Keyed instances (legacy `instance` / placement index) | Each admitted key selects one dedicated canister within its declared scope; for example, one project canister per project ID | Repeated resolution returns the same allocation. Concurrent creation shares retained pending work. Upgrade preserves the key binding, principal and application state. |
+
+Scope singleton and keyed uniqueness by the owning parent allocation and declared
+role or assignment policy; keyed instances additionally bind the application key.
+The same key in a different parent or Fleet is not automatically the same instance.
+A Fleet-wide uniqueness promise needs an explicit authoritative owner and cannot
+be inferred from a role name or a per-parent limit. Application authentication and
+admission precede key allocation; bound key size, retained claims, instance count
+and funding exposure. Fresh caller identities must not create unbounded demand.
+
+A pending or uncertain claim remains bound to its original operation; timeout
+alone cannot authorize another child. Resolution of an unavailable assignment
+reports unavailable until explicit qualified recovery. Generation-bound claims
+and callbacks prevent late success or release from modifying a replacement.
+A removed allocation invalidates its routes. Releasing an old shard binding must
+not decrement a replacement's counts. Recheck capacity at assignment commit to
+handle concurrent completions, while replay of an existing key keeps its original
+assignment even when the shard is full. Allocation reuse and data movement remain
+separate, explicitly qualified operations.
+
+### Physical placement
+
+The eventual placement choices are same subnet as a named parent or dependency,
+a selected admitted subnet, and bounded distribution across admitted subnets.
+Keep hard locality requirements distinct from preferences: an unsatisfied hard
+constraint produces a typed refusal, never silent remote placement. Distribution
+needs explicit count, per-subnet density and spread bounds. Spreading canisters
+does not itself replicate application data or provide failover. Qualify each
+selected arrangement with its actual effect owner and provider before supporting
+it; this design does not claim all combinations currently work.
 
 Same-subnet work is the preferred execution path. Protected placement classifies a route as same-subnet, cross-subnet or unknown. Unknown is never assumed local. Directory paging must carry a generation or comparable consistency marker; mixed pages cannot masquerade as one complete inventory. Large dynamic Fleets require indexes by owner, subnet, role and unfinished operation, including children created after initial deployment.
 
 Shared tenancy is a first-class qualification workload. Do not equate one logical user with one canister. Placement policy accepts application capacity signals without requiring Canic to understand user records. Subnet outages, pressure and lack of funding cause bounded queueing or typed refusal; no hidden unbounded backlog.
 
-Scaling and sharding are admitted composable building blocks, not mandatory
-runtime features. Both use the same allocation, funding, readiness and discovery
-owners. Scaling selects equivalent workers; sharding retains application-key
-assignments. The first concrete policy follows the smallest useful profile-demo
-extension. This decision does not select unlimited recursive spawning, automatic
-rebalancing or a general pool catalogue.
+### Delivery and upgrade qualification
+
+The four patterns are the intended product scope; their implementations enter
+incrementally with a named consumer and bounded fixture. Today the one-child
+Root journey qualifies a fixed slot and bounded serial child upgrades, not general singleton
+admission, scaling, sharding or keyed-instance APIs. Keep those limits visible;
+do not add unused configuration variants or a general pool catalogue in advance.
+
+Each pattern's useful journey includes creation, resolution, bounded growth where
+applicable, upgrade and interrupted-operation recovery. Before extending to many
+children, qualify repeatable maintenance without resetting spent or uncertain
+authority. An approved rollout binds its target allocations and artifact versions,
+finite concurrency and failure policy; concurrent growth cannot silently add
+unapproved upgrade targets. Ordering and mixed-version protocol compatibility
+come from the application. Partial completion retains per-target evidence and
+resumes exact operations; it is not an atomic subtree upgrade or automatic rollback.
+Singletons, keyed instances and shards preserve bindings and application invariants;
+interchangeable workers still require the application's drain/readiness contract.
+Unlimited recursive spawning, automatic rebalancing and data replication remain
+outside these four patterns.
 
 Multi-Fleet operation initially means isolated Fleets inspected by the same host. Cross-Fleet movement is not required for multi-subnet operation. Controlled cycle disposition between Fleets remains a separate experiment with its own physical proof and budget.
 
@@ -865,13 +922,22 @@ one plan for its declared tree, apply it, repeat with no unnecessary effects,
 inspect progress and recover supported interruptions through CLI commands,
 then upgrade while preserving the application's invariant. The same definition
 must serve a second isolated fleet. The initial whole-fleet path now deploys a
-new Root-plus-app tree and resumes the same authority. Existing-fleet adoption,
-whole-fleet upgrade planning and larger trees remain open. `fleet reconcile`
+new Root-plus-app tree, resumes the same authority, and derives its next child
+upgrade from retained completion, retaining at most eight upgrades. Matching
+artifacts report no change against
+retained completion, not freshly observed network state. A separate Root-only
+maintenance plan now preserves the full completed journal through the direct
+installation owner, then advances the Root binding for future child plans.
+Both executables must support the controller-only full-custody observation;
+unfinished work, combined Root/child changes and older owners are refused.
+Unbounded upgrade history, existing-fleet adoption and larger trees remain open. `fleet reconcile`
 requests recovery of an exact retained creation/upgrade approval on a compatible
 Root, retaining original effect limits and ordered signed-attempt custody.
-Infrastructure-owner maintenance still needs lower-level controller calls. These are remaining
+Maintenance of active/uncertain work, old-owner bootstrap and Root replacement
+still require separately qualified controller paths. These are remaining
 implementation requirements, not claims made by the existing command names.
-Subtree administration and optional scaling/sharding extend this boundary in M3.
+Subtree administration and the optional allocation patterns in section 8 extend
+this boundary in M3; each selected pattern includes its maintenance proof.
 
 | Milestone | Deliverable | Completion and subtraction gate |
 | --- | --- | --- |
@@ -927,8 +993,10 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Infrastructure bootstrap and supplied IDs | Explicit retained operation, section 7 | Required — bootstrap; supplied-ID breadth consumer-gated | Lost reply and controller mismatch |
 | Capacity import, reset and recycling | Rebuild around asset/allocation identity, sections 8, 13 | Consumer-gated — reusable-capacity need | Reuse with late callbacks and exact custody |
 | Component lifecycle and application initialization | One provisioning/readiness operation, sections 7, 10 | Required — first stateful consumer | Installed but unready stays unpublished |
-| Pools, child trees and scaling | Retain bounded demand-driven allocation, sections 8–10 | Required — bounded child path; general pools consumer-gated | Capacity race, idle quiescence and rearm |
-| Sharding and placement indexes | Composable assignment policy over shared allocation; application owns movement, section 8 | Required — optional narrow building block qualified with a selected consumer; general policies consumer-gated | Old allocation cannot alter replacement; no implicit movement |
+| Singleton slots and child trees | Explicit per-parent cardinality over shared allocation, sections 8–10 | Required — fixed child path now; general singleton admission qualifies with its consumer | Concurrent requests cannot create a second live slot; upgrade retains identity |
+| Scaling workers | Bounded interchangeable workers over shared allocation, sections 8–10 | Required — optional building block; general pools consumer-gated | Capacity race, idle quiescence, drain/readiness and bounded rollout; no implied data replication |
+| Sharding | Composable shared-capacity assignment; application owns data movement, section 8 | Required — optional building block qualified with a selected consumer; general policies consumer-gated | Commit-time capacity, stable assignments across upgrade, old release cannot alter replacement |
+| Keyed instances / placement indexes | One dedicated allocation per scoped key, section 8 | Required — optional building block qualified with a selected consumer | Same-key concurrency, exact pending recovery, wrong-parent refusal and binding/data preservation across upgrade |
 | Service publication and Group Directory | Cascading generation-bound projections and scoped local lookup, sections 3, 8, 10 | Required — tree discovery; global directory consumer-gated | Dynamic children, repeated roles, exact replay and stale/conflicting projection refusal |
 | Fleet ingress whitelist/admission | Optional deployment policy with selected consistency semantics, section 6 | Consumer-gated — extra Fleet admission | Application access works without it; selected revocation promise is qualified |
 | Caller/topology access checks and RPC replay | Retain explicit authority and effect identity, sections 6–7, 12 | Required — selected commands and effects | Wrong caller, stale generation and duplicate |

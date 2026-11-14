@@ -1,4 +1,4 @@
-//! One retained child upgrade, independent of the original creation approval.
+//! Bounded serial child upgrades, independent of the original creation approval.
 use crate::{Failure, MAX_WASM, Refusal, digest};
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +9,10 @@ mod tests;
 pub const STAGE: u64 = 24;
 /// Read committed upgrade evidence.
 pub const STATUS: u64 = 25;
+/// Observe the exact approval, including completed historical work.
+pub const OBSERVE: u64 = 29;
+/// Maximum retained upgrade approvals, including the current one. No eviction or reset.
+pub const MAX_UPGRADES: usize = 8;
 /// Reconstruct outcomes for the exact retained `Approval`; legacy unbound ID 26 is retired.
 pub const RECONCILE: u64 = 28;
 

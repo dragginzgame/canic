@@ -36,6 +36,9 @@ pub struct Plan {
     /// Explicit Root-owned creation or upgrade; absent bindings retain their original encoding.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management: Option<ManagedOwner>,
+    /// Exact completed journal that a direct Root maintenance upgrade must preserve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maintenance: Option<canic_management_protocol::custody::Custody>,
 }
 
 /// Exact enduring effect owner for a single approved child.
@@ -82,6 +85,9 @@ impl Plan {
         }
         if let Some(deployment) = &self.deployment {
             deployment.validate()?;
+        }
+        if self.maintenance.is_some() {
+            crate::maintenance::validate(self)?;
         }
         if self.network == Network::Mainnet && controller == principal("2vxsx-fae")? {
             return Err(Error::Invalid(
@@ -175,8 +181,15 @@ pub(crate) fn retain(
                     .ok_or_else(|| Error::Invalid("dispatch deadline overflow".into()))
             })?,
         management,
+        maintenance: None,
     };
     let store = Store::open(root)?;
+    retain_locked(&store, plan, &bytes)
+}
+
+/// Lookup and publication share the caller's journal lock.
+pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
+    let root = &store.path;
     if let Some(name) = &plan.deployment {
         // The journal lock spans lookup and publication, including an interrupted earlier plan.
         let mut count = 0;
@@ -201,7 +214,9 @@ pub(crate) fn retain(
                 if crate::fleet_plan::cancelled(&entry.path(), &existing_id)? {
                     continue;
                 }
-                if fleet.reserves(name) {
+                if fleet.reserves(name)
+                    && !crate::fleet_plan::permits_upgrade(&entry.path(), &fleet, &plan)?
+                {
                     return Err(Error::Blocked(format!(
                         "fleet already belongs to operation {existing_id}; resume that whole-fleet approval"
                     )));
@@ -263,10 +278,15 @@ pub(crate) fn retain(
     }
     // Reopening returns the original authority before checking a new schedule.
     // A past requested dispatch cannot renew or replace that retained operation.
+    publish_locked(store, plan, bytes)
+}
+
+/// Publish after the caller validates its reservation under this same lock.
+pub(crate) fn publish_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
     let id = plan.digest()?;
     let dir = store.operation(&id)?;
     ic_host_fs::durable::prepare_private_parents(&dir).map_err(supplier)?;
-    store::put(&dir.join("module.wasm"), &bytes)?;
+    store::put(&dir.join("module.wasm"), bytes)?;
     store::put_json(&dir.join("plan.json"), &plan)?;
     Ok((id, plan))
 }

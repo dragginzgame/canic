@@ -235,21 +235,52 @@ pub(crate) async fn observe(
     icp: &Path,
     agent: &Agent,
 ) -> Result<Vec<u8>> {
-    let owner = plan
-        .management
-        .as_ref()
-        .ok_or_else(|| Error::Invalid("observation needs Root binding".into()))?;
-    let (method, method_id) = if plan.target.is_some() {
+    let (root, method, args) = if plan.maintenance.is_some() {
+        crate::maintenance::validate(plan)?;
         (
-            "observe_upgrade",
-            canic_management_protocol::upgrade::STATUS,
+            principal(
+                plan.target
+                    .as_deref()
+                    .expect("validated maintenance target"),
+            )?,
+            "observe_custody",
+            ic_wire::native::encode_request(
+                canic_management_protocol::custody::OBSERVE,
+                &(),
+                canic_management_protocol::custody::LIMITS,
+            )
+            .map_err(supplier)?,
         )
     } else {
-        ("observe", canic_management_protocol::STATUS)
+        let owner = plan
+            .management
+            .as_ref()
+            .ok_or_else(|| Error::Invalid("observation needs Root binding".into()))?;
+        let (method, args) = if plan.target.is_some() {
+            (
+                "observe_upgrade",
+                ic_wire::native::encode_request(
+                    canic_management_protocol::upgrade::OBSERVE,
+                    &crate::managed::upgrade::approval(plan)?,
+                    canic_management_protocol::LIMITS,
+                )
+                .map_err(supplier)?,
+            )
+        } else {
+            (
+                "observe",
+                ic_wire::native::encode_request(
+                    canic_management_protocol::STATUS,
+                    &(),
+                    canic_management_protocol::LIMITS,
+                )
+                .map_err(supplier)?,
+            )
+        };
+
+        (principal(&owner.root)?, method, args)
     };
-    let args = ic_wire::native::encode_request(method_id, &(), canic_management_protocol::LIMITS)
-        .map_err(supplier)?;
-    if call.canister != principal(&owner.root)?
+    if call.canister != root
         || call.effective != call.canister
         || call.method != method
         || call.args != args

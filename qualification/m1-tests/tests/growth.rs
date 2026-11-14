@@ -533,6 +533,19 @@ async fn profile_get(pic: &PocketIc, worker: CanisterId, caller: CanisterId) -> 
 
 #[tokio::test(flavor = "current_thread")]
 async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
+    qualify_child_upgrades(None, false).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "requires CANIC_PREVIOUS_UPGRADE_MANAGER naming a retained v2-journal manager"]
+async fn previous_single_upgrade_manager_migrates_to_retained_history() {
+    let previous =
+        std::fs::read(std::env::var_os("CANIC_PREVIOUS_UPGRADE_MANAGER").unwrap()).unwrap();
+    qualify_child_upgrades(Some(previous.clone()), false).await;
+    qualify_child_upgrades(Some(previous), true).await;
+}
+
+async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool) {
     use canic_management_protocol::upgrade;
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -562,7 +575,12 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
     let bob = CanisterId::self_authenticating(b"upgrade outsider");
     // Normal, upload callback loss, pre-dispatch trap, install callback loss,
     // and a real application post_upgrade rejection use the same admitted path.
-    for case in [0_u8, 6, 7, 8, 9] {
+    let cases: &[u8] = if previous.is_some() {
+        &[0]
+    } else {
+        &[0, 6, 7, 8, 9]
+    };
+    for &case in cases {
         let manager = pic.create_canister().await;
         pic.add_cycles(manager, 3_000_000_000_000).await;
         pic.install_canister(manager, manager_wasm.clone(), vec![], None)
@@ -573,6 +591,11 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
             pic.get_time().await.as_nanos_since_unix_epoch(),
         );
         stage(pic, manager, &creation).await.unwrap();
+        if migrate_pending {
+            pic.upgrade_canister(manager, maintenance.clone(), vec![], None)
+                .await
+                .unwrap();
+        }
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
         let created = status(pic, manager).await;
@@ -728,10 +751,136 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
         settle(pic).await;
         assert_eq!(upgrade_status(pic, manager).await, complete);
         assert_eq!(count(pic, manager).await, before);
+        if case == 0 {
+            repeated_upgrades(
+                pic,
+                manager,
+                &original,
+                &replacement,
+                &maintenance,
+                input.clone(),
+                complete.clone(),
+            )
+            .await;
+            assert_eq!(profile_get(pic, worker, alice).await.unwrap(), profile);
+            assert_eq!(
+                profile_get(pic, worker, bob).await,
+                Err(canic_profile_protocol::ProfileError::Forbidden)
+            );
+        } else if case == 9 {
+            let mut successor = input.clone();
+            successor.approval.execute_at_ns += 1;
+            assert_eq!(
+                stage_upgrade(pic, manager, &successor).await,
+                Err(Refusal::Occupied)
+            );
+        }
         println!(
             "child upgrade case {case}: {:?}, profile/private ownership and one-install custody retained",
             complete.phase
         );
     }
     owner.close().await;
+}
+
+async fn repeated_upgrades(
+    pic: &PocketIc,
+    manager: CanisterId,
+    original: &[u8],
+    replacement: &[u8],
+    maintenance: &[u8],
+    first: canic_management_protocol::upgrade::Stage,
+    first_status: canic_management_protocol::upgrade::Status,
+) {
+    use canic_management_protocol::upgrade;
+    let worker = CanisterId::from_text(&first.approval.child).unwrap();
+    let mut retained = vec![(first, first_status)];
+    for index in 1..upgrade::MAX_UPGRADES {
+        let latest = upgrade_status(pic, manager).await;
+        let now = pic.get_time().await.as_nanos_since_unix_epoch();
+        let wasm = if index % 2 == 1 {
+            original
+        } else {
+            replacement
+        };
+        let next = upgrade::Stage {
+            approval: upgrade::Approval {
+                manager: manager.to_text(),
+                child: worker.to_text(),
+                previous_module: latest.approval.as_ref().unwrap().module_hash,
+                module_hash: digest(wasm),
+                execute_at_ns: now + 10_000_000_000,
+                expires_at_ns: now + 120_000_000_000,
+            },
+            wasm: wasm.to_vec(),
+        };
+        assert_eq!(
+            stage_upgrade(pic, manager, &next).await.unwrap().phase,
+            upgrade::Phase::Scheduled
+        );
+        // A second approval cannot replace admitted work, even before effects.
+        let mut competing = next.clone();
+        competing.approval.expires_at_ns += 1;
+        assert_eq!(
+            stage_upgrade(pic, manager, &competing).await,
+            Err(Refusal::Occupied)
+        );
+        pic.advance_time(Duration::from_secs(11)).await;
+        settle(pic).await;
+        let complete = upgrade_status(pic, manager).await;
+        assert_eq!(complete.phase, upgrade::Phase::Ready, "{complete:?}");
+        assert!(complete.previous_version.unwrap() >= latest.observed_version.unwrap());
+        assert_eq!(complete.attempts, [1; 2]);
+        retained.push((next, complete.clone()));
+        // Historical replay and recovery must not mutate the newest operation.
+        for (input, expected) in &retained {
+            assert_eq!(stage_upgrade(pic, manager, input).await.unwrap(), *expected);
+            for (method, id) in [
+                ("observe_upgrade", upgrade::OBSERVE),
+                ("reconcile_upgrade", upgrade::RECONCILE),
+            ] {
+                let reply = pic
+                    .update_call(
+                        manager,
+                        CanisterId::anonymous(),
+                        method,
+                        ic_wire::native::encode_request(id, &input.approval, LIMITS).unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    ic_wire::native::decode_response::<upgrade::Status>(id, &reply, LIMITS)
+                        .unwrap(),
+                    *expected
+                );
+            }
+        }
+        assert_eq!(upgrade_status(pic, manager).await, complete);
+    }
+    // Reopen the full journal: same original two allocations and retained history.
+    pic.upgrade_canister(manager, maintenance.to_vec(), vec![], None)
+        .await
+        .unwrap();
+    let (last, expected) = retained.last().unwrap();
+    assert_eq!(upgrade_status(pic, manager).await, *expected);
+    let now = pic.get_time().await.as_nanos_since_unix_epoch();
+    let exhausted = upgrade::Stage {
+        approval: upgrade::Approval {
+            previous_module: last.approval.module_hash,
+            module_hash: digest(original),
+            execute_at_ns: now + 10_000_000_000,
+            expires_at_ns: now + 120_000_000_000,
+            ..last.approval.clone()
+        },
+        wasm: original.to_vec(),
+    };
+    assert_eq!(
+        stage_upgrade(pic, manager, &exhausted).await,
+        Err(Refusal::Occupied)
+    );
+    assert_eq!(
+        stage_upgrade(pic, manager, &retained[0].0).await.unwrap(),
+        retained[0].1
+    );
+    assert_eq!(pic.get_controllers(worker).await, [manager]);
 }

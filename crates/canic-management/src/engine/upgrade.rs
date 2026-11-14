@@ -1,9 +1,9 @@
-//! One child upgrade; creation custody stays immutable in the parent engine.
+//! Serial child upgrades with bounded immutable history and one active effect owner.
 use super::{
     MANAGEMENT_LIMITS, OBSERVING, STATE, State, failure, fault, management, schedule, snapshot,
 };
 use canic_management_protocol::upgrade::{
-    Approval, Phase as UpgradePhase, Stage as UpgradeStage, Status as UpgradeStatus,
+    Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage, Status as UpgradeStatus,
 };
 use canic_management_protocol::{Failure, Phase, RESERVE_CYCLES, Refusal, STAGE_LIMITS, digest};
 use ic_platform::{
@@ -42,8 +42,74 @@ fn mutate(f: impl FnOnce(&mut UpgradeStatus)) {
         state.journal.set(value);
     });
 }
+/// Lookup never dispatches, replaces or reopens a historical operation.
+/// # Panics
+/// Traps if lifecycle initialization has not completed.
+#[must_use]
+pub fn observe(expected: &Approval) -> UpgradeStatus {
+    STATE.with_borrow(|state| {
+        let journal = state.as_ref().expect("initialized manager").journal.get();
+        journal
+            .2
+            .iter()
+            .chain(std::iter::once(&journal.1))
+            .find(|record| record.approval.as_ref() == Some(expected))
+            .cloned()
+            .unwrap_or_default()
+    })
+}
+
 pub(super) fn validate(state: &State) {
-    let s = &state.journal.get().1;
+    let journal = state.journal.get();
+    assert!(journal.2.len() < MAX_UPGRADES, "bounded upgrade history");
+    let mut previous = journal
+        .0
+        .approval
+        .as_ref()
+        .map_or([0; 32], |a| a.module_hash);
+    let mut prior: Option<&UpgradeStatus> = None;
+    for record in journal.2.iter().chain(std::iter::once(&journal.1)) {
+        validate_record(record, &journal.0, &previous);
+        if let Some(old) = prior {
+            assert_eq!(
+                old.phase,
+                UpgradePhase::Ready,
+                "only verified completion admits a successor"
+            );
+            assert!(old.failure.is_none());
+            assert!(
+                record.approval.as_ref().expect("successor").execute_at_ns
+                    > old.approval.as_ref().expect("predecessor").execute_at_ns,
+                "ordered approvals"
+            );
+            if let Some(version) = record.previous_version {
+                assert!(
+                    version >= old.observed_version.expect("completed predecessor"),
+                    "version regression"
+                );
+            }
+        }
+        if let Some(a) = &record.approval {
+            previous = a.module_hash;
+        }
+        prior = Some(record);
+    }
+    if let Some(a) = &journal.1.approval {
+        assert_eq!(
+            digest(&state.artifact.get().1),
+            a.module_hash,
+            "current artifact custody"
+        );
+    } else {
+        assert!(state.artifact.get().1.is_empty());
+    }
+}
+
+fn validate_record(
+    s: &UpgradeStatus,
+    creation: &canic_management_protocol::Status,
+    previous: &[u8; 32],
+) {
     assert!(
         s.attempts.iter().all(|n| *n <= 1),
         "single-use upgrade counts"
@@ -56,7 +122,6 @@ pub(super) fn validate(state: &State) {
         );
     }
     if let Some(a) = &s.approval {
-        let creation = &state.journal.get().0;
         assert_eq!(creation.phase, Phase::Ready, "creation must be complete");
         assert_eq!(
             creation.worker.as_ref(),
@@ -64,21 +129,8 @@ pub(super) fn validate(state: &State) {
             "upgrade child binding"
         );
         assert_eq!(a.manager, api::canister_self().to_text(), "upgrade owner");
-        assert_eq!(
-            a.previous_module,
-            creation
-                .approval
-                .as_ref()
-                .expect("creation approval")
-                .module_hash,
-            "old code"
-        );
+        assert_eq!(&a.previous_module, previous, "old code");
         assert_ne!(a.previous_module, a.module_hash, "different executable");
-        assert_eq!(
-            digest(&state.artifact.get().1),
-            a.module_hash,
-            "upgrade artifact custody"
-        );
         assert!(a.execute_at_ns < a.expires_at_ns, "upgrade interval");
         assert_ne!(s.phase, UpgradePhase::Empty, "admitted upgrade");
         if s.attempts[0] == 1 {
@@ -97,11 +149,10 @@ pub(super) fn validate(state: &State) {
         }
     } else {
         assert_eq!(s, &UpgradeStatus::default(), "unadmitted upgrade evidence");
-        assert!(state.artifact.get().1.is_empty());
     }
 }
 
-/// Admit one immutable child upgrade; the slot remains consumed after any outcome.
+/// Admit a successor only after Ready, retaining all earlier approvals and outcomes.
 /// # Errors
 /// Refuses incomplete creation, changed authority, invalid bytes/time or inadequate reserve.
 /// # Panics
@@ -111,21 +162,53 @@ pub fn stage(input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    if let Some(old) = status().approval {
-        return if old == input.approval && digest(&input.wasm) == old.module_hash {
-            Ok(status())
+    let retained = observe(&input.approval);
+    if retained.approval.is_some() {
+        return if digest(&input.wasm) == input.approval.module_hash {
+            Ok(retained)
         } else {
-            Err(Refusal::Occupied)
+            Err(Refusal::Artifact)
         };
+    }
+    let current = status();
+    if OBSERVING.get()
+        || (current.approval.is_some()
+            && (current.phase != UpgradePhase::Ready || current.failure.is_some()))
+    {
+        return Err(Refusal::Occupied);
+    }
+    let full = STATE.with_borrow(|state| {
+        let journal = state.as_ref().expect("initialized manager").journal.get();
+        journal.2.len() + usize::from(journal.1.approval.is_some()) >= MAX_UPGRADES
+    });
+    if full {
+        return Err(Refusal::Occupied);
     }
     let creation = snapshot();
     if creation.phase != Phase::Ready {
         return Err(Refusal::Binding);
     }
+    let previous = current.approval.as_ref().map_or_else(
+        || {
+            creation
+                .approval
+                .as_ref()
+                .expect("creation approval")
+                .module_hash
+        },
+        |a| a.module_hash,
+    );
+    if current
+        .approval
+        .as_ref()
+        .is_some_and(|old| input.approval.execute_at_ns <= old.execute_at_ns)
+    {
+        return Err(Refusal::Occupied);
+    }
     input.validate(
         &api::canister_self().to_text(),
         creation.worker.as_deref().expect("created child"),
-        &creation.approval.expect("creation approval").module_hash,
+        &previous,
         api::time(),
     )?;
     if api::canister_liquid_cycle_balance() < u128::from(RESERVE_CYCLES) {
@@ -137,9 +220,18 @@ pub fn stage(input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
         artifacts.1 = input.wasm;
         state.artifact.set(artifacts);
     });
-    mutate(|s| {
-        s.approval = Some(input.approval);
-        s.phase = UpgradePhase::Scheduled;
+    STATE.with_borrow_mut(|state| {
+        let state = state.as_mut().expect("initialized manager");
+        let mut journal = state.journal.get().clone();
+        if journal.1.approval.is_some() {
+            journal.2.push(journal.1.clone());
+        }
+        journal.1 = UpgradeStatus {
+            approval: Some(input.approval),
+            phase: UpgradePhase::Scheduled,
+            ..Default::default()
+        };
+        state.journal.set(journal);
     });
     schedule();
     Ok(status())
@@ -207,6 +299,19 @@ pub(super) async fn step() {
         UpgradePhase::Scheduled => inspect(a).await.and_then(|value| {
             if value.module_hash.as_deref() != Some(a.previous_module.as_slice())
                 || value.version == u64::MAX
+                || STATE.with_borrow(|state| {
+                    state
+                        .as_ref()
+                        .expect("initialized manager")
+                        .journal
+                        .get()
+                        .2
+                        .last()
+                        .is_some_and(|old| {
+                            old.observed_version
+                                .is_none_or(|version| value.version < version)
+                        })
+                })
             {
                 return Err(Failure::Mismatch);
             }
@@ -372,11 +477,15 @@ pub async fn reconcile(expected: canic_management_protocol::upgrade::Approval) -
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
+    let retained = observe(&expected);
     assert_eq!(
-        status().approval,
-        Some(expected),
+        retained.approval.as_ref(),
+        Some(&expected),
         "reconciliation approval mismatch"
     );
+    if status().approval.as_ref() != Some(&expected) {
+        return retained;
+    }
     if OBSERVING.replace(true) {
         return status();
     }

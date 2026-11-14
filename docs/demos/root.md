@@ -98,13 +98,14 @@ canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainn
 canic fleet call OPERATION --app starter --fleet mainnet --name team
 ```
 
-Replanning returns the original operation and deadlines; it never renews expired
-authority. Completed apply checks current code/controllers without signing or
+Replanning unfinished work returns the original operation and deadlines; it never
+renews expired authority. After completion, unchanged inputs report no artifact
+changes against retained evidence, without signing or refreshing network state. Completed apply checks current code/controllers without signing or
 creating again. Status is local evidence; watching never retains completion.
 The two steps share one approval digest in fleet views. Original single-canister
 journals remain readable. This first fleet path refuses pre-bound IDs, larger
-trees and competing single-canister plans; adoption and fleet upgrades are not
-implemented yet. Preserve the complete journal and resume the same operation.
+trees and unrelated single-canister plans. Existing-fleet adoption is not
+implemented; its own completed child can receive successive upgrades below. Preserve the complete journal and resume the same operation.
 
 ## Recovery and cleanup
 
@@ -166,9 +167,10 @@ The suggested next step depends on that evidence. Pending work calls for
 observation; Ready without a receipt calls for applying the original operation
 to verify completion. Issued effects without retained outcomes require review
 if fresh observations remain unresolved. An expired or reserve-blocked Root
-slot stays consumed; adding cycles does not reset it. Owner maintenance and
-controller reconciliation still require the qualified Wire path, with no CLI
-recovery command yet. Status never performs those actions automatically.
+slot stays consumed; adding cycles does not reset it. Explicit `fleet reconcile OPERATION --identity canic-mainnet` requests recovery
+under the original approval on a compatible owner; it cannot renew deadlines or
+reset slots. Owner maintenance still requires the qualified controller path.
+Status never performs those actions automatically.
 
 The installed CLI fixture creates and installs Root through the public plan/apply
 commands, then resolves the child's parent from that completed receipt without
@@ -200,22 +202,27 @@ or reuse its approved operations.
 
 ## Upgrade the existing child
 
-The existing single-canister planning path remains available with `--canister`
-and `--root-module`. Do not mix it with a whole-fleet approval.
-
-For an individually planned deployment, the first upgrade uses the same named slot, its completed creation receipt and
-the same Root. Root must already run the upgrade-capable executable. After
-editing the generated greeting, rebuild its app-defined artifact. Copy the child
-principal and previous module hash from the retained creation receipt; use the
-reviewed hash of the deployed Root. These commands plan locally, then admit an
-in-place upgrade on the selected network:
+For a fleet created through the whole-fleet path above, first retain its creation
+completion with apply. Edit the generated application's greeting source, then
+rebuild and plan from its project directory:
 
 ```sh
 canic app build
-canic fleet plan --canister app --target CHILD_PRINCIPAL --previous-module PREVIOUS_SHA256 --root-module ROOT_SHA256 --identity canic-mainnet
+canic fleet plan --identity canic-mainnet
 canic fleet status UPGRADE_OPERATION
 canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
 ```
+
+The planner resolves the existing child, previous module and exact Root module
+from retained completion; no principal or hash needs copying. Review the upgrade
+preview before applying. It has no creation debit and preserves the same child
+identity. Change Root and child in separate reviewed windows; changing both
+artifacts together is refused. Unfinished creation must complete with its original inputs before upgrading.
+An already retained upgrade keeps its original bytes and schedule; a different
+input cannot replace it, including after expiry or failure.
+
+The named `--canister` / `--root-module` path remains for individually deployed
+children; both paths use the same immutable managed plan and runtime owner.
 
 Add `--fleet NAME` when the app has multiple fleets. Copy UPGRADE_OPERATION from
 the new plan. The ten-minute default dispatch delay and following ten-minute
@@ -235,12 +242,15 @@ application's readiness response before reporting completion. The child keeps
 its principal and Root controller. Creation evidence and its receipt remain
 historical records; they do not describe the replacement executable.
 
-This experimental owner has **one permanent upgrade slot**, separate from the
-creation slot. Expiry, failure and completion never reset it. An uncertain install
-is never issued again. A lost host admission reply can be recovered through
-`fleet apply`'s replicated read. Engine callback failures may require owner
-maintenance and controller `reconcile_upgrade`; that recovery is qualified at
-the Wire boundary but has no CLI maintenance command yet. Preserve blocked
+This experimental owner retains **at most eight serial upgrades**, separate from
+creation. After verified successful completion, edit/build/plan/apply again for
+the next change. Each approval is new authority linked to the last completed code,
+not a reset of earlier work. Expired, failed and uncertain operations cannot be
+overtaken; an uncertain install is never issued again. History exhaustion blocks
+new work without erasing any approval or outcome. A lost host admission reply can be recovered through
+`fleet apply`'s replicated read. Use explicit `fleet reconcile UPGRADE_OPERATION
+--identity canic-mainnet` for supported engine recovery on a compatible Root.
+Owner maintenance still requires the qualified controller path. Preserve blocked
 evidence; do not delete the journal or reinstall to obtain another allowance.
 
 `fleet status UPGRADE_OPERATION` shows retained upgrade evidence. `fleet show`
@@ -251,6 +261,9 @@ canic fleet show
 canic fleet show --watch
 ```
 
+With several retained upgrades, the view selects the tip of the completed
+predecessor chain and keeps historical operation rows.
+
 The upgrade is shown as not admitted before staging, then its reported phase.
 These reports are uncertified and must match the complete approval and network;
 an unavailable or mismatched report is UNKNOWN. They share the existing five-second
@@ -260,8 +273,51 @@ completion. Watching never reconciles or authorizes work, even when a report is
 blocked. The localhost view opens no browser and stops with Ctrl-C.
 The installed CLI fixture upgrades
 one generated greeting while preserving the second fleet and both creation
-receipts. `make growth-test` separately proves profile data/ownership across a
+receipts. It also drives the same whole-fleet flow with a profile manager/worker,
+checking private data and owner access after upgrade. `make growth-test` additionally
+proves profile data/ownership across a
 changed executable, rejected upgrade, callback loss and owner maintenance.
+
+## Root maintenance
+
+Whole-fleet planning also accepts a Root-only artifact change after creation and
+every admitted child upgrade have completed. It preserves the Root/child principals,
+controllers, original creation and full upgrade journal. Root and child changes
+need separate approvals; pending, failed or uncertain child work blocks maintenance.
+
+For a generated `starter` project directly under this checkout, with a completed
+fleet created using the current custody-capable Root, build a reviewed replacement
+from the Canic checkout. This example selects the qualified maintenance marker;
+it does not enable fault injection:
+
+```sh
+canic artifact build --package canic-root --features maintenance-candidate --output starter/artifacts/root.wasm
+canic fleet plan --app starter --identity canic-mainnet
+canic fleet status MAINTENANCE_OPERATION --app starter
+```
+
+After reviewing the returned plan, use its digest. Add `--fleet NAME` if needed:
+
+```sh
+canic fleet apply MAINTENANCE_OPERATION --app starter --identity canic-mainnet
+canic fleet show --app starter
+canic fleet plan --app starter --identity canic-mainnet
+```
+
+Keep this operator window exclusive: no out-of-band staging, installation or
+controller changes. Apply verifies certified Root and child bindings and obtains
+a replicated full-journal observation before installation. It retains the exact
+signed install, verifies journal preservation afterward, then writes completion.
+Resume the same digest after interruption. An expired uncertain install stays
+blocked; a new signature, reinstall or automatic rollback is not a recovery path.
+Future child plans bind the new Root hash; historical approvals remain unchanged.
+The original creation approval may no longer apply against the new Root code;
+inspect its historical receipt with `fleet status`.
+
+Both Root executables must export `observe_custody` (ID 30). Older deployed Roots
+are refused before installation, without fallback or automatic rebinding. Their
+bootstrap transition, maintenance during active/uncertain work, and Root replacement
+are separate qualification requirements. Existing mainnet demos are unchanged.
 
 ## Responsibility and bounds
 
@@ -277,6 +333,10 @@ stable keys and enum ordering remain unchanged, preserving retained profile-demo
 authority. Upgrade messages have their own method numbers. The versioned stable
 payload migration packs the separate creation/upgrade journals and artifact bytes
 inside the original two checked allocations, under the existing 64-page bound.
+The v3 journal retains creation, the current upgrade and up to seven completed
+predecessors within the existing 8 KiB cell. It reads original creation and v2
+single-upgrade payloads before validation and migration. Historical artifact
+bytes remain in the host journal; Root retains their hashes and outcomes.
 It validates the original payloads before writing the new format during lifecycle
 execution. Downgrading to a binary that only reads the old payload is unsupported.
 
@@ -287,7 +347,7 @@ retained principal stays blocked; retry does not obtain another allowance.
 Module/controller observations precede application-reported readiness. These
 bounds and the separate-message commit boundaries come from the existing
 [growth qualification](growth.md).
-The separate upgrade approval retains at most another 512 KiB, uses existing
+The current upgrade approval retains at most another 512 KiB, uses existing
 canister cycles and checks the same 0.5T liquid reserve. Application data remains
 owned by the application's lifecycle; management evidence alone cannot prove
 that an arbitrary application's migration preserves its data.
@@ -295,7 +355,7 @@ that an arbitrary application's migration preserves its data.
 ## Remaining work
 
 This qualifies a generated two-canister fleet through one CLI approval. It does
-not yet admit larger trees, whole-fleet upgrades, repeated child upgrades,
+not yet admit larger trees, active-work Root maintenance, unbounded upgrade history,
 cascading discovery or subtree operations. Root maintenance preserves
 its authority and child identity; the stateless greeting makes no application
 data-preservation claim. Existing mainnet profile canisters are unchanged.

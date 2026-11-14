@@ -252,6 +252,11 @@ pub(crate) async fn apply_at(
             ));
         }
         verify_receipt(&agent, &plan, digest, &receipt).await?;
+        if !crate::maintenance::retained(dir, &plan)? {
+            return Err(Error::Invalid(
+                "maintenance receipt lacks retained custody".into(),
+            ));
+        }
         return Ok(ApplyOutcome::Complete(receipt));
     }
     let canister = if let Some(target) = &plan.target {
@@ -298,6 +303,14 @@ pub(crate) async fn apply_at(
             "upgrade precondition: previous module hash changed".into(),
         ));
     }
+    if !dir
+        .join("install/signed.json")
+        .try_exists()
+        .map_err(supplier)?
+    {
+        crate::maintenance::observe(dir, &plan, false, identity, icp, &agent).await?;
+    }
+    crate::maintenance::require_before(dir, &plan)?;
     let args = mgmt::InstallCodeArgs {
         mode: if plan.target.is_some() {
             mgmt::CanisterInstallMode::Upgrade(None)
@@ -317,6 +330,7 @@ pub(crate) async fn apply_at(
     };
     let reply = signed::execute(&dir.join("install"), &plan, &call, identity, icp, &agent).await?;
     decoder::decode_args::<()>(&reply, DECODE, decoder::Arity::Exact).map_err(Error::Decode)?;
+    crate::maintenance::observe(dir, &plan, true, identity, icp, &agent).await?;
     let receipt = Receipt {
         operation: digest.into(),
         canister: canister.to_text(),
@@ -368,7 +382,9 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
 pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     let (plan, _) = plan::load(dir, digest)?;
     let mut effects = serde_json::Map::new();
-    let effect_names: &[&str] = if plan.management.is_some() {
+    let effect_names: &[&str] = if plan.maintenance.is_some() {
+        &["custody-before", "install", "custody-after"]
+    } else if plan.management.is_some() {
         &["stage"]
     } else {
         &["create", "install"]

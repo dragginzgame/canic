@@ -1,4 +1,4 @@
 //! Experimental Root for one greeting application, with controller-approved bounded creation.
-//! One retained child upgrade is supported; no reset, arbitrary adoption or subtree operations.
+//! Bounded serial child upgrades and journal-preserving maintenance; no reset or arbitrary adoption.
 #[cfg(target_arch = "wasm32")]
 mod canister;

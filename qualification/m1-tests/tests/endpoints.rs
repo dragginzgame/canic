@@ -110,16 +110,21 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         // specified independently here: this tests the mounted public contract.
         let mut methods = vec![
             ("status", true, false, STATUS, LIMITS),
+            ("observe", false, true, STATUS, LIMITS),
+            (
+                "observe_custody",
+                false,
+                true,
+                canic_management_protocol::custody::OBSERVE,
+                LIMITS,
+            ),
             ("stage", false, true, STAGE, STAGE_LIMITS),
             ("reconcile", false, true, RECONCILE, LIMITS),
             ("stage_upgrade", false, true, upgrade::STAGE, STAGE_LIMITS),
             ("upgrade_status", true, false, upgrade::STATUS, LIMITS),
-            ("observe_upgrade", false, true, upgrade::STATUS, LIMITS),
+            ("observe_upgrade", false, true, upgrade::OBSERVE, LIMITS),
             ("reconcile_upgrade", false, true, upgrade::RECONCILE, LIMITS),
         ];
-        if variant == "root" {
-            methods.push(("observe", false, true, STATUS, LIMITS));
-        }
         if variant == "faults" {
             methods.push(("inject_fault", false, true, INJECT, LIMITS));
             fault_target = Some(target);
@@ -178,9 +183,29 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                     }
                 );
             }
-            // Query and replicated observation intentionally share protocol IDs.
+            // Creation shares an ID; upgrade observations bind an exact approval.
             let reader = if private { controller } else { outsider };
-            if id == STATUS {
+            if id == canic_management_protocol::custody::OBSERVE {
+                let reply = call(
+                    pic,
+                    target,
+                    reader,
+                    method,
+                    query,
+                    ic_wire::native::encode_request(id, &(), limits).unwrap(),
+                )
+                .await
+                .unwrap();
+                let value: canic_management_protocol::custody::Custody =
+                    ic_wire::native::decode_response(
+                        id,
+                        &reply,
+                        canic_management_protocol::custody::LIMITS,
+                    )
+                    .unwrap();
+                assert_eq!(value.creation, Status::default());
+                assert!(value.upgrades.is_empty());
+            } else if id == STATUS {
                 let reply = call(
                     pic,
                     target,
@@ -207,6 +232,43 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                 let value: upgrade::Status =
                     ic_wire::native::decode_response(id, &reply, LIMITS).unwrap();
                 assert_eq!(value, upgrade::Status::default());
+            } else if id == upgrade::OBSERVE {
+                let expected = upgrade::Approval {
+                    manager: target.to_text(),
+                    child: controller.to_text(),
+                    previous_module: [1; 32],
+                    module_hash: [2; 32],
+                    execute_at_ns: 1,
+                    expires_at_ns: 2,
+                };
+                let reply = call(
+                    pic,
+                    target,
+                    reader,
+                    method,
+                    query,
+                    ic_wire::native::encode_request(id, &expected, limits).unwrap(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    ic_wire::native::decode_response::<upgrade::Status>(id, &reply, LIMITS)
+                        .unwrap(),
+                    upgrade::Status::default()
+                );
+                // A legacy unbound read cannot silently select the latest upgrade.
+                assert!(
+                    call(
+                        pic,
+                        target,
+                        reader,
+                        method,
+                        query,
+                        ic_wire::native::encode_request(upgrade::STATUS, &(), limits).unwrap()
+                    )
+                    .await
+                    .is_err()
+                );
             }
         }
         assert_eq!(status(pic, target).await, initial);

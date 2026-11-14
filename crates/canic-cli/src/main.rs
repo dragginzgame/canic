@@ -307,27 +307,36 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         "whole-fleet planning uses the configured network and Root artifact".into(),
                     ));
                 }
-                let (digest, plan) = canic_host::create_fleet_plan(
+                let result = canic_host::plan_fleet(
                     &state_dir,
                     &config_path,
                     selected,
                     &controller,
-                    cycles.unwrap_or(3_000_000_000_000),
+                    *cycles,
                     dispatch,
                 )?;
                 if !cli.json {
-                    let mut text = status::fleet_preview(&digest, &plan, &state_dir)?;
+                    let (digest, mut text) = match &result {
+                        canic_host::FleetPlanning::Create { operation, fleet_plan } =>
+                            (operation, status::fleet_preview(operation, fleet_plan, &state_dir)?),
+                        canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } =>
+                            (operation, status::render(&canic_host::status(&state_dir, operation)?, &state_dir)?),
+                        canic_host::FleetPlanning::Unchanged { .. } => return Ok(Output::Text(
+                            "No artifact changes. Matches retained completion; network state was not refreshed.\n".into()
+                        )),
+                    };
                     text.push_str(&progress::next(
                         command,
-                        &digest,
+                        digest,
                         "apply",
                         identity.as_deref(),
                     ));
                     return Ok(Output::Text(text));
                 }
-                return Ok(Output::Json(
-                    serde_json::json!({"operation":digest,"fleet_plan":plan,"state_dir":state_dir}),
-                ));
+                let mut output =
+                    serde_json::to_value(result).map_err(|e| Error::Invalid(e.to_string()))?;
+                output["state_dir"] = serde_json::json!(state_dir);
+                return Ok(Output::Json(output));
             }
             if execute_at.is_some() && root_module.is_none() {
                 return Err(Error::Invalid(

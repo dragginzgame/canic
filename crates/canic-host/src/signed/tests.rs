@@ -12,6 +12,7 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     let plan = Plan {
         deployment: None,
         version: 1,
+        maintenance: None,
         management: None,
         network: Network::Local {
             url: "http://127.0.0.1:8000/".into(),
@@ -85,6 +86,72 @@ fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u8> {
 
 fn fixture() -> (Vec<u8>, Plan, Call<'static>) {
     fixture_expiry(false)
+}
+
+#[tokio::test]
+async fn maintenance_observation_cannot_sign_another_root_or_effect() {
+    let (_, mut plan, mut call) = fixture();
+    plan.version = 2;
+    plan.creation_cycles = 0;
+    plan.target = Some("rrkah-fqaaa-aaaaa-aaaaq-cai".into());
+    plan.previous_module = Some("11".repeat(32));
+    plan.maintenance = Some(canic_management_protocol::custody::Custody {
+        creation: canic_management_protocol::Status {
+            approval: Some(canic_management_protocol::Approval {
+                manager: plan.target.clone().unwrap(),
+                module_hash: [1; 32],
+                creation_cycles: canic_management_protocol::CREATION_CYCLES,
+                execute_at_ns: 1,
+                expires_at_ns: 2,
+            }),
+            worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
+            phase: canic_management_protocol::Phase::Ready,
+            ..Default::default()
+        },
+        upgrades: vec![],
+    });
+    let agent = plan.network.agent().unwrap();
+    let dir = crate::tests::directory();
+    for case in 0..4 {
+        call.canister = principal(if case == 0 {
+            "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        } else {
+            "rrkah-fqaaa-aaaaa-aaaaq-cai"
+        })
+        .unwrap();
+        call.effective = call.canister;
+        call.method = if case == 1 {
+            "install_code"
+        } else {
+            "observe_custody"
+        };
+        call.args = ic_wire::native::encode_request(
+            canic_management_protocol::custody::OBSERVE,
+            &(),
+            canic_management_protocol::custody::LIMITS,
+        )
+        .unwrap();
+        if case == 2 {
+            call.args.push(0);
+        }
+        if case == 3 {
+            plan.maintenance.as_mut().unwrap().creation.phase =
+                canic_management_protocol::Phase::CreateIssued;
+        }
+        assert!(matches!(
+            super::observe(
+                &dir,
+                &plan,
+                &call,
+                "must-not-run",
+                std::path::Path::new("must-not-run"),
+                &agent
+            )
+            .await,
+            Err(Error::Invalid(_))
+        ));
+        assert!(!dir.join("signed.json").exists());
+    }
 }
 
 #[tokio::test]

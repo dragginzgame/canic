@@ -1,5 +1,104 @@
 # Changelog
 
+## [0.204.0] - 2026-11-14
+
+### ⚠️ Breaking
+
+**Observation contract:** replicated `observe_upgrade` now requires the exact
+approval (ID 29); public latest-status queries retain ID 25. Historical on-disk
+responses remain readable, with no unbound live fallback or re-signing of old
+attempts. Use a matching reviewed Root; existing mainnet owners and operation
+bindings are not automatically migrated. The v3 journal reads v1/v2 payloads in
+the original two allocations, retaining historical outcomes and current artifact
+bytes. Qualification covers three CLI upgrades, eight runtime upgrades, full
+history refusal, owner maintenance and scheduled/completed v2 migration.
+
+Host `Plan` adds optional maintenance custody, and fleet-planning JSON adds
+`action: "maintenance"`. Existing records without custody retain their original
+bytes and digests; Rust callers constructing plans must supply `maintenance: None`
+for ordinary deployment.
+
+Host callers must replace `create_fleet_plan` with `plan_fleet` and handle the
+`FleetPlanning` variants `Create`, `Upgrade`, `Maintenance` and `Unchanged`
+instead of destructuring a creation-only tuple.
+
+### ➕ Added
+
+`fleet plan` now compares the declared artifacts of a completed Root-plus-app
+fleet and prepares its next child upgrade or a separate Root maintenance plan. Resolve the child, previous code and
+Root authority from retained completion; no copied principal or hash is needed.
+Reuse the existing upgrade plan, signer and runtime engine. Matching artifacts
+report no changes against retained completion, without claiming a fresh network
+check. An unfinished operation keeps its original approval and deadlines.
+
+### ▶️ Try it
+
+From a generated project with a completed fleet, edit the application source:
+
+```sh
+canic app build
+canic fleet plan --identity canic-mainnet
+canic fleet status UPGRADE_OPERATION
+```
+
+Review the returned upgrade digest, then admit it; apply again after dispatch
+to retain completion. Select `--fleet NAME` when there is more than one fleet:
+
+```sh
+canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
+canic fleet show
+canic fleet plan --identity canic-mainnet
+```
+
+Unrelated individual approvals and simultaneous Root/child changes remain blocked. The
+experimental Root now retains up to eight serial child upgrades. Each successor
+requires verified successful completion; failed, expired or uncertain work stays
+blocked. History is never evicted, and old approvals replay their historical
+outcomes without changing current work. Repeat the build/plan/apply examples for
+each new change. Qualification exercises lost-reply recovery,
+two isolated fleets and persistent profile data/ownership through the CLI path.
+The profile manager now mounts authenticated creation `observe` for that same
+host workflow. Existing mainnet canisters are unchanged; no browser opens.
+
+Root-only changes use the same plan/apply commands after all child work completes.
+Maintenance verifies the full journal before and after installation, preserves
+controllers and identities, and binds future child approvals to the new Root code.
+An uncertain install retains its original signed attempt; it cannot be replaced.
+
+From this Canic checkout, with a current, completed generated `starter` fleet:
+
+```sh
+canic artifact build --package canic-root --features maintenance-candidate --output starter/artifacts/root.wasm
+canic fleet plan --app starter --identity canic-mainnet
+canic fleet status MAINTENANCE_OPERATION --app starter
+```
+
+Review the digest before applying. Keep the operator window exclusive and add
+`--fleet NAME` if needed:
+
+```sh
+canic fleet apply MAINTENANCE_OPERATION --app starter --identity canic-mainnet
+canic fleet show --app starter
+```
+
+Both Root executables must support the new controller-only `observe_custody`
+contract (ID 30). Older owners are refused before installation; their transition
+is not automatic. This does not change existing mainnet deployments.
+
+### 🔧 Changed
+
+Adopt Toko Tooling 0.43.2 in both workspaces through its authenticated installer.
+The selected 47 snapshot files retain their existing bytes; the package pins,
+locks and snapshot provenance advance together.
+
+### 📚 Documentation
+
+Clarify the intended allocation patterns in the design: per-parent singleton,
+interchangeable scaling workers, shared-capacity shards and dedicated keyed
+instances. Keep subnet placement separate and require maintenance/recovery for
+each pattern. These are design commitments, not new CLI options or runtime APIs;
+the runnable upgrade examples above retain the current one-child boundary.
+
 ## [0.203.1] - 2026-11-14
 
 Root and the profile manager now explicitly mount their management endpoints

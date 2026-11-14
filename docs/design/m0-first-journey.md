@@ -18,6 +18,233 @@ This record contains scoped decisions and evidence, not a second implementation
 backlog. The first product is the [M1 Hello World loop](../../README.md), followed
 by the [persistent mainnet profile pair](../demos/profile.md#current-mainnet-demo).
 
+## 0.204.0 release qualification
+
+On 2026-11-14, adopt published Toko Tooling 0.43.2 through its authenticated
+installer in both workspaces. All 47 selected snapshot files retain their bytes;
+the exact pins, locks and snapshot provenance advance together. Registry-index
+review confirms the selected first-party Host, Platform, Wire, Storage, Timers,
+Metrics, Testkit and Tooling versions are current stable, non-yanked releases.
+The third-party transitive Certification 3.2.0 and qualification management types
+0.8.0 remain supplier-owned selections; review their newer major/minor lines at
+the next dependency-maintenance boundary, without overriding supplier constraints
+in this tooling adoption.
+
+The full release gate passes: `make lint`, then `make test m0-test
+m0-artifact-test m1-test profile-test growth-test root-test endpoint-test`.
+This includes 65 host tests, 40 CLI tests, installed creation/funding/recovery,
+serial child upgrades, Root maintenance and endpoint authority/rollback checks.
+The separately enabled retained-v2-manager fixture also passes scheduled and
+completed journal migration into serial upgrade history. Two older Root binary
+fixtures remain opt-in and were not rerun in this release. Logs, selected-input
+hashes and registry evidence are local under `target/evidence/0.204.0/`.
+After version preparation, both Cargo graphs verify all 12 product members at
+0.204.0, all four qualification members at 0.0.0 and publication disabled.
+Starter source-generation tests, recursive CLI help/version checks, formatting
+and tooling agreement pass; `make canic` installs 0.204.0 on the existing PATH.
+
+This release qualifies local simulator paths. No mainnet deployment or funding
+occurs, and crates.io publication remains disabled. Older Roots without the
+custody endpoint, maintenance during active work and multiple managed children
+remain outside the qualified maintenance path.
+
+## Root maintenance through whole-fleet planning
+
+`fleet plan` now treats a Root-only artifact change as a separate maintenance
+approval after completed creation and child upgrades. It derives the Root identity,
+previous code and exact completed journal under the existing journal lock. The
+optional maintenance field binds that custody into the existing Plan digest;
+plans without it retain their original bytes and digests. No new signer,
+installation engine, reset command or automatic rollback is introduced.
+
+The shared engine exposes controller-only replicated `observe_custody` (ID 30).
+Its bounded response contains creation and every admitted upgrade, oldest first,
+without artifact bytes. The live page count and maintenance-executable marker are
+excluded from durable custody. Current/creation artifact preservation remains
+checked by the existing lifecycle validation. This adds no storage allocation or
+stored schema. The full eight-upgrade response passes the bounded codec fixture.
+
+Apply checks Root/child code and sole-controller bindings, retains an authenticated
+pre-install journal read, reuses the direct signed `install_code` attempt, and
+requires matching post-install custody before publishing completion. Missing or
+mismatched preflight/postflight evidence cannot unlock the next plan. Completion
+advances only future child plans' Root hash; old approvals and signatures remain
+unchanged. Root and child changes use separate approvals. Unfinished/failed/uncertain
+work cannot be overtaken. The operator must keep the window exclusive; this is
+not a distributed fence against another concurrent controller session.
+
+The installed Root must already support ID 30. An older owner fails the preflight
+before installation; there is no fallback or automatic rebinding. Bootstrap from
+older deployed owners, maintenance of active or blocked work and replacement of
+the Root principal remain distinct qualification requirements. Existing mainnet
+deployments are unchanged.
+
+Research reuses the pinned legacy evidence below and rereads component-operation
+`ops/mod.rs` and `qualification/canic-tests/tests/lifecycle_boundary.rs` at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`. Exact retained submission and fail-closed
+cross-release checks remain useful; legacy's repeated prepared-state and rejected
+upgrade tests do not prove journal-preserving maintenance. Keep their refusal and
+identity invariants, omitting legacy release catalogues and pool orchestration.
+The earlier `aed32be2afbaf66d7e2867292da52f75ce028e41` history investigation remains
+the provenance for that boundary, not evidence of a finished legacy upgrade flow.
+
+Validation passed on the installed PATH CLI: three whole-fleet cases (29.74 s)
+cover greeting/profile preservation, Root maintenance followed by two more child
+upgrades, lost install-reply resumption without another installation, second-fleet
+isolation, missing postflight evidence and refusal of untracked child work before
+signing installation. Installed endpoint admission passed (9.07 s). The full
+custody codec and read-authority rejection tests passed, alongside affected host/CLI
+tests, Clippy, Rustdoc, formatting and tooling agreement. A retained fleet envelope
+from before the optional Plan field still loads under its original digest.
+Logs are under `target/repeated-upgrade/maintenance-*` and
+`target/repeated-upgrade/root-maintenance-test.log`. The CLI is installed locally;
+no mainnet mutation or release accompanies this increment.
+
+## Bounded serial child upgrades
+
+Whole-fleet planning now admits the next child upgrade after verified completion,
+retaining at most eight immutable approvals. The runtime archives each completed
+status, including request commitments and version observations, before admitting
+its successor. Creation custody never changes. Current and creation artifact bytes
+stay in the original artifact allocation; prior bytes remain in each host plan,
+with hashes and outcomes retained on-chain. No record eviction, slot reset or
+automatic replacement of failed, expired or uncertain work is admitted. The
+individually created-child path retains its existing first-upgrade planning bound.
+
+The v3 journal reads original creation and v2 single-upgrade payloads inside the
+same two allocations. Eight upgrade records plus creation fit the existing 8 KiB
+journal; the worst-field codec fixture uses 2,793 payload bytes. Codec allocation
+and node budgets cover nine records, while the stable byte limit remains fixed.
+The limit of eight is an explicit experimental bound, not an unlimited maintenance
+claim or permission to clear history when full.
+
+Dispatch order, exact child/Root bindings and old/new code form one serial chain.
+A successor's fresh observed canister version must not regress from its predecessor;
+it need not equal it. The installed repeat test exposed that ordinary application
+updates and replicated readiness calls advance canister versions, as specified by
+the [IC interface specification](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/#canister-version).
+Each operation retains its existing strict pre-install version and exact increment
+check. This still qualifies a quiet installation window; intervening application
+activity or platform version changes can conservatively block it. General online
+rollout/drain remains a separate qualification requirement, not an inferred guarantee.
+
+`observe_upgrade` now takes the exact approval using Wire ID 29 and can return
+historical evidence without dispatch. Historical reconciliation similarly returns
+the retained outcome without touching current work. Public ID 25 remains the
+latest-status query; fleet views select only the tip of a validated local chain.
+The host reads previously retained ID-25 replies but never substitutes an unbound
+live read or re-signs a mismatched old attempt. Older owners require separately
+qualified maintenance and explicit binding handling; existing plans and deployed
+mainnet owners are not rewritten. Root replacement through the CLI remains open.
+
+Reuse the legacy component-operation, installation and lifecycle research recorded
+below, especially immutable intent, exact replay and failed-upgrade preservation.
+Legacy did not prove this serial maintenance contract. Add explicit replay after a
+code-hash cycle, predecessor completion, full history, pending successor refusal
+and v2 migration cases to the current fixtures rather than copying a general
+workflow catalogue. The same journal lock protects whole-fleet chain validation
+and publication through the existing Plan writer; there is no second signer or
+runtime effect owner.
+
+Installed validation passed: three whole-fleet CLI upgrades for both greeting and
+profile workloads with second-fleet isolation (four enabled Root tests, 29.86 s);
+eight runtime upgrades, historical replay/reconciliation, full-history refusal,
+profile preservation and existing callback/rejected-hook cases (15.12 s). Migration
+passed from the retained v2 manager SHA-256
+`7d689001ba89738e5ffb5d3f77fc95e240a45b4bd28eeb13b4f5d952ce278749`
+with its first upgrade both Scheduled and Ready (21.96 s). Reproduce that opt-in
+fixture with `CANIC_PREVIOUS_UPGRADE_MANAGER` and the ignored
+`previous_single_upgrade_manager_migrates_to_retained_history` growth test.
+Two older v1 Root fixtures remain opt-in and were not repeated. Logs are under
+`target/repeated-upgrade/`. The pre-existing lockfile refresh reached Platform
+0.33.5 and Runtime/macros/guard 0.22.5 during this work; the final installed serial,
+migration and Root runs use those selections. No supplier refresh was initiated
+by this increment. No mainnet mutation or release accompanies it.
+
+The installed PATH command also passed both whole-fleet journeys after moving
+profile-state and ownership assertions after all three upgrades (29.74 s).
+Approval-bound endpoint checks, focused host/CLI/protocol tests, affected Clippy
+and Rustdoc checks, formatting and tooling agreement passed.
+
+## Allocation-pattern scope clarification
+
+The maintainer confirmed retaining singleton, scaling worker, shard and keyed
+instance outcomes. [Design section 8](canic-system-design.md#8-allocation-placement-and-scale)
+now states their scopes, separates physical placement from assignment and tree
+authority, and makes upgrades/recovery part of each selected consumer's acceptance.
+The capability register names all four explicitly. This is a design clarification;
+no new configuration values, allocation engine or runtime qualification is claimed.
+
+Research at legacy revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` reused
+`CONFIG.md` lifecycle classes and scaling/index/sharding pool definitions, then
+inspected `crates/canic-core/src/workflow/placement/index/create.rs`, its
+`tests.rs`, and `workflow/placement/sharding/release/tests/mod.rs`.
+Path history and commit
+[`ccca2a1b3a426691891efc972886020ad72b74a6`](https://github.com/dragginzgame/canic-legacy/commit/ccca2a1b3a426691891efc972886020ad72b74a6)
+show why allocation identity must survive claim finalization and receipt cleanup:
+late completion must neither bind nor recycle a reused principal. The inspected
+regressions also cover wrong-parent/role binding, existing and pending resolution
+without creation, exact stale-claim recovery, and release only for a configured
+shard pool. Carry these cases into the corresponding implementations; they were
+reviewed here, not executed against a new placement subsystem.
+
+Keep the protections and shared allocation ownership. Do not require legacy
+Component/Group catalogues, a mandatory Coordinator or four separate engines.
+Singleton scope is per concrete parent, keyed scope is explicit, and the scaling
+name does not promise application data replication. General policies follow real
+consumer needs; the fixed child slot remains the qualified whole-fleet allocation
+path. Serial upgrade evidence is recorded above; multiple-child allocation is not
+yet qualified.
+
+## First whole-fleet child upgrade
+
+Extend the existing `fleet plan` path for a fleet created through its Root-plus-app
+approval. Under the journal lock, resolve the child and original code from
+completed creation, requiring the retained receipt and matching authenticated
+Ready evidence. Retain a normal managed upgrade Plan with zero creation debit;
+do not add an upgrade envelope, runtime journal or second effect owner. The
+original fleet bytes and nested creation evidence remain unchanged. The supplied
+Root artifact, network, operator and declared parent/child pair must still match.
+
+Pending upgrade authority takes precedence over historical creation completion.
+Identical replanning preserves its schedule even after expiry; different artifacts
+cannot reset its slot. After authenticated upgrade completion, identical artifacts
+produce a local no-change result. This compares retained completion, not current
+network state; apply still checks exact live module/controller bindings. Root
+replacement, repeated upgrades and adoption of unrelated individual deployments
+remain outside this increment. The first repeatable maintenance contract still
+needs bounded history and admission rules; clearing the existing journal is not
+an implementation option.
+
+Reuse the legacy research recorded under the child-upgrade investigation below:
+revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, component-operation workflow,
+operations/tests, installation workflow and lifecycle-boundary regressions;
+history `aed32be2afbaf66d7e2867292da52f75ce028e41`. The applicable protections are
+immutable review identity, exact approved bytes, retained uncertainty, drift
+refusal and application-state preservation. Legacy's install workflow is not
+evidence of a qualified persistent upgrade product. The current small topology
+needs no catalogue, generic workflow engine or automatic subtree expansion.
+
+The whole-fleet qualification uses the existing CLI and generated app for two
+fleets, then upgrades one child and recovers a lost admission reply. A second run
+selects the profile manager/worker to verify private data, ownership and canister
+identity across the same CLI path. The profile wrapper adds only the existing
+authenticated `observe` mount needed by Host; its application readiness and
+lifecycle remain explicit. Native cases reject receipts without Ready evidence,
+stale creation artifacts while an upgrade is pending, substituted children and
+renewed schedules. No mainnet mutation or publication accompanies this work.
+
+Validation: the existing 63 host tests and 40 CLI tests passed; the five focused
+fleet-plan tests include the new custody regression. Both whole-fleet simulator
+journeys passed (26.79 seconds), alongside the existing Root/individual-child
+journeys in the preceding Root run. The endpoint contract fixture passed with
+the manager observation mount. Focused Host/CLI, qualification and manager-Wasm
+Clippy, Host/manager Rustdoc, formatting and tooling agreement passed. Logs use
+`target/fleet-upgrade-*.log`; the initial Root run retains its corrected fixture
+assertion failures, and `whole-test.log` records the successful rerun. Historical
+binary migration tests remain opt-in and were not repeated. No engine state,
+storage schema, supplier selection or retained plan encoding changed.
+
 ## 0.203.1 supplier adoption and delivery
 
 The final batch adopts published Host Text 0.76.0 and qualification Testkit

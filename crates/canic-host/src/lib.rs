@@ -5,6 +5,7 @@ mod artifact;
 mod config;
 mod fleet;
 mod fleet_plan;
+mod maintenance;
 mod managed;
 mod network;
 mod operation;
@@ -30,7 +31,8 @@ pub use fleet::{
     fleet_with_managers,
 };
 pub use fleet_plan::{
-    Cancellation, CreatedCanister, FleetChild, FleetPlan, cancel_fleet_plan, create_fleet_plan,
+    Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, cancel_fleet_plan,
+    plan_fleet,
 };
 pub use managed::create_managed_plan;
 pub use network::{Network, greet};

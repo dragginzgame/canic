@@ -1,9 +1,9 @@
 # Toko Tooling snapshot v1
-# version	0.43.1
+# version	0.43.2
 # layout	vendor
 format	1
 source	https://crates.io/crates/toko-tooling
-revision	467162f616caafe69c965fe4e96173a0df37256f4767bfefd28114781aad76b3
+revision	cb81a5f9c13f50614af8468b599c3a05327f09f643aa954dc8e6878aa649263f
 # entrypoint	TOKO-TOOLING.md
 # entrypoint	vendor/toko-tooling/make/consumer.mk
 # entrypoint	vendor/toko-tooling/make/cargo-dependencies.mk

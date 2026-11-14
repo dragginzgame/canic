@@ -99,7 +99,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        if plan.management.is_some() && plan.target.is_some() { "Root upgrades its existing child" } else if plan.management.is_some() { "Root creates and installs its child" } else if plan.target.is_some() { "upgrade existing canister" } else { "create and install canister" },
+        if plan.maintenance.is_some() { "upgrade Root, preserving child custody" } else if plan.management.is_some() && plan.target.is_some() { "Root upgrades its existing child" } else if plan.management.is_some() { "Root creates and installs its child" } else if plan.target.is_some() { "upgrade existing canister" } else { "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
@@ -110,6 +110,14 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         if now >= u128::from(plan.expires_at_ns) { "expired" } else { "within original deadline" },
     )
     .expect("writing to String");
+    if let Some(custody) = &plan.maintenance {
+        writeln!(
+            output,
+            "Preserve: original child creation and {} completed child upgrade(s)",
+            custody.upgrades.len()
+        )
+        .expect("writing to String");
+    }
     if let Some(owner) = &plan.management {
         writeln!(
             output,

@@ -39,14 +39,121 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
     (dir, selected)
 }
 fn create(dir: &Path, selected: &SelectedFleet) -> Result<(String, FleetPlan)> {
-    create_fleet_plan(
+    let result = plan_fleet(
         &dir.join("journal"),
         &dir.join("canic.json"),
         selected,
         &input().controller,
-        3_000_000_000_000,
+        Some(3_000_000_000_000),
         None,
+    )?;
+    match result {
+        FleetPlanning::Create {
+            operation,
+            fleet_plan,
+        } => Ok((operation, fleet_plan)),
+        _ => panic!("expected creation"),
+    }
+}
+
+#[test]
+fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority() {
+    use canic_management_protocol::{LIMITS, Phase, STATUS, Status};
+    use ic_platform::{candid_codec, cycles_ledger_types as ledger, principal::Principal};
+    let (dir, selected) = fixture();
+    let (id, fleet) = create(&dir, &selected).unwrap();
+    let journal = dir.join("journal");
+    let path = journal.join(&id);
+    let root = Receipt {
+        operation: fleet.child.parent.operation.clone(),
+        canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        module_hash: fleet.root.artifact.sha256.clone(),
+        controller: fleet.root.controller.clone(),
+    };
+    std::fs::create_dir(path.join("root/create")).unwrap();
+    let result: ledger::CreateCanisterResult = Ok(ledger::CreateCanisterSuccess {
+        block_id: 1_u64.into(),
+        canister_id: Principal::from_text(&root.canister).unwrap(),
+    });
+    store::put(
+        &path.join("root/create/reply.bin"),
+        &candid_codec::encode_one(&result, 4096).unwrap(),
     )
+    .unwrap();
+    store::put_json(&path.join("root/receipt.json"), &root).unwrap();
+    let child = fleet.child_plan(&root).unwrap();
+    store::put_json(&path.join("child/plan.json"), &child).unwrap();
+    let receipt = Receipt {
+        operation: child.digest().unwrap(),
+        canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+        module_hash: child.artifact.sha256.clone(),
+        controller: root.canister,
+    };
+    store::put_json(&path.join("child/receipt.json"), &receipt).unwrap();
+    // A matching receipt without authenticated Ready evidence cannot authorize an upgrade.
+    assert!(create(&dir, &selected).is_err());
+    let ready = Status {
+        approval: Some(crate::managed::approval(&child).unwrap()),
+        phase: Phase::Ready,
+        worker: Some(receipt.canister.clone()),
+        observed_module: Some(crate::unhex(&child.artifact.sha256).unwrap()),
+        attempts: [1; 3],
+        ..Default::default()
+    };
+    std::fs::create_dir_all(path.join("child/observe/0")).unwrap();
+    store::put(
+        &path.join("child/observe/0/reply.bin"),
+        &ic_wire::native::encode_response(STATUS, &ready, LIMITS).unwrap(),
+    )
+    .unwrap();
+    let planning = |dispatch| {
+        plan_fleet(
+            &journal,
+            &dir.join("canic.json"),
+            &selected,
+            &input().controller,
+            None,
+            dispatch,
+        )
+    };
+    assert_eq!(
+        planning(None).unwrap(),
+        FleetPlanning::Unchanged {
+            operation: id.clone()
+        }
+    );
+    std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0\0\x02\x01x").unwrap();
+    let planned = planning(None).unwrap();
+    let FleetPlanning::Upgrade { operation, plan } = &planned else {
+        panic!("expected upgrade")
+    };
+    assert_eq!(plan.target.as_ref(), Some(&receipt.canister));
+    assert_eq!(plan.previous_module.as_ref(), Some(&receipt.module_hash));
+    assert_eq!(plan.creation_cycles, 0);
+    assert_eq!(planning(Some(1)).unwrap(), planned);
+    // An upgrade receipt without Ready/version evidence also cannot become no-change.
+    let upgraded = Receipt {
+        operation: operation.clone(),
+        module_hash: plan.artifact.sha256.clone(),
+        ..receipt
+    };
+    store::put_json(&journal.join(operation).join("receipt.json"), &upgraded).unwrap();
+    assert!(planning(None).is_err());
+    std::fs::remove_file(journal.join(operation).join("receipt.json")).unwrap();
+    assert_eq!(planning(None).unwrap(), planned);
+    // The stale creation artifact must not hide the pending upgrade.
+    std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0").unwrap();
+    assert!(
+        planning(None)
+            .unwrap_err()
+            .to_string()
+            .contains("unfinished")
+    );
+    // A different child target cannot bypass the fleet reservation.
+    let mut foreign = plan.clone();
+    foreign.target = Some("r7inp-6aaaa-aaaaa-aaabq-cai".into());
+    assert!(!permits_upgrade(&path, &fleet, &foreign).unwrap());
+    assert_eq!(load(&path, &id).unwrap(), fleet);
 }
 
 #[test]
@@ -61,17 +168,19 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
     );
     // A requested expired schedule must not replace original authority.
     assert_eq!(
-        create_fleet_plan(
+        plan_fleet(
             &journal,
             &dir.join("canic.json"),
             &selected,
             &input().controller,
-            3_000_000_000_000,
+            Some(3_000_000_000_000),
             Some(1)
         )
-        .unwrap()
-        .0,
-        id
+        .unwrap(),
+        FleetPlanning::Create {
+            operation: id.clone(),
+            fleet_plan: value.clone()
+        }
     );
     assert_eq!(
         original,

@@ -11,6 +11,7 @@ fn plan() -> Plan {
     Plan {
         deployment: None,
         version: 1,
+        maintenance: None,
         management: None,
         network: Network::Mainnet,
         controller: input.controller,

@@ -5,6 +5,7 @@ mod tests;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+pub mod custody;
 pub mod upgrade;
 
 /// Admit one immutable approval with its artifact bytes.

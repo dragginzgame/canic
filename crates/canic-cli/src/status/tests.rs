@@ -5,6 +5,7 @@ fn state() -> serde_json::Value {
         "operation": "a".repeat(64),
         "plan": Plan {
             version: 2,
+        maintenance: None,
         management: None,
             network: Network::Mainnet,
             controller: "aaaaa-aa".into(),
