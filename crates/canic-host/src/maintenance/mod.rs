@@ -8,6 +8,8 @@ use canic_management_protocol::{
 use ic_platform::agent::Agent;
 use std::path::Path;
 
+#[cfg(test)]
+mod installed_tests;
 mod stored;
 #[cfg(test)]
 mod tests;
@@ -23,6 +25,16 @@ fn single_upgrade_root(plan: &Plan) -> bool {
 
 // Execution and status share the exact retained-read locations for this predecessor.
 pub(crate) fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
+    if plan
+        .maintenance_store()
+        .is_some_and(|s| s.operation.is_some())
+    {
+        return if after {
+            &[("custody-after", "observe_root_custody")]
+        } else {
+            &[("custody-before", "observe_root_custody")]
+        };
+    }
     if plan.maintenance_store().is_some() {
         return if after {
             &[("custody-after", "observe_stored_children")]
@@ -56,8 +68,12 @@ pub(crate) fn observations(plan: &Plan, after: bool) -> &'static [(&'static str,
 pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
     validate(plan)?;
     if plan.maintenance_store().is_some() {
-        if method != "observe_stored_children" {
+        if method != observations(plan, false)[0].1 {
             return Err(invalid());
+        }
+        if method == "observe_root_custody" {
+            return ic_wire::native::encode_request(custody::ROOT, &(), custody::ROOT_LIMITS)
+                .map_err(supplier);
         }
         return ic_wire::native::encode_request(
             canic_management_protocol::stored::CUSTODY,
@@ -164,7 +180,12 @@ fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
             method,
             &store::read(
                 &path,
-                if plan.maintenance_store().is_some() {
+                if plan
+                    .maintenance_store()
+                    .is_some_and(|s| s.operation.is_some())
+                {
+                    custody::ROOT_LIMITS.bytes
+                } else if plan.maintenance_store().is_some() {
                     canic_management_protocol::stored::LIMITS.bytes
                 } else {
                     canic_management_protocol::children::LIMITS.bytes

@@ -226,9 +226,9 @@ pub(crate) async fn execute(
     execute_with(path, &Authority::from(plan), call, identity, icp, agent).await
 }
 
-/// Publication recovery grants only a typed observation of this exact release.
+/// Read only the typed metadata selected by the approved operation.
 /// Its retained deadline cannot be used to renew any mutation's signed attempt.
-pub(crate) async fn observe_publication(
+pub(crate) async fn observe_operation(
     path: &Path,
     plan: &Plan,
     identity: &str,
@@ -253,6 +253,7 @@ pub(crate) async fn observe_store(
 fn metadata_call(plan: &Plan, store: Option<Principal>, deadline: u64) -> Result<Call<'static>> {
     match store {
         Some(canister) => crate::store_bootstrap::observation(plan, canister, deadline),
+        None if plan.store_upgrade_root().is_some() => crate::store_upgrade::observation(plan),
         None => crate::publication::observation(plan, deadline),
     }
 }
@@ -292,8 +293,8 @@ async fn observe_metadata(
     .await
 }
 
-/// Admit retained publication evidence against its exact signed read contract.
-pub(crate) fn retained_publication(path: &Path, plan: &Plan) -> Result<Vec<u8>> {
+/// Admit retained operation evidence against its exact signed read contract.
+pub(crate) fn retained_operation(path: &Path, plan: &Plan) -> Result<Vec<u8>> {
     retained_metadata(path, plan, None)
 }
 pub(crate) fn retained_store(path: &Path, plan: &Plan, canister: Principal) -> Result<Vec<u8>> {
@@ -384,7 +385,11 @@ pub(crate) async fn reconcile(
     icp: &Path,
     agent: &Agent,
 ) -> Result<Vec<u8>> {
-    let call = crate::managed::recovery::call(plan)?;
+    let call = if plan.store_upgrade_root().is_some() {
+        crate::store_upgrade::recovery(plan)?
+    } else {
+        crate::managed::recovery::call(plan)?
+    };
     ic_host_fs::durable::prepare_private_parents(path).map_err(supplier)?;
     let authority = path.join("authority.json");
     let expires_at_ns = if authority.try_exists().map_err(supplier)? {

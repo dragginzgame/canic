@@ -70,6 +70,34 @@ frames, expiry, rejected modules and incompatible replacement endpoints cannot
 activate or reissue installation. Recovery after expiry can retain an installed
 outcome but cannot start it with expired authority. This is not a CLI/mainnet
 qualification or repeatable maintenance; the single operation remains retained.
+The explicit `recover_store_maintenance` endpoint qualifies observation without
+fresh dispatch: it leaves Reserved, Closed, Stopped, Uploaded, Installed, Verified
+and Ready unchanged, including with live authority. Lost callbacks recover through
+the same journal across Root replacement, concurrent calls and expired authority;
+post-install metadata verification may finish but activation remains explicit.
+Wrong callers, altered attempts and malformed recovery frames preserve state.
+`bash scripts/dev/test-store.sh root-maintenance` selects the complete Root custody
+budget and an installed Host replacement while Store is stopped. It compares
+children, pins and the exact Store operation, refuses altered operation evidence
+before signing install, interrupts after installation and resumes the original
+signed attempt before retaining completion. Root and Store stable bytes remain
+unchanged, and the original Store operator can still recover the same operation.
+The Host test executable is built in the product workspace and invoked by the
+simulator harness; their incompatible supplier graphs remain separate, as with
+CLI witnesses. The ignored native entrypoint is run explicitly by this selection
+and `make store-test`. This qualifies explicit Host approvals, not automatic
+whole-fleet planning of Store maintenance or mainnet use.
+The automatic local path is owned by the installed CLI publication runner:
+`bash scripts/dev/test-publication.sh fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`.
+It creates an isolated signer, bootstraps Root/Store/app, selects a changed Store
+artifact, refuses reconcile before admission, pauses before install and activation,
+and recovers upload callback fault 15 without new installation authority. It compares
+Store stable bytes, rejects missing/substituted completion custody, preserves the
+operation through a later Root replacement, then publishes and upgrades the child
+using the new Store binding and explicit complete Root read. Replanning retains
+the same pending approval and refuses a successor Store upgrade. Fixture credentials
+stay under `target`; it never reads the operator wallet. This uses synthetic cycles
+and is not mainnet qualification. No new runtime workflow or dependency is added.
 Public Root diagnostics are checked against the private retained observation across
 the same installed phases, including a stopped Store and Root replacement. Malformed
 queries do not alter state and the replicated custody endpoint remains controller-only.

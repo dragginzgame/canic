@@ -37,8 +37,8 @@ authenticated tooling installer.
   application admission; it never consumes an application slot. The total operator
   debit includes Store's separate 1T creation allowance. Preserve nested Store
   attempts under the same fleet journal and cancellation boundary. Refuse Store
-  addition/removal or artifact replacement on retained fleets until the relevant
-  adoption/maintenance flow qualifies. One
+  addition/removal on retained fleets. A changed Store artifact now selects its
+  separate Root-owned maintenance approval after completed child work. One
   immutable fleet approval binds all artifacts, permanent name/slot assignments and the Root's typed creation
   output; all steps reuse the existing signer/effect owners under the journal
   lock. Retain nested Root/child attempts, preserve original deadlines on replan,
@@ -129,11 +129,12 @@ authenticated tooling installer.
   serial upgrades retain their existing eight-upgrade bound. Retained inline
   fleets keep inline delivery. Root maintenance for Store-backed fleets carries
   the exact Store code binding and complete per-slot sources alongside all child
-  journals. Select only `observe_stored_children` for both preflight and postflight;
+  journals. Before any Store operation exists, select `observe_stored_children`
+  for both preflight and postflight;
   compare full custody including historical pins and empty slots, and verify live
   Store authority/code/placement as well as child identity/code/controllers. Reuse
   the original direct install attempt and refuse incomplete or mismatched evidence.
-  Inline-to-Store migration and Host-driven Store upgrades remain pending.
+  Inline-to-Store migration remains pending.
   Store's `observe_custody` returns one release's progress and all pins on its
   shared artifact; Root mounts `observe_store_custody` through the existing typed
   controller/deadline admission. This reads metadata only, adds no stable owner
@@ -171,15 +172,35 @@ authenticated tooling installer.
   and dispatch fault 19 qualify recovery without repeating upload/install/start/
   activation. `bash scripts/dev/test-store.sh maintenance` owns this installed proof.
   Completion releases the mutation fence but retains the operation. Full child-only
-  custody must still refuse that retained Store record, including Ready, until Host
-  maintenance can carry it. One attempt only: no cancellation, reset or successor
-  history yet. Host/CLI upgrade execution and live use remain unqualified.
+  custody must still refuse that retained Store record, including Ready. Root's
+  explicit `observe_root_custody` returns both child journals, their artifact
+  sources and the Store operation synchronously. An approved Host Root-maintenance
+  `StoreMaintenance.operation` selects this complete read before and after install;
+  compare every field, including original operator, deadlines and uncertain effects.
+  Absence preserves the older read contract and digest, never an automatic fallback.
+  Whole-fleet planning selects this operation only from the Store workflow's
+  authenticated completion, never public diagnostics. Existing plan/apply/status/
+  reconcile now drive one Store replacement: bind Root/Store code, original operator,
+  deadline and bytes; retain signed admission before continuation. Reconcile only
+  observes issued effects and verifies metadata; apply explicitly installs and activates.
+  Completion is a pointer to the exact signed Ready observation, not a parallel
+  receipt owner. Subsequent child sources bind that completed maintenance attempt
+  and select complete Root custody, refusing missing, stale or unready evidence.
+  Each apply performs at most 32 continuations under 4096 retained observations.
+  One attempt only: no cancellation, reset or successor history yet. Live use
+  remains unqualified; use the local installed publication fixture for this workflow.
   Root's public `store_maintenance_status` query projects the retained metadata
   without scheduling work. `fleet show` selects it only from retained Store
   bootstrap authority and a known Store identity, never configuration roles alone.
   Reports are uncertified and cannot establish completion custody, current Store
   admission or readiness. Missing methods and mismatched Store identities remain
   unknown; the existing snapshot deadline bounds these observations as well.
+  Root's controller-only `recover_store_maintenance` accepts the exact retained
+  approval and observes only already-issued effects (plus post-install catalog
+  verification). It cannot close, stop, upload, install, start or activate anew.
+  Keep Host reconciliation on this restricted contract;
+  generic `advance_store_maintenance` may dispatch new effects and is not a
+  substitute. No recovery request renews the original deadline or operator.
   Cache preparation never grants install authority. It has no pin release or
   deletion; do not clear pins on expiry.
   Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.

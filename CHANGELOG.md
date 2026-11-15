@@ -1,5 +1,76 @@
 # Changelog
 
+## [0.211.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+Host's `StoreMaintenance` Rust struct adds `operation`; callers constructing it
+must supply `None` for the existing child-only contract or the exact retained
+Store operation for complete Root custody. Existing serialized approvals omit
+the absent field and retain their original digests and signed read methods.
+`PlanAction` adds `UpgradeStore` and `ApplyOutcome` adds `StorePending`.
+`StoredArtifact` adds optional `maintenance`: literal callers use `None` before
+Store replacement; subsequent whole-fleet child plans bind its completed attempt
+and select complete Root custody. Absent fields preserve existing encodings.
+
+### ➕ Added
+
+Root's explicit `recover_store_maintenance` contract settles already-issued
+closure, stop, upload, install, start and activation through observation. It can
+finish the post-install catalog scan, but never starts a new effect or activates
+a verified replacement. Replay, concurrent recovery and expired dispatch authority
+retain the original operation. Existing methods and stored formats are unchanged.
+Host reconciliation uses this restricted contract; live use remains unqualified.
+
+Root exposes one controller-only `observe_root_custody` snapshot of both child
+slots, artifact references and the surviving Store operation. Host Root maintenance
+can bind that operation and compare the complete snapshot before and after its
+existing direct installation. Older child-only readers still refuse to omit it.
+Whole-fleet planning now selects one Store replacement when its configured Wasm
+changes, after completed child and publication work. Existing `apply`, `status`
+and `reconcile` retain the original approval, signed attempts and authenticated
+completion. Subsequent Root maintenance preserves the Store operation; child
+publication/upgrades bind the new code and complete custody. Reconcile never
+starts installation or activation. This local qualified path permits one Store
+attempt with a 1 MiB replacement; successor maintenance remains blocked.
+
+`fleet compare-subnets LEFT RIGHT` compares two explicit candidates on a configured
+mainnet fleet using Query's existing resource, configuration, coverage and overlap
+evidence. It does not choose a destination or deploy anything. Partial results stay
+visible and exit 1; `--json` retains the full supplier evidence.
+
+### ▶️ Try it
+
+Build the development Root locally and inspect an existing selected fleet. These
+commands do not deploy, recover or activate a Store, or open a browser:
+
+```sh
+canic artifact build --package canic-root --output target/root.wasm
+canic fleet show --app starter --fleet mainnet --details
+```
+
+For an already completed local Root/Store/app fleet, set the Store's Wasm input to
+the reviewed replacement, then plan and inspect it. Use the returned operation
+digest below; `apply` performs maintenance, while `reconcile` only settles issued
+effects. Keep the same operation if interrupted; a bounded apply may need repeating.
+
+```sh
+canic fleet plan --app starter --fleet local --identity canic-local
+canic fleet status OPERATION --app starter --fleet local
+canic fleet apply OPERATION --app starter --fleet local --identity canic-local
+canic fleet reconcile OPERATION --app starter --fleet local --identity canic-local
+```
+
+After `make canic`, from an existing configured app directory, compare two mainnet
+subnets without signing, changing the journal or opening a browser:
+
+```sh
+canic fleet compare-subnets \
+  tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe \
+  brlsh-zidhj-3yy3e-6vqbz-7xnih-xeq2l-as5oc-g32c4-i5pdn-2wwof-oae \
+  --app starter --fleet mainnet
+```
+
 ## [0.210.0] - 2026-11-15
 
 ### ⚠️ Breaking

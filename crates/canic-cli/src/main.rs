@@ -8,6 +8,7 @@ mod fleet;
 mod placements;
 mod progress;
 mod status;
+mod subnet_comparison;
 mod topology;
 mod view;
 
@@ -160,6 +161,18 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 }
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
+    if let FleetCommand::CompareSubnets {
+        selection,
+        left,
+        right,
+    } = command
+    {
+        let path = selection.config.path(selection.app.as_deref())?;
+        let selected = canic_host::load_config(&path)?
+            .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+        let report = canic_host::subnet_comparison::observe(&selected, left, right).await?;
+        return Ok(subnet_comparison::output(&report, cli.json));
+    }
     if let FleetCommand::Placements { selection } = command {
         let path = selection.config.path(selection.app.as_deref())?;
         let selected = canic_host::load_config(&path)?
@@ -216,7 +229,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         config.check_operation(&state_dir, digest)?;
     }
     let result = match command {
-        FleetCommand::Placements { .. } => {
+        FleetCommand::CompareSubnets { .. } | FleetCommand::Placements { .. } => {
             unreachable!("placements handled before journal resolution")
         }
         FleetCommand::Canister(command) => match command {

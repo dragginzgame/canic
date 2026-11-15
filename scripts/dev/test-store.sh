@@ -12,7 +12,8 @@ case "$scope" in
     admission) filter=store_root_tests::admission_tests ;;
     quiescence) filter=store_root_tests::quiescence_tests ;;
     maintenance) filter=store_root_tests::maintenance_tests ;;
-    *) printf 'Usage: %s [all|readiness|publication|custody|admission|quiescence|maintenance]\n' "$0" >&2; exit 2 ;;
+    root-maintenance) filter=store_root_tests::root_custody_tests ;;
+    *) printf 'Usage: %s [all|readiness|publication|custody|admission|quiescence|maintenance|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
 build() {
     local name=$1 package=$2
@@ -24,12 +25,18 @@ build() {
 build original canic-wasm-store
 build root-maintenance canic-root --features maintenance-candidate
 build root-faults canic-root --features fault-injection
-if [[ "$scope" == all || "$scope" == publication ]]; then
+if [[ "$scope" == all || "$scope" == root-maintenance ]]; then
+    records=$(mktemp target/store/host-tests.XXXXXX.jsonl)
+    cargo test --locked -p canic-host --lib --no-run --message-format=json-render-diagnostics > "$records"
+    CANIC_HOST_CUSTODY_TEST=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic_host") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected Host test executable") end' "$records")
+    export CANIC_HOST_CUSTODY_TEST
+fi
+if [[ "$scope" == all || "$scope" == publication || "$scope" == root-maintenance ]]; then
     build root canic-root
     build app canic-hello
     build app-v2 canic-hello --features greeting-v2
 fi
-if [[ "$scope" == all || "$scope" == custody || "$scope" == admission || "$scope" == quiescence || "$scope" == maintenance ]]; then
+if [[ "$scope" == all || "$scope" == custody || "$scope" == admission || "$scope" == quiescence || "$scope" == maintenance || "$scope" == root-maintenance ]]; then
     build candidate canic-wasm-store --features maintenance-candidate
 fi
 if [[ "$scope" == all ]]; then
@@ -40,6 +47,8 @@ elif [[ "$scope" == custody ]]; then
 elif [[ "$scope" == admission ]]; then
     cargo test --locked -p canic-wasm-store-protocol --lib
     cargo test --locked -p canic-wasm-store --lib
+elif [[ "$scope" == root-maintenance ]]; then
+    cargo test --locked -p canic-management-protocol --lib complete_root_custody
 elif [[ "$scope" == quiescence || "$scope" == maintenance ]]; then
     cargo test --locked -p canic-management-protocol --lib store_maintenance
 else

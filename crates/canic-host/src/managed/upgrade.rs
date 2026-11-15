@@ -113,8 +113,13 @@ pub(crate) fn evidence_with_source(
         ] {
             let path = dir.join(format!("observe/{index}/{name}"));
             if path.try_exists().map_err(supplier)? {
-                let bytes = store::read(&path, canic_management_protocol::stored::LIMITS.bytes)?;
-                let (status, source) = if method == canic_management_protocol::stored::CUSTODY {
+                let bytes =
+                    store::read(&path, canic_management_protocol::custody::ROOT_LIMITS.bytes)?;
+                let (status, source) = if matches!(
+                    method,
+                    canic_management_protocol::stored::CUSTODY
+                        | canic_management_protocol::custody::ROOT
+                ) {
                     super::stored::upgrade_evidence(plan, &bytes)?
                 } else {
                     (

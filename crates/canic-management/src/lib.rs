@@ -45,12 +45,14 @@ pub struct Readiness {
 #[cfg(target_arch = "wasm32")]
 pub mod stored {
     pub use crate::engine::stored_api::{
-        custody, reconcile, reconcile_upgrade, stage, stage_upgrade,
+        custody, reconcile, reconcile_upgrade, root_custody, stage, stage_upgrade,
     };
 }
 
 /// Root-owned Store maintenance custody, mounted explicitly by Root.
 #[cfg(target_arch = "wasm32")]
 pub mod store_maintenance {
-    pub use crate::engine::store_maintenance::{activate, advance, install, observe, stage};
+    pub use crate::engine::store_maintenance::{
+        activate, advance, install, observe, recover, stage,
+    };
 }

@@ -1,4 +1,4 @@
-//! Resolve bounded serial child upgrades from retained fleet custody, without new effect owners.
+//! Resolve ordered child, Root and Store changes from retained fleet custody.
 use super::{FleetPlan, Slot, invalid, root_receipt};
 use crate::{
     Error, Plan, Receipt, Result, managed, plan,
@@ -21,11 +21,11 @@ pub enum FleetPlanning {
         /// Exact immutable creation envelope.
         fleet_plan: FleetPlan,
     },
-    /// Upgrade or resume the child through its original Root.
+    /// Upgrade or resume a child or Store through its original Root.
     Upgrade {
         /// Independently retained upgrade digest.
         operation: String,
-        /// Existing single-child plan contract.
+        /// Existing Plan with the selected Root-owned upgrade authority.
         plan: Plan,
     },
     /// Publish a changed child artifact before approving its installation.
@@ -142,16 +142,15 @@ pub(super) fn plan(
     id: &str,
     fleet: FleetPlan,
     desired: FleetPlan,
-    bytes: (&[u8], &[Vec<u8>]),
+    bytes: (&[u8], &[Vec<u8>], Option<&[u8]>),
     individual: &[(String, Plan)],
     publications: &[(String, Plan)],
 ) -> Result<FleetPlanning> {
     let dir = store.operation(id)?;
-    if fleet.store.as_ref().map(|s| &s.artifact) != desired.store.as_ref().map(|s| &s.artifact) {
-        return Err(Error::Blocked("Store artifact changes require a qualified Store maintenance operation; retain the original fleet".into()));
-    }
     if fleet.store.is_some() && super::store_receipt(&dir, &fleet)?.is_none() {
         if !individual.is_empty()
+            || desired.store.as_ref().map(|s| &s.artifact)
+                != fleet.store.as_ref().map(|s| &s.artifact)
             || desired.root.artifact != fleet.root.artifact
             || !desired
                 .children
@@ -173,6 +172,8 @@ pub(super) fn plan(
         let index = definition.slot;
         let Some((child, receipt)) = child_completion(&dir, &fleet, index)? else {
             if !individual.is_empty()
+                || desired.store.as_ref().map(|s| &s.artifact)
+                    != fleet.store.as_ref().map(|s| &s.artifact)
                 || desired.root.artifact != fleet.root.artifact
                 || !desired
                     .children()
@@ -215,6 +216,11 @@ pub(super) fn plan(
     }
     let root = root_receipt(&dir, &fleet)?.ok_or_else(invalid)?.canister;
     let mut root_module = fleet.root.artifact.sha256.clone();
+    let mut store_binding = super::store_receipt(&dir, &fleet)?.map(|receipt| UpgradeTarget {
+        canister: receipt.canister,
+        module: receipt.module_hash,
+    });
+    let mut store_operation = None;
     let mut ordered: Vec<_> = individual.iter().collect();
     ordered.sort_by_key(|(_, value)| value.created_at_ns);
     let mut last_created = fleet.root.created_at_ns;
@@ -224,8 +230,48 @@ pub(super) fn plan(
             return Err(invalid());
         }
         last_created = value.created_at_ns;
+        if let Some(owner) = value.store_upgrade_root() {
+            let binding = store_binding.as_mut().ok_or_else(invalid)?;
+            if store_operation.is_some()
+                || owner.canister != root
+                || owner.module != root_module
+                || value.target() != Some(&binding.canister)
+                || value.previous_module() != Some(&binding.module)
+                || value.deployment.as_ref() != fleet.store.as_ref().map(|s| &s.deployment)
+                || value.network != fleet.root.network
+                || value.controller != fleet.root.controller
+            {
+                return Err(invalid());
+            }
+            if let Some((receipt, evidence)) =
+                crate::store_upgrade::receipt(&store.operation(operation)?, value)?
+            {
+                binding.module = receipt.module_hash;
+                store_operation = Some(evidence);
+                latest_id = operation;
+                continue;
+            }
+            if position + 1 != ordered.len()
+                || desired
+                    .store
+                    .as_ref()
+                    .is_none_or(|s| s.artifact != value.artifact)
+                || desired.root.artifact.sha256 != root_module
+                || changed_children(&children, &desired).next().is_some()
+            {
+                return Err(Error::Blocked(format!(
+                    "Store upgrade {operation} is unfinished; resume its original artifacts"
+                )));
+            }
+            return Ok(FleetPlanning::Upgrade {
+                operation: operation.clone(),
+                plan: value.clone(),
+            });
+        }
         if let Some(expected) = value.maintenance() {
-            if value.maintenance_store() != store_custody(&dir, &fleet, &children)?.as_ref()
+            if value.maintenance_store()
+                != store_custody(&children, store_binding.as_ref(), store_operation.as_ref())?
+                    .as_ref()
                 || !expected
                     .iter()
                     .eq(children.iter().map(|child| &child.custody))
@@ -242,6 +288,8 @@ pub(super) fn plan(
                     return Err(invalid());
                 }
                 if value.artifact != desired.root.artifact
+                    || desired.store.as_ref().map(|s| &s.artifact.sha256)
+                        != store_binding.as_ref().map(|s| &s.module)
                     || changed_children(&children, &desired).next().is_some()
                 {
                     return Err(Error::Blocked(format!(
@@ -274,7 +322,13 @@ pub(super) fn plan(
                         && new.root_module == root_module
                         && new.slot == old.slot
                         && new.source.as_ref().map(|s| &s.store)
-                            == old.source.as_ref().map(|s| &s.store)
+                            == old.source.as_ref().and(store_binding.as_ref())
+                        && new.source.as_ref().and_then(|s| s.maintenance.as_ref())
+                            == old
+                                .source
+                                .as_ref()
+                                .and(store_operation.as_ref())
+                                .map(|s| &s.approval.attempt)
                         && new.execute_at_ns > child.dispatch
                 })
             || value.previous_module() != Some(&child.module)
@@ -305,6 +359,8 @@ pub(super) fn plan(
                     .1
                     .artifact
                 || desired.root.artifact.sha256 != root_module
+                || desired.store.as_ref().map(|s| &s.artifact.sha256)
+                    != store_binding.as_ref().map(|s| &s.module)
                 || changed_children(&children, &desired).any(|i| i != index)
             {
                 return Err(Error::Blocked(format!(
@@ -333,6 +389,56 @@ pub(super) fn plan(
         return Err(invalid());
     }
     let changed: Vec<_> = changed_children(&children, &desired).collect();
+    if desired.store.as_ref().map(|s| &s.artifact.sha256)
+        != store_binding.as_ref().map(|s| &s.module)
+    {
+        if store_operation.is_some() {
+            return Err(Error::Blocked("Root retains its one Store maintenance operation; successor Store upgrades are not yet qualified".into()));
+        }
+        if !changed.is_empty() || desired.root.artifact.sha256 != root_module {
+            return Err(Error::Blocked(
+                "change Store, Root and child artifacts in separate reviewed windows".into(),
+            ));
+        }
+        let binding = store_binding.as_ref().ok_or_else(invalid)?;
+        for (id, pending) in publications {
+            if pending.network == fleet.root.network
+                && pending.publication().is_some_and(|p| {
+                    p.root.canister == root && p.store.canister == binding.canister
+                })
+            {
+                let path = store.operation(id)?;
+                let (_, bytes) = plan::load(&path, id)?;
+                if crate::publication::receipt(
+                    &path,
+                    pending,
+                    id,
+                    &crate::publication::manifest(pending, &bytes)?,
+                )?
+                .is_none()
+                {
+                    return Err(Error::Blocked(format!(
+                        "publication {id} is unfinished; complete it before Store maintenance"
+                    )));
+                }
+            }
+        }
+        let selected = desired.store.as_ref().ok_or_else(invalid)?;
+        let upgrade = Plan {
+            artifact: selected.artifact.clone(),
+            deployment: Some(selected.deployment.clone()),
+            action: PlanAction::UpgradeStore {
+                target: binding.clone(),
+                root: UpgradeTarget {
+                    canister: root,
+                    module: root_module,
+                },
+            },
+            ..desired.root
+        };
+        let (operation, plan) = plan::publish_locked(store, upgrade, bytes.2.ok_or_else(invalid)?)?;
+        return Ok(FleetPlanning::Upgrade { operation, plan });
+    }
     if desired.root.artifact.sha256 != root_module {
         if !changed.is_empty() {
             return Err(Error::Blocked(
@@ -346,7 +452,8 @@ pub(super) fn plan(
                     module: root_module,
                 },
                 children: children.iter().map(|c| c.custody.clone()).collect(),
-                store: store_custody(&dir, &fleet, &children)?.map(Box::new),
+                store: store_custody(&children, store_binding.as_ref(), store_operation.as_ref())?
+                    .map(Box::new),
             },
             ..desired.root
         };
@@ -399,7 +506,9 @@ pub(super) fn plan(
     owner.execute_at_ns = selected.execute_at_ns;
     owner.root_module = root_module;
     if let Some(source) = &mut owner.source {
+        source.store = store_binding.clone().ok_or_else(invalid)?;
         source.manifest = selected.release.clone().ok_or_else(invalid)?;
+        source.maintenance = store_operation.as_ref().map(|s| s.approval.attempt.clone());
     }
     let upgrade = Plan {
         artifact: selected.artifact.clone(),
@@ -424,6 +533,7 @@ pub(super) fn plan(
                 old,
                 &publication,
                 &source.manifest,
+                store_operation.as_ref(),
             )? {
                 published = true;
                 break;
@@ -447,19 +557,16 @@ pub(super) fn plan(
     Ok(FleetPlanning::Upgrade { operation, plan })
 }
 fn store_custody(
-    dir: &Path,
-    fleet: &FleetPlan,
     children: &[Child],
+    binding: Option<&UpgradeTarget>,
+    operation: Option<&canic_management_protocol::store_maintenance::Status>,
 ) -> Result<Option<crate::StoreMaintenance>> {
-    if children.iter().all(|c| c.sources.is_none()) {
+    if children.iter().all(|c| c.sources.is_none()) && operation.is_none() {
         return Ok(None);
     }
-    let receipt = super::store_receipt(dir, fleet)?.ok_or_else(invalid)?;
     Ok(Some(crate::StoreMaintenance {
-        store: UpgradeTarget {
-            canister: receipt.canister,
-            module: receipt.module_hash,
-        },
+        operation: operation.cloned(),
+        store: binding.ok_or_else(invalid)?.clone(),
         sources: std::array::from_fn(|i| children.get(i).and_then(|c| c.sources.clone())),
     }))
 }

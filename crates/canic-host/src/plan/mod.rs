@@ -69,7 +69,11 @@ pub struct PlanInput {
 
 impl Plan {
     pub(crate) fn artifact_limit(&self) -> usize {
-        if self.publication().is_some() || self.management().is_some_and(|m| m.source.is_some()) {
+        if self.store_upgrade_root().is_some() {
+            canic_management_protocol::store_maintenance::MAX_MODULE_BYTES
+        } else if self.publication().is_some()
+            || self.management().is_some_and(|m| m.source.is_some())
+        {
             artifact::MAX_ARTIFACT_BYTES
         } else {
             artifact::MAX_WASM
@@ -96,6 +100,9 @@ impl Plan {
         }
         if self.maintenance().is_some() {
             crate::maintenance::validate(self)?;
+        }
+        if self.store_upgrade_root().is_some() {
+            crate::store_upgrade::validate(self)?;
         }
         if let Some(root) = self.store_root() {
             let id = principal(&root.canister)?;
@@ -146,6 +153,7 @@ impl Plan {
                 return Err(Error::Invalid("creation needs 0.5T–5T cycles".into()));
             }
             PlanAction::Upgrade(target)
+            | PlanAction::UpgradeStore { target, .. }
             | PlanAction::UpgradeChild { target, .. }
             | PlanAction::MaintainRoot { target, .. } => {
                 principal(&target.canister)?;
@@ -176,6 +184,9 @@ impl Plan {
     /// Sole controller of the resulting application canister.
     #[must_use]
     pub fn application_controller(&self) -> &str {
+        if let Some(root) = self.store_upgrade_root() {
+            return &root.canister;
+        }
         if let Some(root) = self.store_root() {
             return &root.canister;
         }

@@ -16,7 +16,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         || plan.target() == Some(&store.store.canister)
         || crate::unhex(&store.store.module)?.len() != 32
         || store.store.module != store.store.module.to_ascii_lowercase()
-        || store.sources.iter().all(Option::is_none)
+        || (store.operation.is_none() && store.sources.iter().all(Option::is_none))
         || store.sources[children.len()..].iter().any(Option::is_some)
     {
         return Err(invalid());
@@ -49,6 +49,34 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
                 source,
             )?;
         }
+    }
+    if let Some(operation) = &store.operation {
+        let approval = &operation.approval;
+        let operator = principal(&operation.operator)?;
+        if approval.store != store.store.canister
+            || operator.to_text() != operation.operator
+            || operator == principal("2vxsx-fae")?
+            || approval.attempt.sequence == 0
+            || approval.attempt.operation == [0; 32]
+            || approval.previous_module == approval.module_hash
+            || approval.previous_module == [0; 32]
+            || approval.module_hash == [0; 32]
+            || ![
+                crate::hex(&approval.previous_module),
+                crate::hex(&approval.module_hash),
+            ]
+            .contains(&store.store.module)
+        {
+            return Err(invalid());
+        }
+        ic_wire::native::encode(
+            &canic_management_protocol::custody::Root {
+                stored: expected(plan)?,
+                store_operation: Some(operation.clone()),
+            },
+            canic_management_protocol::custody::ROOT_LIMITS,
+        )
+        .map_err(supplier)?;
     }
     ic_wire::native::encode(&expected(plan)?, wire::LIMITS).map_err(supplier)?;
     Ok(())
@@ -100,6 +128,20 @@ fn expected(plan: &Plan) -> Result<wire::Custody> {
     })
 }
 pub(super) fn matches(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
+    if let Some(operation) = plan.maintenance_store().and_then(|s| s.operation.as_ref()) {
+        if method != "observe_root_custody" {
+            return Err(invalid());
+        }
+        let actual: canic_management_protocol::custody::Root = ic_wire::native::decode_response(
+            canic_management_protocol::custody::ROOT,
+            bytes,
+            canic_management_protocol::custody::ROOT_LIMITS,
+        )
+        .map_err(supplier)?;
+        return Ok(
+            actual.stored == expected(plan)? && actual.store_operation.as_ref() == Some(operation)
+        );
+    }
     if method != "observe_stored_children" {
         return Err(invalid());
     }

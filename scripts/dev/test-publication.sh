@@ -14,5 +14,11 @@ for entry in root:canic-root store:canic-wasm-store app:canic-hello; do
 done
 "$cli" artifact build --package canic-root --features maintenance-candidate --json > target/publication/root-maintenance.json
 cp -- "$(jq -r .wasm target/publication/root-maintenance.json)" target/publication/root-maintenance.wasm
+for entry in root-faults:canic-root:fault-injection store-candidate:canic-wasm-store:maintenance-candidate app-v2:canic-hello:greeting-v2; do
+    name=${entry%%:*}
+    rest=${entry#*:}
+    "$cli" artifact build --package "${rest%%:*}" --features "${rest#*:}" --json > "target/publication/$name.json"
+    cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
+done
 CANIC_CLI="$cli" CANIC_PUBLICATION_ARTIFACTS="$root/target/publication" \
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test publication "$@" -- --nocapture

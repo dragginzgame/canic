@@ -21,6 +21,48 @@ fn state() -> serde_json::Value {
 }
 
 #[test]
+fn store_upgrade_status_exposes_phase_without_claiming_completion() {
+    let mut state = state();
+    state["plan"]["creation_cycles"] = 0.into();
+    state["plan"]["target"] = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
+    state["plan"]["previous_module"] = "22".repeat(32).into();
+    state["plan"]["store_upgrade_root"] = serde_json::json!({
+        "canister": "rrkah-fqaaa-aaaaa-aaaaq-cai", "module": "11".repeat(32)
+    });
+    let plan: Plan = serde_json::from_value(state["plan"].clone()).unwrap();
+    state["store_maintenance"] =
+        serde_json::to_value(canic_management_protocol::store_maintenance::Status {
+            approval: canic_management_protocol::store_maintenance::Approval {
+                store: plan.target().unwrap().clone(),
+                previous_module: [0x22; 32],
+                module_hash: [0xbb; 32],
+                attempt: serde_json::from_value(serde_json::json!({
+                    "sequence": 1, "operation": ([1; 32]),
+                }))
+                .unwrap(),
+                expires_at_ns: plan.expires_at_ns,
+            },
+            operator: plan.controller.clone(),
+            phase: canic_management_protocol::store_maintenance::Phase::Verified,
+            stop_request: Some([2; 32]),
+            failure: None,
+            preservation: None,
+            installation: None,
+        })
+        .unwrap();
+    let text = render(&state, Path::new("journal")).unwrap();
+    assert!(text.contains("Store maintenance: Verified"));
+    assert!(text.contains("Root: rrkah-fqaaa-aaaaa-aaaaq-cai"));
+    assert!(text.contains("deployment completion is not established"));
+    state["store_maintenance"] = serde_json::Value::Null;
+    assert!(
+        render(&state, Path::new("journal"))
+            .unwrap()
+            .contains("no retained observation")
+    );
+}
+
+#[test]
 fn retained_replies_and_expiry_never_claim_deployment_success() {
     let mut state = state();
     for (evidence, expected) in [

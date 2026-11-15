@@ -28,7 +28,15 @@ impl Method {
                 Self::StageUpgrade => ("stage_stored_upgrade", stored::STAGE_UPGRADE),
                 Self::ReconcileUpgrade => ("reconcile_stored_upgrade", stored::RECONCILE_UPGRADE),
                 Self::Observe | Self::ObserveUpgrade => {
-                    ("observe_stored_children", stored::CUSTODY)
+                    if plan
+                        .management()
+                        .and_then(|m| m.source.as_ref())
+                        .is_some_and(|s| s.maintenance.is_some())
+                    {
+                        ("observe_root_custody", protocol::custody::ROOT)
+                    } else {
+                        ("observe_stored_children", stored::CUSTODY)
+                    }
                 }
             };
         }

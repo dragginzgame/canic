@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "ic-blob-storage",
  "ic-platform-runtime",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -403,7 +403,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-management-protocol",
  "canic-wasm-store-protocol",
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-wasm-store-protocol",
  "ic-wire",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-client"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-management-protocol",
  "canic-profile-protocol",
@@ -467,7 +467,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-entry"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-manager"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-management",
  "canic-management-protocol",
@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -499,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -523,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "canic-wasm-store-protocol",
  "ic-platform",
@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store-protocol"
-version = "0.210.0"
+version = "0.211.0"
 dependencies = [
  "ic-wire",
  "serde",

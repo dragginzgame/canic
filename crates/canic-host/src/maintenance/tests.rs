@@ -71,6 +71,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         reference,
     };
     *store = Some(Box::new(crate::StoreMaintenance {
+        operation: None,
         store: crate::UpgradeTarget {
             canister: stage.reference.store.clone(),
             module: "22".repeat(32),
@@ -146,6 +147,93 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
     assert!(!retained(&dir, &plan).unwrap());
     store::put(&dir.join("custody-after/reply.bin"), &frame(&observed)).unwrap();
     assert!(retained(&dir, &plan).unwrap());
+    let child_only_digest = plan.digest().unwrap();
+    let operation = canic_management_protocol::store_maintenance::Status {
+        approval: canic_management_protocol::store_maintenance::Approval {
+            store: plan.maintenance_store().unwrap().store.canister.clone(),
+            previous_module: [0x22; 32],
+            module_hash: [0x33; 32],
+            attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+                sequence: 1,
+                operation: [3; 32],
+            },
+            expires_at_ns: 2,
+        },
+        operator: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        phase: canic_management_protocol::store_maintenance::Phase::Reserved,
+        stop_request: None,
+        failure: None,
+        preservation: None,
+        installation: None,
+    };
+    let mut full_plan = plan.clone();
+    let crate::PlanAction::MaintainRoot {
+        store: Some(full), ..
+    } = &mut full_plan.action
+    else {
+        unreachable!()
+    };
+    full.operation = Some(operation.clone());
+    full_plan.validate().unwrap();
+    assert_ne!(full_plan.digest().unwrap(), child_only_digest);
+    assert_eq!(
+        serde_json::from_slice::<Plan>(&serde_json::to_vec(&full_plan).unwrap()).unwrap(),
+        full_plan
+    );
+    let complete = custody::Root {
+        stored: observed.clone(),
+        store_operation: Some(operation),
+    };
+    let full_frame = |value: &custody::Root| {
+        ic_wire::native::encode_response(custody::ROOT, value, custody::ROOT_LIMITS).unwrap()
+    };
+    assert!(matches_plan(&full_plan, "observe_root_custody", &full_frame(&complete)).unwrap());
+    assert!(observation_args(&full_plan, "observe_stored_children").is_err());
+    assert!(matches_plan(&full_plan, "observe_stored_children", &frame(&observed)).is_err());
+    assert!(observation_args(&plan, "observe_root_custody").is_err());
+    assert!(!retained(&dir, &full_plan).unwrap_or(false)); // Old child-only replies cannot authorize full custody.
+    for case in 0..5 {
+        let mut changed = complete.clone();
+        match case {
+            0 => changed.store_operation = None,
+            1 => {
+                changed
+                    .store_operation
+                    .as_mut()
+                    .unwrap()
+                    .approval
+                    .attempt
+                    .operation[0] ^= 1
+            }
+            2 => {
+                changed
+                    .store_operation
+                    .as_mut()
+                    .unwrap()
+                    .approval
+                    .expires_at_ns += 1
+            }
+            3 => changed.store_operation.as_mut().unwrap().operator = "2vxsx-fae".into(),
+            _ => changed.stored.sources[0] = None,
+        }
+        assert!(!matches_plan(&full_plan, "observe_root_custody", &full_frame(&changed)).unwrap());
+    }
+    for side in ["custody-before", "custody-after"] {
+        store::put(
+            &dir.join("complete").join(side).join("reply.bin"),
+            &full_frame(&complete),
+        )
+        .unwrap();
+    }
+    assert!(retained(&dir.join("complete"), &full_plan).unwrap());
+    let crate::PlanAction::MaintainRoot {
+        store: Some(full), ..
+    } = &mut full_plan.action
+    else {
+        unreachable!()
+    };
+    full.operation = None;
+    assert_eq!(full_plan.digest().unwrap(), child_only_digest);
     for case in 0..4 {
         let mut invalid = plan.clone();
         let crate::PlanAction::MaintainRoot {

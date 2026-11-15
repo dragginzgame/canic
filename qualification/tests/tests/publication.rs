@@ -1,4 +1,5 @@
 //! Real CLI Store bootstrap and publication through Root with retained recovery.
+mod store_upgrade_tests;
 use ic_testkit::{
     pic::{PocketIcStartupConfig, server_assets},
     pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder},

@@ -295,8 +295,15 @@ pub(crate) fn evidence_with_source(
         ] {
             let reply = dir.join(format!("observe/{index}/{name}"));
             if reply.try_exists().map_err(supplier)? {
-                let bytes = store::read(&reply, canic_management_protocol::stored::LIMITS.bytes)?;
-                let (status, source) = if method == canic_management_protocol::stored::CUSTODY {
+                let bytes = store::read(
+                    &reply,
+                    canic_management_protocol::custody::ROOT_LIMITS.bytes,
+                )?;
+                let (status, source) = if matches!(
+                    method,
+                    canic_management_protocol::stored::CUSTODY
+                        | canic_management_protocol::custody::ROOT
+                ) {
                     stored::creation_evidence(plan, &bytes)?
                 } else {
                     (decode_observation(plan, method, &bytes)?, None)
@@ -436,7 +443,10 @@ async fn complete(
 }
 
 fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> {
-    if method == canic_management_protocol::stored::CUSTODY {
+    if matches!(
+        method,
+        canic_management_protocol::stored::CUSTODY | canic_management_protocol::custody::ROOT
+    ) {
         stored::creation(plan, bytes)
     } else {
         ic_wire::native::decode_response(method, bytes, LIMITS).map_err(supplier)

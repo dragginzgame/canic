@@ -86,6 +86,18 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
 
 fn outcome(value: &ApplyOutcome, text: &mut String) -> bool {
     match value {
+        ApplyOutcome::StorePending {
+            root,
+            store_maintenance,
+            ..
+        } => {
+            text.push_str(&format!(
+                "Root: {}\nStore upgrade: {:?}; completion not yet retained.\n",
+                terminal_text(root),
+                store_maintenance.phase
+            ));
+            false
+        }
         ApplyOutcome::Publication { publication } => {
             let published = publication.status.as_ref().is_some_and(|s| s.published);
             text.push_str(&format!(

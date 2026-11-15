@@ -7,6 +7,190 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.211.0 release inputs: 2026-11-15
+
+The maintainer authorized the GitHub release and subsequent development. Scope
+includes restricted Store recovery, complete Root custody, the installed fleet
+Store upgrade workflow and the completed subnet-comparison work. Product packages
+and both lockfiles select 0.211.0; qualification packages retain 0.0.0. Packages
+remain unpublished, with no crates.io or mainnet deployment selected.
+
+Fresh registry review confirms the locked first-party selections remain current:
+Host fs/process/artifacts 0.79.0, Host text 0.76.0, Platform 0.33.7, Runtime 0.22.5,
+Types 0.20.4, Storage 0.74.1, Timers 0.44.3, Wire 0.22.4, Testkit 0.106.0 and
+Tooling 0.44.3. Query main remains the selected topology revision
+`0a3eca919f05d777798406087049cc51ab7ae2a8`. Blob's default branch remains
+`86fc663d14b5fde78db1267157ce9b1b9dbe2888`; its optional update from the qualified
+`decde204acb6d7c8362a0003e904beef72ff89b6` is deferred to the next supplier-adoption
+batch. Its registry release remains 0.82.1; no sibling checkout was changed.
+
+The complete Linux `make -j1 ci` gate passed with all 278 captured input hashes
+unchanged. This includes 100 Host tests, 54 CLI tests, 22 installed Store cases,
+three CLI publication/upgrade journeys and five Blob cases, plus the effect,
+artifact, profile, growth, Root and endpoint suites. Native/Wasm lint, Rustdoc,
+formatting and tooling agreement passed. The native Host entrypoint ignored by
+ordinary unit tests ran through its installed Store harness. Optional historical
+manager/Root fixtures remain explicitly ignored. macOS and mainnet maintenance
+were not exercised. Logs: `target/qualification/release-0211-*.log`; captured
+inputs: `target/evidence/0.211.0/release/`.
+
+## Fleet commands carry Store replacement through later upgrades: 2026-11-15
+
+Continued the pending 0.211.0 increment with `PlanAction::UpgradeStore` and the
+existing fleet plan/apply/status/reconcile path. A changed Store artifact selects
+one approval after completed child/publication work; simultaneous artifact changes,
+unfinished work and a second Store attempt are refused. The approval binds exact
+Root/Store code, original operator/deadline and replacement bytes. Root remains
+the management-effect owner. Host retains signed admission and continuations;
+reconcile uses only the restricted recovery contract. Each apply permits 32
+continuations with a 4096-observation lifetime bound. Exhaustion retains evidence.
+
+Completion points to the exact admitted signed Ready observation rather than
+introducing another receipt or runtime journal. Ordered fleet history advances
+the Store binding only through that evidence. Root maintenance automatically
+preserves the complete Store operation. `StoredArtifact.maintenance` binds the
+completed attempt for later child plans and explicitly selects complete Root
+custody; absence preserves old serialized approvals, digests and read methods.
+The installed test first exposed the old child-only reader refusing the retained
+operation. That refusal remains; the new source-bound selection fixes the caller
+instead of weakening the preservation contract or probing/falling back on errors.
+
+Reused the legacy checkpoint/late-callback research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded below: preserve original
+operation authority and treat callback evidence separately from remote effects.
+This is Host composition over the rewrite's qualified engine, not a port of the
+legacy workflow machinery. No supplier, crate, dependency, allocator, timer or
+new CLI command was added. The signed metadata reader now serves typed publication
+and Store observation callers under its existing authority-retention mechanism.
+
+Focused validation passed:
+
+- 40 Host cases across plan, fleet convergence, managed source custody, signed
+  authority, publication, maintenance and Store upgrade; the separately executed
+  installed Host entrypoint remains ignored in ordinary native runs. After adding
+  explicit full-custody rejection cases, the affected 20 cases passed again.
+- Nine CLI status cases, including visible Store phase without a false completion.
+- The new installed CLI/signer witness (82.39s) bootstraps Root/Store/app, preserves
+  pending approvals, refuses reconcile before admission, stops before installation,
+  loses upload callback 15, recovers by observation, pauses before activation and
+  compares Store stable bytes. Missing/substituted completion custody blocks status
+  and planning. It then replaces Root, publishes and upgrades the child through
+  complete custody, and refuses a successor Store upgrade.
+- The existing named bootstrap/publication/child journey (29.42s) still passes,
+  retaining the original Store read contract and signed recovery behavior.
+- Host/CLI Clippy, publication-fixture Clippy, Host Rustdoc, formatting and tooling
+  agreement passed. Logs: `target/qualification/store-workflow-*.log`.
+
+The fixture uses generated isolated credentials and synthetic cycles; no operator
+wallet, mainnet deployment or browser is involved. The runtime is unchanged from
+the preceding complete-custody increment, so its passing Store interruption and
+growth qualification remains applicable. The 1 MiB infrastructure bound, one
+Store attempt, no reset/cancellation/successor maintenance and no mainnet
+maintenance claim remain explicit. `make canic` installed the development CLI on
+PATH and command help was checked. Package versions remain 0.210.0; these changes
+are local and unpushed under the pending 0.211.0 entry.
+
+## Root replacement carries the Store operation: 2026-11-15
+
+Continued after 0.210.0 with complete controller-only Root custody (Wire method
+57): both child slots, all artifact sources and the optional Store operation are
+read synchronously from the existing stores. No remote call, write or lifecycle
+action occurs. Older child-only readers still refuse a retained Store operation,
+including Ready. Reused the same legacy checkpoint/late-callback research recorded
+below at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`; preserving the surviving
+intent remains essential even when replacing its owner.
+
+Host's `StoreMaintenance.operation` selects the complete read on both sides of
+the existing direct installation. Exact evidence, Store identity/code and live
+controller/placement checks remain required. Absent operation keeps the old
+serialized plan, digest and signed read method. The public Rust struct addition
+requires literal callers to adapt, so the pending entry is now **0.211.0**;
+the preceding recovery work is included. Package versions remain 0.210.0.
+
+Focused validation passed: four Host maintenance tests, combined maximum-custody
+Wire budget, and the installed Host replacement witness (11.16s). The latter
+creates a real Store-backed child, closes/stops Store, refuses changed operation
+evidence before installation, interrupts after Root installation and resumes the
+same signed request ID. It verifies the new Root module, exact pre/post custody,
+unchanged Root/Store stable bytes and recovery by the original Store operator.
+Malformed and unauthorized custody reads preserve state. Four Store maintenance
+cases (8.12s) also compare complete custody at the existing interruption phases,
+including Ready. Shared growth checks passed (two cases, 14.33s; the optional
+historical-manager input remains explicitly ignored). Native/Wasm Root and Host
+Clippy, installed Store fixture Clippy, Root/Host Rustdoc, formatting, tooling
+agreement and diff checks passed. Logs: `target/qualification/root-custody-*.log`.
+
+Host and the simulator retain separate dependency graphs: the installed harness
+invokes a Cargo-built Host test executable, as existing CLI witnesses invoke the
+CLI. Testkit's PocketIC requires thiserror 2.0.18 while the selected Host/Query
+graph requires 2.0.21; no dependency pin was changed to combine them. The native
+entrypoint is explicitly selected by `test-store.sh root-maintenance` and the
+aggregate Store runner, rather than accidentally skipped with ordinary unit tests.
+No new product crate, journal, allocator, timer or workflow engine was added.
+
+The installed witness supplies an explicit library approval. Whole-fleet planning
+still needs authenticated Store-upgrade receipts before selecting that operation;
+it cannot promote the public diagnostic report into authority. Store-upgrade
+plan/apply/reconcile, successor maintenance and mainnet use remain unqualified.
+This work is local and unpushed, with no deployment or publication.
+
+The separately coordinated subnet-comparison work is retained in the same pending
+entry. Its owner reports two Host and four CLI tests, production Clippy/Rustdoc,
+and one installed read-only mainnet smoke. Exact scope and source evidence are in
+[the comparison note](../design/fleet-subnet-comparison.md); those results are
+independent of this Store qualification and add no deployment authority.
+
+## Restricted Store recovery for 0.210.1: 2026-11-15
+
+Added the explicit Root update `recover_store_maintenance` (Wire method 56).
+It selects the exact retained approval and original operator, captures the phase
+before awaiting and reuses the existing observation branches and journal. It can
+retain outcomes and complete post-install metadata verification; it cannot issue
+new maintenance effects. Reserved, Closed, Stopped, Uploaded, Installed, Verified
+and Ready remain unchanged even before dispatch expiry. Existing methods, stored
+formats and authority deadlines remain unchanged. No new crate, timer, storage
+allocation, workflow engine or copy of supplier policy was introduced.
+
+Reused the legacy checkpoint sequence/late-callback research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded under “Store admission survives
+maintenance”: exact operation selection and retained outcomes remain the relevant
+invariants. This increment changes recovery access, not the Store lifecycle.
+
+Focused Linux validation passed: the scoped protocol budget test; four installed
+maintenance cases (7.90s); four installed closure/stop and migration cases (7.18s);
+and `make growth-test` (two installed cases, 13.87s; the optional historical-manager
+input remains explicitly ignored). Recovery fixtures cover concurrent calls,
+Root replacement, expired authority, unchanged Store bytes, malformed frames,
+wrong callers, altered attempts and an old attempt unable to reopen a newer gate.
+Native/Wasm Root Clippy, installed Store fixture Clippy, Root Rustdoc, formatting,
+tooling agreement and diff checks passed. Logs are under
+`target/qualification/store-recovery-*.log`.
+
+This is local installed runtime qualification, not a Host/CLI Store upgrade or
+mainnet claim. Host plan/apply/reconcile and carrying the Store operation through
+Host-driven Root maintenance remain the next integration work. The new increment
+is uncommitted and unpushed; package versions and the installed CLI remain 0.210.0.
+
+## 0.210.0 post-push review: 2026-11-15
+
+Verified remote main and peeled `v0.210.0` at
+`5b8d5e91ac601da13ec9d50e8d7a4f4f5efa16bb`, with annotated tag object
+`4b4366b3677be65be69312fcdb6553307940f7bb`. Reviewed the delivered changes and
+their runtime, Host, CLI, configuration and qualification callers before starting
+new work. Store remains the sole durable artifact owner; Root reuses its bounded
+journal, and Host views project diagnostics without effect authority. Placements
+uses Query's bounded collector and keeps diagnostic routing separate from
+deployment authority. Historical journal codecs/fixtures and refusal by old
+child-only custody methods protect real preservation obligations and remain
+deliberate compatibility, not removable leftovers.
+
+No additional corrective defect or duplicate policy owner was found in the pushed
+scope. The documented Host upgrade gap remains: generic advance can dispatch new
+effects, so observation-only reconciliation needs an explicit restricted contract;
+later Host-driven Root maintenance must also carry the retained Store operation.
+The next compatible increment starts at 0.210.1 with the recovery boundary. This
+does not claim repository-wide absence of debt or a completed CLI upgrade journey.
+
 ## 0.210.0 release inputs: 2026-11-15
 
 The maintainer authorized delivery and confirmed the concurrent placement work

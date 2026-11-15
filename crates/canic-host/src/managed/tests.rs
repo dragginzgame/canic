@@ -546,6 +546,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     )
     .unwrap();
     let source = crate::StoredArtifact {
+        maintenance: None,
         store: crate::UpgradeTarget {
             canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
             module: "02".repeat(32),
@@ -614,6 +615,89 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         ic_wire::native::encode_response(wire::CUSTODY, value, wire::LIMITS).unwrap()
     };
     assert_eq!(stored::creation(&plan, &encode(&custody)).unwrap(), status);
+    // A successor Store binding selects the complete contract explicitly. The
+    // old frame, another attempt or incomplete preservation cannot stand in for it.
+    {
+        use canic_management_protocol::{custody as full, store_maintenance as maintenance};
+        let attempt = canic_wasm_store_protocol::MaintenanceAttempt {
+            sequence: 1,
+            operation: [7; 32],
+        };
+        let mut successor = plan.clone();
+        let crate::PlanAction::CreateChild(owner) = &mut successor.action else {
+            unreachable!()
+        };
+        owner.source.as_mut().unwrap().maintenance = Some(attempt.clone());
+        assert_ne!(successor.digest().unwrap(), digest);
+        assert_eq!(
+            observation(&successor).unwrap().method,
+            "observe_root_custody"
+        );
+        assert!(stored::creation(&successor, &encode(&custody)).is_err());
+        let preservation = maintenance::Preservation {
+            catalog: canic_wasm_store_protocol::preservation::Catalog {
+                quota: Default::default(),
+                reserved_bytes: 0,
+                releases: 0,
+                artifacts: 0,
+                chunks: 0,
+            },
+            after: None,
+            observed: 0,
+            digest: [9; 32],
+            complete: true,
+        };
+        let operation = maintenance::Status {
+            approval: maintenance::Approval {
+                store: source.store.canister.clone(),
+                previous_module: [1; 32],
+                module_hash: [2; 32],
+                attempt,
+                expires_at_ns: plan.expires_at_ns,
+            },
+            operator: plan.controller.clone(),
+            phase: maintenance::Phase::Ready,
+            stop_request: Some([3; 32]),
+            failure: None,
+            preservation: Some(preservation.clone()),
+            installation: Some(maintenance::Installation {
+                upload_request: [4; 32],
+                request: Some([5; 32]),
+                sender_version: Some(1),
+                start_request: Some([6; 32]),
+                verification: Some(preservation),
+                activation_request: Some([8; 32]),
+            }),
+        };
+        let full_custody = full::Root {
+            stored: custody.clone(),
+            store_operation: Some(operation),
+        };
+        let frame = |value: &full::Root| {
+            ic_wire::native::encode_response(full::ROOT, value, full::ROOT_LIMITS).unwrap()
+        };
+        assert_eq!(
+            stored::creation(&successor, &frame(&full_custody)).unwrap(),
+            status
+        );
+        assert!(stored::creation(&plan, &frame(&full_custody)).is_err());
+        for case in 0..6 {
+            let mut changed = full_custody.clone();
+            let operation = changed.store_operation.as_mut().unwrap();
+            match case {
+                0 => operation.approval.attempt.operation[0] ^= 1,
+                1 => operation.approval.module_hash[0] ^= 1,
+                2 => operation.operator = operation.approval.store.clone(),
+                3 => operation.preservation = None,
+                4 => operation.phase = maintenance::Phase::Verified,
+                _ => changed.store_operation = None,
+            }
+            assert!(
+                stored::creation(&successor, &frame(&changed)).is_err(),
+                "case {case}"
+            );
+        }
+    }
     custody.sources[0]
         .as_mut()
         .unwrap()

@@ -39,6 +39,7 @@ impl FleetPlan {
                 module: receipt.module_hash.clone(),
             },
             manifest: manifest.clone(),
+            maintenance: None,
         }))
     }
     fn publication(&self, root: &Receipt, store: Option<&Receipt>, slot: Slot) -> Result<Plan> {

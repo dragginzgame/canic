@@ -13,6 +13,8 @@ pub const INSTALL: u64 = 53;
 pub const ACTIVATE: u64 = 54;
 /// Public diagnostic query; never authenticated completion custody or current Store readiness.
 pub const STATUS: u64 = 55;
+/// Reconcile already-issued effects by observation; never issue fresh maintenance effects.
+pub const RECOVER: u64 = 56;
 /// Two bounded metadata commitments and issued-effect evidence; child observations keep their budget.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     allocation: 262_144,
@@ -218,5 +220,10 @@ mod tests {
                 Some(status.clone())
             );
         }
+        let bytes = ic_wire::native::encode_response(RECOVER, &status, LIMITS).unwrap();
+        assert_eq!(
+            ic_wire::native::decode_response::<Status>(RECOVER, &bytes, LIMITS).unwrap(),
+            status
+        );
     }
 }

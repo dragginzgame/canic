@@ -129,7 +129,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        match plan.action { canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
+        match plan.action { canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
@@ -140,7 +140,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         if now >= u128::from(plan.expires_at_ns) { "expired" } else { "within original deadline" },
     )
     .expect("writing to String");
-    if let Some(root) = plan.store_root() {
+    if let Some(root) = plan.store_root().or_else(|| plan.store_upgrade_root()) {
         writeln!(
             output,
             "Root: {}\nRoot module: {}",
@@ -148,6 +148,19 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             terminal_text(&root.module)
         )
         .expect("String write");
+    }
+    if plan.store_upgrade_root().is_some() {
+        let status: Option<canic_management_protocol::store_maintenance::Status> =
+            serde_json::from_value(state["store_maintenance"].clone())
+                .map_err(|error| Error::Supplier(Box::new(error)))?;
+        if let Some(status) = status {
+            writeln!(output, "Store maintenance: {:?}", status.phase).expect("String write");
+            if let Some(failure) = status.failure {
+                writeln!(output, "Retained failure: {failure:?}").expect("String write");
+            }
+        } else {
+            output.push_str("Store maintenance: no retained observation\n");
+        }
     }
     if let Some(publication) = plan.publication() {
         writeln!(output, "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nPublished receipt retained: {}",

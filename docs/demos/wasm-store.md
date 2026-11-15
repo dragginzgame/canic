@@ -70,7 +70,8 @@ preserving full Store custody. See [Root maintenance](root.md#root-maintenance).
 An existing release with retained publication completion can be selected directly
 for the next upgrade, including after Root maintenance. This reuses historical
 artifact evidence; it cannot renew an unfinished publication's old code authority.
-Store upgrades and inline-to-Store migration remain unqualified Host flows.
+One local Store replacement is qualified below; successor maintenance and
+inline-to-Store migration remain unqualified Host flows.
 
 ## Standalone artifact inspection
 
@@ -134,8 +135,7 @@ controllers and different labels sharing those bytes. Root mounts
 Root-owned Store does not need to give the external operator direct access.
 The result is bounded by one manifest and 32 compact pin records, reads metadata
 only and creates no Root copy. It is not an atomic catalog snapshot, payload
-integrity scan, maintenance approval or proof of installed code. Host-driven
-Store upgrades remain unqualified. Run the focused installed observation witness
+integrity scan, maintenance approval or proof of installed code. Run the focused installed observation witness
 with `bash scripts/dev/test-store.sh custody` after simulator preparation.
 
 Store's `admission` endpoint accepts only close, observe and activate. It captures
@@ -197,8 +197,8 @@ replacements remain blocked without installation replay.
 sole Root control and compares all Store stable bytes before/after replacement,
 including payloads, pins and an unfinished upload. Runtime verification itself
 compares metadata; it is not a full payload integrity scan. One attempt remains
-retained, with no cancellation, reset or successor history. Host/CLI upgrade execution
-and live use remain unqualified; **do not use these runtime mounts live**.
+retained, with no cancellation, reset or successor history. The CLI witness below
+qualifies the local Host flow; live use remains unqualified.
 
 `fleet show` reads Root's maintenance metadata without a signer or continuation.
 It selects only Roots and known Store identities from retained Store bootstrap
@@ -217,6 +217,53 @@ canic fleet show --json
 
 The same report appears in the opt-in localhost viewer. No view signs requests,
 advances maintenance or changes completion receipts.
+
+For Host reconciliation, Root mounts a distinct controller-only
+`recover_store_maintenance`. It observes already-issued outcomes and can finish
+post-install catalog verification, retaining that evidence locally. It never
+issues a fresh close, stop, upload, install, start or activation, even with a live
+approval. It retains the original operator and deadline; expired dispatch may
+still be observed. Generic `advance_store_maintenance` can dispatch new effects
+and must not be used as observation-only recovery. The existing fleet commands
+now use these explicit contracts for one locally qualified Store replacement.
+
+Root maintenance has a separate preservation boundary: `observe_root_custody`
+reads both child journals, all artifact references and the retained Store operation
+in one synchronous controller-only call. The Host `StoreMaintenance.operation`
+field binds that exact operation and selects the complete read before and after
+the existing signed Root installation. A changed or missing field blocks completion;
+older child-only approvals still refuse to omit a Store operation. Root replacement
+does not activate Store or renew its original authority. After authenticated Store
+completion, whole-fleet planning includes this operation automatically in later
+Root maintenance. Subsequent child plans bind the completed Store attempt and
+select the same complete read; old child-only readers remain unchanged.
+
+For a completed local Root/Store/app fleet, change only the configured Store Wasm
+input to a reviewed compatible replacement. The operator identity must already
+control Root. From that app directory:
+
+```sh
+canic fleet plan --fleet local --identity canic-local
+canic fleet status OPERATION --fleet local
+canic fleet apply OPERATION --fleet local --identity canic-local
+canic fleet reconcile OPERATION --fleet local --identity canic-local
+```
+
+Use the returned operation digest. Planning binds both canister identities, their
+code, replacement bytes and original operator/deadline; it does not dispatch effects.
+Apply closes, scans, stops, installs, restarts, verifies and explicitly activates
+through Root. Each invocation has at most 32 continuations; repeat the same apply
+if it returns pending. Reconcile can settle issued effects and verification, but
+leaves a stopped or verified Store waiting for explicit apply. `status` reads only
+retained local evidence. Interrupted attempts keep their signatures and deadlines.
+
+The planner refuses concurrent artifact changes and unfinished child/publication
+work. Authenticated Ready evidence advances the retained Store hash, enabling later
+Root maintenance and child publication/upgrades. A completion pointer without its
+signed observation cannot do so. The current scope is one Store attempt, at most
+1 MiB of replacement Wasm and 4096 retained observations. No reset, cancellation,
+successor Store upgrade or mainnet maintenance is qualified. Exhaustion or an
+unrecoverable effect remains blocked with its original evidence.
 
 To create a Store, use the existing named `fleet plan` workflow. The selected
 fleet must have a bound top-level `root` and an unbound `wasm-store` child with a
@@ -301,8 +348,8 @@ Publication, artifact building and inspection accept up to 8 MiB, within Storeâ€
 bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
 and inline child plans retain their smaller custody limits. No measured deployment
 speedup is claimed. Whole-fleet release selection and Root maintenance with full
-Store custody use the workflows above. Host upgrade execution for Store maintenance and
-existing-fleet migration remain pending.
+Store custody use the workflows above, including one Store replacement. Existing-fleet
+migration and repeatable Store maintenance remain pending.
 
 `make publication-test` qualifies the real CLI and signer against installed Root
 and Store, using synthetic cycles. It creates Store through the CLI, refuses

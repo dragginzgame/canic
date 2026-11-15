@@ -29,6 +29,8 @@ pub(super) struct PlanRecord {
     store_root: Option<UpgradeTarget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     maintenance_store: Option<super::StoreMaintenance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    store_upgrade_root: Option<UpgradeTarget>,
 }
 
 fn invalid() -> Error {
@@ -55,11 +57,31 @@ impl TryFrom<PlanRecord> for Plan {
             publication,
             store_root,
             maintenance_store,
+            store_upgrade_root,
         } = record;
         if maintenance_store.is_some() && maintenance.is_none() {
             return Err(invalid());
         }
-        let action = if let Some(root) = store_root {
+        let action = if let Some(root) = store_upgrade_root {
+            if version != 2
+                || creation_cycles != 0
+                || store_root.is_some()
+                || management.is_some()
+                || maintenance.is_some()
+                || maintenance_sibling.is_some()
+                || publication.is_some()
+                || maintenance_store.is_some()
+            {
+                return Err(invalid());
+            }
+            PlanAction::UpgradeStore {
+                target: UpgradeTarget {
+                    canister: target.ok_or_else(invalid)?,
+                    module: previous_module.ok_or_else(invalid)?,
+                },
+                root,
+            }
+        } else if let Some(root) = store_root {
             if version != 2
                 || target.is_some()
                 || previous_module.is_some()
@@ -143,6 +165,7 @@ impl TryFrom<Plan> for PlanRecord {
         let management = plan.management().cloned();
         let publication = plan.publication().cloned();
         let store_root = plan.store_root().cloned();
+        let store_upgrade_root = plan.store_upgrade_root().cloned();
         let maintenance_store = plan.maintenance_store().cloned();
         let (maintenance, maintenance_sibling) = match plan.maintenance() {
             None => (None, None),
@@ -167,6 +190,7 @@ impl TryFrom<Plan> for PlanRecord {
             publication,
             store_root,
             maintenance_store,
+            store_upgrade_root,
         })
     }
 }

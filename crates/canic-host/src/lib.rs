@@ -16,6 +16,8 @@ mod signed;
 mod starter;
 mod store;
 mod store_bootstrap;
+mod store_upgrade;
+pub mod subnet_comparison;
 #[cfg(test)]
 mod tests;
 mod wallet;

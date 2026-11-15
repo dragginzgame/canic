@@ -433,12 +433,12 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
     let agent = plan.network.agent().unwrap();
     let absent = path.join("no-signer");
     assert_eq!(
-        super::observe_publication(&path, &plan, "unused", &absent, &agent)
+        super::observe_operation(&path, &plan, "unused", &absent, &agent)
             .await
             .unwrap(),
         [42]
     );
-    assert_eq!(super::retained_publication(&path, &plan).unwrap(), [42]);
+    assert_eq!(super::retained_operation(&path, &plan).unwrap(), [42]);
     let mutation = crate::publication::call(
         &plan,
         canic_management_protocol::publication::Command::Publish(
@@ -450,7 +450,7 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
     let bytes = signed_fixture(&plan, &mutation, deadline);
     // Fresh read authority cannot admit a mutation, even with the same release and target.
     std::fs::write(path.join("signed.json"), bytes).unwrap();
-    assert!(super::retained_publication(&path, &plan).is_err());
+    assert!(super::retained_operation(&path, &plan).is_err());
     std::fs::remove_file(path.join("reply.bin")).unwrap();
     assert!(
         super::execute(&path, &plan, &mutation, "unused", &absent, &agent)

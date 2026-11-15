@@ -21,6 +21,10 @@ pub struct StoredArtifact {
     pub store: UpgradeTarget,
     /// Complete published release, including ordered content commitments.
     pub manifest: Manifest,
+    /// Completed Store replacement selected from authenticated fleet history.
+    /// Selects complete Root custody; absence preserves the original read and digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maintenance: Option<canic_wasm_store_protocol::MaintenanceAttempt>,
 }
 impl StoredArtifact {
     fn reference(&self) -> wire::Reference {
@@ -52,6 +56,10 @@ pub(crate) fn validate(plan: &Plan, source: &StoredArtifact) -> Result<()> {
         || id == principal("2vxsx-fae")?
         || crate::unhex(&source.store.module)?.len() != 32
         || source.store.module != source.store.module.to_ascii_lowercase()
+        || source
+            .maintenance
+            .as_ref()
+            .is_some_and(|attempt| attempt.sequence != 1 || attempt.operation == [0; 32])
     {
         return Err(invalid());
     }
@@ -96,6 +104,7 @@ pub(super) fn select(
     Ok(StoredArtifact {
         store: binding.store.clone(),
         manifest,
+        maintenance: None,
     })
 }
 
@@ -140,7 +149,7 @@ fn slot(plan: &Plan) -> Slot {
 }
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
     match method {
-        wire::CUSTODY => {
+        wire::CUSTODY | canic_management_protocol::custody::ROOT => {
             ic_wire::native::encode_request(method, &(), wire::LIMITS).map_err(supplier)
         }
         wire::STAGE | wire::RECONCILE => ic_wire::native::encode_request(
@@ -164,7 +173,29 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
         _ => Err(invalid()),
     }
 }
-fn custody(bytes: &[u8]) -> Result<wire::Custody> {
+fn custody(plan: &Plan, bytes: &[u8]) -> Result<wire::Custody> {
+    let source = plan
+        .management()
+        .and_then(|owner| owner.source.as_ref())
+        .ok_or_else(invalid)?;
+    if let Some(attempt) = &source.maintenance {
+        let value: canic_management_protocol::custody::Root = ic_wire::native::decode_response(
+            canic_management_protocol::custody::ROOT,
+            bytes,
+            canic_management_protocol::custody::ROOT_LIMITS,
+        )
+        .map_err(supplier)?;
+        let operation = value.store_operation.as_ref().ok_or_else(invalid)?;
+        if &operation.approval.attempt != attempt
+            || operation.approval.store != source.store.canister
+            || crate::hex(&operation.approval.module_hash) != source.store.module
+            || operation.operator != plan.controller
+            || !crate::store_upgrade::ready(operation)
+        {
+            return Err(invalid());
+        }
+        return Ok(value.stored);
+    }
     ic_wire::native::decode_response(wire::CUSTODY, bytes, wire::LIMITS).map_err(supplier)
 }
 pub(crate) fn delivery<A: Serialize>(
@@ -189,7 +220,7 @@ pub(super) fn creation_evidence(
     plan: &Plan,
     bytes: &[u8],
 ) -> Result<(Status, Option<wire::Delivery>)> {
-    let value = custody(bytes)?;
+    let value = custody(plan, bytes)?;
     let index = slot(plan).index();
     let status = &value.children[index].creation;
     if status == &Status::default() && value.sources[index].is_none() {
@@ -212,7 +243,7 @@ pub(super) fn upgrade_evidence(
     plan: &Plan,
     bytes: &[u8],
 ) -> Result<(upgrade::Status, Option<wire::Delivery>)> {
-    let value = custody(bytes)?;
+    let value = custody(plan, bytes)?;
     let index = slot(plan).index();
     let journal = &value.children[index];
     let expected = super::upgrade::approval(plan)?;

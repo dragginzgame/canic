@@ -1,5 +1,5 @@
 //! Only actual Root calls may close and stop its Store. Lost callbacks retain external intent.
-use super::{Client, artifacts, inject, maintain, readiness_tests, store, support};
+use super::{Client, artifacts, inject, maintain, readiness_tests, recover_store, store, support};
 use canic_management_protocol::{
     self as management, publication,
     store_maintenance::{self as wire, Approval, Phase, Status},
@@ -120,7 +120,9 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     let reserved: Result<Status, management::Refusal> = root
         .update("stage_store_maintenance", wire::STAGE, &input, wire::LIMITS)
         .await;
-    assert_eq!(reserved.unwrap().phase, Phase::Reserved);
+    let reserved = reserved.unwrap();
+    assert_eq!(reserved.phase, Phase::Reserved);
+    assert_eq!(recover_store(&root, &input).await, reserved); // Recovery cannot close Store.
     assert_eq!(child_stage(&root).await, Err(management::Refusal::Occupied));
     let raw = publication::AdmissionRequest {
         store: input.store.clone(),
@@ -169,7 +171,9 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     );
     assert_eq!(observe(&root).await.unwrap().phase, Phase::Closing);
     inject(&root, 0).await;
-    assert_eq!(advance(&root, &input).await.phase, Phase::Closed);
+    let closed = recover_store(&root, &input).await;
+    assert_eq!(closed.phase, Phase::Closed);
+    assert_eq!(recover_store(&root, &input).await, closed);
     let first_page = advance(&root, &input).await;
     assert_eq!(first_page.preservation.as_ref().unwrap().observed, 1);
     assert!(!first_page.preservation.as_ref().unwrap().complete);
@@ -190,6 +194,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     assert_eq!(preservation.catalog.releases, 2);
     assert_eq!(preservation.catalog.artifacts, 2);
     assert_eq!(preservation.catalog.chunks, 1);
+    assert_eq!(recover_store(&root, &input).await, scanned); // Complete pre-scan cannot authorize stop through recovery.
     // The pre-existing maintenance helper installs a non-fault build. Restore the fault build
     // without changing the journal so the stop callback still exercises its failure boundary.
     pic.upgrade_canister(
@@ -214,7 +219,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     maintain(&root).await;
     assert_eq!(observe(&root).await.unwrap(), issued);
     pic.advance_time(Duration::from_secs(3601)).await;
-    let stopped = advance(&root, &input).await;
+    let stopped = recover_store(&root, &input).await;
     assert_eq!(stopped.phase, Phase::Stopped);
     assert_eq!(stopped.stop_request, issued.stop_request);
     assert!(stopped.failure.is_none());

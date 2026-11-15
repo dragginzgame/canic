@@ -55,6 +55,15 @@ pub struct ChildOutcome {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ApplyOutcome {
+    /// Retained Store upgrade progress, without a completion claim.
+    StorePending {
+        /// Original approval digest.
+        operation: String,
+        /// Enduring Store effect owner.
+        root: String,
+        /// Authenticated retained operation, including uncertainty.
+        store_maintenance: Box<canic_management_protocol::store_maintenance::Status>,
+    },
     /// Store publication progress; it does not report an installed canister.
     Publication {
         /// Exact release evidence from the approved Store through Root.
@@ -245,6 +254,9 @@ pub(crate) async fn reconcile_at(
     icp: &Path,
 ) -> Result<ApplyOutcome> {
     let (plan, bytes) = plan::load(dir, digest)?;
+    if plan.store_upgrade_root().is_some() {
+        return crate::store_upgrade::apply(dir, &plan, &bytes, identity, icp, true).await;
+    }
     if plan.publication().is_some() {
         return crate::publication::apply(dir, digest, &plan, &bytes, identity, icp, true).await;
     }
@@ -273,6 +285,9 @@ async fn apply_operation(
     read_only: bool,
 ) -> Result<ApplyOutcome> {
     let (plan, wasm) = plan::load(dir, digest)?;
+    if plan.store_upgrade_root().is_some() {
+        return crate::store_upgrade::apply(dir, &plan, &wasm, identity, icp, false).await;
+    }
     if plan.publication().is_some() {
         return crate::publication::apply(dir, digest, &plan, &wasm, identity, icp, false).await;
     }
@@ -490,12 +505,16 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
 
 pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     let (plan, bytes) = plan::load(dir, digest)?;
+    if plan.store_upgrade_root().is_some() {
+        return crate::store_upgrade::status(dir, &plan);
+    }
     if plan.publication().is_some() {
         return crate::publication::status(dir, digest, &plan, &bytes);
     }
     let mut effects = serde_json::Map::new();
     let effect_names: Vec<_> = match plan.action {
         crate::PlanAction::Publish(_) => unreachable!("publication status selected above"),
+        crate::PlanAction::UpgradeStore { .. } => unreachable!("Store status selected above"),
         crate::PlanAction::MaintainRoot { .. } => crate::maintenance::observations(&plan, false)
             .iter()
             .chain(crate::maintenance::observations(&plan, true))
@@ -563,6 +582,10 @@ pub(crate) fn attempt_state(path: &Path) -> Result<&'static str> {
 
 /// Read completion through the effect owner, including Store handover/readiness evidence.
 pub(crate) fn retained_receipt(dir: &Path, plan: &Plan, bytes: &[u8]) -> Result<Option<Receipt>> {
+    if plan.store_upgrade_root().is_some() {
+        return crate::store_upgrade::receipt(dir, plan)
+            .map(|value| value.map(|(receipt, _)| receipt));
+    }
     let digest = plan.digest()?;
     let receipt: Option<Receipt> = if dir.join("receipt.json").try_exists().map_err(supplier)? {
         Some(store::json(&dir.join("receipt.json"))?)

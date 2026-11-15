@@ -199,7 +199,10 @@ pub(crate) fn local_operation_at(
     let approved_controller = plan.application_controller().to_owned();
     Ok((
         FleetOperation {
-            store_root: plan.store_root().map(|root| root.canister.clone()),
+            store_root: plan
+                .store_root()
+                .or_else(|| plan.store_upgrade_root())
+                .map(|root| root.canister.clone()),
             slot: plan.management().and_then(|owner| owner.slot),
             upgrade,
             management,

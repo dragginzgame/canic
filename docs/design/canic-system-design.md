@@ -430,7 +430,7 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Installed CLI witnesses qualify named Store bootstrap under an existing bound Root and whole-fleet bootstrap before application admission; Root-owned Store replacement now has a local runtime witness; its Host/CLI journey remains pending. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
+The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Installed CLI witnesses qualify named Store bootstrap under an existing bound Root, whole-fleet bootstrap before application admission, and one Root-owned Store replacement followed by Root and child upgrades. This is local qualification, not mainnet maintenance evidence. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |
@@ -832,7 +832,8 @@ code and sole-controller checks. No application child slot is reserved.
 Whole-fleet planning now includes an optional declared Store, bound to the same
 Root creation output and completed before application admission. Its separate 1T
 creation debit appears in the total approval; no app slot is consumed. Retained
-Store definitions cannot be added, removed or replaced through replan.
+Store slots cannot be added or removed through replan; a changed executable selects
+a separate maintenance approval after completed work.
 Fresh fleets with a declared Store publish both selected application artifacts
 before either child admission. The immutable release label is the application
 canister name plus the complete content hash; manifests and future Store creation
@@ -848,8 +849,9 @@ delivery, including retention pins and cache deadlines. Replicated full-custody
 observations must match before and after the original direct install attempt;
 legacy inline observations cannot substitute. Store authority/code/placement and
 child identity/code/controllers are independently checked. Only completed
-maintenance advances Root code authority for subsequent work. Inline-to-Store
-migration and Host-driven Store upgrades remain unqualified. See the
+maintenance advances Root code authority for subsequent work. One Host-driven
+Store upgrade now has an installed CLI witness; inline-to-Store migration remains
+unqualified. See the
 [current scope](../demos/wasm-store.md). The full contract below still requires
 pin release, reclamation and fleet integration. Each managed
 fleet owns a separate Store with a persistent, dynamically extensible catalog.
@@ -957,13 +959,31 @@ activation then opens only the exact Store attempt. The installed two-executable
 witness additionally compares all stable bytes, including payloads and pending
 uploads; runtime metadata comparison is not a full payload integrity scan.
 Completion releases mutation fences but retains the operation as historical
-evidence. Child-only custody must refuse even this completed record until Host
-maintenance can retain it. No drain observation alone authorizes installation.
+evidence. Child-only custody must refuse even this completed record. An explicit
+controller-only Root custody read returns both child slots, complete artifact
+references and the Store operation synchronously, without effects or a Store call.
+Host Root-maintenance approvals can select that operation and require exact
+preflight/postflight equality through the existing direct installation path.
+The operation's captured owner, deadlines, catalog commitments and uncertain
+requests survive unchanged; maintaining Root does not renew Store authority.
+Older approvals keep their existing read contract and cannot omit a new operation.
+Whole-fleet planning selects this richer approval from authenticated retained
+Store-workflow completion; public diagnostics cannot supply it. Subsequent child
+artifact sources bind the completed Store attempt and new module. Their complete
+Root observation must retain that exact attempt, operator, Store code and Ready
+preservation evidence; no old-method probe or fallback is allowed.
+No drain observation alone authorizes installation.
 
-This remains local runtime qualification with one retained attempt and no reset,
-cancellation or successor history. Host/CLI upgrade execution and live use remain
-unqualified. Larger infrastructure replacements, explicit repair of blocked
-attempts and repeatable maintenance need their own admitted consumer paths.
+Existing fleet plan/apply/status/reconcile now qualify this installed path locally.
+A changed Store artifact requires completed child and publication work, with no
+other artifact change in the same approval. Host retains one original signed
+admission and bounded continuations; Root remains the sole management-effect owner.
+Completion points to an admitted signed Ready observation rather than duplicating
+the runtime journal. Apply permits at most 32 continuations per invocation and
+4096 observations per operation. Reaching a bound retains blocked exposure.
+One attempt remains the limit, with no reset, cancellation or successor history.
+Live use, larger infrastructure replacements, explicit repair of blocked attempts
+and repeatable maintenance need their own admitted consumer paths.
 
 The public Root maintenance query is a diagnostic projection of that same journal,
 not another evidence owner. Host selects it from retained Store bootstrap authority
@@ -971,6 +991,13 @@ and a known Store identity, preserving the exact network binding. Missing endpoi
 and foreign Store reports remain unknown. Fleet views never advance the operation;
 an uncertified completed report establishes neither completion custody nor current
 Store admission or readiness.
+
+Host reconciliation must not call the effectful generic maintenance advance.
+The separate typed recovery contract captures the admitted phase and observes
+only already-issued outcomes or the post-install catalog. It may retain evidence
+after dispatch expiry, but cannot issue a fresh close, stop, upload, install,
+start or activation. Reuse the same Root journal and observation implementation;
+do not create a second workflow or renew operation authority.
 
 Deploying an older retained version is a new approved upgrade subject to the
 application's schema and lifecycle compatibility checks. Artifact availability
@@ -1007,8 +1034,9 @@ child planning now selects a completed publication operation, freezes its immuta
 manifest and Store code, and reuses the existing Store-backed creation/upgrade
 contracts. Observations validate complete source and pin custody. Fresh whole
 fleets publish content-hash releases, converge serial child upgrades and preserve
-full Store custody during Root maintenance. Inline-to-Store migration and
-Host-driven Store maintenance remain pending. See the
+full Store custody during Root maintenance. One Host-driven Store replacement
+qualifies subsequent Root and child upgrades. Inline-to-Store migration and
+successor Store maintenance remain pending. See the
 [current implementation scope](../demos/wasm-store.md). First prove fresh
 Root/Store/app creation, multiple coexisting versions, interrupted upload/resume,
 hash/version conflicts, quota exhaustion, cache reconstruction, pin/deletion

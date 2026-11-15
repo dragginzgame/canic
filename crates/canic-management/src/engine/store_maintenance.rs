@@ -259,7 +259,32 @@ async fn admission(
 /// # Panics
 /// Traps for mismatched authority, invalid lifecycle, injected faults or failed durable writes.
 pub async fn advance(approval: Approval) -> Status {
+    run_step(selected(&approval)).await
+}
+
+/// Retain observed outcomes of already-issued effects without starting a new effect.
+/// The captured phase selects one observation branch even if another call advances concurrently.
+/// # Panics
+/// Traps for mismatched authority, invalid lifecycle or failed durable writes.
+pub async fn recover(approval: Approval) -> Status {
     let record = selected(&approval);
+    if matches!(
+        record.phase,
+        Phase::Closing
+            | Phase::StopIssued
+            | Phase::UploadIssued
+            | Phase::InstallIssued
+            | Phase::StartIssued
+            | Phase::Verifying
+            | Phase::ActivateIssued
+    ) {
+        run_step(record).await
+    } else {
+        record
+    }
+}
+
+async fn run_step(record: Status) -> Status {
     let result = step(&record).await;
     if let Err(error) = result {
         change(record.phase, |value| value.failure = Some(error));

@@ -222,12 +222,21 @@ pub(super) enum FleetCommand {
         #[arg(long)]
         app: Option<String>,
     },
+    /// Compare two explicit mainnet subnet candidates; partial evidence exits 1.
+    CompareSubnets {
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+        #[arg(value_name = "LEFT_SUBNET_ID")]
+        left: String,
+        #[arg(value_name = "RIGHT_SUBNET_ID")]
+        right: String,
+    },
     /// Observe configured mainnet canister placements; no journals or deployment effects.
     Placements {
         #[command(flatten)]
         selection: CanisterConfigArgs,
     },
-    /// Plan deployment, Root maintenance or an immutable Store release.
+    /// Plan deployment, Root/Store maintenance or an immutable Store release.
     #[command(mut_arg("icp_bin", |arg| arg.conflicts_with("controller")))]
     Plan {
         #[command(flatten)]
@@ -407,7 +416,8 @@ impl FleetCommand {
             | Self::Status { scope, .. }
             | Self::Show { scope, .. }
             | Self::Call { scope, .. } => Some(scope),
-            Self::Placements { .. }
+            Self::CompareSubnets { .. }
+            | Self::Placements { .. }
             | Self::Canister(_)
             | Self::Init { .. }
             | Self::List { .. }

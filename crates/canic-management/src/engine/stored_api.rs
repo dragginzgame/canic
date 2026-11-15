@@ -120,6 +120,19 @@ pub fn custody() -> stored::Custody {
         super::store_maintenance::observe().is_none(),
         "Store maintenance custody required"
     );
+    stored_journals()
+}
+/// Observe both child slots, all artifact references and the surviving Store operation.
+/// # Panics
+/// Traps if lifecycle has not opened storage.
+#[must_use]
+pub fn root_custody() -> canic_management_protocol::custody::Root {
+    canic_management_protocol::custody::Root {
+        stored: stored_journals(),
+        store_operation: super::store_maintenance::observe(),
+    }
+}
+fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {
         state

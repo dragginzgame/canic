@@ -1,6 +1,7 @@
 //! Real Root-owned Store replacement, including callback loss and explicit activation.
 use super::{
-    Client, artifacts, inject, maintain, quiescence_tests, readiness_tests, store, support,
+    Client, artifacts, inject, maintain, quiescence_tests, readiness_tests, recover_store, store,
+    support,
 };
 use canic_management_protocol::{
     self as management, publication,
@@ -34,6 +35,15 @@ async fn observe(root: &Client<'_>) -> Status {
             .unwrap(),
         Some(retained.clone())
     );
+    let complete: management::custody::Root = root
+        .update(
+            "observe_root_custody",
+            management::custody::ROOT,
+            &(),
+            management::custody::ROOT_LIMITS,
+        )
+        .await;
+    assert_eq!(complete.store_operation.as_ref(), Some(&retained));
     retained
 }
 async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
@@ -180,6 +190,7 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
     let replacement = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
     let approval = stopped(&root, &supplier, &replacement).await;
     let closed = observe(&root).await;
+    assert_eq!(recover_store(&root, &approval).await, closed);
     let before_store = pic.get_stable_memory(supplier.id).await;
     let before_root = pic.get_stable_memory(root.id).await.len();
     let input = wire::Install {
@@ -200,8 +211,14 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
     );
     inject(&root, 0).await;
     assert_eq!(observe(&root).await.phase, Phase::UploadIssued);
-    assert_eq!(advance(&root, &approval).await.phase, Phase::Uploaded);
+    let (first, second) = tokio::join!(
+        recover_store(&root, &approval),
+        recover_store(&root, &approval)
+    );
+    assert_eq!(first.phase, Phase::Uploaded);
+    assert_eq!(second.phase, Phase::Uploaded);
     let uploaded = observe(&root).await;
+    assert_eq!(recover_store(&root, &approval).await, uploaded); // Recovery never starts installation.
     lost_advance(&root, &approval, 19, Phase::Uploaded).await;
     assert_eq!(observe(&root).await, uploaded); // Dispatch trap commits neither install intent nor effect.
     assert_eq!(pic.get_stable_memory(supplier.id).await, before_store);
@@ -211,12 +228,17 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
     maintain(&root).await;
     assert_eq!(observe(&root).await, issued);
     assert_eq!(install(&root, &input).await.unwrap(), issued); // No second upload or installation.
-    assert_eq!(advance(&root, &approval).await.phase, Phase::Installed);
+    let installed = recover_store(&root, &approval).await;
+    assert_eq!(installed.phase, Phase::Installed);
+    assert_eq!(recover_store(&root, &approval).await, installed); // No fresh start while authority is live.
     restore_faults(&root).await;
     lost_advance(&root, &approval, 17, Phase::StartIssued).await;
-    assert_eq!(advance(&root, &approval).await.phase, Phase::Verifying);
+    assert_eq!(
+        recover_store(&root, &approval).await.phase,
+        Phase::Verifying
+    );
     for _ in 0..8 {
-        if advance(&root, &approval).await.phase == Phase::Verified {
+        if recover_store(&root, &approval).await.phase == Phase::Verified {
             break;
         }
     }
@@ -227,6 +249,7 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
         verified.preservation
     );
     assert_eq!(advance(&root, &approval).await, verified); // Advance never implicitly activates.
+    assert_eq!(recover_store(&root, &approval).await, verified);
     assert_eq!(pic.get_stable_memory(supplier.id).await, before_store); // Includes all chunks, pins and pending upload.
     assert_eq!(pic.get_stable_memory(root.id).await.len(), before_root); // No stable Wasm allocation.
     let raw = publication::AdmissionRequest {
@@ -261,11 +284,12 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
     maintain(&root).await;
     assert_eq!(observe(&root).await, activating);
     pic.advance_time(Duration::from_secs(3601)).await;
-    let ready = advance(&root, &approval).await;
+    let ready = recover_store(&root, &approval).await;
     assert_eq!(ready.phase, Phase::Ready); // Read-only recovery may finish after dispatch expiry.
     assert_eq!(advance(&root, &approval).await, ready);
     assert_eq!(activate(&root, &approval).await, ready);
     assert_eq!(install(&root, &input).await.unwrap(), ready);
+    assert_eq!(recover_store(&root, &approval).await, ready);
     let expires = pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000;
     for command in [
         publication::Command::Put(store::Put {
@@ -328,6 +352,7 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
     assert!(closed.closed);
     assert_eq!(closed.attempt, next);
     assert_eq!(activate(&root, &approval).await, ready); // A completed old operation cannot reopen a newer gate.
+    assert_eq!(recover_store(&root, &approval).await, ready);
     raw.command = store::AdmissionCommand::Observe;
     assert_eq!(
         root.update::<_, publication::AdmissionReply>(
@@ -356,6 +381,25 @@ async fn store_install_refuses_wrong_bytes_callers_frames_and_expired_dispatch()
         wasm,
     };
     let before = observe(&root).await;
+    let mut foreign = approval.clone();
+    foreign.attempt.operation[0] ^= 1;
+    for (caller, frame) in [
+        (
+            CanisterId::anonymous(),
+            ic_wire::native::encode_request(wire::RECOVER, &approval, wire::LIMITS).unwrap(),
+        ),
+        (
+            root.operator,
+            ic_wire::native::encode_request(wire::RECOVER, &foreign, wire::LIMITS).unwrap(),
+        ),
+        (root.operator, vec![0, 1, 2]),
+    ] {
+        assert!(
+            pic.update_call(root.id, caller, "recover_store_maintenance", frame)
+                .await
+                .is_err()
+        );
+    }
     assert!(
         pic.query_call(
             root.id,
@@ -426,9 +470,10 @@ async fn installed_store_outcome_recovers_after_expiry_without_fresh_start_autho
     let issued = observe(&root).await;
     maintain(&root).await;
     pic.advance_time(Duration::from_secs(3601)).await;
-    let installed = advance(&root, &approval).await;
+    let installed = recover_store(&root, &approval).await;
     assert_eq!(installed.phase, Phase::Installed);
     assert_eq!(installed.installation, issued.installation);
+    assert_eq!(recover_store(&root, &approval).await, installed);
     let blocked = advance(&root, &approval).await;
     assert_eq!(blocked.phase, Phase::Installed);
     assert!(blocked.failure.is_some());

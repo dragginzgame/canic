@@ -296,7 +296,7 @@ async fn observe(
         if path.join("reply.bin").try_exists().map_err(supplier)? {
             continue;
         }
-        let reply = signed::observe_publication(&path, plan, identity, icp, agent).await?;
+        let reply = signed::observe_operation(&path, plan, identity, icp, agent).await?;
         return Ok((index, decode(&reply, expected)?));
     }
     Err(Error::Blocked(
@@ -390,7 +390,7 @@ pub(crate) fn receipt(
             "publication receipt differs from approved release".into(),
         ));
     }
-    let reply = signed::retained_publication(
+    let reply = signed::retained_operation(
         &dir.join(format!("publication/observe/{}", value.observation)),
         plan,
     )?;
@@ -408,6 +408,7 @@ pub(crate) fn completed_release(
     old: &Plan,
     proposed: &Plan,
     expected: &protocol::Manifest,
+    preserved_store: Option<&canic_management_protocol::store_maintenance::Status>,
 ) -> Result<bool> {
     let previous = binding(old)?;
     let next = binding(proposed)?;
@@ -416,7 +417,14 @@ pub(crate) fn completed_release(
         || old.deployment != proposed.deployment
         || old.artifact != proposed.artifact
         || previous.root.canister != next.root.canister
-        || previous.store != next.store
+        || (previous.store != next.store
+            && !preserved_store.is_some_and(|s| {
+                crate::store_upgrade::ready(s)
+                    && s.approval.store == previous.store.canister
+                    && s.approval.store == next.store.canister
+                    && crate::hex(&s.approval.previous_module) == previous.store.module
+                    && crate::hex(&s.approval.module_hash) == next.store.module
+            }))
         || previous.release != next.release
     {
         return Ok(false);

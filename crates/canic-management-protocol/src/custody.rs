@@ -4,6 +4,15 @@ use serde::{Deserialize, Serialize};
 
 /// Replicated, read-only controller observation of all retained approvals.
 pub const OBSERVE: u64 = 30;
+/// Complete Root evidence, including a retained Store maintenance operation.
+pub const ROOT: u64 = 57;
+/// Combined metadata budget; child-only and Store-only contracts remain unchanged.
+pub const ROOT_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: crate::stored::LIMITS.bytes + crate::store_maintenance::LIMITS.bytes,
+    allocation: crate::stored::LIMITS.allocation + crate::store_maintenance::LIMITS.allocation,
+    nodes: crate::stored::LIMITS.nodes + crate::store_maintenance::LIMITS.nodes,
+    depth: crate::stored::LIMITS.depth + 2,
+};
 /// Bounded full journal response; no artifact bytes are exported.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 8192,
@@ -20,4 +29,14 @@ pub struct Custody {
     pub creation: Status,
     /// Completed historical upgrades followed by the current admitted upgrade.
     pub upgrades: Vec<upgrade::Status>,
+}
+
+/// One synchronous snapshot of all Root-owned management metadata; no Wasm bytes.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Root {
+    /// Both child slots, their complete journals and artifact references.
+    pub stored: crate::stored::Custody,
+    /// Original Store operation, including uncertain or completed effects.
+    pub store_operation: Option<crate::store_maintenance::Status>,
 }

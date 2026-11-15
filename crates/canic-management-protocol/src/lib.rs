@@ -7,6 +7,8 @@ use sha2::{Digest, Sha256};
 
 pub mod children;
 pub mod custody;
+#[cfg(test)]
+mod custody_tests;
 pub mod publication;
 /// One bounded publication envelope, including a transient Store chunk.
 pub const PUBLICATION_LIMITS: ic_wire::Limits = publication::REQUEST_LIMITS;

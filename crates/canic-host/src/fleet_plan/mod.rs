@@ -536,7 +536,7 @@ pub fn plan_fleet(
             &id,
             old,
             value,
-            (&root_bytes, &child_bytes),
+            (&root_bytes, &child_bytes, store_bytes.as_deref()),
             &individual,
             &publications,
         );

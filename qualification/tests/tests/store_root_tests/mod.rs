@@ -4,17 +4,30 @@ mod maintenance_tests;
 mod publication_tests;
 mod quiescence_tests;
 mod readiness_tests;
+mod root_custody_tests;
 use super::{Client, store, support};
 use canic_management_protocol::{
     self as management,
     children::{self, Request, Slot},
-    stored, upgrade,
+    store_maintenance, stored, upgrade,
 };
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, nonblocking::PocketIc};
 use std::{path::PathBuf, time::Duration};
 
 fn artifacts() -> PathBuf {
     PathBuf::from(std::env::var_os("CANIC_STORE_APP_DIRECTORY").expect("make store-test"))
+}
+async fn recover_store(
+    root: &Client<'_>,
+    approval: &store_maintenance::Approval,
+) -> store_maintenance::Status {
+    root.update(
+        "recover_store_maintenance",
+        store_maintenance::RECOVER,
+        approval,
+        store_maintenance::LIMITS,
+    )
+    .await
 }
 async fn settle(pic: &PocketIc) {
     for _ in 0..100 {

@@ -26,6 +26,9 @@ pub fn admit(limit: usize, private: bool) -> Result<(), String> {
 #[doc(hidden)]
 #[must_use]
 pub fn response_limits(method: u64) -> wire::Limits {
+    if method == protocol::custody::ROOT {
+        return protocol::custody::ROOT_LIMITS;
+    }
     if matches!(
         method,
         protocol::store_maintenance::STAGE
@@ -34,6 +37,7 @@ pub fn response_limits(method: u64) -> wire::Limits {
             | protocol::store_maintenance::INSTALL
             | protocol::store_maintenance::ACTIVATE
             | protocol::store_maintenance::STATUS
+            | protocol::store_maintenance::RECOVER
     ) {
         return protocol::store_maintenance::LIMITS;
     }
@@ -86,6 +90,8 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// `install_store_maintenance` supplies approved replacement bytes; `activate_store_maintenance`
 /// explicitly opens admission only after replacement verification.
 /// `store_maintenance_status` reports the same retained metadata as an uncertified public query.
+/// `recover_store_maintenance` retains observed outcomes without issuing fresh maintenance effects.
+/// `observe_root_custody` reads children, artifact references and Store maintenance together.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
@@ -97,6 +103,11 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// ```
 #[macro_export]
 macro_rules! mount_endpoints {
+    (@select observe_root_custody) => {
+        $crate::mount_endpoints!(@method observe_root_custody, update, true, custody::ROOT, LIMITS,
+            [] () -> $crate::endpoint::protocol::custody::Root,
+            $crate::stored::root_custody(), "Root custody request", "Root custody reply");
+    };
     ($($name:ident),+ $(,)?) => { $($crate::mount_endpoints!(@select $name);)+ };
     (@select install_store_maintenance) => {
         $crate::mount_endpoints!(@method install_store_maintenance, update, true, store_maintenance::INSTALL, STORE_INSTALL_LIMITS,
@@ -122,6 +133,11 @@ macro_rules! mount_endpoints {
         $crate::mount_endpoints!(@method observe_store_maintenance, update, true, store_maintenance::OBSERVE, LIMITS,
             [] () -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
             $crate::store_maintenance::observe(), "Store maintenance request", "Store maintenance reply");
+    };
+    (@select recover_store_maintenance) => {
+        $crate::mount_endpoints!(@method recover_store_maintenance, update, true, store_maintenance::RECOVER, LIMITS,
+            [async] (input: $crate::endpoint::protocol::store_maintenance::Approval) -> $crate::endpoint::protocol::store_maintenance::Status,
+            $crate::store_maintenance::recover(input).await, "Store recovery request", "Store recovery reply");
     };
     (@select store_maintenance_status) => {
         $crate::mount_endpoints!(@method store_maintenance_status, query, false, store_maintenance::STATUS, LIMITS,
