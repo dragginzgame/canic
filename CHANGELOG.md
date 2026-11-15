@@ -1,5 +1,84 @@
 # Changelog
 
+## [0.205.1] - Unreleased
+
+### 🔧 Changed
+
+Adopt Toko Tooling 0.44.0 through the verified installer and qualify the current
+Platform 0.33.7 / Wire 0.22.3 selections in both workspaces. Runtime remains
+0.22.5 and Types 0.20.4; compatible manifest minimums and unrelated dependencies
+are retained. Rebuild the installed CLI with `make canic`, then inspect commands
+and local fleet declarations without network effects or browser launches:
+
+```sh
+canic --help
+canic fleet list
+```
+
+### ➕ Added
+
+The optional `canic/blob` adapter mounts captured-caller Blob endpoints without
+owning service state or lifecycle. A real embedded asset catalog qualifies shared
+references, user isolation, atomic catalog/reference rollback, non-resurrecting
+replay and exact-attempt maintenance across two executables. It consumes the
+explicitly selected, read-only local Blob library; this is local composition,
+not provider qualification or fleet-managed Blob deployment.
+
+With the sibling Blob checkout and Wasm toolchain prepared, build/inspect the
+qualification application locally. These commands do not deploy or open a browser:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-asset-catalog --output target/blob-catalog.wasm
+canic artifact inspect target/blob-catalog.wasm
+```
+
+Use `make blob-test` for the installed witness after simulator preparation.
+See [Blob composition and qualified inputs](docs/demos/blob.md).
+
+A standalone Wasm Store retains multiple immutable versions, resumes chunk uploads
+after maintenance, reuses identical content and exposes bounded history and quota
+updates. Caller-owned operation pins survive maintenance; bounded cache requests
+reuse present chunks or reconstruct missing ones from stable bytes. Root now
+supports Store-backed child creation and serial upgrades without retaining
+application Wasm. Exact references, retention evidence and historical sources
+survive Root maintenance; lost pin/cache replies can be reconstructed without
+reissuing creation or installation. Fleet CLI integration is next. Pin release
+and deletion remain unavailable.
+
+From this checkout with `make canic` and the Wasm target prepared, build and
+inspect the Store locally; neither command deploys or opens a browser:
+
+```sh
+canic artifact build --package canic-wasm-store --output target/wasm-store.wasm
+canic artifact inspect target/wasm-store.wasm
+canic artifact build --package canic-root --output target/root.wasm
+```
+
+See the [Store scope and local qualification](docs/demos/wasm-store.md).
+
+### 🩹 Fixed
+
+Retained maintenance status now reports the actual preflight observations selected
+for the approved Root. The supported predecessor shows separate creation and
+upgrade custody results instead of an incorrect generic “not submitted” step.
+Each child's detailed fleet status is labelled with its retained app canister name.
+
+With a retained operation in app `starter`, inspect it without sending requests:
+
+```sh
+canic fleet status OPERATION --app starter
+canic fleet status OPERATION --app starter --json
+```
+
+### 📚 Documentation
+
+The managed-fleet design now selects a separate dynamic, versioned Wasm Store.
+It specifies immutable releases, retained history, resumable uploads, reuse,
+retention pins and independent maintenance. Root keeps approval/effect evidence
+instead of being the long-term artifact repository. Deployment-latency measurement
+and a qualified transition from current Root custody are required. The standalone
+Store above does not yet change fleet deployment or the dispatch default.
+
 ## [0.205.0] - 2026-11-15
 
 ### ⚠️ Breaking

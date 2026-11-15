@@ -26,6 +26,9 @@ pub fn admit(limit: usize, private: bool) -> Result<(), String> {
 #[doc(hidden)]
 #[must_use]
 pub fn response_limits(method: u64) -> wire::Limits {
+    if method == protocol::stored::CUSTODY {
+        return protocol::stored::LIMITS;
+    }
     if method == protocol::children::CUSTODY {
         return protocol::children::LIMITS;
     }
@@ -52,6 +55,8 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// Child-scoped selections: `child_status`, `child_upgrade_status`, `observe_child`, `observe_children`,
 /// `stage_child`, `reconcile_child`, `stage_child_upgrade`, `observe_child_upgrade`,
 /// `reconcile_child_upgrade` and test-only `inject_child_fault`.
+/// Store-bound selections: `observe_stored_children`, `stage_stored_child`,
+/// `reconcile_stored_child`, `stage_stored_upgrade` and `reconcile_stored_upgrade`.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
@@ -64,6 +69,31 @@ pub fn response_limits(method: u64) -> wire::Limits {
 #[macro_export]
 macro_rules! mount_endpoints {
     ($($name:ident),+ $(,)?) => { $($crate::mount_endpoints!(@select $name);)+ };
+    (@select observe_stored_children) => {
+        $crate::mount_endpoints!(@method observe_stored_children, update, true, stored::CUSTODY, LIMITS,
+            [] () -> $crate::endpoint::protocol::stored::Custody,
+            $crate::stored::custody(), "Store custody request", "Store custody reply");
+    };
+    (@select stage_stored_child) => {
+        $crate::mount_endpoints!(@method stage_stored_child, update, true, stored::STAGE, STORED_LIMITS,
+            [] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::stored::Stage<$crate::endpoint::protocol::Approval>>) -> Result<$crate::endpoint::protocol::Status, $crate::endpoint::protocol::Refusal>,
+            $crate::stored::stage(input.slot, input.value), "Store request", "Store reply");
+    };
+    (@select reconcile_stored_child) => {
+        $crate::mount_endpoints!(@method reconcile_stored_child, update, true, stored::RECONCILE, STORED_LIMITS,
+            [async] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::stored::Stage<$crate::endpoint::protocol::Approval>>) -> $crate::endpoint::protocol::Status,
+            $crate::stored::reconcile(input.slot, input.value).await, "Store request", "Store reply");
+    };
+    (@select stage_stored_upgrade) => {
+        $crate::mount_endpoints!(@method stage_stored_upgrade, update, true, stored::STAGE_UPGRADE, STORED_LIMITS,
+            [] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::stored::Stage<$crate::endpoint::protocol::upgrade::Approval>>) -> Result<$crate::endpoint::protocol::upgrade::Status, $crate::endpoint::protocol::Refusal>,
+            $crate::stored::stage_upgrade(input.slot, input.value), "Store request", "Store reply");
+    };
+    (@select reconcile_stored_upgrade) => {
+        $crate::mount_endpoints!(@method reconcile_stored_upgrade, update, true, stored::RECONCILE_UPGRADE, STORED_LIMITS,
+            [async] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::stored::Stage<$crate::endpoint::protocol::upgrade::Approval>>) -> $crate::endpoint::protocol::upgrade::Status,
+            $crate::stored::reconcile_upgrade(input.slot, input.value).await, "Store request", "Store reply");
+    };
     (@select observe_children) => {
         $crate::mount_endpoints!(@method observe_children, update, true, children::CUSTODY, LIMITS,
             [] () -> $crate::endpoint::protocol::children::Custody,

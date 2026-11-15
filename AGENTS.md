@@ -73,6 +73,22 @@ authenticated tooling installer.
   scaling workers, shards and keyed instances. Keep cardinality/assignment separate
   from subnet placement, application parentage and controller authority. Each
   selected pattern must qualify upgrades and recovery, not creation alone.
+- The selected managed-fleet design uses a separate dynamic, versioned Wasm Store;
+  see design section 12. Store owns durable artifact bytes, immutable release
+  history and pins; Root owns approvals, immutable references and effect evidence.
+  Do not grow Root into an artifact repository. Current Root payload storage and
+  limits below remain supported implementation constraints until the replacement
+  and custody transition qualify. `canic-wasm-store` now owns the standalone
+  publication canister; `canic-wasm-store-protocol` is passive and Host-safe.
+  It owns caller/operation/artifact pins and bounded management-cache delivery.
+  Root exposes explicit Store-bound creation/upgrade/custody methods; legacy
+  inline contracts remain supported. Complete Store references and history must
+  survive maintenance. Fleet CLI integration is pending.
+  Cache preparation never grants install authority. It has no pin release,
+  deletion or fleet-deployment integration yet; do not clear pins on expiry.
+  Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.
+  The installed fixture uses synthetic cycles and two different executables;
+  `maintenance-candidate` is a qualification marker, not a live release choice.
 - Exclude ICP conversion from Canic: operators supply cycles manually; bounded
   distribution of those cycles remains in scope. Application frontend integration
   is deferred. Keep operator handover based on retained workspace evidence and
@@ -84,7 +100,9 @@ authenticated tooling installer.
 - Render terminal tables with IC Host's `ic-host-text::table` API. Canic owns
   columns, cell values and output policy; the shared renderer owns escaping,
   display widths and alignment. Do not hand-pad columns or add a formatter alias.
-- `crates/canic` owns the small greeting Wire contract. Host and CLI packages
+- `crates/canic` owns the small greeting Wire contract and optional actor adapters.
+  Its `blob` feature mounts the independent supplier through explicit local handlers;
+  no Blob runtime dependency is enabled by default. Host and CLI packages
   remain native; the demo canister is in `apps/hello/canister`.
 - Follow the accepted [endpoint ownership boundary](docs/design/canic-system-design.md#endpoint-ownership-and-actor-composition):
   Canic composes actor endpoints, Platform owns generic IC entrypoint macros,
@@ -162,7 +180,8 @@ authenticated tooling installer.
 - The rewrite uses versions 0.200.0 and later to distinguish it from legacy Canic.
   Keep crates.io publication disabled until the product is mature and the
   maintainer explicitly authorizes publication. GitHub pushes do not authorize it.
-- There are no local policy exceptions or release adapters. The experimental
+- The explicit development-only Blob path exception below is the sole local
+  dependency exception. There are no release adapters. The experimental
   deployment path selects local/mainnet authority through an explicit plan.
 - `canic app init` creates local `canic.json` declarations by default: it creates a missing
   config or adds a new app and its first fleet, refusing existing app names and
@@ -210,6 +229,34 @@ authenticated tooling installer.
   Keep original records in place and filter observations by exact membership.
   `profile_manager: true` on an existing-ID binding selects only the demo's
   read-only status adapter.
+
+## Local Blob composition
+
+The maintainer explicitly selected the uncommitted local library at
+`../ic-blob-storage/crates/ic-blob-storage` for this development witness. Keep
+that checkout read-only. The root Cargo path and scoped
+`ci/dependency-pinning-exceptions.json` entry record this selection; do not replace
+it with registry or Git bytes that omit pending work. This local path must exist
+for Cargo resolution, including when the optional feature is disabled; it does
+not add Blob to a default application's runtime dependency graph.
+
+Use `make blob-test`, `make blob-clippy` and `make blob-doc`. The installed
+witness is `qualification/asset-catalog`; it calls the real Service locally and
+uses the application's one Storage bootstrap. Its fault endpoint is qualification
+only. `scripts/dev/blob-inputs.pl` records supplier HEAD, dirty status, file hashes
+and both consumer locks before/after the installed run; changed inputs fail the
+runner. Qualify again when those selected source bytes or contracts change.
+Before release, replace this mutable input with an explicitly selected clean
+supplier revision or a content-addressed immutable source artifact and requalify;
+a version beside a path would not freeze its bytes. Publication remains disabled.
+
+Blob owns its Service, identities, accounting and maintenance gate. Canic owns
+endpoint mounting; the app owns user/catalog/publication policy. Never rewrite
+all ingress callers to the application authority, create a second Blob ledger,
+initialize after reopen failure or activate during endpoint/lifecycle mounting.
+Current fleet effects send empty lifecycle arguments and do not own Blob's exact
+drain/activation sequence. Do not advertise fleet-managed Blob deployment or
+bypass its admission checks; see [composition scope](docs/demos/blob.md).
 
 ## Legacy research before subsystem work
 

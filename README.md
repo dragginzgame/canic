@@ -657,13 +657,14 @@ exceptions use scoped `expect` attributes with reasons. This command runs no
 application or simulator tests. These are local checks; a hosted GitHub Actions
 workflow has not yet been configured.
 
-`toko-tooling` 0.43.0 is pinned as a development dependency in both Cargo
+`toko-tooling` is pinned as a development dependency in both Cargo
 workspaces. Its authenticated source snapshot supplies shared Make commands and
 supporting scripts under `vendor/toko-tooling/`; `TOKO-TOOLING.md` remains at the
 repository root. Read `AGENTS.md` and `TOKO-TOOLING.md` before making changes.
 Use `toko-cloc` for line counts; `make cloc` was retired in 0.43.0.
-The qualification workspace uses IC Testkit 0.104.0 for PocketIC lifecycle and
+The qualification workspace uses IC Testkit for PocketIC lifecycle and
 raw calls, with application encoding supplied directly by IC Wire.
+The workspace manifests and lockfiles own the selected supplier versions.
 CLI journey checks are `make journey-test`, `make journey-clippy` and `make journey-doc`.
 Linux execution is qualified locally; native macOS execution remains to be checked.
 

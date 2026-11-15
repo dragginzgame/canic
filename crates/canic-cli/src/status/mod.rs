@@ -65,6 +65,10 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         for child in children {
             let state = &child["state"];
             if !state["management"].is_null() {
+                let name = child["name"]
+                    .as_str()
+                    .ok_or_else(|| Error::Invalid("missing fleet child name".into()))?;
+                writeln!(output, "\nChild: {}", terminal_text(name)).expect("String write");
                 output.push_str(&management::render(
                     &state["management"],
                     false,

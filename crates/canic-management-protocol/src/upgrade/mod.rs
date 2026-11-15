@@ -101,19 +101,37 @@ impl Stage {
         previous: &[u8; 32],
         now: u64,
     ) -> Result<(), Refusal> {
+        self.approval.validate(manager, child, previous, now)?;
         let a = &self.approval;
+        if self.wasm.len() > MAX_WASM
+            || !self.wasm.starts_with(b"\0asm\x01\0\0\0")
+            || digest(&self.wasm) != a.module_hash
+        {
+            return Err(Refusal::Artifact);
+        }
+
+        Ok(())
+    }
+}
+
+impl Approval {
+    /// Validate target, code transition and finite dispatch interval.
+    /// # Errors
+    /// Returns a binding or time refusal.
+    pub fn validate(
+        &self,
+        manager: &str,
+        child: &str,
+        previous: &[u8; 32],
+        now: u64,
+    ) -> Result<(), Refusal> {
+        let a = self;
         if a.manager != manager
             || a.child != child
             || a.previous_module != *previous
             || a.module_hash == a.previous_module
         {
             return Err(Refusal::Binding);
-        }
-        if self.wasm.len() > MAX_WASM
-            || !self.wasm.starts_with(b"\0asm\x01\0\0\0")
-            || digest(&self.wasm) != a.module_hash
-        {
-            return Err(Refusal::Artifact);
         }
         if a.execute_at_ns < now
             || a.execute_at_ns.saturating_sub(now) > 3_600_000_000_000

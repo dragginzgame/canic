@@ -210,6 +210,8 @@ dependencies = [
 name = "canic"
 version = "0.205.0"
 dependencies = [
+ "ic-blob-storage",
+ "ic-platform-runtime",
  "ic-wire",
  "serde",
 ]
@@ -224,6 +226,19 @@ dependencies = [
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-asset-catalog"
+version = "0.0.0"
+dependencies = [
+ "canic",
+ "ic-platform-runtime",
+ "ic-platform-types",
+ "ic-storage",
+ "ic-wire",
+ "serde",
  "toko-tooling",
 ]
 
@@ -243,6 +258,7 @@ dependencies = [
 name = "canic-management-protocol"
 version = "0.205.0"
 dependencies = [
+ "canic-wasm-store-protocol",
  "ic-wire",
  "serde",
  "serde_bytes",
@@ -263,15 +279,28 @@ version = "0.0.0"
 dependencies = [
  "canic",
  "canic-artifact-probe",
+ "canic-asset-catalog",
  "canic-effect-probe",
  "canic-management-protocol",
  "canic-profile-protocol",
+ "canic-wasm-store-protocol",
  "ic-host-artifacts",
  "ic-testkit",
  "ic-wire",
+ "serde",
  "serde_json",
  "tokio",
  "toko-tooling",
+]
+
+[[package]]
+name = "canic-wasm-store-protocol"
+version = "0.205.0"
+dependencies = [
+ "ic-wire",
+ "serde",
+ "serde_bytes",
+ "sha2 0.11.1",
 ]
 
 [[package]]
@@ -816,6 +845,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-blob-storage"
+version = "0.100.6"
+dependencies = [
+ "ic-platform-types",
+ "ic-storage",
+ "ic-wire",
+ "serde",
+ "sha2 0.11.1",
+]
+
+[[package]]
 name = "ic-certification"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -875,9 +915,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform"
-version = "0.33.6"
+version = "0.33.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24586654cc055365afd1c4bfb8dcd8f26f389bedba5cbee3dc722d99fce4a00a"
+checksum = "3e07e0565c70df9222016e93d6f488312176ef5e7036ded60db8b4bc3f61c05f"
 dependencies = [
  "ic-platform-types",
  "num-bigint 0.5.1",
@@ -932,6 +972,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-storage"
+version = "0.74.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26d2520d368ccea2560cd496efce6408652ad681296111f9fe45561796c92ed0"
+dependencies = [
+ "ic-platform-runtime",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ic-testkit"
 version = "0.106.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -969,9 +1020,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wire"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be2bdd6a6d430182fa2ce49ea7e53461ea20d4790c5f299f6b0d04860f8bbd84"
+checksum = "bfd971bb89caee5097fdd0d0e4b3a784be465b3654bb93113e546504145f20fa"
 dependencies = [
  "bytemuck",
  "postcard",
@@ -2334,9 +2385,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.43.2"
+version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb81a5f9c13f50614af8468b599c3a05327f09f643aa954dc8e6878aa649263f"
+checksum = "d7c8e68051bf59c6dadb44448556129eca489e855b74332f84f64ae2e0b09621"
 
 [[package]]
 name = "tower"

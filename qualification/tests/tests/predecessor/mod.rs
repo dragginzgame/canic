@@ -249,6 +249,15 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     }
     let maintained = cli(&config, &apply);
     assert_eq!(maintained["canister"], root.to_text());
+    assert_eq!(
+        cli(&config, &["fleet", "status", id])["effects"],
+        serde_json::json!({
+            "custody-before-creation": "reply_retained",
+            "custody-before-upgrade": "reply_retained",
+            "install": "reply_retained",
+            "custody-after": "reply_retained",
+        })
+    );
     assert!(dir.join("custody-before-creation/reply.bin").exists());
     assert!(dir.join("custody-before-upgrade/reply.bin").exists());
     assert!(!dir.join("custody-before").exists());
@@ -273,6 +282,20 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     // Lose host completion after installation; preserve the exact signed attempt.
     std::fs::remove_file(dir.join("receipt.json")).unwrap();
     std::fs::remove_file(dir.join("install/reply.bin")).unwrap();
+    let interrupted = cli(&config, &["fleet", "status", id]);
+    assert_eq!(
+        interrupted["effects"]["install"],
+        "signed_attempt_retained_outcome_unknown"
+    );
+    assert_eq!(
+        interrupted["effects"]["custody-before-creation"],
+        "reply_retained"
+    );
+    assert_eq!(
+        interrupted["effects"]["custody-before-upgrade"],
+        "reply_retained"
+    );
+    assert!(interrupted["receipt"].is_null());
     assert_eq!(cli(&config, &apply), maintained);
     assert_eq!(
         std::fs::read(dir.join("install/signed.json")).unwrap(),

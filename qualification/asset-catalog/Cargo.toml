@@ -1,0 +1,32 @@
+[package]
+name = "canic-asset-catalog"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Installed embedded Blob and application catalog composition witness"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ic-platform-runtime.workspace = true
+ic-storage.workspace = true
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[package.metadata.toko-tooling.loc]
+category = "tests"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+maintenance-candidate = []
+
+[dependencies]
+canic = { workspace = true, features = ["blob"] }
+ic-platform-types.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

@@ -394,14 +394,21 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
 pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     let (plan, _) = plan::load(dir, digest)?;
     let mut effects = serde_json::Map::new();
-    let effect_names: &[&str] = match plan.action {
-        crate::PlanAction::MaintainRoot { .. } => &["custody-before", "install", "custody-after"],
-        crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. } => &["stage"],
-        crate::PlanAction::Create { .. } | crate::PlanAction::Upgrade(_) => &["create", "install"],
+    let effect_names: Vec<_> = match plan.action {
+        crate::PlanAction::MaintainRoot { .. } => crate::maintenance::observations(&plan, false)
+            .iter()
+            .chain(crate::maintenance::observations(&plan, true))
+            .map(|(step, _)| *step)
+            .chain(std::iter::once("install"))
+            .collect(),
+        crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. } => vec!["stage"],
+        crate::PlanAction::Create { .. } | crate::PlanAction::Upgrade(_) => {
+            vec!["create", "install"]
+        }
     };
     for effect in effect_names {
         let path = dir.join(effect);
-        effects.insert((*effect).into(), attempt_state(&path)?.into());
+        effects.insert(effect.into(), attempt_state(&path)?.into());
     }
     if plan.management().is_some() {
         for index in 0..crate::managed::OBSERVATIONS {

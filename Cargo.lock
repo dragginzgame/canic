@@ -366,6 +366,8 @@ dependencies = [
 name = "canic"
 version = "0.205.0"
 dependencies = [
+ "ic-blob-storage",
+ "ic-platform-runtime",
  "ic-wire",
  "serde",
  "toko-tooling",
@@ -424,6 +426,7 @@ name = "canic-management"
 version = "0.205.0"
 dependencies = [
  "canic-management-protocol",
+ "canic-wasm-store-protocol",
  "ic-platform",
  "ic-platform-runtime",
  "ic-storage",
@@ -437,6 +440,7 @@ dependencies = [
 name = "canic-management-protocol"
 version = "0.205.0"
 dependencies = [
+ "canic-wasm-store-protocol",
  "ic-wire",
  "serde",
  "serde_bytes",
@@ -511,6 +515,31 @@ dependencies = [
  "canic-management-protocol",
  "ic-platform-runtime",
  "ic-wire",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-wasm-store"
+version = "0.205.0"
+dependencies = [
+ "canic-wasm-store-protocol",
+ "ic-platform",
+ "ic-platform-runtime",
+ "ic-storage",
+ "ic-wire",
+ "serde",
+ "sha2 0.11.1",
+ "toko-tooling",
+]
+
+[[package]]
+name = "canic-wasm-store-protocol"
+version = "0.205.0"
+dependencies = [
+ "ic-wire",
+ "serde",
+ "serde_bytes",
+ "sha2 0.11.1",
  "toko-tooling",
 ]
 
@@ -1361,6 +1390,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-blob-storage"
+version = "0.100.6"
+dependencies = [
+ "ic-platform-types",
+ "ic-storage",
+ "ic-wire",
+ "serde",
+ "sha2 0.11.1",
+]
+
+[[package]]
 name = "ic-certification"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1438,9 +1478,9 @@ checksum = "e169441b0ee18cfe2825c18474a90ababa65059096c75ce5b732ce1924862b52"
 
 [[package]]
 name = "ic-platform"
-version = "0.33.6"
+version = "0.33.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24586654cc055365afd1c4bfb8dcd8f26f389bedba5cbee3dc722d99fce4a00a"
+checksum = "3e07e0565c70df9222016e93d6f488312176ef5e7036ded60db8b4bc3f61c05f"
 dependencies = [
  "crc32fast",
  "data-encoding",
@@ -1560,9 +1600,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wire"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be2bdd6a6d430182fa2ce49ea7e53461ea20d4790c5f299f6b0d04860f8bbd84"
+checksum = "bfd971bb89caee5097fdd0d0e4b3a784be465b3654bb93113e546504145f20fa"
 dependencies = [
  "bytemuck",
  "postcard",
@@ -2923,9 +2963,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.43.2"
+version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb81a5f9c13f50614af8468b599c3a05327f09f643aa954dc8e6878aa649263f"
+checksum = "d7c8e68051bf59c6dadb44448556129eca489e855b74332f84f64ae2e0b09621"
 
 [[package]]
 name = "toml"

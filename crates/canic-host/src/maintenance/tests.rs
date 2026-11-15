@@ -43,6 +43,23 @@ fn fixture() -> (std::path::PathBuf, Plan) {
 #[test]
 fn predecessor_requires_both_observations_and_current_postflight() {
     let (dir, plan) = fixture();
+    store::put_json(&dir.join("plan.json"), &plan).unwrap();
+    store::put(
+        &dir.join("module.wasm"),
+        &std::fs::read(dir.join("root.wasm")).unwrap(),
+    )
+    .unwrap();
+    let id = plan.digest().unwrap();
+    let status = || operation::status_at(&dir, &id).unwrap();
+    assert_eq!(
+        status()["effects"],
+        serde_json::json!({
+            "custody-before-creation": "not_submitted",
+            "custody-before-upgrade": "not_submitted",
+            "install": "not_submitted",
+            "custody-after": "not_submitted",
+        })
+    );
     let expected = &plan.maintenance().unwrap()[0];
     assert!(!retained(&dir, &plan).unwrap());
     let mut creation = expected.creation.clone();
@@ -53,6 +70,14 @@ fn predecessor_requires_both_observations_and_current_postflight() {
     )
     .unwrap();
     assert!(require_before(&dir, &plan).is_err());
+    assert_eq!(
+        status()["effects"]["custody-before-creation"],
+        "reply_retained"
+    );
+    assert_eq!(
+        status()["effects"]["custody-before-upgrade"],
+        "not_submitted"
+    );
     let empty = upgrade::Status::default();
     store::put(
         &dir.join("custody-before-upgrade/reply.bin"),
@@ -67,6 +92,16 @@ fn predecessor_requires_both_observations_and_current_postflight() {
     )
     .unwrap();
     assert!(retained(&dir, &plan).unwrap());
+    assert_eq!(
+        status()["effects"],
+        serde_json::json!({
+            "custody-before-creation": "reply_retained",
+            "custody-before-upgrade": "reply_retained",
+            "install": "not_submitted",
+            "custody-after": "reply_retained",
+        })
+    );
+    assert!(status()["receipt"].is_null());
     std::fs::remove_file(dir.join("custody-before-creation/reply.bin")).unwrap();
     assert!(!retained(&dir, &plan).unwrap());
 }

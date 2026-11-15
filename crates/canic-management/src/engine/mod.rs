@@ -1,13 +1,14 @@
 use crate::Readiness;
 use canic_management_protocol::children::{self, Slot};
 use canic_management_protocol::{
-    CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, STAGE_LIMITS, Stage, Status, digest,
+    Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status, digest,
+    stored,
 };
 use ic_platform::{
     candid_codec::{self, decoder},
     management_canister_types::{
-        CanisterIdRecord, CanisterInstallMode, CanisterSettings, CanisterStatusResult, ChunkHash,
-        CreateCanisterArgs, InstallChunkedCodeArgs, UploadChunkArgs,
+        CanisterIdRecord, CanisterInstallMode, CanisterSettings, CanisterStatusResult,
+        CreateCanisterArgs, InstallChunkedCodeArgs,
     },
 };
 use ic_platform_runtime::{
@@ -24,7 +25,9 @@ use ic_timers::{
 };
 use std::cell::RefCell;
 use storage::{ARTIFACT_BYTES, Artifact, Artifacts, JOURNAL_BYTES, Journals};
+mod delivery;
 mod storage;
+pub(crate) mod stored_api;
 
 pub(crate) mod upgrade;
 
@@ -45,6 +48,15 @@ pub fn custody() -> canic_management_protocol::custody::Custody {
 /// Traps when lifecycle has not opened the engine.
 #[must_use]
 pub fn owner_custody() -> children::Custody {
+    assert!(
+        ![Slot::First, Slot::Second]
+            .into_iter()
+            .any(delivery::is_stored),
+        "Store-aware custody required"
+    );
+    journals()
+}
+fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
         state
             .as_ref()
@@ -155,6 +167,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
     for slot in [Slot::First, Slot::Second] {
         validate(&state, slot);
         upgrade::validate(&state, slot);
+        delivery::validate(&state, slot);
     }
     assert!(state.artifact.get().fits(), "aggregate artifact budget");
     let journals = &state.journal.get().0;
@@ -190,8 +203,8 @@ fn validate(state: &State, slot: Slot) {
         );
         assert_eq!(a.creation_cycles, CREATION_CYCLES, "ceiling");
         assert_eq!(
-            digest(&state.artifact.get().0[slot.index()].0),
-            a.module_hash,
+            state.artifact.get().0[slot.index()].hash(false),
+            Some(a.module_hash),
             "artifact custody"
         );
         assert_ne!(s.phase, Phase::Empty, "admitted phase");
@@ -203,7 +216,7 @@ fn validate(state: &State, slot: Slot) {
     } else {
         assert_eq!(s, &Status::default(), "unadmitted journal");
         assert!(
-            state.artifact.get().0[slot.index()].0.is_empty(),
+            state.artifact.get().0[slot.index()].hash(false).is_none(),
             "unadmitted artifact"
         );
     }
@@ -318,6 +331,9 @@ pub fn stage(slot: Slot, input: Stage) -> Result<Status, Refusal> {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
+    if delivery::is_stored(slot) {
+        return Err(Refusal::Occupied);
+    }
     if let Some(previous) = snapshot(slot).approval {
         return if previous == input.approval && digest(&input.wasm) == previous.module_hash {
             Ok(status(slot))
@@ -326,31 +342,25 @@ pub fn stage(slot: Slot, input: Stage) -> Result<Status, Refusal> {
         };
     }
     input.validate(&api::canister_self().to_text(), api::time())?;
+    admit(
+        slot,
+        input.approval,
+        Artifact::Inline(storage::Inline(input.wasm, vec![])),
+    )
+}
+fn admit(slot: Slot, approval: Approval, artifact: Artifact) -> Result<Status, Refusal> {
     if api::canister_liquid_cycle_balance() < reserved_cycles() + u128::from(CREATION_CYCLES) {
         return Err(Refusal::Reserve);
     }
-    let artifacts = STATE.with_borrow(|state| {
-        let mut artifacts = state
-            .as_ref()
-            .expect("initialized manager")
-            .artifact
-            .get()
-            .clone();
-        artifacts.0[slot.index()] = Artifact(input.wasm, vec![]);
-        artifacts
-    });
+    let mut artifacts =
+        STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.get().clone());
+    artifacts.0[slot.index()] = artifact;
     if !artifacts.fits() {
         return Err(Refusal::Artifact);
     }
-    STATE.with_borrow_mut(|state| {
-        state
-            .as_mut()
-            .expect("initialized manager")
-            .artifact
-            .set(artifacts);
-    });
+    STATE.with_borrow_mut(|state| state.as_mut().expect("open engine").artifact.set(artifacts));
     mutate(slot, |s| {
-        s.approval = Some(input.approval);
+        s.approval = Some(approval);
         s.phase = Phase::Scheduled;
     });
     schedule(slot);
@@ -374,7 +384,7 @@ pub fn inject_fault(slot: Slot, value: u8) {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    assert!(value <= 10);
+    assert!(value <= 11);
     FAULT.update(|mut values| {
         values[slot.index()] = value;
         values
@@ -441,6 +451,13 @@ async fn step(slot: Slot) {
     }
     match s.phase {
         Phase::Scheduled => {
+            if delivery::needs_pin(slot, false) {
+                mutate(slot, |s| s.failure = Some(Failure::Uncertain));
+                let result = delivery::pin(slot, false).await;
+                mutate(slot, |s| s.failure = result.err());
+                fault(slot, 11); // Lost pin callback is recovered from Store custody.
+                return; // Commit retention evidence before any creation dispatch.
+            }
             let bytes = candid_codec::encode_one(
                 &CreateCanisterArgs {
                     settings: Some(CanisterSettings {
@@ -474,43 +491,29 @@ async fn step(slot: Slot) {
         }
         Phase::Created => {
             fault(slot, 3); // A later message cannot erase the already committed principal.
-            let wasm = STATE.with_borrow(|state| {
-                state.as_ref().expect("state").artifact.get().0[slot.index()]
-                    .0
-                    .clone()
-            });
-            let bytes = candid_codec::encode_one(
-                &UploadChunkArgs {
-                    canister_id: api::canister_self(),
-                    chunk: wasm,
-                },
-                STAGE_LIMITS.bytes,
-            )
-            .expect("upload args");
-            issue(slot, 1, Phase::UploadIssued, &bytes);
-            let result = management("upload_chunk", bytes, 0)
-                .await
-                .and_then(|bytes| {
-                    decoder::decode_one::<ChunkHash>(&bytes, MANAGEMENT_LIMITS)
-                        .map_err(|_| Failure::InvalidReply)
-                });
-            match result {
-                Ok(hash) if hash.hash == s.approval.expect("approval").module_hash => {
-                    mutate(slot, |s| s.phase = Phase::Uploaded)
-                }
-                Ok(_) => mutate(slot, |s| s.failure = Some(Failure::Mismatch)),
+            let approval = s.approval.as_ref().expect("approval");
+            let upload =
+                delivery::upload(slot, false, approval.module_hash, approval.expires_at_ns);
+            issue(slot, 1, Phase::UploadIssued, &upload.bytes);
+            match upload.send().await {
+                Ok(()) => mutate(slot, |s| s.phase = Phase::Uploaded),
                 Err(error) => mutate(slot, |s| s.failure = Some(error)),
             }
             fault(slot, 4);
         }
         Phase::Uploaded => {
             let hash = s.approval.as_ref().expect("approval").module_hash.to_vec();
+            let (store, chunks) = delivery::layout(
+                slot,
+                false,
+                s.approval.as_ref().expect("approval").module_hash,
+            );
             let bytes = candid_codec::encode_one(
                 &InstallChunkedCodeArgs {
                     mode: CanisterInstallMode::Install,
                     target_canister: worker(&s),
-                    store_canister: Some(api::canister_self()),
-                    chunk_hashes_list: vec![ChunkHash { hash: hash.clone() }],
+                    store_canister: Some(store),
+                    chunk_hashes_list: chunks,
                     wasm_module_hash: hash,
                     arg: vec![],
                     sender_canister_version: Some(api::canister_version()),
@@ -546,20 +549,16 @@ async fn observation(slot: Slot) -> Result<(), Failure> {
         return Ok(());
     };
     match before.phase {
-        Phase::UploadIssued => {
-            let bytes = candid_codec::encode_one(
-                &CanisterIdRecord {
-                    canister_id: api::canister_self(),
-                },
-                1024,
-            )
-            .expect("chunks args");
-            let reply = management("stored_chunks", bytes, 0).await?;
-            let chunks: Vec<ChunkHash> = decoder::decode_one(&reply, MANAGEMENT_LIMITS)
-                .map_err(|_| Failure::InvalidReply)?;
-            if !chunks.iter().any(|chunk| chunk.hash == a.module_hash) {
-                return Err(Failure::Mismatch);
+        Phase::Scheduled if delivery::needs_pin(slot, false) => {
+            if delivery::source(slot, false).expect("Store source").state
+                == stored::PinState::Issued
+            {
+                delivery::pin(slot, false).await?;
+                mutate(slot, |s| s.failure = None);
             }
+        }
+        Phase::UploadIssued => {
+            delivery::observe_cache(slot, false, a.module_hash).await?;
             mutate(slot, |s| {
                 s.phase = Phase::Uploaded;
                 s.failure = None;
@@ -618,6 +617,13 @@ pub async fn reconcile(slot: Slot, expected: canic_management_protocol::Approval
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
+    assert!(
+        !delivery::is_stored(slot),
+        "Store-bound reconciliation required"
+    );
+    reconcile_bound(slot, expected).await
+}
+async fn reconcile_bound(slot: Slot, expected: Approval) -> Status {
     assert_eq!(
         snapshot(slot).approval,
         Some(expected),

@@ -13,6 +13,8 @@ fn post_upgrade() {
 management::mount_endpoints! {
     status, observe, observe_custody, stage, reconcile,
     stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
+    observe_stored_children, stage_stored_child, reconcile_stored_child,
+    stage_stored_upgrade, reconcile_stored_upgrade,
     observe_children, child_status, observe_child, stage_child, reconcile_child,
     stage_child_upgrade, observe_child_upgrade, child_upgrade_status, reconcile_child_upgrade,
 }

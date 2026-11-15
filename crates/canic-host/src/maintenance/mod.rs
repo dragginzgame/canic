@@ -20,7 +20,8 @@ fn single_upgrade_root(plan: &Plan) -> bool {
     plan.previous_module().map(String::as_str) == Some(SINGLE_UPGRADE_ROOT)
 }
 
-fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
+// Execution and status share the exact retained-read locations for this predecessor.
+pub(crate) fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
     if plan
         .maintenance()
         .is_some_and(|children| children.len() > 1)

@@ -7,6 +7,320 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Tooling, Platform and Wire adoption: 2026-11-15
+
+Selected published Toko Tooling 0.44.0 in both workspaces and installed its
+checksum-verified snapshot through preview/update. All 47 retained managed files
+were admitted; only the baseline text changed. The retired Python verifier has
+no Canic caller. Existing package lint inheritance and Rust 1.100.0 stay intact.
+Prepared tools, snapshot agreement, formatting and dependency-list wiring pass.
+
+Registry inspection confirms Platform 0.33.7, Runtime/macros/guard 0.22.5,
+Types 0.20.4 and Wire 0.22.3. Both incoming lockfiles already selected these;
+this adoption changes only Tooling's locked package. Compatible manifest minima
+remain supported rather than raising them for unused additive APIs. No supplier
+checkout, application authority, request bytes or protocol layout was edited.
+No broad dependency refresh, version bump, publication or deployment occurred.
+
+Full locked/offline metadata admits both independent workspaces. The selected
+native Host and installed catalog graphs each retain one canonical Types/Wire
+identity; the catalog shares one Runtime/macros/guard and Storage identity.
+Default Canic remains codec-only. Focused journey/Blob Clippy and Rustdoc pass,
+as do seven Host signed-attempt admission/recovery tests and all five installed
+Blob cases. This refreshes the earlier Wire 0.22.2 witness for 0.22.3; current
+hashes are in [the Blob guide](../demos/blob.md). Logs and graph observations are
+under `target/qualification/adoption/`. Full CI and mainnet were not run.
+
+Before the requested GitHub push, moved Store's directory-owning canister module
+to `canister/mod.rs` to finish the ordinary Rust module-layout migration. Focused
+Store Clippy/Rustdoc, eleven native tests, six installed Store/Root tests (17.04s)
+and formatting/snapshot admission passed on the adopted graph. Logs are
+`target/qualification/adoption/store-push-{checks,tests}.log`. This is a source
+push of the pending increment, not a tagged release; the local Blob input remains
+explicitly development-only.
+
+## Optional embedded Blob composition: 2026-11-15
+
+Completed the optional adapter and real installed catalog witness described in
+[Blob composition](../demos/blob.md), which owns current scope, source identities
+and focused evidence. No supplier checkout changes, dependency refresh, provider
+calls, mainnet deployment or push occurred. The local uncommitted Blob library
+is explicitly selected and fingerprinted, not represented as published input.
+
+Legacy research inspected the fixed revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`:
+[endpoint composition](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-blob-service/src/endpoints/mod.rs),
+[lifecycle](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-blob-service/src/lifecycle/mod.rs),
+[embedded application storage](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/blob-service/embedded-consumer/src/app/mod.rs),
+[installed refusal regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/src/pic/blob_service/journey/refusals/mod.rs)
+and [adapter release history](https://github.com/dragginzgame/canic-legacy/commit/abfb30a51dff117375e7afdac04d5b25b58d39b0).
+Keep explicit lifecycle, host-granted memory, distinct application storage,
+authenticated caller boundaries and trapping failures. Replace manual raw dispatch
+and broad endpoint rosters with three Platform/Wire mounts around the rewrite's
+one real Service. Omit legacy service crates, funding, provider callbacks,
+metrics samplers and recovery machinery: none serves this local consumer.
+
+Canic gains one optional module rather than another adapter crate or universal
+Core. Application state stores publication decisions and original authorizations,
+not a second reference/accounting ledger or admission flag. The installed tests
+expose the present Host/Root lifecycle incompatibility instead of weakening Blob's
+exact drain/activation contract. The independent supplier has no Canic dependency.
+
+Alongside the integration, removed the Store test's `#[path]` override and
+same-name file/directory layout. Its child module now follows ordinary Rust
+discovery under `store_root_tests/mod.rs`; the installed Store test binary still
+compiles. Prior Store runtime evidence is retained; this relocation changes no
+runtime behavior and did not justify replaying its simulator suite.
+
+## Root uses retained Store references: 2026-11-15
+
+The pending 0.205.1 engine now accepts explicit Store-backed creation and serial
+upgrades. This reuses the existing child journals, timer owner, cycle reservations,
+management effects, readiness verification and upgrade history. The artifact lease
+selects either existing inline payloads or bounded Store metadata; Store-backed
+children never retain application Wasm. A new per-child `CUS1` payload uses the
+same two original allocation identities and capacities. Inline codecs and old
+approval frames are preserved. No storage directory rewrite or new workflow
+engine was introduced.
+
+The source/tests/history research in the preceding Store entries remains
+applicable: stable Store bytes are authoritative and the management cache is
+derived. The first actual Root consumer replaces the pending per-chunk cache
+endpoint with one bounded `prepare_cache` call. Store observes once and uploads
+only missing distinct chunks, checking current caller authority and the original
+deadline before every upload. Root's existing upload intent records that exact
+request; installation remains a separate one-attempt effect.
+
+Each Store operation binds its slot, action, unchanged effect approval, Store
+principal and exact versioned manifest into a domain-separated digest. Root
+retains one manifest plus that digest, pin progress and cache deadline. Pin intent
+and outgoing call share a commit boundary; a completed pin callback commits
+before later creation/upgrade work. Lost pin replies recover through replicated
+observation. Lost cache replies recover by observing Store's actual chunk cache.
+Neither recovery reissues creation or installation. Full Store custody includes
+all historical upgrade sources; old complete-custody/reconciliation endpoints
+refuse Store-backed work. A child cannot change artifact backends through an
+upgrade request. Mixed inline and Store-backed children preserve both codecs.
+
+Passing evidence:
+
+- `make store-test`: eleven native protocol/custody tests and six installed
+  cases. The installed suite took 16.40 seconds with synthetic cycles. Actual
+  Root installs a valid executable larger than its former inline limit with its
+  own management cache empty, then performs serial upgrades from Store. Pin and
+  creation/upgrade-cache callback traps recover after Root maintenance; exact
+  historical source bindings and an inline sibling survive maintenance.
+- The installed refusal cases keep unpublished releases from creating a child,
+  retain blocked missing-cache exposure without replay, and prevent late pin
+  recovery from authorizing creation past the original deadline.
+- `cargo test --locked --manifest-path qualification/Cargo.toml -p
+  canic-qualification --test root
+  children::two_children_preserve_history_and_upgrade_independently -- --exact
+  --nocapture`: passed against the new Root, preserving actual predecessor
+  history and independent inline-child upgrades (10.21 seconds). Its selected
+  Root/app artifacts were copied from the same `target/store/` builds.
+- Focused native and Wasm Clippy for management, Root and Store, qualification
+  Store Clippy, profile-manager Wasm assembly, Root/Store Rustdoc,
+  `make fmt-check toko-tooling-check` and diff checks passed. Supplier versions
+  and the installed tooling snapshot are unchanged.
+
+Logs: `target/qualification/store-root-tests.log`,
+`store-inline-compatibility.log`, `store-native-lints.log`,
+`store-root-clippy.log`, `store-root-docs-format.log`,
+`store-root-format.log` and `store-profile-assembly.log` in the same directory.
+The docs/format combined log records the initial manifest-order failure; the
+separate format log records its correction and the passing tooling check.
+Root hash: `b70af4f10a3604736707f8aa32acd1b4a461e00501403c9ee9d9d0e78f5e3005`;
+maintenance candidate:
+`b185314489f76de171f7a484571c0034f6b83499e4f9ad1621577d504447bb49`.
+Store hash: `c14c7755a20d7f4db01228d1f26f001cbc223dd63d8775a1d519718721cfb6ec`.
+These are local qualification binaries, not a deployed release.
+
+The first Root recovery path deliberately remains blocked when an uncertain cache
+preparation has missing chunks. A separately approved bounded repair flow is
+still needed; no fresh deadline or automatic replay is inferred. Fleet Host/CLI
+bootstrap, uploads through Root, Store maintenance through its real controller,
+selected-version policy, warm-deployment latency measurement and existing-fleet
+conversion remain next gates. No fleet CLI default, mainnet state or pushed
+version changed in this increment. Current scope is in the
+[Store guide](../demos/wasm-store.md).
+
+## Store pins and installation-cache delivery: 2026-11-15
+
+The next Store increment retains exact caller/operation/artifact pins and repairs
+one management-cache chunk per bounded request. Same-content aliases cannot
+relabel an existing pin. Replays preserve the obligation; the 32-pin artifact
+limit refuses new work without eviction. No pin release or deletion is exposed.
+The new `CWA2` artifact record reads `CWA1` with no pins under the existing four
+allocation identities; native fixtures cover that transition and maximum pinned
+metadata. Adding pins did not rewrite the Storage directory or create another
+backing owner. Stable metadata has its own bounded decode policy, separate from
+endpoint frame limits.
+
+Revisited legacy
+[cache restoration](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/runtime/template/publication/release/chunks.rs)
+and [Store retirement](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/wasm_store/gc/mod.rs).
+Carry forward stable-byte authority, missing-chunk repair and explicit Root-owned
+retirement intent. No old GC timer or automatic retirement is imported. The
+source/tests/history inspection recorded below remains applicable to the same
+revision; the new pin ownership is a contract derived from the current design.
+
+Installed qualification now proves cold cache population, warm reuse, refusal
+without an exact pin, unchanged version commitments, expired dispatch and
+unauthorized cache access. It clears the management cache explicitly, upgrades
+Store, observes the same pin, reconstructs the cache, and uses real IC
+`install_chunked_code` to install and upgrade a greeting. Both Store and target
+have the same explicit controller on the fixture's one subnet. The test does not
+impersonate a running Root. Discarding a successful cache reply then replaying
+does not upload again; this is not a callback-trap qualification claim.
+
+`make store-test store-clippy store-doc fmt-check toko-tooling-check` passed:
+six native custody cases, one maximum-Wire-frame case and two installed cases.
+The installed pair took 7.75 seconds with synthetic cycles. Logs are in
+`target/qualification/store-delivery-checks.log`; current builder outputs remain
+under `target/store/` (replacing the earlier local binaries recorded below).
+Original Store hash: `741e0fc948e65b19c0f76d02aef040bde79b1d7da7f19e752c5631e3e4f8c77b`;
+candidate: `75e4d997d0997215332f940412b7864900b2f5cba17931fc879323dc52c7b841`.
+
+Root integration remains the next gate. Its current approval/custody records
+describe local payloads and one management upload, without Store bindings or pin
+receipts. A Store reference must be retained and included in complete maintenance
+and reconciliation evidence, including historical upgrades, before replacing that
+path. Preserve existing approval bytes and signed attempts; old observation
+contracts cannot silently claim complete custody for a new reference-backed
+operation. Qualify pin acquisition before dependent effects, cache recovery,
+original deadlines and Root maintenance through that same operation owner. No
+Root persistence change, fleet CLI default change, mainnet call or push was made.
+
+## Standalone versioned Store qualification: 2026-11-15
+
+The pending 0.205.1 increment adds the passive Store protocol and a separately
+compiled publication canister. It reuses IC Storage, Wire, Platform entrypoints
+and the public artifact builder. Supplier selections are unchanged. Root's
+existing payload records and fleet deployment behavior are unchanged.
+
+Adapted the Store regressions identified below: hash/identity conflicts,
+byte/release capacity, visible headroom, reopened stable collections and
+metadata-only catalog access. The new catalog deliberately retains earlier
+versions instead of adopting legacy approved-manifest replacement. Native tests
+cover incomplete-upload read refusal, exact replay, full digest mismatch, quota
+changes, pagination and content reuse. A maximum-frame test caught insufficient
+Wire node allowance; four-entry pages now round-trip with maximum labels,
+32 chunk hashes and missing-position lists under the explicit metadata policy.
+
+The installed PocketIC fixture qualifies the current 8 MiB artifact ceiling:
+32 distinct 256 KiB chunks, interrupted after the first chunk, then a stopped
+Store upgraded to a different executable. The second executable retains exact
+progress, accepts only missing chunks, publishes verified bytes and returns them
+through replicated reads. A second version reuses the same artifact without
+increasing chunk count or payload reservation. Anonymous mutation, oversized
+input, conflicting version bytes and quota shrink below custody are refused.
+No deletion endpoint exists; unfinished uploads keep their reservation.
+
+Evidence: `make store-test store-clippy store-doc fmt-check toko-tooling-check`
+passed; the installed case took 7.65 seconds locally. This is a synthetic-cycle
+fixture duration, not mainnet deployment latency or a speedup comparison. The
+initial sandbox attempt could not bind loopback; the focused rerun had local
+loopback permission. Logs are in `target/qualification/store-checks.log`; builder
+records and exact binaries are under `target/store/`:
+
+- Original: `dd29d6f8f592652af86f5bdb001bfeac29efc96ffc3944ffb82e984c07927ada`.
+- Maintenance candidate: `02c225d5ee19351b67023d00e8325da53e20a59a37987dfe27eb73ed1a371806`.
+
+The documented `canic artifact build --package canic-wasm-store --output
+target/wasm-store.wasm` and `canic artifact inspect target/wasm-store.wasm` were
+also exercised; the original executable is 332,758 bytes. No browser, mainnet
+deployment, push or publication was performed.
+
+Next is the existing management owner consuming pinned Store references and
+rebuilding its installation cache, then fleet CLI integration. Selected-release
+policy, retention/deletion, autonomous installation, failed Store migration,
+Root-held payload migration and cross-subnet delivery remain unqualified. The
+standalone fixture does not replace the retained artifact-effect probe or qualify
+the full section-12 contract. See [current Store scope](../demos/wasm-store.md).
+
+## Versioned Wasm Store decision: 2026-11-15
+
+The maintainer selects a separate dynamic, versioned Store per managed fleet,
+superseding the initial decision to retain demo artifacts inside Root/manager.
+The current aggregate artifact budget and historical storage layout demonstrate
+why continued artifact growth should not enlarge Root's authority journal.
+[Design section 12](../design/canic-system-design.md#per-fleet-versioned-wasm-store)
+owns the new contract and qualification gates. This is a design decision, not a
+shipped Store, runtime migration or measured performance improvement.
+
+Legacy research used `dragginzgame/canic-legacy` at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`:
+
+- [Manifest storage](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/storage/stable/template/manifest/mod.rs)
+  and [catalog publication](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/runtime/template/publication/release/catalog.rs)
+  retain release keys, versions, hashes, sizes and Store bindings. Preserve exact
+  identity while separating release history from the current deployment selection.
+- [Chunk cache restoration](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/runtime/template/publication/release/chunks.rs)
+  explicitly treats stable Store bytes as authoritative and repairs missing
+  management-cache chunks. Carry forward that ownership and reuse criterion.
+- [Storage regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/storage/stable/template/chunked/tests/mod.rs)
+  cover reopened chunk references, exact snapshots, slot reuse and metadata-only
+  counts. [Admission regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/ops/storage/template/tests/mod.rs)
+  cover hash mismatch, byte/template/version limits and visible headroom. Adapt
+  these cases when implementing Store; they have not been run against new code.
+  The same suite expects replacement of an approved manifest to remove its older
+  version. Do not carry that behavior into the new retained release catalog.
+- Reviewed the publication-chunk file's history listing at commits `aa02dc0`,
+  `afc2521` and `e9748fa`, and the
+  [bootstrap diagnostic correction](https://github.com/dragginzgame/canic-legacy/commit/ed9f133149ac0dd220877b981ff8b09eb9dc6643),
+  which added Root logs when waiting for readiness fails. Keep phase/blocker
+  diagnostics in the public workflow; this history supplies no latency benchmark.
+
+Current source inspection finds default dispatch at planning time plus ten
+minutes in `crates/canic-host/src/fleet_plan/mod.rs` and
+`crates/canic-host/src/managed/mod.rs`. The new design separates that scheduled
+wait from build, upload, installation and observation time. It requires warm
+artifact reuse and a qualified ready-to-dispatch contract, without changing
+retained timestamps or claiming the Store alone will make deployment faster.
+The [IC management specification](https://docs.internetcomputer.org/references/ic-interface-spec/management-canister/#ic-method-install_chunked_code)
+requires a same-subnet chunk source and appropriate caller control; the initial
+Root/Store/app graph must qualify this before cross-subnet delivery is added.
+
+Validation for this change is documentation consistency, source/link inspection
+and `git diff --check`. No executable or deployed state changed for this decision.
+
+## Post-push review: 0.205.0
+
+Review `f6b5c37ead9f443f49d1d7cac0b0897f56d221e7`, delivered to `main` and
+annotated tag `v0.205.0`, against the operation model, fleet membership,
+retained-record codecs, status consumers and current setup documentation.
+Historical optional fields remain confined to record codecs; their golden
+digest fixtures justify retaining them. The two-child runtime boundary remains
+explicit and does not claim general tree or subtree execution.
+
+Three concrete leftovers are corrected in the pending 0.205.1 patch:
+
+- Maintenance status had a second list of observation steps, missing the
+  supported predecessor's two actual preflight records. Status now projects the
+  same selected observations as execution. Retained replies remain distinct
+  from completion receipts, including after an installation reply is lost.
+- Detailed child status blocks lacked their names. Each block now identifies
+  its retained child, using the existing terminal escaping owner.
+- README copied outdated Tooling/Testkit versions. Manifests and lockfiles remain
+  the version owners; the documentation no longer duplicates those numbers.
+
+Reuse the legacy progress projection and regressions recorded under
+[readable retained-operation status](#readable-retained-operation-status), at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` and history
+`afc2521ed02744c1e1a376d59dae5e2b80d9dec5`: preserve exact-request correlation and
+unknown outcomes without adding a second progress engine. The predecessor
+fixture and two-child CLI journey now check the corrected local projection.
+No approvals, signed attempts, runtime effects or dependencies change in this patch.
+
+Focused validation passes three Host maintenance tests, eight CLI status tests,
+Host/CLI and Root-fixture Clippy, and formatting. The installed predecessor
+journey verifies empty/completed custody and unknown installation outcomes;
+the installed two-child journey verifies both named detail sections alongside
+creation, upgrades and maintenance. Logs remain under
+`target/qualification/status-*.log`. These follow-up changes remain local and
+uncommitted after the 0.205.0 push; `make canic` installs them for hands-on use.
+
 ## 0.205.0 release qualification
 
 On 2026-11-15, the complete Linux release gate passes: `make lint`, then

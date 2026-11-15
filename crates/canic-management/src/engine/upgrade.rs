@@ -1,18 +1,17 @@
 //! Serial child upgrades with bounded immutable history and one active effect owner.
 use super::{
-    MANAGEMENT_LIMITS, OBSERVING, STATE, State, failure, fault, management, observing,
-    reserved_cycles, schedule, snapshot,
+    MANAGEMENT_LIMITS, OBSERVING, STATE, State, delivery, failure, fault, management, observing,
+    reserved_cycles, schedule, snapshot, storage::Artifact,
 };
 use canic_management_protocol::children::Slot;
 use canic_management_protocol::upgrade::{
     Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage, Status as UpgradeStatus,
 };
-use canic_management_protocol::{Failure, Phase, Refusal, STAGE_LIMITS, digest};
+use canic_management_protocol::{Failure, Phase, Refusal, digest, stored};
 use ic_platform::{
     candid_codec::{self, decoder},
     management_canister_types::{
-        CanisterIdRecord, CanisterInstallMode, CanisterStatusResult, ChunkHash,
-        InstallChunkedCodeArgs, UploadChunkArgs,
+        CanisterIdRecord, CanisterInstallMode, CanisterStatusResult, InstallChunkedCodeArgs,
     },
 };
 use ic_platform_runtime::{
@@ -94,12 +93,12 @@ pub(super) fn validate(state: &State, slot: Slot) {
     }
     if let Some(a) = &journal.1.approval {
         assert_eq!(
-            digest(&state.artifact.get().0[slot.index()].1),
-            a.module_hash,
+            state.artifact.get().0[slot.index()].hash(true),
+            Some(a.module_hash),
             "current artifact custody"
         );
     } else {
-        assert!(state.artifact.get().0[slot.index()].1.is_empty());
+        assert!(state.artifact.get().0[slot.index()].hash(true).is_none());
     }
 }
 
@@ -156,13 +155,52 @@ fn validate_record(
 /// # Panics
 /// Traps for noncontrollers, uninitialized storage or failed durable writes.
 pub fn stage(slot: Slot, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
+    stage_input(slot, Input::Inline(input))
+}
+pub(super) enum Input {
+    Inline(UpgradeStage),
+    Stored(stored::Stage<Approval>),
+}
+impl Input {
+    fn approval(&self) -> &Approval {
+        match self {
+            Self::Inline(s) => &s.approval,
+            Self::Stored(s) => &s.approval,
+        }
+    }
+    fn validate(
+        &self,
+        manager: &str,
+        child: &str,
+        previous: &[u8; 32],
+        now: u64,
+    ) -> Result<(), Refusal> {
+        match self {
+            Self::Inline(input) => input.validate(manager, child, previous, now),
+            Self::Stored(input) => {
+                input.approval.validate(manager, child, previous, now)?;
+                delivery::admit(&input.reference, &input.approval.module_hash)
+            }
+        }
+    }
+}
+pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Refusal> {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    let retained = observe(slot, &input.approval);
+    let approval = input.approval().clone();
+    if delivery::is_stored(slot) != matches!(&input, Input::Stored(_)) {
+        return Err(Refusal::Binding);
+    }
+    let retained = observe(slot, &approval);
     if retained.approval.is_some() {
-        return if digest(&input.wasm) == input.approval.module_hash {
+        let matches = match &input {
+            Input::Inline(input) => digest(&input.wasm) == approval.module_hash,
+            Input::Stored(input) => super::stored_api::upgrade_source(slot, &approval)
+                .is_some_and(|source| source.reference == input.reference),
+        };
+        return if matches {
             Ok(retained)
         } else {
             Err(Refusal::Artifact)
@@ -199,7 +237,7 @@ pub fn stage(slot: Slot, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> 
     if current
         .approval
         .as_ref()
-        .is_some_and(|old| input.approval.execute_at_ns <= old.execute_at_ns)
+        .is_some_and(|old| approval.execute_at_ns <= old.execute_at_ns)
     {
         return Err(Refusal::Occupied);
     }
@@ -219,7 +257,13 @@ pub fn stage(slot: Slot, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> 
             .artifact
             .get()
             .clone();
-        artifacts.0[slot.index()].1 = input.wasm;
+        match (&mut artifacts.0[slot.index()], input) {
+            (Artifact::Inline(artifact), Input::Inline(input)) => artifact.1 = input.wasm,
+            (Artifact::Stored(sources), Input::Stored(input)) => sources
+                .upgrades
+                .push(delivery::retained(slot, stored::STAGE_UPGRADE, &input)),
+            _ => unreachable!("source mode admitted"),
+        }
         artifacts
     });
     if !artifacts.fits() {
@@ -240,7 +284,7 @@ pub fn stage(slot: Slot, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> 
             journal.2.push(journal.1.clone());
         }
         journal.1 = UpgradeStatus {
-            approval: Some(input.approval),
+            approval: Some(approval),
             phase: UpgradePhase::Scheduled,
             ..Default::default()
         };
@@ -308,6 +352,12 @@ pub(super) async fn step(slot: Slot) {
             return;
         }
     }
+    if s.phase == UpgradePhase::Scheduled && delivery::needs_pin(slot, true) {
+        mutate(slot, |s| s.failure = Some(Failure::Uncertain));
+        let result = delivery::pin(slot, true).await;
+        mutate(slot, |s| s.failure = result.err());
+        return; // Retention commits before subsequent inspection or installation.
+    }
     let result = match s.phase {
         UpgradePhase::Scheduled => inspect(a).await.and_then(|value| {
             if value.module_hash.as_deref() != Some(a.previous_module.as_slice())
@@ -331,31 +381,12 @@ pub(super) async fn step(slot: Slot) {
             Ok(())
         }),
         UpgradePhase::Checked => {
-            let wasm = STATE.with_borrow(|state| {
-                state.as_ref().expect("state").artifact.get().0[slot.index()]
-                    .1
-                    .clone()
-            });
-            let bytes = candid_codec::encode_one(
-                &UploadChunkArgs {
-                    canister_id: api::canister_self(),
-                    chunk: wasm,
-                },
-                STAGE_LIMITS.bytes,
-            )
-            .expect("upload args");
-            issue(slot, 0, UpgradePhase::UploadIssued, &bytes);
-            let result = management("upload_chunk", bytes, 0)
+            let upload = delivery::upload(slot, true, a.module_hash, a.expires_at_ns);
+            issue(slot, 0, UpgradePhase::UploadIssued, &upload.bytes);
+            let result = upload
+                .send()
                 .await
-                .and_then(|bytes| {
-                    let hash: ChunkHash = decoder::decode_one(&bytes, MANAGEMENT_LIMITS)
-                        .map_err(|_| Failure::InvalidReply)?;
-                    if hash.hash != a.module_hash {
-                        return Err(Failure::Mismatch);
-                    }
-                    mutate(slot, |s| s.phase = UpgradePhase::Uploaded);
-                    Ok(())
-                });
+                .map(|()| mutate(slot, |s| s.phase = UpgradePhase::Uploaded));
             fault(slot, 6); // Lost upload callback is recoverable from the chunk store.
             result
         }
@@ -378,15 +409,14 @@ pub(super) async fn step(slot: Slot) {
                         mutate(slot, |s| s.phase = UpgradePhase::ReserveBlocked);
                         return;
                     }
+                    let (store, chunks) = delivery::layout(slot, true, a.module_hash);
                     let bytes = candid_codec::encode_one(
                         &InstallChunkedCodeArgs {
                             mode: CanisterInstallMode::Upgrade(None),
                             target_canister: Principal::from_text(&a.child)
                                 .expect("retained child"),
-                            store_canister: Some(api::canister_self()),
-                            chunk_hashes_list: vec![ChunkHash {
-                                hash: a.module_hash.to_vec(),
-                            }],
+                            store_canister: Some(store),
+                            chunk_hashes_list: chunks,
                             wasm_module_hash: a.module_hash.to_vec(),
                             arg: vec![],
                             sender_canister_version: Some(api::canister_version()),
@@ -427,20 +457,15 @@ async fn observation(slot: Slot) -> Result<(), Failure> {
         return Ok(());
     };
     match s.phase {
-        UpgradePhase::UploadIssued => {
-            let bytes = candid_codec::encode_one(
-                &CanisterIdRecord {
-                    canister_id: api::canister_self(),
-                },
-                1024,
-            )
-            .expect("chunks args");
-            let reply = management("stored_chunks", bytes, 0).await?;
-            let chunks: Vec<ChunkHash> = decoder::decode_one(&reply, MANAGEMENT_LIMITS)
-                .map_err(|_| Failure::InvalidReply)?;
-            if !chunks.iter().any(|c| c.hash == a.module_hash) {
-                return Err(Failure::Mismatch);
+        UpgradePhase::Scheduled if delivery::needs_pin(slot, true) => {
+            if delivery::source(slot, true).expect("Store source").state == stored::PinState::Issued
+            {
+                delivery::pin(slot, true).await?;
+                mutate(slot, |s| s.failure = None);
             }
+        }
+        UpgradePhase::UploadIssued => {
+            delivery::observe_cache(slot, true, a.module_hash).await?;
             mutate(slot, |s| {
                 s.phase = UpgradePhase::Uploaded;
                 s.failure = None;
@@ -492,6 +517,13 @@ pub async fn reconcile(
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
+    assert!(
+        !delivery::is_stored(slot),
+        "Store-bound reconciliation required"
+    );
+    reconcile_bound(slot, expected).await
+}
+pub(super) async fn reconcile_bound(slot: Slot, expected: Approval) -> UpgradeStatus {
     let retained = observe(slot, &expected);
     assert_eq!(
         retained.approval.as_ref(),

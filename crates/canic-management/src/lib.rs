@@ -38,3 +38,11 @@ pub struct Readiness {
     /// Bounded response decoder and application readiness check.
     pub accept: fn(&[u8]) -> Result<(), canic_management_protocol::Failure>,
 }
+
+/// Store-bound operations, mounted explicitly by the owning canister.
+#[cfg(target_arch = "wasm32")]
+pub mod stored {
+    pub use crate::engine::stored_api::{
+        custody, reconcile, reconcile_upgrade, stage, stage_upgrade,
+    };
+}

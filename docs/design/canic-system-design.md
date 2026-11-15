@@ -52,7 +52,7 @@ M0 resolves only the contracts needed for the first effects and records later de
 
 The next design witness is a persistent application with one entry canister and a shared worker on one subnet. Build and install it, serve an authenticated application operation, grow to a second worker under a finite budget, interrupt a management call, recover its original outcome, and inspect what happened. M2 must include meaningful application state, one actual stateful supplier such as IcyDB, and explicit endpoint, memory and timer composition. By M3, a second executable must preserve the promised application invariant and an operation awaiting reconciliation. This narrow rehearsal does not claim general migration or production readiness.
 
-The application owns logical user routing and data semantics. Begin with explicit canister declarations. Introduce groups, role catalogs, a global directory, warm pools, cross-subnet coordination or a separate artifact canister only when a concrete journey needs them.
+The application owns logical user routing and data semantics. Begin with explicit canister declarations. Introduce groups, role catalogs, a global directory, warm pools or cross-subnet coordination only when a concrete journey needs them. The 2026-11-15 decision selects a separate per-fleet Wasm Store for managed deployments; its contract is in section 12.
 
 For each mechanism, record the need, failure being prevented, simplest candidate, state/effects introduced and acceptance witness. Compare direct host-controlled installation with a subnet-local executor before selecting the first managed topology. Autonomous growth requires a surviving on-chain effect owner; a permanently running operator process is not an equivalent substitute. Choose one initial topology after this comparison rather than implementing speculative deployment modes.
 
@@ -66,8 +66,9 @@ or require replacing the existing mainnet demos before their successor qualifies
   that definition in several fleets with distinct networks, identities and budgets.
 - Generate a small buildable Rust application with one application canister
   controlled by one Root/management owner. Support a persistent local development
-  loop and the same reviewed deployment semantics on mainnet. A separate
-  Coordinator or Store is not part of this starter.
+  loop and the same reviewed deployment semantics on mainnet. The selected next
+  topology adds a per-fleet Wasm Store controlled by Root. A Coordinator remains
+  conditional; the currently shipped starter has no Store yet.
 - Build, review and converge the complete selected fleet through one plan/apply
   path. Repeating a completed convergence has no mutation effects. Individual
   canister changes use the same owners and evidence.
@@ -86,9 +87,9 @@ or require replacing the existing mainnet demos before their successor qualifies
   after losing the journals. Application frontend integration remains deferred;
   the existing read-only fleet visualization stays in scope.
 
-Deliver these as small usable increments within M2/M3. The first is the reusable
-app definition and generated Root-plus-app local journey; whole-fleet convergence
-then uses that same definition. Qualify discovery and subtree state propagation
+Deliver these as small usable increments within M2/M3. The existing reusable
+app definition and Root-plus-app journey extend to Root/Store/app through the
+same whole-fleet convergence owner. Qualify discovery and subtree state propagation
 before broadening growth or subtree upgrades. No new command aliases, generic
 workflow engine or package catalogue follows merely from this scope decision.
 
@@ -108,7 +109,7 @@ These are documented dependency boundaries, not four parallel implementations. A
 | Decision | Recommendation | Consequence |
 | --- | --- | --- |
 | Product organization | Organize by responsibility and state owner | Do not recreate a universal core containing every service |
-| Fleet topology | Derive physical authorities from custody, autonomous work, placement and resource needs | Coordinator, Root and Store are candidate responsibilities, not mandatory canisters |
+| Fleet topology | Managed fleets select Root and a separate versioned Wasm Store; derive further infrastructure from concrete needs | Root owns effects, Store owns artifact bytes; Coordinator remains conditional |
 | Application runtime | Only explicitly selected endpoint, binding and lifecycle support | A leaf does not link provisioning, estate accounting or host tooling |
 | Execution | Domain-specific durable operations sharing small mechanical primitives | No generic workflow interpreter or universal journal schema |
 | Authorization | Separate infrastructure authority, optional Fleet admission, application identity and resource permission | Passing one check never implies the others; Fleet filtering is explicitly selected |
@@ -243,7 +244,7 @@ Use direct functions and domain modules first. A module may contain its transiti
 
 ### Infrastructure roles
 
-The next generated starter selects one Root/management owner controlling one application canister. Retain an explicit external controller for that owner's maintenance and recovery; qualify its exact controller graph before deployment. This selects the responsibility and minimal topology, not a public rename or the old Root implementation. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
+The selected next managed starter has one Root/management owner controlling a Wasm Store and one application canister. The Store is an infrastructure role, separate from application allocation cardinality. Retain an explicit external controller for Root's maintenance and recovery; show that principal as controller metadata outside the canister tree. Qualify the exact graph before deployment. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
 
 The experimental `canic-root` now qualifies one or two direct greeting children locally,
 using the same bounded management engine as the profile manager. Its controller
@@ -261,18 +262,18 @@ compares complete custody for both slots, including Empty. General trees and
 subtree operations remain unqualified. See the
 [managed-child evidence](../qualification/history.md#managed-child-cli-approval).
 
-Artifact distribution is a responsibility to assign, not a mandatory Store canister. Compare direct reviewed uploads and executor-local storage against a separate service using artifact size, retention, autonomous installation, memory pressure and recurring canister cost. Select the simplest qualified arrangement for the first workload. A separate service earns its place through demonstrated distribution or isolation needs. Artifact possession never supplies approval authority.
+The maintainer's 2026-11-15 decision selects a separate, dynamic, versioned Wasm Store per managed fleet. Root must not be the durable artifact repository. Root retains approved immutable references, reservations and effect evidence; the Store retains verified bytes, versions and retention pins. This separates artifact growth and release history from Root's authority journal and maintenance. Section 12 owns the contract and migration gates. Direct host bootstrap and passive artifact tools remain usable without installing a fleet. Artifact possession never supplies deployment approval authority.
 
 External governance retains the controller hierarchy it approves. A governance integration may place the same executor logic inside an existing infrastructure owner only after composition proves one lifecycle and one effect owner. No hidden recovery key or universal operator bypass is acceptable.
 
-Later sections use Coordinator, executor and Store to name these responsibilities in larger deployments. Their contracts apply where selected; the names do not override the topology decision here.
+Later sections use Coordinator, executor and Store to name these responsibilities. Store is selected for managed fleets; Coordinator remains conditional. Names do not import the legacy implementations.
 
 The existing mainnet topology is recorded in M0: the operator directly
 controls Hello World, the profile entry/shared worker, and the profile manager;
 only the manager's autonomous worker is controlled by that manager. This is not a
 fleet-wide executor or a general Root. Its artifact bytes are retained in the
-manager; no separate Coordinator or Store has been selected. Generalizing that
-owner remains subject to the custody and workload gates below.
+manager; those deployments predate the separate Store decision. Moving their
+custody requires the qualified transition below, not an automatic migration.
 
 ### Repository and workspace boundary
 
@@ -429,14 +430,14 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The next generated starter selects an explicitly trusted operator recovery authority R controlling one Root/management owner E, which controls the application canister. R is an external principal with retained host custody, not another infrastructure canister required by this design. R performs E's maintenance; its power to replace E is explicit transitive trust. The implemented one-slot manager qualifies only its narrow form of this graph. Generalizing it to an executor requires validation of the management path, surviving custody and artifact availability for the admitted workload. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
+The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Existing Root/manager fixtures do not qualify Store bootstrap or maintenance. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |
 | Application | E; E performs management effects | E retains the application upgrade operation | E holds allocation identity, grants and receipts outside the application; R can repair E |
 | Subnet executor E | R; R performs E maintenance effects | R's authenticated host custody retains E's upgrade operation; E's domain evidence is preserved or exported before stopping | R retains inventory and outstanding exposure; loss of that evidence blocks new effects, not a fresh allowance |
 | Coordinator, if selected | R; R performs maintenance | R retains the upgrade journal; executors retain their acknowledged delegation liabilities | R retains reconciliation evidence; unavailable delegations remain encumbered |
-| Artifact service, if selected | Its named executor; that executor performs maintenance | Controller retains the operation and immutable artifact references outside the service | Controller preserves or reconstructs exact bytes; missing bytes block installation |
+| Per-fleet Wasm Store | E; E performs Store maintenance | E retains the maintenance operation and immutable references outside Store; Store preserves catalog, bytes, upload progress and pins | Retained host backup/export permits exact reconstruction; unavailable or missing bytes block dependent effects without losing Root's journal |
 
 A role is never the sole surviving executor or journal owner for the operation that stops or replaces it. Ingress-result custody and its retention horizon must be demonstrated for R as well as E. An operator cannot resolve missing evidence by declaring an uncertain operation failed.
 
@@ -715,6 +716,35 @@ Do not assume synchronized cross-canister clocks. Preserve upstream signed deadl
 
 Qualify the selected service arrangement, embedded or separately deployed. If both arrangements are eventually supported, they must use the same independently owned service engine, with each arrangement qualified for its actual composition boundaries. Supplier packages remain usable without Canic. Direct supplier types are preferred where identity is shared; duplicate DTOs require an actual boundary. Pin and qualify type/runtime identities that must agree. Do not force unrelated tools and product packages to advance as one dependency generation.
 
+### Embedded Blob composition witness
+
+The first optional adapter is a module in `canic`, behind its `blob` feature.
+It mounts three bounded Platform/Wire endpoints with captured caller identity,
+using the independent supplier's Command, Inspection and management contracts.
+The application explicitly grants Blob's declared Storage lease alongside its
+catalog, creates with its actual principal, reopens with `Service::open`, and
+calls the service synchronously. Mounting contributes no storage bootstrap,
+timers, manager selection or activation.
+
+The installed asset-catalog witness in Canic's qualification workspace owns two
+users, four lifetime catalog slots and publication policy. Checked user paths may
+invoke local application authority; public uploader paths preserve the actual
+caller. Conflicts/capacity precede Blob mutation. Later persistence or reply
+encoding failure traps, preserving atomic rollback of both owners. Blob retains
+all reference/accounting and maintenance decisions. Closed admission survives
+upgrade until activation of the exact attempt; readiness never activates it.
+
+Current Host and Root effects use empty installation/upgrade arguments and have
+no approved Blob drain/stop/reopen/activation sequence. That is an explicit
+integration gap, not permission to weaken the supplier's hooks. The local witness
+uses explicit installation and method-bound unit upgrade arguments with a trusted
+controller and a separately configured manager. Fleet lifecycle support must
+extend the existing approval/effect owners and bind those arguments and the exact
+maintenance attempt before this app can join the managed fleet journey. No parallel
+Blob deployment CLI or recovery engine is selected. See the
+[current witness and input evidence](../demos/blob.md). This does not close the
+provider journey, certificate, settlement or sustained-history gates.
+
 ## 12 Protocols transport and artifact identity
 
 Domain transitions consume logical bounded values. Endpoint adapters select and invoke supplier-owned codecs, and call adapters own a single attempt. Application operations own retry and consistency. A decode failure after a remote mutation must not trigger a second request using another codec.
@@ -786,6 +816,107 @@ Separate four identities: logical protocol/schema, transport encoding, canonical
 A call contract declares request/reply limits, wait policy, attached-cycle maximum and effect certainty. Check request size before dispatch and reply size before decoding. An oversized reply may still follow a completed remote effect. Metrics use bounded outcome/route/method classes, not arbitrary principal labels. Generic calls do not acquire mandatory Fleet lookups.
 
 Build records bind exact sources, selected lock graph, toolchain, features, target, relevant environment, generated inputs and final artifacts. Read executable paths from Cargo artifact messages, not guessed filenames. Generated infrastructure entrypoints stay small and output under build storage; applications do not maintain copies of canonical infrastructure source.
+
+### Per-fleet versioned Wasm Store
+
+Selected on 2026-11-15; not integrated with the current Root or fleet CLI. The
+standalone Store now implements versioned publication, chunk custody, quota
+changes, durable pins and bounded management-cache preparation; see its
+[current scope](../demos/wasm-store.md). The full contract below still requires
+Root approval/custody integration, pin release, reclamation and fleet integration. Each managed
+fleet owns a separate Store with a persistent, dynamically extensible catalog.
+Adding artifacts or versions must not require rebuilding or reinstalling Root or
+Store. The first implementation serves one subnet. Its canister tree is:
+
+```text
+Root
+├─ wasm-store
+└─ app
+```
+
+The external operator controls Root and is displayed separately. Root owns
+management effects and deployment approval. Store owns artifact publication,
+storage and delivery; it cannot authorize an application upgrade. Root's durable
+records contain references and evidence, not Wasm payloads or a mirrored catalog.
+Bounded transient transfer buffers are allowed; they are not a second repository.
+
+| Concern | Required contract |
+| --- | --- |
+| Artifact identity | Immutable content digest, exact length, encoding, ordered chunk hashes and build/protocol metadata. Specify stored-byte and installed-module hashes separately where encoding changes them. |
+| Release versions | A logical artifact name plus an explicit version resolves to one immutable manifest. Repeating identical publication is idempotent; assigning different bytes to that version is refused. Paginated history survives selection of a newer release. |
+| Selected release | A mutable, authenticated selection points to a published version. Selection changes are retained and do not deploy anything. Plan review resolves it once to the exact manifest/hash and Store binding; apply never resolves a moving “latest” again. |
+| Upload | Authenticated, bounded, resumable chunk staging with reserved capacity. Verify each chunk and the complete ordered payload before atomic publication. Interrupted uploads remain incomplete and cannot be installed; identical committed chunks can be reused. |
+| Dynamic capacity | Store owns explicit byte, artifact, version, staging and request/work limits with visible usage/headroom. Authorized limit changes preserve data and require no reinstall; platform ceilings still apply. No fixed two-version array, whole-catalog payload rewrite or inherited 512 KiB child/approximately 1 MiB fleet product ceiling. |
+| Retention | Root obtains an idempotent durable pin for the exact approved operation before relying on availability. Pin acquisition and release have retained outcomes. Pending, uncertain and recovery-required artifacts cannot be evicted; rollback candidates have an explicit retention policy. Expiry or a lost release reply alone does not prove that a pin can be removed. |
+| Deletion | Reject deletion of pinned content. Removing a selection does not delete its release. Explicit bounded reclamation removes eligible bytes while retaining version/hash history and an availability/tombstone record; it cannot permit reuse of a version for different bytes. |
+| Observation | Show versions, selected and deployed hashes separately, upload progress, pins/blockers, bytes/headroom and delivery-cache readiness. Catalog listings read metadata rather than scanning artifact payloads. |
+
+Stable Store bytes are authoritative; the IC management chunk store is a
+rebuildable installation cache. Verify cached chunk presence and restore only
+missing chunks from the exact pinned artifact. Root remains the caller of
+`install_chunked_code`. The IC requires its chunk-store canister to share the
+target's subnet, and the caller to control that store or be the store itself.
+Root controlling both Store and application satisfies the selected graph. See the
+[management-canister specification](https://docs.internetcomputer.org/references/ic-interface-spec/management-canister/#ic-method-install_chunked_code).
+Multi-subnet fleets retain one logical version authority but must qualify
+subnet-local delivery and its controller graph before use; a remote Store is not
+automatically a usable management chunk source. Do not duplicate release policy
+or make Root the durable cross-subnet payload repository.
+
+Bootstrap uses the existing reviewed host/effect path to establish Root and Store
+under exact hashes, typed creation outputs and bounded budgets, then verifies
+Store readiness before admitting dependent application effects. Store bootstrap
+and replacement must not depend on fetching their only recovery executable from
+that same unavailable Store. Host retains the exact infrastructure executables
+and the selected recovery export. Store maintenance preserves catalog, payloads,
+staged uploads and pins across two executables; Root retains the maintenance
+journal outside Store. A Store outage blocks dependent installation, not normal
+application calls or access to Root's retained operation status.
+
+Deploying an older retained version is a new approved upgrade subject to the
+application's schema and lifecycle compatibility checks. Artifact availability
+does not make application-state rollback safe.
+
+### Deployment latency and Store transition
+
+Upload each distinct artifact once per fleet, reuse it across children and
+upgrades, and rebuild only missing management-cache chunks. Keep bounded transfer
+work separate from management-effect concurrency; faster publication must not
+introduce competing installs. Measure cold bootstrap, cold upload, warm reuse,
+upgrade and interrupted-resume paths separately: wall time, bytes transferred,
+management calls, cycles, build time, scheduled waiting and readiness observation.
+The acceptance witness includes an unchanged artifact reused by a second child
+with no payload re-upload while the verified cache remains available.
+
+Current fleet and individual managed planning default dispatch to ten minutes
+after planning. This is a code-derived scheduling delay, not a measured Store
+bottleneck. The next interactive contract should dispatch once approved
+prerequisites are ready within the original bounded validity window; deliberate
+future scheduling remains explicit. Qualify that contract before changing the
+default. Existing plans keep their exact timestamps, digests and signed attempts;
+no performance change silently extends authority. Report phase timings before
+claiming a speedup; an extra canister can increase cold-bootstrap cost.
+
+Inline Root deployments retain their 512 KiB per-artifact and 1,048,512-byte
+combined custody limits. The pending Store-backed engine qualifies immutable
+references, pin/callback recovery and preserved upgrade history through the same
+effect owner; it does not yet select Store in fleet Host/CLI plans. See the
+[current implementation scope](../demos/wasm-store.md). First prove fresh
+Root/Store/app creation, multiple coexisting versions, interrupted upload/resume,
+hash/version conflicts, quota exhaustion, cache reconstruction, pin/deletion
+races, operator-absent installation and independent Root/Store maintenance.
+Adapt the applicable legacy regression cases recorded in the
+[Store decision evidence](../qualification/history.md#versioned-wasm-store-decision-2026-11-15).
+Integrate through the existing fleet plan/apply/status owners, not a second
+deployment engine or an unqualified set of parallel CLI commands.
+
+Existing Root-held artifacts move only through an explicitly qualified custody
+transition: verify exact Store bytes and pins, preserve every operation's original
+authority and evidence, then prove the upgraded owner uses those references
+before retiring its payload storage. Unfinished/uncertain old work blocks a
+transition unless that exact state has a preservation proof. Never rewrite old
+approvals, reset storage or reinstall to bypass migration. Fresh fleets can use
+the new contract before existing-fleet migration is supported.
 
 ### Direct calls and optional IC Relay
 
@@ -958,7 +1089,7 @@ this boundary in M3; each selected pattern includes its maintenance proof.
 | --- | --- | --- |
 | M0 First deployment contract and baseline | Specify the Hello World walkthrough and finite budget; choose its topology/controller graph, approval representation and provider contracts; identify the later stateful consumer and preservation requirements | Exercise the selected operator management path and creation-result custody in small fixtures; classify unavoidable uncertainty; defer unrelated governance/composition decisions to their owning implementation gates |
 | M1 Hands-on Hello World | Deliver usable CLI/artifact inspection and a narrow build, plan, apply, call and status journey locally and on mainnet, then deploy a changed greeting | Team follows public instructions; exact approval and retained effect custody, explicit identity/state semantics, bounded spending and truthful status; one parsing/artifact identity and operation path; passive preview alone is insufficient |
-| M2 Composed managed application | Reusable app definition, generated Root-plus-app starter and persistent local loop; whole-fleet convergence; real consumer state, stateful supplier composition, cascading discovery and runnable fleet visualization | Same app definition serves two fleets; repeated convergence has no mutations; exact authority and interrupted-effect recovery; explicit memory/timer ownership and first adoption comparison; no second provisioning path |
+| M2 Composed managed application | Reusable app definition, generated Root/Store/app starter and persistent local loop; versioned artifact custody; whole-fleet convergence; real consumer state, stateful supplier composition, cascading discovery and runnable fleet visualization | Same app definition serves two fleets; repeated convergence has no mutations; Store publication, retention, maintenance and warm-reuse evidence from section 12; exact authority and interrupted-effect recovery; explicit memory/timer ownership and first adoption comparison; no second provisioning path |
 | M3 Autonomous bounded operation and early persistence | Finite grants, composable growth, subtree drain/suspend/resume and narrow persistent subtree upgrade with surviving operation evidence | Sibling isolation, descendant acknowledgements, concurrent growth fencing, operator absence, late replies and recovery after upgrade; no duplicate retry/funding owner; live Rust futures need not migrate |
 | M4 Multi-subnet scale, when admitted | Consumer-required coordination, dynamic inventory, shared tenancy and explicit delegation reclamation | Admit the consumer's multi-subnet need first; unreachable executor cannot release allowance; fence/reconciliation and selected revocation semantics are proven; no central round trip per local continuation |
 | M5 Expanded composition, when admitted | Complete the selected Auth, Blob or frontend journeys building on M2's composition | Admit each integration's consumer need separately and qualify its selected arrangement; supplier independence; no copied engine or second lifecycle owner |
@@ -967,7 +1098,7 @@ this boundary in M3; each selected pattern includes its maintenance proof.
 | M7 Production lifecycle and governance | Complete maintenance-window lifecycle and selected governance profile qualification | Broader migration, infrastructure recovery and actual governed effects using early contracts; production claim permitted only here |
 | M8 Broader adoption value | Representative additional consumers and accumulated baseline comparisons | Measured net responsibility removed, including suppliers; reject extensions without demonstrated value |
 
-Record M7 preservation requirements during M0 and exercise their narrow persistence path by M3. Complete governance-specific feasibility before implementing that integration, without making it a prerequisite for the direct-operator experiment. M1 implements only the bootstrap/install/status subset required by Hello World using the selected management owner; M2 extends that same path with stateful composition and allocation. A minimal executor is required in M1 if the selected topology uses one; Coordinator, a dedicated Store, Auth and IcyDB are not prerequisites for a public greeting. There is no throwaway second deployment engine.
+Record M7 preservation requirements during M0 and exercise their narrow persistence path by M3. Complete governance-specific feasibility before implementing that integration, without making it a prerequisite for the direct-operator experiment. M1's direct public greeting does not require Store, Coordinator, Auth or IcyDB. M2 extends the existing effect path with the selected per-fleet Store and stateful composition; the Store decision does not retroactively invalidate historical M0/M1 evidence. There is no throwaway second deployment engine.
 
 Every later milestone extends a runnable team journey and updates its example, operator instructions and limitations. M6A and M6B are separately reviewable outcomes; shared custody principles do not couple their completion gates. Expansion depends on preceding hands-on and consumer evidence: if M2 adds burden without a credible reduction, revise the architecture before building the larger management surface. Reorder optional adapters for demonstrated consumer needs while retaining dependency and recovery proofs.
 
@@ -1002,7 +1133,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Specs, groups and deployments | Reusable app definition instantiated by fleets, sections 3, 5, 8 | Required — app blueprint and explicit instances; generic groups remain consumer-gated | Two fleets share definitions without sharing identities, journals or budgets |
 | Coordinator and Registry | Conditional global authority with bounded delegation, sections 4, 6, 8 | Consumer-gated — global constraints | Demonstrated global constraint and membership/reservation concurrency |
 | Root control plane | One surviving Root/management owner controls the generated starter's app, sections 4, 7–9 | Required — selected starter topology; general executor behavior still needs qualification | Installed management journey and custody/artifact availability during operator absence |
-| Wasm Store and templates | Preserve artifact integrity; select physical distribution after comparison, sections 4, 12 | Required — integrity; separate Store consumer-gated | Integrity/retention proof and justified deployment overhead |
+| Wasm Store and versioned artifacts | Separate dynamic per-fleet Store; immutable releases, selected-version references and retention, sections 4, 12 | Required — selected managed-fleet architecture; generic template engines remain consumer-gated | Resumable publication, coexisting versions, pins, cache reconstruction, maintenance and measured cold/warm deployment costs |
 | Network enrollment and subnet catalog | Retain exact trust and typed evidence, sections 5–6 | Required — selected network and subnet | Wrong network and stale evidence refusal |
 | Fleet generation and Ensure | One compiler and plan/apply owner, sections 5, 7 | Required — whole selected fleet; current CLI qualifies Root with one or two direct children | Repeated convergence has no effects; interrupted apply retains exact targets |
 | Infrastructure bootstrap and supplied IDs | Explicit retained operation, section 7 | Required — bootstrap; supplied-ID breadth consumer-gated | Lost reply and controller mismatch |
@@ -1100,7 +1231,7 @@ The architecture is accepted as the basis for M0. The choices below still requir
 | Governance profile | Direct operator for M1; hierarchical governance over infrastructure owners as proposed in section 6 | M0 proves the operator path; prove governance feasibility before that integration; direct SNS registration of every descendant would require a different effect owner |
 | Artifact binding | Separate executable identity from release approval; one activation evidence chain | Structural finalization excluded from initial product |
 | Restore boundary | Application rollback with surviving authoritative control plane | Whole-Fleet/control-plane rollback needs a separately qualified external authority/evidence procedure |
-| Physical infrastructure | Next generated starter: operator → one Root/management owner → one application canister | Qualify owner maintenance and application deployment through the existing effect path; add Coordinator/Store only for demonstrated needs |
+| Physical infrastructure | Root controls a per-fleet Wasm Store and application canister; external operator controls Root | Qualify Store bootstrap, versioned custody and maintenance through the existing effect path; Coordinator remains conditional; current Root-held payloads require qualified migration |
 | Fleet admission | Optional extra deployment policy | Application authentication works independently; select propagation semantics before adding machinery |
 | Package and repository boundaries | One product repository/workspace with separate host/runtime graphs | Split further for demonstrated compilation, dependency or ownership needs |
 | Application framework ownership | Application owns lifecycle and participant composition | Combined framework fixture before public composability claims |

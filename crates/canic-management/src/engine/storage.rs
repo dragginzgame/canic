@@ -46,8 +46,8 @@ impl Journal {
 }
 
 #[derive(Clone, Default)]
-pub(super) struct Artifact(pub Vec<u8>, pub Vec<u8>);
-impl Storable for Artifact {
+pub(super) struct Inline(pub Vec<u8>, pub Vec<u8>);
+impl Storable for Inline {
     const BOUND: Bound = Bound::Bounded {
         max_size: ARTIFACT_BYTES as u32,
         is_fixed_size: false,
@@ -82,6 +82,85 @@ impl Storable for Artifact {
             Ok(Self(bytes.into_owned(), vec![]))
         } else {
             Err(CodecError::Invalid("creation artifact migration"))
+        }
+    }
+}
+
+// Inline payloads keep their original codec. Store custody fits the same lease and
+// never retains application bytes. Old executables refuse the new per-child tag.
+#[derive(Clone)]
+pub(super) enum Artifact {
+    Inline(Inline),
+    Stored(canic_management_protocol::stored::Sources),
+}
+impl Default for Artifact {
+    fn default() -> Self {
+        Self::Inline(Inline::default())
+    }
+}
+impl Artifact {
+    pub(super) fn sources(&self) -> Option<&canic_management_protocol::stored::Sources> {
+        match self {
+            Self::Inline(_) => None,
+            Self::Stored(value) => Some(value),
+        }
+    }
+    pub(super) fn wasm(&self, upgrade: bool) -> &[u8] {
+        match self {
+            Self::Inline(value) => {
+                if upgrade {
+                    &value.1
+                } else {
+                    &value.0
+                }
+            }
+            Self::Stored(_) => panic!("Store bytes never belong to Root"),
+        }
+    }
+    pub(super) fn hash(&self, upgrade: bool) -> Option<[u8; 32]> {
+        match self {
+            Self::Inline(_) => {
+                let bytes = self.wasm(upgrade);
+                (!bytes.is_empty()).then(|| canic_management_protocol::digest(bytes))
+            }
+            Self::Stored(value) => if upgrade {
+                value.upgrades.last()
+            } else {
+                Some(&value.creation)
+            }
+            .map(|source| source.reference.manifest.hash),
+        }
+    }
+}
+impl Storable for Artifact {
+    const BOUND: Bound = Inline::BOUND;
+    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, CodecError> {
+        match self {
+            Self::Inline(value) => value.to_bytes(),
+            Self::Stored(value) => {
+                if value.upgrades.len() > upgrade::MAX_UPGRADES {
+                    return Err(CodecError::Invalid("Store history bound"));
+                }
+                let mut bytes = b"CUS1".to_vec();
+                bytes.extend(
+                    ic_wire::native::encode(value, canic_management_protocol::stored::LIMITS)
+                        .map_err(|_| CodecError::Invalid("Store custody"))?,
+                );
+                Ok(Cow::Owned(bytes))
+            }
+        }
+    }
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
+        if let Some(payload) = bytes.strip_prefix(b"CUS1") {
+            let value: canic_management_protocol::stored::Sources =
+                ic_wire::native::decode(payload, canic_management_protocol::stored::LIMITS)
+                    .map_err(|_| CodecError::Invalid("Store custody"))?;
+            if value.upgrades.len() > upgrade::MAX_UPGRADES {
+                return Err(CodecError::Invalid("Store history bound"));
+            }
+            Ok(Self::Stored(value))
+        } else {
+            Inline::from_bytes(bytes).map(Self::Inline)
         }
     }
 }
@@ -128,11 +207,25 @@ impl Storable for Journals {
 pub(super) struct Artifacts(pub [Artifact; 2]);
 impl Artifacts {
     pub(super) fn fits(&self) -> bool {
-        self.0
+        let inline_bytes: usize = self
+            .0
             .iter()
-            .map(|artifact| artifact.0.len() + artifact.1.len())
-            .sum::<usize>()
-            <= canic_management_protocol::children::MAX_ARTIFACT_BYTES
+            .map(|artifact| match artifact {
+                Artifact::Inline(value) => value.0.len() + value.1.len(),
+                Artifact::Stored(_) => 0,
+            })
+            .sum();
+        inline_bytes <= canic_management_protocol::children::MAX_ARTIFACT_BYTES
+            && self
+                .0
+                .iter()
+                .try_fold(8_usize, |size, artifact| {
+                    artifact
+                        .to_bytes()
+                        .ok()
+                        .and_then(|bytes| size.checked_add(bytes.len()))
+                })
+                .is_some_and(|size| size <= ARTIFACT_BYTES)
     }
 }
 impl Storable for Artifacts {

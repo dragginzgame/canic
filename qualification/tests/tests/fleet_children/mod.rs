@@ -169,6 +169,9 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         pending["children"][1]["outcome"]["status"]["phase"],
         "Scheduled"
     );
+    let summary = status_text(&config, id, "local");
+    assert!(summary.contains("\nChild: app\nRetained Root phase: Scheduled"));
+    assert!(summary.contains("\nChild: worker\nRetained Root phase: Scheduled"));
     let path = journal.join(id);
     let first_signed = std::fs::read(path.join("child/stage/signed.json")).unwrap();
     let second_signed = std::fs::read(path.join("sibling/stage/signed.json")).unwrap();

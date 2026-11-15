@@ -155,18 +155,6 @@ when changing component boundaries.
 
 ## Complete, reviewable changes
 
-In engineering requests, "nuke this", "nuke and rewrite" or "the nuclear option"
-means whole-subsystem replacement as one coherent deliverable, not deletion alone.
-First establish a coherent responsibility, inputs/outputs and callers; an existing
-directory or collection of tangled concerns is not proof of a subsystem. Separate
-misplaced responsibilities instead of rebuilding the same accidental boundary.
-Define protected behavior and mechanisms to retire, then implement, migrate callers,
-delete superseded paths and verify the result without requiring another prompt
-for every intermediate cleanup. Internal steps may be incremental; preparatory
-refactors are not the deliverable. Observable contracts and recovery guarantees
-remain protected. Resolve scope from context and ask only for material ambiguity;
-frustration alone does not activate this mode or expand delivery authority.
-
 Finish the accepted coherent outcome, including directly required callers,
 fixtures, docs and cleanup. Split independent outcomes, not compiler fallout or
 each proof of the same change. Stop at new independent scope or a release boundary.
@@ -759,7 +747,13 @@ from `ic-platform-types`, IC0/execution from `ic-platform-runtime`, and crypto o
 external IC adapters from `ic-platform`, following the
 [Platform ownership rules](https://github.com/dragginzgame/toko-tooling/blob/d4b09ceb6dd94d825adee2b894fa26dac4618ae0/rules/cargo-dependencies.md#platform-package-owners).
 External IC dependencies remain behind that reviewed boundary; Types alone may
-add `ic_principal` for explicit registry conversions. Self-authentication does
+add `ic_principal` for explicit registry conversions. Platform's unpublished
+`qualification/bls-probe` comparison oracle may use unaliased crates.io
+`ic-verify-bls-signature` at `^0.6.0`, default features disabled and only `alloc`,
+as a nonoptional dev dependency under `cfg(not(target_family = "wasm"))`.
+This exception requires the `bls-wrapper-probe` identity and Platform repository
+metadata; it grants no normal/build, production or Wasm dependency permission.
+Self-authentication does
 not enable those conversions. npm SDK Core uses
 `@tokostudios/ic-platform`. Keep reusable cores independently upgradable;
 adapters own their matching integration stacks and must not impose consumer

@@ -1,0 +1,19 @@
+[package]
+name = "canic-wasm-store-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Bounded versioned Canic artifact publication contract"
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[dependencies]
+ic-wire.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

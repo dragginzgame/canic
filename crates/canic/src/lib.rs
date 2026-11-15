@@ -1,5 +1,9 @@
-//! Small greeting contract shared by the first application and native caller.
+//! Small contracts and explicitly selected actor adapters.
 //! No host dependencies or management surface enters a Wasm consumer.
+
+/// Optional Blob endpoint composition; no implicit lifecycle or service activation.
+#[cfg(feature = "blob")]
+pub mod blob;
 
 use serde::{Deserialize, Serialize};
 

@@ -7,12 +7,31 @@ Its packages are named by responsibility, independently of design milestones:
 | --- | --- |
 | `canic-qualification` (`tests/`) | Native harnesses, retained predecessor binaries and explicit shared simulator preparation |
 | `canic-effect-probe` (`effect-probe/`) | Small Wasm probe isolating creation/funding commit boundaries and owner rollback |
+| `canic-asset-catalog` (`asset-catalog/`) | Real embedded Blob/catalog composition with explicit lifecycle and qualification-only failure points |
 | `canic-artifact-probe` (`artifact-probe/`) | Small Wasm probe isolating retained-byte installation onto an existing target |
 
 M0/M1 package and Make names are retired without aliases. `make qualification-setup`
 prepares the simulator for every suite. Select `make effect-test`,
 `make artifact-custody-test` or `make journey-test` for the renamed workflows;
 `root-test`, `growth-test`, `profile-test` and `endpoint-test` keep their names.
+`make store-test` qualifies versioned Store custody and Root's Store-backed
+creation/upgrade engine, after `make canic` and simulator preparation. It builds
+Store and Root executables through the public artifact builder, checks bounded
+Wire frames, resumes publication across Store maintenance and verifies byte reuse.
+Actual Root calls acquire pins, install a child larger than the former inline
+limit, and upgrade it using the Store cache. Lost pin/cache callbacks recover
+through observation after Root maintenance. Missing cache, unpublished releases,
+expired authority, retained upgrade history and mixed inline/Store custody have
+explicit cases. A separate provider fixture reconstructs a cleared cache and
+performs real chunked installation/upgrade. Fleet CLI deployment remains on its
+existing inline path; see [Store scope](../docs/demos/wasm-store.md).
+`make blob-test` builds two embedded catalog executables using the optional
+Canic adapter and the real local Blob Service. Five installed cases cover user
+isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
+non-resurrecting replay, drain/reopen/exact activation and reopen refusal.
+Supplier source/status and both consumer locks are fingerprinted before/after;
+no supplier checkout files are changed. This development-only path is explicit
+in [AGENTS](../AGENTS.md#local-blob-composition). See [scope and evidence](../docs/demos/blob.md).
 Tests never install the simulator themselves. Preparation and tests use the same
 `IC_TESTKIT_SERVER_DIRECTORY` override, defaulting to `target/qualification/server`.
 Existing files under `target/m0/` are historical outputs and are not deleted or

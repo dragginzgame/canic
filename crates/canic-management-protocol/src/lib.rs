@@ -7,6 +7,9 @@ use sha2::{Digest, Sha256};
 
 pub mod children;
 pub mod custody;
+pub mod stored;
+/// Store metadata request budget, independent of inline Wasm envelopes.
+pub const STORED_LIMITS: ic_wire::Limits = stored::LIMITS;
 pub mod upgrade;
 
 /// Admit one immutable approval with its artifact bytes.
@@ -159,15 +162,27 @@ impl Stage {
     /// # Errors
     /// Returns the first failed admission condition; controller guards live at the endpoint.
     pub fn validate(&self, manager: &str, now: u64) -> Result<(), Refusal> {
+        self.approval.validate(manager, now)?;
         let a = &self.approval;
-        if a.manager != manager || a.creation_cycles != CREATION_CYCLES {
-            return Err(Refusal::Binding);
-        }
         if self.wasm.len() > MAX_WASM
             || !self.wasm.starts_with(b"\0asm\x01\0\0\0")
             || digest(&self.wasm) != a.module_hash
         {
             return Err(Refusal::Artifact);
+        }
+
+        Ok(())
+    }
+}
+
+impl Approval {
+    /// Validate the owner, cycle ceiling and finite admission interval.
+    /// # Errors
+    /// Returns a binding or time refusal.
+    pub fn validate(&self, manager: &str, now: u64) -> Result<(), Refusal> {
+        let a = self;
+        if a.manager != manager || a.creation_cycles != CREATION_CYCLES {
+            return Err(Refusal::Binding);
         }
         if a.execute_at_ns <= now
             || a.execute_at_ns - now > 3_600_000_000_000
