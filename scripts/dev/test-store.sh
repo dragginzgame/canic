@@ -23,7 +23,7 @@ build() {
     canic artifact build --package "$package" "$@" --json > "target/store/$name.json"
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
-build original canic-wasm-store
+build original ic-wasm-store
 build root-maintenance canic-root --features maintenance-candidate
 build root-faults canic-root --features fault-injection
 if [[ "$scope" == all || "$scope" == root-maintenance ]]; then
@@ -38,16 +38,11 @@ if [[ "$scope" == all || "$scope" == publication || "$scope" == dispatch || "$sc
     build app-v2 canic-hello --features greeting-v2
 fi
 if [[ "$scope" == all || "$scope" == custody || "$scope" == admission || "$scope" == quiescence || "$scope" == maintenance || "$scope" == root-maintenance ]]; then
-    build candidate canic-wasm-store --features maintenance-candidate
+    build candidate ic-wasm-store --features maintenance-candidate
 fi
-if [[ "$scope" == all ]]; then
-    cargo test --locked -p canic-management-protocol -p canic-wasm-store-protocol -p canic-wasm-store --lib
-elif [[ "$scope" == custody ]]; then
-    cargo test --locked -p canic-wasm-store-protocol --lib
-    cargo test --locked -p canic-wasm-store --lib custody_reports
-elif [[ "$scope" == admission ]]; then
-    cargo test --locked -p canic-wasm-store-protocol --lib
-    cargo test --locked -p canic-wasm-store --lib
+if [[ "$scope" == all || "$scope" == custody || "$scope" == admission ]]; then
+    # Supplier-native tests live in ic-wasm-store; this runner owns Canic integration.
+    cargo test --locked -p canic-management-protocol --lib
 elif [[ "$scope" == root-maintenance ]]; then
     cargo test --locked -p canic-management-protocol --lib complete_root_custody
 elif [[ "$scope" == quiescence || "$scope" == maintenance ]]; then
@@ -60,7 +55,6 @@ else
     cargo test --locked -p canic-management-protocol --lib "$native"
 fi
 CANIC_EFFECT_PROBE_WASM="$root/target/store/original.wasm" \
-    CANIC_STORE_CANDIDATE="$root/target/store/candidate.wasm" \
     CANIC_STORE_APP_DIRECTORY="$root/target/store" \
     cargo test --locked --manifest-path qualification/Cargo.toml \
     -p canic-qualification --test store "$filter" -- --nocapture

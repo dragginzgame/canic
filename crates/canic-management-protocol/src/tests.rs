@@ -30,7 +30,7 @@ fn creation_admission_uses_original_expiry_not_earliest_dispatch() {
 #[test]
 fn publication_envelope_carries_a_maximum_chunk_and_bounded_status() {
     use crate::publication::{self, Command, Request};
-    use canic_wasm_store_protocol as store;
+    use ic_wasm_store_protocol as store;
     let release = store::Release {
         name: "a".repeat(64),
         version: "v".repeat(64),
@@ -190,7 +190,7 @@ fn growth_frames_cover_declared_artifact_and_retained_evidence() {
 #[test]
 fn store_readiness_frame_is_separate_from_publication_and_carries_bounded_info() {
     use crate::publication;
-    use canic_wasm_store_protocol as store;
+    use ic_wasm_store_protocol as store;
     let input = publication::InfoRequest {
         store: "a".repeat(63),
         expires_at_ns: u64::MAX,

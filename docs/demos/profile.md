@@ -48,7 +48,7 @@ build code; they do not deploy:
 mkdir profile-store
 canic app init profile-store --fleet mainnet --network ic --config profile-store/canic.json
 canic app canister add root --app profile-store --role root --wasm artifacts/root.wasm --manifest ../Cargo.toml --package canic-profile-manager
-canic app canister add store --app profile-store --parent root --role wasm-store --wasm artifacts/store.wasm --manifest ../Cargo.toml --package canic-wasm-store
+canic app canister add store --app profile-store --parent root --role wasm-store --wasm artifacts/store.wasm --manifest ../Cargo.toml --package ic-wasm-store
 canic app canister add worker --app profile-store --parent root --role worker --wasm artifacts/worker.wasm --manifest ../Cargo.toml --package canic-profile-worker
 canic app build --app profile-store
 canic fleet canister list --app profile-store

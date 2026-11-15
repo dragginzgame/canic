@@ -53,7 +53,7 @@ pub(crate) fn approval(plan: &Plan) -> Result<wire::Approval> {
         store: plan.target().ok_or_else(invalid)?.clone(),
         previous_module: hash(plan.previous_module().ok_or_else(invalid)?)?,
         module_hash: hash(&plan.artifact.sha256)?,
-        attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+        attempt: ic_wasm_store_protocol::MaintenanceAttempt {
             sequence: 1,
             operation: hash(&plan.digest()?)?,
         },

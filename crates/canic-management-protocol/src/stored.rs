@@ -1,6 +1,6 @@
 //! Store-backed authority; legacy inline approvals keep their original wire representation.
 use crate::children;
-use canic_wasm_store_protocol::{Manifest, Pin};
+use ic_wasm_store_protocol::{Manifest, Pin};
 use serde::{Deserialize, Serialize};
 
 /// Admit Store-backed child creation.
@@ -107,7 +107,7 @@ pub struct Custody {
 mod tests {
     use super::*;
     use crate::{Approval, CREATION_CYCLES, Status, custody, upgrade};
-    use canic_wasm_store_protocol::{CHUNK_BYTES, MAX_CHUNKS, Release};
+    use ic_wasm_store_protocol::{CHUNK_BYTES, MAX_CHUNKS, Release};
 
     #[test]
     fn complete_store_custody_fits_and_operation_identity_binds_source_slot_and_action() {

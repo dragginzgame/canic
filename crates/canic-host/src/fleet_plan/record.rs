@@ -20,7 +20,7 @@ struct Child {
     parent: super::CreatedCanister,
     artifact: crate::Artifact,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    release: Option<canic_wasm_store_protocol::Manifest>,
+    release: Option<ic_wasm_store_protocol::Manifest>,
     creation_cycles: u64,
     execute_at_ns: u64,
 }

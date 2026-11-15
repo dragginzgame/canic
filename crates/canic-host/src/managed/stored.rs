@@ -8,8 +8,8 @@ use canic_management_protocol::{
     children::{Request, Slot},
     stored as wire, upgrade,
 };
-use canic_wasm_store_protocol::Manifest;
 use ic_platform::agent::Agent;
+use ic_wasm_store_protocol::Manifest;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -24,7 +24,7 @@ pub struct StoredArtifact {
     /// Completed Store replacement selected from authenticated fleet history.
     /// Selects complete Root custody; absence preserves the original read and digest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub maintenance: Option<canic_wasm_store_protocol::MaintenanceAttempt>,
+    pub maintenance: Option<ic_wasm_store_protocol::MaintenanceAttempt>,
 }
 impl StoredArtifact {
     fn reference(&self) -> wire::Reference {

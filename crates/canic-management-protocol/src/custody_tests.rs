@@ -3,8 +3,8 @@ use crate::{custody, store_maintenance as maintenance, stored, upgrade};
 #[test]
 fn complete_root_custody_fits_combined_budget() {
     let preservation = maintenance::Preservation {
-        catalog: canic_wasm_store_protocol::preservation::Catalog {
-            quota: canic_wasm_store_protocol::Quota {
+        catalog: ic_wasm_store_protocol::preservation::Catalog {
+            quota: ic_wasm_store_protocol::Quota {
                 reserved_bytes: u64::MAX,
                 releases: u64::MAX,
             },
@@ -13,7 +13,7 @@ fn complete_root_custody_fits_combined_budget() {
             artifacts: u64::MAX,
             chunks: u64::MAX,
         },
-        after: Some(canic_wasm_store_protocol::Release {
+        after: Some(ic_wasm_store_protocol::Release {
             name: "n".repeat(64),
             version: "v".repeat(64),
         }),
@@ -26,7 +26,7 @@ fn complete_root_custody_fits_combined_budget() {
             store: "s".repeat(63),
             previous_module: [254; 32],
             module_hash: [255; 32],
-            attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+            attempt: ic_wasm_store_protocol::MaintenanceAttempt {
                 sequence: u64::MAX,
                 operation: [255; 32],
             },
@@ -49,14 +49,14 @@ fn complete_root_custody_fits_combined_budget() {
     let source = stored::Delivery {
         reference: stored::Reference {
             store: "s".repeat(63),
-            manifest: canic_wasm_store_protocol::Manifest {
-                release: canic_wasm_store_protocol::Release {
+            manifest: ic_wasm_store_protocol::Manifest {
+                release: ic_wasm_store_protocol::Release {
                     name: "n".repeat(64),
                     version: "v".repeat(64),
                 },
                 hash: [255; 32],
                 bytes: u64::MAX,
-                chunks: vec![[255; 32]; canic_wasm_store_protocol::MAX_CHUNKS],
+                chunks: vec![[255; 32]; ic_wasm_store_protocol::MAX_CHUNKS],
             },
         },
         operation: [255; 32],

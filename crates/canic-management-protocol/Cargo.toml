@@ -10,7 +10,7 @@ description = "Bounded child management authority and evidence"
 toko-tooling.workspace = true
 
 [dependencies]
-canic-wasm-store-protocol.workspace = true
+ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true

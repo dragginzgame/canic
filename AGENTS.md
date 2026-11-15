@@ -95,7 +95,7 @@ remain separate; do not pull optional supplier runtimes into default application
 | `canic-host`, `canic-cli`, `apps/hello/canic-hello` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
 | `canic-management`, `canic-management-protocol`, `canic-root` | Shared bounded effect engine, passive contracts and explicit Root mounts | `make root-test`, `make root-clippy`, `make root-doc`; `make growth-test` for shared effect boundaries |
 | `apps/profile/` | Profile protocol/client, discovery entry, persistent worker and autonomous manager | `make profile-test`, `make profile-clippy`, `make profile-doc` |
-| `canic-wasm-store`, `canic-wasm-store-protocol` | Durable artifacts, pins and maintenance admission | `make store-test`, `make store-clippy`, `make store-doc` |
+| `ic-wasm-store` supplier; Canic's Root/Host integration | Supplier owns artifacts, pins and admission; Canic owns orchestration | `make store-test`, `make store-clippy`; `make root-doc` covers management contracts |
 | `qualification/canic-asset-catalog` | Installed local Blob/catalog composition | `make blob-test`, `make blob-clippy`, `make blob-doc` |
 
 The commands above select scope families; choose their affected cases for ordinary
@@ -106,6 +106,11 @@ owns the installed CLI Store workflow. The narrow Store cases are selected throu
 maintenance). `bash scripts/dev/test-root.sh profile_store` selects the Store-backed
 profile journey. These fixtures use synthetic cycles. Never select `fault-injection`
 for live deployment; `maintenance-candidate` is a qualification marker.
+
+Store implementation, passive protocol and supplier tests live in
+`dragginzgame/ic-wasm-store`. Both workspaces pin the same Git revision. The public
+artifact builder resolves `ic-wasm-store` from that locked protocol source and
+uses its committed lockfile; no sibling checkout or copied runtime is required.
 
 The qualification harness owns explicit `make qualification-setup`; simulator setup
 and tests share `IC_TESTKIT_SERVER_DIRECTORY`, defaulting to

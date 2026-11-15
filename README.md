@@ -4,6 +4,10 @@ Canic's first native CLI and deployable greeting application. The CLI lives in
 `crates/canic-cli`, deployment logic in `crates/canic-host`, the small shared
 Wire contract in `crates/canic`, and the demo in `apps/hello/canic-hello`.
 
+The standalone [Wasm Store](https://github.com/dragginzgame/ic-wasm-store) owns
+artifact custody and its own qualification. Canic pins its protocol and builds
+its executable from the same Git revision; no sibling checkout is needed.
+
 The [Root journey](docs/demos/root.md) generates a greeting workspace
 and deploys Root, Wasm Store and one application through one fleet plan/apply approval.
 The installed local journeys qualify admission, lost-reply recovery and completion
@@ -136,7 +140,7 @@ have no aliases.
 | `app init APP --fleet FLEET --network ic` | Declare an app in `--config PATH`, or add `--source DIRECTORY` (checkout override: `--canic-source CHECKOUT`) to generate a new standalone workspace and its own config. No deployment. |
 | `app build` | Build the selected app’s declared workspace/package recipes, preparing missing Cargo locks once. Existing locks are preserved. |
 | `app list` | List apps in the current/direct-child configs, or only `--config PATH`. Duplicate names require explicit config selection. |
-| `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
+| `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `ic-wasm-store` builds from the workspace's locked supplier protocol source. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
 | `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
 | `fleet list` | Read fleet declarations; optional `--app APP` filters them. |
 | `fleet artifact list` | Read retained publication approvals/completion for the selected app, fleet and exact network. Includes materialized bootstrap publications; no network calls. `--json` retains full hashes and operation IDs. |
@@ -285,6 +289,9 @@ names a Cargo workspace and resolves beside the config; each supplied Root/Store
 points to its Canic workspace. `canic app build --app starter` builds all declared
 recipes and writes their Wasm outputs. Older/custom definitions need explicit
 recipes before using app build; Canic does not guess packages from roles.
+For starters generated before the Store extraction, change the Store recipe's
+`build.package` from `canic-wasm-store` to `ic-wasm-store`, retaining its Canic
+manifest path. This changes future builds, not existing approvals or deployments.
 
 The current config is unversioned and requires `apps.APP.canisters`. The old
 versioned fleet-local layout is refused. For an existing external config, remove

@@ -1,6 +1,11 @@
 # Canic qualification
 
 This workspace owns installed effect-boundary and product regression tests.
+Store-native tests and the standalone upload/reopen/version-reuse witness now live
+in `dragginzgame/ic-wasm-store`. The two local workspaces pin its passive protocol;
+the existing artifact builder selects the runtime from that exact supplier source.
+This workspace retains Root integration, chunked installation and complete CLI
+journeys. `make store-test` does not rerun the supplier's native suite.
 Its packages are named by responsibility, independently of design milestones:
 
 | Package | Responsibility |
@@ -31,15 +36,17 @@ reads, a reply trap and Root maintenance. Both application slots and both owners
 stable bytes remain unchanged; malformed, unauthorized and expired requests are
 refused. The full `store-test` includes these cases. This observation alone does
 not certify code/controllers or complete CLI bootstrap.
-`bash scripts/dev/test-store.sh custody` selects one installed preservation-read
-witness plus the Store metadata budget and reopen tests. It preserves shared
+`bash scripts/dev/test-store.sh custody` selects the installed preservation-read
+witness and Canic's management protocol tests. Supplier metadata budgets and reopen
+tests live in ic-wasm-store. The installed witness preserves shared
 release pins from two former owners and an incomplete upload across a Store
 executable change, then reads through the real Root after sole-control handover.
 It covers unauthorized, malformed, expired and missing-release requests, reply
 fault 12, Root maintenance and unchanged stable bytes. Direct test-controller
 Store maintenance here does not qualify a Host-driven Store upgrade workflow.
-`bash scripts/dev/test-store.sh admission` selects the persistent mutation gate
-and cache-continuation witnesses, all Store native invariants and metadata bounds.
+`bash scripts/dev/test-store.sh admission` selects the installed persistent mutation
+gate and cache-continuation witnesses, plus Canic's management protocol tests.
+Store-native invariants and metadata bounds are qualified in the supplier repository.
 Actual Root calls close and activate admission; a lost Root reply preserves the
 Store commit. Closed admission survives Store/Root replacement, stale or wrong-owner
 activation is refused, and an in-flight cache repair cannot continue through a

@@ -1,11 +1,11 @@
 //! One controller-authorized Store call. No catalog, payload persistence or retry owner.
 use canic_management_protocol::publication::{Command, Error, MAX_WINDOW_NS, Reply, Request};
-use canic_wasm_store_protocol as store;
 use ic_platform_runtime::{
     Principal,
     call::{Call, WaitPolicy},
     cdk::api,
 };
+use ic_wasm_store_protocol as store;
 
 /// Forward one typed publication command under the captured controller's authority.
 /// A callback/encoding trap cannot undo an already committed Store mutation.

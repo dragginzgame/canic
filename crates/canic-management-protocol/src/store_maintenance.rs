@@ -52,7 +52,7 @@ pub struct Approval {
     /// Exact proposed different executable, whose bytes remain with Host.
     pub module_hash: [u8; 32],
     /// Store-local monotonic attempt, retained identically by both owners.
-    pub attempt: canic_wasm_store_protocol::MaintenanceAttempt,
+    pub attempt: ic_wasm_store_protocol::MaintenanceAttempt,
     /// Last dispatch time for every new effect; at most one hour from staging.
     pub expires_at_ns: u64,
 }
@@ -128,9 +128,9 @@ pub struct Installation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Preservation {
     /// Exact counters and quota observed under closed admission.
-    pub catalog: canic_wasm_store_protocol::preservation::Catalog,
+    pub catalog: ic_wasm_store_protocol::preservation::Catalog,
     /// Last committed release in Store key order.
-    pub after: Option<canic_wasm_store_protocol::Release>,
+    pub after: Option<ic_wasm_store_protocol::Release>,
     /// Number of release records included, including aliases and incomplete uploads.
     pub observed: u64,
     /// Ordered metadata commitment; excludes physical payload bytes and management cache.
@@ -149,7 +149,7 @@ mod tests {
                 store: "a".repeat(63),
                 previous_module: [254; 32],
                 module_hash: [255; 32],
-                attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+                attempt: ic_wasm_store_protocol::MaintenanceAttempt {
                     sequence: u64::MAX,
                     operation: [255; 32],
                 },
@@ -160,8 +160,8 @@ mod tests {
             stop_request: Some([255; 32]),
             failure: Some(crate::Failure::Rejected(u32::MAX)),
             preservation: Some(Preservation {
-                catalog: canic_wasm_store_protocol::preservation::Catalog {
-                    quota: canic_wasm_store_protocol::Quota {
+                catalog: ic_wasm_store_protocol::preservation::Catalog {
+                    quota: ic_wasm_store_protocol::Quota {
                         reserved_bytes: u64::MAX,
                         releases: u64::MAX,
                     },
@@ -170,7 +170,7 @@ mod tests {
                     artifacts: u64::MAX,
                     chunks: u64::MAX,
                 },
-                after: Some(canic_wasm_store_protocol::Release {
+                after: Some(ic_wasm_store_protocol::Release {
                     name: "a".repeat(64),
                     version: "v".repeat(64),
                 }),

@@ -287,7 +287,20 @@ custody requires the qualified transition below, not an automatic migration.
 
 ### Repository and workspace boundary
 
-Keep one repository and one product workspace initially. CLI depends on Host, Host depends on passive Contracts, and the application runtime depends on Contracts and selected suppliers. Host communicates with deployed roles through contracts without depending on their runtime implementations. Add role crates when the topology requires separately compiled artifacts, and adapter crates with their first complete consumer journey.
+Keep Canic's CLI, Host, management contracts and runtime orchestration in one product workspace. CLI depends on Host, Host depends on passive Contracts, and the application runtime depends on Contracts and selected suppliers. Host communicates with deployed roles through contracts without depending on their runtime implementations. Add role crates when the topology requires separately compiled artifacts, and adapter crates with their first complete consumer journey.
+
+The maintainer selected extraction of the versioned Wasm Store into
+`dragginzgame/ic-wasm-store`, a separate repository and product/qualification
+workspace pair. It owns immutable releases, chunks, quotas, pins, cache preparation,
+persistence and exact maintenance admission. Canic owns fleet bindings, publication
+approvals, Root-driven effects and end-to-end integration qualification. The supplier
+has no Canic dependency. Canic consumes the passive protocol through an immutable
+Git revision and builds the Store executable from that same source and its lockfile.
+Package renaming does not change endpoint identities, Wire records, Storage keys or
+retained operation semantics; executable replacement still needs explicit approval.
+There is no duplicate in-tree Store, mandatory sibling checkout or new deployment
+engine. Standalone supplier qualification moves with its owner; Canic's installed
+Root/Store/application witnesses remain here.
 
 The independent qualification workspace isolates test-only graphs. Separate Host into another workspace only for demonstrated dependency/toolchain incompatibility; a separate repository requires an independent ownership or delivery need. Release groups can evolve independently within one repository. Dependency direction, Wasm builds and downstream consumer tests enforce the runtime boundary.
 
@@ -1412,7 +1425,7 @@ The architecture is accepted as the basis for M0. The choices below still requir
 | Restore boundary | Application rollback with surviving authoritative control plane | Whole-Fleet/control-plane rollback needs a separately qualified external authority/evidence procedure |
 | Physical infrastructure | Root controls a per-fleet Wasm Store and application canister; external operator controls Root | Qualify Store bootstrap, versioned custody and maintenance through the existing effect path; Coordinator remains conditional; current Root-held payloads require qualified migration |
 | Fleet admission | Optional extra deployment policy | Application authentication works independently; select propagation semantics before adding machinery |
-| Package and repository boundaries | One product repository/workspace with separate host/runtime graphs | Split further for demonstrated compilation, dependency or ownership needs |
+| Package and repository boundaries | Canic workspace with separate host/runtime graphs; standalone Wasm Store supplier repository | Store has independent ownership and qualification; orchestration and consumer integration stay in Canic |
 | Application framework ownership | Application owns lifecycle and participant composition | Combined framework fixture before public composability claims |
 | Endpoint ownership | Canic composes actor endpoints; Platform owns generic IC entrypoint macros; Wire owns codecs | Migrate existing consumers before retiring Wire Endpoint; preserve protocol, authorization, admission and reply semantics; optional Testkit Wire remains test-only |
 | Funding autonomy | Manually supplied cycles with finite distribution grants, reactive funding plus coarse idle coverage | Budget exhaustion pauses; no ICP conversion or hidden unlimited authority |

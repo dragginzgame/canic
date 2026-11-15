@@ -7,6 +7,89 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.215.0 release qualification: 2026-11-15
+
+The authorized Canic release includes the standalone Store adoption and extraction
+cleanup. The complete sequential Linux `make -j1 ci` gate passed, including 107
+Host and 63 CLI tests, effect/custody, profile/growth, 12 Root cases, endpoint
+composition, 23 Store integration cases, three CLI publication journeys and five
+installed Blob cases, plus native/Wasm lint, Rustdoc, formatting and tooling
+agreement. Existing explicit installed/predecessor exclusions remain exclusions;
+this does not claim native macOS or mainnet qualification. All 290 captured tracked
+path states, including intended deletions, remained unchanged during validation.
+The gate log is `target/qualification/release-0215-0-ci.log`; source and supplier
+evidence is under `target/evidence/0.215.0/release/`.
+
+Fresh registry review found the direct first-party registry selections current.
+Blob retains its qualified Git Service revision; its registry release lacks the
+selected contract. Topology and the new Store protocol retain their qualified
+Git revisions and have no available registry entry. Blob's internally owned older
+Wire selection remains intentional. No supplier versions changed during release.
+
+After validation, the coordinated product version and local-package entries in
+both lockfiles advance to 0.215.0. Qualification members retain 0.0.0, the Store
+supplier retains 0.1.0 at `541d911410dae0f38eefc371693024bf2068c55b`, and all
+first-party workspace packages remain unpublished. This delivery does not install
+replacement application or infrastructure executables on mainnet.
+
+## Standalone Wasm Store extraction: 2026-11-15
+
+The extraction residue review checked maintained source, both manifests/locks,
+build runners, generated starter wiring and current documentation. No Store state
+engine, allocation keys or duplicate supplier DTO definitions remain in Canic.
+It removed the now-unused `CANIC_STORE_CANDIDATE` runner variable, merged the
+adjacent test-helper impl blocks and retired `store-doc` plus the duplicate native
+management Clippy invocation. `root-doc`/`root-clippy` retain that coverage. Current
+docs now identify supplier codec ownership and no longer call Root-driven Store
+maintenance or fleet CLI integration pending. The focused admission selection
+passed both installed cases; harness Clippy, formatting/tooling agreement, shell
+syntax and Make's explicit dry-run preview passed. Logs are the `residue-*` files
+under `target/evidence/store-extraction/`. Historical evidence and operator journals
+were preserved; this review did not alter runtime or protocol behavior.
+
+The maintainer authorized a sibling repository at `/home/adam/projects/ic-wasm-store`
+and GitHub `dragginzgame/ic-wasm-store`. Supplier commit
+`541d911410dae0f38eefc371693024bf2068c55b` contains the implementation/protocol
+extracted from Canic `c39aee1e34dae82be6da89bf6242c3a0e22ade84`, with product
+version 0.1.0 and private qualification version 0.0.0. Every package remains
+unpublished. The remote main ref was verified; post-push review found no duplicate
+Canic owner or runtime dependency in the supplier.
+
+Runtime/protocol Rust source differs only in the renamed crate import and formatter
+import ordering. Endpoint names/numbers, Wire records, allocation names, quotas
+and exact maintenance attempts remain unchanged. Existing Store build recipes
+select `ic-wasm-store`; no old-name alias is retained. Both Canic locks select the
+same supplier Git revision, containing only the passive protocol in their library
+graphs. The public artifact builder resolves the runtime from that source and its
+committed lockfile, with compiler output under Canic's target directory.
+
+Supplier Linux qualification passed: ten native state tests, one protocol test,
+native/Wasm Clippy, both workspaces' Rustdoc, formatting/tooling admission and the
+moved installed upload/reopen/version-reuse witness. That witness also passed
+using the retained pre-extraction executable (SHA-256
+`5bf18e1ee35c8c84ebaba44d713cd87bc8759dfe6bb033f707307748ca21df25`) as the
+predecessor, preserving an unfinished 8 MiB upload across replacement. Supplier
+evidence is under its `target/qualification/extraction-*`.
+
+Canic validation passed: 107 Host tests (one installed-only case ignored by the
+native run), 63 CLI tests, nine management protocol tests, native consumer Clippy,
+Root native/Wasm and installed-harness Clippy, Host/CLI Rustdoc, formatting and
+tooling agreement. All 23 remaining installed Store integration cases and all
+three CLI publication journeys passed, including generated starter builds, Store
+replacement, Root maintenance and a subsequent child upgrade. The installed Host
+custody case is exercised by the Store runner. Evidence is under
+`target/evidence/store-extraction/`.
+
+An initial concurrent invocation of the two build runners copied a maintenance
+Root into the fault fixture's path; hashes identified the shared Cargo-output
+collision. That run is retained as failed evidence; the Store runner passed after
+the other runner finished compilation. Installed build suites must run sequentially.
+No runtime fallback or extra workflow was added to conceal it. This extraction
+does not qualify native macOS, mainnet replacement, repeatable Store maintenance
+or automatic conversion of existing inline fleets. Legacy research reuses the
+[recorded Store decision](#versioned-wasm-store-decision-2026-11-15), including its
+frozen revision, regression paths and immutable-version decision.
+
 ## 0.214.0 release qualification: 2026-11-15
 
 The maintainer authorized GitHub delivery of the retained artifact listing and

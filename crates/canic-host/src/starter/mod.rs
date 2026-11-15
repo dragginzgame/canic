@@ -67,7 +67,7 @@ fn files(
                             wasm: Some("artifacts/store.wasm".into()),
                             build: Some(crate::BuildInput {
                                 manifest: source.join("Cargo.toml"),
-                                package: "canic-wasm-store".into(),
+                                package: "ic-wasm-store".into(),
                             }),
                         },
                     ),
@@ -106,7 +106,7 @@ fn files(
             "select a Canic source checkout matching this CLI version".into(),
         ));
     }
-    for name in ["canic", "canic-root", "canic-wasm-store"] {
+    for name in ["canic", "canic-root"] {
         if manifest(&source.join("crates").join(name).join("Cargo.toml"))?
             .get("package")
             .and_then(|v| v.get("name"))

@@ -2,7 +2,6 @@
 use super::storage::Artifact;
 use super::{MANAGEMENT_LIMITS, STATE, State, failure, management};
 use canic_management_protocol::{Failure, Refusal, STAGE_LIMITS, children::Slot, stored};
-use canic_wasm_store_protocol as store;
 use ic_platform::{
     candid_codec::{self, decoder},
     management_canister_types::{CanisterIdRecord, ChunkHash, UploadChunkArgs},
@@ -12,6 +11,7 @@ use ic_platform_runtime::{
     call::{Call, WaitPolicy},
     cdk::api,
 };
+use ic_wasm_store_protocol as store;
 use serde::{Serialize, de::DeserializeOwned};
 
 pub(super) fn source(slot: Slot, upgrade: bool) -> Option<stored::Delivery> {

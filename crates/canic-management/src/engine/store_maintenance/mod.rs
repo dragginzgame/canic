@@ -6,7 +6,6 @@ use canic_management_protocol::{
     Failure, Refusal,
     store_maintenance::{Approval, Phase, Status},
 };
-use canic_wasm_store_protocol as store;
 use ic_platform::management_canister_types::{
     CanisterIdRecord, CanisterStatusResult, CanisterStatusType,
 };
@@ -14,6 +13,7 @@ use ic_platform_runtime::{
     Principal,
     call::{Call, WaitPolicy},
 };
+use ic_wasm_store_protocol as store;
 mod installation;
 mod preservation;
 pub use installation::{activate, install};

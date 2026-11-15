@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.214.0"
+version = "0.215.0"
 dependencies = [
  "ic-blob-storage",
  "ic-platform-runtime",
@@ -256,9 +256,9 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.214.0"
+version = "0.215.0"
 dependencies = [
- "canic-wasm-store-protocol",
+ "ic-wasm-store-protocol",
  "ic-wire 0.24.1",
  "serde",
  "serde_bytes",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.214.0"
+version = "0.215.0"
 dependencies = [
  "ic-wire 0.24.1",
  "serde",
@@ -283,24 +283,14 @@ dependencies = [
  "canic-effect-probe",
  "canic-management-protocol",
  "canic-profile-protocol",
- "canic-wasm-store-protocol",
  "ic-host-artifacts",
  "ic-testkit",
+ "ic-wasm-store-protocol",
  "ic-wire 0.24.1",
  "serde",
  "serde_json",
  "tokio",
  "toko-tooling",
-]
-
-[[package]]
-name = "canic-wasm-store-protocol"
-version = "0.214.0"
-dependencies = [
- "ic-wire 0.24.1",
- "serde",
- "serde_bytes",
- "sha2 0.11.1",
 ]
 
 [[package]]
@@ -1017,6 +1007,17 @@ dependencies = [
  "serde_repr",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "ic-wasm-store-protocol"
+version = "0.1.0"
+source = "git+https://github.com/dragginzgame/ic-wasm-store?rev=541d911410dae0f38eefc371693024bf2068c55b#541d911410dae0f38eefc371693024bf2068c55b"
+dependencies = [
+ "ic-wire 0.24.1",
+ "serde",
+ "serde_bytes",
+ "sha2 0.11.1",
 ]
 
 [[package]]

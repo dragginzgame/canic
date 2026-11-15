@@ -1,5 +1,5 @@
 //! Controller-admitted Store publication and observation; Store owns release custody.
-use canic_wasm_store_protocol as store;
+use ic_wasm_store_protocol as store;
 use serde::{Deserialize, Serialize};
 
 /// Execute one bounded Store operation; never admits deployment or cache work.

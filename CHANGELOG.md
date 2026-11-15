@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.215.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+The Store implementation and protocol move to `dragginzgame/ic-wasm-store` as
+`ic-wasm-store` and `ic-wasm-store-protocol`. Existing source recipes must change
+their Store `build.package` to `ic-wasm-store`, retaining the Canic manifest path.
+Rust consumers use the new protocol package name. Endpoint identities, Wire/state
+formats, allocation names and retained approval bytes are unchanged; no reinstall
+or journal migration is required.
+
+### ▶️ Try it
+
+From the Canic checkout, with the updated CLI installed and dependency-fetch access:
+
+```sh
+make canic
+canic artifact build --package ic-wasm-store --output target/wasm-store.wasm
+```
+
+For an existing starter with the Store recipe updated (build only; no deployment):
+
+```sh
+canic app build --app starter
+canic fleet artifact list --app starter
+```
+
+### 🧹 Cleanup
+
+Canic consumes an immutable Git revision and builds the standalone Store from that
+same source and its committed lockfile. No sibling checkout or copied runtime is
+required. Supplier persistence tests and standalone installed qualification move
+with their owner; Root orchestration and end-to-end fleet qualification stay here.
+The extraction follow-up removes the unused Store-candidate fixture variable and
+the redundant `store-doc` target; `root-doc` already owns management documentation.
+Store harness linting no longer repeats the native management lint pass.
+
 ## [0.214.0] - 2026-11-15
 
 ### ⚠️ Breaking

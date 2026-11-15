@@ -43,7 +43,7 @@ fn store_report_distinguishes_empty_from_malformed_and_foreign_attempts() {
             store: STORE.into(),
             previous_module: [1; 32],
             module_hash: [2; 32],
-            attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+            attempt: ic_wasm_store_protocol::MaintenanceAttempt {
                 sequence: 1,
                 operation: [3; 32],
             },

@@ -418,7 +418,7 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
             canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
             module: "22".repeat(32),
         },
-        release: canic_wasm_store_protocol::Release {
+        release: ic_wasm_store_protocol::Release {
             name: "app".into(),
             version: "v1".into(),
         },

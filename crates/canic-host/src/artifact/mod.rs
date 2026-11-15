@@ -10,12 +10,13 @@ use std::{
     process::Command,
     time::Duration,
 };
+mod store_source;
 
 // Direct ingress installation retains its original transport bound.
 pub(crate) const MAX_WASM: usize = 1_500_000;
 // Build/inspection can admit the complete Store artifact without granting installation authority.
 pub(crate) const MAX_ARTIFACT_BYTES: usize =
-    canic_wasm_store_protocol::CHUNK_BYTES * canic_wasm_store_protocol::MAX_CHUNKS;
+    ic_wasm_store_protocol::CHUNK_BYTES * ic_wasm_store_protocol::MAX_CHUNKS;
 
 /// Identity of the exact uncompressed Wasm bytes selected for installation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -104,6 +105,7 @@ pub fn inspect(path: &Path) -> Result<Artifact> {
 }
 
 /// Build one explicit Cargo package and select its Wasm from artifact records.
+/// `ic-wasm-store` uses the Git source selected by the workspace's locked Store protocol.
 /// An output path atomically receives a copy, replacing a prior build input.
 ///
 /// # Errors
@@ -114,7 +116,12 @@ pub fn build(
     features: &[String],
     destination: Option<&Path>,
 ) -> Result<PathBuf> {
-    let manifest = manifest.canonicalize().map_err(supplier)?;
+    let workspace_manifest = manifest.canonicalize().map_err(supplier)?;
+    let manifest = if package == "ic-wasm-store" {
+        store_source::manifest(&workspace_manifest)?
+    } else {
+        workspace_manifest.clone()
+    };
     let mut command = Command::new("cargo");
     command
         .current_dir(
@@ -134,6 +141,15 @@ pub fn build(
         ])
         .arg(manifest)
         .args(["-p", package]);
+    if package == "ic-wasm-store" {
+        // Keep compiler output in the consuming workspace, never Cargo's source checkout.
+        command.arg("--target-dir").arg(
+            workspace_manifest
+                .parent()
+                .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?
+                .join("target/store-build"),
+        );
+    }
     if !features.is_empty() {
         command.arg("--features").arg(features.join(","));
     }

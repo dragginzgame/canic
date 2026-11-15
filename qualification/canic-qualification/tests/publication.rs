@@ -561,7 +561,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         let completed = apply_operation(upgrade_id);
         assert_eq!(
             completed["module_hash"],
-            hex(&canic_wasm_store_protocol::digest(&next)),
+            hex(&ic_wasm_store_protocol::digest(&next)),
             "{completed}"
         );
         assert_eq!(apply_operation(upgrade_id), completed);
@@ -599,11 +599,11 @@ async fn observe_stopped_store(
     use canic_management_protocol::store_maintenance as wire;
     let approval = wire::Approval {
         store: store.to_text(),
-        previous_module: canic_wasm_store_protocol::digest(
+        previous_module: ic_wasm_store_protocol::digest(
             &std::fs::read(assets.join("store.wasm")).unwrap(),
         ),
         module_hash: [99; 32],
-        attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+        attempt: ic_wasm_store_protocol::MaintenanceAttempt {
             sequence: 1,
             operation: [123; 32],
         },
@@ -791,8 +791,8 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     let inspected: Value = serde_json::from_slice(&inspected.stdout).unwrap();
     assert!(inspected["bytes"].as_u64().unwrap() > 1_500_000);
-    let root_hash = hex(&canic_wasm_store_protocol::digest(&root_bytes));
-    let store_hash = hex(&canic_wasm_store_protocol::digest(&store_bytes));
+    let root_hash = hex(&ic_wasm_store_protocol::digest(&root_bytes));
+    let store_hash = hex(&ic_wasm_store_protocol::digest(&store_bytes));
     let signer = repo.join(".tools/ic/bin/icp");
     let bootstrap = cli(
         &dir,
@@ -1083,8 +1083,8 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let (warm_chunks, warm_bytes) = publication_payload(&dir, second_id);
     let input = std::fs::read(&wasm).unwrap();
     let unique_chunks: std::collections::BTreeMap<_, _> = input
-        .chunks(canic_wasm_store_protocol::CHUNK_BYTES)
-        .map(|chunk| (canic_wasm_store_protocol::digest(chunk), chunk.len()))
+        .chunks(ic_wasm_store_protocol::CHUNK_BYTES)
+        .map(|chunk| (ic_wasm_store_protocol::digest(chunk), chunk.len()))
         .collect();
     assert_eq!(cold_chunks, unique_chunks.len());
     assert_eq!(cold_bytes, unique_chunks.values().sum::<usize>());
@@ -1313,7 +1313,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(upgraded["canister"], child);
     assert_eq!(
         upgraded["module_hash"],
-        hex(&canic_wasm_store_protocol::digest(&next))
+        hex(&ic_wasm_store_protocol::digest(&next))
     );
     assert_eq!(apply("reconcile", upgrade_id), upgraded);
     assert_eq!(

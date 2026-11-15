@@ -6,10 +6,10 @@ use crate::{
     operation, plan, signed, store, supplier,
 };
 use canic_management_protocol::publication as wire;
-use canic_wasm_store_protocol::Info;
 use ic_platform::{
     agent::Agent, candid_codec, management_canister_types as mgmt, principal::Principal,
 };
+use ic_wasm_store_protocol::Info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

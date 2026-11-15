@@ -14,7 +14,7 @@ help:
 	  'make endpoint-test           Qualify management mounts, guards and reply rollback' \
 	  'make root-test               Qualify Root creation, upgrades and child isolation' \
 	  'make blob-test               Qualify embedded Blob/catalog composition' \
-	  'make store-test              Qualify versioned Store uploads and maintenance' \
+	  'make store-test              Qualify Canic Root/Store integration and maintenance' \
 	  'make store-readiness-test    Qualify Store observation after Root handover' \
 	  'make publication-test        Qualify CLI Store bootstrap and publication' \
 	  'make check                   Check the canic library' \
@@ -61,7 +61,7 @@ doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --no-deps
 
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
-lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy store-doc blob-clippy blob-doc
+lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc
 
 ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test
 
@@ -144,7 +144,7 @@ root-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 
-.PHONY: store-test store-readiness-test store-clippy store-doc publication-test
+.PHONY: store-test store-readiness-test store-clippy publication-test
 publication-test:
 	bash scripts/dev/test-publication.sh
 
@@ -155,12 +155,7 @@ store-test:
 	bash scripts/dev/test-store.sh
 
 store-clippy:
-	cargo clippy --locked -p canic-wasm-store-protocol -p canic-wasm-store --all-targets -- -D warnings
-	cargo clippy --locked -p canic-wasm-store --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store -- -D warnings
-
-store-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-wasm-store-protocol -p canic-wasm-store --no-deps
 
 .PHONY: blob-test blob-clippy blob-doc
 blob-test:

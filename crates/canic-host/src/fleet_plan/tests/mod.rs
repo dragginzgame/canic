@@ -100,7 +100,7 @@ fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
             .children
             .iter()
             .all(|c| c.release.as_ref().unwrap().chunks.len()
-                == canic_wasm_store_protocol::MAX_CHUNKS)
+                == ic_wasm_store_protocol::MAX_CHUNKS)
     );
     let mut wrong = fleet_plan.clone();
     wrong.children[0].release.as_mut().unwrap().hash[0] ^= 1;

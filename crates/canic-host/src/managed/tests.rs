@@ -599,7 +599,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
 #[test]
 fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() {
     use canic_management_protocol::{children, stored as wire};
-    use canic_wasm_store_protocol::{Manifest, Release};
+    use ic_wasm_store_protocol::{Manifest, Release};
     let dir = directory();
     let wasm = dir.join("app.wasm");
     let bytes = b"\0asm\x01\0\0\0";
@@ -626,9 +626,9 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
                 name: "app".into(),
                 version: "v1".into(),
             },
-            hash: canic_wasm_store_protocol::digest(bytes),
+            hash: ic_wasm_store_protocol::digest(bytes),
             bytes: bytes.len() as u64,
-            chunks: vec![canic_wasm_store_protocol::digest(bytes)],
+            chunks: vec![ic_wasm_store_protocol::digest(bytes)],
         },
     };
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
@@ -711,7 +711,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     // old frame, another attempt or incomplete preservation cannot stand in for it.
     {
         use canic_management_protocol::{custody as full, store_maintenance as maintenance};
-        let attempt = canic_wasm_store_protocol::MaintenanceAttempt {
+        let attempt = ic_wasm_store_protocol::MaintenanceAttempt {
             sequence: 1,
             operation: [7; 32],
         };
@@ -727,7 +727,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         );
         assert!(stored::creation(&successor, &encode(&custody)).is_err());
         let preservation = maintenance::Preservation {
-            catalog: canic_wasm_store_protocol::preservation::Catalog {
+            catalog: ic_wasm_store_protocol::preservation::Catalog {
                 quota: Default::default(),
                 reserved_bytes: 0,
                 releases: 0,

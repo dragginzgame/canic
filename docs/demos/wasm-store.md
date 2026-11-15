@@ -1,5 +1,14 @@
 # Versioned Wasm Store
 
+Implementation and passive protocol now live in
+[ic-wasm-store](https://github.com/dragginzgame/ic-wasm-store).
+Canic pins the supplier revision in both Cargo workspaces; `canic artifact build
+--package ic-wasm-store` builds that source with its committed lockfile. No sibling
+checkout is needed. Existing generated configurations must change only their Store
+`build.package` from `canic-wasm-store` to `ic-wasm-store`; keep `build.manifest`
+pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
+are unchanged. Rebuilding does not authorize installing the changed executable.
+
 The standalone Store is the first implementation of the
 [per-fleet artifact contract](../design/canic-system-design.md#per-fleet-versioned-wasm-store).
 It keeps immutable `(name, version)` releases, content hashes and ordered chunks
@@ -100,15 +109,18 @@ inline-to-Store migration remain unqualified Host flows.
 From this checkout, after `make canic` and Wasm toolchain preparation:
 
 ```sh
-canic artifact build --package canic-wasm-store --output target/wasm-store.wasm
+canic artifact build --package ic-wasm-store --output target/wasm-store.wasm
 canic artifact inspect target/wasm-store.wasm
 ```
 
 These commands build and inspect locally. They do not install the Store or open
 a browser. `make store-test` runs native and installed PocketIC qualification
 after `make qualification-setup`; it uses synthetic cycles and requires local
-loopback access. `make store-clippy` and `make store-doc` check Store code;
-`make root-clippy` and `make root-doc` cover the management consumer.
+loopback access. `make store-clippy` checks the installed integration harness;
+`make root-clippy` and `make root-doc` cover the management runtime and contracts.
+The supplier repository owns Store runtime/protocol checks and standalone installed
+qualification. Run installed build suites sequentially: their feature variants
+share Cargo output paths.
 
 All Store endpoints require the current IC controller. `prepare`, `put` and
 `publish` are idempotent for exact retained commitments. `status`/`observe` expose
@@ -171,8 +183,8 @@ are fenced even if admission has reopened. The gate does not certify that earlie
 remote calls have drained or authorize installation. These are runtime primitives,
 not another CLI upgrade path. `bash scripts/dev/test-store.sh admission` qualifies
 them locally; its test controller still performs Store installation explicitly.
-The CWS2 settings codec loads recognized prior CWS1 settings. Unknown or malformed
-records fail closed, and downgrading after writing CWS2 is unsupported.
+Store record migration and downgrade restrictions are owned by the supplier's
+[settings codec](https://github.com/dragginzgame/ic-wasm-store/blob/541d911410dae0f38eefc371693024bf2068c55b/crates/ic-wasm-store/src/state/records.rs).
 
 Root's `stage_store_maintenance`, `advance_store_maintenance` and
 `observe_store_maintenance` mounts now qualify the next boundary under sole Root
@@ -397,8 +409,8 @@ The identity is caller, operation digest and artifact hash; an operation can pin
 several artifacts, but cannot change an existing pin's release label. `observe_pin`
 returns replicated retention evidence. At most 32 pins per artifact are retained;
 exhaustion refuses new obligations without evicting old ones. Pins do not expire
-or authorize installation. Metadata schema `CWA2` reads the original `CWA1`
-records with no pins, using the same four stable allocations.
+or authorize installation. Persistent pin formats and migrations are owned by the
+supplier's settings and artifact codecs, not Root.
 
 `prepare_cache` requires an exact retained pin and prepares its entire bounded
 artifact. It observes the cache once, uploads only missing chunks from stable
@@ -436,9 +448,10 @@ rebuilds it after Store maintenance.
 The first Root path deliberately remains blocked if an uncertain cache preparation
 has missing chunks at reconciliation. It does not renew the original deadline or
 reissue preparation automatically. Cache loss after installation dispatch never
-authorizes install replay. An operator-approved repair flow, Store maintenance
-through Root, existing-fleet conversion and fleet CLI integration are remaining
-gates. The management-cache listing has a bounded 64 KiB reply decoder; an oversized
+authorizes install replay. An operator-approved cache-repair flow, existing-fleet
+conversion and successor Store maintenance remain pending. Root-driven Store
+maintenance and fleet CLI integration are qualified above. The management-cache
+listing has a bounded 64 KiB reply decoder; an oversized
 listing blocks preparation/recovery rather than allocating without a bound.
 
 The initial bounded contract accepts raw artifacts up to 8 MiB in 256 KiB chunks.

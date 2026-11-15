@@ -19,13 +19,13 @@ canic-asset-catalog = { path = "canic-asset-catalog" }
 canic-effect-probe = { path = "canic-effect-probe" }
 canic-management-protocol = { path = "../crates/canic-management-protocol" }
 canic-profile-protocol = { path = "../apps/profile/canic-profile-protocol" }
-canic-wasm-store-protocol = { path = "../crates/canic-wasm-store-protocol" }
 ic-host-artifacts = { version = "0.79.0", default-features = false, features = ["wasm"] }
 ic-platform = { version = "0.33.0", default-features = false, features = ["management-canister-types"] }
 ic-platform-runtime = { version = "0.22.1", default-features = false, features = ["cdk"] }
 ic-platform-types = { version = "0.20.3", default-features = false }
 ic-storage = "0.74.1"
 ic-testkit = { version = "0.106.0", default-features = false }
+ic-wasm-store-protocol = { git = "https://github.com/dragginzgame/ic-wasm-store", rev = "541d911410dae0f38eefc371693024bf2068c55b" }
 ic-wire = { version = "0.24.1", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"

@@ -56,8 +56,8 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
     target.module = "11".repeat(32);
     let reference = wire::Reference {
         store: "r7inp-6aaaa-aaaaa-aaabq-cai".into(),
-        manifest: canic_wasm_store_protocol::Manifest {
-            release: canic_wasm_store_protocol::Release {
+        manifest: ic_wasm_store_protocol::Manifest {
+            release: ic_wasm_store_protocol::Release {
                 name: "app".into(),
                 version: "v1".into(),
             },
@@ -161,7 +161,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
             store: plan.maintenance_store().unwrap().store.canister.clone(),
             previous_module: [0x22; 32],
             module_hash: [0x33; 32],
-            attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+            attempt: ic_wasm_store_protocol::MaintenanceAttempt {
                 sequence: 1,
                 operation: [3; 32],
             },

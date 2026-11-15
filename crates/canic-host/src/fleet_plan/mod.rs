@@ -41,7 +41,7 @@ pub struct FleetChild {
     pub artifact: Artifact,
     /// Immutable release in this fleet's approved Store; absent in retained inline fleets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub release: Option<canic_wasm_store_protocol::Manifest>,
+    pub release: Option<ic_wasm_store_protocol::Manifest>,
     /// Child attachment drawn from Root's funded budget, not another host debit.
     pub creation_cycles: u64,
     /// Earliest autonomous dispatch; admission must precede this time.
@@ -437,7 +437,7 @@ pub fn plan_fleet(
             )?,
             release: (!stores.is_empty()).then(|| {
                 crate::publication::release_manifest(
-                    canic_wasm_store_protocol::Release {
+                    ic_wasm_store_protocol::Release {
                         name: children[index].0.clone(),
                         version: artifact::digest(&child_bytes[index]),
                     },

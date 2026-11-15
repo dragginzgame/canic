@@ -30,7 +30,7 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
         .build
         .as_ref()
         .unwrap();
-    assert_eq!(recipe.package, "canic-wasm-store");
+    assert_eq!(recipe.package, "ic-wasm-store");
     assert_eq!(recipe.manifest, source().join("Cargo.toml"));
     assert_eq!(
         selected.wasm_path(&config, "store", None).unwrap(),

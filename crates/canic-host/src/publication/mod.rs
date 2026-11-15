@@ -4,8 +4,8 @@ use crate::{
     artifact, network::principal, operation, plan, signed, store, supplier,
 };
 use canic_management_protocol::publication::{self as wire, Command};
-use canic_wasm_store_protocol as protocol;
 use ic_platform::agent::Agent;
+use ic_wasm_store_protocol as protocol;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

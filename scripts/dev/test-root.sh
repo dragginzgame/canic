@@ -17,7 +17,7 @@ cp -- "$scratch/project/artifacts/app.wasm" target/root/app.wasm
 cp -- "$(jq -r .wasm target/root/app-v2.json)" target/root/app-v2.wasm
 cp -- "$scratch/project/artifacts/root.wasm" target/root/root.wasm
 cp -- "$scratch/project/artifacts/store.wasm" target/root/store.wasm
-"$cli" artifact build --json --package canic-wasm-store --features maintenance-candidate > target/root/store-maintenance.json
+"$cli" artifact build --json --package ic-wasm-store --features maintenance-candidate > target/root/store-maintenance.json
 cp -- "$(jq -r .wasm target/root/store-maintenance.json)" target/root/store-maintenance.wasm
 "$cli" artifact build --json --package canic-root --features maintenance-candidate > target/root/maintenance.json
 cp -- "$(jq -r .wasm target/root/maintenance.json)" target/root/maintenance.wasm
