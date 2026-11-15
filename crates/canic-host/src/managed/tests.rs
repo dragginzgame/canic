@@ -62,9 +62,15 @@ async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
         call.canister,
         principal(plan.application_controller()).unwrap()
     );
-    let bound: Approval =
-        ic_wire::native::decode_request(canic_management_protocol::RECONCILE, &call.args, LIMITS)
-            .unwrap();
+    let bound: Approval = ic_wire::decode(
+        &call.args,
+        ic_wire::Encoding::Frame {
+            method: canic_management_protocol::RECONCILE,
+            direction: ic_wire::Direction::Request,
+        },
+        LIMITS,
+    )
+    .unwrap();
     assert_eq!(bound, approval(&plan).unwrap());
     let mut unmanaged = plan;
     unmanaged.action = crate::PlanAction::Create {
@@ -104,8 +110,15 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
     };
     store::put(
         &slot.join("reconcile/reply.bin"),
-        &ic_wire::native::encode_response(canic_management_protocol::RECONCILE, &retained, LIMITS)
-            .unwrap(),
+        &ic_wire::encode(
+            &retained,
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::RECONCILE,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(recovery::require_settled(&slot).is_ok());
@@ -121,7 +134,15 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
     };
     store::put(
         &slot.join("reply.bin"),
-        &ic_wire::native::encode_response(STATUS, &earlier, LIMITS).unwrap(),
+        &ic_wire::encode(
+            &earlier,
+            ic_wire::Encoding::Frame {
+                method: STATUS,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(evidence(&operation, &plan).is_err());
@@ -339,7 +360,15 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
     ic_host_fs::durable::prepare_private_parents(&created_dir.join("stage")).unwrap();
     store::put(
         &created_dir.join("stage/reply.bin"),
-        &ic_wire::native::encode_response(STAGE, &Ok::<_, Refusal>(ready), LIMITS).unwrap(),
+        &ic_wire::encode(
+            &Ok::<_, Refusal>(ready),
+            ic_wire::Encoding::Frame {
+                method: STAGE,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(
@@ -481,8 +510,15 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
     };
     std::fs::write(
         staged,
-        ic_wire::native::encode_response(wire::STAGE, &Ok::<_, Refusal>(&installed), LIMITS)
-            .unwrap(),
+        ic_wire::encode(
+            &Ok::<_, Refusal>(&installed),
+            ic_wire::Encoding::Frame {
+                method: wire::STAGE,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     let ready = wire::Status {
@@ -508,7 +544,15 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         }
         std::fs::write(
             &observed,
-            ic_wire::native::encode_response(wire::STATUS, &invalid, LIMITS).unwrap(),
+            ic_wire::encode(
+                &invalid,
+                ic_wire::Encoding::Frame {
+                    method: wire::STATUS,
+                    direction: ic_wire::Direction::Response,
+                },
+                LIMITS,
+            )
+            .unwrap(),
         )
         .unwrap();
         assert!(
@@ -518,7 +562,15 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
     }
     std::fs::write(
         &observed,
-        ic_wire::native::encode_response(wire::STATUS, &ready, LIMITS).unwrap(),
+        ic_wire::encode(
+            &ready,
+            ic_wire::Encoding::Frame {
+                method: wire::STATUS,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     assert_eq!(
@@ -529,7 +581,15 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
     std::fs::create_dir_all(regression.parent().unwrap()).unwrap();
     std::fs::write(
         regression,
-        ic_wire::native::encode_response(wire::STATUS, &installed, LIMITS).unwrap(),
+        ic_wire::encode(
+            &installed,
+            ic_wire::Encoding::Frame {
+                method: wire::STATUS,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(upgrade::evidence(&evidence_dir, &plan).is_err());
@@ -579,13 +639,27 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     let digest = plan.digest().unwrap();
     let call = stage_call(&plan, bytes).unwrap();
     assert_eq!(call.method, "stage_stored_child");
-    let request: children::Request<wire::Stage<Approval>> =
-        ic_wire::native::decode_request(wire::STAGE, &call.args, wire::LIMITS).unwrap();
+    let request: children::Request<wire::Stage<Approval>> = ic_wire::decode(
+        &call.args,
+        ic_wire::Encoding::Frame {
+            method: wire::STAGE,
+            direction: ic_wire::Direction::Request,
+        },
+        wire::LIMITS,
+    )
+    .unwrap();
     assert_eq!(request.slot, children::Slot::First);
     assert_eq!(request.value.reference.manifest, source.manifest);
     let recovery = recovery::call(&plan).unwrap();
-    let recovered: children::Request<wire::Stage<Approval>> =
-        ic_wire::native::decode_request(wire::RECONCILE, &recovery.args, wire::LIMITS).unwrap();
+    let recovered: children::Request<wire::Stage<Approval>> = ic_wire::decode(
+        &recovery.args,
+        ic_wire::Encoding::Frame {
+            method: wire::RECONCILE,
+            direction: ic_wire::Direction::Request,
+        },
+        wire::LIMITS,
+    )
+    .unwrap();
     assert_eq!(recovered.value, request.value);
     assert_eq!(
         observation(&plan).unwrap().method,
@@ -622,7 +696,15 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         ],
     };
     let encode = |value: &wire::Custody| {
-        ic_wire::native::encode_response(wire::CUSTODY, value, wire::LIMITS).unwrap()
+        ic_wire::encode(
+            value,
+            ic_wire::Encoding::Frame {
+                method: wire::CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            wire::LIMITS,
+        )
+        .unwrap()
     };
     assert_eq!(stored::creation(&plan, &encode(&custody)).unwrap(), status);
     // A successor Store binding selects the complete contract explicitly. The
@@ -684,7 +766,15 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
             store_operation: Some(operation),
         };
         let frame = |value: &full::Root| {
-            ic_wire::native::encode_response(full::ROOT, value, full::ROOT_LIMITS).unwrap()
+            ic_wire::encode(
+                value,
+                ic_wire::Encoding::Frame {
+                    method: full::ROOT,
+                    direction: ic_wire::Direction::Response,
+                },
+                full::ROOT_LIMITS,
+            )
+            .unwrap()
         };
         assert_eq!(
             stored::creation(&successor, &frame(&full_custody)).unwrap(),
@@ -748,7 +838,15 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     plan.validate().unwrap();
     let call = Method::StageUpgrade.call(&plan, &(), LIMITS).unwrap();
     let expected: children::Request<wire::Stage<canic_management_protocol::upgrade::Approval>> =
-        ic_wire::native::decode_request(wire::STAGE_UPGRADE, &call.args, wire::LIMITS).unwrap();
+        ic_wire::decode(
+            &call.args,
+            ic_wire::Encoding::Frame {
+                method: wire::STAGE_UPGRADE,
+                direction: ic_wire::Direction::Request,
+            },
+            wire::LIMITS,
+        )
+        .unwrap();
     let upgraded = canic_management_protocol::upgrade::Status {
         approval: Some(expected.value.approval.clone()),
         phase: canic_management_protocol::upgrade::Phase::Scheduled,

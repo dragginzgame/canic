@@ -5,10 +5,12 @@ Its packages are named by responsibility, independently of design milestones:
 
 | Package | Responsibility |
 | --- | --- |
-| `canic-qualification` (`tests/`) | Native harnesses, retained predecessor binaries and explicit shared simulator preparation |
-| `canic-effect-probe` (`effect-probe/`) | Small Wasm probe isolating creation/funding commit boundaries and owner rollback |
-| `canic-asset-catalog` (`asset-catalog/`) | Real embedded Blob/catalog composition with explicit lifecycle and qualification-only failure points |
-| `canic-artifact-probe` (`artifact-probe/`) | Small Wasm probe isolating retained-byte installation onto an existing target |
+| `canic-qualification` | Native harnesses, retained predecessor binaries and explicit shared simulator preparation |
+| `canic-effect-probe` | Small Wasm probe isolating creation/funding commit boundaries and owner rollback |
+| `canic-asset-catalog` | Real embedded Blob/catalog composition with explicit lifecycle and qualification-only failure points |
+| `canic-artifact-probe` | Small Wasm probe isolating retained-byte installation onto an existing target |
+
+Each package lives in its identically named directory under this workspace.
 
 M0/M1 package and Make names are retired without aliases. `make qualification-setup`
 prepares the simulator for every suite. Select `make effect-test`,
@@ -354,6 +356,21 @@ bash scripts/dev/test-root.sh whole_fleet managed_child_cli multi_child_cli reta
 
 These fixtures explicitly select inline custody. The publication runner above
 owns the generated Root/Store/app default; neither fixture migrates retained fleets.
+
+`bash scripts/dev/test-root.sh profile_store` qualifies the profile manager as a
+Store-backed management owner. It preserves two users' private state and Store
+custody through worker, Store and owner upgrades, checks fleet observations,
+and refuses an installed greeting as profile readiness without replaying effects.
+After infrastructure maintenance, both users can still write; retries and refused
+writes preserve state. A subsequent approved change to the compatible earlier
+worker executable uses the current Root/Store bindings and retains the latest data.
+The same witness selects an explicitly qualified fault manager through maintenance,
+loses a worker-install callback after remote commit, and recovers through the real
+CLI's `fleet reconcile`. It checks original approval/signed-admission custody,
+effect fingerprints, one installation/version increment and unchanged private
+state before proceeding through normal Store/owner maintenance.
+The profile and publication witnesses share isolated signer preparation; generated
+credentials stay in their fixture directories and never use the operator wallet.
 
 `make profile-test` runs the [Canic-owned profile demo](../docs/demos/profile.md)
 through the existing deployment CLI, with private ownership, bounded capacity,

@@ -1,5 +1,10 @@
 [workspace]
-members = ["artifact-probe", "asset-catalog", "effect-probe", "tests"]
+members = [
+    "canic-artifact-probe",
+    "canic-asset-catalog",
+    "canic-effect-probe",
+    "canic-qualification",
+]
 resolver = "3"
 
 [workspace.package]
@@ -9,11 +14,11 @@ publish = false
 
 [workspace.dependencies]
 canic = { path = "../crates/canic" }
-canic-artifact-probe = { path = "artifact-probe" }
-canic-asset-catalog = { path = "asset-catalog" }
-canic-effect-probe = { path = "effect-probe" }
+canic-artifact-probe = { path = "canic-artifact-probe" }
+canic-asset-catalog = { path = "canic-asset-catalog" }
+canic-effect-probe = { path = "canic-effect-probe" }
 canic-management-protocol = { path = "../crates/canic-management-protocol" }
-canic-profile-protocol = { path = "../apps/profile/protocol" }
+canic-profile-protocol = { path = "../apps/profile/canic-profile-protocol" }
 canic-wasm-store-protocol = { path = "../crates/canic-wasm-store-protocol" }
 ic-host-artifacts = { version = "0.79.0", default-features = false, features = ["wasm"] }
 ic-platform = { version = "0.33.0", default-features = false, features = ["management-canister-types"] }
@@ -21,13 +26,13 @@ ic-platform-runtime = { version = "0.22.1", default-features = false, features =
 ic-platform-types = { version = "0.20.3", default-features = false }
 ic-storage = "0.74.1"
 ic-testkit = { version = "0.106.0", default-features = false }
-ic-wire = { version = "0.22.0", default-features = false }
+ic-wire = { version = "0.24.1", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.44.3"
+toko-tooling = "=0.44.4"
 
 [workspace.lints.cargo]
 unused_dependencies = "deny"

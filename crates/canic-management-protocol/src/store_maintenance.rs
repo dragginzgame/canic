@@ -192,37 +192,103 @@ mod tests {
             approval: status.approval.clone(),
             wasm: vec![255; MAX_MODULE_BYTES],
         };
-        let bytes = ic_wire::native::encode_request(INSTALL, &input, INSTALL_LIMITS).unwrap();
+        let bytes = ic_wire::encode(
+            &input,
+            ic_wire::Encoding::Frame {
+                method: INSTALL,
+                direction: ic_wire::Direction::Request,
+            },
+            INSTALL_LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_request::<Install>(INSTALL, &bytes, INSTALL_LIMITS)
-                .unwrap()
-                .wasm,
+            ic_wire::decode::<Install>(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: INSTALL,
+                    direction: ic_wire::Direction::Request
+                },
+                INSTALL_LIMITS
+            )
+            .unwrap()
+            .wasm,
             input.wasm
         );
         assert!(
-            ic_wire::native::decode_request::<Install>(INSTALL, &bytes, crate::STAGE_LIMITS)
-                .is_err()
+            ic_wire::decode::<Install>(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: INSTALL,
+                    direction: ic_wire::Direction::Request
+                },
+                crate::STAGE_LIMITS
+            )
+            .is_err()
         );
         let reply = Ok::<_, crate::Refusal>(status.clone());
-        let bytes = ic_wire::native::encode_response(STAGE, &reply, LIMITS).unwrap();
+        let bytes = ic_wire::encode(
+            &reply,
+            ic_wire::Encoding::Frame {
+                method: STAGE,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<Result<Status, crate::Refusal>>(
-                STAGE, &bytes, LIMITS
+            ic_wire::decode::<Result<Status, crate::Refusal>>(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: STAGE,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
             )
             .unwrap(),
             reply
         );
         for method in [OBSERVE, STATUS] {
-            let bytes =
-                ic_wire::native::encode_response(method, &Some(status.clone()), LIMITS).unwrap();
+            let bytes = ic_wire::encode(
+                &Some(status.clone()),
+                ic_wire::Encoding::Frame {
+                    method,
+                    direction: ic_wire::Direction::Response,
+                },
+                LIMITS,
+            )
+            .unwrap();
             assert_eq!(
-                ic_wire::native::decode_response::<Option<Status>>(method, &bytes, LIMITS).unwrap(),
+                ic_wire::decode::<Option<Status>>(
+                    &bytes,
+                    ic_wire::Encoding::Frame {
+                        method,
+                        direction: ic_wire::Direction::Response
+                    },
+                    LIMITS
+                )
+                .unwrap(),
                 Some(status.clone())
             );
         }
-        let bytes = ic_wire::native::encode_response(RECOVER, &status, LIMITS).unwrap();
+        let bytes = ic_wire::encode(
+            &status,
+            ic_wire::Encoding::Frame {
+                method: RECOVER,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<Status>(RECOVER, &bytes, LIMITS).unwrap(),
+            ic_wire::decode::<Status>(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: RECOVER,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap(),
             status
         );
     }

@@ -44,7 +44,7 @@ impl<A: Serialize> Stage<A> {
     /// Panics if the caller supplies metadata outside the bounded contract.
     #[must_use]
     pub fn pin(&self, method: u64, slot: children::Slot) -> Pin {
-        let bytes = ic_wire::native::encode(&(method, slot, self), LIMITS)
+        let bytes = ic_wire::encode(&(method, slot, self), ic_wire::Encoding::Payload, LIMITS)
             .expect("bounded Store operation");
         Pin {
             operation: crate::digest(&bytes),
@@ -197,9 +197,25 @@ mod tests {
             children: [journal.clone(), journal],
             sources: [Some(sources.clone()), Some(sources)],
         };
-        let bytes = ic_wire::native::encode_response(CUSTODY, &custody, LIMITS).unwrap();
+        let bytes = ic_wire::encode(
+            &custody,
+            ic_wire::Encoding::Frame {
+                method: CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<Custody>(CUSTODY, &bytes, LIMITS).unwrap(),
+            ic_wire::decode::<Custody>(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: CUSTODY,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap(),
             custody
         );
     }

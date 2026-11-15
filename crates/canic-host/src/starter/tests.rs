@@ -125,7 +125,7 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
         let root = canisters.get_mut("root").unwrap();
         match case {
             0 => root.build = None,
-            1 => root.build.as_mut().unwrap().manifest = "app/Cargo.toml".into(),
+            1 => root.build.as_mut().unwrap().manifest = "starter-app/Cargo.toml".into(),
             _ => root.wasm = Some("artifacts/app.wasm".into()),
         }
         std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
@@ -183,7 +183,7 @@ fn concurrent_initializers_publish_one_complete_project() {
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     let config = crate::load_config(&destination.join("canic.json")).unwrap();
     assert_eq!(config.select(None, None).unwrap().config.canisters.len(), 3);
-    assert!(destination.join("app/src/endpoint.rs").is_file());
+    assert!(destination.join("starter-app/src/endpoint.rs").is_file());
     assert!(destination.join("README.md").is_file());
     std::fs::remove_dir_all(parent).unwrap();
 }

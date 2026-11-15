@@ -121,8 +121,15 @@ fn publication_rejects_conflicting_authority_and_retains_an_exact_read_contract(
     assert!(old.digest().is_err());
     let deadline = crate::now().unwrap() + wire::MAX_WINDOW_NS;
     let read = observation(&plan, deadline).unwrap();
-    let request: wire::Request =
-        ic_wire::native::decode_request(wire::EXECUTE, &read.args, wire::REQUEST_LIMITS).unwrap();
+    let request: wire::Request = ic_wire::decode(
+        &read.args,
+        ic_wire::Encoding::Frame {
+            method: wire::EXECUTE,
+            direction: ic_wire::Direction::Request,
+        },
+        wire::REQUEST_LIMITS,
+    )
+    .unwrap();
     assert_eq!(
         read.canister.to_text(),
         plan.publication().unwrap().root.canister
@@ -160,9 +167,12 @@ fn publication_evidence_cannot_become_an_installation_receipt_or_change_the_mani
         published: true,
         missing: vec![],
     };
-    let frame = ic_wire::native::encode_response(
-        wire::EXECUTE,
+    let frame = ic_wire::encode(
         &Ok::<_, wire::Error>(status.clone()),
+        ic_wire::Encoding::Frame {
+            method: wire::EXECUTE,
+            direction: ic_wire::Direction::Response,
+        },
         wire::RESPONSE_LIMITS,
     )
     .unwrap();

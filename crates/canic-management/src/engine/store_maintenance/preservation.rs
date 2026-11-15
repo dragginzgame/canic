@@ -52,8 +52,15 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
         attempt: record.approval.attempt.clone(),
         after: scan(record).as_ref().and_then(|value| value.after.clone()),
     };
-    let bytes = ic_wire::native::encode_request(store::PRESERVATION, &request, store::LIMITS)
-        .expect("preservation request");
+    let bytes = ic_wire::encode(
+        &request,
+        ic_wire::Encoding::Frame {
+            method: store::PRESERVATION,
+            direction: ic_wire::Direction::Request,
+        },
+        store::LIMITS,
+    )
+    .expect("preservation request");
     let reply = Call::new(
         target(&record.approval),
         "observe_preservation",
@@ -63,9 +70,15 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
     .execute()
     .await
     .map_err(super::super::failure)?;
-    let page: Result<store::preservation::Page, store::Error> =
-        ic_wire::native::decode_response(store::PRESERVATION, &reply, store::LIMITS)
-            .map_err(|_| Failure::InvalidReply)?;
+    let page: Result<store::preservation::Page, store::Error> = ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: store::PRESERVATION,
+            direction: ic_wire::Direction::Response,
+        },
+        store::LIMITS,
+    )
+    .map_err(|_| Failure::InvalidReply)?;
     let page = page.map_err(|_| Failure::Mismatch)?;
     if !page.catalog.quota.valid()
         || page.catalog.releases > page.catalog.quota.releases
@@ -96,8 +109,12 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
         {
             return Err(Failure::Mismatch);
         }
-        let bytes = ic_wire::native::encode(&(value.digest, entry), store::LIMITS)
-            .map_err(|_| Failure::InvalidReply)?;
+        let bytes = ic_wire::encode(
+            &(value.digest, entry),
+            ic_wire::Encoding::Payload,
+            store::LIMITS,
+        )
+        .map_err(|_| Failure::InvalidReply)?;
         value.digest = store::digest(&bytes);
         value.after = Some(release.clone());
         value.observed += 1;

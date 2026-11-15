@@ -72,12 +72,22 @@ pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
             return Err(invalid());
         }
         if method == "observe_root_custody" {
-            return ic_wire::native::encode_request(custody::ROOT, &(), custody::ROOT_LIMITS)
-                .map_err(supplier);
+            return ic_wire::encode(
+                &(),
+                ic_wire::Encoding::Frame {
+                    method: custody::ROOT,
+                    direction: ic_wire::Direction::Request,
+                },
+                custody::ROOT_LIMITS,
+            )
+            .map_err(supplier);
         }
-        return ic_wire::native::encode_request(
-            canic_management_protocol::stored::CUSTODY,
+        return ic_wire::encode(
             &(),
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::stored::CUSTODY,
+                direction: ic_wire::Direction::Request,
+            },
             canic_management_protocol::stored::LIMITS,
         )
         .map_err(supplier);
@@ -101,7 +111,15 @@ pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
         "observe_upgrade" if single_upgrade_root(plan) => (upgrade::STATUS, LIMITS),
         _ => return Err(invalid()),
     };
-    ic_wire::native::encode_request(id, &(), limits).map_err(supplier)
+    ic_wire::encode(
+        &(),
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Request,
+        },
+        limits,
+    )
+    .map_err(supplier)
 }
 
 pub(crate) fn validate(plan: &Plan) -> Result<()> {
@@ -148,10 +166,14 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
         {
             return Err(invalid());
         }
-        ic_wire::native::encode(expected, custody::LIMITS).map_err(supplier)?;
+        ic_wire::encode(expected, ic_wire::Encoding::Payload, custody::LIMITS).map_err(supplier)?;
     }
-    ic_wire::native::encode(expected, canic_management_protocol::children::LIMITS)
-        .map_err(supplier)?;
+    ic_wire::encode(
+        expected,
+        ic_wire::Encoding::Payload,
+        canic_management_protocol::children::LIMITS,
+    )
+    .map_err(supplier)?;
     stored::validate(plan)?;
     Ok(())
 }
@@ -204,13 +226,15 @@ fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
         return stored::matches(plan, method, bytes);
     }
     if method == "observe_children" {
-        let observed: canic_management_protocol::children::Custody =
-            ic_wire::native::decode_response(
-                canic_management_protocol::children::CUSTODY,
-                bytes,
-                canic_management_protocol::children::LIMITS,
-            )
-            .map_err(supplier)?;
+        let observed: canic_management_protocol::children::Custody = ic_wire::decode(
+            bytes,
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::children::CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            canic_management_protocol::children::LIMITS,
+        )
+        .map_err(supplier)?;
         Ok(observed.as_slice() == expected)
     } else {
         let [child] = expected else {
@@ -223,22 +247,41 @@ fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
 fn matches(expected: &Custody, method: &str, bytes: &[u8]) -> Result<bool> {
     match method {
         "observe" => {
-            let mut observed: Status =
-                ic_wire::native::decode_response(STATUS, bytes, LIMITS).map_err(supplier)?;
+            let mut observed: Status = ic_wire::decode(
+                bytes,
+                ic_wire::Encoding::Frame {
+                    method: STATUS,
+                    direction: ic_wire::Direction::Response,
+                },
+                LIMITS,
+            )
+            .map_err(supplier)?;
             observed.stable_pages = 0;
             observed.maintenance_candidate = false;
             Ok(observed == expected.creation)
         }
         "observe_upgrade" => {
-            let observed: upgrade::Status =
-                ic_wire::native::decode_response(upgrade::STATUS, bytes, LIMITS)
-                    .map_err(supplier)?;
+            let observed: upgrade::Status = ic_wire::decode(
+                bytes,
+                ic_wire::Encoding::Frame {
+                    method: upgrade::STATUS,
+                    direction: ic_wire::Direction::Response,
+                },
+                LIMITS,
+            )
+            .map_err(supplier)?;
             Ok(observed == expected.upgrades.first().cloned().unwrap_or_default())
         }
         "observe_custody" => {
-            let observed: Custody =
-                ic_wire::native::decode_response(custody::OBSERVE, bytes, custody::LIMITS)
-                    .map_err(supplier)?;
+            let observed: Custody = ic_wire::decode(
+                bytes,
+                ic_wire::Encoding::Frame {
+                    method: custody::OBSERVE,
+                    direction: ic_wire::Direction::Response,
+                },
+                custody::LIMITS,
+            )
+            .map_err(supplier)?;
             Ok(&observed == expected)
         }
         _ => Err(invalid()),

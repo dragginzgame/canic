@@ -7,6 +7,302 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.213.0 release qualification: 2026-11-15
+
+The maintainer authorized GitHub delivery. Fourteen product packages select
+0.213.0; qualification packages retain 0.0.0. Registry freshness review confirms
+the selected first-party registry suppliers are current, including Wire 0.24.1
+and Tooling 0.44.4. Blob 0.100.6 and topology 0.106.1 retain their explicitly
+qualified Git revisions; topology has no registry index entry and Blob's registry
+release does not contain the selected Service contract. Neither source is replaced
+by an unreviewed sibling checkout. All packages remain unpublished.
+
+Pre-push review found two test helpers at the native harness's `tests/` root:
+`profile_store.rs` and `store_upgrade_tests.rs`. Cargo discovered them as independent
+test crates although they import their enclosing suite. Move them to matching
+module directories without changing test bodies or suite names. Normal workspace
+test discovery can then compile them through their actual owners. The first
+release gate was deliberately stopped before this edit; its partial output is
+retained separately. Normal qualification-workspace discovery now compiles all
+test targets. The complete Linux `make -j1 ci` gate passed on the corrected layout,
+with all 283 captured input hashes unchanged. This includes 104 Host and 61 CLI
+tests, 24 installed Store cases, three publication journeys, five Blob cases,
+the Store-backed profile witness, effect/custody, growth, Root and endpoint checks,
+and native/Wasm lint/docs/format/tooling agreement. Three optional retained-binary
+cases remain explicitly ignored by the aggregate; the prior focused Wire-adoption
+run separately exercised the retained Root transition described below.
+
+Gate log: `target/qualification/release-0213-0-ci.log`; frozen inputs and supplier
+review: `target/evidence/0.213.0/release/`. This result paragraph is the only
+post-gate source edit and changes no executable or release metadata. macOS and
+mainnet were not exercised; no crates.io publication is authorized.
+
+## Toko Tooling 0.44.4 and Wire 0.24.1 adoption: 2026-11-15
+
+The requested refresh selects registry Toko Tooling 0.44.4 and IC Wire 0.24.1
+in both maintained workspaces. The sparse registry index established stable,
+non-yanked availability; downloaded archives matched the advertised SHA-256:
+`b52bb793b386309b8c4a9e88f32711bb5d1fd11a47bf337c11c63ca2aa22fc97`
+for Tooling and
+`6811e5270a9c430cf0b1cf86ba4c8f6a3c15b597cd8f2f99fa2af7a4f82e1297`
+for Wire. Wire's published source identifies revision
+`57c17dcfb8f844a306eb81dbdc1aa5b77c51e4bc`. The authenticated tooling installer
+previewed and updated the existing 47-file snapshot; only the baseline and receipt
+changed. Prepared tool versions and retained executable entrypoints are unchanged.
+
+Reviewed Wire's actual published API before changing consumers. All Canic host,
+runtime, application, generated-source and qualification codec calls now use
+`encode`/`decode` with explicit `Encoding::Payload` or method/direction frames.
+No old-API alias, codec facade, schema rewrite, endpoint owner or implicit
+lifecycle was added. Limits and DTOs remain owned by their existing contracts.
+Wire 0.24.1 appeared during the fresh-starter check; its source diff against the
+initially selected 0.24.0 contains only comment/documentation changes. Earlier
+0.24.0 behavior evidence below therefore remains relevant; final locks select
+0.24.1, and fresh starters resolve it too. Other suppliers remain out of this
+requested refresh scope.
+
+The pinned independent Blob library remains at
+`decde204acb6d7c8362a0003e904beef72ff89b6` with its own Wire 0.22.4 persistence
+dependency. Canic's optional adapter projects only the supplier-selected numeric
+RPC limits into its own Wire type. The default Wasm graph still excludes Blob,
+Storage and Runtime; the composed catalog graph has one shared Storage/Runtime
+identity and two independently owned codecs. No sibling checkout was changed.
+
+The new tooling package-directory rule moves the greeting to
+`apps/hello/canic-hello`, the five profile packages to their `canic-profile-*`
+directories, and the four qualification packages to their exact package names.
+Both Cargo metadata inventories confirm the names. Native references and build
+fixtures follow the move; historical evidence paths stay historical. Generated
+source uses `starter-app/` without changing the application slot named `app`.
+Existing projects, deployment identities, approvals and journals are not rewritten.
+
+Validation and input evidence are retained locally under
+`target/qualification/supplier-adoption/`. Native product tests passed (186 cases,
+one explicitly installed-only case ignored), and runtime Wasm compilation passed.
+Affected Clippy/Rustdoc checks passed; the Blob-specific checks were rerun after
+correcting a catalog load argument during migration. The five installed Blob
+cases passed, including authorization, shared references, transaction rollback,
+malformed frames and exact drain/reopen/activation. The Store-backed profile
+witness passed across worker/Store/owner maintenance and callback recovery.
+The generated starter builds and passes its own formatting/Wasm Clippy checks.
+Formatting, prepared tools and authenticated snapshot agreement pass.
+
+With the final Wire 0.24.1 selection, all five installed Blob cases passed again
+with matching before/after source and lock receipts. Installed management endpoint
+admission and reply rollback passed. The generated starter's full Store-maintenance/publication/
+child-upgrade witness passed, including editing/rebuilding the source application
+and preserving its principal. A retained pre-migration Root built with Wire 0.22.4
+upgraded to the new Root through the existing predecessor witness, preserving its
+child, original approval and exact replay. This is local synthetic-cycle evidence,
+not a mainnet rollout or a claim that every historical binary is compatible.
+The installed development `canic` is on the normal PATH; package metadata remains
+0.212.0 pending the 0.213.0 release. No publication or push was performed.
+
+## Worker-upgrade continuation guidance: 2026-11-15
+
+The installed callback-recovery work exposed misleading native CLI guidance:
+UpgradePending always printed another apply command, even for a retained uncertain
+installation needing explicit reconciliation. Repeating that command can consume
+the bounded observation slots without requesting recovery. Share the existing
+status projection's upgrade decision with progress output: issued upload/install
+and supported failures select reconcile, ordinary progress/Ready-without-receipt
+select apply, and Empty/Expired/ReserveBlocked select status for review. Retain
+the original operation, scope and signer via the existing shell-safe renderer.
+No new command, alias, Host authority, JSON field or management behavior is added.
+Store and whole-fleet creation continuations retain their existing owners.
+
+Reused the recorded legacy diagnostics/custody research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: presentation must preserve uncertainty,
+scope and original effect authority. Status and progress now consume one upgrade
+guidance function instead of contradictory decisions. The touched progress tests
+move to their adjacent test module. Focused cases cover all upgrade phases,
+failures, shell quoting, retained scope/signers, and unchanged outcome evidence.
+
+All 15 status and three progress tests pass, together with CLI Clippy/Rustdoc,
+formatting and diff checks. `make canic` installs the development CLI through the
+normal PATH. A read-only `canic fleet status` against the earlier callback-failure
+fixture reports InstallIssued, directs original-operation recovery and retains
+the absence of a receipt. Evidence: `target/qualification/upgrade-guidance-*.log`.
+No simulator rerun was needed for this presentation-only change. Package metadata
+still reports 0.212.0; the pending increment remains 0.213.0, local and unpushed.
+
+## Profile worker callback recovery: 2026-11-15
+
+Continued pending 0.213.0 at the remaining installed composition boundary: a worker
+upgrade can commit remotely while its callback traps before Root retains success.
+Reused the existing management engine's fault point 8, the earlier installed
+growth upgrade cases, and the legacy custody/readiness research below. No new
+fault endpoint, retry policy or recovery engine was needed.
+
+This exposed a product defect: the timer set its per-slot heap exclusion before
+awaiting an effect, but a trapping callback never reached the manual clear. The
+existing growth fixtures replaced the owner before reconciliation, hiding the
+stuck flag. Replace manual acquire/clear pairs in scheduling and both reconciliation
+paths with one task-owned standard-library DropGuard. Runtime 0.22.5's call cleanup
+cancels and drops the suspended task; dropping the guard clears only heap exclusion,
+never durable intent, reservations or attempt counts. No timeout, forced unlock,
+new lease record or supplier change is involved.
+
+Additional read-only legacy inspection at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` covered
+`crates/canic-core/src/workflow/topology/guard.rs` and its path history
+(`ed9af4e1b35cad3a0c5622521dd64abe02d5fb4b`,
+`538c87924e8f719a471ece8ffa7558785922a328`,
+`173fb90f7fc41c3c2afa1f0425780e28d2ad8c0b`), plus
+`crates/canic-core/src/ops/storage/async_job_recovery/tests.rs` and the
+0.104 B3 domain async-job recovery report. Preserve scoped destruction and the
+tests' separation between operation identity and execution exclusion. Do not port
+legacy lease takeover or watchdog machinery: this path has an executor-owned
+cleanup boundary and cannot reissue uncertain management effects.
+
+The profile witness bootstraps normally, then selects the existing fault-enabled
+manager through an ordinary maintenance approval. After the worker upgrade,
+the new executable serves the unchanged private records while Root remains at
+InstallIssued. Replanning returns the same operation; another apply observes
+uncertainty without a completion receipt. Explicit `fleet reconcile` reconstructs
+the approved outcome. The test checks retained approval, exact signed admission,
+effect fingerprints and counts, and precisely one child version increment. It
+then continues through Store maintenance, replacement with the normal manager,
+private writes and a subsequent worker upgrade. All fault selection is local,
+with synthetic cycles and the fixture's isolated identity.
+
+The first run caught a qualification reader using profile limits for management
+status. It now uses the management protocol's declared limits for both encoding
+and decoding; product limits and admission checks are unchanged. This proves a
+recoverable committed upgrade, not arbitrary rejected or unknown installations.
+
+The installed profile CLI witness passes in 61.49s. The affected inline growth
+suite passes both current tests in 14.73s (one optional predecessor fixture remains
+ignored), including creation upload/install callback recovery before owner
+maintenance. The two-child lost-creation/sibling-upgrade witness passes in 7.26s.
+Runtime Wasm Clippy/Rustdoc with all features, focused Root/growth qualification
+Clippy, generated-app lint, formatting, shell syntax and diff checks pass.
+Evidence: `target/qualification/profile-store-recovery-*.log`. No mainnet effects
+or delivery occurred. The fix requires the updated management executable; recovery
+of a guard already stranded in an older deployed Root is not established here.
+
+## Profile operation after infrastructure maintenance: 2026-11-15
+
+Continued the same pending 0.213.0 composition, extending its installed witness
+rather than adding a second deployment engine or readiness mechanism. The
+previous proof preserved existing records but did not exercise writes and another
+worker transition after both infrastructure owners changed. Reused the legacy
+custody/readiness research recorded below and the current Store-upgrade witness's
+post-maintenance publication flow. Profile's existing revision/idempotency rules
+remain application-owned.
+
+Both users update their private records after Store and owner maintenance. Exact
+retries return the retained record; conflicting stale writes and controller writes
+are refused, with complete worker stable bytes unchanged. A new publication and
+upgrade approval then selects the compatible earlier worker executable. The plan
+must bind the current Root module, maintained Store module and activation attempt,
+and the currently installed worker module. The worker keeps its principal and
+latest full application state; this is a code change, not application rollback.
+Private reads, fleet observations and an unchanged final plan remain checked.
+
+Also moved the pending Cargo diagnostic regressions into their adjacent test
+module, preserving their cases and the single Cargo diagnostic owner. No new
+product endpoint, storage schema, feature flag, supplier or permission path.
+Only this selected compatible profile pair is covered; arbitrary old executables
+and broader allocation or mainnet recovery are not inferred from it.
+
+The extended installed witness passed in 57.59s with
+`CARGO_NET_OFFLINE=true bash scripts/dev/test-root.sh profile_store`, using the
+prepared simulator and isolated signer. Localhost permission was required for
+PocketIC; the first sandbox attempt could not bind its port. The three relocated
+Cargo diagnostic tests, focused Root qualification Clippy, generated-app lint,
+formatting and diff checks pass. Evidence:
+`target/qualification/profile-store-continuation-{installed,clippy,format}.log`
+and `target/qualification/build-diagnostics-relocation-tests.log`. Work remains
+local and unpushed, with package versions still at 0.212.0; no mainnet effects.
+
+## Store-backed profile composition: 2026-11-15
+
+The next coherent increment is pending 0.213.0, including the earlier build
+diagnostic repair. Package versions remain at released 0.212.0 until delivery.
+The profile manager explicitly mounts existing Store publication, custody,
+creation/upgrade, maintenance and public observation endpoints. Its readiness
+decoder, lifecycle, memory allocation and timer ownership are unchanged. The
+generic greeting Root is unchanged. The selected new consumer has one manager
+in the Root role, one Store and one profile worker; existing inline/mainnet
+deployments are not migrated.
+
+Reviewed the actual profile worker's strict Storage opening and authenticated
+user operations, the manager's profile readiness decoder, the management engine
+and Host's Store-bound admission/maintenance checks. Reused the recorded legacy
+Root-bootstrap research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: installing
+code is not readiness, and dependent work waits for retained custody. This use
+case needs the existing application-owned decoder, not a generic readiness
+registry, greeting facade, copied provisioning engine or new package. No runtime
+Wire format, stable-memory schema or supplier version changes.
+
+The installed profile Store witness passed in 49.54s. The real CLI creates the
+fleet, publishes and upgrades the worker, replaces Store, then replaces the
+management owner. Two users retain their full profiles and cannot read each
+other's data; the worker's controller also receives Forbidden. Worker stable
+bytes remain unchanged across both executable transitions. Store replacement
+compares complete preservation evidence before/after installation; its explicit
+activation legitimately advances the maintenance fence. Store backing is then
+unchanged across owner maintenance. Fleet views report three canisters and Ready
+creation, upgrade and Store observations without inventory issues.
+
+A separate incompatible greeting is installed under the profile owner. It stays
+Verified with a readiness failure, original approval and exactly one creation,
+upload and installation attempt. Reapplying retains the same evidence without
+producing a completion receipt. This is accepted blocked qualification exposure,
+not permission to reinstall or bypass readiness.
+
+Store maintenance's anonymous-operator rejection remains intact. Both this
+witness and the existing Store-upgrade witness now share isolated test-identity
+preparation; credentials remain in fixture directories. The existing Store
+interruption/recovery witness passed in 57.73s with that helper. The affected
+inline profile-preservation test also passed; manager Wasm Clippy, qualification
+Clippy/Rustdoc, generated-app lint, formatting, shell syntax and diff checks pass.
+The documented init/add/build flow builds all three packages with no identity
+bindings or journal creation. Evidence: `target/qualification/profile-store-*.log`
+and `target/qualification/profile-store-config-1sqhtg75/`.
+
+Only the selected one-worker composition is qualified here. Broader allocations,
+arbitrary readiness protocols, Blob fleet lifecycle and mainnet Store maintenance
+remain open. No push, mainnet effect or browser launch occurred.
+
+## 0.212.0 post-push review and 0.212.1 build diagnostics: 2026-11-15
+
+GitHub main and peeled `v0.212.0` match
+`724744bab2a5bf6972f3021431e6da0e66b55b26`; the annotated tag object is
+`04e445d86dc3487f0c29b372c6413c674e828dd3`. Local main and origin/main match.
+Compared the pushed tree to the gate inputs: only the documented release-result
+entry differs. Reviewed the actual generator/status changes, build and planning
+callers, installed fixtures and current guidance. No new deployment owner,
+authority bypass, compatibility alias or migration claim was introduced. The
+greeting-specific readiness contract remains an explicit qualification boundary.
+
+One actionable usability issue surfaced in the generated-source workflow:
+`artifact::build` and app-build lock preparation retained Cargo output through
+Host Process but formatted only the supplier's deliberately terse exit error.
+Pending 0.212.1 adds one Cargo-specific diagnostic projection shared by these
+callers. It selects the first compiler error or Cargo stderr, limits the preview
+to 4,096 characters and marks truncation. It preserves the original ToolError and
+its bounded evidence. Process execution/cleanup stays supplier-owned; signer and
+provider error handling is unchanged. The native Host package now directly uses
+the already selected Host Text escaper; no supplier version or Wasm graph changes.
+
+Reused the recorded starter/build ownership and legacy config-discovery diagnostic
+research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: keep one builder, escape
+untrusted presentation and preserve original evidence. Three focused tests pass,
+covering compiler-vs-stderr selection, control escaping, Unicode/truncation and
+an actual missing Cargo package that preserves an existing build output.
+Host/CLI Clippy and formatting pass. `make canic` installed the development CLI.
+Its generated-project smoke reports the actual E0425 source location, preserves
+the previous Wasm on failure, then builds all three canisters after correction
+with the same lockfile. Missing local dependency during lock preparation also
+reports the cause and preserves the existing Wasm. Evidence:
+`target/qualification/build-diagnostics-{tests,clippy,format,install}.log` and
+`target/qualification/build-diagnostics-qi2u7yl8/`.
+
+The next increment is local and unpushed; package versions remain at released
+0.212.0. No mainnet effect or browser launch occurred.
+
 ## 0.212.0 release qualification: 2026-11-15
 
 The maintainer authorized GitHub delivery and subsequent development. All fourteen
@@ -3168,7 +3464,7 @@ Validation: 24 host tests, 15 CLI tests, the installed PocketIC deployment/upgra
 recovery journey, M1 Clippy/Rustdoc, formatting and tooling agreement passed.
 Regression cases live in [host config tests](../../crates/canic-host/src/config/tests.rs),
 [CLI config tests](../../crates/canic-cli/src/config_tests.rs) and the
-[installed journey](../../qualification/tests/tests/journey.rs). Mainnet
+[installed journey](../../qualification/canic-qualification/tests/journey.rs). Mainnet
 canister code and operation evidence were not changed by these fixes. Comparative
 adoption measurements and broader production lifecycle remain unqualified; this
 review does not close M0 or admit the optional capability catalogue.

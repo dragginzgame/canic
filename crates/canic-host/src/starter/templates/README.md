@@ -1,6 +1,6 @@
 # Canic starter
 
-Edit `app/src/lib.rs` to change the greeting. Root and Wasm Store are supplied by Canic.
+Edit `starter-app/src/lib.rs` to change the greeting. Root and Wasm Store are supplied by Canic.
 
 ```text
 Root
@@ -72,7 +72,7 @@ Keep the config and its .canic journal; do not delete attempts to retry.
 
 ## Upgrade the application
 
-After retaining creation completion, edit `app/src/lib.rs`, then rebuild and review
+After retaining creation completion, edit `starter-app/src/lib.rs`, then rebuild and review
 the next plan. Unpublished bytes first need a publication approval; after applying
 it, plan again for installation. Canic resolves the existing child and previous
 code from its journal:

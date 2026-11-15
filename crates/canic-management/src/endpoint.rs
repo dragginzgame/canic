@@ -306,15 +306,12 @@ macro_rules! mount_endpoints {
             }
             #[expect(clippy::needless_pass_by_value, reason = "Platform transfers the argument buffer to its decoder")]
             fn decode(bytes: Vec<u8>) -> ($($request)?) {
-                wire::native::decode_request(protocol::$($id)::+, &bytes, protocol::$limits)
+                wire::decode(&bytes, wire::Encoding::Frame { method: protocol::$($id)::+, direction: wire::Direction::Request }, protocol::$limits)
                     .expect($decode_error)
             }
             #[allow(clippy::needless_pass_by_value, reason = "Platform passes an owned reply; selected reply types include both Copy and non-Copy values")]
             fn encode(value: Reply) -> Vec<u8> {
-                wire::native::encode_response(
-                    protocol::$($id)::+, &value,
-                    $crate::endpoint::response_limits(protocol::$($id)::+),
-                )
+                wire::encode(&value, wire::Encoding::Frame { method: protocol::$($id)::+, direction: wire::Direction::Response }, $crate::endpoint::response_limits(protocol::$($id)::+))
                     .expect($encode_error)
             }
             #[cdk::$kind(crate = "cdk", guard = "admit", decode_with = "decode", encode_with = "encode")]

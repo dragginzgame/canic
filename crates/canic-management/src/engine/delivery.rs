@@ -149,7 +149,15 @@ async fn call<T: Serialize, R: DeserializeOwned>(
     id: u64,
     input: &T,
 ) -> Result<R, Failure> {
-    let bytes = ic_wire::native::encode_request(id, input, store::LIMITS).expect("Store request");
+    let bytes = ic_wire::encode(
+        input,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Request,
+        },
+        store::LIMITS,
+    )
+    .expect("Store request");
     let reply = Call::new(
         Principal::from_text(&source.reference.store).expect("Store principal"),
         method,
@@ -159,7 +167,15 @@ async fn call<T: Serialize, R: DeserializeOwned>(
     .execute()
     .await
     .map_err(failure)?;
-    ic_wire::native::decode_response(id, &reply, store::LIMITS).map_err(|_| Failure::InvalidReply)
+    ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Response,
+        },
+        store::LIMITS,
+    )
+    .map_err(|_| Failure::InvalidReply)
 }
 /// Pending pins dispatch once. Issued pins can only be reconstructed by observation.
 pub(super) async fn pin(slot: Slot, upgrade: bool) -> Result<(), Failure> {
@@ -205,9 +221,15 @@ impl Upload {
             .execute()
             .await
             .map_err(failure)?;
-            let ready: Result<store::CacheReady, store::CacheError> =
-                ic_wire::native::decode_response(store::PREPARE_CACHE, &reply, store::LIMITS)
-                    .map_err(|_| Failure::InvalidReply)?;
+            let ready: Result<store::CacheReady, store::CacheError> = ic_wire::decode(
+                &reply,
+                ic_wire::Encoding::Frame {
+                    method: store::PREPARE_CACHE,
+                    direction: ic_wire::Direction::Response,
+                },
+                store::LIMITS,
+            )
+            .map_err(|_| Failure::InvalidReply)?;
             let ready = ready.map_err(|_| Failure::Uncertain)?;
             if ready.pin != source.pin() || ready.uploaded as usize > store::MAX_CHUNKS {
                 return Err(Failure::Mismatch);
@@ -230,11 +252,14 @@ pub(super) fn upload(slot: Slot, upgrade: bool, hash: [u8; 32], expires: u64) ->
         assert!(source.cache_deadline.is_none(), "one cache preparation");
         let deadline = expires.min(api::time().saturating_add(300_000_000_000));
         mutate(slot, upgrade, |s| s.cache_deadline = Some(deadline));
-        ic_wire::native::encode_request(
-            store::PREPARE_CACHE,
+        ic_wire::encode(
             &store::PrepareCache {
                 pin: source.pin(),
                 expires_at_ns: deadline,
+            },
+            ic_wire::Encoding::Frame {
+                method: store::PREPARE_CACHE,
+                direction: ic_wire::Direction::Request,
             },
             store::LIMITS,
         )

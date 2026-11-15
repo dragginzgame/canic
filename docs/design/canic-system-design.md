@@ -252,9 +252,12 @@ is the external operator; its created application's sole controller is Root.
 Lifecycle mounting and application readiness remain explicit in each canister.
 The supplied Root currently admits the greeting `probe` contract; the profile
 manager separately admits profile readiness. This is not a general application
-readiness interface. A Store-backed stateful consumer must first qualify an
-explicit application-owned readiness contract with its selected management owner,
-including preservation of that contract for retained work. Do not substitute a
+readiness interface. The profile manager explicitly mounts the same Store
+protocols and qualifies a Store-backed profile worker with its existing readiness
+decoder. Publication, worker/Store/owner upgrades preserve the worker's private
+user state and retained artifact custody. The greeting Root's contract is unchanged.
+Further consumers must qualify their application-owned readiness contract with
+the selected owner, including preservation for retained work. Do not substitute a
 successful install, accept an undecoded reply or impersonate the greeting protocol
 to bypass this boundary.
 The CLI now generates a standalone greeting workspace whose artifact passes that
@@ -699,6 +702,12 @@ records source/history evidence and the differences needing new qualification.
 Memory ownership uses IC Storage allocations and stable names, not copied hardcoded IDs. Compile and validate one allocation manifest. Optional roles do not open unused stores during startup, diagnostics or sampling. Measure fresh physical allocation as well as logical usage. Reopening state must validate its schema, allocation owner and bounds before granting access.
 
 Use one qualified executor/timer provider instance in a composed canister. The scheduler owns wakeups; the domain owns durable demand. Each recovery-critical task retains its operation and attempt fence. A bounded independently rearmed watchdog can recover abandoned work, but does not create new business authority. Stale callbacks cannot clear successors.
+
+Heap exclusion belongs to the executing task and must release when the executor
+cleans up a trapped callback. Releasing it permits observation of the retained
+operation; it never resets durable effect intent or proves that a remote effect
+did not occur. Qualify callback recovery without replacing the management owner,
+so a heap reset cannot conceal a stranded execution guard.
 
 Demand-driven pool maintenance is the baseline direction: activation, allocation, reset and recovery transitions re-arm actionable work. Healthy or unsupported local creation demand becomes observable quiescence. A coarse safety sweep may remain if complete event coverage is unproved. Measure its cost separately from productive work and preserve recovery reliability.
 

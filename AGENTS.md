@@ -229,7 +229,7 @@ authenticated tooling installer.
 - `crates/canic` owns the small greeting Wire contract and optional actor adapters.
   Its `blob` feature mounts the independent supplier through explicit local handlers;
   no Blob runtime dependency is enabled by default. Host and CLI packages
-  remain native; the demo canister is in `apps/hello/canister`.
+  remain native; the demo canister is in `apps/hello/canic-hello`.
 - Follow the accepted [endpoint ownership boundary](docs/design/canic-system-design.md#endpoint-ownership-and-actor-composition):
   Canic composes actor endpoints, Platform owns generic IC entrypoint macros,
   and Wire owns codecs without endpoint knowledge. Keep shared protocols passive
@@ -298,7 +298,13 @@ authenticated tooling installer.
   reconcile or publish completion receipts. Reuse the shared bounded collector
   for terminal, saved reports and localhost refreshes.
 - `apps/profile/` owns the profile protocol, native client, discovery entry and
-  persistent worker and one-slot autonomous manager. It uses IC Storage; Toko application integration is outside
+  persistent worker and autonomous profile manager. Its original inline journey
+  uses one worker; the selected Store-backed journey also uses one worker and
+  the shared engine's bounded Store protocols. Profile readiness remains
+  application-owned. Use `bash scripts/dev/test-root.sh profile_store` to qualify
+  publication, worker/Store/owner maintenance, private-user preservation and
+  refusal of incompatible readiness. No existing fleet is implicitly migrated.
+  It uses IC Storage; Toko application integration is outside
   the current scope. Use `make profile-test`, `make profile-clippy` and
   `make profile-doc` for its affected checks.
   `make growth-test` qualifies operator-absent creation and manager maintenance
@@ -367,7 +373,7 @@ required for initial dependency preparation. Blob remains optional and absent
 from the default application's runtime graph.
 
 Use `make blob-test`, `make blob-clippy` and `make blob-doc`. The installed
-witness is `qualification/asset-catalog`; it calls the real Service locally and
+witness is `qualification/canic-asset-catalog`; it calls the real Service locally and
 uses the application's one Storage bootstrap. Its fault endpoint is qualification
 only. `scripts/dev/blob-inputs.pl` resolves the immutable source through locked
 Cargo metadata and records its source identity, file hashes and both consumer

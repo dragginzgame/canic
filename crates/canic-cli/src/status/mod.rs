@@ -12,7 +12,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-mod management;
+pub(crate) mod management;
 pub(crate) mod store;
 #[cfg(test)]
 mod tests;

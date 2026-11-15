@@ -21,24 +21,26 @@ pub(super) struct Journal(pub Status, pub upgrade::Status, pub Vec<upgrade::Stat
 impl Journal {
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
         if let Some(payload) = bytes.strip_prefix(JOURNAL_TAG) {
-            let (creation, upgrade, history) = ic_wire::native::decode::<(
-                Status,
-                upgrade::Status,
-                Vec<upgrade::Status>,
-            )>(payload, JOURNAL_LIMITS)
-            .map_err(|_| CodecError::Invalid("upgrade journal"))?;
+            let (creation, upgrade, history) =
+                ic_wire::decode::<(Status, upgrade::Status, Vec<upgrade::Status>)>(
+                    payload,
+                    ic_wire::Encoding::Payload,
+                    JOURNAL_LIMITS,
+                )
+                .map_err(|_| CodecError::Invalid("upgrade journal"))?;
             if history.len() >= upgrade::MAX_UPGRADES {
                 return Err(CodecError::Invalid("upgrade history bound"));
             }
             Ok(Self(creation, upgrade, history))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ2") {
-            let (creation, upgrade) = ic_wire::native::decode(payload, JOURNAL_LIMITS)
-                .map_err(|_| CodecError::Invalid("single upgrade journal migration"))?;
+            let (creation, upgrade) =
+                ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
+                    .map_err(|_| CodecError::Invalid("single upgrade journal migration"))?;
             Ok(Self(creation, upgrade, vec![]))
         } else {
             // The sole historical schema is the original bounded creation status.
             // Lifecycle validates both stores before committing the migration.
-            ic_wire::native::decode(bytes, LIMITS)
+            ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS)
                 .map(|creation| Self(creation, upgrade::Status::default(), vec![]))
                 .map_err(|_| CodecError::Invalid("creation journal migration"))
         }
@@ -143,8 +145,12 @@ impl Storable for Artifact {
                 }
                 let mut bytes = b"CUS1".to_vec();
                 bytes.extend(
-                    ic_wire::native::encode(value, canic_management_protocol::stored::LIMITS)
-                        .map_err(|_| CodecError::Invalid("Store custody"))?,
+                    ic_wire::encode(
+                        value,
+                        ic_wire::Encoding::Payload,
+                        canic_management_protocol::stored::LIMITS,
+                    )
+                    .map_err(|_| CodecError::Invalid("Store custody"))?,
                 );
                 Ok(Cow::Owned(bytes))
             }
@@ -152,9 +158,12 @@ impl Storable for Artifact {
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
         if let Some(payload) = bytes.strip_prefix(b"CUS1") {
-            let value: canic_management_protocol::stored::Sources =
-                ic_wire::native::decode(payload, canic_management_protocol::stored::LIMITS)
-                    .map_err(|_| CodecError::Invalid("Store custody"))?;
+            let value: canic_management_protocol::stored::Sources = ic_wire::decode(
+                payload,
+                ic_wire::Encoding::Payload,
+                canic_management_protocol::stored::LIMITS,
+            )
+            .map_err(|_| CodecError::Invalid("Store custody"))?;
             if value.upgrades.len() > upgrade::MAX_UPGRADES {
                 return Err(CodecError::Invalid("Store history bound"));
             }
@@ -184,16 +193,21 @@ impl Storable for Journals {
         {
             return Err(CodecError::Invalid("upgrade history bound"));
         }
-        let payload = ic_wire::native::encode(&(&self.0, &self.1), JOURNAL_LIMITS)
-            .map_err(|_| CodecError::Invalid("child journals"))?;
+        let payload = ic_wire::encode(
+            &(&self.0, &self.1),
+            ic_wire::Encoding::Payload,
+            JOURNAL_LIMITS,
+        )
+        .map_err(|_| CodecError::Invalid("child journals"))?;
         let mut bytes = b"CUJ6".to_vec();
         bytes.extend_from_slice(&payload);
         Ok(Cow::Owned(bytes))
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
         if let Some(payload) = bytes.strip_prefix(b"CUJ6") {
-            let (journals, maintenance) = ic_wire::native::decode(payload, JOURNAL_LIMITS)
-                .map_err(|_| CodecError::Invalid("Store maintenance journal"))?;
+            let (journals, maintenance) =
+                ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
+                    .map_err(|_| CodecError::Invalid("Store maintenance journal"))?;
             Ok(Self(journals, maintenance))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ5") {
             // Wire records have exact arity: decode the historical shape explicitly.
@@ -206,7 +220,7 @@ impl Storable for Journals {
                 failure: Option<canic_management_protocol::Failure>,
             }
             let (journals, maintenance): ([Journal; 2], Option<Previous>) =
-                ic_wire::native::decode(payload, JOURNAL_LIMITS)
+                ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                     .map_err(|_| CodecError::Invalid("previous Store maintenance journal"))?;
             Ok(Self(
                 journals,
@@ -221,8 +235,9 @@ impl Storable for Journals {
                 }),
             ))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ4") {
-            let journals: [Journal; 2] = ic_wire::native::decode(payload, JOURNAL_LIMITS)
-                .map_err(|_| CodecError::Invalid("child journals"))?;
+            let journals: [Journal; 2] =
+                ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
+                    .map_err(|_| CodecError::Invalid("child journals"))?;
             if journals
                 .iter()
                 .any(|journal| journal.2.len() >= upgrade::MAX_UPGRADES)

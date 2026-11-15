@@ -78,9 +78,15 @@ pub(super) fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) 
     Ok(())
 }
 fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
-    let reply: std::result::Result<Status, Refusal> =
-        ic_wire::native::decode_response(Method::StageUpgrade.id(plan), bytes, LIMITS)
-            .map_err(supplier)?;
+    let reply: std::result::Result<Status, Refusal> = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: Method::StageUpgrade.id(plan),
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .map_err(supplier)?;
     reply.map_err(|refusal| {
         Error::Blocked(format!(
             "Root refused upgrade: {refusal:?}; original attempt retained"
@@ -123,16 +129,30 @@ pub(crate) fn evidence_with_source(
                     super::stored::upgrade_evidence(plan, &bytes)?
                 } else {
                     (
-                        ic_wire::native::decode_response(method, &bytes, LIMITS)
-                            .or_else(|error| {
-                                // Historical on-disk unit observations remain readable; no live fallback.
-                                if method == OBSERVE {
-                                    ic_wire::native::decode_response(STATUS, &bytes, LIMITS)
-                                } else {
-                                    Err(error)
-                                }
-                            })
-                            .map_err(supplier)?,
+                        ic_wire::decode(
+                            &bytes,
+                            ic_wire::Encoding::Frame {
+                                method,
+                                direction: ic_wire::Direction::Response,
+                            },
+                            LIMITS,
+                        )
+                        .or_else(|error| {
+                            // Historical on-disk unit observations remain readable; no live fallback.
+                            if method == OBSERVE {
+                                ic_wire::decode(
+                                    &bytes,
+                                    ic_wire::Encoding::Frame {
+                                        method: STATUS,
+                                        direction: ic_wire::Direction::Response,
+                                    },
+                                    LIMITS,
+                                )
+                            } else {
+                                Err(error)
+                            }
+                        })
+                        .map_err(supplier)?,
                         None,
                     )
                 };
@@ -228,8 +248,15 @@ pub(super) async fn apply(
         let observed: Status = if owner.source.is_some() {
             super::stored::upgraded(plan, &bytes)?
         } else {
-            ic_wire::native::decode_response(Method::ObserveUpgrade.id(plan), &bytes, LIMITS)
-                .map_err(supplier)?
+            ic_wire::decode(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: Method::ObserveUpgrade.id(plan),
+                    direction: ic_wire::Direction::Response,
+                },
+                LIMITS,
+            )
+            .map_err(supplier)?
         };
         if observed == Status::default() && retained.is_none() {
             stage_reply(

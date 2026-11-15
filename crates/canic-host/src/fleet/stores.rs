@@ -42,8 +42,15 @@ fn selected(
 }
 
 fn decode(store: &str, response: &[u8]) -> Result<Option<wire::Status>> {
-    let report: Option<wire::Status> =
-        ic_wire::native::decode_response(wire::STATUS, response, wire::LIMITS).map_err(supplier)?;
+    let report: Option<wire::Status> = ic_wire::decode(
+        response,
+        ic_wire::Encoding::Frame {
+            method: wire::STATUS,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .map_err(supplier)?;
     if report
         .as_ref()
         .is_some_and(|status| status.approval.store != store)
@@ -79,8 +86,15 @@ pub(super) async fn collect(
                     .agent()?
                     .query(&root.parse().map_err(supplier)?, "store_maintenance_status")
                     .with_arg(
-                        ic_wire::native::encode_request(wire::STATUS, &(), wire::LIMITS)
-                            .map_err(supplier)?,
+                        ic_wire::encode(
+                            &(),
+                            ic_wire::Encoding::Frame {
+                                method: wire::STATUS,
+                                direction: ic_wire::Direction::Request,
+                            },
+                            wire::LIMITS,
+                        )
+                        .map_err(supplier)?,
                     )
                     .call()
                     .await

@@ -329,20 +329,50 @@ mod tests {
             owner: vec![255; 29],
             pin: pin.clone(),
         });
-        let encoded = ic_wire::native::encode_response(PIN, &receipt, LIMITS).unwrap();
+        let encoded = ic_wire::encode(
+            &receipt,
+            ic_wire::Encoding::Frame {
+                method: PIN,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<Result<PinReceipt, Error>>(PIN, &encoded, LIMITS)
-                .unwrap(),
+            ic_wire::decode::<Result<PinReceipt, Error>>(
+                &encoded,
+                ic_wire::Encoding::Frame {
+                    method: PIN,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap(),
             receipt
         );
         let request = PrepareCache {
             pin,
             expires_at_ns: u64::MAX,
         };
-        let encoded = ic_wire::native::encode_request(PREPARE_CACHE, &request, LIMITS).unwrap();
+        let encoded = ic_wire::encode(
+            &request,
+            ic_wire::Encoding::Frame {
+                method: PREPARE_CACHE,
+                direction: ic_wire::Direction::Request,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_request::<PrepareCache>(PREPARE_CACHE, &encoded, LIMITS)
-                .unwrap(),
+            ic_wire::decode::<PrepareCache>(
+                &encoded,
+                ic_wire::Encoding::Frame {
+                    method: PREPARE_CACHE,
+                    direction: ic_wire::Direction::Request
+                },
+                LIMITS
+            )
+            .unwrap(),
             request
         );
         let status = Status {
@@ -364,10 +394,24 @@ mod tests {
                 })
                 .collect(),
         });
-        let encoded = ic_wire::native::encode_response(CUSTODY, &custody, LIMITS).unwrap();
-        let decoded =
-            ic_wire::native::decode_response::<Result<Custody, Error>>(CUSTODY, &encoded, LIMITS)
-                .unwrap();
+        let encoded = ic_wire::encode(
+            &custody,
+            ic_wire::Encoding::Frame {
+                method: CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
+        let decoded = ic_wire::decode::<Result<Custody, Error>>(
+            &encoded,
+            ic_wire::Encoding::Frame {
+                method: CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(decoded, custody);
         let preservation = Ok::<_, Error>(preservation::Page {
             catalog: preservation::Catalog {
@@ -382,22 +426,47 @@ mod tests {
             },
             entry: Some(decoded.unwrap()),
         });
-        let encoded =
-            ic_wire::native::encode_response(PRESERVATION, &preservation, LIMITS).unwrap();
+        let encoded = ic_wire::encode(
+            &preservation,
+            ic_wire::Encoding::Frame {
+                method: PRESERVATION,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<Result<preservation::Page, Error>>(
-                PRESERVATION,
+            ic_wire::decode::<Result<preservation::Page, Error>>(
                 &encoded,
+                ic_wire::Encoding::Frame {
+                    method: PRESERVATION,
+                    direction: ic_wire::Direction::Response
+                },
                 LIMITS
             )
             .unwrap(),
             preservation
         );
         let page = Ok::<_, Error>(vec![status; PAGE_SIZE]);
-        let encoded = ic_wire::native::encode_response(LIST, &page, LIMITS).unwrap();
+        let encoded = ic_wire::encode(
+            &page,
+            ic_wire::Encoding::Frame {
+                method: LIST,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<Result<Vec<Status>, Error>>(LIST, &encoded, LIMITS)
-                .unwrap(),
+            ic_wire::decode::<Result<Vec<Status>, Error>>(
+                &encoded,
+                ic_wire::Encoding::Frame {
+                    method: LIST,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap(),
             page
         );
         let input = Put {
@@ -405,20 +474,60 @@ mod tests {
             index: 0,
             bytes: vec![255; CHUNK_BYTES],
         };
-        let encoded = ic_wire::native::encode_request(PUT, &input, CHUNK_LIMITS).unwrap();
+        let encoded = ic_wire::encode(
+            &input,
+            ic_wire::Encoding::Frame {
+                method: PUT,
+                direction: ic_wire::Direction::Request,
+            },
+            CHUNK_LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_request::<Put>(PUT, &encoded, CHUNK_LIMITS)
-                .unwrap()
-                .bytes
-                .len(),
+            ic_wire::decode::<Put>(
+                &encoded,
+                ic_wire::Encoding::Frame {
+                    method: PUT,
+                    direction: ic_wire::Direction::Request
+                },
+                CHUNK_LIMITS
+            )
+            .unwrap()
+            .bytes
+            .len(),
             CHUNK_BYTES
         );
-        assert!(ic_wire::native::decode_request::<Put>(PUT, &encoded, LIMITS).is_err());
+        assert!(
+            ic_wire::decode::<Put>(
+                &encoded,
+                ic_wire::Encoding::Frame {
+                    method: PUT,
+                    direction: ic_wire::Direction::Request
+                },
+                LIMITS
+            )
+            .is_err()
+        );
         let response = Ok::<_, Error>(Chunk(input.bytes));
-        let encoded = ic_wire::native::encode_response(READ, &response, CHUNK_LIMITS).unwrap();
+        let encoded = ic_wire::encode(
+            &response,
+            ic_wire::Encoding::Frame {
+                method: READ,
+                direction: ic_wire::Direction::Response,
+            },
+            CHUNK_LIMITS,
+        )
+        .unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<Result<Chunk, Error>>(READ, &encoded, CHUNK_LIMITS)
-                .unwrap(),
+            ic_wire::decode::<Result<Chunk, Error>>(
+                &encoded,
+                ic_wire::Encoding::Frame {
+                    method: READ,
+                    direction: ic_wire::Direction::Response
+                },
+                CHUNK_LIMITS
+            )
+            .unwrap(),
             response
         );
     }

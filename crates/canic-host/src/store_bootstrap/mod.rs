@@ -181,11 +181,14 @@ pub(crate) fn observation(
         canister: id,
         effective: id,
         method: "observe_store",
-        args: ic_wire::native::encode_request(
-            wire::INFO,
+        args: ic_wire::encode(
             &wire::InfoRequest {
                 store: canister.to_text(),
                 expires_at_ns: deadline,
+            },
+            ic_wire::Encoding::Frame {
+                method: wire::INFO,
+                direction: ic_wire::Direction::Request,
             },
             canic_management_protocol::LIMITS,
         )
@@ -201,9 +204,15 @@ struct Readiness {
 }
 
 fn decode(bytes: &[u8]) -> Result<Info> {
-    let result: wire::InfoReply =
-        ic_wire::native::decode_response(wire::INFO, bytes, wire::RESPONSE_LIMITS)
-            .map_err(supplier)?;
+    let result: wire::InfoReply = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: wire::INFO,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::RESPONSE_LIMITS,
+    )
+    .map_err(supplier)?;
     result.map_err(|error| {
         Error::Blocked(format!(
             "Store readiness returned {error:?}; retain evidence and reconcile"

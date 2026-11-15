@@ -136,7 +136,7 @@ fn files(
         .ok_or_else(|| Error::Invalid("missing Canic workspace lints".into()))?;
     let generated = json!({
         "workspace": {
-            "members":["app"], "resolver":"3",
+            "members":["starter-app"], "resolver":"3",
             "package": {"version":"0.0.0", "edition":package.get("edition").ok_or_else(|| Error::Invalid("missing edition".into()))?, "rust-version":package.get("rust-version").ok_or_else(|| Error::Invalid("missing Rust version".into()))?, "publish":false},
             "dependencies":selected, "lints":lints,
         }
@@ -164,17 +164,17 @@ fn files(
                 .into_bytes(),
         ),
         (
-            "app/Cargo.toml".into(),
+            "starter-app/Cargo.toml".into(),
             toml::to_string_pretty(&app_manifest)
                 .map_err(supplier)?
                 .into_bytes(),
         ),
         (
-            "app/src/lib.rs".into(),
+            "starter-app/src/lib.rs".into(),
             include_bytes!("templates/lib.rs").to_vec(),
         ),
         (
-            "app/src/endpoint.rs".into(),
+            "starter-app/src/endpoint.rs".into(),
             include_bytes!("templates/endpoint.rs").to_vec(),
         ),
         (

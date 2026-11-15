@@ -2,7 +2,7 @@
 
 The optional `canic` feature `blob` mounts three endpoints around the real
 `ic_blob_storage::local::persistence::Service`. The installed application witness
-is [canic-asset-catalog](../../qualification/asset-catalog/src/lib.rs), in Canic's
+is [canic-asset-catalog](../../qualification/canic-asset-catalog/src/lib.rs), in Canic's
 qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
@@ -66,6 +66,13 @@ The input recorder resolves the supplier via locked Cargo metadata, requires
 an exact Git revision, and records library/context hashes and consumer locks
 before/after each installed run. Release evidence is recorded in the
 [qualification history](../qualification/history.md).
+
+Canic now selects Wire 0.24.1 for its adapter and application catalog. The pinned
+Blob service retains Wire 0.22.4 for its independently owned persistence codec.
+`canic::blob::RPC_LIMITS` projects the supplier's numeric budgets into the adapter's
+Wire type; it does not change admission policy or add a codec implementation.
+The installed composition checks qualify that boundary. The older input hashes
+below describe their dated run, not the current dependency selection.
 
 ## Original local qualification evidence — 2026-11-15
 

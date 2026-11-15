@@ -114,8 +114,15 @@ pub async fn greet(network: &Network, canister: &str, name: &str) -> Result<cani
     if name.len() > canic::MAX_NAME_BYTES {
         return Err(Error::Invalid("name exceeds 128 UTF-8 bytes".into()));
     }
-    let bytes =
-        ic_wire::native::encode_request(canic::GREET, &name, canic::LIMITS).map_err(supplier)?;
+    let bytes = ic_wire::encode(
+        &name,
+        ic_wire::Encoding::Frame {
+            method: canic::GREET,
+            direction: ic_wire::Direction::Request,
+        },
+        canic::LIMITS,
+    )
+    .map_err(supplier)?;
     let agent = network.agent()?;
     principal(canister)?;
     let reply = bounded(
@@ -125,7 +132,15 @@ pub async fn greet(network: &Network, canister: &str, name: &str) -> Result<cani
             .call(),
     )
     .await?;
-    ic_wire::native::decode_response(canic::GREET, &reply, canic::LIMITS).map_err(supplier)
+    ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: canic::GREET,
+            direction: ic_wire::Direction::Response,
+        },
+        canic::LIMITS,
+    )
+    .map_err(supplier)
 }
 
 /// Certified subnet identity shared by bootstrap and artifact-delivery admission.

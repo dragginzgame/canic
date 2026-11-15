@@ -115,9 +115,12 @@ async fn root_maintenance_preserves_store_operation() {
     for side in ["custody-before", "custody-after"] {
         let reply = std::fs::read(path.join(side).join("reply.bin")).unwrap();
         assert_eq!(
-            ic_wire::native::decode_response::<custody::Root>(
-                custody::ROOT,
+            ic_wire::decode::<custody::Root>(
                 &reply,
+                ic_wire::Encoding::Frame {
+                    method: custody::ROOT,
+                    direction: ic_wire::Direction::Response
+                },
                 custody::ROOT_LIMITS
             )
             .unwrap(),

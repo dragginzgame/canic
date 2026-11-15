@@ -32,13 +32,27 @@ macro_rules! endpoint {
             }
 
             fn decode(bytes: Vec<u8>) -> $request {
-                ic_wire::native::decode_request(protocol::$id, &bytes, protocol::$input_limits)
-                    .expect("Store request")
+                ic_wire::decode(
+                    &bytes,
+                    ic_wire::Encoding::Frame {
+                        method: protocol::$id,
+                        direction: ic_wire::Direction::Request,
+                    },
+                    protocol::$input_limits,
+                )
+                .expect("Store request")
             }
 
             fn encode(reply: $reply) -> Vec<u8> {
-                ic_wire::native::encode_response(protocol::$id, &reply, protocol::$output_limits)
-                    .expect("Store reply")
+                ic_wire::encode(
+                    &reply,
+                    ic_wire::Encoding::Frame {
+                        method: protocol::$id,
+                        direction: ic_wire::Direction::Response,
+                    },
+                    protocol::$output_limits,
+                )
+                .expect("Store reply")
             }
             #[cdk::$kind(
                 crate = "cdk",

@@ -25,12 +25,25 @@ management::mount_endpoints! {
 fn readiness() -> Readiness {
     Readiness {
         method: "probe",
-        request: ic_wire::native::encode_request(canic::GREET, &"Root", canic::LIMITS)
-            .expect("probe args"),
+        request: ic_wire::encode(
+            &"Root",
+            ic_wire::Encoding::Frame {
+                method: canic::GREET,
+                direction: ic_wire::Direction::Request,
+            },
+            canic::LIMITS,
+        )
+        .expect("probe args"),
         accept: |reply| {
-            let greeting: canic::Greeting =
-                ic_wire::native::decode_response(canic::GREET, reply, canic::LIMITS)
-                    .map_err(|_| Failure::InvalidReply)?;
+            let greeting: canic::Greeting = ic_wire::decode(
+                reply,
+                ic_wire::Encoding::Frame {
+                    method: canic::GREET,
+                    direction: ic_wire::Direction::Response,
+                },
+                canic::LIMITS,
+            )
+            .map_err(|_| Failure::InvalidReply)?;
             if greeting.message.is_empty() {
                 Err(Failure::Mismatch)
             } else {

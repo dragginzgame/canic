@@ -43,21 +43,30 @@ fn full_upgrade_history_fits_original_journal_budget() {
         depth: crate::LIMITS.depth + 2,
     };
     let payload = (&creation, &completed, &history);
-    let bytes = ic_wire::native::encode(&payload, limits).unwrap();
+    let bytes = ic_wire::encode(&payload, ic_wire::Encoding::Payload, limits).unwrap();
     let decoded: (crate::Status, Status, Vec<Status>) =
-        ic_wire::native::decode(&bytes, limits).unwrap();
+        ic_wire::decode(&bytes, ic_wire::Encoding::Payload, limits).unwrap();
     assert_eq!(decoded.2.len(), MAX_UPGRADES - 1);
     let custody = crate::custody::Custody {
         creation,
         upgrades: vec![completed; MAX_UPGRADES],
     };
-    let response =
-        ic_wire::native::encode_response(crate::custody::OBSERVE, &custody, crate::custody::LIMITS)
-            .unwrap();
+    let response = ic_wire::encode(
+        &custody,
+        ic_wire::Encoding::Frame {
+            method: crate::custody::OBSERVE,
+            direction: ic_wire::Direction::Response,
+        },
+        crate::custody::LIMITS,
+    )
+    .unwrap();
     assert_eq!(
-        ic_wire::native::decode_response::<crate::custody::Custody>(
-            crate::custody::OBSERVE,
+        ic_wire::decode::<crate::custody::Custody>(
             &response,
+            ic_wire::Encoding::Frame {
+                method: crate::custody::OBSERVE,
+                direction: ic_wire::Direction::Response
+            },
             crate::custody::LIMITS
         )
         .unwrap(),
@@ -119,9 +128,24 @@ fn upgrade_binds_original_child_old_and_new_code_and_time() {
         changed.validate("root", "child", &[1; 32], 99),
         Err(Refusal::Artifact)
     );
-    let bytes = ic_wire::native::encode_request(STAGE, &input, crate::STAGE_LIMITS).unwrap();
-    let decoded: Stage =
-        ic_wire::native::decode_request(STAGE, &bytes, crate::STAGE_LIMITS).unwrap();
+    let bytes = ic_wire::encode(
+        &input,
+        ic_wire::Encoding::Frame {
+            method: STAGE,
+            direction: ic_wire::Direction::Request,
+        },
+        crate::STAGE_LIMITS,
+    )
+    .unwrap();
+    let decoded: Stage = ic_wire::decode(
+        &bytes,
+        ic_wire::Encoding::Frame {
+            method: STAGE,
+            direction: ic_wire::Direction::Request,
+        },
+        crate::STAGE_LIMITS,
+    )
+    .unwrap();
     assert_eq!(decoded.approval, input.approval);
     let status = Status {
         approval: Some(input.approval),
@@ -132,9 +156,25 @@ fn upgrade_binds_original_child_old_and_new_code_and_time() {
         observed_version: Some(2),
         failure: None,
     };
-    let bytes = ic_wire::native::encode_response(STATUS, &status, crate::LIMITS).unwrap();
+    let bytes = ic_wire::encode(
+        &status,
+        ic_wire::Encoding::Frame {
+            method: STATUS,
+            direction: ic_wire::Direction::Response,
+        },
+        crate::LIMITS,
+    )
+    .unwrap();
     assert_eq!(
-        ic_wire::native::decode_response::<Status>(STATUS, &bytes, crate::LIMITS).unwrap(),
+        ic_wire::decode::<Status>(
+            &bytes,
+            ic_wire::Encoding::Frame {
+                method: STATUS,
+                direction: ic_wire::Direction::Response
+            },
+            crate::LIMITS
+        )
+        .unwrap(),
         status
     );
 }

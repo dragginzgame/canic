@@ -383,7 +383,14 @@ fn pin_capacity_never_evicts_and_old_artifact_schema_gains_no_authority() {
         published: true,
     };
     let mut encoded = b"CWA1".to_vec();
-    encoded.extend(ic_wire::native::encode(&old, canic_wasm_store_protocol::LIMITS).unwrap());
+    encoded.extend(
+        ic_wire::encode(
+            &old,
+            ic_wire::Encoding::Payload,
+            canic_wasm_store_protocol::LIMITS,
+        )
+        .unwrap(),
+    );
     let decoded = Artifact::from_bytes(Cow::Owned(encoded)).unwrap();
     assert!(decoded.published);
     assert!(decoded.pins.is_empty());

@@ -1,5 +1,95 @@
 # Changelog
 
+## [0.213.0] - 2026-11-15
+
+### ▶️ Try it
+
+From this checkout, install the development CLI on PATH, then generate a new
+starter in an unused directory and build its Root, Store and application locally:
+
+```sh
+make canic
+canic app init wire-demo --fleet mainnet --network ic \
+    --source wire-demo
+canic app build --app wire-demo
+canic fleet canister list --app wire-demo
+```
+
+This creates configuration and Wasm artifacts; it does not deploy, spend cycles
+or open a browser. Rust 1.100.0 with the Wasm target and dependency access are required.
+
+### ✨ Added
+
+The profile manager can serve as the management owner for a Store-backed profile
+fleet. Its existing profile readiness check, private user state and versioned
+artifact custody survive worker, Store and owner upgrades. An installed application
+with the wrong readiness protocol cannot receive a completion receipt.
+The installed witness also checks continued private writes, stale-write rejection
+and a subsequent approved worker code change after infrastructure maintenance,
+preserving current data when reselecting a compatible earlier executable.
+Lost worker-upgrade callback evidence is qualified through explicit reconciliation:
+the existing approval, signed admission and single installation attempt survive.
+
+For an admitted worker upgrade that reports an uncertain outcome, retain its
+operation and journal. Inspect it and request reconciliation with the same identity:
+
+```sh
+canic fleet status UPGRADE_OPERATION --app profile-store
+canic fleet reconcile UPGRADE_OPERATION --app profile-store \
+    --identity canic-mainnet
+```
+
+Reconciliation requests evidence recovery under the original approval; it does
+not authorize another installation or guarantee that every uncertainty is recoverable.
+Pending worker-upgrade output now prints the appropriate next command: reconciliation
+for issued/uncertain effects, apply for ordinary progress, and status for expired or
+reserve-blocked work. It retains the selected app, fleet, paths and signer; it no
+longer suggests repeated apply calls for a known uncertain installation.
+
+After following the [profile fleet setup](docs/demos/profile.md#store-backed-profile-fleet),
+build locally and inspect the configured fleet without opening a browser:
+
+```sh
+canic app build --app profile-store
+canic fleet show --app profile-store
+```
+
+This is local composition qualification for one profile worker. Existing mainnet
+deployments remain unchanged; the default generated starter still uses its greeting Root.
+
+### 🔧 Changed
+
+Adopted Toko Tooling 0.44.4 and IC Wire 0.24.1 in both workspaces. Canic's
+runtime, host, generated starter and qualification callers now use Wire's explicit
+payload/frame encoding API without a compatibility facade. Blob's pinned supplier
+still owns its internal Wire 0.22.4 dependency; the optional adapter preserves its
+numeric RPC limits while using Canic's selected codec.
+
+Demo and qualification package directories now match their Cargo package names.
+For example, the greeting lives at `apps/hello/canic-hello`, and the native
+qualification harness at `qualification/canic-qualification`. New starter source
+lives at `starter-app/`; its configured canister slot remains `app`. Existing
+generated projects are not rewritten. If updating their Wire dependency, migrate
+the endpoint calls to the explicit `Encoding::Frame` API as well.
+
+Root's async observation exclusion now releases during callback-trap cleanup.
+Previously a committed worker upgrade could remain blocked until Root was replaced,
+because the trapped task left its heap busy flag set. Explicit reconciliation can
+now inspect that original outcome without resetting its durable effect journal.
+
+Cargo build and lockfile-preparation failures now include a bounded, escaped
+diagnostic: the first compiler error when available, otherwise Cargo's stderr.
+The original process failure remains attached. Failed builds preserve the previous
+Wasm output. For an existing starter, fix the reported source or recipe, then rebuild
+and review the resulting fleet plan with a prepared identity:
+
+```sh
+canic app build --app starter
+canic fleet plan --app starter --identity canic-mainnet
+```
+
+Building is local; planning retains approval without deploying or spending cycles.
+
 ## [0.212.0] - 2026-11-15
 
 ### 🔧 Changed

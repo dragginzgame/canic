@@ -149,23 +149,35 @@ fn slot(plan: &Plan) -> Slot {
 }
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
     match method {
-        wire::CUSTODY | canic_management_protocol::custody::ROOT => {
-            ic_wire::native::encode_request(method, &(), wire::LIMITS).map_err(supplier)
-        }
-        wire::STAGE | wire::RECONCILE => ic_wire::native::encode_request(
-            method,
-            &Request {
-                slot: slot(plan),
-                value: stage(plan, super::approval(plan)?)?,
+        wire::CUSTODY | canic_management_protocol::custody::ROOT => ic_wire::encode(
+            &(),
+            ic_wire::Encoding::Frame {
+                method,
+                direction: ic_wire::Direction::Request,
             },
             wire::LIMITS,
         )
         .map_err(supplier),
-        wire::STAGE_UPGRADE | wire::RECONCILE_UPGRADE => ic_wire::native::encode_request(
-            method,
+        wire::STAGE | wire::RECONCILE => ic_wire::encode(
+            &Request {
+                slot: slot(plan),
+                value: stage(plan, super::approval(plan)?)?,
+            },
+            ic_wire::Encoding::Frame {
+                method,
+                direction: ic_wire::Direction::Request,
+            },
+            wire::LIMITS,
+        )
+        .map_err(supplier),
+        wire::STAGE_UPGRADE | wire::RECONCILE_UPGRADE => ic_wire::encode(
             &Request {
                 slot: slot(plan),
                 value: stage(plan, super::upgrade::approval(plan)?)?,
+            },
+            ic_wire::Encoding::Frame {
+                method,
+                direction: ic_wire::Direction::Request,
             },
             wire::LIMITS,
         )
@@ -179,9 +191,12 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<wire::Custody> {
         .and_then(|owner| owner.source.as_ref())
         .ok_or_else(invalid)?;
     if let Some(attempt) = &source.maintenance {
-        let value: canic_management_protocol::custody::Root = ic_wire::native::decode_response(
-            canic_management_protocol::custody::ROOT,
+        let value: canic_management_protocol::custody::Root = ic_wire::decode(
             bytes,
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::custody::ROOT,
+                direction: ic_wire::Direction::Response,
+            },
             canic_management_protocol::custody::ROOT_LIMITS,
         )
         .map_err(supplier)?;
@@ -196,7 +211,15 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<wire::Custody> {
         }
         return Ok(value.stored);
     }
-    ic_wire::native::decode_response(wire::CUSTODY, bytes, wire::LIMITS).map_err(supplier)
+    ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: wire::CUSTODY,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .map_err(supplier)
 }
 pub(crate) fn delivery<A: Serialize>(
     slot: Slot,

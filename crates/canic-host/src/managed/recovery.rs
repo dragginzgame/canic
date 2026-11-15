@@ -96,14 +96,26 @@ pub(crate) async fn reconcile(
         let path = attempt(dir)?;
         let bytes = signed::reconcile(&path, plan, identity, icp, agent).await?;
         if let Some(previous) = creation.as_ref() {
-            let current: Status =
-                ic_wire::native::decode_response(Method::Reconcile.id(plan), &bytes, LIMITS)
-                    .map_err(supplier)?;
+            let current: Status = ic_wire::decode(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: Method::Reconcile.id(plan),
+                    direction: ic_wire::Direction::Response,
+                },
+                LIMITS,
+            )
+            .map_err(supplier)?;
             super::validate(plan, Some(previous), &current)?;
         } else {
-            let current: canic_management_protocol::upgrade::Status =
-                ic_wire::native::decode_response(Method::ReconcileUpgrade.id(plan), &bytes, LIMITS)
-                    .map_err(supplier)?;
+            let current: canic_management_protocol::upgrade::Status = ic_wire::decode(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: Method::ReconcileUpgrade.id(plan),
+                    direction: ic_wire::Direction::Response,
+                },
+                LIMITS,
+            )
+            .map_err(supplier)?;
             upgrade::validate(plan, upgrading.as_ref(), &current)?;
         }
     }

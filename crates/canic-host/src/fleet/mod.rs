@@ -421,11 +421,14 @@ async fn observe_upgrade(
                 (
                     "child_upgrade_status",
                     children::OBSERVE_UPGRADE,
-                    ic_wire::native::encode_request(
-                        children::OBSERVE_UPGRADE,
+                    ic_wire::encode(
                         &children::Request {
                             slot,
                             value: approval,
+                        },
+                        ic_wire::Encoding::Frame {
+                            method: children::OBSERVE_UPGRADE,
+                            direction: ic_wire::Direction::Request,
                         },
                         canic_management_protocol::LIMITS,
                     ),
@@ -434,9 +437,12 @@ async fn observe_upgrade(
                 (
                     "upgrade_status",
                     canic_management_protocol::upgrade::STATUS,
-                    ic_wire::native::encode_request(
-                        canic_management_protocol::upgrade::STATUS,
+                    ic_wire::encode(
                         &(),
+                        ic_wire::Encoding::Frame {
+                            method: canic_management_protocol::upgrade::STATUS,
+                            direction: ic_wire::Direction::Request,
+                        },
                         canic_management_protocol::LIMITS,
                     ),
                 )
@@ -448,9 +454,15 @@ async fn observe_upgrade(
                 .call()
                 .await
                 .map_err(supplier)?;
-            let report =
-                ic_wire::native::decode_response(id, &response, canic_management_protocol::LIMITS)
-                    .map_err(supplier)?;
+            let report = ic_wire::decode(
+                &response,
+                ic_wire::Encoding::Frame {
+                    method: id,
+                    direction: ic_wire::Direction::Response,
+                },
+                canic_management_protocol::LIMITS,
+            )
+            .map_err(supplier)?;
             check_upgrade_report(approval, &report)?;
             Ok(report)
         })
@@ -675,9 +687,12 @@ pub async fn fleet_with_config(
                     (
                         "child_status",
                         children::STATUS,
-                        ic_wire::native::encode_request(
-                            children::STATUS,
+                        ic_wire::encode(
                             &slot,
+                            ic_wire::Encoding::Frame {
+                                method: children::STATUS,
+                                direction: ic_wire::Direction::Request,
+                            },
                             canic_management_protocol::LIMITS,
                         ),
                     )
@@ -685,9 +700,12 @@ pub async fn fleet_with_config(
                     (
                         "status",
                         canic_management_protocol::STATUS,
-                        ic_wire::native::encode_request(
-                            canic_management_protocol::STATUS,
+                        ic_wire::encode(
                             &(),
+                            ic_wire::Encoding::Frame {
+                                method: canic_management_protocol::STATUS,
+                                direction: ic_wire::Direction::Request,
+                            },
                             canic_management_protocol::LIMITS,
                         ),
                     )
@@ -699,9 +717,12 @@ pub async fn fleet_with_config(
                     .call()
                     .await
                     .map_err(supplier)?;
-                let report: canic_management_protocol::Status = ic_wire::native::decode_response(
-                    id,
+                let report: canic_management_protocol::Status = ic_wire::decode(
                     &response,
+                    ic_wire::Encoding::Frame {
+                        method: id,
+                        direction: ic_wire::Direction::Response,
+                    },
                     canic_management_protocol::LIMITS,
                 )
                 .map_err(supplier)?;

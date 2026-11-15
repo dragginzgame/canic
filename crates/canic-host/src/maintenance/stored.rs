@@ -69,16 +69,18 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         {
             return Err(invalid());
         }
-        ic_wire::native::encode(
+        ic_wire::encode(
             &canic_management_protocol::custody::Root {
                 stored: expected(plan)?,
                 store_operation: Some(operation.clone()),
             },
+            ic_wire::Encoding::Payload,
             canic_management_protocol::custody::ROOT_LIMITS,
         )
         .map_err(supplier)?;
     }
-    ic_wire::native::encode(&expected(plan)?, wire::LIMITS).map_err(supplier)?;
+    ic_wire::encode(&expected(plan)?, ic_wire::Encoding::Payload, wire::LIMITS)
+        .map_err(supplier)?;
     Ok(())
 }
 
@@ -132,9 +134,12 @@ pub(super) fn matches(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
         if method != "observe_root_custody" {
             return Err(invalid());
         }
-        let actual: canic_management_protocol::custody::Root = ic_wire::native::decode_response(
-            canic_management_protocol::custody::ROOT,
+        let actual: canic_management_protocol::custody::Root = ic_wire::decode(
             bytes,
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::custody::ROOT,
+                direction: ic_wire::Direction::Response,
+            },
             canic_management_protocol::custody::ROOT_LIMITS,
         )
         .map_err(supplier)?;
@@ -145,7 +150,14 @@ pub(super) fn matches(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
     if method != "observe_stored_children" {
         return Err(invalid());
     }
-    let actual: wire::Custody =
-        ic_wire::native::decode_response(wire::CUSTODY, bytes, wire::LIMITS).map_err(supplier)?;
+    let actual: wire::Custody = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: wire::CUSTODY,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .map_err(supplier)?;
     Ok(actual == expected(plan)?)
 }

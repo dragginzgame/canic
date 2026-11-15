@@ -174,12 +174,15 @@ pub(crate) fn call(plan: &Plan, command: Command, deadline: u64) -> Result<signe
         canister: root,
         effective: root,
         method: "store_publication",
-        args: ic_wire::native::encode_request(
-            wire::EXECUTE,
+        args: ic_wire::encode(
             &wire::Request {
                 store: publication.store.canister.clone(),
                 expires_at_ns: deadline,
                 command,
+            },
+            ic_wire::Encoding::Frame {
+                method: wire::EXECUTE,
+                direction: ic_wire::Direction::Request,
             },
             wire::REQUEST_LIMITS,
         )
@@ -194,9 +197,15 @@ pub(crate) fn observation(plan: &Plan, deadline: u64) -> Result<signed::Call<'st
     )
 }
 fn decode(bytes: &[u8], expected: &protocol::Manifest) -> Result<Option<protocol::Status>> {
-    let reply: wire::Reply =
-        ic_wire::native::decode_response(wire::EXECUTE, bytes, wire::RESPONSE_LIMITS)
-            .map_err(supplier)?;
+    let reply: wire::Reply = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: wire::EXECUTE,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::RESPONSE_LIMITS,
+    )
+    .map_err(supplier)?;
     match reply {
         Err(wire::Error::Store(protocol::Error::NotFound)) => Ok(None),
         Err(error) => Err(Error::Blocked(format!(

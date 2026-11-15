@@ -208,11 +208,11 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.212.0"
+version = "0.213.0"
 dependencies = [
  "ic-blob-storage",
  "ic-platform-runtime",
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
 ]
 
@@ -222,7 +222,7 @@ version = "0.0.0"
 dependencies = [
  "ic-platform",
  "ic-platform-runtime",
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -237,7 +237,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
  "toko-tooling",
 ]
@@ -248,7 +248,7 @@ version = "0.0.0"
 dependencies = [
  "ic-platform",
  "ic-platform-runtime",
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
  "serde_bytes",
  "toko-tooling",
@@ -256,10 +256,10 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.212.0"
+version = "0.213.0"
 dependencies = [
  "canic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -267,9 +267,9 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.212.0"
+version = "0.213.0"
 dependencies = [
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
 ]
 
@@ -286,7 +286,7 @@ dependencies = [
  "canic-wasm-store-protocol",
  "ic-host-artifacts",
  "ic-testkit",
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
  "serde_json",
  "tokio",
@@ -295,9 +295,9 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store-protocol"
-version = "0.212.0"
+version = "0.213.0"
 dependencies = [
- "ic-wire",
+ "ic-wire 0.24.1",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -851,7 +851,7 @@ source = "git+https://github.com/dragginzgame/ic-blob-storage?rev=decde204acb6d7
 dependencies = [
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.22.4",
  "serde",
  "sha2 0.11.1",
 ]
@@ -1024,6 +1024,18 @@ name = "ic-wire"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12f9ea1376af8b628c513c838043106a79d0c94c2946fe4a79b8fefbc595c250"
+dependencies = [
+ "bytemuck",
+ "postcard",
+ "serde",
+ "serde_bytes",
+]
+
+[[package]]
+name = "ic-wire"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6811e5270a9c430cf0b1cf86ba4c8f6a3c15b597cd8f2f99fa2af7a4f82e1297"
 dependencies = [
  "bytemuck",
  "postcard",
@@ -2386,9 +2398,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.44.3"
+version = "0.44.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a9bc7b6827044baac8134cada7ee6bc31f86c70beec9608d1d39d911eba15e1"
+checksum = "b52bb793b386309b8c4a9e88f32711bb5d1fd11a47bf337c11c63ca2aa22fc97"
 
 [[package]]
 name = "tower"

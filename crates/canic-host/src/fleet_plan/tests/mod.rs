@@ -320,7 +320,15 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     std::fs::create_dir_all(path.join("child/observe/0")).unwrap();
     store::put(
         &path.join("child/observe/0/reply.bin"),
-        &ic_wire::native::encode_response(STATUS, &ready, LIMITS).unwrap(),
+        &ic_wire::encode(
+            &ready,
+            ic_wire::Encoding::Frame {
+                method: STATUS,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     let planning = |dispatch| {

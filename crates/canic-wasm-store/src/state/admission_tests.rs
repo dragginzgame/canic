@@ -141,7 +141,14 @@ fn admission_settings_migrate_only_the_recognized_previous_schema() {
         reserved_bytes: 8,
     };
     let mut bytes = b"CWS1".to_vec();
-    bytes.extend(ic_wire::native::encode(&previous, canic_wasm_store_protocol::LIMITS).unwrap());
+    bytes.extend(
+        ic_wire::encode(
+            &previous,
+            ic_wire::Encoding::Payload,
+            canic_wasm_store_protocol::LIMITS,
+        )
+        .unwrap(),
+    );
     let mut migrated = Settings::from_bytes(Cow::Owned(bytes)).unwrap();
     assert_eq!(migrated.reserved_bytes, 8);
     assert!(migrated.admission.is_none());

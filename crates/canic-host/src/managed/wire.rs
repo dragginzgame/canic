@@ -73,13 +73,30 @@ impl Method {
             super::stored::arguments(plan, id)?
         } else {
             match owner.slot {
-                Some(slot) if matches!(self, Self::Observe) => {
-                    ic_wire::native::encode_request(id, &slot, limits)
-                }
-                Some(slot) => {
-                    ic_wire::native::encode_request(id, &children::Request { slot, value }, limits)
-                }
-                None => ic_wire::native::encode_request(id, value, limits),
+                Some(slot) if matches!(self, Self::Observe) => ic_wire::encode(
+                    &slot,
+                    ic_wire::Encoding::Frame {
+                        method: id,
+                        direction: ic_wire::Direction::Request,
+                    },
+                    limits,
+                ),
+                Some(slot) => ic_wire::encode(
+                    &children::Request { slot, value },
+                    ic_wire::Encoding::Frame {
+                        method: id,
+                        direction: ic_wire::Direction::Request,
+                    },
+                    limits,
+                ),
+                None => ic_wire::encode(
+                    value,
+                    ic_wire::Encoding::Frame {
+                        method: id,
+                        direction: ic_wire::Direction::Request,
+                    },
+                    limits,
+                ),
             }
             .map_err(supplier)?
         };

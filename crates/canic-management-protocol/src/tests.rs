@@ -44,22 +44,34 @@ fn publication_envelope_carries_a_maximum_chunk_and_bounded_status() {
             bytes: vec![42; store::CHUNK_BYTES],
         }),
     };
-    let frame = ic_wire::native::encode_request(
-        publication::EXECUTE,
+    let frame = ic_wire::encode(
         &request,
+        ic_wire::Encoding::Frame {
+            method: publication::EXECUTE,
+            direction: ic_wire::Direction::Request,
+        },
         publication::REQUEST_LIMITS,
     )
     .unwrap();
-    let decoded: Request =
-        ic_wire::native::decode_request(publication::EXECUTE, &frame, publication::REQUEST_LIMITS)
-            .unwrap();
+    let decoded: Request = ic_wire::decode(
+        &frame,
+        ic_wire::Encoding::Frame {
+            method: publication::EXECUTE,
+            direction: ic_wire::Direction::Request,
+        },
+        publication::REQUEST_LIMITS,
+    )
+    .unwrap();
     assert!(
         matches!(decoded.command, Command::Put(chunk) if chunk.bytes == vec![42; store::CHUNK_BYTES])
     );
     assert!(
-        ic_wire::native::decode_request::<Request>(
-            publication::EXECUTE,
+        ic_wire::decode::<Request>(
             &frame,
+            ic_wire::Encoding::Frame {
+                method: publication::EXECUTE,
+                direction: ic_wire::Direction::Request
+            },
             publication::RESPONSE_LIMITS
         )
         .is_err()
@@ -75,16 +87,22 @@ fn publication_envelope_carries_a_maximum_chunk_and_bounded_status() {
         missing: (0..store::MAX_CHUNKS as u32).collect(),
     };
     let reply: publication::Reply = Ok(status);
-    let frame = ic_wire::native::encode_response(
-        publication::EXECUTE,
+    let frame = ic_wire::encode(
         &reply,
+        ic_wire::Encoding::Frame {
+            method: publication::EXECUTE,
+            direction: ic_wire::Direction::Response,
+        },
         publication::RESPONSE_LIMITS,
     )
     .unwrap();
     assert_eq!(
-        ic_wire::native::decode_response::<publication::Reply>(
-            publication::EXECUTE,
+        ic_wire::decode::<publication::Reply>(
             &frame,
+            ic_wire::Encoding::Frame {
+                method: publication::EXECUTE,
+                direction: ic_wire::Direction::Response
+            },
             publication::RESPONSE_LIMITS
         )
         .unwrap(),
@@ -107,8 +125,24 @@ fn growth_frames_cover_declared_artifact_and_retained_evidence() {
         wasm,
     };
     assert_eq!(input.validate(&input.approval.manager, 0), Ok(()));
-    let frame = ic_wire::native::encode_request(STAGE, &input, STAGE_LIMITS).unwrap();
-    let decoded: Stage = ic_wire::native::decode_request(STAGE, &frame, STAGE_LIMITS).unwrap();
+    let frame = ic_wire::encode(
+        &input,
+        ic_wire::Encoding::Frame {
+            method: STAGE,
+            direction: ic_wire::Direction::Request,
+        },
+        STAGE_LIMITS,
+    )
+    .unwrap();
+    let decoded: Stage = ic_wire::decode(
+        &frame,
+        ic_wire::Encoding::Frame {
+            method: STAGE,
+            direction: ic_wire::Direction::Request,
+        },
+        STAGE_LIMITS,
+    )
+    .unwrap();
     assert_eq!(decoded.wasm, input.wasm);
     assert_eq!(decoded.approval, input.approval);
     input.wasm.push(0);
@@ -130,9 +164,25 @@ fn growth_frames_cover_declared_artifact_and_retained_evidence() {
         stable_pages: 64,
         maintenance_candidate: true,
     };
-    let frame = ic_wire::native::encode_response(STATUS, &status, LIMITS).unwrap();
+    let frame = ic_wire::encode(
+        &status,
+        ic_wire::Encoding::Frame {
+            method: STATUS,
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .unwrap();
     assert_eq!(
-        ic_wire::native::decode_response::<Status>(STATUS, &frame, LIMITS).unwrap(),
+        ic_wire::decode::<Status>(
+            &frame,
+            ic_wire::Encoding::Frame {
+                method: STATUS,
+                direction: ic_wire::Direction::Response
+            },
+            LIMITS
+        )
+        .unwrap(),
         status
     );
 }
@@ -145,14 +195,32 @@ fn store_readiness_frame_is_separate_from_publication_and_carries_bounded_info()
         store: "a".repeat(63),
         expires_at_ns: u64::MAX,
     };
-    let frame = ic_wire::native::encode_request(publication::INFO, &input, LIMITS).unwrap();
-    let decoded: publication::InfoRequest =
-        ic_wire::native::decode_request(publication::INFO, &frame, LIMITS).unwrap();
+    let frame = ic_wire::encode(
+        &input,
+        ic_wire::Encoding::Frame {
+            method: publication::INFO,
+            direction: ic_wire::Direction::Request,
+        },
+        LIMITS,
+    )
+    .unwrap();
+    let decoded: publication::InfoRequest = ic_wire::decode(
+        &frame,
+        ic_wire::Encoding::Frame {
+            method: publication::INFO,
+            direction: ic_wire::Direction::Request,
+        },
+        LIMITS,
+    )
+    .unwrap();
     assert_eq!(decoded.store, input.store);
     assert!(
-        ic_wire::native::decode_request::<publication::InfoRequest>(
-            publication::EXECUTE,
+        ic_wire::decode::<publication::InfoRequest>(
             &frame,
+            ic_wire::Encoding::Frame {
+                method: publication::EXECUTE,
+                direction: ic_wire::Direction::Request
+            },
             LIMITS
         )
         .is_err()
@@ -169,11 +237,23 @@ fn store_readiness_frame_is_separate_from_publication_and_carries_bounded_info()
         maintenance_candidate: true,
     };
     let reply: publication::InfoReply = Ok(expected.clone());
-    let frame =
-        ic_wire::native::encode_response(publication::INFO, &reply, publication::RESPONSE_LIMITS)
-            .unwrap();
-    let decoded: publication::InfoReply =
-        ic_wire::native::decode_response(publication::INFO, &frame, publication::RESPONSE_LIMITS)
-            .unwrap();
+    let frame = ic_wire::encode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: publication::INFO,
+            direction: ic_wire::Direction::Response,
+        },
+        publication::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    let decoded: publication::InfoReply = ic_wire::decode(
+        &frame,
+        ic_wire::Encoding::Frame {
+            method: publication::INFO,
+            direction: ic_wire::Direction::Response,
+        },
+        publication::RESPONSE_LIMITS,
+    )
+    .unwrap();
     assert_eq!(decoded.unwrap(), expected);
 }

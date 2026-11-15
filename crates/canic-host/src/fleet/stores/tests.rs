@@ -56,17 +56,37 @@ fn store_report_distinguishes_empty_from_malformed_and_foreign_attempts() {
         preservation: None,
         installation: None,
     };
-    let reply = ic_wire::native::encode_response(wire::STATUS, &Some(report.clone()), wire::LIMITS)
-        .unwrap();
+    let reply = ic_wire::encode(
+        &Some(report.clone()),
+        ic_wire::Encoding::Frame {
+            method: wire::STATUS,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .unwrap();
     assert_eq!(decode(STORE, &reply).unwrap(), Some(report));
     assert!(decode("rrkah-fqaaa-aaaaa-aaaaq-cai", &reply).is_err());
-    let empty = ic_wire::native::encode_response(wire::STATUS, &None::<wire::Status>, wire::LIMITS)
-        .unwrap();
+    let empty = ic_wire::encode(
+        &None::<wire::Status>,
+        ic_wire::Encoding::Frame {
+            method: wire::STATUS,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .unwrap();
     assert_eq!(decode(STORE, &empty).unwrap(), None);
     assert!(decode(STORE, b"malformed").is_err());
-    let wrong_method =
-        ic_wire::native::encode_response(wire::OBSERVE, &None::<wire::Status>, wire::LIMITS)
-            .unwrap();
+    let wrong_method = ic_wire::encode(
+        &None::<wire::Status>,
+        ic_wire::Encoding::Frame {
+            method: wire::OBSERVE,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .unwrap();
     assert!(decode(STORE, &wrong_method).is_err());
 }
 

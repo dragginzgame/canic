@@ -299,15 +299,15 @@ fn schedule(slot: Slot) {
             .expect("constant timer"),
             desired,
             move |_| async move {
-                if observing(slot, true) {
+                let Some(observation) = observing(slot) else {
                     return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
-                }
+                };
                 if snapshot(slot).phase == Phase::Ready {
                     upgrade::step(slot).await;
                 } else {
                     step(slot).await;
                 }
-                observing(slot, false);
+                drop(observation);
                 let decision = next(&snapshot(slot))
                     .or_else(|| upgrade::next(slot))
                     .map_or(OnceDecision::Stop, OnceDecision::ScheduleAt);
@@ -641,13 +641,13 @@ async fn reconcile_bound(slot: Slot, expected: Approval) -> Status {
         Some(expected),
         "reconciliation approval mismatch"
     );
-    if observing(slot, true) {
+    let Some(guard) = observing(slot) else {
         return status(slot);
-    }
+    };
     if let Err(error) = observation(slot).await {
         mutate(slot, |s| s.failure = Some(error));
     }
-    observing(slot, false);
+    drop(guard);
     schedule(slot);
     status(slot)
 }
@@ -669,10 +669,18 @@ fn reserved_cycles() -> u128 {
                 .sum::<u128>()
     })
 }
-fn observing(slot: Slot, value: bool) -> bool {
+// The executor drops the suspended future during callback-trap cleanup. Keep
+// this heap exclusion owned by that future; durable effect intent stays intact.
+fn observing(slot: Slot) -> Option<impl Drop> {
     let mut values = OBSERVING.get();
-    let previous = values[slot.index()];
-    values[slot.index()] = value;
+    if values[slot.index()] {
+        return None;
+    }
+    values[slot.index()] = true;
     OBSERVING.set(values);
-    previous
+    Some(std::mem::DropGuard::new(slot, |slot| {
+        let mut values = OBSERVING.get();
+        values[slot.index()] = false;
+        OBSERVING.set(values);
+    }))
 }

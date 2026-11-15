@@ -118,7 +118,7 @@ const METADATA_BOUND: Bound = Bound::Bounded {
 fn encode<T: Serialize>(value: &T, tag: &[u8]) -> Result<Cow<'static, [u8]>, CodecError> {
     let mut bytes = tag.to_vec();
     bytes.extend(
-        ic_wire::native::encode(value, RECORD_LIMITS)
+        ic_wire::encode(value, ic_wire::Encoding::Payload, RECORD_LIMITS)
             .map_err(|_| CodecError::Invalid("store record"))?,
     );
     Ok(Cow::Owned(bytes))
@@ -133,7 +133,7 @@ impl Storable for Artifact {
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
         let value: Self = if let Some(payload) = bytes.strip_prefix(b"CWA2") {
-            ic_wire::native::decode(payload, RECORD_LIMITS)
+            ic_wire::decode(payload, ic_wire::Encoding::Payload, RECORD_LIMITS)
                 .map_err(|_| CodecError::Invalid("artifact record"))?
         } else if let Some(payload) = bytes.strip_prefix(b"CWA1") {
             #[derive(Deserialize)]
@@ -142,7 +142,7 @@ impl Storable for Artifact {
                 chunks: Vec<[u8; 32]>,
                 published: bool,
             }
-            let old: Legacy = ic_wire::native::decode(payload, LIMITS)
+            let old: Legacy = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
                 .map_err(|_| CodecError::Invalid("legacy artifact"))?;
             Self {
                 bytes: old.bytes,
@@ -169,7 +169,7 @@ impl Storable for Settings {
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
         let value: Self = if let Some(payload) = bytes.strip_prefix(b"CWS2") {
-            ic_wire::native::decode(payload, LIMITS)
+            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
                 .map_err(|_| CodecError::Invalid("settings record"))?
         } else if let Some(payload) = bytes.strip_prefix(b"CWS1") {
             #[derive(Deserialize)]
@@ -177,7 +177,7 @@ impl Storable for Settings {
                 quota: Quota,
                 reserved_bytes: u64,
             }
-            let old: Previous = ic_wire::native::decode(payload, LIMITS)
+            let old: Previous = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
                 .map_err(|_| CodecError::Invalid("previous settings record"))?;
             Self {
                 quota: old.quota,

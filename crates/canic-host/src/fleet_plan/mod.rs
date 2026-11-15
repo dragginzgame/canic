@@ -86,8 +86,9 @@ impl FleetPlan {
     /// Rejects invalid authority, output references or unbounded inputs.
     pub fn digest(&self) -> Result<String> {
         self.validate()?;
-        let bytes = ic_wire::native::encode(
+        let bytes = ic_wire::encode(
             self,
+            ic_wire::Encoding::Payload,
             ic_wire::Limits {
                 bytes: 16_384,
                 allocation: 262_144,

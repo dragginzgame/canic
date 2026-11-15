@@ -13,8 +13,15 @@ fn bounded() -> Result<(), String> {
     reason = "entrypoint decoder owns argument buffer"
 )]
 fn decode(bytes: Vec<u8>) -> String {
-    let name: String = ic_wire::native::decode_request(GREET, &bytes, LIMITS)
-        .unwrap_or_else(|_| api::trap("invalid greeting frame"));
+    let name: String = ic_wire::decode(
+        &bytes,
+        ic_wire::Encoding::Frame {
+            method: GREET,
+            direction: ic_wire::Direction::Request,
+        },
+        LIMITS,
+    )
+    .unwrap_or_else(|_| api::trap("invalid greeting frame"));
     if name.len() > MAX_NAME_BYTES {
         api::trap("name exceeds 128 UTF-8 bytes");
     }
@@ -26,7 +33,15 @@ fn decode(bytes: Vec<u8>) -> String {
     reason = "entrypoint encoder owns return value"
 )]
 fn encode(value: Greeting) -> Vec<u8> {
-    ic_wire::native::encode_response(GREET, &value, LIMITS).expect("bounded greeting")
+    ic_wire::encode(
+        &value,
+        ic_wire::Encoding::Frame {
+            method: GREET,
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .expect("bounded greeting")
 }
 
 #[cdk::query(guard = "bounded", decode_with = "decode", encode_with = "encode")]

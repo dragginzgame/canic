@@ -5,7 +5,85 @@ One worker owns a nonzero user ID, its original caller principal, a private
 display name and a revision. It uses IC Storage directly, with one lifecycle and
 two named allocations. A separate entry stores one immutable worker address and
 checks readiness through a direct inter-canister call. There is no database,
-Coordinator, Store or Relay dependency.
+Coordinator, Store or Relay dependency in the application runtime. The optional
+managed fleet below keeps versioned artifacts in a separate Store canister.
+
+## Store-backed profile fleet
+
+The profile manager can occupy the `root` role and publish/install its worker
+through a separate Wasm Store. It keeps its existing profile `probe` decoder:
+readiness means the worker successfully opened its application storage. It does
+not accept a greeting reply as evidence of profile readiness. The worker owns
+user IDs, caller mappings and private reads; Root control grants no profile access.
+
+After simulator and signer preparation, run the installed local witness:
+
+```sh
+bash scripts/dev/test-root.sh profile_store
+```
+
+It creates the three-canister fleet through the real CLI, writes two users'
+profiles, publishes and upgrades the worker, upgrades Store and the management
+owner, and verifies both private records and artifact custody. Both users then
+update their profiles; retries are idempotent, stale writes and controller writes
+are refused. A new approval selects the compatible earlier worker executable
+through the upgraded Root and Store, preserving the latest profiles rather than
+restoring old application data. Wrong-user and controller reads are refused.
+An incompatible greeting application remains at
+code-verified status without a completion receipt or another install attempt.
+The witness also selects a qualification-only manager through maintenance and
+traps its worker-upgrade callback after the new worker code has committed. The
+worker keeps both private profiles while Root retains an uncertain installation.
+Replanning and observation retain the original operation; explicit CLI reconciliation
+recovers readiness with the same signed admission and effect fingerprints, exactly
+one installation and one worker version increment. The later owner maintenance
+restores the normal manager. Never select `fault-injection` for a live fleet.
+The replica stops after the test; all cycles are synthetic.
+
+To prepare a separate hands-on fleet from the Canic checkout, choose an unused
+`profile-store/` directory. These commands only create local declarations and
+build code; they do not deploy:
+
+```sh
+mkdir profile-store
+canic app init profile-store --fleet mainnet --network ic --config profile-store/canic.json
+canic app canister add root --app profile-store --role root --wasm artifacts/root.wasm --manifest ../Cargo.toml --package canic-profile-manager
+canic app canister add store --app profile-store --parent root --role wasm-store --wasm artifacts/store.wasm --manifest ../Cargo.toml --package canic-wasm-store
+canic app canister add worker --app profile-store --parent root --role worker --wasm artifacts/worker.wasm --manifest ../Cargo.toml --package canic-profile-worker
+canic app build --app profile-store
+canic fleet canister list --app profile-store
+```
+
+With a prepared identity, review the usual 4T total creation approval (3T to the
+management owner including worker funding, 1T to Store):
+
+```sh
+canic fleet plan --app profile-store --identity canic-mainnet
+canic fleet status OPERATION --app profile-store
+```
+
+Applying spends the approved budget. Use the existing [fleet apply and recovery
+workflow](root.md#deploy-the-generated-application); this new composition has
+local qualification, not a mainnet maintenance rehearsal. Keep the original
+journal. New worker bytes require publication before a separate upgrade approval.
+If an admitted worker upgrade has an uncertain outcome, inspect and reconcile that
+same operation with the original identity. Pending upgrade output prints a scoped
+next command, preserving any explicit config, journal and signer override:
+
+```sh
+canic fleet status UPGRADE_OPERATION --app profile-store
+canic fleet reconcile UPGRADE_OPERATION --app profile-store --identity canic-mainnet
+```
+
+Reconciliation reconstructs evidence where possible; it does not reset consumed
+authority or grant permission to reinstall. Keep blocked evidence if the observed
+code or version cannot establish the approved outcome.
+Callback cleanup requires the updated management executable; a new CLI alone
+does not repair a heap guard already stranded in an older deployed Root.
+Use the profile application's client for authenticated operations; `fleet call`
+is the greeting-demo helper. Store remains an infrastructure role, not a profile
+or application-permission store. The qualified journey uses one worker; broader
+allocation patterns and arbitrary readiness protocols remain future work.
 
 ## Current mainnet demo
 

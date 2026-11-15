@@ -260,9 +260,15 @@ fn stage_call(plan: &Plan, wasm: &[u8]) -> Result<Call<'static>> {
 }
 
 fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
-    let reply: std::result::Result<Status, Refusal> =
-        ic_wire::native::decode_response(Method::Stage.id(plan), bytes, LIMITS)
-            .map_err(supplier)?;
+    let reply: std::result::Result<Status, Refusal> = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: Method::Stage.id(plan),
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .map_err(supplier)?;
     reply.map_err(|refusal| {
         Error::Blocked(format!(
             "Root refused admission: {refusal:?}; original attempt retained"
@@ -453,6 +459,14 @@ fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> 
     ) {
         stored::creation(plan, bytes)
     } else {
-        ic_wire::native::decode_response(method, bytes, LIMITS).map_err(supplier)
+        ic_wire::decode(
+            bytes,
+            ic_wire::Encoding::Frame {
+                method,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .map_err(supplier)
     }
 }

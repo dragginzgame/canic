@@ -540,13 +540,13 @@ pub(super) async fn reconcile_bound(slot: Slot, expected: Approval) -> UpgradeSt
     if status(slot).approval.as_ref() != Some(&expected) {
         return retained;
     }
-    if observing(slot, true) {
+    let Some(guard) = observing(slot) else {
         return status(slot);
-    }
+    };
     if let Err(error) = observation(slot).await {
         mutate(slot, |s| s.failure = Some(error));
     }
-    observing(slot, false);
+    drop(guard);
     schedule(slot);
     status(slot)
 }

@@ -2,7 +2,7 @@
 
 Canic's first native CLI and deployable greeting application. The CLI lives in
 `crates/canic-cli`, deployment logic in `crates/canic-host`, the small shared
-Wire contract in `crates/canic`, and the demo in `apps/hello/canister`.
+Wire contract in `crates/canic`, and the demo in `apps/hello/canic-hello`.
 
 The [Root journey](docs/demos/root.md) generates a greeting workspace
 and deploys Root, Wasm Store and one application through one fleet plan/apply approval.
@@ -38,6 +38,9 @@ The [persistent profile demo](docs/demos/profile.md) adds an application-owned
 worker, discovery entry, Wire contract and native client under `apps/profile/`.
 Start with `make profile` and `make profile-test`; the same Canic CLI deploys both
 canisters. The entry resolves the worker while private calls keep the user's identity.
+The [Store-backed profile fleet](docs/demos/profile.md#store-backed-profile-fleet)
+uses the profile manager as its management owner, preserving private profiles
+through worker, Store and owner upgrades with the existing profile readiness check.
 The [bounded growth demo](docs/demos/growth.md) adds one autonomous manager:
 approve a worker once, let the host leave, then inspect the retained outcome with
 `canic fleet show --app profile --fleet mainnet --manager MANAGER --open`. Run `make growth-test` locally first.

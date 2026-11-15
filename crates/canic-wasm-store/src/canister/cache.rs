@@ -31,13 +31,27 @@ fn admit() -> Result<(), String> {
     reason = "Platform owns the argument buffer"
 )]
 fn decode(bytes: Vec<u8>) -> PrepareCache {
-    ic_wire::native::decode_request(protocol::PREPARE_CACHE, &bytes, protocol::LIMITS)
-        .expect("cache request")
+    ic_wire::decode(
+        &bytes,
+        ic_wire::Encoding::Frame {
+            method: protocol::PREPARE_CACHE,
+            direction: ic_wire::Direction::Request,
+        },
+        protocol::LIMITS,
+    )
+    .expect("cache request")
 }
 #[expect(clippy::needless_pass_by_value, reason = "Platform owns the reply")]
 fn encode(reply: Result<CacheReady, CacheError>) -> Vec<u8> {
-    ic_wire::native::encode_response(protocol::PREPARE_CACHE, &reply, protocol::LIMITS)
-        .expect("cache reply")
+    ic_wire::encode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: protocol::PREPARE_CACHE,
+            direction: ic_wire::Direction::Response,
+        },
+        protocol::LIMITS,
+    )
+    .expect("cache reply")
 }
 fn authority(caller: &Principal, expires: u64, epoch: u64) -> Result<(), CacheError> {
     if !cdk::api::is_controller(caller) {

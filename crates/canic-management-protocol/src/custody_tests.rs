@@ -112,21 +112,34 @@ fn complete_root_custody_fits_combined_budget() {
         },
         store_operation: Some(operation),
     };
-    let bytes =
-        ic_wire::native::encode_response(custody::ROOT, &value, custody::ROOT_LIMITS).unwrap();
+    let bytes = ic_wire::encode(
+        &value,
+        ic_wire::Encoding::Frame {
+            method: custody::ROOT,
+            direction: ic_wire::Direction::Response,
+        },
+        custody::ROOT_LIMITS,
+    )
+    .unwrap();
     assert_eq!(
-        ic_wire::native::decode_response::<custody::Root>(
-            custody::ROOT,
+        ic_wire::decode::<custody::Root>(
             &bytes,
+            ic_wire::Encoding::Frame {
+                method: custody::ROOT,
+                direction: ic_wire::Direction::Response
+            },
             custody::ROOT_LIMITS
         )
         .unwrap(),
         value
     );
     assert!(
-        ic_wire::native::decode_response::<stored::Custody>(
-            stored::CUSTODY,
+        ic_wire::decode::<stored::Custody>(
             &bytes,
+            ic_wire::Encoding::Frame {
+                method: stored::CUSTODY,
+                direction: ic_wire::Direction::Response
+            },
             stored::LIMITS
         )
         .is_err()

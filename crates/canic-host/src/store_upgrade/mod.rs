@@ -70,7 +70,15 @@ fn call<T: serde::Serialize>(
         canister: root,
         effective: root,
         method,
-        args: ic_wire::native::encode_request(id, value, limits).map_err(supplier)?,
+        args: ic_wire::encode(
+            value,
+            ic_wire::Encoding::Frame {
+                method: id,
+                direction: ic_wire::Direction::Request,
+            },
+            limits,
+        )
+        .map_err(supplier)?,
     })
 }
 pub(crate) fn observation(plan: &Plan) -> Result<signed::Call<'static>> {
@@ -99,8 +107,15 @@ fn admit(plan: &Plan, value: &Status) -> Result<()> {
     Ok(())
 }
 fn decode(plan: &Plan, bytes: &[u8]) -> Result<Option<Status>> {
-    let value: Option<Status> =
-        ic_wire::native::decode_response(wire::OBSERVE, bytes, wire::LIMITS).map_err(supplier)?;
+    let value: Option<Status> = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: wire::OBSERVE,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .map_err(supplier)?;
     if let Some(value) = &value {
         admit(plan, value)?;
     }
@@ -266,8 +281,15 @@ pub(crate) async fn apply(
         let reply =
             signed::execute(&dir.join("stage"), plan, &stage, identity, icp, &agent).await?;
         let staged: std::result::Result<Status, canic_management_protocol::Refusal> =
-            ic_wire::native::decode_response(wire::STAGE, &reply, wire::LIMITS)
-                .map_err(supplier)?;
+            ic_wire::decode(
+                &reply,
+                ic_wire::Encoding::Frame {
+                    method: wire::STAGE,
+                    direction: ic_wire::Direction::Response,
+                },
+                wire::LIMITS,
+            )
+            .map_err(supplier)?;
         admit(
             plan,
             &staged
@@ -289,9 +311,15 @@ pub(crate) async fn apply(
         let action = path(dir, index).join("continue");
         if read_only || needs_recovery(current.phase) {
             let reply = signed::reconcile(&action, plan, identity, icp, &agent).await?;
-            let result: Status =
-                ic_wire::native::decode_response(wire::RECOVER, &reply, wire::LIMITS)
-                    .map_err(supplier)?;
+            let result: Status = ic_wire::decode(
+                &reply,
+                ic_wire::Encoding::Frame {
+                    method: wire::RECOVER,
+                    direction: ic_wire::Direction::Response,
+                },
+                wire::LIMITS,
+            )
+            .map_err(supplier)?;
             admit(plan, &result)?;
         } else {
             let (request, id, result) = match current.phase {
@@ -334,13 +362,26 @@ pub(crate) async fn apply(
             };
             let reply = signed::execute(&action, plan, &request, identity, icp, &agent).await?;
             let value: Status = if result {
-                ic_wire::native::decode_response::<
-                    std::result::Result<Status, canic_management_protocol::Refusal>,
-                >(id, &reply, wire::LIMITS)
+                ic_wire::decode::<std::result::Result<Status, canic_management_protocol::Refusal>>(
+                    &reply,
+                    ic_wire::Encoding::Frame {
+                        method: id,
+                        direction: ic_wire::Direction::Response,
+                    },
+                    wire::LIMITS,
+                )
                 .map_err(supplier)?
                 .map_err(|r| Error::Blocked(format!("Root refused Store installation: {r:?}")))?
             } else {
-                ic_wire::native::decode_response(id, &reply, wire::LIMITS).map_err(supplier)?
+                ic_wire::decode(
+                    &reply,
+                    ic_wire::Encoding::Frame {
+                        method: id,
+                        direction: ic_wire::Direction::Response,
+                    },
+                    wire::LIMITS,
+                )
+                .map_err(supplier)?
             };
             admit(plan, &value)?;
         }

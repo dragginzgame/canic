@@ -127,9 +127,12 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
         } else {
             "observe_custody"
         };
-        call.args = ic_wire::native::encode_request(
-            canic_management_protocol::custody::OBSERVE,
+        call.args = ic_wire::encode(
             &(),
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::custody::OBSERVE,
+                direction: ic_wire::Direction::Request,
+            },
             canic_management_protocol::custody::LIMITS,
         )
         .unwrap();

@@ -1,6 +1,6 @@
 //! App recipes reuse the artifact builder; Cargo owns dependency resolution and locking.
 use crate::{Artifact, Error, Result, supplier};
-use ic_host_process::tool::{OutputLimit, OutputLimits, capture_group_command};
+use ic_host_process::tool::{CompletedExecution, OutputLimit, OutputLimits, capture_group_command};
 use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
@@ -78,11 +78,9 @@ pub fn build_app(path: &Path, app: Option<&str>) -> Result<Vec<BuiltCanister>> {
                     timeout: Some(Duration::from_secs(120)),
                 },
             )
-            .map_err(supplier)?
-            .require_success()
-            .map_err(supplier)?
-            .require_complete()
-            .map_err(supplier)?;
+            .and_then(CompletedExecution::require_success)
+            .and_then(CompletedExecution::require_complete)
+            .map_err(crate::artifact::cargo_failure)?;
         }
         let wasm = crate::artifact::build(&manifest, &recipe.package, &[], Some(&output))?;
         built.push(BuiltCanister {

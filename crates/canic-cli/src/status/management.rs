@@ -29,16 +29,7 @@ pub(super) fn render(value: &serde_json::Value, is_upgrade: bool, receipt: bool)
         )
         .expect("String write");
         failure(&mut output, status.failure.as_ref());
-        let guidance = match status.phase {
-            upgrade::Phase::Expired => EXPIRED,
-            upgrade::Phase::ReserveBlocked => RESERVE,
-            upgrade::Phase::UploadIssued | upgrade::Phase::InstallIssued => UNCERTAIN,
-            _ if status.failure.is_some() => FAILED,
-            upgrade::Phase::Ready if receipt => COMPLETE,
-            upgrade::Phase::Ready => READY,
-            upgrade::Phase::Empty => UNKNOWN,
-            _ => PENDING,
-        };
+        let guidance = upgrade_continuation(&status, receipt).1;
         writeln!(output, "Next: {guidance}").expect("String write");
     } else {
         let status: Status = serde_json::from_value(value.clone())
@@ -86,6 +77,26 @@ const UNCERTAIN: &str = "apply this original operation to refresh retained evide
 const FAILED: &str = "review the retained failure. Use fleet reconcile with this operation and its operator identity for supported recovery. A trapped owner may still need maintenance; preserve this operation.";
 const EXPIRED: &str = "retain this operation for owner recovery review. Root stopped before another effect; expiry does not undo issued effects or renew its consumed slot.";
 const RESERVE: &str = "retain this operation for owner recovery review. Root stopped at its cycle reserve; adding cycles does not reset this consumed slot.";
+
+/// Project a retained upgrade's next command without granting new effect authority.
+pub(crate) fn upgrade_continuation(
+    status: &upgrade::Status,
+    receipt: bool,
+) -> (&'static str, &'static str) {
+    match status.phase {
+        upgrade::Phase::Expired => ("status", EXPIRED),
+        upgrade::Phase::ReserveBlocked => ("status", RESERVE),
+        upgrade::Phase::UploadIssued | upgrade::Phase::InstallIssued => (
+            "reconcile",
+            "request Root recovery for this original operation; original effect limits still apply. Reconciliation does not authorize another installation.",
+        ),
+        _ if status.failure.is_some() => ("reconcile", FAILED),
+        upgrade::Phase::Ready if receipt => ("status", COMPLETE),
+        upgrade::Phase::Ready => ("apply", READY),
+        upgrade::Phase::Empty => ("status", UNKNOWN),
+        _ => ("apply", PENDING),
+    }
+}
 
 fn version(value: Option<u64>) -> String {
     value.map_or_else(|| "unknown".into(), |value| value.to_string())

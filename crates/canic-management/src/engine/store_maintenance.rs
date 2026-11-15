@@ -222,8 +222,15 @@ async fn gate(approval: &Approval, command: store::AdmissionCommand) -> Result<(
     admission(approval, command, true).await
 }
 fn admission_frame(command: &store::AdmissionCommand) -> Vec<u8> {
-    ic_wire::native::encode_request(store::ADMISSION, command, store::LIMITS)
-        .expect("admission request")
+    ic_wire::encode(
+        command,
+        ic_wire::Encoding::Frame {
+            method: store::ADMISSION,
+            direction: ic_wire::Direction::Request,
+        },
+        store::LIMITS,
+    )
+    .expect("admission request")
 }
 async fn admission(
     approval: &Approval,
@@ -240,9 +247,15 @@ async fn admission(
     .execute()
     .await
     .map_err(super::failure)?;
-    let result: Result<Option<store::Admission>, store::Error> =
-        ic_wire::native::decode_response(store::ADMISSION, &reply, store::LIMITS)
-            .map_err(|_| Failure::InvalidReply)?;
+    let result: Result<Option<store::Admission>, store::Error> = ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: store::ADMISSION,
+            direction: ic_wire::Direction::Response,
+        },
+        store::LIMITS,
+    )
+    .map_err(|_| Failure::InvalidReply)?;
     let expected = store::Admission {
         attempt: approval.attempt.clone(),
         owner: api::canister_self().as_slice().to_vec(),

@@ -95,16 +95,34 @@ fn recovery_keeps_expired_effect_authority_and_cannot_select_advance() {
         plan.store_upgrade_root().unwrap().canister
     );
     assert_eq!(read.method, "observe_store_maintenance");
-    ic_wire::native::decode_request::<()>(wire::OBSERVE, &read.args, wire::LIMITS).unwrap();
+    ic_wire::decode::<()>(
+        &read.args,
+        ic_wire::Encoding::Frame {
+            method: wire::OBSERVE,
+            direction: ic_wire::Direction::Request,
+        },
+        wire::LIMITS,
+    )
+    .unwrap();
     let recover = recovery(&plan).unwrap();
     assert_eq!(recover.method, "recover_store_maintenance");
-    let retained: wire::Approval =
-        ic_wire::native::decode_request(wire::RECOVER, &recover.args, wire::LIMITS).unwrap();
+    let retained: wire::Approval = ic_wire::decode(
+        &recover.args,
+        ic_wire::Encoding::Frame {
+            method: wire::RECOVER,
+            direction: ic_wire::Direction::Request,
+        },
+        wire::LIMITS,
+    )
+    .unwrap();
     assert_eq!(retained, approval(&plan).unwrap());
     assert!(
-        ic_wire::native::decode_request::<wire::Approval>(
-            wire::ADVANCE,
+        ic_wire::decode::<wire::Approval>(
             &recover.args,
+            ic_wire::Encoding::Frame {
+                method: wire::ADVANCE,
+                direction: ic_wire::Direction::Request
+            },
             wire::LIMITS
         )
         .is_err()

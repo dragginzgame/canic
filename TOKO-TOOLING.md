@@ -440,6 +440,11 @@ When a release adds or changes a runnable CLI workflow, include a short
 any breaking-change notice. Show copyable setup/install and invocation commands,
 their working directory, and the expected result. Keep one-time setup distinct
 from normal use and identify credentials, network or paid/mutating effects.
+Wrap long Bash/sh example commands across lines with `\` continuations and
+indent continued arguments. Break between arguments, keeping each identifier,
+URL and quoted value intact. The backslash must be the final character on its
+line, with no trailing whitespace or comment, so the example remains copyable.
+Keep short commands on one line.
 Do not hide this quick start in detailed notes or substitute a link to them;
 independently versioned groups also surface it in the root release index with
 the group/version identified. Use actual supported commands, not a mandatory
@@ -706,6 +711,23 @@ and Canic fleet components in `apps/<fleet-name>/`. Meaningful grouping such as
 packages need not be immediate children. Grouping does not create another
 workspace, dependency catalog or release group. Declare actual member paths
 explicitly and discover packages through Cargo metadata, not a `crates/*` scan.
+Every maintained Cargo package's containing directory must exactly match its
+`[package].name`, including hyphens and underscores. This applies under `crates/`,
+`qualification/` and `apps/<fleet-name>/`, including private helpers and fixture
+packages. Intermediate domain/fleet directories and non-package directories such
+as `src/`, `tests/`, `benches/`, `examples/`, `fixtures/`, `docs/` and `scripts/`
+keep descriptive names; they need no package prefix. Root `Cargo.toml` and
+`qualification/Cargo.toml` are virtual workspace manifests, not extra packages.
+Additional workspace roots require a scoped maintainer exception; grouping alone
+does not justify them. Generated scratch manifests, vendored upstream sources and
+frozen historical evidence are not maintained package locations.
+During adoption, rename mismatched package directories rather than package
+identities, and update member paths, path dependencies, build/test commands,
+deployment references and docs together. Preserve selected dependencies, coverage
+and deployed identities. This supersedes older permission for fleet component
+directories to use role names different from their Cargo package names; it does
+not authorize sibling edits or deployment merely through policy adoption.
+
 Ordinary unit tests, package integration tests and examples stay beside their
 owning product code. Separate packages used only for qualification, benchmarks,
 fuzzing, test fixtures or test support live under `qualification/`, with

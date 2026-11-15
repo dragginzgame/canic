@@ -149,6 +149,8 @@ fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
                 terminal_text(root),
                 upgrade.phase
             ));
+            text.push_str(crate::status::management::upgrade_continuation(upgrade, false).1);
+            text.push('\n');
             false
         }
     }
@@ -174,6 +176,9 @@ pub(crate) fn applied(value: &ApplyOutcome, command: &FleetCommand) -> String {
         ApplyOutcome::StorePending {
             store_maintenance, ..
         } => crate::status::store::continuation(store_maintenance, now).0,
+        ApplyOutcome::UpgradePending { upgrade, .. } => {
+            crate::status::management::upgrade_continuation(upgrade, false).0
+        }
         _ if complete => "status",
         _ => "apply",
     };
@@ -182,52 +187,4 @@ pub(crate) fn applied(value: &ApplyOutcome, command: &FleetCommand) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use clap::Parser as _;
-
-    #[test]
-    fn follow_up_retains_scope_and_quotes_shell_input() {
-        let cli = crate::args::Cli::try_parse_from([
-            "canic",
-            "fleet",
-            "plan",
-            "--config",
-            "project's config.json",
-            "--app",
-            "demo",
-            "--fleet",
-            "mainnet",
-            "--state-dir",
-            "journal path",
-            "--identity",
-            "operator",
-            "--icp-bin",
-            "signer path",
-        ])
-        .unwrap();
-        let crate::args::Commands::Fleet(command) = cli.command else {
-            panic!("fleet")
-        };
-        let output = next(&command, "digest", "apply", Some("operator"));
-        assert!(output.contains("--config 'project'\"'\"'s config.json'"));
-        assert!(output.contains("--state-dir 'journal path' --app demo --fleet mainnet"));
-        assert!(output.contains("--identity operator --icp-bin 'signer path'"));
-        assert_eq!(quote("$(touch nope)"), "'$(touch nope)'");
-    }
-
-    #[test]
-    fn planning_requires_exactly_one_controller_source() {
-        let base = ["canic", "fleet", "plan"];
-        for args in [
-            vec![],
-            vec!["--identity", "one", "--controller", "2vxsx-fae"],
-            vec!["--controller", "2vxsx-fae", "--icp-bin", "unused"],
-        ] {
-            assert!(crate::args::Cli::try_parse_from(base.into_iter().chain(args)).is_err());
-        }
-        for args in [vec!["--identity", "one"], vec!["--controller", "2vxsx-fae"]] {
-            assert!(crate::args::Cli::try_parse_from(base.into_iter().chain(args)).is_ok());
-        }
-    }
-}
+mod tests;

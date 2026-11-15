@@ -110,7 +110,15 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         sources: plan.maintenance_store().unwrap().sources.clone(),
     };
     let frame = |v: &wire::Custody| {
-        ic_wire::native::encode_response(wire::CUSTODY, v, wire::LIMITS).unwrap()
+        ic_wire::encode(
+            v,
+            ic_wire::Encoding::Frame {
+                method: wire::CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            wire::LIMITS,
+        )
+        .unwrap()
     };
     assert!(matches_plan(&plan, "observe_stored_children", &frame(&observed)).unwrap());
     for method in [
@@ -185,7 +193,15 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         store_operation: Some(operation),
     };
     let full_frame = |value: &custody::Root| {
-        ic_wire::native::encode_response(custody::ROOT, value, custody::ROOT_LIMITS).unwrap()
+        ic_wire::encode(
+            value,
+            ic_wire::Encoding::Frame {
+                method: custody::ROOT,
+                direction: ic_wire::Direction::Response,
+            },
+            custody::ROOT_LIMITS,
+        )
+        .unwrap()
     };
     assert!(matches_plan(&full_plan, "observe_root_custody", &full_frame(&complete)).unwrap());
     assert!(observation_args(&full_plan, "observe_stored_children").is_err());
@@ -279,7 +295,15 @@ fn predecessor_requires_both_observations_and_current_postflight() {
     creation.stable_pages = 18;
     store::put(
         &dir.join("custody-before-creation/reply.bin"),
-        &ic_wire::native::encode_response(STATUS, &creation, LIMITS).unwrap(),
+        &ic_wire::encode(
+            &creation,
+            ic_wire::Encoding::Frame {
+                method: STATUS,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(require_before(&dir, &plan).is_err());
@@ -294,14 +318,30 @@ fn predecessor_requires_both_observations_and_current_postflight() {
     let empty = upgrade::Status::default();
     store::put(
         &dir.join("custody-before-upgrade/reply.bin"),
-        &ic_wire::native::encode_response(upgrade::STATUS, &empty, LIMITS).unwrap(),
+        &ic_wire::encode(
+            &empty,
+            ic_wire::Encoding::Frame {
+                method: upgrade::STATUS,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     require_before(&dir, &plan).unwrap();
     assert!(!retained(&dir, &plan).unwrap());
     store::put(
         &dir.join("custody-after/reply.bin"),
-        &ic_wire::native::encode_response(custody::OBSERVE, expected, custody::LIMITS).unwrap(),
+        &ic_wire::encode(
+            expected,
+            ic_wire::Encoding::Frame {
+                method: custody::OBSERVE,
+                direction: ic_wire::Direction::Response,
+            },
+            custody::LIMITS,
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(retained(&dir, &plan).unwrap());
@@ -358,7 +398,15 @@ fn predecessor_compares_complete_creation_and_single_upgrade_custody() {
         !matches(
             &expected,
             "observe",
-            &ic_wire::native::encode_response(STATUS, &changed, LIMITS).unwrap()
+            &ic_wire::encode(
+                &changed,
+                ic_wire::Encoding::Frame {
+                    method: STATUS,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap()
         )
         .unwrap()
     );
@@ -370,7 +418,15 @@ fn predecessor_compares_complete_creation_and_single_upgrade_custody() {
         !matches(
             &expected,
             "observe_upgrade",
-            &ic_wire::native::encode_response(upgrade::STATUS, &admitted, LIMITS).unwrap()
+            &ic_wire::encode(
+                &admitted,
+                ic_wire::Encoding::Frame {
+                    method: upgrade::STATUS,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap()
         )
         .unwrap()
     );
@@ -395,7 +451,15 @@ fn predecessor_compares_complete_creation_and_single_upgrade_custody() {
         matches(
             &expected,
             "observe_upgrade",
-            &ic_wire::native::encode_response(upgrade::STATUS, &completed, LIMITS).unwrap()
+            &ic_wire::encode(
+                &completed,
+                ic_wire::Encoding::Frame {
+                    method: upgrade::STATUS,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap()
         )
         .unwrap()
     );
@@ -405,7 +469,15 @@ fn predecessor_compares_complete_creation_and_single_upgrade_custody() {
         !matches(
             &expected,
             "observe_upgrade",
-            &ic_wire::native::encode_response(upgrade::STATUS, &changed, LIMITS).unwrap()
+            &ic_wire::encode(
+                &changed,
+                ic_wire::Encoding::Frame {
+                    method: upgrade::STATUS,
+                    direction: ic_wire::Direction::Response
+                },
+                LIMITS
+            )
+            .unwrap()
         )
         .unwrap()
     );

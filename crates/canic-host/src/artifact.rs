@@ -1,5 +1,8 @@
 use crate::{Error, Result, hex, supplier};
-use ic_host_process::tool::{OutputLimit, OutputLimits, capture_group_command};
+use ic_host_process::tool::{
+    CompletedExecution, ExecutionEvidence, OutputLimit, OutputLimits, ToolError,
+    capture_group_command,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -22,6 +25,51 @@ pub struct Artifact {
     pub sha256: String,
     /// Complete uncompressed module length.
     pub bytes: usize,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Cargo failed: {source}\n{diagnostic}")]
+struct CargoFailure {
+    source: ToolError,
+    diagnostic: String,
+}
+
+// Only Cargo callers expose captured diagnostics. Signer/provider evidence keeps
+// its existing disclosure policy; the process supplier owns capture and cleanup.
+pub(crate) fn cargo_failure(source: ToolError) -> Error {
+    match source.evidence().and_then(cargo_diagnostic) {
+        Some(diagnostic) => supplier(CargoFailure { source, diagnostic }),
+        None => supplier(source),
+    }
+}
+
+fn cargo_diagnostic(evidence: &ExecutionEvidence) -> Option<String> {
+    let compiler = evidence.stdout.split(|b| *b == b'\n').find_map(|line| {
+        let value: serde_json::Value = serde_json::from_slice(line).ok()?;
+        if value["reason"] != "compiler-message" || value["message"]["level"] != "error" {
+            return None;
+        }
+        value["message"]["rendered"]
+            .as_str()
+            .or_else(|| value["message"]["message"].as_str())
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_owned)
+    });
+    let text = compiler.unwrap_or_else(|| String::from_utf8_lossy(&evidence.stderr).into_owned());
+    let mut characters = text.trim().chars();
+    let prefix: String = characters.by_ref().take(4096).collect();
+    if prefix.is_empty() {
+        return None;
+    }
+    let mut diagnostic = prefix
+        .split('\n')
+        .map(ic_host_text::escape::terminal_text)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if characters.next().is_some() || evidence.stdout_truncated || evidence.stderr_truncated {
+        diagnostic.push_str("\n[Cargo diagnostic truncated]");
+    }
+    Some(diagnostic)
 }
 
 pub(crate) fn digest(bytes: &[u8]) -> String {
@@ -97,11 +145,9 @@ pub fn build(
             timeout: Some(Duration::from_secs(600)),
         },
     )
-    .map_err(supplier)?
-    .require_success()
-    .map_err(supplier)?
-    .require_complete()
-    .map_err(supplier)?;
+    .and_then(CompletedExecution::require_success)
+    .and_then(CompletedExecution::require_complete)
+    .map_err(cargo_failure)?;
     let mut paths = Vec::new();
     for line in output
         .stdout
@@ -154,3 +200,6 @@ pub fn build(
     }
     Ok(path)
 }
+
+#[cfg(test)]
+mod tests;

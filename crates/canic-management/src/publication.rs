@@ -23,25 +23,53 @@ pub async fn execute(input: Request) -> Reply {
         Command::Prepare(value) => (
             "prepare",
             store::PREPARE,
-            ic_wire::native::encode_request(store::PREPARE, value, store::LIMITS),
+            ic_wire::encode(
+                value,
+                ic_wire::Encoding::Frame {
+                    method: store::PREPARE,
+                    direction: ic_wire::Direction::Request,
+                },
+                store::LIMITS,
+            ),
             &value.release,
         ),
         Command::Put(value) => (
             "put",
             store::PUT,
-            ic_wire::native::encode_request(store::PUT, value, store::CHUNK_LIMITS),
+            ic_wire::encode(
+                value,
+                ic_wire::Encoding::Frame {
+                    method: store::PUT,
+                    direction: ic_wire::Direction::Request,
+                },
+                store::CHUNK_LIMITS,
+            ),
             &value.release,
         ),
         Command::Publish(value) => (
             "publish",
             store::PUBLISH,
-            ic_wire::native::encode_request(store::PUBLISH, value, store::LIMITS),
+            ic_wire::encode(
+                value,
+                ic_wire::Encoding::Frame {
+                    method: store::PUBLISH,
+                    direction: ic_wire::Direction::Request,
+                },
+                store::LIMITS,
+            ),
             value,
         ),
         Command::Observe(value) => (
             "observe",
             store::STATUS,
-            ic_wire::native::encode_request(store::STATUS, value, store::LIMITS),
+            ic_wire::encode(
+                value,
+                ic_wire::Encoding::Frame {
+                    method: store::STATUS,
+                    direction: ic_wire::Direction::Request,
+                },
+                store::LIMITS,
+            ),
             value,
         ),
     };
@@ -52,9 +80,15 @@ pub async fn execute(input: Request) -> Reply {
         .execute()
         .await
         .map_err(|_| Error::Uncertain)?;
-    let reply: Result<store::Status, store::Error> =
-        ic_wire::native::decode_response(id, &reply, store::LIMITS)
-            .map_err(|_| Error::Uncertain)?;
+    let reply: Result<store::Status, store::Error> = ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Response,
+        },
+        store::LIMITS,
+    )
+    .map_err(|_| Error::Uncertain)?;
     let status = reply.map_err(Error::Store)?;
     if &status.manifest.release != release
         || matches!(&input.command, Command::Prepare(expected) if expected != &status.manifest)
@@ -149,12 +183,27 @@ async fn metadata_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
     id: u64,
     input: &T,
 ) -> Result<R, Error> {
-    let bytes =
-        ic_wire::native::encode_request(id, input, store::LIMITS).map_err(|_| Error::Invalid)?;
+    let bytes = ic_wire::encode(
+        input,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Request,
+        },
+        store::LIMITS,
+    )
+    .map_err(|_| Error::Invalid)?;
     let reply = Call::new(target, method, WaitPolicy::Bounded { timeout_seconds: 5 })
         .take_raw_args(bytes)
         .execute()
         .await
         .map_err(|_| Error::Uncertain)?;
-    ic_wire::native::decode_response(id, &reply, store::LIMITS).map_err(|_| Error::Uncertain)
+    ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Response,
+        },
+        store::LIMITS,
+    )
+    .map_err(|_| Error::Uncertain)
 }
