@@ -56,10 +56,11 @@ pub(crate) fn validate(plan: &Plan, source: &StoredArtifact) -> Result<()> {
         || id == principal("2vxsx-fae")?
         || crate::unhex(&source.store.module)?.len() != 32
         || source.store.module != source.store.module.to_ascii_lowercase()
-        || source
-            .maintenance
-            .as_ref()
-            .is_some_and(|attempt| attempt.sequence != 1 || attempt.operation == [0; 32])
+        || source.maintenance.as_ref().is_some_and(|attempt| {
+            !(1..=canic_management_protocol::store_maintenance::MAX_UPGRADES as u64)
+                .contains(&attempt.sequence)
+                || attempt.operation == [0; 32]
+        })
     {
         return Err(invalid());
     }
@@ -149,7 +150,9 @@ fn slot(plan: &Plan) -> Slot {
 }
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
     match method {
-        wire::CUSTODY | canic_management_protocol::custody::ROOT => ic_wire::encode(
+        wire::CUSTODY
+        | canic_management_protocol::custody::ROOT
+        | canic_management_protocol::custody::ROOT_HISTORY => ic_wire::encode(
             &(),
             ic_wire::Encoding::Frame {
                 method,
@@ -191,15 +194,31 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<wire::Custody> {
         .and_then(|owner| owner.source.as_ref())
         .ok_or_else(invalid)?;
     if let Some(attempt) = &source.maintenance {
-        let value: canic_management_protocol::custody::Root = ic_wire::decode(
-            bytes,
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::custody::ROOT,
-                direction: ic_wire::Direction::Response,
-            },
-            canic_management_protocol::custody::ROOT_LIMITS,
-        )
-        .map_err(supplier)?;
+        let value: canic_management_protocol::custody::Root = if attempt.sequence > 1 {
+            let all: canic_management_protocol::custody::RootHistory = ic_wire::decode(
+                bytes,
+                ic_wire::Encoding::Frame {
+                    method: canic_management_protocol::custody::ROOT_HISTORY,
+                    direction: ic_wire::Direction::Response,
+                },
+                canic_management_protocol::custody::ROOT_HISTORY_LIMITS,
+            )
+            .map_err(supplier)?;
+            if all.store_history.len() as u64 + 1 != attempt.sequence {
+                return Err(invalid());
+            }
+            all.current
+        } else {
+            ic_wire::decode(
+                bytes,
+                ic_wire::Encoding::Frame {
+                    method: canic_management_protocol::custody::ROOT,
+                    direction: ic_wire::Direction::Response,
+                },
+                canic_management_protocol::custody::ROOT_LIMITS,
+            )
+            .map_err(supplier)?
+        };
         let operation = value.store_operation.as_ref().ok_or_else(invalid)?;
         if &operation.approval.attempt != attempt
             || operation.approval.store != source.store.canister

@@ -42,3 +42,16 @@ upgrades to CUJ6, and verifies that all authority and stop evidence survive whil
 missing catalog-scan evidence stays absent. A still-closed Store can be scanned;
 an already-stopped attempt cannot gain an invented commitment. This is retained
 binary evidence, not a reproducible-build claim or a Host compatibility fallback.
+
+## Single Store-maintenance predecessor
+
+`root-store-single-maintenance.wasm` is the maintenance-candidate Root retained
+from the 0.215.0 qualification, released at
+`b7f39a3598cb84236a98320847245a47d4c79eca`. SHA-256:
+`85f7081e96acb978617ac7cdac0262a4ab44d13ebda73b8fcfc7b1171d1c2573`.
+
+It writes CUJ6 with one Store attempt and CUA3 artifact custody. The repeat-upgrade
+fixture completes a real Store replacement with these bytes, upgrades Root, then
+checks that the original outcome survives before admitting successors. The older
+executable must refuse CUJ7 rather than discard history. This is retained binary
+evidence, not a reproducible-build claim or a Host compatibility fallback.

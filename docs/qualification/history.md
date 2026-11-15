@@ -7,6 +7,91 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.216.0 release qualification: 2026-11-15
+
+The maintainer authorized GitHub delivery of the repeat Store-maintenance increment.
+The complete sequential Linux `make -j1 ci` gate passed with all 279 captured
+input hashes unchanged. This includes 108 Host and 63 CLI tests, 12 installed Root
+cases, 25 Store cases, all three CLI publication/upgrade journeys and five Blob
+cases, plus effect/custody, profile/growth, endpoint, native/Wasm lint, Rustdoc,
+formatting and tooling checks. Existing explicit historical fixture exclusions
+remain exclusions. The gate log is `target/qualification/release-0216-0-ci.log`;
+input and supplier evidence is under `target/evidence/0.216.0/release/`.
+
+Fresh registry review confirms the selected direct first-party registry versions
+remain current. Store and Topology remain at their qualified Git revisions, which
+still match their default branches and have no registry entry. Blob retains
+0.100.6 at `decde204acb6d7c8362a0003e904beef72ff89b6`; its registry is still
+0.82.1. The optional Git update to 0.100.9 at
+`61d4ce02e7afd421bb48d9b8e5a198333e6055a0` on branch `0.100` is deferred to the
+next supplier-maintenance batch. Its callback/client and Wire adoption work is
+outside this release's qualified local Service composition. No supplier changed.
+
+After validation, the coordinated product version and local entries in both
+lockfiles advance to 0.216.0. Qualification members remain 0.0.0 and all packages
+remain unpublished. Delivery selects `main` and annotated tag `v0.216.0` at
+`dragginzgame/canic`; it includes no crates.io publication or mainnet deployment.
+Native macOS qualification is not claimed.
+
+## Repeat Store maintenance under the existing owner: 2026-11-15
+
+The pending 0.216.0 increment extends the existing Store maintenance journal and
+fleet planner. Root retains up to eight immutable attempts, archives only Ready
+predecessors and admits the next sequence against the exact Store/code boundary.
+Every callback mutation matches both approval and phase; historical replay returns
+its own evidence without touching a successor. Full history is never evicted.
+The original 16 KiB Storage lease remains unchanged. The worst-field codec fixture
+round-trips two full child journals plus eight Store attempts in 12,880 payload
+bytes. CUJ7 explicitly migrates recognized predecessors, including CUJ6; older
+executables refuse the new tag. No Wasm payload enters Root's journal.
+
+New Host approvals bind the sequence and select an exact-attempt read. Historical
+plan bytes, digests, deadlines and signed read methods remain unchanged. Root
+maintenance after a second attempt binds every predecessor and selects the new
+complete-history read; the older read refuses to omit history. Child delivery
+selects that same contract, and publication reuse follows the validated Store
+code chain. No CLI command, crate, dependency, allocator, workflow engine or
+supplier change was added. The supplier remains at
+`541d911410dae0f38eefc371693024bf2068c55b` and owns artifact bytes and admission.
+
+Reused the recorded legacy immutable-intent, late-callback and serial-upgrade
+research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, especially the
+[bounded serial child upgrade decision](#bounded-serial-child-upgrades) and
+[first Store workflow](#fleet-commands-carry-store-replacement-through-later-upgrades-2026-11-15).
+The applicable lesson is preserving original authority through continuations,
+not importing the legacy workflow catalogue. The supplier admission implementation
+already supports successive exact attempts; Canic required the missing orchestration
+and custody boundary, not another Store mechanism.
+
+Focused Linux qualification passed:
+
+- 108 Host tests and nine protocol tests; four affected maintenance tests were
+  rerun after adding full-history omission/substitution cases. The installed Host
+  entrypoint ignored in native tests ran through the Store harness.
+- All 25 installed Store cases. New witnesses migrate both a completed operation
+  and an issued installation from the retained 0.215 Root, complete eight Store
+  upgrades, recover the second upload, preserve all prior records and stable Store
+  bytes, refuse stale/reused/mismatched authority and a ninth attempt, and reject
+  older Root code without losing custody. A broad regression exposed changed
+  Occupied/Time precedence; the original occupied-authority precedence was restored.
+- The installed CLI/signer journey (80.38s) completes two Store replacements with
+  interrupted second-upload recovery, preserves both through Root maintenance,
+  then publishes, upgrades and calls the application at the same identity. A third
+  plan selects sequence three. Local fixtures use isolated credentials and synthetic
+  cycles, never the operator wallet.
+- Both manager growth/upgrade cases passed; the optional external historical
+  manager fixture remains explicitly ignored. Native and Wasm Clippy, affected
+  Rustdoc, formatting and tooling agreement passed. `make canic` installed the
+  development CLI on PATH; browser launches remain opt-in.
+
+Logs are under `target/qualification/store-repeat-*.log`; raw evidence stays under
+`target`. The retained CUJ6 binary and provenance are in the existing qualification
+fixtures. Limits remain eight attempts, 1 MiB replacement Wasm, bounded observations,
+no reset/cancellation/eviction or repair of uncertain attempts. New plans require
+the current Root endpoints through separately approved Root maintenance; no probing
+or fallback is introduced. No macOS, mainnet or full release-gate claim is made.
+Package versions remain 0.215.0 pending release; these changes are local and unpushed.
+
 ## 0.215.0 release qualification: 2026-11-15
 
 The authorized Canic release includes the standalone Store adoption and extraction

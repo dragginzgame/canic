@@ -21,6 +21,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     let root_id = principal(&root.canister)?;
     let target_id = principal(target)?;
     if plan.version != 2
+        || !(1..=wire::MAX_UPGRADES as u64).contains(&plan.store_upgrade_sequence().unwrap_or(1))
         || plan.controller == "2vxsx-fae"
         || root_id.to_text() != root.canister
         || target_id.to_text() != *target
@@ -54,7 +55,7 @@ pub(crate) fn approval(plan: &Plan) -> Result<wire::Approval> {
         previous_module: hash(plan.previous_module().ok_or_else(invalid)?)?,
         module_hash: hash(&plan.artifact.sha256)?,
         attempt: ic_wasm_store_protocol::MaintenanceAttempt {
-            sequence: 1,
+            sequence: plan.store_upgrade_sequence().unwrap_or(1),
             operation: hash(&plan.digest()?)?,
         },
         expires_at_ns: plan.expires_at_ns,
@@ -85,6 +86,15 @@ fn call<T: serde::Serialize>(
 }
 pub(crate) fn observation(plan: &Plan) -> Result<signed::Call<'static>> {
     validate(plan)?;
+    if plan.store_upgrade_sequence().is_some() {
+        return call(
+            plan,
+            "observe_store_attempt",
+            wire::OBSERVE_ATTEMPT,
+            &approval(plan)?,
+            wire::LIMITS,
+        );
+    }
     call(
         plan,
         "observe_store_maintenance",
@@ -112,7 +122,11 @@ fn decode(plan: &Plan, bytes: &[u8]) -> Result<Option<Status>> {
     let value: Option<Status> = ic_wire::decode(
         bytes,
         ic_wire::Encoding::Frame {
-            method: wire::OBSERVE,
+            method: if plan.store_upgrade_sequence().is_some() {
+                wire::OBSERVE_ATTEMPT
+            } else {
+                wire::OBSERVE
+            },
             direction: ic_wire::Direction::Response,
         },
         wire::LIMITS,

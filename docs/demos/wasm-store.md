@@ -101,8 +101,8 @@ preserving full Store custody. See [Root maintenance](root.md#root-maintenance).
 An existing release with retained publication completion can be selected directly
 for the next upgrade, including after Root maintenance. This reuses historical
 artifact evidence; it cannot renew an unfinished publication's old code authority.
-One local Store replacement is qualified below; successor maintenance and
-inline-to-Store migration remain unqualified Host flows.
+Bounded repeat Store replacements are qualified below; inline-to-Store migration
+remains an unqualified Host flow.
 
 ## Standalone artifact inspection
 
@@ -188,12 +188,14 @@ Store record migration and downgrade restrictions are owned by the supplier's
 
 Root's `stage_store_maintenance`, `advance_store_maintenance` and
 `observe_store_maintenance` mounts now qualify the next boundary under sole Root
-control. Root retains one immutable approval and stop-request commitment outside
-Store. It fences child/publication mutations and raw gate changes, closes Store,
+control. Root retains each immutable approval and stop-request commitment outside
+Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJ6 journal preserves the attempt across Root replacement and loads prior
-recognized journals without inventing an attempt. Existing complete child-custody
+The CUJ7 journal preserves current and completed attempts across Root replacement
+and loads recognized predecessor journals, including CUJ6, without inventing or
+resetting authority. The original 16 KiB checked allocation is unchanged; a full
+worst-field journal uses 12,880 payload bytes. Older executables refuse CUJ7. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
 preventing the current Host Root-maintenance path from omitting it.
 Run `bash scripts/dev/test-store.sh quiescence` for the installed proof.
@@ -230,9 +232,12 @@ replacements remain blocked without installation replay.
 `bash scripts/dev/test-store.sh maintenance` qualifies this runtime path using
 sole Root control and compares all Store stable bytes before/after replacement,
 including payloads, pins and an unfinished upload. Runtime verification itself
-compares metadata; it is not a full payload integrity scan. One attempt remains
-retained, with no cancellation, reset or successor history. The CLI witness below
-qualifies the local Host flow; live use remains unqualified.
+compares metadata; it is not a full payload integrity scan. A retained 0.215 Root
+completes the first replacement before migrating, then the fixture admits seven
+successors, recovers a lost second upload callback and refuses a ninth attempt.
+Historical replay returns its own evidence without touching a successor. Callbacks
+match both approval and phase. The CLI witness below qualifies two replacements
+followed by Root and child upgrades; mainnet maintenance remains unqualified.
 
 `fleet show` reads Root's maintenance metadata without a signer or continuation.
 It selects only Roots and known Store identities from retained Store bootstrap
@@ -259,7 +264,7 @@ issues a fresh close, stop, upload, install, start or activation, even with a li
 approval. It retains the original operator and deadline; expired dispatch may
 still be observed. Generic `advance_store_maintenance` can dispatch new effects
 and must not be used as observation-only recovery. The existing fleet commands
-now use these explicit contracts for one locally qualified Store replacement.
+use these explicit contracts for bounded repeat Store replacements.
 
 Root maintenance has a separate preservation boundary: `observe_root_custody`
 reads both child journals, all artifact references and the retained Store operation
@@ -270,11 +275,18 @@ older child-only approvals still refuse to omit a Store operation. Root replacem
 does not activate Store or renew its original authority. After authenticated Store
 completion, whole-fleet planning includes this operation automatically in later
 Root maintenance. Subsequent child plans bind the completed Store attempt and
-select the same complete read; old child-only readers remain unchanged.
+select the complete read; old child-only readers remain unchanged. After a second
+Store attempt, `observe_root_history` includes every completed predecessor and
+the current operation. Root maintenance binds `StoreMaintenance.history` exactly.
+The former `observe_root_custody` refuses to omit predecessors. New Store plans
+bind the sequence and use `observe_store_attempt` to read the exact approval;
+historical first-upgrade plans retain their original bytes and read method.
 
 For a completed local Root/Store/app fleet, change only the configured Store Wasm
-input to a reviewed compatible replacement. The operator identity must already
-control Root. From that app directory:
+input to a reviewed compatible replacement. First install the current Root through
+its separately approved maintenance workflow if it predates these history-aware
+endpoints; there is no endpoint probing or fallback. The operator identity must
+already control Root. From that app directory:
 
 ```sh
 canic fleet plan --fleet local --identity canic-local
@@ -301,9 +313,10 @@ to status review; it does not authorize a new plan or replacement attempt.
 The planner refuses concurrent artifact changes and unfinished child/publication
 work. Authenticated Ready evidence advances the retained Store hash, enabling later
 Root maintenance and child publication/upgrades. A completion pointer without its
-signed observation cannot do so. The current scope is one Store attempt, at most
-1 MiB of replacement Wasm and 4096 retained observations. No reset, cancellation,
-successor Store upgrade or mainnet maintenance is qualified. Exhaustion or an
+signed observation cannot do so. Only a completed predecessor permits the next
+sequence and code transition. The current scope is eight retained Store attempts,
+at most 1 MiB of replacement Wasm and 4096 observations per attempt. No reset,
+cancellation, history eviction or mainnet maintenance is qualified. Exhaustion or an
 unrecoverable effect remains blocked with its original evidence.
 
 To create a Store, use the existing named `fleet plan` workflow. The selected
@@ -389,7 +402,7 @@ Publication, artifact building and inspection accept up to 8 MiB, within Storeâ€
 bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
 and inline child plans retain their smaller custody limits. No measured deployment
 speedup is claimed. Whole-fleet release selection and Root maintenance with full
-Store custody use the workflows above, including one Store replacement. Existing-fleet
+Store custody use the workflows above, including repeat Store replacement. Existing-fleet
 migration and repeatable Store maintenance remain pending.
 
 `make publication-test` qualifies the real CLI and signer against installed Root
@@ -449,7 +462,7 @@ The first Root path deliberately remains blocked if an uncertain cache preparati
 has missing chunks at reconciliation. It does not renew the original deadline or
 reissue preparation automatically. Cache loss after installation dispatch never
 authorizes install replay. An operator-approved cache-repair flow, existing-fleet
-conversion and successor Store maintenance remain pending. Root-driven Store
+conversion remain pending. Root-driven Store
 maintenance and fleet CLI integration are qualified above. The management-cache
 listing has a bounded 64 KiB reply decoder; an oversized
 listing blocks preparation/recovery rather than allocating without a bound.

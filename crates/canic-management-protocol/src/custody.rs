@@ -6,6 +6,19 @@ use serde::{Deserialize, Serialize};
 pub const OBSERVE: u64 = 30;
 /// Complete Root evidence, including a retained Store maintenance operation.
 pub const ROOT: u64 = 57;
+/// Complete Root evidence including all completed Store predecessors.
+pub const ROOT_HISTORY: u64 = 58;
+/// Complete bounded Store history in addition to child custody.
+pub const ROOT_HISTORY_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: ROOT_LIMITS.bytes
+        + (crate::store_maintenance::MAX_UPGRADES - 1) * crate::store_maintenance::LIMITS.bytes,
+    allocation: ROOT_LIMITS.allocation
+        + (crate::store_maintenance::MAX_UPGRADES - 1)
+            * crate::store_maintenance::LIMITS.allocation,
+    nodes: ROOT_LIMITS.nodes
+        + (crate::store_maintenance::MAX_UPGRADES - 1) * crate::store_maintenance::LIMITS.nodes,
+    depth: ROOT_LIMITS.depth + 2,
+};
 /// Combined metadata budget; child-only and Store-only contracts remain unchanged.
 pub const ROOT_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: crate::stored::LIMITS.bytes + crate::store_maintenance::LIMITS.bytes,
@@ -37,6 +50,16 @@ pub struct Custody {
 pub struct Root {
     /// Both child slots, their complete journals and artifact references.
     pub stored: crate::stored::Custody,
-    /// Original Store operation, including uncertain or completed effects.
+    /// Current Store operation, including uncertain or completed effects.
     pub store_operation: Option<crate::store_maintenance::Status>,
+}
+
+/// Complete custody across repeat Store upgrades; the original Root codec stays unchanged.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootHistory {
+    /// Child custody and the latest Store attempt.
+    pub current: Root,
+    /// Completed Store attempts in admission order, excluding the current attempt.
+    pub store_history: Vec<crate::store_maintenance::Status>,
 }

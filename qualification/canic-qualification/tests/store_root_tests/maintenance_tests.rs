@@ -10,7 +10,7 @@ use canic_management_protocol::{
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use std::time::Duration;
 
-async fn observe(root: &Client<'_>) -> Status {
+pub(super) async fn observe(root: &Client<'_>) -> Status {
     let retained = root
         .update::<_, Option<Status>>(
             "observe_store_maintenance",
@@ -61,7 +61,7 @@ async fn observe(root: &Client<'_>) -> Status {
     assert_eq!(complete.store_operation.as_ref(), Some(&retained));
     retained
 }
-async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
+pub(super) async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
     root.update(
         "advance_store_maintenance",
         wire::ADVANCE,
@@ -70,7 +70,7 @@ async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
     )
     .await
 }
-async fn activate(root: &Client<'_>, approval: &Approval) -> Status {
+pub(super) async fn activate(root: &Client<'_>, approval: &Approval) -> Status {
     root.update(
         "activate_store_maintenance",
         wire::ACTIVATE,
@@ -79,7 +79,10 @@ async fn activate(root: &Client<'_>, approval: &Approval) -> Status {
     )
     .await
 }
-async fn install(root: &Client<'_>, input: &wire::Install) -> Result<Status, management::Refusal> {
+pub(super) async fn install(
+    root: &Client<'_>,
+    input: &wire::Install,
+) -> Result<Status, management::Refusal> {
     root.update(
         "install_store_maintenance",
         wire::INSTALL,
@@ -88,7 +91,11 @@ async fn install(root: &Client<'_>, input: &wire::Install) -> Result<Status, man
     )
     .await
 }
-async fn stopped(root: &Client<'_>, supplier: &Client<'_>, replacement: &[u8]) -> Approval {
+pub(super) async fn stopped(
+    root: &Client<'_>,
+    supplier: &Client<'_>,
+    replacement: &[u8],
+) -> Approval {
     root.pic
         .update_canister_settings(
             supplier.id,

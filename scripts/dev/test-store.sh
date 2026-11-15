@@ -12,7 +12,7 @@ case "$scope" in
     custody) filter=store_custody_observation ;;
     admission) filter=store_root_tests::admission_tests ;;
     quiescence) filter=store_root_tests::quiescence_tests ;;
-    maintenance) filter=store_root_tests::maintenance_tests ;;
+    maintenance) filter=store_root_tests::maintenance_ ;;
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
     *) printf 'Usage: %s [all|readiness|publication|dispatch|custody|admission|quiescence|maintenance|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac

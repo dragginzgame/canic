@@ -24,6 +24,9 @@ pub struct StoreMaintenance {
     /// Absence preserves the original child-only observation contract and plan digest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation: Option<canic_management_protocol::store_maintenance::Status>,
+    /// Completed Store predecessors, oldest first. Omission preserves historical plan bytes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<canic_management_protocol::store_maintenance::Status>,
 }
 
 /// One operation with all and only the authority it needs.
@@ -51,6 +54,8 @@ pub enum PlanAction {
         target: UpgradeTarget,
         /// Sole Store controller and enduring effect owner.
         root: UpgradeTarget,
+        /// Explicit sequence selects exact-attempt observations. Absence is the historical first upgrade.
+        sequence: Option<u64>,
     },
     /// Root creates its permanently assigned child with the protocol's fixed grant.
     CreateChild(ManagedOwner),
@@ -73,6 +78,14 @@ pub enum PlanAction {
 }
 
 impl super::Plan {
+    /// Explicit Store maintenance sequence, absent in historical first-upgrade plans.
+    #[must_use]
+    pub fn store_upgrade_sequence(&self) -> Option<u64> {
+        match self.action {
+            PlanAction::UpgradeStore { sequence, .. } => sequence,
+            _ => None,
+        }
+    }
     /// Enduring Store upgrade owner, independent of child slot authority.
     #[must_use]
     pub fn store_upgrade_root(&self) -> Option<&UpgradeTarget> {

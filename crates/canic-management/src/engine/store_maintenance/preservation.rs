@@ -131,7 +131,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
         return Err(Failure::Mismatch);
     }
     // Concurrent responses to the same cursor may commit it only once. A later page must win.
-    change(record.phase, |current| {
+    change(&record.approval, record.phase, |current| {
         if scan(current) == scan(record) {
             if record.phase == Phase::Verifying {
                 if value.complete {

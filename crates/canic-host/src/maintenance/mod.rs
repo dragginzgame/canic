@@ -27,6 +27,16 @@ fn single_upgrade_root(plan: &Plan) -> bool {
 pub(crate) fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
     if plan
         .maintenance_store()
+        .is_some_and(|s| !s.history.is_empty())
+    {
+        return if after {
+            &[("custody-after", "observe_root_history")]
+        } else {
+            &[("custody-before", "observe_root_history")]
+        };
+    }
+    if plan
+        .maintenance_store()
         .is_some_and(|s| s.operation.is_some())
     {
         return if after {
@@ -71,14 +81,18 @@ pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
         if method != observations(plan, false)[0].1 {
             return Err(invalid());
         }
-        if method == "observe_root_custody" {
+        if matches!(method, "observe_root_custody" | "observe_root_history") {
             return ic_wire::encode(
                 &(),
                 ic_wire::Encoding::Frame {
-                    method: custody::ROOT,
+                    method: if method == "observe_root_history" {
+                        custody::ROOT_HISTORY
+                    } else {
+                        custody::ROOT
+                    },
                     direction: ic_wire::Direction::Request,
                 },
-                custody::ROOT_LIMITS,
+                custody::ROOT_HISTORY_LIMITS,
             )
             .map_err(supplier);
         }
@@ -206,7 +220,7 @@ fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
                     .maintenance_store()
                     .is_some_and(|s| s.operation.is_some())
                 {
-                    custody::ROOT_LIMITS.bytes
+                    custody::ROOT_HISTORY_LIMITS.bytes
                 } else if plan.maintenance_store().is_some() {
                     canic_management_protocol::stored::LIMITS.bytes
                 } else {

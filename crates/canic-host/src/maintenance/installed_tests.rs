@@ -56,6 +56,7 @@ async fn root_maintenance_preserves_store_operation() {
             },
             children: vec![input.expected.stored.children[0].clone()],
             store: Some(Box::new(StoreMaintenance {
+                history: Vec::new(),
                 store: UpgradeTarget {
                     canister: input.store,
                     module: crate::hex(&operation.approval.previous_module),

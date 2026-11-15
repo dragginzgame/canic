@@ -31,6 +31,8 @@ pub(super) struct PlanRecord {
     maintenance_store: Option<super::StoreMaintenance>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     store_upgrade_root: Option<UpgradeTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    store_upgrade_sequence: Option<u64>,
 }
 
 fn invalid() -> Error {
@@ -58,7 +60,11 @@ impl TryFrom<PlanRecord> for Plan {
             store_root,
             maintenance_store,
             store_upgrade_root,
+            store_upgrade_sequence,
         } = record;
+        if store_upgrade_sequence.is_some() && store_upgrade_root.is_none() {
+            return Err(invalid());
+        }
         if maintenance_store.is_some() && maintenance.is_none() {
             return Err(invalid());
         }
@@ -80,6 +86,7 @@ impl TryFrom<PlanRecord> for Plan {
                     module: previous_module.ok_or_else(invalid)?,
                 },
                 root,
+                sequence: store_upgrade_sequence,
             }
         } else if let Some(root) = store_root {
             if version != 2
@@ -166,6 +173,7 @@ impl TryFrom<Plan> for PlanRecord {
         let publication = plan.publication().cloned();
         let store_root = plan.store_root().cloned();
         let store_upgrade_root = plan.store_upgrade_root().cloned();
+        let store_upgrade_sequence = plan.store_upgrade_sequence();
         let maintenance_store = plan.maintenance_store().cloned();
         let (maintenance, maintenance_sibling) = match plan.maintenance() {
             None => (None, None),
@@ -191,6 +199,7 @@ impl TryFrom<Plan> for PlanRecord {
             store_root,
             maintenance_store,
             store_upgrade_root,
+            store_upgrade_sequence,
         })
     }
 }

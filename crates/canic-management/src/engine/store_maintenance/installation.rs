@@ -2,7 +2,7 @@
 use super::{
     Approval, Failure, MANAGEMENT_LIMITS, Phase, Refusal, Status, admission, admission_frame, api,
     args, candid_codec, change, decoder, digest, dispatch, gate, inspect, inspect_module,
-    management, observe, preservation, selected, store, target,
+    management, observe_attempt, preservation, selected, store, target,
 };
 use canic_management_protocol::store_maintenance::{Install, Installation, MAX_MODULE_BYTES};
 use ic_platform::management_canister_types::{
@@ -98,9 +98,11 @@ pub async fn install(input: Install) -> Result<Status, Refusal> {
         return Err(Refusal::Occupied);
     }
     if let Err(error) = issue(&record, input.wasm).await {
-        change(Phase::Stopped, |value| value.failure = Some(error));
+        change(&record.approval, Phase::Stopped, |value| {
+            value.failure = Some(error)
+        });
     }
-    Ok(observe().expect("retained maintenance"))
+    Ok(observe_attempt(&record.approval).expect("retained maintenance"))
 }
 async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
     if inspect(&record.approval).await?.status != CanisterStatusType::Stopped {
@@ -115,7 +117,7 @@ async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
         MAX_MODULE_BYTES + 4096,
     )
     .expect("Store install args");
-    change(Phase::Stopped, |value| {
+    change(&record.approval, Phase::Stopped, |value| {
         value.phase = Phase::UploadIssued;
         value.failure = None;
         value.installation = Some(Installation {
@@ -138,11 +140,13 @@ async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
         Ok(())
     });
     match result {
-        Ok(()) => change(Phase::UploadIssued, |value| {
+        Ok(()) => change(&record.approval, Phase::UploadIssued, |value| {
             value.phase = Phase::Uploaded;
             value.failure = None;
         }),
-        Err(error) => change(Phase::UploadIssued, |value| value.failure = Some(error)),
+        Err(error) => change(&record.approval, Phase::UploadIssued, |value| {
+            value.failure = Some(error)
+        }),
     }
     Ok(())
 }
@@ -191,7 +195,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
                 return Err(Failure::Mismatch);
             }
             chunk_present(approval).await?;
-            change(Phase::UploadIssued, |value| {
+            change(&record.approval, Phase::UploadIssued, |value| {
                 value.phase = Phase::Uploaded;
                 value.failure = None;
             });
@@ -204,7 +208,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
             dispatch(record)?;
             let sender_version = api::canister_version();
             let bytes = install_args(approval, sender_version);
-            change(Phase::Uploaded, |value| {
+            change(&record.approval, Phase::Uploaded, |value| {
                 let installation = value.installation.as_mut().expect("issued upload");
                 installation.request = Some(digest(&bytes));
                 installation.sender_version = Some(sender_version);
@@ -215,7 +219,9 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
             let result = empty_reply(management("install_chunked_code", bytes, 0).await);
             super::super::fault(super::super::Slot::First, 16);
             if let Err(error) = result {
-                change(Phase::InstallIssued, |value| value.failure = Some(error));
+                change(&record.approval, Phase::InstallIssued, |value| {
+                    value.failure = Some(error)
+                });
             }
         }
         Phase::InstallIssued => {
@@ -224,7 +230,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
             {
                 return Err(Failure::Mismatch);
             }
-            change(Phase::InstallIssued, |value| {
+            change(&record.approval, Phase::InstallIssued, |value| {
                 value.phase = Phase::Installed;
                 value.failure = None;
             });
@@ -237,7 +243,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
             }
             dispatch(record)?;
             let bytes = args(approval);
-            change(Phase::Installed, |value| {
+            change(&record.approval, Phase::Installed, |value| {
                 value
                     .installation
                     .as_mut()
@@ -249,7 +255,9 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
             let result = empty_reply(management("start_canister", bytes, 0).await);
             super::super::fault(super::super::Slot::First, 17);
             if let Err(error) = result {
-                change(Phase::StartIssued, |value| value.failure = Some(error));
+                change(&record.approval, Phase::StartIssued, |value| {
+                    value.failure = Some(error)
+                });
             }
         }
         Phase::StartIssued => {
@@ -259,7 +267,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
                 return Err(Failure::Mismatch);
             }
             gate(approval, store::AdmissionCommand::Observe).await?;
-            change(Phase::StartIssued, |value| {
+            change(&record.approval, Phase::StartIssued, |value| {
                 value.phase = Phase::Verifying;
                 value.failure = None;
             });
@@ -272,7 +280,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
                 return Err(Failure::Mismatch);
             }
             admission(approval, store::AdmissionCommand::Observe, false).await?;
-            change(Phase::ActivateIssued, |value| {
+            change(&record.approval, Phase::ActivateIssued, |value| {
                 value.phase = Phase::Ready;
                 value.failure = None;
             });
@@ -292,9 +300,11 @@ pub async fn activate(approval: Approval) -> Status {
         return record;
     }
     if let Err(error) = activate_once(&record).await {
-        change(Phase::Verified, |value| value.failure = Some(error));
+        change(&record.approval, Phase::Verified, |value| {
+            value.failure = Some(error)
+        });
     }
-    observe().expect("retained maintenance")
+    observe_attempt(&record.approval).expect("retained maintenance")
 }
 async fn activate_once(record: &Status) -> Result<(), Failure> {
     let approval = &record.approval;
@@ -304,7 +314,7 @@ async fn activate_once(record: &Status) -> Result<(), Failure> {
     gate(approval, store::AdmissionCommand::Observe).await?;
     dispatch(record)?;
     let command = store::AdmissionCommand::Activate(approval.attempt.clone());
-    change(Phase::Verified, |value| {
+    change(&record.approval, Phase::Verified, |value| {
         value
             .installation
             .as_mut()
@@ -316,7 +326,9 @@ async fn activate_once(record: &Status) -> Result<(), Failure> {
     let result = admission(approval, command, false).await;
     super::super::fault(super::super::Slot::First, 18);
     if let Err(error) = result {
-        change(Phase::ActivateIssued, |value| value.failure = Some(error));
+        change(&record.approval, Phase::ActivateIssued, |value| {
+            value.failure = Some(error)
+        });
     }
     Ok(())
 }

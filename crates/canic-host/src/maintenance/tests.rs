@@ -71,6 +71,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         reference,
     };
     *store = Some(Box::new(crate::StoreMaintenance {
+        history: Vec::new(),
         operation: None,
         store: crate::UpgradeTarget {
             canister: stage.reference.store.clone(),
@@ -242,6 +243,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         .unwrap();
     }
     assert!(retained(&dir.join("complete"), &full_plan).unwrap());
+    complete_history_requires_every_retained_predecessor(&full_plan, &complete);
     let crate::PlanAction::MaintainRoot {
         store: Some(full), ..
     } = &mut full_plan.action
@@ -266,6 +268,110 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
             _ => store.sources[1] = store.sources[0].clone(),
         }
         assert!(invalid.validate().is_err());
+    }
+}
+
+fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &custody::Root) {
+    use canic_management_protocol::store_maintenance as wire;
+    let mut first = previous.store_operation.clone().unwrap();
+    first.phase = wire::Phase::Ready;
+    let scan = wire::Preservation {
+        catalog: ic_wasm_store_protocol::preservation::Catalog {
+            quota: ic_wasm_store_protocol::Quota {
+                reserved_bytes: 8,
+                releases: 1,
+            },
+            reserved_bytes: 8,
+            releases: 1,
+            artifacts: 1,
+            chunks: 1,
+        },
+        after: None,
+        observed: 1,
+        digest: [7; 32],
+        complete: true,
+    };
+    first.preservation = Some(scan.clone());
+    first.installation = Some(wire::Installation {
+        upload_request: [1; 32],
+        request: Some([2; 32]),
+        sender_version: Some(1),
+        start_request: Some([3; 32]),
+        verification: Some(scan),
+        activation_request: Some([4; 32]),
+    });
+    let mut next = first.clone();
+    next.approval.previous_module = first.approval.module_hash;
+    next.approval.module_hash = [0x44; 32];
+    next.approval.attempt.sequence = 2;
+    next.approval.attempt.operation = [4; 32];
+    let complete = custody::RootHistory {
+        current: custody::Root {
+            stored: previous.stored.clone(),
+            store_operation: Some(next.clone()),
+        },
+        store_history: vec![first.clone()],
+    };
+    let mut plan = plan.clone();
+    let crate::PlanAction::MaintainRoot {
+        store: Some(store), ..
+    } = &mut plan.action
+    else {
+        unreachable!()
+    };
+    store.store.module = "44".repeat(32);
+    store.operation = Some(next);
+    store.history = vec![first];
+    plan.validate().unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Plan>(&serde_json::to_vec(&plan).unwrap()).unwrap(),
+        plan
+    );
+    assert_eq!(observations(&plan, false)[0].1, "observe_root_history");
+    assert!(observation_args(&plan, "observe_root_custody").is_err());
+    let frame = |value: &custody::RootHistory| {
+        ic_wire::encode(
+            value,
+            ic_wire::Encoding::Frame {
+                method: custody::ROOT_HISTORY,
+                direction: ic_wire::Direction::Response,
+            },
+            custody::ROOT_HISTORY_LIMITS,
+        )
+        .unwrap()
+    };
+    assert!(matches_plan(&plan, "observe_root_history", &frame(&complete)).unwrap());
+    for case in 0..4 {
+        let mut changed = complete.clone();
+        match case {
+            0 => changed.store_history.clear(),
+            1 => changed.store_history[0].approval.attempt.operation[0] ^= 1,
+            2 => changed.store_history[0].approval.expires_at_ns += 1,
+            _ => {
+                changed.store_history[0]
+                    .installation
+                    .as_mut()
+                    .unwrap()
+                    .request = None
+            }
+        }
+        assert!(!matches_plan(&plan, "observe_root_history", &frame(&changed)).unwrap());
+    }
+    for case in 0..4 {
+        let mut changed = plan.clone();
+        let crate::PlanAction::MaintainRoot {
+            store: Some(store), ..
+        } = &mut changed.action
+        else {
+            unreachable!()
+        };
+        match case {
+            0 => store.history[0].phase = wire::Phase::InstallIssued,
+            1 => store.operation.as_mut().unwrap().approval.attempt.sequence = 3,
+            2 => store.history[0].approval.module_hash = [9; 32],
+            _ => store.history = vec![store.history[0].clone(); wire::MAX_UPGRADES],
+        }
+        assert!(changed.validate().is_err());
     }
 }
 

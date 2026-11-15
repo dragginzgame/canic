@@ -127,6 +127,30 @@ pub fn custody() -> stored::Custody {
 /// Traps if lifecycle has not opened storage.
 #[must_use]
 pub fn root_custody() -> canic_management_protocol::custody::Root {
+    assert!(
+        STATE.with_borrow(|state| state
+            .as_ref()
+            .expect("open engine")
+            .journal
+            .get()
+            .2
+            .is_empty()),
+        "complete Store history required"
+    );
+    current_root_custody()
+}
+/// Read all child custody and every retained Store maintenance attempt synchronously.
+/// # Panics
+/// Traps if lifecycle has not opened storage.
+#[must_use]
+pub fn root_history() -> canic_management_protocol::custody::RootHistory {
+    canic_management_protocol::custody::RootHistory {
+        current: current_root_custody(),
+        store_history: STATE
+            .with_borrow(|state| state.as_ref().expect("open engine").journal.get().2.clone()),
+    }
+}
+fn current_root_custody() -> canic_management_protocol::custody::Root {
     canic_management_protocol::custody::Root {
         stored: stored_journals(),
         store_operation: super::store_maintenance::observe(),

@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.216.0] - 2026-11-15
+
+### ✨ Added
+
+Fleet planning supports repeat Wasm Store upgrades through the existing Root-owned
+maintenance path. Root retains up to eight exact attempts, fences stale callbacks
+by approval and phase, and preserves all history through its own upgrades. An
+unfinished or uncertain operation cannot be replaced, and full history is never
+evicted. The installed CLI witness completes two Store upgrades, recovers an
+interrupted second upload, then upgrades Root and its application.
+
+### ▶️ Try it
+
+For a completed local starter fleet with a prepared signer, first upgrade Root to
+the current executable in a separate approved window. Then change only the Store
+Wasm to a reviewed compatible replacement and use the returned operation digest:
+
+```sh
+canic fleet plan --app starter --fleet local --identity canic-local
+canic fleet status OPERATION --app starter --fleet local
+canic fleet apply OPERATION --app starter --fleet local --identity canic-local
+```
+
+After interruption, retain the same approval; reconciliation observes issued work:
+
+```sh
+canic fleet reconcile OPERATION --app starter --fleet local --identity canic-local
+```
+
+### ⚠️ Compatibility
+
+New plans require the history-aware Root endpoints. Historical plans keep their
+original encoding, digests and signed methods. CUJ7 reopens recognized prior
+journals, including a qualified 0.215 executable, in the existing allocation;
+older executables refuse the new state. Rust `UpgradeStore` literals gain a
+sequence and `StoreMaintenance` gains history. Limits remain experimental: eight
+attempts, 1 MiB replacement Wasm, no reset/cancellation or mainnet qualification.
+
+### 🧹 Cleanup
+
+This extends the existing engine, approval codec and planner. Store stays at its
+qualified supplier revision; no new crate, allocator, workflow engine or mirrored
+artifact catalog is introduced. Prior publication evidence remains reusable
+across the validated Store upgrade chain.
+
 ## [0.215.0] - 2026-11-15
 
 ### ⚠️ Breaking

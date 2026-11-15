@@ -305,12 +305,13 @@ pub(crate) fn evidence_with_source(
             if reply.try_exists().map_err(supplier)? {
                 let bytes = store::read(
                     &reply,
-                    canic_management_protocol::custody::ROOT_LIMITS.bytes,
+                    canic_management_protocol::custody::ROOT_HISTORY_LIMITS.bytes,
                 )?;
                 let (status, source) = if matches!(
                     method,
                     canic_management_protocol::stored::CUSTODY
                         | canic_management_protocol::custody::ROOT
+                        | canic_management_protocol::custody::ROOT_HISTORY
                 ) {
                     stored::creation_evidence(plan, &bytes)?
                 } else {
@@ -455,7 +456,9 @@ async fn complete(
 fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> {
     if matches!(
         method,
-        canic_management_protocol::stored::CUSTODY | canic_management_protocol::custody::ROOT
+        canic_management_protocol::stored::CUSTODY
+            | canic_management_protocol::custody::ROOT
+            | canic_management_protocol::custody::ROOT_HISTORY
     ) {
         stored::creation(plan, bytes)
     } else {

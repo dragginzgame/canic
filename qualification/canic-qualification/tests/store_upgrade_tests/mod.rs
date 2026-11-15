@@ -386,11 +386,94 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         "unchanged"
     );
 
+    // The second approved replacement traverses the same effect owner and recovers its own upload.
+    let first_outcome = retained(pic, root, operator).await;
+    config["apps"]["demo"]["canisters"]["store"]["wasm"] = json!(assets.join("store.wasm"));
+    write_config(&dir, &config);
+    let second = cli(&dir, &["fleet", "plan", "--controller", &controller]);
+    assert_eq!(second["plan"]["store_upgrade_sequence"], 2);
+    let second_id = second["operation"].as_str().unwrap();
+    assert!(
+        !run(
+            &dir,
+            &[
+                "fleet",
+                "apply",
+                second_id,
+                "--identity",
+                "store-fixture",
+                "--icp-bin",
+                stop_before_install.to_str().unwrap()
+            ]
+        )
+        .status
+        .success()
+    );
+    assert_eq!(
+        cli(&dir, &["fleet", "plan", "--controller", &controller]),
+        second
+    );
+    let before_second = pic.get_stable_memory(store).await;
+    inject(pic, root, operator, 15).await;
+    assert!(
+        !run(
+            &dir,
+            &[
+                "fleet",
+                "apply",
+                second_id,
+                "--identity",
+                "store-fixture",
+                "--icp-bin",
+                signer.to_str().unwrap()
+            ]
+        )
+        .status
+        .success()
+    );
+    inject(pic, root, operator, 0).await;
+    assert_eq!(
+        call(&dir, "reconcile", second_id, &signer)["store_maintenance"]["phase"],
+        "Uploaded"
+    );
+    assert!(
+        !run(
+            &dir,
+            &[
+                "fleet",
+                "apply",
+                second_id,
+                "--identity",
+                "store-fixture",
+                "--icp-bin",
+                stop_before_activation.to_str().unwrap()
+            ]
+        )
+        .status
+        .success()
+    );
+    assert_eq!(
+        retained(pic, root, operator).await.phase,
+        wire::Phase::Verified
+    );
+    assert_eq!(pic.get_stable_memory(store).await, before_second);
+    let completed = call(&dir, "apply", second_id, &signer);
+    assert_eq!(completed["canister"], store.to_text());
+    assert_eq!(call(&dir, "reconcile", second_id, &signer), completed);
+    assert_eq!(
+        cli(&dir, &["fleet", "status", id])["store_maintenance"]["phase"],
+        "Ready"
+    );
+
     config["apps"]["demo"]["canisters"]["root"]["wasm"] =
         json!(assets.join("root-maintenance.wasm"));
     write_config(&dir, &config);
     let maintenance = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(maintenance["action"], "maintenance");
+    assert_eq!(
+        maintenance["plan"]["maintenance_store"]["history"],
+        serde_json::to_value(vec![first_outcome]).unwrap()
+    );
     assert_eq!(
         maintenance["plan"]["maintenance_store"]["operation"]["phase"],
         "Ready"
@@ -476,7 +559,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     );
     assert_eq!(
         child["plan"]["management"]["source"]["maintenance"]["sequence"],
-        1
+        2
     );
     let mut ready = Value::Null;
     for _ in 0..100 {
@@ -509,12 +592,10 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         cli(&dir, &["fleet", "plan", "--controller", &controller])["action"],
         "unchanged"
     );
-    config["apps"]["demo"]["canisters"]["store"]["wasm"] = json!(assets.join("store.wasm"));
+    config["apps"]["demo"]["canisters"]["store"]["wasm"] =
+        json!(assets.join("store-candidate.wasm"));
     write_config(&dir, &config);
-    assert!(
-        !run(&dir, &["fleet", "plan", "--controller", &controller])
-            .status
-            .success()
-    );
+    let third = cli(&dir, &["fleet", "plan", "--controller", &controller]);
+    assert_eq!(third["plan"]["store_upgrade_sequence"], 3);
     owner.instance_mut().stop_live().await;
 }

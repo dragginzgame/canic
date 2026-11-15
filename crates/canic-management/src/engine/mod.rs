@@ -180,7 +180,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
     if let (Some(first), Some(second)) = (&journals[0].0.worker, &journals[1].0.worker) {
         assert_ne!(first, second, "distinct child identities");
     }
-    // Commit the bounded v6 journal and v3 artifact payloads only after strict old/new schema validation.
+    // Commit the bounded v7 journal and v3 artifact payloads only after strict old/new schema validation.
     // A post-upgrade trap rolls back both writes with the executable change.
     state.journal.set(state.journal.get().clone());
     state.artifact.set(state.artifact.get().clone());

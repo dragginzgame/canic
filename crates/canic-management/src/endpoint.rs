@@ -26,6 +26,9 @@ pub fn admit(limit: usize, private: bool) -> Result<(), String> {
 #[doc(hidden)]
 #[must_use]
 pub fn response_limits(method: u64) -> wire::Limits {
+    if method == protocol::custody::ROOT_HISTORY {
+        return protocol::custody::ROOT_HISTORY_LIMITS;
+    }
     if method == protocol::custody::ROOT {
         return protocol::custody::ROOT_LIMITS;
     }
@@ -38,6 +41,7 @@ pub fn response_limits(method: u64) -> wire::Limits {
             | protocol::store_maintenance::ACTIVATE
             | protocol::store_maintenance::STATUS
             | protocol::store_maintenance::RECOVER
+            | protocol::store_maintenance::OBSERVE_ATTEMPT
     ) {
         return protocol::store_maintenance::LIMITS;
     }
@@ -91,7 +95,9 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// explicitly opens admission only after replacement verification.
 /// `store_maintenance_status` reports the same retained metadata as an uncertified public query.
 /// `recover_store_maintenance` retains observed outcomes without issuing fresh maintenance effects.
-/// `observe_root_custody` reads children, artifact references and Store maintenance together.
+/// `observe_root_custody` reads children, artifact references and a single Store operation.
+/// `observe_root_history` includes all completed Store predecessors; older reads refuse omission.
+/// `observe_store_attempt` reads an exact current or historical approval without effects.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
@@ -103,6 +109,16 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// ```
 #[macro_export]
 macro_rules! mount_endpoints {
+    (@select observe_root_history) => {
+        $crate::mount_endpoints!(@method observe_root_history, update, true, custody::ROOT_HISTORY, LIMITS,
+            [] () -> $crate::endpoint::protocol::custody::RootHistory,
+            $crate::stored::root_history(), "Root history request", "Root history reply");
+    };
+    (@select observe_store_attempt) => {
+        $crate::mount_endpoints!(@method observe_store_attempt, update, true, store_maintenance::OBSERVE_ATTEMPT, LIMITS,
+            [] (input: $crate::endpoint::protocol::store_maintenance::Approval) -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
+            $crate::store_maintenance::observe_attempt(&input), "Store attempt request", "Store attempt reply");
+    };
     (@select observe_root_custody) => {
         $crate::mount_endpoints!(@method observe_root_custody, update, true, custody::ROOT, LIMITS,
             [] () -> $crate::endpoint::protocol::custody::Root,

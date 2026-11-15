@@ -77,8 +77,10 @@ before/after upgrade, including chunks, shared-version pins and an unfinished
 upload; publication resumes only after activation. Wrong bytes/callers, malformed
 frames, expiry, rejected modules and incompatible replacement endpoints cannot
 activate or reissue installation. Recovery after expiry can retain an installed
-outcome but cannot start it with expired authority. This is not a CLI/mainnet
-qualification or repeatable maintenance; the single operation remains retained.
+outcome but cannot start it with expired authority. The repeat fixture migrates
+both an issued installation and a completed attempt from a retained 0.215 Root,
+then qualifies bounded successors without losing prior authority. CLI qualification
+is separate below; neither selection establishes mainnet readiness.
 The explicit `recover_store_maintenance` endpoint qualifies observation without
 fresh dispatch: it leaves Reserved, Closed, Stopped, Uploaded, Installed, Verified
 and Ready unchanged, including with live authority. Lost callbacks recover through
@@ -105,9 +107,12 @@ maintenance, selects a changed Store
 artifact, refuses reconcile before admission, pauses before install and activation,
 and recovers upload callback fault 15 without new installation authority. It compares
 Store stable bytes, rejects missing/substituted completion custody, preserves the
-operation through a later Root replacement, then publishes and upgrades the child
-using the new Store binding and explicit complete Root read. Replanning retains
-the same pending approval and refuses a successor Store upgrade. Fixture credentials
+first operation through a second Store replacement and later Root replacement,
+then publishes and upgrades the child using the new Store binding and explicit
+complete-history read. Replanning retains the same pending approval and derives
+the next sequence only after completion. The runtime maintenance selection also
+qualifies all eight slots, ninth-attempt refusal, a retained 0.215 Root transition,
+historical replay and older-code refusal without dropping custody. Fixture credentials
 stay under `target`; it never reads the operator wallet. This uses synthetic cycles
 and is not mainnet qualification. No new runtime workflow or dependency is added.
 Public Root diagnostics are checked against the private retained observation across

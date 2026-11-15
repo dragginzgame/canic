@@ -413,28 +413,31 @@ pub(crate) fn receipt(
 }
 
 /// Reuse historical completion under a newly reviewed Root executable; never renew publication authority.
-pub(crate) fn completed_release(
+pub(crate) fn completed_release<'a>(
     dir: &Path,
     old: &Plan,
     proposed: &Plan,
     expected: &protocol::Manifest,
-    preserved_store: Option<&canic_management_protocol::store_maintenance::Status>,
+    preserved_store: impl IntoIterator<Item = &'a canic_management_protocol::store_maintenance::Status>,
 ) -> Result<bool> {
     let previous = binding(old)?;
     let next = binding(proposed)?;
+    let mut preserved_module = previous.store.module.clone();
+    for status in preserved_store {
+        if crate::store_upgrade::ready(status)
+            && status.approval.store == previous.store.canister
+            && crate::hex(&status.approval.previous_module) == preserved_module
+        {
+            preserved_module = crate::hex(&status.approval.module_hash);
+        }
+    }
     if old.network != proposed.network
         || old.controller != proposed.controller
         || old.deployment != proposed.deployment
         || old.artifact != proposed.artifact
         || previous.root.canister != next.root.canister
-        || (previous.store != next.store
-            && !preserved_store.is_some_and(|s| {
-                crate::store_upgrade::ready(s)
-                    && s.approval.store == previous.store.canister
-                    && s.approval.store == next.store.canister
-                    && crate::hex(&s.approval.previous_module) == previous.store.module
-                    && crate::hex(&s.approval.module_hash) == next.store.module
-            }))
+        || previous.store.canister != next.store.canister
+        || preserved_module != next.store.module
         || previous.release != next.release
     {
         return Ok(false);

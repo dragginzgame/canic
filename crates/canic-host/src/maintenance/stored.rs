@@ -18,6 +18,8 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         || store.store.module != store.store.module.to_ascii_lowercase()
         || (store.operation.is_none() && store.sources.iter().all(Option::is_none))
         || store.sources[children.len()..].iter().any(Option::is_some)
+        || store.history.len() >= canic_management_protocol::store_maintenance::MAX_UPGRADES
+        || (!store.history.is_empty() && store.operation.is_none())
     {
         return Err(invalid());
     }
@@ -51,6 +53,27 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         }
     }
     if let Some(operation) = &store.operation {
+        if !store.history.is_empty() {
+            let chain: Vec<_> = store
+                .history
+                .iter()
+                .chain(std::iter::once(operation))
+                .collect();
+            for (index, record) in chain.iter().enumerate() {
+                if record.approval.attempt.sequence != index as u64 + 1
+                    || record.approval.store != store.store.canister
+                    || (index < store.history.len() && !crate::store_upgrade::ready(record))
+                    || (index > 0
+                        && chain[index - 1].approval.module_hash != record.approval.previous_module)
+                    || record.approval.attempt.operation == [0; 32]
+                    || chain[..index].iter().any(|old| {
+                        old.approval.attempt.operation == record.approval.attempt.operation
+                    })
+                {
+                    return Err(invalid());
+                }
+            }
+        }
         let approval = &operation.approval;
         let operator = principal(&operation.operator)?;
         if approval.store != store.store.canister
@@ -78,6 +101,20 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
             canic_management_protocol::custody::ROOT_LIMITS,
         )
         .map_err(supplier)?;
+        if !store.history.is_empty() {
+            ic_wire::encode(
+                &canic_management_protocol::custody::RootHistory {
+                    current: canic_management_protocol::custody::Root {
+                        stored: expected(plan)?,
+                        store_operation: Some(operation.clone()),
+                    },
+                    store_history: store.history.clone(),
+                },
+                ic_wire::Encoding::Payload,
+                canic_management_protocol::custody::ROOT_HISTORY_LIMITS,
+            )
+            .map_err(supplier)?;
+        }
     }
     ic_wire::encode(&expected(plan)?, ic_wire::Encoding::Payload, wire::LIMITS)
         .map_err(supplier)?;
@@ -130,6 +167,23 @@ fn expected(plan: &Plan) -> Result<wire::Custody> {
     })
 }
 pub(super) fn matches(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
+    if let Some(store) = plan.maintenance_store().filter(|s| !s.history.is_empty()) {
+        if method != "observe_root_history" {
+            return Err(invalid());
+        }
+        let actual: canic_management_protocol::custody::RootHistory = ic_wire::decode(
+            bytes,
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::custody::ROOT_HISTORY,
+                direction: ic_wire::Direction::Response,
+            },
+            canic_management_protocol::custody::ROOT_HISTORY_LIMITS,
+        )
+        .map_err(supplier)?;
+        return Ok(actual.current.stored == expected(plan)?
+            && actual.current.store_operation == store.operation
+            && actual.store_history == store.history);
+    }
     if let Some(operation) = plan.maintenance_store().and_then(|s| s.operation.as_ref()) {
         if method != "observe_root_custody" {
             return Err(invalid());

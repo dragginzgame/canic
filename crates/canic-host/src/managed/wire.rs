@@ -28,14 +28,15 @@ impl Method {
                 Self::StageUpgrade => ("stage_stored_upgrade", stored::STAGE_UPGRADE),
                 Self::ReconcileUpgrade => ("reconcile_stored_upgrade", stored::RECONCILE_UPGRADE),
                 Self::Observe | Self::ObserveUpgrade => {
-                    if plan
+                    match plan
                         .management()
                         .and_then(|m| m.source.as_ref())
-                        .is_some_and(|s| s.maintenance.is_some())
+                        .and_then(|s| s.maintenance.as_ref())
+                        .map(|a| a.sequence)
                     {
-                        ("observe_root_custody", protocol::custody::ROOT)
-                    } else {
-                        ("observe_stored_children", stored::CUSTODY)
+                        Some(2..) => ("observe_root_history", protocol::custody::ROOT_HISTORY),
+                        Some(_) => ("observe_root_custody", protocol::custody::ROOT),
+                        None => ("observe_stored_children", stored::CUSTODY),
                     }
                 }
             };

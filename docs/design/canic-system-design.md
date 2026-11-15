@@ -880,8 +880,8 @@ delivery, including retention pins and cache deadlines. Replicated full-custody
 observations must match before and after the original direct install attempt;
 legacy inline observations cannot substitute. Store authority/code/placement and
 child identity/code/controllers are independently checked. Only completed
-maintenance advances Root code authority for subsequent work. One Host-driven
-Store upgrade now has an installed CLI witness; inline-to-Store migration remains
+maintenance advances Root code authority for subsequent work. Two Host-driven
+Store upgrades followed by Root and child upgrades now have an installed CLI witness; inline-to-Store migration remains
 unqualified. See the
 [current scope](../demos/wasm-store.md). The full contract below still requires
 pin release, reclamation and fleet integration. Each managed
@@ -960,9 +960,11 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJ6 journal loads recognized predecessors without inventing maintenance
-authority; existing full child-custody reads refuse a pending Store attempt so
-Host Root maintenance cannot silently omit it.
+The CUJ7 journal loads recognized predecessors, including CUJ6, without inventing
+maintenance authority. Current and completed attempts remain in the original
+checked allocation. Existing child-only reads refuse Store custody; after a second
+attempt, full-history observation is required so Root maintenance cannot omit any
+predecessor. Older executables reject the new journal rather than losing history.
 
 Before issuing stop, Root captures a bounded ordered metadata commitment over
 the closed Store catalog, one release per continuation. Every page checks the
@@ -1012,9 +1014,11 @@ admission and bounded continuations; Root remains the sole management-effect own
 Completion points to an admitted signed Ready observation rather than duplicating
 the runtime journal. Apply permits at most 32 continuations per invocation and
 4096 observations per operation. Reaching a bound retains blocked exposure.
-One attempt remains the limit, with no reset, cancellation or successor history.
-Live use, larger infrastructure replacements, explicit repair of blocked attempts
-and repeatable maintenance need their own admitted consumer paths.
+Up to eight attempts are retained. Only a completed predecessor admits the next
+sequence and exact code transition; replay addresses the original approval and
+callbacks match both approval and phase. There is no reset, cancellation or history
+eviction. Live use, larger infrastructure replacements and explicit repair of
+blocked attempts need their own admitted consumer paths.
 
 The public Root maintenance query is a diagnostic projection of that same journal,
 not another evidence owner. Host selects it from retained Store bootstrap authority
@@ -1082,9 +1086,12 @@ child planning now selects a completed publication operation, freezes its immuta
 manifest and Store code, and reuses the existing Store-backed creation/upgrade
 contracts. Observations validate complete source and pin custody. Fresh whole
 fleets publish content-hash releases, converge serial child upgrades and preserve
-full Store custody during Root maintenance. One Host-driven Store replacement
-qualifies subsequent Root and child upgrades. Inline-to-Store migration and
-successor Store maintenance remain pending. See the
+full Store custody during Root maintenance. Bounded repeat Store replacement
+qualifies subsequent Root and child upgrades. Root retains at most eight attempts
+inside its original allocation, with exact replay and approval/phase callback
+fencing. Every successor binds the next sequence and predecessor code; incomplete
+or uncertain work cannot be replaced. Complete history survives Root maintenance
+and is never evicted. Inline-to-Store migration remains pending. See the
 [current implementation scope](../demos/wasm-store.md). First prove fresh
 Root/Store/app creation, multiple coexisting versions, interrupted upload/resume,
 hash/version conflicts, quota exhaustion, cache reconstruction, pin/deletion

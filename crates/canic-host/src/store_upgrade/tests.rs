@@ -11,6 +11,7 @@ fn plan() -> Plan {
             bytes: 8,
         },
         action: PlanAction::UpgradeStore {
+            sequence: None,
             target: UpgradeTarget {
                 canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
                 module: "22".repeat(32),
@@ -69,10 +70,59 @@ fn store_approval_binds_code_owner_operation_and_original_deadline() {
 }
 
 #[test]
+fn explicit_sequence_binds_exact_observation_without_rewriting_old_approvals() {
+    let historical = plan();
+    let old_bytes = serde_json::to_vec(&historical).unwrap();
+    assert!(
+        serde_json::to_value(&historical)
+            .unwrap()
+            .get("store_upgrade_sequence")
+            .is_none()
+    );
+    let mut next = historical.clone();
+    let PlanAction::UpgradeStore { sequence, .. } = &mut next.action else {
+        unreachable!()
+    };
+    *sequence = Some(2);
+    next.validate().unwrap();
+    assert_ne!(next.digest().unwrap(), historical.digest().unwrap());
+    let call = observation(&next).unwrap();
+    assert_eq!(call.method, "observe_store_attempt");
+    assert_eq!(
+        ic_wire::decode::<wire::Approval>(
+            &call.args,
+            ic_wire::Encoding::Frame {
+                method: wire::OBSERVE_ATTEMPT,
+                direction: ic_wire::Direction::Request,
+            },
+            wire::LIMITS
+        )
+        .unwrap(),
+        approval(&next).unwrap()
+    );
+    assert_eq!(approval(&next).unwrap().attempt.sequence, 2);
+    let roundtrip: Plan = serde_json::from_slice(&serde_json::to_vec(&next).unwrap()).unwrap();
+    assert_eq!(roundtrip, next);
+    for invalid in [0, wire::MAX_UPGRADES as u64 + 1] {
+        let PlanAction::UpgradeStore { sequence, .. } = &mut next.action else {
+            unreachable!()
+        };
+        *sequence = Some(invalid);
+        assert!(next.validate().is_err());
+    }
+    let restored: Plan = serde_json::from_slice(&old_bytes).unwrap();
+    assert_eq!(serde_json::to_vec(&restored).unwrap(), old_bytes);
+    assert_eq!(
+        observation(&restored).unwrap().method,
+        "observe_store_maintenance"
+    );
+}
+
+#[test]
 fn store_upgrade_refuses_anonymous_reflected_and_unbounded_authority() {
     for case in 0..5 {
         let mut plan = plan();
-        let PlanAction::UpgradeStore { root, target } = &mut plan.action else {
+        let PlanAction::UpgradeStore { root, target, .. } = &mut plan.action else {
             unreachable!()
         };
         match case {

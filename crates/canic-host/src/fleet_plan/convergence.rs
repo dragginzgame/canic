@@ -221,6 +221,7 @@ pub(super) fn plan(
         module: receipt.module_hash,
     });
     let mut store_operation = None;
+    let mut store_history = Vec::new();
     let mut ordered: Vec<_> = individual.iter().collect();
     ordered.sort_by_key(|(_, value)| value.created_at_ns);
     let mut last_created = fleet.root.created_at_ns;
@@ -232,7 +233,8 @@ pub(super) fn plan(
         last_created = value.created_at_ns;
         if let Some(owner) = value.store_upgrade_root() {
             let binding = store_binding.as_mut().ok_or_else(invalid)?;
-            if store_operation.is_some()
+            if value.store_upgrade_sequence().unwrap_or(1)
+                != (store_history.len() + usize::from(store_operation.is_some()) + 1) as u64
                 || owner.canister != root
                 || owner.module != root_module
                 || value.target() != Some(&binding.canister)
@@ -247,7 +249,9 @@ pub(super) fn plan(
                 crate::store_upgrade::receipt(&store.operation(operation)?, value)?
             {
                 binding.module = receipt.module_hash;
-                store_operation = Some(evidence);
+                if let Some(previous) = store_operation.replace(evidence) {
+                    store_history.push(previous);
+                }
                 latest_id = operation;
                 continue;
             }
@@ -270,8 +274,13 @@ pub(super) fn plan(
         }
         if let Some(expected) = value.maintenance() {
             if value.maintenance_store()
-                != store_custody(&children, store_binding.as_ref(), store_operation.as_ref())?
-                    .as_ref()
+                != store_custody(
+                    &children,
+                    store_binding.as_ref(),
+                    store_operation.as_ref(),
+                    &store_history,
+                )?
+                .as_ref()
                 || !expected
                     .iter()
                     .eq(children.iter().map(|child| &child.custody))
@@ -392,8 +401,12 @@ pub(super) fn plan(
     if desired.store.as_ref().map(|s| &s.artifact.sha256)
         != store_binding.as_ref().map(|s| &s.module)
     {
-        if store_operation.is_some() {
-            return Err(Error::Blocked("Root retains its one Store maintenance operation; successor Store upgrades are not yet qualified".into()));
+        let sequence = store_history.len() + usize::from(store_operation.is_some()) + 1;
+        if sequence > canic_management_protocol::store_maintenance::MAX_UPGRADES {
+            return Err(Error::Blocked(
+                "Root Store maintenance history is full; retained evidence cannot be evicted"
+                    .into(),
+            ));
         }
         if !changed.is_empty() || desired.root.artifact.sha256 != root_module {
             return Err(Error::Blocked(
@@ -428,6 +441,7 @@ pub(super) fn plan(
             artifact: selected.artifact.clone(),
             deployment: Some(selected.deployment.clone()),
             action: PlanAction::UpgradeStore {
+                sequence: Some(sequence as u64),
                 target: binding.clone(),
                 root: UpgradeTarget {
                     canister: root,
@@ -452,8 +466,13 @@ pub(super) fn plan(
                     module: root_module,
                 },
                 children: children.iter().map(|c| c.custody.clone()).collect(),
-                store: store_custody(&children, store_binding.as_ref(), store_operation.as_ref())?
-                    .map(Box::new),
+                store: store_custody(
+                    &children,
+                    store_binding.as_ref(),
+                    store_operation.as_ref(),
+                    &store_history,
+                )?
+                .map(Box::new),
             },
             ..desired.root
         };
@@ -533,7 +552,7 @@ pub(super) fn plan(
                 old,
                 &publication,
                 &source.manifest,
-                store_operation.as_ref(),
+                store_history.iter().chain(store_operation.iter()),
             )? {
                 published = true;
                 break;
@@ -560,12 +579,14 @@ fn store_custody(
     children: &[Child],
     binding: Option<&UpgradeTarget>,
     operation: Option<&canic_management_protocol::store_maintenance::Status>,
+    history: &[canic_management_protocol::store_maintenance::Status],
 ) -> Result<Option<crate::StoreMaintenance>> {
     if children.iter().all(|c| c.sources.is_none()) && operation.is_none() {
         return Ok(None);
     }
     Ok(Some(crate::StoreMaintenance {
         operation: operation.cloned(),
+        history: history.to_vec(),
         store: binding.ok_or_else(invalid)?.clone(),
         sources: std::array::from_fn(|i| children.get(i).and_then(|c| c.sources.clone())),
     }))

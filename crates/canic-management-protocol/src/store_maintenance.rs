@@ -15,6 +15,10 @@ pub const ACTIVATE: u64 = 54;
 pub const STATUS: u64 = 55;
 /// Reconcile already-issued effects by observation; never issue fresh maintenance effects.
 pub const RECOVER: u64 = 56;
+/// Read one exact retained approval, including completed historical attempts.
+pub const OBSERVE_ATTEMPT: u64 = 59;
+/// Retained Store upgrades, including the current attempt. History is never evicted.
+pub const MAX_UPGRADES: usize = 8;
 /// Two bounded metadata commitments and issued-effect evidence; child observations keep their budget.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     allocation: 262_144,

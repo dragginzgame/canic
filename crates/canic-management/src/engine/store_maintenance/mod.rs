@@ -4,7 +4,7 @@ use super::{
 };
 use canic_management_protocol::{
     Failure, Refusal,
-    store_maintenance::{Approval, Phase, Status},
+    store_maintenance::{Approval, MAX_UPGRADES, Phase, Status},
 };
 use ic_platform::management_canister_types::{
     CanisterIdRecord, CanisterStatusResult, CanisterStatusType,
@@ -66,7 +66,32 @@ fn binding(state: &State, approval: &Approval) -> bool {
         })
 }
 pub(super) fn validate(state: &State) {
-    if let Some(record) = &state.journal.get().1 {
+    let journals = state.journal.get();
+    assert!(journals.2.len() < MAX_UPGRADES, "Store history bound");
+    assert!(
+        journals.2.is_empty() || journals.1.is_some(),
+        "Store history tip"
+    );
+    let records: Vec<_> = journals.2.iter().chain(journals.1.iter()).collect();
+    for (index, record) in records.iter().enumerate() {
+        if index < journals.2.len() {
+            assert!(
+                record.phase == Phase::Ready && record.failure.is_none(),
+                "completed Store predecessor"
+            );
+        }
+        if index > 0 {
+            assert!(
+                successor(records[index - 1], &record.approval),
+                "Store maintenance chain"
+            );
+        }
+        assert!(
+            records[..index]
+                .iter()
+                .all(|old| old.approval.attempt.operation != record.approval.attempt.operation),
+            "distinct Store operation"
+        );
         assert!(
             binding(state, &record.approval) && (record.phase == Phase::Ready || quiescent(state)),
             "maintenance owner binding"
@@ -100,6 +125,30 @@ pub(super) fn validate(state: &State) {
 pub fn observe() -> Option<Status> {
     STATE.with_borrow(|state| state.as_ref().expect("open engine").journal.get().1.clone())
 }
+fn successor(previous: &Status, approval: &Approval) -> bool {
+    previous.phase == Phase::Ready
+        && previous.failure.is_none()
+        && previous.approval.store == approval.store
+        && previous.approval.module_hash == approval.previous_module
+        && previous.approval.attempt.sequence.checked_add(1) == Some(approval.attempt.sequence)
+}
+
+/// Read one exact retained approval without advancing or replacing any operation.
+/// # Panics
+/// Traps if lifecycle has not opened the engine.
+#[must_use]
+pub fn observe_attempt(approval: &Approval) -> Option<Status> {
+    STATE.with_borrow(|state| {
+        let journals = state.as_ref().expect("open engine").journal.get();
+        journals
+            .1
+            .iter()
+            .chain(journals.2.iter())
+            .find(|record| &record.approval == approval)
+            .cloned()
+    })
+}
+
 /// Fence new child/publication mutations and retain one exact Store-maintenance approval.
 /// # Errors
 /// Refuses unfinished child work, changed authority/bindings, or an invalid dispatch interval.
@@ -112,12 +161,25 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
     if operator == Principal::anonymous() {
         return Err(Refusal::Binding);
     }
-    if let Some(old) = observe() {
-        return if old.approval == approval && old.operator == operator.to_text() {
+    if let Some(old) = observe_attempt(&approval) {
+        return if old.operator == operator.to_text() {
             Ok(old)
         } else {
             Err(Refusal::Occupied)
         };
+    }
+    // Occupied authority dominates a changed request's deadline, as in the original contract.
+    if STATE.with_borrow(|state| {
+        state
+            .as_ref()
+            .expect("open engine")
+            .journal
+            .get()
+            .1
+            .as_ref()
+            .is_some_and(|old| !successor(old, &approval))
+    }) {
+        return Err(Refusal::Occupied);
     }
     let now = api::time();
     if approval.expires_at_ns <= now || approval.expires_at_ns - now > 3_600_000_000_000 {
@@ -131,6 +193,17 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
         if !quiescent(state) || OBSERVING.get().into_iter().any(|busy| busy) {
             return Err(Refusal::Occupied);
         }
+        let journals = state.journal.get();
+        if journals.2.len() + usize::from(journals.1.is_some()) >= MAX_UPGRADES
+            || (journals.1.is_none() && approval.attempt.sequence != 1)
+            || journals
+                .1
+                .iter()
+                .chain(journals.2.iter())
+                .any(|old| old.approval.attempt.operation == approval.attempt.operation)
+        {
+            return Err(Refusal::Occupied);
+        }
         let record = Status {
             approval,
             operator: operator.to_text(),
@@ -141,13 +214,15 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
             installation: None,
         };
         let mut journals = state.journal.get().clone();
-        journals.1 = Some(record.clone());
+        if let Some(previous) = journals.1.replace(record.clone()) {
+            journals.2.push(previous);
+        }
         state.journal.set(journals);
         Ok(record)
     })
 }
 fn selected(approval: &Approval) -> Status {
-    let value = observe().expect("retained Store maintenance");
+    let value = observe_attempt(approval).expect("retained Store maintenance");
     assert_eq!(&value.approval, approval, "maintenance approval mismatch");
     assert_eq!(
         value.operator,
@@ -160,13 +235,13 @@ fn selected(approval: &Approval) -> Status {
     );
     value
 }
-fn change(expected: Phase, update: impl FnOnce(&mut Status)) {
+fn change(approval: &Approval, expected: Phase, update: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
         let mut journals = state.journal.get().clone();
         let value = journals.1.as_mut().expect("retained maintenance");
-        // A late observation/callback cannot regress another continuation's committed phase.
-        if value.phase == expected {
+        // Both operation and phase fence callbacks, including a successor at the same phase.
+        if &value.approval == approval && value.phase == expected {
             update(value);
             state.journal.set(journals);
         }
@@ -300,9 +375,11 @@ pub async fn recover(approval: Approval) -> Status {
 async fn run_step(record: Status) -> Status {
     let result = step(&record).await;
     if let Err(error) = result {
-        change(record.phase, |value| value.failure = Some(error));
+        change(&record.approval, record.phase, |value| {
+            value.failure = Some(error)
+        });
     }
-    observe().expect("retained maintenance")
+    observe_attempt(&record.approval).expect("retained maintenance")
 }
 async fn step(record: &Status) -> Result<(), Failure> {
     let approval = &record.approval;
@@ -312,7 +389,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
                 return Err(Failure::Mismatch);
             }
             dispatch(record)?;
-            change(Phase::Reserved, |value| {
+            change(approval, Phase::Reserved, |value| {
                 value.phase = Phase::Closing;
                 value.failure = None;
             });
@@ -324,16 +401,18 @@ async fn step(record: &Status) -> Result<(), Failure> {
             .await;
             super::fault(super::Slot::First, 13);
             match result {
-                Ok(()) => change(Phase::Closing, |value| {
+                Ok(()) => change(approval, Phase::Closing, |value| {
                     value.phase = Phase::Closed;
                     value.failure = None;
                 }),
-                Err(error) => change(Phase::Closing, |value| value.failure = Some(error)),
+                Err(error) => change(approval, Phase::Closing, |value| {
+                    value.failure = Some(error)
+                }),
             }
         }
         Phase::Closing => {
             gate(approval, store::AdmissionCommand::Observe).await?;
-            change(Phase::Closing, |value| {
+            change(approval, Phase::Closing, |value| {
                 value.phase = Phase::Closed;
                 value.failure = None;
             });
@@ -347,7 +426,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
             }
             dispatch(record)?;
             let bytes = args(approval);
-            change(Phase::Closed, |value| {
+            change(approval, Phase::Closed, |value| {
                 value.phase = Phase::StopIssued;
                 value.stop_request = Some(digest(&bytes));
                 value.failure = None;
@@ -360,14 +439,16 @@ async fn step(record: &Status) -> Result<(), Failure> {
                 });
             super::fault(super::Slot::First, 14);
             if let Err(error) = result {
-                change(Phase::StopIssued, |value| value.failure = Some(error));
+                change(approval, Phase::StopIssued, |value| {
+                    value.failure = Some(error)
+                });
             }
         }
         Phase::StopIssued | Phase::Stopped => {
             if inspect(approval).await?.status != CanisterStatusType::Stopped {
                 return Err(Failure::Uncertain);
             }
-            change(record.phase, |value| {
+            change(&record.approval, record.phase, |value| {
                 value.phase = Phase::Stopped;
                 value.failure = None;
             });
