@@ -107,7 +107,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 )?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
-                        "Initialized app {name}\nFleet: {fleet}\nConfig: {}\n\nRoot\n└─ Application\n\nSource created; nothing built or deployed. See the generated README for build steps.\n",
+                        "Initialized app {name}\nFleet: {fleet}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nSource created; nothing built or deployed. See the generated README for build steps.\n",
                         ic_host_text::escape::terminal_text(&path.to_string_lossy()),
                     )));
                 }

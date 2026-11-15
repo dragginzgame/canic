@@ -1,10 +1,11 @@
 # Root and its children
 
-The generated starter begins with one approved Hello World child; a fresh fleet
-can include a second direct child:
+The generated starter begins with a Wasm Store and one approved Hello World
+application; a fresh fleet can include a second application:
 
 ```text
 Root
+├─ Wasm Store
 └─ Application
 ```
 
@@ -12,8 +13,8 @@ Root's controller is the external operator identity. The application's sole
 controller is Root. External identities appear as controller metadata, never as
 nodes above the canister tree.
 
-A fresh fleet can also declare one `wasm-store` child of Root, alongside both
-application slots. Whole-fleet apply completes Store handover/readiness before
+The generated `wasm-store` child is separate from both application slots.
+Whole-fleet apply completes Store handover/readiness before
 admitting either app; the approval includes its separate 1T debit. See the
 [Store bootstrap workflow](wasm-store.md). Adding Store to an already retained
 fleet remains an unqualified adoption path; the existing mainnet demo below is
@@ -62,10 +63,10 @@ neither fetches dependencies nor prepares tools. Keep the generated Cargo lockfi
 with your project after the first `app build`; later builds preserve it.
 
 The generated app uses the selected local Canic checkout, with its supplier
-selections, compiler and lint policy. Root remains a supplied Canic package.
+selections, compiler and lint policy. Root and Store remain supplied Canic packages.
 Canic source aliases resolve to their physical path. If that checkout moves,
-update the dependency and Root build paths; the generated README records the
-Root workspace manifest in `canic.json`. No legacy crates.io Canic dependency is selected.
+update the dependency and Root/Store build paths in `canic.json`.
+No legacy crates.io Canic dependency is selected.
 
 `--output` is a replaceable build input, separate from the immutable artifact
 bytes retained by deployment plans. Relative artifact paths resolve beside the
@@ -79,7 +80,8 @@ Prepare the simulator once with `make qualification-setup`, then run:
 make root-test
 ```
 
-The test generates a standalone app using the CLI and builds its application
+This suite explicitly retains inline-custody fixtures for existing fleets. It
+generates a standalone app using the CLI and builds its application
 and supplied Root through `app build` and the locked artifact builder, then installs
 Root in PocketIC, admits
 one child, upgrades Root before dispatch, and observes creation and readiness
@@ -95,6 +97,19 @@ Root. The CLI fixture covers creation, lost admission replies, separate child
 upgrades, maintenance with both full journals, and terminal/HTML views. Untracked
 work in either child blocks Root maintenance before installation.
 
+The generated Root/Store/app default has a separate installed CLI witness:
+
+```sh
+bash scripts/dev/test-publication.sh fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans
+```
+
+It initializes and builds all three declarations, deploys the normal Root and
+Store, publishes the app and retains completion. It then qualifies interrupted
+Store maintenance and subsequent Root/child upgrades using test-only fault code.
+It edits and rebuilds the generated greeting source, publishes that new artifact
+and verifies the changed greeting through `fleet call` at the same principal.
+An unchanged rebuild preserves artifact identities and the project lockfile.
+
 ## A fresh two-child fleet
 
 From the Canic checkout, choose an unused project name. This adds a second
@@ -102,7 +117,7 @@ instance of the generated greeting package with its own artifact output:
 
 ```sh
 canic app init siblings --fleet mainnet --network ic --source siblings
-canic app canister add worker --app siblings --parent root --role worker --wasm artifacts/worker.wasm --manifest Cargo.toml --package siblings-app
+canic app canister add worker --app siblings --parent root --role worker --wasm artifacts/worker.wasm --manifest Cargo.toml --package starter-app
 canic app build --app siblings
 canic fleet plan --app siblings --identity canic-mainnet
 ```
@@ -111,7 +126,8 @@ The manifest and Wasm paths are relative to the generated config. `--manifest`
 and `--package` attach the existing build recipe; both require a Wasm output.
 Planning retains an approval but has no network effects. Prepare the signer and
 fund its cycles-ledger account before applying the reviewed plan. The default
-two-child budget is 4T cycles, including 1T attached to each child creation:
+two-child budget is 5T cycles, including Store's separate 1T and 1T attached to
+each application creation from Root's allocation:
 
 ```sh
 canic fleet apply OPERATION --app siblings --identity canic-mainnet
@@ -148,7 +164,7 @@ for a deployed mainnet fleet.
 
 ## Deploy the generated application
 
-For a new generated fleet, build both declared artifacts first and prepare the
+For a new generated fleet, build all three declared artifacts first and prepare the
 qualified signer and manually funded cycles-ledger account. From the generated
 directory (`cd starter` from the Canic checkout), use your ICP identity name.
 Planning reads its public principal; it does not sign. These commands select the generated app and fleet:
@@ -159,9 +175,10 @@ canic fleet status OPERATION --app starter --fleet mainnet
 canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
 ```
 
-The preview binds both artifacts, the network, a default 3T Root debit, its 1T
-child attachment and a fixed dispatch/deadline. The child's parent is the typed
-output of Root creation. Apply creates/installs Root and admits the child without
+The preview binds all three artifacts, the network and a default 4T total debit:
+3T for Root (including its 1T application attachment) and 1T for Store. It fixes
+dispatch/deadline bounds. The child's parent is the typed output of Root creation.
+Apply creates Root/Store, hands Store to Root, publishes the application and admits it without
 asking for a second approval or editing the original plan. New plans dispatch once
 approved prerequisites are ready, within ten minutes of planning. Apply promptly;
 bootstrap and publication consume that same window. Explicit future `--execute-at`
@@ -285,9 +302,15 @@ rebuild and plan from its project directory:
 ```sh
 canic app build
 canic fleet plan --identity canic-mainnet
+canic fleet apply PUBLICATION_OPERATION --identity canic-mainnet
+canic fleet plan --identity canic-mainnet
 canic fleet status UPGRADE_OPERATION
 canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
 ```
+
+New Store-backed bytes first need publication; copy PUBLICATION_OPERATION from
+that plan, apply it, then plan again for the upgrade. Already published bytes and
+existing inline fleets skip that publication step.
 
 The planner resolves the existing child, previous module and exact Root module
 from retained completion; no principal or hash needs copying. Review the upgrade

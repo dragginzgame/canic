@@ -419,7 +419,7 @@ fn dispatch(created: u64, earliest: u64) -> String {
     if earliest == created {
         "when approved prerequisites are ready".into()
     } else {
-        deadline(earliest)
+        format!("{} (original admission cutoff)", utc(earliest))
     }
 }
 

@@ -60,6 +60,18 @@ fn files(
                         },
                     ),
                     (
+                        "store".into(),
+                        CanisterDefinition {
+                            role: Some("wasm-store".into()),
+                            parent: Some("root".into()),
+                            wasm: Some("artifacts/store.wasm".into()),
+                            build: Some(crate::BuildInput {
+                                manifest: source.join("Cargo.toml"),
+                                package: "canic-wasm-store".into(),
+                            }),
+                        },
+                    ),
+                    (
                         "app".into(),
                         CanisterDefinition {
                             role: Some("app".into()),
@@ -89,21 +101,22 @@ fn files(
         .get("workspace")
         .and_then(|value| value.get("package"))
         .ok_or_else(|| Error::Invalid("Canic source requires a workspace package policy".into()))?;
-    if package.get("version").and_then(toml::Value::as_str) != Some(env!("CARGO_PKG_VERSION"))
-        || manifest(&source.join("crates/canic/Cargo.toml"))?
-            .get("package")
-            .and_then(|v| v.get("name"))
-            .and_then(toml::Value::as_str)
-            != Some("canic")
-        || manifest(&source.join("crates/canic-root/Cargo.toml"))?
-            .get("package")
-            .and_then(|v| v.get("name"))
-            .and_then(toml::Value::as_str)
-            != Some("canic-root")
-    {
+    if package.get("version").and_then(toml::Value::as_str) != Some(env!("CARGO_PKG_VERSION")) {
         return Err(Error::Invalid(
             "select a Canic source checkout matching this CLI version".into(),
         ));
+    }
+    for name in ["canic", "canic-root", "canic-wasm-store"] {
+        if manifest(&source.join("crates").join(name).join("Cargo.toml"))?
+            .get("package")
+            .and_then(|v| v.get("name"))
+            .and_then(toml::Value::as_str)
+            != Some(name)
+        {
+            return Err(Error::Invalid(format!(
+                "Canic source is missing the {name} package"
+            )));
+        }
     }
     let workspace = &root["workspace"];
     let dependencies = workspace
@@ -176,7 +189,7 @@ fn files(
     ]))
 }
 
-/// Generate a new standalone greeting workspace and Root/app declarations.
+/// Generate a new standalone greeting workspace and Root/Store/app declarations.
 ///
 /// Source and config publish together under a new directory name. Existing
 /// directories, files and symlinks are refused. Canic source is resolved to its

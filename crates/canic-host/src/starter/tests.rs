@@ -9,7 +9,7 @@ fn source() -> PathBuf {
 }
 
 #[test]
-fn starter_config_resolves_supplied_root_and_generated_app_without_effects() {
+fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects() {
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
     let config = create_starter(
@@ -23,6 +23,19 @@ fn starter_config_resolves_supplied_root_and_generated_app_without_effects() {
     let loaded = crate::load_config(&config).unwrap();
     let selected = loaded.select(None, None).unwrap();
     assert_eq!(selected.app, "hello");
+    let store = &selected.config.canisters["store"];
+    assert_eq!(store.role.as_deref(), Some("wasm-store"));
+    assert_eq!(store.parent.as_deref(), Some("root"));
+    let recipe = loaded.apps["hello"].canisters["store"]
+        .build
+        .as_ref()
+        .unwrap();
+    assert_eq!(recipe.package, "canic-wasm-store");
+    assert_eq!(recipe.manifest, source().join("Cargo.toml"));
+    assert_eq!(
+        selected.wasm_path(&config, "store", None).unwrap(),
+        destination.join("artifacts/store.wasm")
+    );
     assert_eq!(
         selected.config.canisters["app"].parent.as_deref(),
         Some("root")
@@ -169,7 +182,7 @@ fn concurrent_initializers_publish_one_complete_project() {
         .collect();
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     let config = crate::load_config(&destination.join("canic.json")).unwrap();
-    assert_eq!(config.select(None, None).unwrap().config.canisters.len(), 2);
+    assert_eq!(config.select(None, None).unwrap().config.canisters.len(), 3);
     assert!(destination.join("app/src/endpoint.rs").is_file());
     assert!(destination.join("README.md").is_file());
     std::fs::remove_dir_all(parent).unwrap();

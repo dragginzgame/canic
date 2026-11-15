@@ -314,7 +314,7 @@ authenticated tooling installer.
   config or adds a new app and its first fleet, refusing existing app names and
   preserving other apps. Configured journals are not created by initialization.
   `--source DIRECTORY` instead creates a new standalone
-  source workspace with its own config, supplied Root and generated app declarations.
+  source workspace with its own config, supplied Root/Store and generated app declarations.
   The supplying checkout defaults to the CLI build source; `--canic-source` overrides it.
   It conflicts with `--config`, requires the destination's parent to exist, and
   refuses occupied destinations. Publish source/config together through the Host
@@ -323,7 +323,7 @@ authenticated tooling installer.
   supplier selections, toolchain and inherited lints. Do not select legacy Canic
   from crates.io or copy Root management code into generated apps. Tool
   preparation remains explicit. `app build` owns declared workspace/package recipes,
-  prepares only missing Cargo locks, and builds both canisters through the locked
+  prepares only missing Cargo locks, and builds all three canisters through the locked
   artifact builder. Preserve existing locks. `artifact build --output` publishes a replaceable
   build input; retained deployment artifacts still belong to the plan/journal owner.
   `canic fleet init` adds a fleet projecting the shared app definitions, with

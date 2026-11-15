@@ -21,7 +21,8 @@ executable validation remains with the IC installation boundary.
 
 ## Whole-fleet artifacts
 
-Declare a new Root, one `wasm-store` child and one or two application children,
+`canic app init starter --fleet mainnet --network ic --source starter` generates Root, one `wasm-store` child
+and one application. Custom fresh fleets can declare the same topology with one or two application children,
 with built Wasm inputs and no existing ID bindings. The usual whole-fleet plan
 selects Store delivery automatically. Release names are application canister names;
 versions are full content hashes, frozen with the ordered chunk commitments.
@@ -49,8 +50,8 @@ and Root receives the remainder, including child funding. Store consumes no
 application slot. Reconcile reports blocked until apply admits all children;
 recovering Store alone is not fleet completion. Cancellation is unavailable after
 effect preparation. Store addition/removal or replacement on a retained fleet
-requires a separately qualified adoption/maintenance contract. The generated
-starter still begins with Root and one app; declare Store explicitly.
+requires a separately qualified adoption/maintenance contract. Generation does
+not modify existing projects or migrate retained inline fleets.
 
 After creation completes, change and rebuild one child. For an unpublished
 artifact, planning returns publication authority first. Apply it, then replan

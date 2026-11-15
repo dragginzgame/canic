@@ -29,5 +29,5 @@ done
 cp -- "$(jq -r .wasm target/root/profile-worker-v2.json)" target/root/profile-worker-v2.wasm
 "$cli" artifact build --json --package canic-profile-manager --features maintenance-candidate > target/root/profile-maintenance.json
 cp -- "$(jq -r .wasm target/root/profile-maintenance.json)" target/root/profile-maintenance.wasm
-CANIC_CLI="$cli" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root -- --nocapture
+CANIC_CLI="$cli" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root -- --nocapture "$@"
 printf 'Generated starter retained at %s/project\n' "$scratch"

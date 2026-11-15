@@ -7,6 +7,130 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.212.0 release qualification: 2026-11-15
+
+The maintainer authorized GitHub delivery and subsequent development. All fourteen
+product packages select 0.212.0; qualification packages retain 0.0.0. Both locks
+change only Canic package versions. Suppliers, publication restrictions and
+existing deployment journals are unchanged.
+
+The full Linux `make -j1 ci` gate passed with all 280 captured inputs unchanged.
+It includes 101 Host tests, 60 CLI tests, 24 installed Store cases, three CLI
+publication journeys and five Blob cases, plus effect/custody, profile, growth,
+Root and endpoint qualification and native/Wasm lint/docs/format/tooling checks.
+Three optional historical-binary cases remain explicitly skipped. The publication
+journeys took 106.87s; generated bootstrap measured 8,108 ms and the rebuilt app
+upgrade 5,177 ms after publication. These are local samples, not mainnet claims.
+macOS and mainnet were not exercised; no crates.io publication is authorized.
+
+Gate log: `target/qualification/release-0212-0-ci.log`; input evidence:
+`target/evidence/0.212.0/release/`. This release-result entry is the only change
+after input comparison and does not alter executable or release metadata inputs.
+
+## Generated application rebuild loop: 2026-11-15
+
+Continued pending 0.212.0 by replacing the Store-upgrade witness's prebuilt Hello
+World replacement with a source edit and build of the actual generated app. It
+checks the original greeting, a warm all-recipe build with unchanged artifacts
+and Cargo.lock, publication of the edited app, and the changed greeting at the
+original principal after upgrade. The later app-only artifact build deliberately
+preserves the feature-selected infrastructure used for maintenance faults. The
+fixture reads its package from the declared recipe instead of inferring it from
+the logical app name; the two-child walkthrough now uses the correct `starter-app`
+package as well. Removed the unused replacement-artifact build from the runner.
+
+Reused the scaffold/Root ownership research cited in the preceding work and
+reviewed the actual Root/profile-manager readiness implementations. The supplied
+Root decodes a greeting probe; the profile manager decodes profile readiness.
+Neither is an arbitrary-application readiness contract. Recorded that boundary
+in the design and generated guidance: the next Store-backed stateful consumer
+must qualify explicit application readiness and preserve its selection for
+retained work. A greeting-compatible facade or install success cannot replace
+that proof. This increment adds no endpoint, runtime policy, dependency or
+alternative management workflow, and does not claim a persistent replica loop.
+
+The focused installed witness passed in 58.41s with synthetic cycles, including
+the retained Store/Root interruption cases. Bootstrap measured 8,193 ms and the
+generated app upgrade 5,233 ms after publication; these are local samples, not
+mainnet estimates. Qualification Clippy, formatting, shell syntax and diff checks
+passed. `make canic` installed the updated generated guidance. Evidence is in
+`target/qualification/starter-rebuild-{installed,clippy,format,install}.log`.
+No push, mainnet effects, browser launch or supplier changes occurred.
+
+## Generated Root/Store/app starter: 2026-11-15
+
+Pending 0.212.0 now generates the already selected topology: supplied Root and
+Wasm Store, plus the generated greeting app. Source initialization remains local
+and refuses occupied destinations; config-only initialization is unchanged.
+Existing projects, bindings and journals are not migrated. The default reviewed
+creation debit is 4T (3T Root including 1T app funding, plus 1T Store). New app bytes
+use the existing publication approval followed by a separate upgrade approval.
+The pending version is a minor increment because generation and budget defaults
+change; package manifests remain at released 0.211.1 until delivery.
+
+Reused the recorded legacy scaffold, Root bootstrap and versioned Store research
+at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: refuse destination replacement,
+retain effect results before dependent work, and gate admission on artifact
+readiness. The existing convergence owner already implements those boundaries;
+this change selects it through declarations rather than adding an installer,
+workflow engine, feature switch or copied Root/Store implementation. Store stays
+outside the generated application's runtime dependency graph. Supplying-package
+validation now shares one loop instead of repeating manifest checks.
+
+Focused validation passed:
+
+- Five Host starter tests and 15 CLI configuration tests, including no-effect
+  generation, shared definitions and refusal before publication.
+- The installed publication runner now initializes and builds the actual default
+  starter. Normal Root/Store/app creation completed in 8,148 ms locally; the later
+  child upgrade took 4,973 ms with publication already retained. The same witness
+  passes Store interruption/recovery and subsequent Root/child maintenance checks.
+  Fault code is selected only through reviewed maintenance after normal bootstrap.
+- Seven affected inline CLI/predecessor cases pass with explicit inline fixture
+  declarations, including two children, reply loss, untracked-work refusal and
+  private profile preservation. Test filters reach the Root harness; unrelated
+  runtime cases were not repeated.
+- Host/CLI and affected qualification Clippy, Host Rustdoc, generated app lint,
+  Rust/manifest formatting and diff checks pass. `make canic` installed the local
+  development binary; plain `canic app init`, app/fleet canister listings display
+  three unbound canisters and create no journal.
+
+Logs are `target/qualification/starter-store-{native,cli,installed,inline,clippy,doc,format,install}.log`.
+The application remains stateless; existing-fleet Store adoption, general trees,
+mainnet Store maintenance and unlimited history are not qualified. No supplier,
+dependency, permission, scheduler or authority contract changed. No push,
+crates.io publication, mainnet effect or browser launch occurred in this increment.
+
+## 0.211.1 post-push review and next increment: 2026-11-15
+
+Verified GitHub main and peeled `v0.211.1` at
+`05ab75a2fb5cf8276236802cea0a621089357f95`, with annotated tag object
+`7c7d1af437544ad426e56ada440b600983b39920`. Local main and origin/main match.
+Compared the pushed tree against the release input hashes: only this history
+file differs, by the recorded release-result entry added after validation.
+Reviewed the actual pushed plan/admission and runtime changes, their native and
+installed witnesses, Store guidance and direct rendering callers. No competing
+effect owner, renewed deadline, second recovery workflow or unnecessary dependency
+was found in that scope. Older-Root timing support and mainnet qualification remain
+explicit limits, not inferred compatibility.
+
+One presentation issue remained: scheduled dispatch reused the generic deadline
+renderer and displayed `expired`, even though it is the original admission cutoff
+and not proof of operation failure. The local display cleanup, now included in
+pending 0.212.0, uses the existing
+UTC formatter to label that timestamp explicitly; effect expiry and ready-to-dispatch
+wording stay distinct. This adds no policy or runtime mechanism. Reused the existing
+retained-evidence/legacy progress research recorded above; the invariant remains
+that timing and request counts do not claim success or failure.
+
+Seventeen focused status/progress tests, CLI Clippy, formatting and diff checks
+passed. `make canic` installed the development display. The real retained scheduled
+fleet from `target/publication/store-upgrade-1655996/journal` changes exactly one
+human-output line; before/after JSON is byte-identical. Evidence:
+`target/qualification/0211-2-*`. This next increment is local and unpushed; package
+versions remain at released 0.211.1 until the next release. No mainnet operation
+or browser launch occurred, and crates.io publication remains disabled.
+
 ## 0.211.1 release qualification: 2026-11-15
 
 The maintainer authorized GitHub delivery and subsequent development. All fourteen

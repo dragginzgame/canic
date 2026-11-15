@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.212.0] - 2026-11-15
+
+### 🔧 Changed
+
+New source starters declare Root, a separate versioned Wasm Store and one greeting
+application. Root/Store use the supplying Canic workspace; the app stays independent
+of Store implementation dependencies. Existing projects and journals are unchanged.
+From the Canic checkout, choose an unused directory; initialization and build are local:
+
+```sh
+canic app init starter --fleet mainnet --network ic --source starter
+canic app build --app starter
+canic fleet plan --app starter --identity canic-mainnet
+```
+
+Planning requires a prepared identity and retains an approval without network
+effects. Review the default **4T** creation budget (3T Root including app funding,
+1T Store) before applying. Store-backed changes publish new bytes before planning
+the child upgrade; the generated README includes both steps. Existing inline
+fleets keep their original path. No browser opens automatically.
+
+The installed starter witness now edits and rebuilds the generated application
+itself, publishes its new version and verifies the changed greeting at the same
+principal. An unchanged rebuild leaves artifacts and Cargo.lock unchanged and
+requires no new deployment approval. After completing an upgrade, read its greeting:
+
+```sh
+canic fleet call UPGRADE_OPERATION --app starter --name team
+```
+
+Scheduled child status labels the original admission cutoff separately from the
+effect deadline. A past dispatch timestamp no longer uses the generic `expired`
+label, which could be mistaken for deployment failure. Authority and JSON are
+unchanged. Inspect an existing operation without network effects:
+
+```sh
+canic fleet status OPERATION --app starter --fleet local
+canic fleet status OPERATION --app starter --fleet local --json
+```
+
 ## [0.211.1] - 2026-11-15
 
 ### 🔧 Changed

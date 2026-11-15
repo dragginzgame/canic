@@ -481,7 +481,10 @@ fn fleet_budget_and_utc_labels_preserve_exact_boundaries() {
         super::dispatch(100, 100),
         "when approved prerequisites are ready"
     );
-    assert!(!super::dispatch(100, 200).contains("when approved"));
+    assert_eq!(
+        super::dispatch(100, 200),
+        "1970-01-01 00:00:00 UTC (original admission cutoff)"
+    );
     assert_eq!(super::cycles(0), "0 cycles");
     assert_eq!(
         super::cycles(3_000_000_000_000),

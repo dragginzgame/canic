@@ -14,7 +14,7 @@ for entry in root:canic-root store:canic-wasm-store app:canic-hello; do
 done
 "$cli" artifact build --package canic-root --features maintenance-candidate --json > target/publication/root-maintenance.json
 cp -- "$(jq -r .wasm target/publication/root-maintenance.json)" target/publication/root-maintenance.wasm
-for entry in root-faults:canic-root:fault-injection store-candidate:canic-wasm-store:maintenance-candidate app-v2:canic-hello:greeting-v2; do
+for entry in root-faults:canic-root:fault-injection store-candidate:canic-wasm-store:maintenance-candidate; do
     name=${entry%%:*}
     rest=${entry#*:}
     "$cli" artifact build --package "${rest%%:*}" --features "${rest#*:}" --json > "target/publication/$name.json"

@@ -66,9 +66,9 @@ or require replacing the existing mainnet demos before their successor qualifies
   that definition in several fleets with distinct networks, identities and budgets.
 - Generate a small buildable Rust application with one application canister
   controlled by one Root/management owner. Support a persistent local development
-  loop and the same reviewed deployment semantics on mainnet. The selected next
-  topology adds a per-fleet Wasm Store controlled by Root. A Coordinator remains
-  conditional; the currently shipped starter has no Store yet.
+  loop and the same reviewed deployment semantics on mainnet. New generated
+  starters include a per-fleet Wasm Store controlled by Root. A Coordinator remains
+  conditional; existing inline fleets retain their original custody contract.
 - Build, review and converge the complete selected fleet through one plan/apply
   path. Repeating a completed convergence has no mutation effects. Individual
   canister changes use the same owners and evidence.
@@ -244,12 +244,19 @@ Use direct functions and domain modules first. A module may contain its transiti
 
 ### Infrastructure roles
 
-The selected next managed starter has one Root/management owner controlling a Wasm Store and one application canister. The Store is an infrastructure role, separate from application allocation cardinality. Retain an explicit external controller for Root's maintenance and recovery; show that principal as controller metadata outside the canister tree. Qualify the exact graph before deployment. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
+The generated managed starter has one Root/management owner controlling a Wasm Store and one application canister. The Store is an infrastructure role, separate from application allocation cardinality. Retain an explicit external controller for Root's maintenance and recovery; show that principal as controller metadata outside the canister tree. Qualify the exact graph before deployment. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
 
 The experimental `canic-root` now qualifies one or two direct greeting children locally,
 using the same bounded management engine as the profile manager. Its controller
 is the external operator; its created application's sole controller is Root.
 Lifecycle mounting and application readiness remain explicit in each canister.
+The supplied Root currently admits the greeting `probe` contract; the profile
+manager separately admits profile readiness. This is not a general application
+readiness interface. A Store-backed stateful consumer must first qualify an
+explicit application-owned readiness contract with its selected management owner,
+including preservation of that contract for retained work. Do not substitute a
+successful install, accept an undecoded reply or impersonate the greeting protocol
+to bypass this boundary.
 The CLI now generates a standalone greeting workspace whose artifact passes that
 same installed qualification. Managed-child CLI plan/apply now pins Root code,
 retains exact admission attempts and recovers completion through replicated
@@ -323,8 +330,10 @@ bindings at `apps.APP.fleets.FLEET.canisters.SLOT`. Every fleet resolves the sha
 definitions; its bindings cannot override topology or artifacts. Network and
 journal path remain fleet-owned. Wasm paths resolve beside the config; exact
 bytes are retained only when planning. The generated starter now has a bounded
-whole-fleet planner for one new Root and one new application. General spawn policy,
-larger fleet funding policy, adoption and upgrade convergence remain unimplemented.
+whole-fleet planner for Root, Store and one or two applications; generation selects
+one application. Store-backed upgrades publish new bytes before a separate
+installation approval. General spawn policy, larger fleet funding policy and
+adoption of existing fleets remain unimplemented.
 The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config.
 An existing shared journal may remain in place, but observations and operation
 selection must distinguish its fleets by exact retained names or known target
@@ -373,7 +382,7 @@ deployment; a selector may be omitted only when its choice is unique. See the
 | Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
 | Define reusable canisters | `canic app canister add SLOT --app APP [--role ROLE] [--parent SLOT] [--wasm PATH]`, `canic app canister list --app APP`; app-owned topology and artifact inputs, shared by all fleets |
 | Bind and list deployment identities | `canic fleet canister bind SLOT --app APP --fleet FLEET --id PRINCIPAL`, `canic fleet canister list --app APP --fleet FLEET`; observation declarations only, never controller or deployment approval; unknown definitions, occupied bindings and conflicting membership refuse |
-| Review and execute a starter fleet or one deployment | `canic fleet plan --controller PRINCIPAL` selects Root-plus-app creation or its next child upgrade; `--canister SLOT` selects one deployment; `canic fleet apply DIGEST` resumes that exact approval |
+| Review and execute a starter fleet or one deployment | `canic fleet plan --controller PRINCIPAL` selects fleet creation, publication or the next installation approval; `--canister SLOT` selects one deployment; `canic fleet apply DIGEST` resumes that exact approval |
 | Investigate or continue the original operation | `canic fleet status DIGEST`, `canic fleet apply DIGEST` |
 | Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |
 | Exercise the greeting or inspect the wallet | `canic fleet call DIGEST`, `canic wallet PRINCIPAL` |
@@ -430,7 +439,7 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Installed CLI witnesses qualify named Store bootstrap under an existing bound Root, whole-fleet bootstrap before application admission, and one Root-owned Store replacement followed by Root and child upgrades. This is local qualification, not mainnet maintenance evidence. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
+The generated starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Installed CLI witnesses qualify named Store bootstrap under an existing bound Root, whole-fleet bootstrap before application admission, and one Root-owned Store replacement followed by Root and child upgrades. This is local qualification, not mainnet maintenance evidence. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |

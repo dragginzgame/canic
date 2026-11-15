@@ -89,6 +89,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     )
     .unwrap();
     let config = workspace.join("canic.json");
+    inline_fixture(&config, "transition");
     let dispatch = || {
         (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

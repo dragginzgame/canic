@@ -92,6 +92,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         String::from_utf8_lossy(&output.stderr)
     );
     let config = workspace.join("canic.json");
+    inline_fixture(&config, "starter");
     cli(
         &config,
         &[

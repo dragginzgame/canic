@@ -21,6 +21,21 @@ fn repo() -> PathBuf {
         .to_path_buf()
 }
 
+// Keep the retained inline-custody witnesses explicit. The publication runner
+// qualifies the generated default Root/Store/app topology through the CLI.
+fn inline_fixture(config: &std::path::Path, app: &str) {
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(config).unwrap()).unwrap();
+    assert!(
+        value["apps"][app]["canisters"]
+            .as_object_mut()
+            .unwrap()
+            .remove("store")
+            .is_some()
+    );
+    std::fs::write(config, serde_json::to_vec(&value).unwrap()).unwrap();
+}
+
 async fn status(pic: &PocketIc, root: CanisterId) -> Status {
     let reply = pic
         .query_call(
@@ -374,6 +389,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         "{}",
         String::from_utf8_lossy(&generated.stderr)
     );
+    inline_fixture(&config, "starter");
     std::fs::create_dir(workspace.join("artifacts")).unwrap();
     std::fs::copy(
         artifacts.join("app.wasm"),
@@ -1043,6 +1059,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         String::from_utf8_lossy(&initialized.stderr)
     );
     let config = workspace.join("canic.json");
+    inline_fixture(&config, "starter");
     cli(&config, &["app", "build"]);
     let lock = std::fs::read(workspace.join("Cargo.lock")).unwrap();
     cli(&config, &["app", "build"]);

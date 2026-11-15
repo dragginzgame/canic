@@ -5,10 +5,10 @@ Canic's first native CLI and deployable greeting application. The CLI lives in
 Wire contract in `crates/canic`, and the demo in `apps/hello/canister`.
 
 The [Root journey](docs/demos/root.md) generates a greeting workspace
-and deploys Root and one or two direct children through one fleet plan/apply approval.
-The installed local journey qualifies admission, lost-reply recovery and completion
-receipts. Run `make root-test`
-after simulator preparation. The bounded fleet path plans successive child upgrades
+and deploys Root, Wasm Store and one application through one fleet plan/apply approval.
+The installed local journeys qualify admission, lost-reply recovery and completion
+receipts; the Root guide lists the generated Store-backed witness and retained
+inline-fleet tests. The bounded fleet path plans successive child upgrades
 from retained completion, changing one artifact per approval. Identical artifacts
 produce no new approval; unfinished work retains its original authority. Larger
 trees and adopting existing deployments remain upcoming; existing
@@ -69,7 +69,7 @@ Delivery starts with a hands-on Hello World deployment locally and on mainnet,
 followed by stateful composition and bounded autonomous operation. Each increment
 will include a runnable example and team-facing instructions so feedback can
 shape the next step. Early mainnet experiments do not imply production lifecycle
-support. A starter fleet approval composes Root and up to two applications under one
+support. A starter fleet approval composes Root, Store and up to two applications under one
 operator; individual canister plans remain available for existing workflows.
 The CLI can inspect multiple retained deployments without a Coordinator or Store.
 
@@ -277,7 +277,7 @@ later config or source-file edits never change an approved operation.
 
 Generated starters also have a `build` recipe beside `wasm` on each app canister:
 `"build": {"manifest": "Cargo.toml", "package": "starter-app"}`. The manifest
-names a Cargo workspace and resolves beside the config; the supplied Root recipe
+names a Cargo workspace and resolves beside the config; each supplied Root/Store recipe
 points to its Canic workspace. `canic app build --app starter` builds all declared
 recipes and writes their Wasm outputs. Older/custom definitions need explicit
 recipes before using app build; Canic does not guess packages from roles.

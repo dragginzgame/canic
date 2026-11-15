@@ -89,7 +89,10 @@ and `make store-test`. This qualifies explicit Host approvals, not automatic
 whole-fleet planning of Store maintenance or mainnet use.
 The automatic local path is owned by the installed CLI publication runner:
 `bash scripts/dev/test-publication.sh fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`.
-It creates an isolated signer, bootstraps Root/Store/app, selects a changed Store
+It creates an isolated signer, generates the default starter through `app init
+--source`, builds all three recipes and bootstraps the normal Root/Store/app with
+the default 4T budget. It installs a qualification-only fault Root through reviewed
+maintenance, selects a changed Store
 artifact, refuses reconcile before admission, pauses before install and activation,
 and recovers upload callback fault 15 without new installation authority. It compares
 Store stable bytes, rejects missing/substituted completion custody, preserves the
@@ -101,6 +104,14 @@ and is not mainnet qualification. No new runtime workflow or dependency is added
 Public Root diagnostics are checked against the private retained observation across
 the same installed phases, including a stopped Store and Root replacement. Malformed
 queries do not alter state and the replicated custody endpoint remains controller-only.
+
+The same witness calls the generated greeting before and after editing its actual
+source and rebuilding through the public artifact builder. The changed executable
+keeps the original application principal. An unchanged `app build` preserves all
+three artifact identities and Cargo.lock and produces no new deployment approval.
+The later targeted app build preserves the feature-selected infrastructure used
+for maintenance fault qualification. No alternate greeting artifact stands in
+for the generated application upgrade.
 Actual Root calls acquire pins, install a child larger than the former inline
 limit, and upgrade it using the Store cache. Lost pin/cache callbacks recover
 through observation after Root maintenance. Missing cache, unpublished releases,
@@ -333,6 +344,16 @@ The aggregate `make ci` includes the artifact experiment separately from
 `make effect-test`.
 
 ## Checks and evidence
+
+The Root runner accepts test-name filters after artifact preparation. For the
+generated starter's existing inline callers and predecessor transitions:
+
+```sh
+bash scripts/dev/test-root.sh whole_fleet managed_child_cli multi_child_cli retained_predecessor
+```
+
+These fixtures explicitly select inline custody. The publication runner above
+owns the generated Root/Store/app default; neither fixture migrates retained fleets.
 
 `make profile-test` runs the [Canic-owned profile demo](../docs/demos/profile.md)
 through the existing deployment CLI, with private ownership, bounded capacity,
