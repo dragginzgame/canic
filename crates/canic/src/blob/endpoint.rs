@@ -10,7 +10,7 @@ use serde::{Serialize, de::DeserializeOwned};
 /// Refuses oversize or invalid method/direction framing.
 pub fn admit<const ID: u64>() -> Result<(), String> {
     let size = ic0::msg_arg_data_size();
-    if size > RPC_LIMITS.bytes || size < 11 {
+    if !(11..=RPC_LIMITS.bytes).contains(&size) {
         return Err("Blob request size".into());
     }
     let mut header = [0; 11];
@@ -24,6 +24,7 @@ pub fn admit<const ID: u64>() -> Result<(), String> {
     clippy::needless_pass_by_value,
     reason = "Platform transfers its argument buffer"
 )]
+#[must_use]
 pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: Vec<u8>) -> T {
     ic_wire::decode(
         &bytes,

@@ -11,6 +11,7 @@ ignored = ["toko-tooling"]
 
 [features]
 blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
+metrics = ["dep:ic-platform-runtime"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ic-platform-runtime = { workspace = true, optional = true, features = ["cdk"] }
@@ -21,6 +22,7 @@ ic-wire.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 toko-tooling.workspace = true
 
 [lints]

@@ -11,6 +11,7 @@ use std::{path::PathBuf, time::Duration};
 
 mod children;
 mod fleet_children;
+mod metrics;
 mod predecessor;
 mod profile_store;
 

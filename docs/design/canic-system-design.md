@@ -1194,6 +1194,18 @@ Physical deletion is separate, explicit and irreversible. It requires a disposit
 
 Keep Observatory, rendering, comparisons and aggregation on the host. Canisters expose bounded facts, counters, operation summaries and paged inventory. Separate public metrics from protected authority, topology, logs and treasury details. Certificate or authenticated-update requirements depend on whether a result is merely displayed or used to authorize an effect.
 
+Reusable suppliers keep instrumentation feature-gated. Root and the profile
+manager enable the selected timer metrics in their normal builds; applications
+select instrumentation and endpoint mounting explicitly. Canic owns the shared
+metrics adapter and passive transport types, without owning another recorder.
+The initial public report exposes only fixed aggregate timer counters, preserves
+supplier overflow quality and names the volatile initialization window. Host
+observes it once per selected management owner, after operational observations
+and within the existing snapshot budget. Missing reports remain unknown. Metrics
+do not establish readiness, authorize recovery or replace durable effect evidence.
+Historical metrics, persistence and additional provider families need their own
+admitted consumer; mounting an endpoint starts no sampler or lifecycle work.
+
 Every status states observation age/generation and completeness. An unreachable subnet is unknown, not empty or healthy. Dynamic inventory must include autonomous children. A terminal initial deployment plan is not a perpetual inventory source. Correlate plans, local operations, remote effects and readiness with durable operation IDs.
 
 ### Demo fleet visualization from the first multi-canister increment

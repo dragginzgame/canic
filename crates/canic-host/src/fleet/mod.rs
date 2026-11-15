@@ -3,7 +3,9 @@ use canic_management_protocol::children::{self, Slot};
 use serde::Serialize;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
+mod metrics;
 mod stores;
+pub use metrics::FleetMetrics;
 #[cfg(test)]
 mod tests;
 pub use stores::FleetStoreMaintenance;
@@ -29,6 +31,8 @@ pub struct Fleet {
     pub issues: Vec<String>,
     /// Planned Roots and explicitly selected managers, each an uncertified query.
     pub managers: Vec<FleetManager>,
+    /// Aggregate public metrics, once per selected owner; never operation evidence.
+    pub metrics: Vec<FleetMetrics>,
     /// Uncertified Store maintenance reports from owners named by retained Store deployment plans.
     pub stores: Vec<FleetStoreMaintenance>,
     /// Optional, explicitly selected mainnet default wallet; separate from canister balances.
@@ -677,6 +681,7 @@ pub async fn fleet_with_config(
         }
     }
     let selected = select_managers(&operations, &targets, &selected)?;
+    let metric_targets = selected.clone();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     let mut managers = Vec::new();
     for ((network_id, manager), network) in selected {
@@ -811,6 +816,7 @@ pub async fn fleet_with_config(
             observation_error,
         });
     }
+    let metrics = metrics::collect(&metric_targets, deadline).await;
     Ok(Fleet {
         configuration: configuration.cloned(),
         started_at_ns,
@@ -820,6 +826,7 @@ pub async fn fleet_with_config(
         operations,
         issues,
         managers,
+        metrics,
         stores,
         wallet: None,
     })

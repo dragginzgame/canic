@@ -20,12 +20,11 @@ use ic_storage::{
     AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
     MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig, adapter::StableCell,
 };
-use ic_timers::{
-    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
-};
+use ic_timers::{Lifetime, Observation, Once, OnceDemand, OnceNext, OnceResult, OnceStatus};
 use std::cell::RefCell;
 use storage::{ARTIFACT_BYTES, Artifact, Artifacts, JOURNAL_BYTES, Journals};
 mod delivery;
+pub(super) mod metrics;
 mod storage;
 pub(crate) mod store_maintenance;
 pub(crate) mod stored_api;
@@ -96,11 +95,12 @@ struct State {
     journal: StableCell<Journals>,
     artifact: StableCell<Artifacts>,
     readiness: Readiness,
+    timer_window: (u64, u64),
     _runtime: MemoryRuntime<DefaultMemoryImpl>,
 }
 thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
-    static TIMER: RefCell<[Option<OnceRegistration>; 2]> = const { RefCell::new([None, None]) };
+    static TIMER: RefCell<[Option<Once>; 2]> = const { RefCell::new([None, None]) };
     static OBSERVING: std::cell::Cell<[bool; 2]> = const { std::cell::Cell::new([false; 2]) };
     #[cfg(feature = "fault-injection")]
     static FAULT: std::cell::Cell<[u8; 2]> = const { std::cell::Cell::new([0; 2]) };
@@ -167,6 +167,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
         journal,
         artifact,
         readiness,
+        timer_window: (api::canister_version(), api::time()),
         _runtime: runtime,
     };
     for slot in [Slot::First, Slot::Second] {
@@ -185,7 +186,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
     state.journal.set(state.journal.get().clone());
     state.artifact.set(state.artifact.get().clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
-    ic_timers::initialize_runtime().expect("one timer runtime");
+    ic_timers::initialize().expect("one timer runtime");
     for slot in [Slot::First, Slot::Second] {
         schedule(slot);
     }
@@ -284,38 +285,68 @@ fn next(s: &Status) -> Option<u64> {
 fn schedule(slot: Slot) {
     let desired = next(&snapshot(slot))
         .or_else(|| upgrade::next(slot))
-        .map(TimerSchedule::At);
+        .map_or(OnceDemand::Inactive, OnceDemand::At);
     TIMER.with_borrow_mut(|timers| {
-        ic_timers::reconcile_once(
-            &mut timers[slot.index()],
-            &TimerIdentity::try_new(
-                "profile",
-                "manager",
-                match slot {
-                    Slot::First => "one-worker",
-                    Slot::Second => "second-worker",
+        let timer = timers[slot.index()].get_or_insert_with(|| {
+            ic_timers::bind_once(
+                [
+                    "profile",
+                    "manager",
+                    match slot {
+                        Slot::First => "one-worker",
+                        Slot::Second => "second-worker",
+                    },
+                ],
+                // Child slots keep their identities across creation and all upgrades.
+                Lifetime::Retained,
+                move || async move {
+                    let Some(observation) = observing(slot) else {
+                        return OnceResult {
+                            observation: Observation::NoWork,
+                            next: OnceNext::Stop,
+                        };
+                    };
+                    if snapshot(slot).phase == Phase::Ready {
+                        upgrade::step(slot).await;
+                    } else {
+                        step(slot).await;
+                    }
+                    drop(observation);
+                    let decision = next(&snapshot(slot))
+                        .or_else(|| upgrade::next(slot))
+                        .map_or(OnceNext::Stop, OnceNext::At);
+                    OnceResult {
+                        observation: if snapshot(slot).failure.is_some()
+                            || upgrade::status(slot).failure.is_some()
+                        {
+                            Observation::ExpectedFailure
+                        } else {
+                            Observation::Success
+                        },
+                        next: decision,
+                    }
                 },
             )
-            .expect("constant timer"),
-            desired,
-            move |_| async move {
-                let Some(observation) = observing(slot) else {
-                    return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
-                };
-                if snapshot(slot).phase == Phase::Ready {
-                    upgrade::step(slot).await;
-                } else {
-                    step(slot).await;
-                }
-                drop(observation);
-                let decision = next(&snapshot(slot))
-                    .or_else(|| upgrade::next(slot))
-                    .map_or(OnceDecision::Stop, OnceDecision::ScheduleAt);
-                OnceRunResult::new(TimerCompletion::success(1), decision)
-            },
-        )
-        .expect("schedule retained demand")
+            .expect("bind retained child timer")
+        });
+        timer.set(desired).expect("schedule retained demand");
     });
+}
+
+// Only authenticated domain reconciliation may clear an abandoned timer's
+// barrier. Stop it first, then derive eligibility from the retained journal;
+// these local commands commit together and never reset effect intent.
+fn resume_after_reconciliation(slot: Slot) {
+    TIMER.with_borrow(|timers| {
+        if let Some(timer) = &timers[slot.index()]
+            && let OnceStatus::RecoveryRequired(token) = timer.status().expect("timer status")
+        {
+            timer
+                .recover(token, OnceDemand::Inactive)
+                .expect("reconciled timer recovery");
+        }
+    });
+    schedule(slot);
 }
 /// Read committed evidence without resuming work.
 /// # Panics
@@ -648,7 +679,7 @@ async fn reconcile_bound(slot: Slot, expected: Approval) -> Status {
         mutate(slot, |s| s.failure = Some(error));
     }
     drop(guard);
-    schedule(slot);
+    resume_after_reconciliation(slot);
     status(slot)
 }
 

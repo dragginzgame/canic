@@ -429,6 +429,11 @@ async fn autonomous_growth_and_commit_boundaries() {
         invalid.approval.expires_at_ns += 1;
         assert_eq!(stage(pic, manager, &invalid).await, Err(Refusal::Occupied));
         if fault >= 4 {
+            // An abandoned timer stays blocked even after another scheduling
+            // opportunity; only the domain reconciliation below may resume it.
+            pic.advance_time(Duration::from_secs(3)).await;
+            settle(pic).await;
+            assert_eq!(status(pic, manager).await, blocked);
             // Callback cleanup must release heap exclusion without replacing
             // the owner. Preserve the issued upload/install evidence throughout.
             reconcile(pic, manager).await;

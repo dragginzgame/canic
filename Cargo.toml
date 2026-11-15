@@ -17,7 +17,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.216.2"
+version = "0.216.3"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
@@ -37,7 +37,7 @@ ic-host-text = { version = "0.76.0", default-features = false }
 ic-platform = { version = "0.33.0", default-features = false }
 ic-platform-runtime = { version = "0.22.1", default-features = false }
 ic-storage = "0.74.0"
-ic-timers = "0.44.1"
+ic-timers = "0.45.10"
 ic-topology = { git = "https://github.com/dragginzgame/ic-query", rev = "0a3eca919f05d777798406087049cc51ab7ae2a8", version = "0.106.1" }
 ic-wasm-store = "0.2.1"
 ic-wasm-store-protocol = "0.2.1"

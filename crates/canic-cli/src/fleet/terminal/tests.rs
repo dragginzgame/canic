@@ -12,9 +12,43 @@ fn empty() -> Fleet {
         operations: vec![],
         issues: vec![],
         managers: vec![],
+        metrics: vec![],
         stores: vec![],
         wallet: None,
     }
+}
+
+#[test]
+fn metrics_details_keep_unknown_and_clipped_counts_separate_from_outcomes() {
+    let mut snapshot = empty();
+    let counter = serde_json::json!({"total":u128::MAX.to_string(), "overflowed":true});
+    snapshot.metrics.push(canic_host::FleetMetrics {
+        network_id: "network".into(),
+        canister: "root\u{1b}[31m".into(),
+        reported: Some(serde_json::from_value(serde_json::json!({
+            "observed_at_ns":100,
+            "timers":{
+                "started_at_version":7, "started_at_ns":50,
+                "accepted":counter, "completed":counter, "abandoned":counter,
+                "expected_failures":counter, "deferred_submissions":counter, "provider_faults":counter,
+            }
+        })).unwrap()),
+        observation_error: None,
+    });
+    snapshot.metrics.push(canic_host::FleetMetrics {
+        network_id: "network".into(),
+        canister: "old-root".into(),
+        reported: None,
+        observation_error: Some("metrics method unavailable".into()),
+    });
+    let detail = render(&snapshot, &[], true, false);
+    assert!(detail.contains("Timer metrics (uncertified)"));
+    assert!(detail.contains(&u128::MAX.to_string()));
+    assert!(detail.contains("clipped"));
+    assert!(detail.contains("UNKNOWN: metrics method unavailable"));
+    assert!(detail.contains("counters do not prove operation outcomes"));
+    assert!(!detail.contains('\u{1b}'));
+    assert!(!render(&snapshot, &[], false, false).contains("Timer metrics"));
 }
 
 #[test]

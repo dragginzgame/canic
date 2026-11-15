@@ -325,6 +325,22 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     assert_eq!(interrupted.attempts[1], 1);
     assert!(interrupted.requests[1].is_some());
     assert!(interrupted.observed_version.is_none());
+    pic.stop_progress().await;
+    pic.advance_time(Duration::from_secs(3)).await;
+    for _ in 0..20 {
+        pic.tick().await;
+    }
+    assert_eq!(upgrade_status(pic, root).await, interrupted);
+    assert!(
+        super::metrics::read(pic, root)
+            .await
+            .timers
+            .unwrap()
+            .abandoned
+            .total
+            > 0
+    );
+    pic.auto_progress().await;
     assert!(
         pic.get_stable_memory(child).await == application_state,
         "interrupted callback changed application storage"
@@ -529,6 +545,18 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     assert_eq!(view["managers"][0]["reported"]["phase"], "Ready");
     assert_eq!(view["managers"][0]["upgrade"]["reported"]["phase"], "Ready");
     assert_eq!(view["stores"][0]["reported"]["phase"], "Ready");
+    assert_eq!(view["metrics"].as_array().unwrap().len(), 1);
+    assert_eq!(view["metrics"][0]["canister"], root.to_text());
+    let timer_report = &view["metrics"][0]["reported"]["timers"];
+    assert!(
+        timer_report["accepted"]["total"]
+            .as_str()
+            .unwrap()
+            .parse::<u128>()
+            .unwrap()
+            > 0
+    );
+    assert_eq!(timer_report["accepted"]["overflowed"], false);
 
     // A valid, installed greeting is not profile readiness. Keep the same
     // management owner and prove the incompatible application remains blocked.
@@ -586,5 +614,14 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     let journal = PathBuf::from(refused["state_dir"].as_str().unwrap()).join(id);
     assert!(!journal.join("child/receipt.json").exists());
     assert_eq!(status(pic, refused_root).await.attempts, [1, 1, 1]);
+    assert!(
+        super::metrics::read(pic, refused_root)
+            .await
+            .timers
+            .unwrap()
+            .expected_failures
+            .total
+            > 0
+    );
     replica.instance_mut().stop_live().await;
 }

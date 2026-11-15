@@ -40,6 +40,7 @@ pub fn build_app(
         return Err(Error::Invalid(format!("app has no canister named {name}")));
     }
     let base = path.parent().unwrap_or(Path::new("."));
+    let working_directory = std::env::current_dir().map_err(supplier)?;
     let mut recipes = Vec::new();
     let mut outputs = std::collections::BTreeSet::new();
     for (name, canister) in &app.canisters {
@@ -62,7 +63,12 @@ pub fn build_app(
                 .as_ref()
                 .ok_or_else(|| Error::Invalid("build recipe needs a Wasm output".into()))?,
         );
-        if !outputs.insert(output.clone()) {
+        // Compare physical destinations, including missing outputs. Keep the
+        // original path for the artifact writer's independent safety checks.
+        let destination =
+            ic_host_fs::path::canonicalize_allow_missing(&output, &working_directory, 40)
+                .map_err(supplier)?;
+        if !outputs.insert(destination) {
             return Err(Error::Invalid("app build outputs must be distinct".into()));
         }
         recipes.push((name, recipe, manifest, output));

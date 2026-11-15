@@ -395,8 +395,23 @@ loses a worker-install callback after remote commit, and recovers through the re
 CLI's `fleet reconcile`. It checks original approval/signed-admission custody,
 effect fingerprints, one installation/version increment and unchanged private
 state before proceeding through normal Store/owner maintenance.
+The interrupted upgrade remains unchanged across further timer opportunities
+before reconciliation. IC Timers owns callback recovery tokens; Canic clears the
+current token only through authenticated domain reconciliation after inspecting
+durable operation evidence, then derives demand from that evidence.
 The profile and publication witnesses share isolated signer preparation; generated
 credentials stay in their fixture directories and never use the operator wallet.
+
+`bash scripts/dev/test-root.sh metrics:: profile_store` qualifies public timer
+metrics on installed Root and profile manager executables. Anonymous/non-controller
+queries and malformed requests preserve counters and durable state. Root upgrades
+reset the volatile counters with a new initialization window while preserving
+operation evidence. The profile witness observes an abandoned callback and an
+expected readiness failure, and consumes the aggregate report through the real
+CLI fleet JSON. This proves local aggregate diagnostics, not historical metrics,
+fleet-wide rates, persistence or mainnet deployment. Passive codec tests preserve
+maximum counter totals/overflow quality; CLI tests retain unknown/clipped states
+and keep metrics out of the compact terminal view.
 
 `make profile-test` runs the [Canic-owned profile demo](../docs/demos/profile.md)
 through the existing deployment CLI, with private ownership, bounded capacity,
@@ -429,7 +444,9 @@ operator command. It exercises authenticated application use, five interruption
 boundaries, a distinct manager executable, exact replay, network binding, expiry
 and insufficient reserve. Subnet counts independently detect duplicate creation.
 Lost creation replies remain blocked; upload/install outcomes can be reconstructed
-by observation after maintenance. All cycles are synthetic.
+by observation, including callback-trap recovery without replacing the manager.
+Abandoned upload/install callbacks remain blocked across further timer
+opportunities before explicit reconciliation. All cycles are synthetic.
 
 The test also qualifies maximum artifact/evidence codec budgets and emits a fleet
 snapshot under `target/growth/journey-N/fleet.html`. Serve the selected snapshot

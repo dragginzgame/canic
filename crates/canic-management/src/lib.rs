@@ -10,7 +10,7 @@ pub mod publication;
 #[cfg(target_arch = "wasm32")]
 mod single;
 #[cfg(target_arch = "wasm32")]
-pub use engine::{custody, open};
+pub use engine::{custody, metrics::snapshot as metrics, open};
 #[cfg(all(target_arch = "wasm32", feature = "fault-injection"))]
 pub use single::inject_fault;
 #[cfg(target_arch = "wasm32")]

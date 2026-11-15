@@ -7,6 +7,170 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.216.3 release qualification: 2026-11-15
+
+The sequential Linux `make -j1 ci` gate passed with all 288 captured input hashes
+unchanged. It includes 109 Host tests (one existing ignore), 66 CLI tests,
+13 installed Root cases (two existing predecessor ignores), 26 Store cases,
+three publication journeys, five Blob cases and the effect, artifact-custody,
+profile, growth and endpoint checks, plus native/Wasm linting and documentation.
+Evidence is under `target/evidence/0.216.3/release/`; the gate log is
+`target/qualification/release-0216-3-ci.log`.
+
+Fresh registry review confirms the selected direct registry suppliers, including
+Timers 0.45.10, are current and non-yanked. Topology retains the current committed
+Git 0.106.1 input; it has no registry entry. Blob remains the qualified Service
+Git 0.100.6 input: registry 0.82.1 does not provide the selected application
+boundary. Published Git 0.100.10 provider/browser work is deferred to the next
+requested Blob maintenance batch, along with its older transitive Wire selection.
+Canic itself selects Wire 0.24.1. This release changes no further suppliers.
+
+After qualification, twelve product versions and three qualification references
+advance to 0.216.3; private qualification packages remain 0.0.0. GitHub delivery
+is the selected release effect; crates.io publication and mainnet deployment
+remain outside it. The release includes timer adoption, bounded public metrics
+and resolved build-output preflight, preserving retained effect/state contracts.
+
+## IC Timers retained slots and explicit recovery: 2026-11-15
+
+Pending 0.216.3 adopts published `ic-timers` 0.45.10 from 0.44.3. The crates.io
+index and downloaded archive agree on checksum
+`e9bc6f83f3b47cdfc531fb78ab9fab02781dd5e2709bee1de67829f1395cb2ac`.
+Reviewed the published `api.rs`, `transport.rs` and manifest against the
+[supplier changelog](https://github.com/dragginzgame/ic-scheduling/blob/main/releases/timers/CHANGELOG.md).
+The new API requires explicit declaration lifetimes and exact abandonment
+recovery tokens. Legacy research reuses **Profile worker callback recovery**
+below: task-owned cleanup releases heap exclusion, while durable effect intent
+and the original authority survive. It does not justify replaying uncertain calls.
+
+The existing management engine binds each fixed child slot once with
+`Lifetime::Retained`. Ordinary scheduling only changes demand. Authenticated
+creation/upgrade reconciliation first inspects durable domain evidence, then
+recovers a current abandoned timer to inactive and derives eligible demand from
+the journal in the same local commit. Initialization still restores the journal
+strictly and reconstructs volatile timer declarations; no timer snapshot, new
+recovery endpoint or persistent schema is added. Canic owns effect eligibility;
+Timers owns wakeups, callback isolation and recovery tokens.
+
+Only the product lockfile changes. The separate qualification graph has no
+Timers dependency and remains byte-identical; its installed executables are built
+from the product graph. Locked metadata resolves both graphs. Default and
+all-feature Wasm trees for Root/profile manager select one Timers 0.45.10 and one
+Platform Runtime 0.22.5; native CLI has no Timers. This initial migration left the
+supplier's optional metrics feature disabled; the subsequent instrumentation
+increment below enables it for management owners. No sibling checkout or other
+supplier version is changed.
+
+Focused installed qualification passed, sequentially:
+
+- `bash scripts/dev/test-growth.sh`: nine protocol tests and two installed growth
+  cases; the existing retained-predecessor case remains explicitly ignored.
+  Upload/install callback traps remain blocked through further timer opportunities
+  before same-owner reconciliation. Creation and child-upgrade evidence, private
+  state and original approvals survive.
+- `bash scripts/dev/test-root.sh profile_store children::`: five installed cases
+  cover independent children, sibling reservation/isolation, the real CLI fleet
+  flow and Store-backed private profiles through callback recovery and Store/owner
+  maintenance. The generated consumer also passes Wasm Clippy.
+- `bash scripts/dev/test-store.sh dispatch`: both installed dispatch cases pass,
+  with the focused native admission/upgrade checks. Past earliest-dispatch times
+  remain eligible within the original expiry; future work waits and expired,
+  unstarted work does not create a child.
+
+Product Wasm all-feature Clippy/Rustdoc and qualification growth/Root/Store Clippy
+pass. Logs, metadata and dependency trees are under
+`target/qualification/ic-timers-*`; executable receipts/copies are under
+`target/growth`, `target/root` and `target/store`. The default Root SHA-256 is
+`e32f29bec9ee84e06e84efea2b790bcd99d35f6a86f3e33d9e8d5f730185c07e`;
+the default profile manager is
+`7670963982be7a02804cfe4022fb06dcdd7ab1141eda74bfb94f93b9952a200f`.
+These are local synthetic-cycle observations, not a mainnet upgrade or a full
+release gate. Lost creation principals remain unrecoverable; timer recovery does
+not expand the domain's evidence or retry contract. Existing deployed executables
+retain their previous timer implementation until explicitly upgraded.
+
+## Management timer metrics: 2026-11-15
+
+The maintainer confirmed metrics remain an admitted operational requirement:
+reusable suppliers gate instrumentation; management owners enable it normally.
+Pending 0.216.3 therefore enables `ic-timers/metrics` in the shared management
+engine, selecting its exact `ic-metrics` 0.30.8 dependency. `canic::metrics` owns
+passive transport types and an optional endpoint mount, not a recorder. Root and
+the profile manager explicitly mount that public query. The adapter feature only
+selects Platform entrypoint support; default applications and native Host/CLI have
+no Timers/Metrics recording dependency. No second management feature or runtime
+configuration switch is introduced.
+
+Legacy research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` inspected
+`crates/canic-core/src/ops/runtime/metric_providers/{mod.rs,tests.rs}`,
+`workflow/metrics/query/mod.rs`, and the public-metrics protocol tests in
+`canic-contracts`. Provider history includes `4426e24`, `4176ee9` and `d704f4d`.
+Retain fixed names, source overflow quality, reset windows and maximum-frame
+qualification. Do not restore the provider registry, storage policies, paging,
+sampling timers or metric history: six aggregate timer counters need none of them.
+The supplier still owns accumulation; Canic projects its totals without arithmetic.
+
+The 32-byte empty request and 1,024-byte response ceilings include Wire framing.
+The native allocation allowance separately covers Wire's conservative traversal
+of nested fixed records. JSON counter totals are decimal strings, preserving
+u128 precision independently of browser number handling. The reset window captures
+canister version and IC time at lifecycle initialization; later controller changes
+do not reset it. Normal returns carrying a domain failure are classified as
+expected failures. Accepted/completed counts do not count successful child effects.
+Read-only Host collection runs once per selected owner after operation and metadata
+observations, within the existing total budget and a two-second per-owner ceiling.
+Older/missing endpoints remain unknown; terminal presentation is details-only.
+
+Focused validation: the maximal passive Wire/JSON round trip and ten terminal
+cases pass. Installed `profile_store` passes through the real CLI, including
+abandonment, expected failure, private state and owner maintenance. The new
+installed metrics case refuses malformed/oversized/wrong-method/wrong-direction
+requests, permits an unrelated public reader, preserves stable bytes through
+repeated queries, and resets only diagnostics on upgrade. Its first assertion
+incorrectly expected the maintenance executable marker to stay unchanged; after
+explicitly accounting for that intended marker, the focused rerun passes with
+operation evidence and stable bytes unchanged. No product workaround was needed.
+
+Evidence is under `target/qualification/timer-metrics-*`, using product-built
+artifacts under `target/root`. The default Root SHA-256 is
+`976493b54b3e8b0f7e84d13110881a31303d50238a1d12675b6a47045b972401`;
+the profile manager is
+`f0b376314b6504e6c100f9e0fe5a88e80c81fa0fe3e98524923ad601276be792`.
+The qualification lockfile remains unchanged. Native and Wasm graph checks show
+instrumentation only in selected management builds. These are local synthetic-cycle
+observations; no mainnet installation, persistent metrics, history, rates or
+application instrumentation is qualified. Two existing Blob endpoint lint findings
+were cleaned up without changing its range guard or decoder behavior.
+Native/Wasm Clippy, Rustdoc, formatting and tooling agreement passed. `make canic`
+installed the pending CLI on the existing PATH; it still reports 0.216.2 until
+release preparation. This increment remains uncommitted and undeployed.
+
+## 0.216.2 post-push review and build destinations: 2026-11-15
+
+Verified `main` and annotated `v0.216.2` at
+`521b054d425ad152a84c5cecb8fc80d53b459ac6`. Reviewed the delivered recipe selector,
+error rendering, Store evidence readers and their status/maintenance callers.
+Those changes retain the existing build and custody owners. The actionable
+finding was lexical-only duplicate output admission: different configured paths
+could designate the same destination, including an unselected canister's output.
+
+Pending 0.216.3 resolves destination identities with the already-selected
+`ic-host-fs` path owner before compilation. Original paths still reach the artifact
+writer, preserving its independent checks and output spelling. This is a local
+preflight snapshot, not namespace confinement against concurrent filesystem edits.
+No private resolver, new dependency or second build workflow is introduced.
+Legacy research reuses **Starter workflow simplification** below; filesystem
+resolution is a supplier responsibility, not a legacy Canic mechanism to restore.
+
+Both native preflight cases passed, covering relative/absolute and normalized
+paths, existing/dangling symlink aliases and unchanged links/absent locks/outputs.
+Host/CLI Clippy, Host Rustdoc, formatting and tooling agreement passed. An actual
+generated app built through the installed `canic app build --canister app`,
+producing only its 44,681-byte Wasm; Root/Store outputs stayed absent. Evidence is
+under `target/qualification/app-build-destinations-*`, with the local fixture in
+`target/qualification/build-destinations.u07IWD`. The pending fix is installed and
+uncommitted; release 0.216.2 remains the last pushed version.
+
 ## 0.216.2 release qualification: 2026-11-15
 
 The sequential Linux `make -j1 ci` gate passed with all 281 captured input hashes

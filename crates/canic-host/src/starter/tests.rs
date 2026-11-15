@@ -119,14 +119,17 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
     )
     .unwrap();
     let original = crate::load_config(&path).unwrap();
-    for case in 0..3 {
+    for case in 0..6 {
         let mut config = original.clone();
         let canisters = &mut config.apps.get_mut("hello").unwrap().canisters;
         let root = canisters.get_mut("root").unwrap();
         match case {
             0 => root.build = None,
             1 => root.build.as_mut().unwrap().manifest = "starter-app/Cargo.toml".into(),
-            _ => root.wasm = Some("artifacts/app.wasm".into()),
+            2 => root.wasm = Some("artifacts/app.wasm".into()),
+            3 => root.wasm = Some(destination.join("artifacts/app.wasm")),
+            4 => root.wasm = Some("./artifacts/./app.wasm".into()),
+            _ => root.wasm = Some("artifacts/missing/../app.wasm".into()),
         }
         std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
         assert!(crate::build_app(&path, None, None).is_err());
@@ -142,6 +145,52 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
     ));
     assert!(!destination.join("Cargo.lock").exists());
     assert!(!destination.join("artifacts").exists());
+    std::fs::remove_dir_all(parent).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn app_build_refuses_output_aliases_before_creating_a_lock_or_output() {
+    let parent = crate::tests::directory();
+    let destination = parent.join("starter");
+    let path = create_starter(
+        &destination,
+        "hello",
+        "mainnet",
+        Network::Mainnet,
+        &source(),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(".", destination.join("alias")).unwrap();
+    std::os::unix::fs::symlink("artifacts/app.wasm", destination.join("app-link.wasm")).unwrap();
+    for alias in ["alias/artifacts/app.wasm", "app-link.wasm"] {
+        let mut config = crate::load_config(&path).unwrap();
+        config
+            .apps
+            .get_mut("hello")
+            .unwrap()
+            .canisters
+            .get_mut("root")
+            .unwrap()
+            .wasm = Some(alias.into());
+        std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
+        for selected in [None, Some("app")] {
+            assert!(matches!(
+                crate::build_app(&path, None, selected),
+                Err(Error::Invalid(_))
+            ));
+            assert!(!destination.join("Cargo.lock").exists());
+            assert!(!destination.join("artifacts").exists());
+        }
+    }
+    assert_eq!(
+        std::fs::read_link(destination.join("alias")).unwrap(),
+        PathBuf::from(".")
+    );
+    assert_eq!(
+        std::fs::read_link(destination.join("app-link.wasm")).unwrap(),
+        PathBuf::from("artifacts/app.wasm")
+    );
     std::fs::remove_dir_all(parent).unwrap();
 }
 

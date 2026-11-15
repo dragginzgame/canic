@@ -5,6 +5,9 @@
 #[cfg(feature = "blob")]
 pub mod blob;
 
+/// Passive operational reports; the optional `metrics` feature enables endpoint mounting.
+pub mod metrics;
+
 use serde::{Deserialize, Serialize};
 
 /// Identity of the greeting RPC, including its Wire request/response envelope.

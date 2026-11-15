@@ -9,19 +9,19 @@ description = "Root for bounded controller-approved greeting canisters"
 [target.'cfg(any())'.dev-dependencies]
 toko-tooling.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-canic.workspace = true
-canic-management.workspace = true
-canic-management-protocol.workspace = true
-ic-platform-runtime = { workspace = true, features = ["cdk"] }
-ic-wire.workspace = true
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
 fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+canic = { workspace = true, features = ["metrics"] }
+canic-management.workspace = true
+canic-management-protocol.workspace = true
+ic-platform-runtime = { workspace = true, features = ["cdk"] }
+ic-wire.workspace = true
 
 [lints]
 workspace = true

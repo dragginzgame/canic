@@ -66,7 +66,7 @@ async fn admit(
     )
     .unwrap()
 }
-fn input(root: CanisterId, wasm: Vec<u8>, now: u64) -> Stage {
+pub(super) fn input(root: CanisterId, wasm: Vec<u8>, now: u64) -> Stage {
     Stage {
         approval: Approval {
             manager: root.to_text(),
@@ -78,7 +78,7 @@ fn input(root: CanisterId, wasm: Vec<u8>, now: u64) -> Stage {
         wasm,
     }
 }
-fn artifact(name: &str) -> Vec<u8> {
+pub(super) fn artifact(name: &str) -> Vec<u8> {
     std::fs::read(repo().join("target/root").join(name)).unwrap()
 }
 

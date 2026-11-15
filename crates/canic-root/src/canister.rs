@@ -2,6 +2,8 @@ use canic_management::{self as management, Readiness};
 use canic_management_protocol::Failure;
 use ic_platform_runtime::cdk;
 
+canic::mount_metrics_endpoint!(canic_management::metrics);
+
 #[cdk::init]
 fn init() {
     management::open(true, readiness());

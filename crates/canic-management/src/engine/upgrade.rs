@@ -547,6 +547,6 @@ pub(super) async fn reconcile_bound(slot: Slot, expected: Approval) -> UpgradeSt
         mutate(slot, |s| s.failure = Some(error));
     }
     drop(guard);
-    schedule(slot);
+    super::resume_after_reconciliation(slot);
     status(slot)
 }

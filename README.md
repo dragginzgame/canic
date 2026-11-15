@@ -297,7 +297,8 @@ only that output:
 canic app build --app starter --canister app
 ```
 
-All app recipes are still checked before compilation. Other canister recipes are
+All app recipes are still checked before compilation, including aliases of the
+same output destination. Other canister recipes are
 not built; no fleet, identity or deployment approval is needed. Omit `--canister`
 to rebuild the whole app. The artifact builder continues to own compilation.
 For starters generated before the Store extraction, change the Store recipe's

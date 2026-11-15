@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.216.3] - 2026-11-15
+
+### 🔧 Changed
+
+Adopt IC Timers 0.45.10 for Root and the profile manager. Child slots use retained
+timer identities; an abandoned callback requires explicit timer recovery through
+the existing authenticated operation reconciliation. Recovery still follows the
+durable effect evidence and cannot renew approval or replay an uncertain effect.
+Root and the profile manager enable the supplier's optional metrics feature in
+normal builds. Canic's optional metrics endpoint adapter exposes six aggregate
+timer counters, with overflow quality and a lifecycle reset window. Recording
+stays supplier-owned; default application builds do not acquire it.
+
+For a configured, deployed fleet, these read-only commands show the selected
+management owners' timer observations. Details keeps them out of the compact view:
+
+```sh
+canic fleet show --app starter --fleet mainnet --details
+canic fleet show --app starter --fleet mainnet --json
+```
+
+Older or unreachable endpoints are unknown, never zero. Counters reset on owner
+upgrade, are uncertified and never prove effect completion. JSON counter totals
+are decimal strings to preserve full integer precision.
+
+For an existing approved operation, inspect retained evidence, then reconcile
+observable outcomes with its controller identity when needed:
+
+```sh
+canic fleet status OPERATION --app starter --fleet mainnet
+canic fleet reconcile OPERATION --app starter --fleet mainnet --identity canic-mainnet
+```
+
+Reconciliation can resume eligible, unissued work under the original approval.
+This supplier change requires rebuilding and upgrading the management canister;
+updating the native CLI alone does not change an installed fleet.
+
+### 🩹 Fixed
+
+App builds now compare resolved output destinations before compiling. Recipes
+that alias the same Wasm file through absolute/relative paths, parent traversal
+or symlinks are refused before creating a Cargo lockfile or build output. This
+also applies when selecting one canister; original paths and the artifact writer's
+independent filesystem checks are preserved.
+
+For a generated starter or another app with complete build recipes:
+
+```sh
+canic app build --app starter --canister app
+canic app build --app starter
+```
+
 ## [0.216.2] - 2026-11-15
 
 ### 🔧 Changed

@@ -3,6 +3,7 @@ use ic_host_text::escape::terminal_text;
 use std::{collections::BTreeMap, fmt::Write as _};
 
 mod inventory;
+mod metrics;
 mod roles;
 #[cfg(test)]
 mod tests;
@@ -188,6 +189,9 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 .expect("writing to String");
             }
         }
+    }
+    if details {
+        output.push_str(&metrics::render(snapshot));
     }
     for report in &snapshot.stores {
         let name = roles::name(snapshot, &report.network_id, &report.store)

@@ -32,8 +32,8 @@ pub use config::{
     init_config, init_fleet, load_config, resolve_config_path,
 };
 pub use fleet::{
-    Fleet, FleetCanister, FleetManager, FleetOperation, FleetStoreMaintenance, FleetUpgrade, fleet,
-    fleet_with_config, fleet_with_managers,
+    Fleet, FleetCanister, FleetManager, FleetMetrics, FleetOperation, FleetStoreMaintenance,
+    FleetUpgrade, fleet, fleet_with_config, fleet_with_managers,
 };
 pub use fleet_plan::{
     Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,
