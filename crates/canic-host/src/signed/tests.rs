@@ -389,3 +389,69 @@ async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing()
     }
     assert!(!dir.join("signed.json").exists());
 }
+
+#[tokio::test]
+async fn publication_read_authority_survives_effect_expiry_without_renewing_mutations() {
+    let (_, mut plan, _) = fixture();
+    let now = crate::now().unwrap();
+    plan.version = 3;
+    plan.created_at_ns = now - 3_600_000_000_000;
+    plan.expires_at_ns = now - 1;
+    plan.deployment = Some(crate::DeploymentName {
+        app: "demo".into(),
+        fleet: "local".into(),
+        canister: "app".into(),
+    });
+    plan.action = crate::PlanAction::Publish(crate::Publication {
+        root: crate::UpgradeTarget {
+            canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+            module: "11".repeat(32),
+        },
+        store: crate::UpgradeTarget {
+            canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+            module: "22".repeat(32),
+        },
+        release: canic_wasm_store_protocol::Release {
+            name: "app".into(),
+            version: "v1".into(),
+        },
+    });
+    let path = crate::tests::directory();
+    let deadline = now + 300_000_000_000;
+    let call = crate::publication::observation(&plan, deadline).unwrap();
+    crate::store::put_json(&path.join("authority.json"), &(deadline + 300_000_000_000)).unwrap();
+    crate::store::put(
+        &path.join("signed.json"),
+        &signed_fixture(&plan, &call, deadline),
+    )
+    .unwrap();
+    crate::store::put(&path.join("reply.bin"), &[42]).unwrap();
+    let agent = plan.network.agent().unwrap();
+    let absent = path.join("no-signer");
+    assert_eq!(
+        super::observe_publication(&path, &plan, "unused", &absent, &agent)
+            .await
+            .unwrap(),
+        [42]
+    );
+    assert_eq!(super::retained_publication(&path, &plan).unwrap(), [42]);
+    let mutation = crate::publication::call(
+        &plan,
+        canic_management_protocol::publication::Command::Publish(
+            plan.publication().unwrap().release.clone(),
+        ),
+        deadline,
+    )
+    .unwrap();
+    let bytes = signed_fixture(&plan, &mutation, deadline);
+    // Fresh read authority cannot admit a mutation, even with the same release and target.
+    std::fs::write(path.join("signed.json"), bytes).unwrap();
+    assert!(super::retained_publication(&path, &plan).is_err());
+    std::fs::remove_file(path.join("reply.bin")).unwrap();
+    assert!(
+        super::execute(&path, &plan, &mutation, "unused", &absent, &agent)
+            .await
+            .is_err()
+    );
+    assert!(!absent.exists());
+}

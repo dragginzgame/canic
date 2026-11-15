@@ -384,7 +384,7 @@ pub fn inject_fault(slot: Slot, value: u8) {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    assert!(value <= 11);
+    assert!(value <= 12);
     FAULT.update(|mut values| {
         values[slot.index()] = value;
         values
@@ -397,7 +397,9 @@ pub fn inject_fault(slot: Slot, value: u8) {
 pub(crate) fn reply_fault(method: u64) -> bool {
     matches!(
         (FAULT.get()[0], method),
-        (9, canic_management_protocol::STAGE) | (10, canic_management_protocol::RECONCILE)
+        (9, canic_management_protocol::STAGE)
+            | (10, canic_management_protocol::RECONCILE)
+            | (12, canic_management_protocol::publication::EXECUTE)
     )
 }
 

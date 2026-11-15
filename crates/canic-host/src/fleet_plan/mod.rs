@@ -246,6 +246,14 @@ pub fn plan_fleet(
 ) -> Result<FleetPlanning> {
     selected.validate()?;
     let slots = &selected.config.canisters;
+    if slots
+        .values()
+        .any(|s| s.role.as_deref() == Some("wasm-store"))
+    {
+        return Err(Error::Invalid(
+            "Store bootstrap is not qualified yet; publish into an existing bound Store with --publish-version".into(),
+        ));
+    }
     if !(2..=SLOTS.len() + 1).contains(&slots.len())
         || slots.values().any(|s| s.id.is_some() || s.profile_manager)
     {
@@ -353,6 +361,9 @@ pub fn plan_fleet(
             }
         } else {
             let (old, _) = plan::load(&dir, &id)?;
+            if old.publication().is_some() {
+                continue;
+            }
             if old
                 .deployment
                 .as_ref()

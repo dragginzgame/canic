@@ -226,6 +226,67 @@ pub(crate) async fn execute(
     execute_with(path, &Authority::from(plan), call, identity, icp, agent).await
 }
 
+/// Publication recovery grants only a typed observation of this exact release.
+/// Its retained deadline cannot be used to renew any mutation's signed attempt.
+pub(crate) async fn observe_publication(
+    path: &Path,
+    plan: &Plan,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+) -> Result<Vec<u8>> {
+    if plan.publication().is_none() {
+        return Err(Error::Invalid(
+            "publication observation requires its own plan".into(),
+        ));
+    }
+    ic_host_fs::durable::prepare_private_parents(path).map_err(supplier)?;
+    let authority = path.join("authority.json");
+    let expires_at_ns = if authority.try_exists().map_err(supplier)? {
+        store::json::<u64>(&authority)?
+    } else {
+        let deadline = now()? + 600_000_000_000;
+        store::put_json(&authority, &deadline)?;
+        deadline
+    };
+    let dispatch_deadline = expires_at_ns
+        .checked_sub(300_000_000_000)
+        .ok_or_else(|| Error::Invalid("invalid publication observation authority".into()))?;
+    let call = crate::publication::observation(plan, dispatch_deadline)?;
+    execute_with(
+        path,
+        &Authority {
+            network: &plan.network,
+            controller: &plan.controller,
+            expires_at_ns,
+        },
+        &call,
+        identity,
+        icp,
+        agent,
+    )
+    .await
+}
+
+/// Admit retained publication evidence against its exact signed read contract.
+pub(crate) fn retained_publication(path: &Path, plan: &Plan) -> Result<Vec<u8>> {
+    let expires_at_ns: u64 = store::json(&path.join("authority.json"))?;
+    let deadline = expires_at_ns
+        .checked_sub(300_000_000_000)
+        .ok_or_else(|| Error::Invalid("invalid publication observation authority".into()))?;
+    let call = crate::publication::observation(plan, deadline)?;
+    admit(
+        &store::read(&path.join("signed.json"), store::MAX_RECORD)?,
+        &Authority {
+            network: &plan.network,
+            controller: &plan.controller,
+            expires_at_ns,
+        },
+        &call,
+    )?;
+    store::read(&path.join("reply.bin"), 2 * 1024 * 1024)
+}
+
 /// Only the selected Root observation contract receives fresh read authority after plan expiry.
 pub(crate) async fn observe(
     path: &Path,

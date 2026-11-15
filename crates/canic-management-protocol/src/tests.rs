@@ -4,6 +4,71 @@ use crate::{
 };
 
 #[test]
+fn publication_envelope_carries_a_maximum_chunk_and_bounded_status() {
+    use crate::publication::{self, Command, Request};
+    use canic_wasm_store_protocol as store;
+    let release = store::Release {
+        name: "a".repeat(64),
+        version: "v".repeat(64),
+    };
+    let request = Request {
+        store: "a".repeat(63),
+        expires_at_ns: u64::MAX,
+        command: Command::Put(store::Put {
+            release: release.clone(),
+            index: 31,
+            bytes: vec![42; store::CHUNK_BYTES],
+        }),
+    };
+    let frame = ic_wire::native::encode_request(
+        publication::EXECUTE,
+        &request,
+        publication::REQUEST_LIMITS,
+    )
+    .unwrap();
+    let decoded: Request =
+        ic_wire::native::decode_request(publication::EXECUTE, &frame, publication::REQUEST_LIMITS)
+            .unwrap();
+    assert!(
+        matches!(decoded.command, Command::Put(chunk) if chunk.bytes == vec![42; store::CHUNK_BYTES])
+    );
+    assert!(
+        ic_wire::native::decode_request::<Request>(
+            publication::EXECUTE,
+            &frame,
+            publication::RESPONSE_LIMITS
+        )
+        .is_err()
+    );
+    let status = store::Status {
+        manifest: store::Manifest {
+            release,
+            hash: [255; 32],
+            bytes: (store::CHUNK_BYTES * store::MAX_CHUNKS) as u64,
+            chunks: vec![[255; 32]; store::MAX_CHUNKS],
+        },
+        published: false,
+        missing: (0..store::MAX_CHUNKS as u32).collect(),
+    };
+    let reply: publication::Reply = Ok(status);
+    let frame = ic_wire::native::encode_response(
+        publication::EXECUTE,
+        &reply,
+        publication::RESPONSE_LIMITS,
+    )
+    .unwrap();
+    assert_eq!(
+        ic_wire::native::decode_response::<publication::Reply>(
+            publication::EXECUTE,
+            &frame,
+            publication::RESPONSE_LIMITS
+        )
+        .unwrap(),
+        reply
+    );
+}
+
+#[test]
 fn growth_frames_cover_declared_artifact_and_retained_evidence() {
     let mut wasm = vec![0; MAX_WASM];
     wasm[..8].copy_from_slice(b"\0asm\x01\0\0\0");

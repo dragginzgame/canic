@@ -7,6 +7,143 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.205.1 release qualification: 2026-11-15
+
+Fourteen product packages move to 0.205.1; the four qualification packages remain
+0.0.0. This GitHub release adds Root-mediated Store publication, its reviewed
+fleet CLI workflow and receipt custody, plus Tooling 0.44.3. Publication to
+crates.io stays disabled. No mainnet state or saved deployment approval changes.
+
+The local Blob library's runtime implementation is now present unchanged in
+its pushed 0.100.6 commit `decde204acb6d7c8362a0003e904beef72ff89b6`. Both
+Canic graphs select that exact Git source, with authenticated access required for
+initial preparation. The external path exception is retired. The input recorder
+uses locked Cargo metadata instead of a mutable sibling path and still compares
+actual source files and consumer locks before/after the installed witness. The
+supplier checkout was inspected read-only; no supplier changes were made.
+
+The full Linux gate passed: `make lint blob-clippy blob-doc`, then the native
+and installed test leaves `test effect-test artifact-custody-test journey-test
+profile-test growth-test root-test endpoint-test store-test publication-test
+blob-test`. This includes 79 Host tests, 43 CLI tests, eleven installed Root
+cases, eight Store cases, the actual publication CLI witness and five Blob cases
+against the immutable supplier. Three historical-binary scenarios remain
+explicit opt-ins and were skipped. The selected root `ic-metrics 0.30.8` input
+is covered by this release's affected native/Wasm builds and installed paths.
+
+Registry search and cached index admission confirm the selected first-party
+registry suppliers match current stable, non-yanked releases. The old crates.io
+Blob product is intentionally not substituted for the committed rewrite. No
+unrelated dependency refresh was performed. Formatting, snapshot agreement,
+dependency inventory and documentation links pass. Source/lock hashes and full
+logs are under `target/evidence/0.205.1/release/`; Blob's before/after receipts
+match under `target/blob/`. No macOS, live provider or new mainnet qualification
+is claimed. The installed CLI reports 0.205.1.
+
+## Toko Tooling 0.44.3 adoption: 2026-11-15
+
+Selected published 0.44.3 in both workspace catalogs and locks. The authenticated
+preview/update retained all 47 managed files, changing only the baseline and
+two LOC reporter files. The archive checksum is
+`8a9bc7b6827044baac8134cada7ee6bc31f86c70beec9608d1d39d911eba15e1`.
+The shared baseline now owns post-push review; AGENTS keeps only Canic's domain
+model and recovery concerns instead of repeating the shared policy.
+
+Locked metadata passed for both workspaces, as did tool admission, snapshot
+agreement, formatting and diff checks. The installed PATH launcher produced
+identical default and `-d 0` output; `-d 1` expanded actual Canic crate rows.
+No producer regression matrix or product simulator suite was rerun for this
+tooling-only change. Evidence: `target/qualification/tooling-0.44.3/`.
+
+The root lock's `ic-metrics` selection separately changed from 0.30.7 to 0.30.8
+after the narrow Tooling update was inspected. That unrelated change was
+preserved; this adoption does not claim runtime qualification for it.
+No supplier source, application implementation, release version or delivery was
+changed by the Tooling adoption.
+
+## Fleet CLI artifact publication: 2026-11-15
+
+The existing Host plan/apply/status/reconcile owners now publish one explicit
+release into an already-bound Root-owned Store. V3 approval binds exact artifact
+bytes, label, network, operator and both canister/code identities. The journal
+lock, signer admission, retained attempts and immutable file owner are reused.
+V1/v2 deployment digest fixtures remain unchanged. Publication does not reserve
+an application slot or appear as an installed canister in fleet inventory.
+
+The [preceding publication research](#publication-through-root-after-store-handover-2026-11-15)
+at legacy revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` covers this same
+question: preserve exact release identity, bounded transfer and observable
+progress, without the legacy Root catalog/cache workflow. The current qualified
+Host signer already owns durable request custody, so no legacy transport or
+second journal/executor was added. Store remains the only durable catalog/byte
+owner; Root performs one typed call at a time.
+
+Every mutation retains its original dispatch deadline and signature. Fresh
+recovery authority can only observe that exact release, including after effect
+approval expiry. Exact observation can establish a lost mutation's outcome,
+but cannot authorize remaining expired work. A completion summary alone is
+insufficient: its retained observation index, signed request, response and exact
+manifest must agree. Thirty-two observations bound this initial recovery history;
+exhaustion blocks without discarding evidence.
+
+Focused validation passed: seventeen native cases across publication admission,
+retained operation encoding, signer custody and CLI argument conflicts; the
+installed `make publication-test` witness passed in 12.79s. The witness uses the
+actual CLI, pinned ICP signer, Root and Store with synthetic cycles. It interrupts
+before the first chunk signature, reconciles without mutation, resumes without
+replacing Prepare's signature, publishes two versions with warm byte reuse and
+proves unchanged Root stable memory. It also refuses wrong certified code and
+missing signed receipt proof, checks human status, and keeps publications out of
+canister inventory. Host/CLI and the new harness passed focused Clippy; Host
+Rustdoc passed. Logs are `target/qualification/publication-{host-tests,host-clippy,host-doc,installed}.log`.
+
+Review removed misleading deployment-receipt text from publication status and
+kept inventory sampling under one lock. It also found that the old greeting-child
+bootstrap could admit a declared Store as an application. Whole-fleet and named
+child planning now refuse that unsupported role before journal creation; the
+focused regression proves both refusals. A separate Store bootstrap/readiness
+contract and deployment release selection are the next coherent integration,
+not another workflow engine. Current publication requires existing bound owners;
+Store maintenance through Root and existing-fleet migration remain pending.
+Artifact publication admits 8 MiB; the current public builder/inspector still
+admits 1.5 MB, so larger inputs need an external build. No mainnet deployment,
+measured deployment speedup, browser launch, version bump or push is claimed.
+
+## Publication through Root after Store handover: 2026-11-15
+
+The next Host integration prerequisite is complete: the external operator can
+publish after Root becomes the Store's sole controller. One explicitly mounted
+`store_publication` endpoint admits a fixed prepare/put/publish/observe command,
+canonical Store target and five-minute dispatch window. It performs one bounded
+call, with no retry, attached cycles, catalog mirror or durable payload at Root.
+Store remains the immutable release/capacity owner; publication creates no child
+approval, pin or installation. CLI integration still needs retained host authority,
+selected-release policy and reviewed Store bootstrap in existing fleet plan/apply.
+
+Revisited legacy revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` publication
+`release/catalog.rs`, `release/chunks.rs` and template admission tests, using the
+links in the [original Store research](#versioned-wasm-store-decision-2026-11-15).
+The same bootstrap diagnostic history `ed9f133` remains relevant. Retain exact
+release identity, bounded transfers and observable progress. Omit the legacy
+Root catalog mirror, approved-version replacement/pruning, cache side effects
+and broad publication workflow: Store already owns these immutable outcomes.
+The installed regressions preserve conflict/hash/size admission at that owner.
+
+`make store-test` passed twelve native tests and eight installed cases (16.98s).
+New cases resume an incomplete multi-chunk upload across changed Root executables,
+retain earlier versions and prove Root stable bytes do not change. They refuse
+direct operator access to the Root-owned Store, unauthorized Root calls, malformed
+frames, invalid targets/windows and expired dispatch. Fault point 12 makes the
+real Root reply encoder fail after prepare, put and publish have committed at
+Store. Observation and exact replay recover each result without extra custody;
+no cross-canister rollback or automatic retry is claimed.
+
+`make root-clippy root-doc` and the qualification Store test's focused Clippy
+passed. Current logs: `target/qualification/store-publication-{tests,lints,fixture-lints}.log`.
+The public artifact builder admitted the new Root within the existing Host size
+limit. No supplier, persistent record schema, old endpoint byte contract or
+fleet CLI default changed; no mainnet, browser or push was performed.
+
 ## Tooling, Platform and Wire adoption: 2026-11-15
 
 Selected published Toko Tooling 0.44.0 in both workspaces and installed its

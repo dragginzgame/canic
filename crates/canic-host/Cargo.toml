@@ -13,6 +13,7 @@ toko-tooling.workspace = true
 base64.workspace = true
 canic.workspace = true
 canic-management-protocol.workspace = true
+canic-wasm-store-protocol.workspace = true
 ic-host-fs.workspace = true
 ic-host-process.workspace = true
 ic-platform = { workspace = true, features = ["agent", "ic-protocol", "management-canister-types", "cycles-ledger-types", "icp-ledger-types", "icrc-ledger-types"] }

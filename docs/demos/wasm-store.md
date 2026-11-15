@@ -15,8 +15,8 @@ fleet migration remain unimplemented. Existing inline deployments keep their
 current limits and contracts.
 There is no delete/reset or pin-release endpoint; incomplete uploads keep their
 reservation. No deployment approval or application readiness follows from Store
-publication. Host remains responsible for structural Wasm inspection; Store
-checks raw Wasm framing and byte integrity, not executable validity.
+publication. Host and Store check bounded raw Wasm framing and byte integrity. Full
+executable validation remains with the IC installation boundary.
 
 From this checkout, after `make canic` and Wasm toolchain preparation:
 
@@ -37,9 +37,73 @@ query/replicated progress; `read`/`read_chunk` expose query/replicated published
 bytes. `list` returns at most four metadata entries after an exclusive release
 cursor. These transport distinctions do not grant fresh installation authority.
 `configure` changes admission quotas without reinstalling; `info` reports their
-usage. Root controls the Store during autonomous work. The qualification fixture
-publishes its inputs before handing Store control to Root; a production upload
-and infrastructure-maintenance flow through Root remains part of Host integration.
+usage. Root controls the Store during autonomous work. Root's controller-only
+`store_publication` endpoint now accepts four fixed commands from
+`canic-management-protocol::publication`: prepare an immutable manifest, supply
+one chunk, publish, or observe retained progress. Each request binds a canonical
+Store principal and a dispatch deadline within five minutes. Root performs one
+call with a five-second bounded wait and no cycle attachment, storage write,
+background retry, deployment or cache preparation. Store independently checks
+that Root controls it. There is no arbitrary method/management forwarding.
+
+This route remains usable after the external operator hands Store control to
+Root. Publication tests use actual Root calls, resume an incomplete upload after
+Root maintenance, retain earlier releases, and prove that Root stable bytes stay
+unchanged. Exact replays return retained progress. Malformed frames, unauthorized
+callers, invalid targets and expired dispatch preserve state. Fault point 12 in
+qualification builds makes Root's reply encoder trap after each remote mutation:
+Store commits survive, replicated observation reconstructs progress, and exact
+replay does not add a reservation or another chunk. Local callback rollback is
+not remote rollback. Call/decode/binding failures return uncertainty; a lost reply
+is never evidence of no effect. The calling Host must retain exact commands and
+source/code authority before using this route in fleet operations.
+
+The fleet Host now uses this route for explicit publication into an existing
+Store. Prerequisites: the selected fleet has bound `root` and `store` slots, with
+roles `root` and `wasm-store`; `store` and the app-defined artifact slot
+`app` share that Root parent. The artifact slot has a Wasm path. Root must have
+the signing operator as its sole controller; Store must have Root as its sole
+controller. Both reviewed module hashes must match certified metadata. Existing
+fleets need a separately qualified Store installation/handover; these commands
+do not bootstrap it. Whole-fleet and named application-child planning refuse a
+Store declaration until its bootstrap/readiness contract is qualified.
+
+With those prerequisites and the repository signer prepared, substitute the
+reviewed hashes and returned operation digest:
+
+```sh
+canic fleet plan --app starter --fleet mainnet --canister app --publish-version 1.0.0 --store store --root-module ROOT_SHA256 --store-module STORE_SHA256 --identity canic-mainnet
+canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status OPERATION --app starter --fleet mainnet
+canic fleet reconcile OPERATION --app starter --fleet mainnet --identity canic-mainnet
+```
+
+Planning retains exact bytes, release label, network, operator and Root/Store code
+identities. Apply prepares the manifest, transfers only missing chunks and
+publishes; it creates no canister and grants no installation authority. Repeated
+planning of the same release reuses the original approval or refuses changed
+bytes/authority. Publication uses v3 records; v1/v2 deployment digests stay fixed.
+A publication receipt refers to its exact retained signed observation and never
+becomes a deployment receipt or reserves an app slot. Inspect it with `fleet status`;
+canister inventory excludes artifact-only operations.
+
+Each mutation retains its dispatch deadline and original signed attempt under
+the existing journal lock. Reconcile only observes the approved release; fresh
+read authority cannot renew upload or publish authority. An expired uncertain
+mutation can be bypassed only when exact Store evidence establishes that step.
+An unfinished step still needs its original live authority. Observation history
+is bounded to 32 attempts; exhaustion blocks without deleting evidence.
+
+Publication accepts up to 8 MiB, within Store's bounded chunk contract. The
+existing artifact builder/inspector and direct-install path still have a 1.5 MB
+limit; larger inputs currently need an external build. No measured deployment
+speedup is claimed. Generated Store topology, deployment release selection,
+Store maintenance through Root and existing-fleet migration remain pending.
+
+`make publication-test` qualifies the real CLI and signer against installed Root
+and Store, using synthetic cycles. It interrupts signing before the first chunk,
+observes without mutation, resumes the original upload, reuses bytes for a second
+immutable version and rejects mismatched code and missing receipt evidence.
 
 `pin` retains an exact published manifest for the authenticated caller's operation.
 The identity is caller, operation digest and artifact hash; an operation can pin

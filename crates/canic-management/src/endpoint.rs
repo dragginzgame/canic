@@ -26,6 +26,16 @@ pub fn admit(limit: usize, private: bool) -> Result<(), String> {
 #[doc(hidden)]
 #[must_use]
 pub fn response_limits(method: u64) -> wire::Limits {
+    #[cfg(feature = "fault-injection")]
+    if crate::engine::reply_fault(method) {
+        return wire::Limits {
+            bytes: 0,
+            ..protocol::LIMITS
+        };
+    }
+    if method == protocol::publication::EXECUTE {
+        return protocol::publication::RESPONSE_LIMITS;
+    }
     if method == protocol::stored::CUSTODY {
         return protocol::stored::LIMITS;
     }
@@ -34,13 +44,6 @@ pub fn response_limits(method: u64) -> wire::Limits {
     }
     if method == protocol::custody::OBSERVE {
         return protocol::custody::LIMITS;
-    }
-    #[cfg(feature = "fault-injection")]
-    if crate::engine::reply_fault(method) {
-        return wire::Limits {
-            bytes: 0,
-            ..protocol::LIMITS
-        };
     }
     #[cfg(not(feature = "fault-injection"))]
     let _ = method;
@@ -57,6 +60,7 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// `reconcile_child_upgrade` and test-only `inject_child_fault`.
 /// Store-bound selections: `observe_stored_children`, `stage_stored_child`,
 /// `reconcile_stored_child`, `stage_stored_upgrade` and `reconcile_stored_upgrade`.
+/// `store_publication` mounts a separate, controller-only bounded publication call.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
@@ -69,6 +73,11 @@ pub fn response_limits(method: u64) -> wire::Limits {
 #[macro_export]
 macro_rules! mount_endpoints {
     ($($name:ident),+ $(,)?) => { $($crate::mount_endpoints!(@select $name);)+ };
+    (@select store_publication) => {
+        $crate::mount_endpoints!(@method store_publication, update, true, publication::EXECUTE, PUBLICATION_LIMITS,
+            [async] (input: $crate::endpoint::protocol::publication::Request) -> $crate::endpoint::protocol::publication::Reply,
+            $crate::publication::execute(input).await, "publication request", "publication reply");
+    };
     (@select observe_stored_children) => {
         $crate::mount_endpoints!(@method observe_stored_children, update, true, stored::CUSTODY, LIMITS,
             [] () -> $crate::endpoint::protocol::stored::Custody,

@@ -83,7 +83,18 @@ authenticated tooling installer.
   It owns caller/operation/artifact pins and bounded management-cache delivery.
   Root exposes explicit Store-bound creation/upgrade/custody methods; legacy
   inline contracts remain supported. Complete Store references and history must
-  survive maintenance. Fleet CLI integration is pending.
+  survive maintenance. Root also mounts `store_publication`: one controller-only,
+  deadline-bound prepare/put/publish/observe call. Store owns durable outcomes;
+  Root retains no publication catalog, payload or retry journal. A reply trap
+  cannot undo Store commits; recover by observation and exact idempotent commands.
+  Fault point 12 exercises this remote-commit boundary only in qualification.
+  Fleet publication uses existing plan/apply/status/reconcile with explicit version,
+  bound Root/Store code and original signed attempts. V3 publication plans never
+  reserve deployment slots or produce installation receipts. Reconcile grants only
+  typed release observation, not fresh mutation authority. Use `make publication-test`
+  for the installed CLI/signer witness. Generated Store bootstrap and deployment
+  release selection remain pending. Refuse `wasm-store` in the greeting-child
+  bootstrap rather than silently assigning it application readiness semantics.
   Cache preparation never grants install authority. It has no pin release,
   deletion or fleet-deployment integration yet; do not clear pins on expiry.
   Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.
@@ -180,8 +191,7 @@ authenticated tooling installer.
 - The rewrite uses versions 0.200.0 and later to distinguish it from legacy Canic.
   Keep crates.io publication disabled until the product is mature and the
   maintainer explicitly authorizes publication. GitHub pushes do not authorize it.
-- The explicit development-only Blob path exception below is the sole local
-  dependency exception. There are no release adapters. The experimental
+- There are no local dependency exceptions or release adapters. The experimental
   deployment path selects local/mainnet authority through an explicit plan.
 - `canic app init` creates local `canic.json` declarations by default: it creates a missing
   config or adds a new app and its first fleet, refusing existing app names and
@@ -232,23 +242,20 @@ authenticated tooling installer.
 
 ## Local Blob composition
 
-The maintainer explicitly selected the uncommitted local library at
-`../ic-blob-storage/crates/ic-blob-storage` for this development witness. Keep
-that checkout read-only. The root Cargo path and scoped
-`ci/dependency-pinning-exceptions.json` entry record this selection; do not replace
-it with registry or Git bytes that omit pending work. This local path must exist
-for Cargo resolution, including when the optional feature is disabled; it does
-not add Blob to a default application's runtime dependency graph.
+The original witness used the maintainer-selected, read-only local checkout. Its
+qualified library is now committed in Blob 0.100.6. Cargo pins the exact supplier
+Git revision `decde204acb6d7c8362a0003e904beef72ff89b6`; keep the sibling checkout
+read-only and do not substitute its pending work. Authenticated Git access is
+required for initial dependency preparation. Blob remains optional and absent
+from the default application's runtime graph.
 
 Use `make blob-test`, `make blob-clippy` and `make blob-doc`. The installed
 witness is `qualification/asset-catalog`; it calls the real Service locally and
 uses the application's one Storage bootstrap. Its fault endpoint is qualification
-only. `scripts/dev/blob-inputs.pl` records supplier HEAD, dirty status, file hashes
-and both consumer locks before/after the installed run; changed inputs fail the
-runner. Qualify again when those selected source bytes or contracts change.
-Before release, replace this mutable input with an explicitly selected clean
-supplier revision or a content-addressed immutable source artifact and requalify;
-a version beside a path would not freeze its bytes. Publication remains disabled.
+only. `scripts/dev/blob-inputs.pl` resolves the immutable source through locked
+Cargo metadata and records its source identity, file hashes and both consumer
+locks before/after the installed run. Changed inputs fail the runner. Requalify
+when those selected source bytes or contracts change. Publication stays disabled.
 
 Blob owns its Service, identities, accounting and maintenance gate. Canic owns
 endpoint mounting; the app owns user/catalog/publication policy. Never rewrite
@@ -284,24 +291,10 @@ authorized.
 
 ## Post-push design review
 
-After every push, review the pushed changes and their affected callers against
-the current design and actual consumer needs before starting the next increment.
-The purpose is to prevent the drift, accumulated leftovers and technical debt
-that made legacy Canic difficult to evolve.
-
-- Check domain boundaries, ownership, CLI/config semantics and documentation for
-  disagreement with each other or with the intended App → Fleets → Canisters model.
-- Look for obsolete paths, terminology, aliases, compatibility scaffolding,
-  duplicated policy, unused dependencies and temporary mechanisms left behind.
-- Challenge abstractions, modes and infrastructure without a demonstrated need.
-  Prefer deletion or simplification while preserving required safety and recovery
-  guarantees; do not replace sediment with another layer of machinery.
-- Report concrete findings with code locations and the smallest corrective action,
-  or state the reviewed scope and that no actionable findings were found. Record
-  deferred findings in the relevant design/work notes so they are not forgotten.
-
-Keep this a focused review, not an automatic full audit or test-suite rerun.
-The review does not itself authorize another push or an unrelated redesign.
+Apply the shared [post-push review](TOKO-TOOLING.md#post-push-review) to Canic’s
+App → Fleets → Canisters model, explicit authority boundaries and qualified
+recovery paths. Keep Canic-specific deferred findings in the existing design or
+qualification notes.
 
 ## Changelog examples
 

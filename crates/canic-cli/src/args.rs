@@ -222,12 +222,12 @@ pub(super) enum FleetCommand {
         #[arg(long)]
         app: Option<String>,
     },
-    /// Plan fleet creation, child upgrade or Root maintenance from retained completion.
+    /// Plan deployment, Root maintenance or an immutable Store release.
     #[command(mut_arg("icp_bin", |arg| arg.conflicts_with("controller")))]
     Plan {
         #[command(flatten)]
         scope: FleetScope,
-        /// Named slot for creation or its first Root-owned upgrade; repeats reuse its plan.
+        /// App-defined slot for deployment or artifact publication; repeats reuse its plan.
         #[arg(long, value_name = "SLOT", conflicts_with = "no_config")]
         canister: Option<String>,
         /// Local Wasm input; omit for a named canister with an app-defined Wasm path.
@@ -254,9 +254,11 @@ pub(super) enum FleetCommand {
         /// Certified module hash from the previous deployment receipt.
         #[arg(long, requires = "target")]
         previous_module: Option<String>,
-        /// Admit the named child through its Root parent, pinned to this reviewed module hash.
+        /// Exact reviewed Root module for child management or Store publication.
         #[arg(long, value_name = "SHA256", requires = "canister")]
         root_module: Option<String>,
+        #[command(flatten)]
+        publication: Box<PublicationArgs>,
         /// Unix seconds for Root's child dispatch; default is ten minutes from planning.
         /// Reopening a slot keeps its original schedule.
         #[arg(long, value_name = "UNIX_SECONDS")]
@@ -481,4 +483,17 @@ pub(super) fn help_command() -> clap::Command {
             .mut_subcommands(banner)
     }
     banner(Cli::command())
+}
+
+#[derive(Args)]
+pub(super) struct PublicationArgs {
+    /// Publish this named canister's artifact only; does not install or deploy it.
+    #[arg(long, value_name = "VERSION", requires_all = ["canister", "root_module", "store", "store_module"], conflicts_with_all = ["target", "previous_module", "execute_at", "cycles"])]
+    pub(super) publish_version: Option<String>,
+    /// Existing bound wasm-store slot under the same Root as the artifact.
+    #[arg(long, value_name = "SLOT", requires = "publish_version")]
+    pub(super) store: Option<String>,
+    /// Exact reviewed Store executable; publication requires Root's sole control.
+    #[arg(long, value_name = "SHA256", requires = "publish_version")]
+    pub(super) store_module: Option<String>,
 }

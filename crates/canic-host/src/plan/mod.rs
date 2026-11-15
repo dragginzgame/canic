@@ -65,13 +65,21 @@ pub struct PlanInput {
 }
 
 impl Plan {
+    pub(crate) fn artifact_limit(&self) -> usize {
+        if self.publication().is_some() {
+            crate::publication::MAX_WASM
+        } else {
+            artifact::MAX_WASM
+        }
+    }
     pub(crate) fn validate(&self) -> Result<()> {
         self.network.validate()?;
         let controller = principal(&self.controller)?;
         if !matches!(
             (self.version, self.deployment.is_some()),
-            (1, false) | (2, true)
-        ) || self.artifact.bytes > artifact::MAX_WASM
+            (1, false) | (2, true) | (3, true)
+        ) || (self.version == 3) != self.publication().is_some()
+            || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
             || self.expires_at_ns - self.created_at_ns > 3_600_000_000_000
@@ -110,6 +118,7 @@ impl Plan {
             }
         }
         match &self.action {
+            PlanAction::Publish(value) => crate::publication::validate(self, value)?,
             PlanAction::Create { cycles }
                 if !(500_000_000_000..=5_000_000_000_000).contains(cycles) =>
             {
@@ -213,7 +222,7 @@ pub(crate) fn retain(
 }
 
 /// Lookup and publication share the caller's journal lock.
-fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
+pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
     let root = &store.path;
     if let Some(name) = &plan.deployment {
         // The journal lock spans lookup and publication, including an interrupted earlier plan.
@@ -235,6 +244,9 @@ fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Pla
                 ));
             }
             if crate::fleet_plan::exists(&entry.path())? {
+                if plan.publication().is_some() {
+                    continue;
+                }
                 let fleet = crate::fleet_plan::load(&entry.path(), &existing_id)?;
                 if crate::fleet_plan::cancelled(&entry.path(), &existing_id)? {
                     continue;
@@ -251,6 +263,26 @@ fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Pla
             let existing: Plan = store::json(&entry.path().join("plan.json"))?;
             if existing.digest()? != existing_id {
                 return Err(Error::Invalid("retained plan digest mismatch".into()));
+            }
+            if existing.publication().is_some() || plan.publication().is_some() {
+                if let (Some(old), Some(new)) = (existing.publication(), plan.publication())
+                    && existing.network == plan.network
+                    && old.store.canister == new.store.canister
+                    && old.release == new.release
+                {
+                    let (existing, _) = load(&entry.path(), &existing_id)?;
+                    if existing.publication() == plan.publication()
+                        && existing.controller == plan.controller
+                        && existing.artifact == plan.artifact
+                        && existing.deployment == plan.deployment
+                    {
+                        return Ok((existing_id, existing));
+                    }
+                    return Err(Error::Blocked(format!(
+                        "release already belongs to operation {existing_id}; retained authority cannot be replaced"
+                    )));
+                }
+                continue;
             }
             if existing.deployment.as_ref() != Some(name)
                 && existing.network == plan.network
@@ -316,8 +348,10 @@ pub(crate) fn publish_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<
 
 pub(crate) fn load(dir: &Path, digest: &str) -> Result<(Plan, Vec<u8>)> {
     let plan: Plan = store::json(&dir.join("plan.json"))?;
-    let bytes = store::read(&dir.join("module.wasm"), artifact::MAX_WASM)?;
-    if plan.digest()? != digest || artifact::admit(&bytes)? != plan.artifact {
+    let bytes = store::read(&dir.join("module.wasm"), plan.artifact_limit())?;
+    if plan.digest()? != digest
+        || artifact::admit_bounded(&bytes, plan.artifact_limit())? != plan.artifact
+    {
         return Err(Error::Invalid(
             "retained plan or artifact differs from the approved digest".into(),
         ));

@@ -169,6 +169,40 @@ Detailed line metrics and symbol inventories are optional under the
 See [contract-change details](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/engineering-details.md#complete-reviewable-changes)
 when changing interfaces, persistence or installation/recovery behavior.
 
+### Post-push review
+
+After each successful push, review the pushed changes and their directly affected
+callers before starting the next increment. Review the delivered commits, not
+unrelated working-tree edits, to catch architectural drift, accumulated leftovers
+("sediment") and technical debt early. Check for:
+
+- Disagreement between design, implementation, CLI/configuration semantics and
+  documentation.
+- Duplicate policy, competing owners or parallel workflows.
+- Obsolete paths, aliases, compatibility scaffolding, unused dependencies and
+  temporary mechanisms left behind.
+- New abstractions or infrastructure without a demonstrated consumer need.
+- Gaps between claimed behavior and actual qualification evidence.
+
+Prefer deletion, reuse or simplification while preserving safety, persistence
+and recovery guarantees. Respect consumer-specific architecture decisions;
+distinguish deliberate compatibility obligations and documented limitations from
+accidental debt before recommending removal.
+
+Keep the review focused on the pushed scope. It does not automatically trigger
+a full audit, repeated test suites, unrelated refactoring, sibling changes or
+another push. Reuse applicable evidence under the validation policy below;
+repairs and delivery retain their existing authorization boundaries. This review
+does not replace required gates or cancel remaining steps of an authorized
+release, such as registry publication.
+
+Report concrete findings with code locations and the smallest corrective action.
+If nothing actionable is found, state the reviewed scope and that result without
+claiming the entire repository is debt-free. Record deferred actionable findings
+in the existing owning issue or relevant design notes. Use the normal delivery
+response and existing records; do not create a parallel tracker, mandatory report
+file or separate review framework.
+
 ## Validation and evidence
 
 - Ordinary coding and cleanup end after the relevant focused checks pass. Do not

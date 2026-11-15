@@ -477,7 +477,17 @@ pub(crate) fn inventory(
                 let _store = crate::store::Store::open(root)?;
                 crate::fleet_plan::inventory(&root.join(&id), &id, started_at_ns)
             } else {
-                local_operation(root, &id, started_at_ns).map(|record| vec![record])
+                // Publication has no deployed identity or deployment-slot reservation.
+                // Admit its retained plan/bytes before excluding it from canister inventory.
+                let _store = crate::store::Store::open(root)?;
+                if crate::plan::load(&root.join(&id), &id)?
+                    .0
+                    .publication()
+                    .is_some()
+                {
+                    return Ok(vec![]);
+                }
+                local_operation_at(&root.join(&id), &id, started_at_ns).map(|record| vec![record])
             }
         })();
         match result {

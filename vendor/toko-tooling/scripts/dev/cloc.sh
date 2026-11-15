@@ -19,7 +19,7 @@ qualification workspaces, counting shared source paths once;
 a parent directory reports its sibling repositories.
 
 Options:
-  -d N            Show crates and N module levels (0 = crates only)
+  -d N            Expand N levels below the selected scope (default: 0 = totals)
   --json          Full file counts and diagnostics for one repository/selection
   --wide          Show full names instead of middle-truncated table labels
   --manifest PATH Count only the selected Cargo workspace
@@ -27,8 +27,10 @@ Options:
   -h, --help      Show this help
 
 Examples:
-  toko-cloc -d 1    Top-level modules beneath each crate
-  toko-cloc -d 2 .. Sibling crates with two module levels
+  toko-cloc         Repository total only (same as -d 0)
+  toko-cloc ..      Sibling repository totals only
+  toko-cloc -d 1    Crates beneath the repository
+  toko-cloc -d 2 .. Sibling crates and their top-level modules
   toko-cloc -d 1 my-crate::parser  Drill into one module
 
 ??? = unclassified LOC. Counting details: docs/fleet/fleet-tools.md
@@ -111,7 +113,7 @@ report_repositories() (
     exit "$status"
 )
 
-depth=''
+depth=0
 selected_manifest=''
 json=false
 wide=false
@@ -134,8 +136,7 @@ done
 [[ $# -le 1 ]] || { usage >&2; exit 2; }
 
 render_table() {
-    local flags=() columns=120 observed=''
-    if [[ -n "$depth" ]]; then flags=(-d "$depth"); fi
+    local flags=(-d "$depth") columns=120 observed=''
     if [[ "$wide" == true ]]; then
         flags+=(--wide)
     else

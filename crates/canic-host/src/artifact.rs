@@ -25,10 +25,14 @@ pub(crate) fn digest(bytes: &[u8]) -> String {
 }
 
 pub(crate) fn admit(bytes: &[u8]) -> Result<Artifact> {
-    if bytes.len() > MAX_WASM || !bytes.starts_with(b"\0asm\x01\0\0\0") {
-        return Err(Error::Invalid(
-            "expected uncompressed Wasm v1, at most 1,500,000 bytes".into(),
-        ));
+    admit_bounded(bytes, MAX_WASM)
+}
+
+pub(crate) fn admit_bounded(bytes: &[u8], limit: usize) -> Result<Artifact> {
+    if bytes.len() > limit || !bytes.starts_with(b"\0asm\x01\0\0\0") {
+        return Err(Error::Invalid(format!(
+            "expected uncompressed Wasm v1, at most {limit} bytes"
+        )));
     }
     Ok(Artifact {
         sha256: digest(bytes),

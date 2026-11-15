@@ -6,6 +6,8 @@ pub mod endpoint;
 #[cfg(target_arch = "wasm32")]
 mod engine;
 #[cfg(target_arch = "wasm32")]
+pub mod publication;
+#[cfg(target_arch = "wasm32")]
 mod single;
 #[cfg(target_arch = "wasm32")]
 pub use engine::{custody, open};

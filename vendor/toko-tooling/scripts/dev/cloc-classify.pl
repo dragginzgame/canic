@@ -141,7 +141,7 @@ if (($ARGV[0] // '') eq '--select') {
 }
 if (($ARGV[0] // '') eq '--table') {
     shift; my $r=$json->decode(read_file(shift));
-    my ($depth,$wide,$columns)=(undef,0,120);
+    my ($depth,$wide,$columns)=(0,0,120);
     while (@ARGV) {
         my $flag=shift;
         if ($flag eq '--wide') { $wide=1; next; }
@@ -161,18 +161,18 @@ if (($ARGV[0] // '') eq '--table') {
             my $label=safe_label($w->{report}{selection} // $w->{name});
             my $kind=$w->{report}{selection} ? ($w->{report}{selection} =~ /::/ ? 37 : 34) : 32;
             push @rows, [$label, $w->{report}{totals},$kind];
-            if (defined $depth) {
-                my %files_by_crate;
-                if ($depth) {
-                    push @{$files_by_crate{$_->{crate}}},$_ for @{$w->{report}{files}};
-                }
-                for my $crate (@{$w->{report}{crates}}) {
-                    push @rows,['  '.safe_label($crate->{crate}),$crate->{counts},34] unless $w->{report}{selection};
-                    if ($depth) {
-                        my @modules=module_rows($crate,$files_by_crate{$crate->{crate}} // [],$depth);
-                        if ($w->{report}{selection}) { $_->[0] =~ s/^  // for @modules; }
-                        push @rows,@modules;
-                    }
+            next unless $depth;
+            my $module_depth=$w->{report}{selection} ? $depth : $depth-1;
+            my %files_by_crate;
+            if ($module_depth) {
+                push @{$files_by_crate{$_->{crate}}},$_ for @{$w->{report}{files}};
+            }
+            for my $crate (@{$w->{report}{crates}}) {
+                push @rows,['  '.safe_label($crate->{crate}),$crate->{counts},34] unless $w->{report}{selection};
+                if ($module_depth) {
+                    my @modules=module_rows($crate,$files_by_crate{$crate->{crate}} // [],$module_depth);
+                    if ($w->{report}{selection}) { $_->[0] =~ s/^  // for @modules; }
+                    push @rows,@modules;
                 }
             }
         } else { push @rows, [safe_label($w->{name}), {map {$_=>$w->{status}} (@categories,'total')},32]; }

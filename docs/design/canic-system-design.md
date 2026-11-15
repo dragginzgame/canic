@@ -819,11 +819,12 @@ Build records bind exact sources, selected lock graph, toolchain, features, targ
 
 ### Per-fleet versioned Wasm Store
 
-Selected on 2026-11-15; not integrated with the current Root or fleet CLI. The
-standalone Store now implements versioned publication, chunk custody, quota
-changes, durable pins and bounded management-cache preparation; see its
+Selected on 2026-11-15. Store implements versioned publication, chunk custody,
+quota changes, durable pins and bounded management-cache preparation. Root
+qualifies reference-backed effects/custody and controller-mediated publication;
+fleet Host/CLI integration remains pending. See the
 [current scope](../demos/wasm-store.md). The full contract below still requires
-Root approval/custody integration, pin release, reclamation and fleet integration. Each managed
+pin release, reclamation and fleet integration. Each managed
 fleet owns a separate Store with a persistent, dynamically extensible catalog.
 Adding artifacts or versions must not require rebuilding or reinstalling Root or
 Store. The first implementation serves one subnet. Its canister tree is:
@@ -839,6 +840,12 @@ management effects and deployment approval. Store owns artifact publication,
 storage and delivery; it cannot authorize an application upgrade. Root's durable
 records contain references and evidence, not Wasm payloads or a mirrored catalog.
 Bounded transient transfer buffers are allowed; they are not a second repository.
+Root's explicit publication endpoint forwards one typed prepare/chunk/publish/observe
+command under actual controller authority and a bounded dispatch deadline. Store
+independently checks Root control and retains immutable publication outcomes. Root
+keeps no publication catalog or retry journal. A failed Root reply after dispatch
+cannot roll back Store; the operator retains the exact command and reconstructs
+progress by replicated Store observation. Publication never grants install authority.
 
 | Concern | Required contract |
 | --- | --- |
@@ -898,9 +905,13 @@ no performance change silently extends authority. Report phase timings before
 claiming a speedup; an extra canister can increase cold-bootstrap cost.
 
 Inline Root deployments retain their 512 KiB per-artifact and 1,048,512-byte
-combined custody limits. The pending Store-backed engine qualifies immutable
+combined custody limits. The Store-backed engine qualifies immutable
 references, pin/callback recovery and preserved upgrade history through the same
-effect owner; it does not yet select Store in fleet Host/CLI plans. See the
+effect owner. Fleet Host/CLI can publish an explicit immutable release through
+an already-bound Root-owned Store using the existing plan/apply/status/reconcile
+owners; this grants no installation authority. The approval binds both modules,
+principals and exact bytes, with separately retained read-only recovery. Generated
+Store bootstrap and selecting a Store release for deployment are still pending. See the
 [current implementation scope](../demos/wasm-store.md). First prove fresh
 Root/Store/app creation, multiple coexisting versions, interrupted upload/resume,
 hash/version conflicts, quota exhaustion, cache reconstruction, pin/deletion

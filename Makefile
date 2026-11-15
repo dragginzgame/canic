@@ -15,6 +15,7 @@ help:
 	  'make root-test               Qualify Root creation, upgrades and child isolation' \
 	  'make blob-test               Qualify embedded Blob/catalog composition (local supplier)' \
 	  'make store-test              Qualify versioned Store uploads and maintenance' \
+	  'make publication-test        Qualify CLI publication through Root to Store' \
 	  'make check                   Check the canic library' \
 	  'make test                    Run canic tests' \
 	  'make clippy                  Check canic lints' \
@@ -61,7 +62,7 @@ doc:
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
 lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy store-doc
 
-ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test
+ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test
 
 # The runner selects the Wasm path from Cargo artifact messages.
 qualification-setup:
@@ -98,7 +99,7 @@ journey-test:
 journey-clippy:
 	cargo clippy --locked -p canic -p canic-host -p canic-cli -p canic-hello --all-targets -- -D warnings
 	cargo clippy --locked -p canic-hello --target wasm32-unknown-unknown --all-features -- -D warnings
-	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --lib --test journey -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --lib --test journey --test publication -- -D warnings
 
 journey-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic -p canic-host -p canic-hello --no-deps
@@ -142,7 +143,10 @@ root-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 
-.PHONY: store-test store-clippy store-doc
+.PHONY: store-test store-clippy store-doc publication-test
+publication-test:
+	bash scripts/dev/test-publication.sh
+
 store-test:
 	bash scripts/dev/test-store.sh
 

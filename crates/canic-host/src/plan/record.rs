@@ -1,4 +1,4 @@
-//! Retained v1/v2 encoding only. Optional fields never enter the operation model.
+//! Retained encoding: v1/v2 deployment bytes stay fixed; v3 adds publication authority.
 use super::{ManagedOwner, Plan, PlanAction, UpgradeTarget};
 use crate::{Artifact, Error, Network, Result};
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,8 @@ pub(super) struct PlanRecord {
     maintenance: Option<canic_management_protocol::custody::Custody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     maintenance_sibling: Option<canic_management_protocol::custody::Custody>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    publication: Option<crate::Publication>,
 }
 
 fn invalid() -> Error {
@@ -46,38 +48,54 @@ impl TryFrom<PlanRecord> for Plan {
             management,
             maintenance,
             maintenance_sibling,
+            publication,
         } = record;
-        let action = match (
-            target,
-            previous_module,
-            management,
-            maintenance,
-            maintenance_sibling,
-        ) {
-            (None, None, None, None, None) => PlanAction::Create {
-                cycles: creation_cycles,
-            },
-            (None, None, Some(owner), None, None)
-                if creation_cycles == canic_management_protocol::CREATION_CYCLES =>
+        let action = if let Some(value) = publication {
+            if target.is_some()
+                || previous_module.is_some()
+                || management.is_some()
+                || maintenance.is_some()
+                || maintenance_sibling.is_some()
+                || creation_cycles != 0
             {
-                PlanAction::CreateChild(owner)
+                return Err(invalid());
             }
-            (Some(canister), Some(module), None, None, None) if creation_cycles == 0 => {
-                PlanAction::Upgrade(UpgradeTarget { canister, module })
-            }
-            (Some(canister), Some(module), Some(owner), None, None) if creation_cycles == 0 => {
-                PlanAction::UpgradeChild {
-                    target: UpgradeTarget { canister, module },
-                    owner,
+            PlanAction::Publish(value)
+        } else {
+            match (
+                target,
+                previous_module,
+                management,
+                maintenance,
+                maintenance_sibling,
+            ) {
+                (None, None, None, None, None) => PlanAction::Create {
+                    cycles: creation_cycles,
+                },
+                (None, None, Some(owner), None, None)
+                    if creation_cycles == canic_management_protocol::CREATION_CYCLES =>
+                {
+                    PlanAction::CreateChild(owner)
                 }
-            }
-            (Some(canister), Some(module), None, Some(first), sibling) if creation_cycles == 0 => {
-                PlanAction::MaintainRoot {
-                    target: UpgradeTarget { canister, module },
-                    children: std::iter::once(first).chain(sibling).collect(),
+                (Some(canister), Some(module), None, None, None) if creation_cycles == 0 => {
+                    PlanAction::Upgrade(UpgradeTarget { canister, module })
                 }
+                (Some(canister), Some(module), Some(owner), None, None) if creation_cycles == 0 => {
+                    PlanAction::UpgradeChild {
+                        target: UpgradeTarget { canister, module },
+                        owner,
+                    }
+                }
+                (Some(canister), Some(module), None, Some(first), sibling)
+                    if creation_cycles == 0 =>
+                {
+                    PlanAction::MaintainRoot {
+                        target: UpgradeTarget { canister, module },
+                        children: std::iter::once(first).chain(sibling).collect(),
+                    }
+                }
+                _ => return Err(invalid()),
             }
-            _ => return Err(invalid()),
         };
         Ok(Self {
             version,
@@ -98,6 +116,7 @@ impl TryFrom<Plan> for PlanRecord {
         let previous_module = plan.previous_module().cloned();
         let creation_cycles = plan.creation_cycles();
         let management = plan.management().cloned();
+        let publication = plan.publication().cloned();
         let (maintenance, maintenance_sibling) = match plan.maintenance() {
             None => (None, None),
             Some([first]) => (Some(first.clone()), None),
@@ -118,6 +137,7 @@ impl TryFrom<Plan> for PlanRecord {
             management,
             maintenance,
             maintenance_sibling,
+            publication,
         })
     }
 }

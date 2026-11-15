@@ -283,6 +283,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             target,
             previous_module,
             root_module,
+            publication,
             execute_at,
             cycles,
             ..
@@ -392,7 +393,24 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     Error::Invalid("named deployment requires a fleet config".into())
                 })?;
                 let wasm = config.wasm_path(&config_path, canister, wasm.as_deref())?;
-                if let Some(root_module) = root_module {
+                if let Some(version) = &publication.publish_version {
+                    canic_host::create_publication_plan(
+                        &state_dir,
+                        &wasm,
+                        config,
+                        &input.controller,
+                        canic_host::PublicationInput {
+                            canister: canister.clone(),
+                            store: publication.store.clone().expect("Clap publication Store"),
+                            version: version.clone(),
+                            root_module: root_module.clone().expect("Clap publication Root module"),
+                            store_module: publication
+                                .store_module
+                                .clone()
+                                .expect("Clap publication Store module"),
+                        },
+                    )?
+                } else if let Some(root_module) = root_module {
                     let execute_at = execute_at
                         .map(|seconds| {
                             seconds

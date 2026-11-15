@@ -18,19 +18,28 @@ prepares the simulator for every suite. Select `make effect-test`,
 creation/upgrade engine, after `make canic` and simulator preparation. It builds
 Store and Root executables through the public artifact builder, checks bounded
 Wire frames, resumes publication across Store maintenance and verifies byte reuse.
+Root-mediated publication remains usable after controller handover: incomplete
+uploads resume after Root maintenance without changing Root stable bytes.
+Malformed/unauthorized/expired requests preserve state; lost Root replies retain
+Store commits and exact replays recover through replicated observation.
 Actual Root calls acquire pins, install a child larger than the former inline
 limit, and upgrade it using the Store cache. Lost pin/cache callbacks recover
 through observation after Root maintenance. Missing cache, unpublished releases,
 expired authority, retained upgrade history and mixed inline/Store custody have
 explicit cases. A separate provider fixture reconstructs a cleared cache and
 performs real chunked installation/upgrade. Fleet CLI deployment remains on its
-existing inline path; see [Store scope](../docs/demos/wasm-store.md).
+existing inline path. `make publication-test` focuses on the actual CLI, ICP signer
+and installed Root/Store publication path: interrupted upload, read-only
+reconciliation, exact resumption, immutable version reuse, certified-code refusal
+and signed observation custody. It needs the prepared simulator and ICP signer,
+uses synthetic cycles, and leaves Root stable memory unchanged. Publication does
+not create a canister or reserve a deployment slot; see [Store scope](../docs/demos/wasm-store.md).
 `make blob-test` builds two embedded catalog executables using the optional
-Canic adapter and the real local Blob Service. Five installed cases cover user
+Canic adapter and the real Blob Service at its pinned Git revision. Five installed cases cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
 non-resurrecting replay, drain/reopen/exact activation and reopen refusal.
-Supplier source/status and both consumer locks are fingerprinted before/after;
-no supplier checkout files are changed. This development-only path is explicit
+Supplier source/files and both consumer locks are fingerprinted before/after;
+no supplier checkout files are changed. The immutable input is explicit
 in [AGENTS](../AGENTS.md#local-blob-composition). See [scope and evidence](../docs/demos/blob.md).
 Tests never install the simulator themselves. Preparation and tests use the same
 `IC_TESTKIT_SERVER_DIRECTORY` override, defaulting to `target/qualification/server`.

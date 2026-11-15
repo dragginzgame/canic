@@ -49,6 +49,11 @@ pub fn create_managed_plan(
         .as_ref()
         .ok_or_else(|| Error::Invalid("Root-owned work requires a declared parent".into()))?;
     let owner = &selection.config.canisters[parent];
+    if child.role.as_deref() == Some("wasm-store") {
+        return Err(Error::Invalid(
+            "Store bootstrap is not qualified through the application-child contract".into(),
+        ));
+    }
     if input.network != selection.config.network
         || (input.target.is_none() && (child.id.is_some() || input.previous_module.is_some()))
         || owner.role.as_deref() != Some("root")

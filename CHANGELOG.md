@@ -1,10 +1,11 @@
 # Changelog
 
-## [0.205.1] - Unreleased
+## [0.205.1] - 2026-11-15
 
 ### 🔧 Changed
 
-Adopt Toko Tooling 0.44.0 through the verified installer and qualify the current
+Adopt Toko Tooling 0.44.3 through the verified installer, including the shared
+post-push review rule and compact LOC reporting. Qualify the current
 Platform 0.33.7 / Wire 0.22.3 selections in both workspaces. Runtime remains
 0.22.5 and Types 0.20.4; compatible manifest minimums and unrelated dependencies
 are retained. Rebuild the installed CLI with `make canic`, then inspect commands
@@ -21,10 +22,10 @@ The optional `canic/blob` adapter mounts captured-caller Blob endpoints without
 owning service state or lifecycle. A real embedded asset catalog qualifies shared
 references, user isolation, atomic catalog/reference rollback, non-resurrecting
 replay and exact-attempt maintenance across two executables. It consumes the
-explicitly selected, read-only local Blob library; this is local composition,
+exact Blob 0.100.6 Git revision, preserving the originally qualified library; this is local composition,
 not provider qualification or fleet-managed Blob deployment.
 
-With the sibling Blob checkout and Wasm toolchain prepared, build/inspect the
+With authenticated Git access to Blob and the Wasm toolchain prepared, build/inspect the
 qualification application locally. These commands do not deploy or open a browser:
 
 ```sh
@@ -42,16 +43,35 @@ reuse present chunks or reconstruct missing ones from stable bytes. Root now
 supports Store-backed child creation and serial upgrades without retaining
 application Wasm. Exact references, retention evidence and historical sources
 survive Root maintenance; lost pin/cache replies can be reconstructed without
-reissuing creation or installation. Fleet CLI integration is next. Pin release
-and deletion remain unavailable.
+reissuing creation or installation. Root now also forwards bounded publication
+commands after Store controller handover, without storing artifact bytes or a
+second catalog. Interrupted uploads resume after Root maintenance; a failed Root
+reply preserves the Store commit and can be recovered by observation. Fleet
+plan/apply now publishes explicit immutable releases through an existing Root-owned
+Store, retaining exact approval and signed-attempt custody. Reconcile observes
+without renewing mutation authority. Publication receipts remain separate from
+deployments; old plan digests stay unchanged. Pin release and deletion remain
+unavailable.
+
+With a configured `starter/mainnet` fleet, app-defined `app` Wasm and bound
+`root`/`store` identities, substitute their reviewed hashes and the returned
+operation digest. Root must solely control Store; the signer must solely control
+Root. Apply uploads/publishes only; it does not deploy an app:
+
+```sh
+canic fleet plan --app starter --fleet mainnet --canister app --publish-version 1.0.0 --store store --root-module ROOT_SHA256 --store-module STORE_SHA256 --identity canic-mainnet
+canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status OPERATION --app starter --fleet mainnet
+```
 
 From this checkout with `make canic` and the Wasm target prepared, build and
-inspect the Store locally; neither command deploys or opens a browser:
+inspect Store and Root locally; these commands do not deploy or open a browser:
 
 ```sh
 canic artifact build --package canic-wasm-store --output target/wasm-store.wasm
 canic artifact inspect target/wasm-store.wasm
 canic artifact build --package canic-root --output target/root.wasm
+canic artifact inspect target/root.wasm
 ```
 
 See the [Store scope and local qualification](docs/demos/wasm-store.md).

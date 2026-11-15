@@ -1264,3 +1264,45 @@ fn build_recipe_requires_manifest_package_and_wasm() {
         .is_ok()
     );
 }
+
+#[test]
+fn publication_requires_exact_store_authority_and_refuses_deployment_options() {
+    let base = [
+        "canic",
+        "fleet",
+        "plan",
+        "--canister",
+        "app",
+        "--controller",
+        "2vxsx-fae",
+    ];
+    let authority = [
+        "--publish-version",
+        "v1",
+        "--store",
+        "store",
+        "--root-module",
+        "hash",
+        "--store-module",
+        "hash",
+    ];
+    assert!(Cli::try_parse_from(base.into_iter().chain(authority)).is_ok());
+    for extra in [
+        vec!["--cycles", "0"],
+        vec!["--target", "id", "--previous-module", "hash"],
+        vec!["--execute-at", "1"],
+        vec!["--no-config"],
+    ] {
+        assert!(Cli::try_parse_from(base.into_iter().chain(authority).chain(extra)).is_err());
+    }
+    for pair in 0..4 {
+        let incomplete = authority
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != pair)
+            .flat_map(|(_, args)| args.iter().copied());
+        assert!(Cli::try_parse_from(base.into_iter().chain(incomplete)).is_err());
+    }
+}

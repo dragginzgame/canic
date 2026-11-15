@@ -3,7 +3,8 @@ use crate::ManagedOwner;
 use canic_management_protocol::custody::Custody;
 
 /// Exact existing canister and code that an upgrade is allowed to replace.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct UpgradeTarget {
     /// Existing canister principal.
     pub canister: String,
@@ -14,6 +15,8 @@ pub struct UpgradeTarget {
 /// One operation with all and only the authority it needs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PlanAction {
+    /// Publish immutable artifact bytes through Root; grants no installation authority.
+    Publish(crate::Publication),
     /// Direct creation and installation, funded by the operator.
     Create {
         /// Exact creation debit ceiling.
@@ -40,6 +43,15 @@ pub enum PlanAction {
 }
 
 impl super::Plan {
+    /// Exact publication authority, independent of deployment slots and receipts.
+    #[must_use]
+    pub fn publication(&self) -> Option<&crate::Publication> {
+        match &self.action {
+            PlanAction::Publish(value) => Some(value),
+            _ => None,
+        }
+    }
+
     /// Existing target, only for an upgrade.
     #[must_use]
     pub fn target(&self) -> Option<&String> {
@@ -55,7 +67,7 @@ impl super::Plan {
             PlanAction::Upgrade(target)
             | PlanAction::UpgradeChild { target, .. }
             | PlanAction::MaintainRoot { target, .. } => Some(target),
-            PlanAction::Create { .. } | PlanAction::CreateChild(_) => None,
+            PlanAction::Create { .. } | PlanAction::CreateChild(_) | PlanAction::Publish(_) => None,
         }
     }
     /// Creation debit/attachment; upgrades have no creation authority.

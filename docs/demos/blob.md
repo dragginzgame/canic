@@ -41,7 +41,7 @@ cleanup remain available under ordinary permissions while drained.
 
 ## Run locally
 
-Prerequisites: the explicitly selected sibling `../ic-blob-storage` checkout,
+Prerequisites: authenticated Git access to the pinned Blob repository,
 Rust 1.100.0 with the Wasm target, `make canic`, and previously prepared simulator
 assets from `make qualification-setup`. Nothing opens a desktop window.
 
@@ -56,20 +56,18 @@ Canic's existing artifact builder and runs five installed tests with synthetic
 cycles. `make blob-clippy` and `make blob-doc` select the adapter and actual caller.
 The two artifacts and input receipts stay under `target/blob/`; no live IC or
 Caffeine request is issued. Optional feature selection keeps Blob/Storage/Runtime
-out of Canic's default runtime graph. The current development-only Cargo path
-still requires the sibling checkout to exist during dependency resolution.
+out of Canic's default runtime graph. The library now comes from the exact
+0.100.6 commit `decde204acb6d7c8362a0003e904beef72ff89b6`, which contains the
+originally qualified Service implementation. The mutable sibling checkout is no
+longer a Cargo input; it stays read-only. This removes the external-path exception
+and the isolated formatting hook's former sibling-resolution limitation.
 
-The installed pre-commit formatter exports only Canic's Git index into a temporary
-worktree. That export cannot resolve this external sibling path, even with Blob
-disabled. For the initial source push, formatting and snapshot checks ran on the
-real checkout after verifying every staged file matched its working file; a
-single-invocation hook override completed the commit. Hook configuration and
-supplier bytes stayed unchanged. This limitation remains part of the temporary
-local-source exception; no custom hook or second formatting implementation was
-added. Ordinary clean-checkout/release delivery still requires the immutable
-supplier-input transition described below.
+The input recorder resolves the supplier via locked Cargo metadata, requires
+an exact Git revision, and records library/context hashes and consumer locks
+before/after each installed run. Release evidence is recorded in the
+[qualification history](../qualification/history.md).
 
-## Qualified inputs and evidence — 2026-11-15
+## Original local qualification evidence — 2026-11-15
 
 The local supplier identifies itself as **0.100.6**, with HEAD
 `3c26f6c5c9bd0a32e0ad1a4c7d644f056c6c5e46` **plus dirty files**. This is not a claim
@@ -139,5 +137,5 @@ Blob remains experimental: finite 64-record supplier history, four lifetime
 catalog entries and declared-byte accounting. Releases do not free historical
 slots or establish provider settlement. There are no Caffeine calls, certificates,
 provider proofs, compaction, snapshot recovery or completed provider-journey claim.
-The [local dependency exception](../../AGENTS.md#local-blob-composition) requires
-immutable supplier inputs and requalification before a release.
+The [supplier input policy](../../AGENTS.md#local-blob-composition) requires
+the pinned immutable supplier input and requalification when it changes.

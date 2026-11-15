@@ -113,7 +113,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        match plan.action { canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
+        match plan.action { canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
@@ -124,6 +124,12 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         if now >= u128::from(plan.expires_at_ns) { "expired" } else { "within original deadline" },
     )
     .expect("writing to String");
+    if let Some(publication) = plan.publication() {
+        writeln!(output, "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nPublished receipt retained: {}",
+            terminal_text(&publication.root.canister), terminal_text(&publication.root.module),
+            terminal_text(&publication.store.canister), terminal_text(&publication.store.module),
+            terminal_text(&publication.release.name), terminal_text(&publication.release.version), !state["publication"].is_null()).expect("String write");
+    }
     for custody in plan.maintenance().into_iter().flatten() {
         writeln!(
             output,
@@ -203,7 +209,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             terminal_text(&receipt.controller),
         )
         .expect("writing to String");
-    } else {
+    } else if plan.publication().is_none() {
         output.push_str("Receipt: none retained; deployment completion is not established.\n");
     }
     if effects

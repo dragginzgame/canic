@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.205.0"
+version = "0.205.1"
 dependencies = [
  "ic-blob-storage",
  "ic-platform-runtime",
@@ -256,7 +256,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.205.0"
+version = "0.205.1"
 dependencies = [
  "canic-wasm-store-protocol",
  "ic-wire",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.205.0"
+version = "0.205.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store-protocol"
-version = "0.205.0"
+version = "0.205.1"
 dependencies = [
  "ic-wire",
  "serde",
@@ -847,6 +847,7 @@ dependencies = [
 [[package]]
 name = "ic-blob-storage"
 version = "0.100.6"
+source = "git+https://github.com/dragginzgame/ic-blob-storage?rev=decde204acb6d7c8362a0003e904beef72ff89b6#decde204acb6d7c8362a0003e904beef72ff89b6"
 dependencies = [
  "ic-platform-types",
  "ic-storage",
@@ -2385,9 +2386,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.44.0"
+version = "0.44.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7c8e68051bf59c6dadb44448556129eca489e855b74332f84f64ae2e0b09621"
+checksum = "8a9bc7b6827044baac8134cada7ee6bc31f86c70beec9608d1d39d911eba15e1"
 
 [[package]]
 name = "tower"

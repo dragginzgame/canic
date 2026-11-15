@@ -10,6 +10,7 @@ mod managed;
 mod network;
 mod operation;
 mod plan;
+mod publication;
 mod signed;
 mod starter;
 mod store;
@@ -38,6 +39,9 @@ pub use managed::create_managed_plan;
 pub use network::{Network, greet};
 pub use operation::{ApplyOutcome, ChildOutcome, Receipt, apply, reconcile, status};
 pub use plan::{ManagedOwner, Plan, PlanAction, PlanInput, UpgradeTarget, create_plan};
+pub use publication::{
+    Publication, PublicationInput, PublicationProgress, create_publication_plan,
+};
 pub use signed::signing_principal;
 pub use starter::create_starter;
 pub use wallet::{Wallet, WalletBalance, wallet, wallet_address};

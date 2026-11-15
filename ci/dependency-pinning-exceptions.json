@@ -1,10 +1,1 @@
-[
-  {
-    "rule": "cargo-external-path",
-    "file": "Cargo.toml",
-    "subject": "ic-blob-storage",
-    "value": "../ic-blob-storage/crates/ic-blob-storage",
-    "reason": "Maintainer-requested local qualification of the supplier's uncommitted Service contract; not a release input.",
-    "evidence": "AGENTS.md#local-blob-composition"
-  }
-]
+[]

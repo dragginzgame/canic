@@ -86,6 +86,19 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
 
 fn outcome(value: &ApplyOutcome, text: &mut String) -> bool {
     match value {
+        ApplyOutcome::Publication { publication } => {
+            let published = publication.status.as_ref().is_some_and(|s| s.published);
+            text.push_str(&format!(
+                "Store: {}\nPublication: {}\n",
+                terminal_text(&publication.store),
+                if published {
+                    "published; receipt retained"
+                } else {
+                    "incomplete; retained observation only"
+                }
+            ));
+            published
+        }
         ApplyOutcome::Fleet { root, children, .. } => {
             text.push_str(&format!(
                 "Root installed: {}\n",

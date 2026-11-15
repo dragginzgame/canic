@@ -55,6 +55,11 @@ pub struct ChildOutcome {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ApplyOutcome {
+    /// Store publication progress; it does not report an installed canister.
+    Publication {
+        /// Exact release evidence from the approved Store through Root.
+        publication: crate::PublicationProgress,
+    },
     /// One fleet approval, composed from the existing Root and child effect owners.
     Fleet {
         /// Original whole-fleet approval digest.
@@ -228,9 +233,12 @@ pub(crate) async fn reconcile_at(
     identity: &str,
     icp: &Path,
 ) -> Result<ApplyOutcome> {
-    let (plan, wasm) = plan::load(dir, digest)?;
+    let (plan, bytes) = plan::load(dir, digest)?;
+    if plan.publication().is_some() {
+        return crate::publication::apply(dir, digest, &plan, &bytes, identity, icp, true).await;
+    }
     let agent = plan.network.agent()?;
-    crate::managed::recovery::reconcile(dir, digest, &plan, &wasm, identity, icp, &agent).await
+    crate::managed::recovery::reconcile(dir, digest, &plan, &bytes, identity, icp, &agent).await
 }
 
 // Caller holds the journal lock; fleet composition uses this same effect owner.
@@ -241,6 +249,9 @@ pub(crate) async fn apply_at(
     icp: &Path,
 ) -> Result<ApplyOutcome> {
     let (plan, wasm) = plan::load(dir, digest)?;
+    if plan.publication().is_some() {
+        return crate::publication::apply(dir, digest, &plan, &wasm, identity, icp, false).await;
+    }
     let agent = plan.network.agent()?;
     if matches!(
         plan.action,
@@ -392,9 +403,13 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
 }
 
 pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
-    let (plan, _) = plan::load(dir, digest)?;
+    let (plan, bytes) = plan::load(dir, digest)?;
+    if plan.publication().is_some() {
+        return crate::publication::status(dir, digest, &plan, &bytes);
+    }
     let mut effects = serde_json::Map::new();
     let effect_names: Vec<_> = match plan.action {
+        crate::PlanAction::Publish(_) => unreachable!("publication status selected above"),
         crate::PlanAction::MaintainRoot { .. } => crate::maintenance::observations(&plan, false)
             .iter()
             .chain(crate::maintenance::observations(&plan, true))
@@ -438,7 +453,7 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     )
 }
 
-fn attempt_state(path: &Path) -> Result<&'static str> {
+pub(crate) fn attempt_state(path: &Path) -> Result<&'static str> {
     for (file, state) in [
         ("reply.bin", "reply_retained"),
         ("rejected.json", "rejection_retained"),
