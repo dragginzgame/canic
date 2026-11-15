@@ -27,6 +27,8 @@ pub(super) struct PlanRecord {
     publication: Option<crate::Publication>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     store_root: Option<UpgradeTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    maintenance_store: Option<super::StoreMaintenance>,
 }
 
 fn invalid() -> Error {
@@ -52,7 +54,11 @@ impl TryFrom<PlanRecord> for Plan {
             maintenance_sibling,
             publication,
             store_root,
+            maintenance_store,
         } = record;
+        if maintenance_store.is_some() && maintenance.is_none() {
+            return Err(invalid());
+        }
         let action = if let Some(root) = store_root {
             if version != 2
                 || target.is_some()
@@ -110,6 +116,7 @@ impl TryFrom<PlanRecord> for Plan {
                     PlanAction::MaintainRoot {
                         target: UpgradeTarget { canister, module },
                         children: std::iter::once(first).chain(sibling).collect(),
+                        store: maintenance_store.map(Box::new),
                     }
                 }
                 _ => return Err(invalid()),
@@ -136,6 +143,7 @@ impl TryFrom<Plan> for PlanRecord {
         let management = plan.management().cloned();
         let publication = plan.publication().cloned();
         let store_root = plan.store_root().cloned();
+        let maintenance_store = plan.maintenance_store().cloned();
         let (maintenance, maintenance_sibling) = match plan.maintenance() {
             None => (None, None),
             Some([first]) => (Some(first.clone()), None),
@@ -158,6 +166,7 @@ impl TryFrom<Plan> for PlanRecord {
             maintenance_sibling,
             publication,
             store_root,
+            maintenance_store,
         })
     }
 }

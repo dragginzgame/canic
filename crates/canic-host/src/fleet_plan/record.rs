@@ -19,6 +19,8 @@ struct Child {
     deployment: crate::DeploymentName,
     parent: super::CreatedCanister,
     artifact: crate::Artifact,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    release: Option<canic_wasm_store_protocol::Manifest>,
     creation_cycles: u64,
     execute_at_ns: u64,
 }
@@ -29,6 +31,7 @@ impl Child {
             deployment: self.deployment,
             parent: self.parent,
             artifact: self.artifact,
+            release: self.release,
             creation_cycles: self.creation_cycles,
             execute_at_ns: self.execute_at_ns,
         }
@@ -38,6 +41,7 @@ impl Child {
             deployment: c.deployment.clone(),
             parent: c.parent.clone(),
             artifact: c.artifact.clone(),
+            release: c.release.clone(),
             creation_cycles: c.creation_cycles,
             execute_at_ns: c.execute_at_ns,
         }

@@ -270,13 +270,19 @@ fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
 
 /// Read only authenticated retained replies; public queries never establish output custody.
 pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
+    evidence_with_source(dir, plan).map(|value| value.map(|(status, _)| status))
+}
+pub(crate) fn evidence_with_source(
+    dir: &Path,
+    plan: &Plan,
+) -> Result<Option<(Status, Option<canic_management_protocol::stored::Delivery>)>> {
     let mut latest = None;
     let stage = dir.join("stage/reply.bin");
     if stage.try_exists().map_err(supplier)? {
         match stage_reply(plan, &store::read(&stage, LIMITS.bytes)?) {
             Ok(status) => {
                 validate(plan, None, &status)?;
-                latest = Some(status);
+                latest = Some((status, None));
             }
             Err(Error::Blocked(_)) => {}
             Err(error) => return Err(error),
@@ -289,16 +295,17 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
         ] {
             let reply = dir.join(format!("observe/{index}/{name}"));
             if reply.try_exists().map_err(supplier)? {
-                let status = decode_observation(
-                    plan,
-                    method,
-                    &store::read(&reply, canic_management_protocol::stored::LIMITS.bytes)?,
-                )?;
+                let bytes = store::read(&reply, canic_management_protocol::stored::LIMITS.bytes)?;
+                let (status, source) = if method == canic_management_protocol::stored::CUSTODY {
+                    stored::creation_evidence(plan, &bytes)?
+                } else {
+                    (decode_observation(plan, method, &bytes)?, None)
+                };
                 if status.phase == Phase::Empty && status.approval.is_none() && latest.is_none() {
                     continue;
                 }
-                validate(plan, latest.as_ref(), &status)?;
-                latest = Some(status);
+                validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
+                latest = Some((status, source));
             }
         }
     }

@@ -327,7 +327,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     let (digest, mut text) = match &result {
                         canic_host::FleetPlanning::Create { operation, fleet_plan } =>
                             (operation, status::fleet_preview(operation, fleet_plan, &state_dir)?),
-                        canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } =>
+                        canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } | canic_host::FleetPlanning::Publication { operation, .. } =>
                             (operation, status::render(&canic_host::status(&state_dir, operation)?, &state_dir)?),
                         canic_host::FleetPlanning::Unchanged { .. } => return Ok(Output::Text(
                             "No artifact changes. Matches retained completion; network state was not refreshed.\n".into()
@@ -418,7 +418,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         .is_some_and(|slot| slot.role.as_deref() == Some("wasm-store"))
                     {
                         if execute_at.is_some() || publication.release.is_some() {
-                            return Err(Error::Invalid("Store bootstrap is operator-driven and has no child dispatch schedule".into()));
+                            return Err(Error::Invalid("Store bootstrap accepts neither an application release nor a child dispatch schedule".into()));
                         }
                         canic_host::create_store_plan(
                             &state_dir,

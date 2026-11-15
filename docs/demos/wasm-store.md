@@ -11,13 +11,68 @@ Root now supports explicit Store-backed creation and serial upgrades. It retains
 immutable references, pin evidence and complete upgrade history in its original
 artifact allocation, with no application Wasm bytes. Named `fleet plan --release`
 now selects a completed publication for child creation and its first upgrade.
-Whole-fleet bootstrap still uses inline application artifacts; release selection
-for that envelope and existing-fleet migration remain unimplemented. Existing
-inline deployments keep their current limits and contracts.
+Fresh whole fleets with a declared Store publish immutable child releases before
+admission and support bounded serial upgrades. Existing-fleet migration remains
+unimplemented; retained inline deployments keep their current limits and contracts.
 There is no delete/reset or pin-release endpoint; incomplete uploads keep their
 reservation. No deployment approval or application readiness follows from Store
 publication. Host and Store check bounded raw Wasm framing and byte integrity. Full
 executable validation remains with the IC installation boundary.
+
+## Whole-fleet artifacts
+
+Declare a new Root, one `wasm-store` child and one or two application children,
+with built Wasm inputs and no existing ID bindings. The usual whole-fleet plan
+selects Store delivery automatically. Release names are application canister names;
+versions are full content hashes, frozen with the ordered chunk commitments.
+There is no mutable latest selection or extra configuration switch.
+
+From the app's config directory, after `make canic` and signer preparation:
+
+```sh
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status FLEET_OPERATION --app starter --fleet mainnet
+canic fleet apply FLEET_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+```
+
+Apply spends the reviewed creation budget: 4T total for Root, Store and one app,
+or 5T with two apps. It creates Root/Store, hands Store to Root, publishes every
+selected child release, then admits children using exact references. Application
+artifacts can be up to 8 MiB each, subject to Store quota. Identical content under
+different application names reuses bytes. Root's scheduled work can continue
+after the operator leaves. Default dispatch remains ten minutes after planning;
+resume the same operation promptly after an interruption rather than making a new
+approval. Reconcile observes publication but cannot publish or admit a new child.
+`--cycles` sets the total fleet debit: Store receives a separate 1T allowance,
+and Root receives the remainder, including child funding. Store consumes no
+application slot. Reconcile reports blocked until apply admits all children;
+recovering Store alone is not fleet completion. Cancellation is unavailable after
+effect preparation. Store addition/removal or replacement on a retained fleet
+requires a separately qualified adoption/maintenance contract. The generated
+starter still begins with Root and one app; declare Store explicitly.
+
+After creation completes, change and rebuild one child. For an unpublished
+artifact, planning returns publication authority first. Apply it, then replan
+and review installation:
+
+```sh
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+canic fleet apply PUBLICATION_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+canic fleet apply UPGRADE_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+```
+
+Repeat that upgrade apply after dispatch to retain completion. Each child retains
+up to eight upgrades. Pending installation must finish before a successor; exact
+replanning retains its original schedule and authority. After child work completes,
+a Root-only artifact change uses the same maintenance plan/apply flow while
+preserving full Store custody. See [Root maintenance](root.md#root-maintenance).
+An existing release with retained publication completion can be selected directly
+for the next upgrade, including after Root maintenance. This reuses historical
+artifact evidence; it cannot renew an unfinished publication's old code authority.
+Store upgrades and inline-to-Store migration remain unqualified Host flows.
+
+## Standalone artifact inspection
 
 From this checkout, after `make canic` and Wasm toolchain preparation:
 
@@ -111,35 +166,8 @@ contract. Readiness has 32 retained attempts; unresolved expired reads and
 exhaustion remain blocked. Keep the journal and signer. A receipt is historical
 completion evidence, not perpetual readiness or a Store maintenance contract.
 
-For a fresh fleet, declare `store` under `root` before whole-fleet planning. The
-fleet may have one or two application children in addition to Store; every slot
-must be unbound. Root, Store and application Wasm paths must already be built.
-From that app's config directory:
-
-```sh
-canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
-canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
-canic fleet status OPERATION --app starter --fleet mainnet
-canic fleet show --app starter --fleet mainnet
-```
-
-The default total debit is 4T for Root + Store + one application, or 5T for two
-applications. `--cycles` sets the total: Store receives a separate 1T allowance,
-and Root receives the remainder, including its child funding. The preview shows
-each debit and the total. One immutable approval binds Store to Root's retained
-creation output. Apply completes Root, then Store installation/handover/readiness,
-then admits the application children under the original dispatch deadline.
-Store does not consume either application slot. Retained fleet digests without
-Store remain unchanged.
-
-Reconcile can recover Store before application admission, but reports blocked
-until apply admits every approved child. That is not a completed fleet. Replan
-keeps the original operation and deadlines; cancellation is unavailable after
-any effect preparation. Completed Store evidence is required for convergence.
-Adding/removing Store or changing its artifact on a retained fleet is refused:
-existing-fleet adoption and Store maintenance need their own qualified contracts.
-The generated starter still begins with one app and Root; Store is explicitly
-declared rather than imposed on every application.
+For new unbound Root/Store/app deployments, use the
+[whole-fleet workflow](#whole-fleet-artifacts).
 
 The fleet Host uses this route for explicit publication into an existing
 Store. Prerequisites: the selected fleet has bound `root` and `store` slots, with
@@ -180,8 +208,9 @@ is bounded to 32 attempts; exhaustion blocks without deleting evidence.
 Publication, artifact building and inspection accept up to 8 MiB, within Store’s
 bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
 and inline child plans retain their smaller custody limits. No measured deployment
-speedup is claimed. Whole-fleet release selection, Store maintenance through Root
-and existing-fleet migration remain pending.
+speedup is claimed. Whole-fleet release selection and Root maintenance with full
+Store custody use the workflows above. Store maintenance through Root and
+existing-fleet migration remain pending.
 
 `make publication-test` qualifies the real CLI and signer against installed Root
 and Store, using synthetic cycles. It creates Store through the CLI, refuses
@@ -301,7 +330,6 @@ The final command is the greeting demo's read-only query. Root obtains an exact
 Store pin, prepares/reconstructs the derived management cache and performs the
 upgrade through its existing effect owner. An inline child cannot switch to Store
 custody through this flag. The named planner retains its existing first-upgrade
-limit; serial upgrade convergence, whole-fleet release selection and host-managed
-Root maintenance with complete Store custody need separate qualification. Runtime
-maintenance evidence already has its installed fixture, but that does not qualify
-the Host maintenance workflow. No live mainnet run or latency improvement is claimed.
+limit. Serial upgrade convergence and Root maintenance with full Store custody
+are qualified through the whole-fleet workflow above; they do not expand this
+named first-upgrade planner. No live mainnet run or latency improvement is claimed.

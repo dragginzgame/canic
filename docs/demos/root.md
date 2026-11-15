@@ -17,8 +17,10 @@ application slots. Whole-fleet apply completes Store handover/readiness before
 admitting either app; the approval includes its separate 1T debit. See the
 [Store bootstrap workflow](wasm-store.md). Adding Store to an already retained
 fleet remains an unqualified adoption path; the existing mainnet demo below is
-unchanged. Applications still use inline deployment until Store release selection
-is integrated.
+unchanged. Fresh fleets with Store publish each application by content hash before
+admission; existing inline fleets keep their original delivery contract. A changed
+Store-backed child with unpublished bytes first needs publication plan/apply, then a separate upgrade
+plan/apply. See [whole-fleet artifacts](wasm-store.md#whole-fleet-artifacts).
 
 ## Current mainnet demo
 
@@ -352,6 +354,14 @@ changed executable, rejected upgrade, callback loss and owner maintenance.
 
 ## Root maintenance
 
+For Store-backed children, the same workflow retains every artifact reference,
+pin, cache deadline and historical upgrade source. Both executables must support
+the complete `observe_stored_children` contract. The preview identifies the Store
+and pin count; `--json` exposes the full approved custody. Store code, sole Root
+control and subnet placement are checked before and after installation alongside
+the child checks. An interrupted completion check resumes the original installation
+attempt; it cannot declare success with missing source evidence.
+
 Whole-fleet planning also accepts a Root-only artifact change after creation and
 every admitted child upgrade have completed. It preserves the Root/child principals,
 controllers, original creation and full upgrade journal. Root and child changes
@@ -418,17 +428,19 @@ bytes remain in the host journal; Root retains their hashes and outcomes.
 It validates the original payloads before writing the new format during lifecycle
 execution. Downgrading to a binary that only reads the old payload is unsupported.
 
-The engine retains one creation approval and at most 512 KiB of application Wasm, attaches
+For inline delivery, the engine retains one creation approval and at most 512 KiB of application Wasm, attaches
 1T cycles on creation and requires a 0.5T liquid reserve. Each creation, upload
 and installation effect is issued at most once. An uncertain creation with no
 retained principal stays blocked; retry does not obtain another allowance.
 Module/controller observations precede application-reported readiness. These
 bounds and the separate-message commit boundaries come from the existing
 [growth qualification](growth.md).
-The current upgrade approval retains at most another 512 KiB, uses existing
+An inline upgrade approval retains at most another 512 KiB, uses existing
 canister cycles and checks the same 0.5T liquid reserve. Application data remains
 owned by the application's lifecycle; management evidence alone cannot prove
 that an arbitrary application's migration preserves its data.
+Store-backed children instead retain immutable references and pins; the Store
+owns up to 8 MiB per artifact and the derived management cache.
 
 ## Remaining work
 

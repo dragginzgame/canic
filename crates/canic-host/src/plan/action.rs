@@ -12,6 +12,16 @@ pub struct UpgradeTarget {
     pub module: String,
 }
 
+/// Store authority and complete artifact evidence preserved during Root maintenance.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StoreMaintenance {
+    /// Exact fleet Store identity and reviewed executable.
+    pub store: UpgradeTarget,
+    /// Original creation and every upgrade delivery, in permanent child-slot order.
+    pub sources: [Option<canic_management_protocol::stored::Sources>; 2],
+}
+
 /// One operation with all and only the authority it needs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PlanAction {
@@ -46,6 +56,8 @@ pub enum PlanAction {
         target: UpgradeTarget,
         /// Complete child journals in stable slot order.
         children: Vec<Custody>,
+        /// Present when complete Store custody is required; absent preserves inline approvals.
+        store: Option<Box<StoreMaintenance>>,
     },
 }
 
@@ -110,6 +122,14 @@ impl super::Plan {
     pub fn maintenance(&self) -> Option<&[Custody]> {
         match &self.action {
             PlanAction::MaintainRoot { children, .. } => Some(children),
+            _ => None,
+        }
+    }
+    /// Complete Store artifact evidence, only for Store-aware Root maintenance.
+    #[must_use]
+    pub fn maintenance_store(&self) -> Option<&StoreMaintenance> {
+        match &self.action {
+            PlanAction::MaintainRoot { store, .. } => store.as_deref(),
             _ => None,
         }
     }

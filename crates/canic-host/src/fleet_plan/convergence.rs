@@ -28,6 +28,13 @@ pub enum FleetPlanning {
         /// Existing single-child plan contract.
         plan: Plan,
     },
+    /// Publish a changed child artifact before approving its installation.
+    Publication {
+        /// Independently retained publication digest.
+        operation: String,
+        /// Exact release and Store authority, with no installation effect.
+        plan: Plan,
+    },
     /// Upgrade Root while retaining its complete child journal.
     Maintenance {
         /// Independently retained maintenance approval digest.
@@ -85,7 +92,7 @@ fn child_completion(dir: &Path, fleet: &FleetPlan, index: Slot) -> Result<Option
     {
         return Ok(None);
     }
-    let child = fleet.child_plan(&root, index)?;
+    let child = fleet.child_plan(&root, super::store_receipt(dir, fleet)?.as_ref(), index)?;
     Ok(
         completed(&dir.join(super::record::child_leaf(index)), &child)?
             .map(|receipt| (child, receipt)),
@@ -111,7 +118,11 @@ pub(crate) fn permits_upgrade(dir: &Path, fleet: &FleetPlan, proposed: &Plan) ->
             .management()
             .zip(child.management())
             .is_some_and(|(new, old)| {
-                new.root == old.root && new.root_module == old.root_module && new.slot == old.slot
+                new.root == old.root
+                    && new.root_module == old.root_module
+                    && new.slot == old.slot
+                    && new.source.as_ref().map(|s| &s.store)
+                        == old.source.as_ref().map(|s| &s.store)
             }))
 }
 
@@ -119,6 +130,7 @@ struct Child {
     plan: Plan,
     receipt: Receipt,
     custody: canic_management_protocol::custody::Custody,
+    sources: Option<canic_management_protocol::stored::Sources>,
     module: String,
     dispatch: u64,
     version: Option<u64>,
@@ -132,6 +144,7 @@ pub(super) fn plan(
     desired: FleetPlan,
     bytes: (&[u8], &[Vec<u8>]),
     individual: &[(String, Plan)],
+    publications: &[(String, Plan)],
 ) -> Result<FleetPlanning> {
     let dir = store.operation(id)?;
     if fleet.store.as_ref().map(|s| &s.artifact) != desired.store.as_ref().map(|s| &s.artifact) {
@@ -175,8 +188,12 @@ pub(super) fn plan(
                 fleet_plan: fleet,
             });
         };
-        let mut creation = managed::evidence(&dir.join(super::record::child_leaf(index)), &child)?
-            .ok_or_else(invalid)?;
+        let (mut creation, source) =
+            managed::evidence_with_source(&dir.join(super::record::child_leaf(index)), &child)?
+                .ok_or_else(invalid)?;
+        if source.is_some() != child.management().is_some_and(|o| o.source.is_some()) {
+            return Err(invalid());
+        }
         creation.stable_pages = 0;
         creation.maintenance_candidate = false;
         children.push(Child {
@@ -187,6 +204,10 @@ pub(super) fn plan(
                 creation,
                 upgrades: Vec::new(),
             },
+            sources: source.map(|creation| canic_management_protocol::stored::Sources {
+                creation,
+                upgrades: Vec::new(),
+            }),
             dispatch: 0,
             version: None,
             upgrade_bytes: 0,
@@ -204,9 +225,10 @@ pub(super) fn plan(
         }
         last_created = value.created_at_ns;
         if let Some(expected) = value.maintenance() {
-            if !expected
-                .iter()
-                .eq(children.iter().map(|child| &child.custody))
+            if value.maintenance_store() != store_custody(&dir, &fleet, &children)?.as_ref()
+                || !expected
+                    .iter()
+                    .eq(children.iter().map(|child| &child.custody))
                 || value.deployment != fleet.root.deployment
                 || value.network != fleet.root.network
                 || value.controller != fleet.root.controller
@@ -251,6 +273,8 @@ pub(super) fn plan(
                     new.root == old.root
                         && new.root_module == root_module
                         && new.slot == old.slot
+                        && new.source.as_ref().map(|s| &s.store)
+                            == old.source.as_ref().map(|s| &s.store)
                         && new.execute_at_ns > child.dispatch
                 })
             || value.previous_module() != Some(&child.module)
@@ -260,11 +284,10 @@ pub(super) fn plan(
                 "upgrade history is not an ordered child/slot/code chain".into(),
             ));
         }
-        let evidence = managed::upgrade::evidence(&store.operation(operation)?, value)?;
-        if let (Some(old), Some(new)) = (
-            child.version,
-            evidence.as_ref().and_then(|s| s.previous_version),
-        ) && new < old
+        let retained = managed::upgrade::evidence_with_source(&store.operation(operation)?, value)?;
+        let evidence = retained.as_ref().map(|(status, _)| status);
+        if let (Some(old), Some(new)) = (child.version, evidence.and_then(|s| s.previous_version))
+            && new < old
         {
             return Err(invalid());
         }
@@ -295,9 +318,15 @@ pub(super) fn plan(
         }
         child.module = value.artifact.sha256.clone();
         child.dispatch = value.management().expect("validated owner").execute_at_ns;
-        child.version = evidence.as_ref().and_then(|s| s.observed_version);
+        child.version = evidence.and_then(|s| s.observed_version);
         child.upgrade_bytes = value.artifact.bytes;
-        child.custody.upgrades.push(evidence.ok_or_else(invalid)?);
+        let (evidence, source) = retained.ok_or_else(invalid)?;
+        match (&mut child.sources, source) {
+            (Some(sources), Some(source)) => sources.upgrades.push(source),
+            (None, None) => {}
+            _ => return Err(invalid()),
+        }
+        child.custody.upgrades.push(evidence);
         latest_id = operation;
     }
     if desired.root.created_at_ns <= last_created {
@@ -317,6 +346,7 @@ pub(super) fn plan(
                     module: root_module,
                 },
                 children: children.iter().map(|c| c.custody.clone()).collect(),
+                store: store_custody(&dir, &fleet, &children)?.map(Box::new),
             },
             ..desired.root
         };
@@ -338,6 +368,9 @@ pub(super) fn plan(
         .iter()
         .enumerate()
         .map(|(i, c)| {
+            if c.plan.management().is_some_and(|o| o.source.is_some()) {
+                return 0;
+            }
             c.plan.artifact.bytes
                 + if i == index {
                     selected.artifact.bytes
@@ -365,6 +398,9 @@ pub(super) fn plan(
     let mut owner = child.plan.management().cloned().ok_or_else(invalid)?;
     owner.execute_at_ns = selected.execute_at_ns;
     owner.root_module = root_module;
+    if let Some(source) = &mut owner.source {
+        source.manifest = selected.release.clone().ok_or_else(invalid)?;
+    }
     let upgrade = Plan {
         artifact: selected.artifact.clone(),
         action: PlanAction::UpgradeChild {
@@ -378,8 +414,54 @@ pub(super) fn plan(
         expires_at_ns: desired.root.expires_at_ns,
         ..child.plan
     };
+    if let Some(source) = upgrade.management().and_then(|o| o.source.as_ref()) {
+        let publication = super::releases::publication_plan(&upgrade, source)?;
+        // Completed publication is artifact evidence, not permission to renew an old mutation.
+        let mut published = false;
+        for (id, old) in publications {
+            if crate::publication::completed_release(
+                &store.operation(id)?,
+                old,
+                &publication,
+                &source.manifest,
+            )? {
+                published = true;
+                break;
+            }
+        }
+        if !published {
+            let (operation, plan) = plan::retain_locked(store, publication, &bytes.1[index])?;
+            if crate::publication::receipt(
+                &store.operation(&operation)?,
+                &plan,
+                &operation,
+                &source.manifest,
+            )?
+            .is_none()
+            {
+                return Ok(FleetPlanning::Publication { operation, plan });
+            }
+        }
+    }
     let (operation, plan) = plan::publish_locked(store, upgrade, &bytes.1[index])?;
     Ok(FleetPlanning::Upgrade { operation, plan })
+}
+fn store_custody(
+    dir: &Path,
+    fleet: &FleetPlan,
+    children: &[Child],
+) -> Result<Option<crate::StoreMaintenance>> {
+    if children.iter().all(|c| c.sources.is_none()) {
+        return Ok(None);
+    }
+    let receipt = super::store_receipt(dir, fleet)?.ok_or_else(invalid)?;
+    Ok(Some(crate::StoreMaintenance {
+        store: UpgradeTarget {
+            canister: receipt.canister,
+            module: receipt.module_hash,
+        },
+        sources: std::array::from_fn(|i| children.get(i).and_then(|c| c.sources.clone())),
+    }))
 }
 fn changed_children<'a>(
     children: &'a [Child],

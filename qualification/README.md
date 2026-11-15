@@ -49,11 +49,24 @@ Run only that journey with `bash scripts/dev/test-publication.sh bootstrap_store
 Publication does
 not create a canister or reserve a deployment slot; see [Store scope](../docs/demos/wasm-store.md).
 The same runner also qualifies a fresh whole fleet with Root, Store and two
-application children. Store readiness blocks both application admissions;
+application children above 2 MB each. Store readiness and complete publication
+evidence block both application admissions;
 reconciliation recovers a lost handover reply without admitting either child,
 then apply resumes the original approval. Both children finish, replay creates
-nothing extra, four-canister inventory is complete, and missing Store readiness
-proof refuses convergence. Original fleets without Store retain their digests.
+nothing extra, shared bytes are not uploaded twice, and publication/admission
+replies can be lost without replacing signed attempts. Four successive child
+upgrades exercise both slots and cache reconstruction, with independent publication
+and installation approvals. Four-canister inventory is complete; missing Store
+readiness proof refuses convergence. A second Root executable preserves complete
+Store custody after both children upgrade. Changed Store authority refuses
+installation, interrupted postflight and a lost install reply recover the original
+signature, and subsequent child upgrades use the maintained Root, including reuse
+of a release published before maintenance. Missing publication completion refuses
+that reuse without granting renewed mutation authority. Native
+maintenance tests reject altered pins, sources, deadlines and unexpected slots,
+without admitting legacy inline observation methods for Store custody.
+Native fleet tests admit both full 8 MiB manifests and
+preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds two embedded catalog executables using the optional
 Canic adapter and the real Blob Service at its pinned Git revision. Five installed cases cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,

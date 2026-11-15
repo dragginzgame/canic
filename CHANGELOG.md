@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.208.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+Fresh whole-fleet plans with a declared `wasm-store` now publish application
+artifacts there before admitting children. Unpublished child artifacts require a
+publication plan/apply step, followed by a separately reviewed upgrade plan/apply.
+Host library callers must handle `FleetPlanning::Publication` and supply the
+optional `FleetChild.release` field. Retained inline approvals remain unchanged.
+`PlanAction::MaintainRoot` also carries optional Store custody; use `None` for
+inline maintenance.
+
+### ▶️ Try it
+
+After `make canic`, run from a fresh app's config directory with built Root,
+Store and application Wasms declared. Select your app/fleet; planning spends
+nothing, while apply funds and installs the approved fleet. No browser opens.
+
+```sh
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+canic fleet apply FLEET_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status FLEET_OPERATION --app starter --fleet mainnet
+```
+
+After creation completes, change and rebuild one child, then run `fleet plan`
+again. Apply the returned publication operation, replan, and review/apply the
+returned upgrade operation. See the [Store workflow](docs/demos/wasm-store.md#whole-fleet-artifacts).
+
+### ➕ Added
+
+Whole fleets bind immutable releases by application name and full content hash,
+reuse shared bytes, and support bounded successive child upgrades. Both releases
+must have retained publication evidence before either child is admitted. Existing
+signed attempts survive interrupted publication and admission. Root keeps
+references; Store owns application bytes and cache rebuilding.
+
+Root maintenance now preserves the complete Store references, pins and historical
+upgrade deliveries. It verifies Root, child and Store code/controller bindings,
+compares full custody before and after installation, and recovers the original
+install attempt after an interrupted completion check. Subsequent child work uses
+the upgraded Root's code binding and can reuse releases whose original publication
+completion is retained. Unfinished publication authority is never renewed by a
+Root upgrade. See [Root maintenance](docs/demos/root.md#root-maintenance).
+
+### 🩹 Fixed
+
+Store bootstrap now identifies both unsupported release selection and scheduling
+in its refusal message.
+
 ## [0.207.0] - 2026-11-15
 
 ### ⚠️ Breaking

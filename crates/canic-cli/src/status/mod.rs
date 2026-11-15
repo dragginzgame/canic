@@ -51,6 +51,16 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             .as_array()
             .ok_or_else(|| Error::Invalid("missing fleet child states".into()))?;
         for child in children {
+            if !child["publication"].is_null() {
+                rows.push([
+                    format!("{} release", child["name"].as_str().unwrap_or("unknown")),
+                    if child["publication"]["publication"].is_null() {
+                        "Publication unfinished; resume fleet apply".into()
+                    } else {
+                        "Published release evidence retained".into()
+                    },
+                ]);
+            }
             rows.push([
                 child["name"].as_str().unwrap_or("unknown").into(),
                 evidence(&child["state"]),
@@ -153,6 +163,21 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             custody.upgrades.len()
         )
         .expect("writing to String");
+    }
+    if let Some(store) = plan.maintenance_store() {
+        writeln!(
+            output,
+            "Preserved Store: {}\nStore module: {}\nRetained artifact pins: {}",
+            terminal_text(&store.store.canister),
+            terminal_text(&store.store.module),
+            store
+                .sources
+                .iter()
+                .flatten()
+                .map(|s| 1 + s.upgrades.len())
+                .sum::<usize>()
+        )
+        .expect("String write");
     }
     if let Some(owner) = plan.management() {
         writeln!(
@@ -305,6 +330,15 @@ pub(crate) fn fleet_preview(
             child.artifact.sha256
         )
         .expect("String write");
+        if let Some(release) = &child.release {
+            writeln!(
+                modules,
+                "  Store release: {} / {} (publication before child admission)",
+                terminal_text(&release.release.name),
+                terminal_text(&release.release.version)
+            )
+            .expect("String write");
+        }
     }
     Ok(format!(
         "CANIC FLEET PLAN\nOperation: {}\nApp: {}\nFleet: {}\nNetwork: {}\nOperator: {}\nJournal: {}\n\n{}\n\n{}Admission before: {}\nChild effect deadline: {}\n\n",

@@ -154,15 +154,18 @@ fn binding(plan: &Plan) -> Result<&Publication> {
         .ok_or_else(|| Error::Invalid("publication plan required".into()))
 }
 pub(crate) fn manifest(plan: &Plan, bytes: &[u8]) -> Result<protocol::Manifest> {
-    Ok(protocol::Manifest {
-        release: binding(plan)?.release.clone(),
+    Ok(release_manifest(binding(plan)?.release.clone(), bytes))
+}
+pub(crate) fn release_manifest(release: protocol::Release, bytes: &[u8]) -> protocol::Manifest {
+    protocol::Manifest {
+        release,
         hash: protocol::digest(bytes),
         bytes: bytes.len() as u64,
         chunks: bytes
             .chunks(protocol::CHUNK_BYTES)
             .map(protocol::digest)
             .collect(),
-    })
+    }
 }
 pub(crate) fn call(plan: &Plan, command: Command, deadline: u64) -> Result<signed::Call<'static>> {
     let publication = binding(plan)?;
@@ -397,6 +400,28 @@ pub(crate) fn receipt(
         ));
     }
     Ok(Some(value))
+}
+
+/// Reuse historical completion under a newly reviewed Root executable; never renew publication authority.
+pub(crate) fn completed_release(
+    dir: &Path,
+    old: &Plan,
+    proposed: &Plan,
+    expected: &protocol::Manifest,
+) -> Result<bool> {
+    let previous = binding(old)?;
+    let next = binding(proposed)?;
+    if old.network != proposed.network
+        || old.controller != proposed.controller
+        || old.deployment != proposed.deployment
+        || old.artifact != proposed.artifact
+        || previous.root.canister != next.root.canister
+        || previous.store != next.store
+        || previous.release != next.release
+    {
+        return Ok(false);
+    }
+    Ok(receipt(dir, old, &old.digest()?, expected)?.is_some())
 }
 pub(crate) fn status(
     dir: &Path,

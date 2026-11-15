@@ -7,6 +7,167 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.208.0 release qualification: 2026-11-15
+
+The complete Linux `make -j1 ci` gate passed in 271 seconds with unchanged source
+inputs. This covers native/Wasm lint and documentation, effect and artifact custody,
+89 Host and 44 CLI tests, installed application/Root/Store journeys, both publication
+journeys including four serial child upgrades across Root maintenance, and all five
+Blob composition cases. Historical-binary opt-in cases and macOS/mainnet were not
+run. Raw gate and input evidence is under `target/evidence/0.208.0/release/`.
+
+Fresh sparse-registry review of direct first-party dependencies in both workspaces
+found the selected stable versions current. Blob remains at its qualified immutable
+Git revision. Release preparation changes all 14 product versions to 0.208.0 and
+their local lockfile entries; the four qualification package versions stay 0.0.0.
+External selections are unchanged and every package retains `publish = false`.
+Version-sensitive Host/CLI checks and `make canic` verify the prepared release.
+
+## Host Root maintenance preserves Store custody: 2026-11-15
+
+Extended the existing whole-fleet maintenance owner to carry complete Store
+delivery evidence alongside child journals. Reused the legacy source/test/history
+research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded in the
+[Store decision](#versioned-wasm-store-decision-2026-11-15) and
+[runtime integration](#root-uses-retained-store-references-2026-11-15). The relevant
+requirements remain immutable source identity, preserved pins and history, and a
+reconstructible management cache. The rewrite's installed full-custody contract,
+not an assumed legacy upgrade guarantee, supplies the maintenance mechanism.
+
+Maintenance plans bind the Store identity/code and both slots' exact creation and
+historical upgrade deliveries, including pin state, operation identity and cache
+deadlines. Existing evidence readers now return their already-validated delivery
+alongside status; there is no second journal scan or status summary parser. Root
+installation still belongs to the direct effect owner. Preflight and postflight
+select only `observe_stored_children`, compare the complete record including empty
+slots, and verify child and Store code/controllers plus Store subnet placement.
+The optional boxed custody field preserves inline plan encodings while avoiding
+growth of every PlanAction value. Unknown legacy custody contracts are not probed.
+
+Completed release publication remains valid artifact evidence after a reviewed
+Root code change. Fleet convergence reuses the existing inventory and signed
+completion receipt; it does not grant new publication authority or renew an
+unfinished old-code operation. The installed witness returns to an earlier release
+after maintenance and refuses that selection when the original completion proof
+is missing. Subsequent installation still binds current Root code and exact Store
+source. Root maintenance recovery continues through the original `fleet apply`;
+the child reconciliation command is not extended into a second maintenance path.
+
+Focused Linux evidence:
+
+- 89 Host and 44 CLI tests pass; the ten convergence cases were rerun after
+  completing historical-release reuse. Native maintenance cases reject changed
+  pins, source identities, cache deadlines, unexpected slots, incomplete retention
+  and legacy inline observation methods. Logs are
+  `target/qualification/store-maintenance-{native,convergence}.log`.
+- Both installed publication journeys pass on the maintenance implementation
+  (90.44s). After the final reuse change, the whole-fleet witness passes again
+  (100.22s): two applications above 2 MB, four child upgrades across both slots,
+  Root replacement between upgrades, changed Store authority refused before
+  installation, interrupted postflight, lost install reply, unchanged signed
+  attempt, identical complete before/after custody, repeat completion and an old
+  release reused under the new Root code. Logs are
+  `target/qualification/store-maintenance-{installed,reuse}.log`; final fleet
+  custody is under `target/publication/fleet-324467/`.
+- Focused Host/CLI and publication-fixture Clippy, Host/CLI Rustdoc, formatting
+  and tooling agreement pass. `make canic` installs the development CLI on PATH.
+  No full release gate, macOS or mainnet result is claimed.
+
+Removed stale inline-only/maintenance-pending guidance and consolidated duplicated
+whole-fleet instructions. Kept source validation and live Store verification with
+their existing owners; added no crate, dependency, runtime endpoint, storage
+allocation, timer, signing path or workflow engine. Current guarantees cover
+completed child work and an exclusive operator maintenance window, not active or
+uncertain effects. Host-driven Store upgrades, inline migration, pin reclamation
+and application-specific data migration remain separate qualification work.
+The pending 0.208.0 notes now include the optional Store custody field on
+`PlanAction::MaintainRoot`; inline callers supply `None`. Package versions remain
+0.207.0. No push or mainnet mutation was performed.
+
+## Whole-fleet Store artifacts and serial upgrades: 2026-11-15
+
+Continued after the maintainer confirmed 0.207.0 delivery. Fixed the review's
+Slot-index cast and misleading Store-bootstrap diagnostic. Reused the source,
+regression and history research at legacy revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` in the
+[Store decision](#versioned-wasm-store-decision-2026-11-15) and
+[Root integration](#root-uses-retained-store-references-2026-11-15): immutable
+release identity, stable bytes as authority, reusable chunks and explicit
+bootstrap readiness remain the relevant requirements. No legacy mutable catalog
+selection, old-version pruning or new workflow engine is needed.
+
+Fresh whole fleets with a declared Store now bind each child's manifest into
+the aggregate approval. Release identity is `(application canister name, complete
+content hash)`. Root/Store principals resolve only from their approved creation
+results and typed completion evidence. Nested publication reuses the existing
+Plan, signer, observation and retention owners. Both publications must complete
+before any child admission. Publication progress is visible in fleet status;
+reconciliation can observe it but cannot publish or admit a child.
+
+For each changed child, convergence returns an independently reviewable publication
+plan first. Once its signed completion evidence is retained, replan creates the
+existing managed upgrade plan with that exact Store/manifest. The ordered child,
+code and slot chain keeps its eight-upgrade bound and source owner. Root holds
+references and pins, not application bytes. Existing inline fleets, including
+those with a bootstrapped Store, retain their original delivery mode and digests.
+Host Root maintenance explicitly refuses Store-backed children until its full
+custody-preservation flow is qualified; no inline-only maintenance record may
+silently replace Store evidence.
+
+Focused Linux evidence:
+
+- All 88 Host and 44 CLI tests pass, including maximum-size planning with two
+  8 MiB manifests, exact future Store binding, original one/two-child digests and
+  retained Store-plus-inline replanning. Native output is at
+  `target/qualification/store-fleet-native.log`.
+- The installed whole-fleet publication fixture passes in 80.40 seconds with
+  two application Wasms above 2 MB. It interrupts Store handover and second-release
+  completion, loses publication and child-admission replies, preserves original
+  signatures, and proves neither child is admitted before both publications.
+  The second release reuses the first object's bytes without chunk upload.
+  Three upgrades cover app, worker, then app again, clearing the management cache
+  before each. Publication and installation are independently approved; replay,
+  unchanged convergence, four-canister inventory, missing readiness evidence and
+  the Root-maintenance refusal are checked. Retained fixture data is under
+  `target/publication/fleet-244972/`.
+- The existing named publication/deployment/first-upgrade fixture also passes
+  against the unchanged product inputs. The initial extended fleet run exposed
+  accumulated simulator clock skew beyond the real signer's five-minute window;
+  the fixture now uses simulator-relative short schedules like the Root suite.
+  Production deadlines were not relaxed. A native maximum-manifest case identified
+  Wire's per-value node charge; only the bounded metadata node allowance increased.
+- Focused Host/CLI and publication-fixture Clippy, Host/CLI Rustdoc, `make fmt-check`
+  and `make toko-tooling-check` pass. Rustdoc output is at
+  `target/qualification/store-fleet-doc.log`. No full release gate, macOS or
+  mainnet run is claimed.
+
+Pending notes select 0.208.0 because Host adds a public fleet-child field and a
+planning result variant, and fresh Store fleets now use publication before
+installation. Package versions remain 0.207.0 until authorized release preparation.
+This batch adds one private fleet-publication composition module, no crate,
+dependency, alias, configuration switch, mutable latest resolver, runtime engine
+or catalog mirror. Inline migration, Host Root/Store maintenance and pin reclamation
+remain explicit limitations. No push or mainnet mutation was performed.
+
+## 0.207.0 post-push review: 2026-11-15
+
+Reviewed delivered commit `e908fe97e0b470c395656b56930cb6d58a8d5f3e` after
+verifying remote main and the peeled `v0.207.0` tag. The review covered release
+selection, managed staging/observation/reconciliation, retained approval matching,
+typed Store receipts and direct CLI callers against the design and installed
+witness. Source custody stays with the existing owners; there is no new runtime
+engine, payload repository in Root, mutable latest resolution or signing path.
+Old inline digests remain qualified. Whole-fleet release selection and custody
+migration are documented limitations, not implicit supported flows.
+
+No release-blocking discrepancy was found in this scope. Two minor cleanup items
+remain: `managed/stored.rs::upgraded` casts Slot to an index instead of using the
+existing `Slot::index()` owner, and the Store-bootstrap refusal in CLI `run_fleet`
+mentions scheduling even when the rejected input is `--release`. Use the existing
+index method and make that diagnostic identify the unsupported application-release
+selection. Neither changes effect authority; no new framework or broad audit is
+needed. This post-push note remains local and is not part of the release tag.
+
 ## 0.207.0 release qualification: 2026-11-15
 
 The complete Linux `make -j1 ci` gate passed on the release inputs in 242 seconds.

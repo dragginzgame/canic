@@ -833,7 +833,23 @@ Whole-fleet planning now includes an optional declared Store, bound to the same
 Root creation output and completed before application admission. Its separate 1T
 creation debit appears in the total approval; no app slot is consumed. Retained
 Store definitions cannot be added, removed or replaced through replan.
-Store-backed deployment release selection remains pending. See the
+Fresh fleets with a declared Store publish both selected application artifacts
+before either child admission. The immutable release label is the application
+canister name plus the complete content hash; manifests and future Store creation
+output are bound by the original fleet approval. Changed child artifacts first
+produce an independent publication approval through existing plan/apply; after
+publication completes, replan approves installation separately. A completed
+release remains reusable after reviewed Root maintenance; this does not renew
+unfinished publication authority under different Root code. The existing
+bounded serial upgrade chain retains target, code, source and slot authority.
+Retained inline fleets do not migrate implicitly. Host Root maintenance binds the
+Store identity/code and every child's original creation and historical upgrade
+delivery, including retention pins and cache deadlines. Replicated full-custody
+observations must match before and after the original direct install attempt;
+legacy inline observations cannot substitute. Store authority/code/placement and
+child identity/code/controllers are independently checked. Only completed
+maintenance advances Root code authority for subsequent work. Inline-to-Store
+migration and Host-driven Store upgrades remain unqualified. See the
 [current scope](../demos/wasm-store.md). The full contract below still requires
 pin release, reclamation and fleet integration. Each managed
 fleet owns a separate Store with a persistent, dynamically extensible catalog.
@@ -924,9 +940,10 @@ owners; this grants no installation authority. The approval binds both modules,
 principals and exact bytes, with separately retained read-only recovery. Named
 child planning now selects a completed publication operation, freezes its immutable
 manifest and Store code, and reuses the existing Store-backed creation/upgrade
-contracts. Observations validate complete source and pin custody. Whole-fleet
-release selection, inline-to-Store migration and host maintenance carrying Store
-custody remain pending. See the
+contracts. Observations validate complete source and pin custody. Fresh whole
+fleets publish content-hash releases, converge serial child upgrades and preserve
+full Store custody during Root maintenance. Inline-to-Store migration and
+Host-driven Store maintenance remain pending. See the
 [current implementation scope](../demos/wasm-store.md). First prove fresh
 Root/Store/app creation, multiple coexisting versions, interrupted upload/resume,
 hash/version conflicts, quota exhaustion, cache reconstruction, pin/deletion

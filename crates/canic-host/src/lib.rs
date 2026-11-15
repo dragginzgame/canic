@@ -39,7 +39,9 @@ pub use fleet_plan::{
 pub use managed::{create_managed_plan, stored::StoredArtifact};
 pub use network::{Network, greet};
 pub use operation::{ApplyOutcome, ChildOutcome, Receipt, apply, reconcile, status};
-pub use plan::{ManagedOwner, Plan, PlanAction, PlanInput, UpgradeTarget, create_plan};
+pub use plan::{
+    ManagedOwner, Plan, PlanAction, PlanInput, StoreMaintenance, UpgradeTarget, create_plan,
+};
 pub use publication::{
     Publication, PublicationInput, PublicationProgress, create_publication_plan,
 };

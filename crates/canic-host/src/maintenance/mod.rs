@@ -8,6 +8,7 @@ use canic_management_protocol::{
 use ic_platform::agent::Agent;
 use std::path::Path;
 
+mod stored;
 #[cfg(test)]
 mod tests;
 
@@ -22,6 +23,13 @@ fn single_upgrade_root(plan: &Plan) -> bool {
 
 // Execution and status share the exact retained-read locations for this predecessor.
 pub(crate) fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
+    if plan.maintenance_store().is_some() {
+        return if after {
+            &[("custody-after", "observe_stored_children")]
+        } else {
+            &[("custody-before", "observe_stored_children")]
+        };
+    }
     if plan
         .maintenance()
         .is_some_and(|children| children.len() > 1)
@@ -47,6 +55,17 @@ pub(crate) fn observations(plan: &Plan, after: bool) -> &'static [(&'static str,
 /// Exact read authority derived from the approved predecessor, never endpoint probing.
 pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
     validate(plan)?;
+    if plan.maintenance_store().is_some() {
+        if method != "observe_stored_children" {
+            return Err(invalid());
+        }
+        return ic_wire::native::encode_request(
+            canic_management_protocol::stored::CUSTODY,
+            &(),
+            canic_management_protocol::stored::LIMITS,
+        )
+        .map_err(supplier);
+    }
     let (id, limits) = match method {
         "observe_children"
             if plan
@@ -73,6 +92,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     let crate::PlanAction::MaintainRoot {
         target,
         children: expected,
+        ..
     } = &plan.action
     else {
         return Err(invalid());
@@ -116,6 +136,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     }
     ic_wire::native::encode(expected, canic_management_protocol::children::LIMITS)
         .map_err(supplier)?;
+    stored::validate(plan)?;
     Ok(())
 }
 
@@ -141,7 +162,14 @@ fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
         if !matches_plan(
             plan,
             method,
-            &store::read(&path, canic_management_protocol::children::LIMITS.bytes)?,
+            &store::read(
+                &path,
+                if plan.maintenance_store().is_some() {
+                    canic_management_protocol::stored::LIMITS.bytes
+                } else {
+                    canic_management_protocol::children::LIMITS.bytes
+                },
+            )?,
         )? {
             return Err(invalid());
         }
@@ -151,6 +179,9 @@ fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
 
 fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
     let expected = plan.maintenance().ok_or_else(invalid)?;
+    if plan.maintenance_store().is_some() {
+        return stored::matches(plan, method, bytes);
+    }
     if method == "observe_children" {
         let observed: canic_management_protocol::children::Custody =
             ic_wire::native::decode_response(
@@ -225,6 +256,9 @@ pub(crate) async fn observe(
         return Err(Error::Blocked(
             "Root maintenance code binding changed".into(),
         ));
+    }
+    if let Some(store) = plan.maintenance_store() {
+        crate::managed::stored::verify_store(agent, &target.to_text(), &store.store).await?;
     }
     for (step, method) in observations(plan, after) {
         let call = signed::Call {

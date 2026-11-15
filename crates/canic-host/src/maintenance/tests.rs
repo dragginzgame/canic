@@ -16,6 +16,7 @@ fn fixture() -> (std::path::PathBuf, Plan) {
         canister: "root".into(),
     });
     plan.action = crate::PlanAction::MaintainRoot {
+        store: None,
         target: crate::UpgradeTarget {
             canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
             module: SINGLE_UPGRADE_ROOT.into(),
@@ -38,6 +39,130 @@ fn fixture() -> (std::path::PathBuf, Plan) {
     };
     plan.validate().unwrap();
     (dir, plan)
+}
+
+#[test]
+fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
+    use canic_management_protocol::stored as wire;
+    let (dir, mut plan) = fixture();
+    let crate::PlanAction::MaintainRoot {
+        target,
+        children,
+        store,
+    } = &mut plan.action
+    else {
+        panic!("maintenance");
+    };
+    target.module = "11".repeat(32);
+    let reference = wire::Reference {
+        store: "r7inp-6aaaa-aaaaa-aaabq-cai".into(),
+        manifest: canic_wasm_store_protocol::Manifest {
+            release: canic_wasm_store_protocol::Release {
+                name: "app".into(),
+                version: "v1".into(),
+            },
+            hash: [1; 32],
+            bytes: 8,
+            chunks: vec![[2; 32]],
+        },
+    };
+    let stage = wire::Stage {
+        approval: children[0].creation.approval.clone().unwrap(),
+        reference,
+    };
+    *store = Some(Box::new(crate::StoreMaintenance {
+        store: crate::UpgradeTarget {
+            canister: stage.reference.store.clone(),
+            module: "22".repeat(32),
+        },
+        sources: [
+            Some(wire::Sources {
+                creation: wire::Delivery {
+                    operation: stage
+                        .pin(
+                            wire::STAGE,
+                            canic_management_protocol::children::Slot::First,
+                        )
+                        .operation,
+                    reference: stage.reference,
+                    state: wire::PinState::Retained,
+                    cache_deadline: Some(2),
+                },
+                upgrades: Vec::new(),
+            }),
+            None,
+        ],
+    }));
+    plan.validate().unwrap();
+    assert_eq!(
+        serde_json::from_value::<Plan>(serde_json::to_value(&plan).unwrap()).unwrap(),
+        plan
+    );
+    let observed = wire::Custody {
+        children: [
+            plan.maintenance().unwrap()[0].clone(),
+            Custody {
+                creation: Status::default(),
+                upgrades: vec![],
+            },
+        ],
+        sources: plan.maintenance_store().unwrap().sources.clone(),
+    };
+    let frame = |v: &wire::Custody| {
+        ic_wire::native::encode_response(wire::CUSTODY, v, wire::LIMITS).unwrap()
+    };
+    assert!(matches_plan(&plan, "observe_stored_children", &frame(&observed)).unwrap());
+    for method in [
+        "observe",
+        "observe_upgrade",
+        "observe_children",
+        "observe_custody",
+    ] {
+        assert!(observation_args(&plan, method).is_err());
+        assert!(matches_plan(&plan, method, &frame(&observed)).is_err());
+    }
+    for case in 0..5 {
+        let mut changed = observed.clone();
+        match case {
+            0 => changed.sources[0].as_mut().unwrap().creation.operation[0] ^= 1,
+            1 => changed.sources[0].as_mut().unwrap().creation.cache_deadline = Some(3),
+            2 => changed.sources[0] = None,
+            3 => changed.children[1] = changed.children[0].clone(),
+            _ => {
+                changed.sources[0]
+                    .as_mut()
+                    .unwrap()
+                    .creation
+                    .reference
+                    .manifest
+                    .release
+                    .version = "v2".into()
+            }
+        }
+        assert!(!matches_plan(&plan, "observe_stored_children", &frame(&changed)).unwrap());
+    }
+    store::put(&dir.join("custody-before/reply.bin"), &frame(&observed)).unwrap();
+    require_before(&dir, &plan).unwrap();
+    assert!(!retained(&dir, &plan).unwrap());
+    store::put(&dir.join("custody-after/reply.bin"), &frame(&observed)).unwrap();
+    assert!(retained(&dir, &plan).unwrap());
+    for case in 0..4 {
+        let mut invalid = plan.clone();
+        let crate::PlanAction::MaintainRoot {
+            store: Some(store), ..
+        } = &mut invalid.action
+        else {
+            panic!("stored maintenance");
+        };
+        let source = &mut store.sources[0].as_mut().unwrap().creation;
+        match case {
+            0 => source.operation[0] ^= 1,
+            1 => source.state = wire::PinState::Issued,
+            2 => source.reference.store = "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+            _ => store.sources[1] = store.sources[0].clone(),
+        }
+        assert!(invalid.validate().is_err());
+    }
 }
 
 #[test]
@@ -124,7 +249,10 @@ fn predecessor_refuses_unknown_code_extra_history_and_foreign_reads() {
         observations(&plan, false),
         &[("custody-before", "observe_custody")]
     );
-    let crate::PlanAction::MaintainRoot { target, children } = &mut plan.action else {
+    let crate::PlanAction::MaintainRoot {
+        target, children, ..
+    } = &mut plan.action
+    else {
         panic!("maintenance")
     };
     target.module = SINGLE_UPGRADE_ROOT.into();

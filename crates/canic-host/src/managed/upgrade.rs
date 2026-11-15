@@ -88,13 +88,19 @@ fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     })
 }
 pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
+    evidence_with_source(dir, plan).map(|value| value.map(|(status, _)| status))
+}
+pub(crate) fn evidence_with_source(
+    dir: &Path,
+    plan: &Plan,
+) -> Result<Option<(Status, Option<canic_management_protocol::stored::Delivery>)>> {
     let mut latest = None;
     let path = dir.join("stage/reply.bin");
     if path.try_exists().map_err(supplier)? {
         match stage_reply(plan, &store::read(&path, LIMITS.bytes)?) {
             Ok(status) => {
                 validate(plan, None, &status)?;
-                latest = Some(status);
+                latest = Some((status, None));
             }
             Err(Error::Blocked(_)) => {}
             Err(error) => return Err(error),
@@ -108,25 +114,28 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
             let path = dir.join(format!("observe/{index}/{name}"));
             if path.try_exists().map_err(supplier)? {
                 let bytes = store::read(&path, canic_management_protocol::stored::LIMITS.bytes)?;
-                let status: Status = if method == canic_management_protocol::stored::CUSTODY {
-                    super::stored::upgraded(plan, &bytes)?
+                let (status, source) = if method == canic_management_protocol::stored::CUSTODY {
+                    super::stored::upgrade_evidence(plan, &bytes)?
                 } else {
-                    ic_wire::native::decode_response(method, &bytes, LIMITS)
-                        .or_else(|error| {
-                            // Historical on-disk unit observations remain readable; no live fallback.
-                            if method == OBSERVE {
-                                ic_wire::native::decode_response(STATUS, &bytes, LIMITS)
-                            } else {
-                                Err(error)
-                            }
-                        })
-                        .map_err(supplier)?
+                    (
+                        ic_wire::native::decode_response(method, &bytes, LIMITS)
+                            .or_else(|error| {
+                                // Historical on-disk unit observations remain readable; no live fallback.
+                                if method == OBSERVE {
+                                    ic_wire::native::decode_response(STATUS, &bytes, LIMITS)
+                                } else {
+                                    Err(error)
+                                }
+                            })
+                            .map_err(supplier)?,
+                        None,
+                    )
                 };
                 if status == Status::default() && latest.is_none() {
                     continue;
                 }
-                validate(plan, latest.as_ref(), &status)?;
-                latest = Some(status);
+                validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
+                latest = Some((status, source));
             }
         }
     }

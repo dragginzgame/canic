@@ -12,6 +12,7 @@ use std::path::Path;
 mod cancellation;
 mod convergence;
 mod record;
+mod releases;
 #[cfg(test)]
 mod tests;
 pub use cancellation::{Cancellation, cancel_fleet_plan};
@@ -38,6 +39,9 @@ pub struct FleetChild {
     pub parent: CreatedCanister,
     /// Exact retained application executable.
     pub artifact: Artifact,
+    /// Immutable release in this fleet's approved Store; absent in retained inline fleets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<canic_wasm_store_protocol::Manifest>,
     /// Child attachment drawn from Root's funded budget, not another host debit.
     pub creation_cycles: u64,
     /// Earliest autonomous dispatch; admission must precede this time.
@@ -87,7 +91,8 @@ impl FleetPlan {
             ic_wire::Limits {
                 bytes: 16_384,
                 allocation: 262_144,
-                nodes: 1024,
+                // Two full 32-chunk manifests; Wire charges four nodes per visited value.
+                nodes: 16_384,
                 depth: 16,
             },
         )
@@ -135,13 +140,23 @@ impl FleetPlan {
                 || child.deployment.fleet != root.fleet
                 || child.deployment.canister == root.canister
                 || child.parent.operation != self.root.digest()?
-                || child.artifact.bytes > canic_management_protocol::MAX_WASM
+                || child.artifact.bytes > child.artifact_limit()
                 || child.creation_cycles != canic_management_protocol::CREATION_CYCLES
                 || crate::unhex(&child.artifact.sha256)?.len() != 32
                 || child.execute_at_ns <= self.root.created_at_ns
                 || child.execute_at_ns != self.children[0].execute_at_ns
                 || child.execute_at_ns.checked_add(600_000_000_000) != Some(self.root.expires_at_ns)
                 || child.execute_at_ns - self.root.created_at_ns > 3_000_000_000_000
+            {
+                return Err(invalid());
+            }
+            if let Some(release) = &child.release
+                && (self.store.is_none()
+                    || !release.valid()
+                    || release.release.name != child.deployment.canister
+                    || release.release.version != child.artifact.sha256
+                    || crate::hex(&release.hash) != child.artifact.sha256
+                    || release.bytes != child.artifact.bytes as u64)
             {
                 return Err(invalid());
             }
@@ -165,6 +180,7 @@ impl FleetPlan {
         }
         if self
             .children()
+            .filter(|(_, c)| c.release.is_none())
             .map(|(_, c)| c.artifact.bytes)
             .sum::<usize>()
             > canic_management_protocol::children::MAX_ARTIFACT_BYTES
@@ -186,7 +202,7 @@ impl FleetPlan {
             .as_ref()
             .is_some_and(|root| root.app == name.app && root.fleet == name.fleet)
     }
-    fn child_plan(&self, receipt: &Receipt, slot: Slot) -> Result<Plan> {
+    fn child_plan(&self, receipt: &Receipt, store: Option<&Receipt>, slot: Slot) -> Result<Plan> {
         let child = self.child(slot)?;
         self.verify_root_receipt(receipt)?;
         let plan = Plan {
@@ -195,7 +211,7 @@ impl FleetPlan {
             controller: self.root.controller.clone(),
             artifact: child.artifact.clone(),
             action: crate::PlanAction::CreateChild(ManagedOwner {
-                source: None,
+                source: self.source(receipt, store, slot)?,
                 slot: (self.version == 2).then_some(slot),
                 root: receipt.canister.clone(),
                 root_module: self.root.artifact.sha256.clone(),
@@ -257,18 +273,23 @@ pub(crate) fn load(dir: &Path, id: &str) -> Result<FleetPlan> {
     }
     for (index, child) in value.children() {
         let path = dir.join(record::child_leaf(index));
-        if artifact::admit(&store::read(&path.join("module.wasm"), artifact::MAX_WASM)?)?
-            != child.artifact
+        let bytes = store::read(&path.join("module.wasm"), child.artifact_limit())?;
+        if artifact::admit_bounded(&bytes, child.artifact_limit())? != child.artifact
+            || child.release.as_ref().is_some_and(|m| {
+                crate::publication::release_manifest(m.release.clone(), &bytes) != *m
+            })
         {
             return Err(invalid());
         }
         if path.join("plan.json").try_exists().map_err(supplier)? {
             let receipt = root_receipt(dir, &value)?.ok_or_else(invalid)?;
-            let expected = value.child_plan(&receipt, index)?;
+            let expected =
+                value.child_plan(&receipt, store_receipt(dir, &value)?.as_ref(), index)?;
             if plan::load(&path, &expected.digest()?)?.0 != expected {
                 return Err(invalid());
             }
         }
+        releases::validate(dir, &value, index, &bytes)?;
     }
     if let Some(definition) = &value.store {
         let path = dir.join("store");
@@ -358,7 +379,11 @@ pub fn plan_fleet(
         .map(|(name, _)| {
             store::read(
                 &selected.wasm_path(config_path, name, None)?,
-                artifact::MAX_WASM,
+                if stores.is_empty() {
+                    canic_management_protocol::MAX_WASM
+                } else {
+                    artifact::MAX_ARTIFACT_BYTES
+                },
             )
         })
         .collect::<Result<_>>()?;
@@ -401,7 +426,23 @@ pub fn plan_fleet(
             parent: CreatedCanister {
                 operation: String::new(),
             },
-            artifact: artifact::admit(&child_bytes[index])?,
+            artifact: artifact::admit_bounded(
+                &child_bytes[index],
+                if stores.is_empty() {
+                    canic_management_protocol::MAX_WASM
+                } else {
+                    artifact::MAX_ARTIFACT_BYTES
+                },
+            )?,
+            release: (!stores.is_empty()).then(|| {
+                crate::publication::release_manifest(
+                    canic_wasm_store_protocol::Release {
+                        name: children[index].0.clone(),
+                        version: artifact::digest(&child_bytes[index]),
+                    },
+                    &child_bytes[index],
+                )
+            }),
             creation_cycles: canic_management_protocol::CREATION_CYCLES,
             execute_at_ns: dispatch,
         })
@@ -435,6 +476,7 @@ pub fn plan_fleet(
     }
     let mut retained = None;
     let mut individual = Vec::new();
+    let mut publications = Vec::new();
     for id in ids {
         let dir = store.operation(&id)?;
         if exists(&dir)? {
@@ -470,6 +512,7 @@ pub fn plan_fleet(
         } else {
             let (old, _) = plan::load(&dir, &id)?;
             if old.publication().is_some() {
+                publications.push((id, old));
                 continue;
             }
             if old
@@ -482,6 +525,12 @@ pub fn plan_fleet(
         }
     }
     if let Some((id, old)) = retained {
+        // Existing approvals keep their delivery contract; a Store alone never migrates inline custody.
+        for (child, retained) in value.children.iter_mut().zip(&old.children) {
+            if retained.release.is_none() {
+                child.release = None;
+            }
+        }
         return convergence::plan(
             &store,
             &id,
@@ -489,6 +538,7 @@ pub fn plan_fleet(
             value,
             (&root_bytes, &child_bytes),
             &individual,
+            &publications,
         );
     }
     if !individual.is_empty() {
@@ -583,9 +633,10 @@ pub(crate) async fn apply(
     } else {
         None
     };
+    releases::apply(dir, &value, &root, store.as_ref(), identity, icp).await?;
     let mut outcomes = Vec::new();
     for (index, definition) in value.children() {
-        let child = value.child_plan(&root, index)?;
+        let child = value.child_plan(&root, store.as_ref(), index)?;
         let child_id = child.digest()?;
         let path = dir.join(record::child_leaf(index));
         if !path.join("plan.json").try_exists().map_err(supplier)? {
@@ -635,6 +686,7 @@ pub(crate) async fn reconcile(
     } else {
         None
     };
+    releases::reconcile(dir, &value, identity, icp).await?;
     for (index, _) in value.children() {
         if !dir
             .join(record::child_leaf(index))
@@ -653,7 +705,7 @@ pub(crate) async fn reconcile(
             name: definition.deployment.canister.clone(),
             outcome: operation::reconcile_at(
                 &path,
-                &value.child_plan(&root, index)?.digest()?,
+                &value.child_plan(&root, store.as_ref(), index)?.digest()?,
                 identity,
                 icp,
             )
@@ -680,11 +732,16 @@ pub(crate) fn status(dir: &Path, id: &str) -> Result<serde_json::Value> {
         let path = dir.join(record::child_leaf(index));
         let child = if path.join("plan.json").try_exists().map_err(supplier)? {
             let receipt = root_receipt(dir, &value)?.ok_or_else(invalid)?;
-            operation::status_at(&path, &value.child_plan(&receipt, index)?.digest()?)?
+            operation::status_at(
+                &path,
+                &value
+                    .child_plan(&receipt, store_receipt(dir, &value)?.as_ref(), index)?
+                    .digest()?,
+            )?
         } else {
             serde_json::Value::Null
         };
-        children.push(serde_json::json!({"name": definition.deployment.canister, "state": child}));
+        children.push(serde_json::json!({"name": definition.deployment.canister, "state": child, "publication": releases::status(dir, &value, index)?}));
     }
     result["children"] = children.into();
     Ok(result)
@@ -718,7 +775,9 @@ pub(crate) fn inventory(
             let receipt = root_receipt(dir, &value)?.ok_or_else(invalid)?;
             records.push(crate::fleet::local_operation_at(
                 &path,
-                &value.child_plan(&receipt, index)?.digest()?,
+                &value
+                    .child_plan(&receipt, store_receipt(dir, &value)?.as_ref(), index)?
+                    .digest()?,
                 now,
             )?);
         }

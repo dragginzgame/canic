@@ -101,20 +101,24 @@ pub(super) fn select(
 
 pub(super) async fn verify(plan: &Plan, agent: &Agent) -> Result<()> {
     if let Some(source) = plan.management().and_then(|m| m.source.as_ref()) {
-        let id = principal(&source.store.canister)?;
-        operation::controllers(agent, id, plan.application_controller()).await?;
-        if crate::network::subnet(agent, &source.store.canister).await?
-            != crate::network::subnet(agent, plan.application_controller()).await?
-        {
-            return Err(Error::Blocked(
-                "Store delivery requires the approved Root and Store on the same subnet".into(),
-            ));
-        }
-        if operation::module(agent, id).await? != source.store.module {
-            return Err(Error::Blocked(
-                "Store code differs from the approved artifact supplier".into(),
-            ));
-        }
+        verify_store(agent, plan.application_controller(), &source.store).await?;
+    }
+    Ok(())
+}
+pub(crate) async fn verify_store(agent: &Agent, root: &str, store: &UpgradeTarget) -> Result<()> {
+    let id = principal(&store.canister)?;
+    operation::controllers(agent, id, root).await?;
+    if crate::network::subnet(agent, &store.canister).await?
+        != crate::network::subnet(agent, root).await?
+    {
+        return Err(Error::Blocked(
+            "Store delivery requires the approved Root and Store on the same subnet".into(),
+        ));
+    }
+    if operation::module(agent, id).await? != store.module {
+        return Err(Error::Blocked(
+            "Store code differs from the approved artifact supplier".into(),
+        ));
     }
     Ok(())
 }
@@ -163,15 +167,15 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
 fn custody(bytes: &[u8]) -> Result<wire::Custody> {
     ic_wire::native::decode_response(wire::CUSTODY, bytes, wire::LIMITS).map_err(supplier)
 }
-fn delivery<A: Serialize>(
-    plan: &Plan,
+pub(crate) fn delivery<A: Serialize>(
+    slot: Slot,
     expected: &wire::Stage<A>,
     method: u64,
     actual: &wire::Delivery,
     ready: bool,
 ) -> Result<()> {
     if actual.reference != expected.reference
-        || actual.pin() != expected.pin(method, slot(plan))
+        || actual.pin() != expected.pin(method, slot)
         || (ready && actual.state != wire::PinState::Retained)
     {
         return Err(invalid());
@@ -179,25 +183,37 @@ fn delivery<A: Serialize>(
     Ok(())
 }
 pub(super) fn creation(plan: &Plan, bytes: &[u8]) -> Result<Status> {
+    creation_evidence(plan, bytes).map(|(status, _)| status)
+}
+pub(super) fn creation_evidence(
+    plan: &Plan,
+    bytes: &[u8],
+) -> Result<(Status, Option<wire::Delivery>)> {
     let value = custody(bytes)?;
     let index = slot(plan).index();
     let status = &value.children[index].creation;
     if status == &Status::default() && value.sources[index].is_none() {
-        return Ok(status.clone());
+        return Ok((status.clone(), None));
     }
     let source = value.sources[index].as_ref().ok_or_else(invalid)?;
     delivery(
-        plan,
+        slot(plan),
         &stage(plan, super::approval(plan)?)?,
         wire::STAGE,
         &source.creation,
         status.phase == canic_management_protocol::Phase::Ready,
     )?;
-    Ok(status.clone())
+    Ok((status.clone(), Some(source.creation.clone())))
 }
 pub(super) fn upgraded(plan: &Plan, bytes: &[u8]) -> Result<upgrade::Status> {
+    upgrade_evidence(plan, bytes).map(|(status, _)| status)
+}
+pub(super) fn upgrade_evidence(
+    plan: &Plan,
+    bytes: &[u8],
+) -> Result<(upgrade::Status, Option<wire::Delivery>)> {
     let value = custody(bytes)?;
-    let index = slot(plan) as usize;
+    let index = slot(plan).index();
     let journal = &value.children[index];
     let expected = super::upgrade::approval(plan)?;
     let Some(position) = journal
@@ -205,7 +221,7 @@ pub(super) fn upgraded(plan: &Plan, bytes: &[u8]) -> Result<upgrade::Status> {
         .iter()
         .position(|s| s.approval.as_ref() == Some(&expected))
     else {
-        return Ok(upgrade::Status::default());
+        return Ok((upgrade::Status::default(), None));
     };
     let sources = value.sources[index].as_ref().ok_or_else(invalid)?;
     if sources.upgrades.len() != journal.upgrades.len() {
@@ -213,11 +229,11 @@ pub(super) fn upgraded(plan: &Plan, bytes: &[u8]) -> Result<upgrade::Status> {
     }
     let status = &journal.upgrades[position];
     delivery(
-        plan,
+        slot(plan),
         &stage(plan, expected)?,
         wire::STAGE_UPGRADE,
         &sources.upgrades[position],
         status.phase == upgrade::Phase::Ready,
     )?;
-    Ok(status.clone())
+    Ok((status.clone(), Some(sources.upgrades[position].clone())))
 }

@@ -118,8 +118,22 @@ authenticated tooling installer.
   Retain source-bound staging/reconciliation and complete Store custody reads;
   never recover through an inline observation that omits artifact custody. The
   app input must match publication bytes. This qualifies creation and the named
-  planner's first upgrade only. Whole-fleet release selection, inline-to-Store
-  migration and host Root maintenance carrying Store custody remain pending.
+  planner's first upgrade. Fresh whole fleets with a declared Store publish each
+  child's `(name, full-content-hash)` release before admitting either child, using
+  the approved Root/Store creation outputs. Both manifests belong to the original
+  fleet approval. Child upgrades first publish through a separate existing Plan,
+  then replan for installation after retained publication completion. Completed
+  release evidence remains reusable across reviewed Root maintenance; unfinished
+  publication authority stays bound to its original Root code and deadlines. No new CLI
+  selector, mutable latest lookup or runtime effect owner is needed. Whole-fleet
+  serial upgrades retain their existing eight-upgrade bound. Retained inline
+  fleets keep inline delivery. Root maintenance for Store-backed fleets carries
+  the exact Store code binding and complete per-slot sources alongside all child
+  journals. Select only `observe_stored_children` for both preflight and postflight;
+  compare full custody including historical pins and empty slots, and verify live
+  Store authority/code/placement as well as child identity/code/controllers. Reuse
+  the original direct install attempt and refuse incomplete or mismatched evidence.
+  Inline-to-Store migration and Host-driven Store upgrades remain pending.
   Cache preparation never grants install authority. It has no pin release or
   deletion; do not clear pins on expiry.
   Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.

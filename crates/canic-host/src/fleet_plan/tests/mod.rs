@@ -57,6 +57,105 @@ fn create(dir: &Path, selected: &SelectedFleet) -> Result<(String, FleetPlan)> {
 }
 
 #[test]
+fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
+    let (dir, mut selected) = fixture();
+    selected.config.canisters.insert(
+        "store".into(),
+        CanisterConfig {
+            role: Some("wasm-store".into()),
+            parent: Some("root".into()),
+            wasm: Some("root.wasm".into()),
+            ..Default::default()
+        },
+    );
+    selected
+        .config
+        .canisters
+        .insert("worker".into(), selected.config.canisters["app"].clone());
+    let mut bytes = b"\0asm\x01\0\0\0".to_vec();
+    bytes.resize(artifact::MAX_ARTIFACT_BYTES, 42);
+    std::fs::write(dir.join("app.wasm"), &bytes).unwrap();
+    let result = plan_fleet(
+        &dir.join("journal"),
+        &dir.join("canic.json"),
+        &selected,
+        &input().controller,
+        None,
+        None,
+    )
+    .unwrap();
+    let FleetPlanning::Create {
+        operation,
+        fleet_plan,
+    } = result
+    else {
+        panic!("creation");
+    };
+    assert_eq!(
+        load(&dir.join("journal").join(&operation), &operation).unwrap(),
+        fleet_plan
+    );
+    assert!(
+        fleet_plan
+            .children
+            .iter()
+            .all(|c| c.release.as_ref().unwrap().chunks.len()
+                == canic_wasm_store_protocol::MAX_CHUNKS)
+    );
+    let mut wrong = fleet_plan.clone();
+    wrong.children[0].release.as_mut().unwrap().hash[0] ^= 1;
+    assert!(wrong.digest().is_err());
+    wrong = fleet_plan;
+    wrong.children[0].release.as_mut().unwrap().release.name = "another-app".into();
+    assert!(wrong.digest().is_err());
+    cancel_fleet_plan(&dir.join("journal"), &operation).unwrap();
+
+    // Model a retained 0.206 Store + inline-child approval. Replanning cannot silently migrate it.
+    std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0").unwrap();
+    let FleetPlanning::Create {
+        operation,
+        mut fleet_plan,
+    } = plan_fleet(
+        &dir.join("journal"),
+        &dir.join("canic.json"),
+        &selected,
+        &input().controller,
+        None,
+        None,
+    )
+    .unwrap()
+    else {
+        panic!("creation");
+    };
+    for child in &mut fleet_plan.children {
+        child.release = None;
+    }
+    let old_id = fleet_plan.digest().unwrap();
+    let path = dir.join("journal").join(&operation);
+    std::fs::write(
+        path.join("fleet.json"),
+        serde_json::to_vec(&fleet_plan).unwrap(),
+    )
+    .unwrap();
+    std::fs::rename(path, dir.join("journal").join(&old_id)).unwrap();
+    assert_eq!(
+        plan_fleet(
+            &dir.join("journal"),
+            &dir.join("canic.json"),
+            &selected,
+            &input().controller,
+            None,
+            None
+        )
+        .unwrap(),
+        FleetPlanning::Create {
+            operation: old_id,
+            fleet_plan
+        }
+    );
+}
+
+#[test]
 fn fleet_store_is_an_independent_output_binding_and_debit() {
     let (dir, mut selected) = fixture();
     selected.config.canisters.insert(
@@ -112,13 +211,35 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     assert_eq!(resolved.application_controller(), receipt.canister);
     assert_eq!(resolved.creation_cycles(), 1_000_000_000_000);
     let path = dir.join("journal").join(&id);
+    assert!(!permits_upgrade(&path, &value, &value.root).unwrap());
+    assert!(value.child_plan(&receipt, None, Slot::First).is_err());
+    let store_receipt = Receipt {
+        operation: resolved.digest().unwrap(),
+        canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+        module_hash: resolved.artifact.sha256,
+        controller: receipt.canister.clone(),
+    };
+    let child = value
+        .child_plan(&receipt, Some(&store_receipt), Slot::First)
+        .unwrap();
+    assert_eq!(
+        child
+            .management()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .manifest
+            .release
+            .version,
+        child.artifact.sha256
+    );
+    let mut wrong = store_receipt;
+    wrong.operation = "00".repeat(32);
     assert!(
-        !permits_upgrade(
-            &path,
-            &value,
-            &value.child_plan(&receipt, Slot::First).unwrap()
-        )
-        .unwrap()
+        value
+            .child_plan(&receipt, Some(&wrong), Slot::First)
+            .is_err()
     );
     assert!(path.join("store/module.wasm").exists());
     assert!(!path.join("store/plan.json").exists());
@@ -177,7 +298,7 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     )
     .unwrap();
     store::put_json(&path.join("root/receipt.json"), &root).unwrap();
-    let child = fleet.child_plan(&root, Slot::First).unwrap();
+    let child = fleet.child_plan(&root, None, Slot::First).unwrap();
     store::put_json(&path.join("child/plan.json"), &child).unwrap();
     let receipt = Receipt {
         operation: child.digest().unwrap(),
@@ -347,7 +468,7 @@ fn fleet_refuses_unsupported_trees_conflicts_and_tampered_artifacts() {
         module_hash: value.root.artifact.sha256.clone(),
         controller: value.root.controller.clone(),
     };
-    let child = value.child_plan(&receipt, Slot::First).unwrap();
+    let child = value.child_plan(&receipt, None, Slot::First).unwrap();
     store::put_json(&root.join("child/plan.json"), &child).unwrap();
     // An invented child plan without Root result custody is never admitted.
     assert!(load(&root, &id).is_err());
@@ -478,8 +599,8 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
         module_hash: fleet.root.artifact.sha256.clone(),
         controller: fleet.root.controller.clone(),
     };
-    let first = fleet.child_plan(&root, Slot::First).unwrap();
-    let second = fleet.child_plan(&root, Slot::Second).unwrap();
+    let first = fleet.child_plan(&root, None, Slot::First).unwrap();
+    let second = fleet.child_plan(&root, None, Slot::Second).unwrap();
     assert_eq!(
         first.management().unwrap().slot,
         Some(canic_management_protocol::children::Slot::First)

@@ -49,6 +49,103 @@ fn padded(mut bytes: Vec<u8>) -> Vec<u8> {
     bytes
 }
 
+async fn maintain_root(
+    dir: &Path,
+    pic: &ic_testkit::pocket_ic::nonblocking::PocketIc,
+    root: CanisterId,
+    store: CanisterId,
+    signer: &Path,
+) {
+    let planned = cli(dir, &["fleet", "plan", "--controller", "2vxsx-fae"]);
+    assert_eq!(planned["action"], "maintenance", "{planned}");
+    let id = planned["operation"].as_str().unwrap();
+    let path = dir.join("journal").join(id);
+    let sources = planned["plan"]["maintenance_store"]["sources"]
+        .as_array()
+        .unwrap();
+    assert_eq!(sources.len(), 2);
+    assert!(
+        sources
+            .iter()
+            .all(|s| s["upgrades"].as_array().unwrap().len() == 1)
+    );
+    // Drift in supplier authority blocks maintenance before any installation signature.
+    pic.update_canister_settings(
+        store,
+        Some(root),
+        CanisterSettings {
+            controllers: Some(vec![root, CanisterId::anonymous()]),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let apply = [
+        "fleet",
+        "apply",
+        id,
+        "--identity",
+        "anonymous",
+        "--icp-bin",
+        signer.to_str().unwrap(),
+    ];
+    assert!(!run(dir, &apply).status.success());
+    assert!(!path.join("install/signed.json").exists());
+    pic.update_canister_settings(
+        store,
+        Some(root),
+        CanisterSettings {
+            controllers: Some(vec![root]),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let pause = dir.join("pause-maintenance");
+    std::fs::write(&pause, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */custody-after/arguments.bin) exit 73;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
+    std::fs::set_permissions(&pause, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let interrupted = Command::new(std::env::var_os("CANIC_CLI").unwrap())
+        .args(["fleet", "apply", id, "--json", "--config"])
+        .arg(dir.join("canic.json"))
+        .args(["--identity", "anonymous", "--icp-bin"])
+        .arg(&pause)
+        .env("CANIC_REAL_SIGNER", signer)
+        .output()
+        .unwrap();
+    assert!(!interrupted.status.success());
+    assert!(
+        path.join("install/reply.bin").exists(),
+        "{}",
+        String::from_utf8_lossy(&interrupted.stderr)
+    );
+    assert!(!path.join("receipt.json").exists());
+    let signed = std::fs::read(path.join("install/signed.json")).unwrap();
+    std::fs::remove_file(path.join("install/reply.bin")).unwrap();
+    assert_eq!(
+        cli(dir, &["fleet", "plan", "--controller", "2vxsx-fae"]),
+        planned
+    );
+    let completed = cli(dir, &apply);
+    assert_eq!(completed["canister"], root.to_text());
+    assert_eq!(
+        completed["module_hash"],
+        planned["plan"]["artifact"]["sha256"]
+    );
+    assert_eq!(
+        std::fs::read(path.join("install/signed.json")).unwrap(),
+        signed
+    );
+    assert_eq!(
+        std::fs::read(path.join("custody-before/reply.bin")).unwrap(),
+        std::fs::read(path.join("custody-after/reply.bin")).unwrap()
+    );
+    assert_eq!(cli(dir, &apply), completed);
+    assert_eq!(
+        cli(dir, &["fleet", "plan", "--controller", "2vxsx-fae"])["action"],
+        "unchanged"
+    );
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -79,11 +176,14 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .join("target/publication")
         .join(format!("fleet-{}", std::process::id()));
     std::fs::create_dir(&dir).unwrap();
-    let config = json!({"apps":{"demo":{
+    let app_bytes = padded(std::fs::read(assets.join("app.wasm")).unwrap());
+    std::fs::write(dir.join("app.wasm"), &app_bytes).unwrap();
+    std::fs::write(dir.join("worker.wasm"), &app_bytes).unwrap();
+    let mut config = json!({"apps":{"demo":{
         "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")},
             "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
-            "app":{"role":"app","parent":"root","wasm":assets.join("app.wasm")},
-            "worker":{"role":"worker","parent":"root","wasm":assets.join("app.wasm")}},
+            "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm")},
+            "worker":{"role":"worker","parent":"root","wasm":dir.join("worker.wasm")}},
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
     }}});
     std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
@@ -91,7 +191,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs()
-        + 90)
+        + 60)
         .to_string();
     let planned = cli(
         &dir,
@@ -123,6 +223,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     let text = String::from_utf8(human.stdout).unwrap();
     assert!(text.contains("store [WASM STORE]"));
     assert!(text.contains("Total operator debit ceiling: 5T"));
+    assert!(text.contains("Store release: app /"));
     let signer = repo.join(".tools/ic/bin/icp");
     let paused = dir.join("pause-store-ready");
     std::fs::write(&paused, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */store/store-observe/0/arguments.bin) exit 71;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
@@ -195,6 +296,48 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         std::fs::read(path.join("store/handover/signed.json")).unwrap(),
         signed
     );
+    // Pause the second publication after the first completed. Neither child may be admitted.
+    std::fs::write(&paused, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */sibling/publication/publication/observe/1/arguments.bin) exit 72;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
+    let stopped = Command::new(std::env::var_os("CANIC_CLI").unwrap())
+        .args(["fleet", "apply", id, "--json", "--config"])
+        .arg(dir.join("canic.json"))
+        .args(["--identity", "anonymous", "--icp-bin"])
+        .arg(&paused)
+        .env("CANIC_REAL_SIGNER", &signer)
+        .output()
+        .unwrap();
+    assert!(!stopped.status.success(), "pause must reach publication");
+    assert!(
+        path.join("child/publication/publication.json").exists(),
+        "{}",
+        String::from_utf8_lossy(&stopped.stderr)
+    );
+    assert!(!path.join("child/plan.json").exists());
+    assert!(!path.join("sibling/plan.json").exists());
+    let prepared = path.join("sibling/publication/publication/prepare");
+    let signed_prepare = std::fs::read(prepared.join("signed.json")).unwrap();
+    std::fs::remove_file(prepared.join("reply.bin")).unwrap();
+    assert_eq!(
+        cli(&dir, &["fleet", "plan", "--controller", "2vxsx-fae"])["operation"],
+        id
+    );
+    assert!(
+        !run(
+            &dir,
+            &[
+                "fleet",
+                "reconcile",
+                id,
+                "--identity",
+                "anonymous",
+                "--icp-bin",
+                signer.to_str().unwrap()
+            ]
+        )
+        .status
+        .success()
+    );
+    assert!(!path.join("child/plan.json").exists());
     let apply = || {
         cli(
             &dir,
@@ -210,12 +353,36 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         )
     };
     let admitted = apply();
+    assert_eq!(
+        std::fs::read(prepared.join("signed.json")).unwrap(),
+        signed_prepare
+    );
+    assert!(
+        !path
+            .join("sibling/publication/publication/chunk-0")
+            .exists(),
+        "shared content must not upload twice"
+    );
+    let staged = path.join("child/stage");
+    let signed_stage = std::fs::read(staged.join("signed.json")).unwrap();
+    assert!(
+        std::fs::metadata(staged.join("arguments.bin"))
+            .unwrap()
+            .len()
+            < 8192
+    );
+    std::fs::remove_file(staged.join("reply.bin")).unwrap();
+    apply();
+    assert_eq!(
+        std::fs::read(staged.join("signed.json")).unwrap(),
+        signed_stage
+    );
     assert_eq!(admitted["children"].as_array().unwrap().len(), 2);
     let store = CanisterId::from_text(admitted["store"]["canister"].as_str().unwrap()).unwrap();
     assert_eq!(owner.instance().get_subnet(store).await, Some(subnet));
     owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(95)).await;
-    for _ in 0..40 {
+    owner.instance().advance_time(Duration::from_secs(65)).await;
+    for _ in 0..70 {
         owner.instance().tick().await;
     }
     owner.instance().auto_progress().await;
@@ -238,6 +405,135 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         cli(&dir, &["fleet", "plan", "--controller", "2vxsx-fae"])["action"],
         "unchanged"
     );
+    // Each changed child first gets publication authority, then an independently approved upgrade.
+    let apply_operation = |operation: &str| {
+        cli(
+            &dir,
+            &[
+                "fleet",
+                "apply",
+                operation,
+                "--identity",
+                "anonymous",
+                "--icp-bin",
+                signer.to_str().unwrap(),
+            ],
+        )
+    };
+    let mut first_publication = String::new();
+    for (index, (name, marker)) in [("app", 43), ("worker", 44), ("app", 45), ("app", 43)]
+        .into_iter()
+        .enumerate()
+    {
+        if index == 2 {
+            config["apps"]["demo"]["canisters"]["root"]["wasm"] =
+                json!(assets.join("root-maintenance.wasm"));
+            std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+            maintain_root(&dir, owner.instance(), root, store, &signer).await;
+        }
+        let mut next = app_bytes.clone();
+        *next.last_mut().unwrap() = marker;
+        std::fs::write(dir.join(format!("{name}.wasm")), &next).unwrap();
+        let dispatch = (owner
+            .instance()
+            .get_time()
+            .await
+            .as_nanos_since_unix_epoch()
+            / 1_000_000_000
+            + 30)
+            .to_string();
+        let plan = || {
+            cli(
+                &dir,
+                &[
+                    "fleet",
+                    "plan",
+                    "--controller",
+                    "2vxsx-fae",
+                    "--execute-at",
+                    &dispatch,
+                ],
+            )
+        };
+        if index < 3 {
+            let publication = plan();
+            assert_eq!(publication["action"], "publication", "{publication}");
+            let publication_id = publication["operation"].as_str().unwrap();
+            if index == 0 {
+                first_publication = publication_id.into();
+            }
+            assert_eq!(
+                plan(),
+                publication,
+                "pending publication must retain its original approval"
+            );
+            assert!(
+                !dir.join("journal")
+                    .join(publication_id)
+                    .join("receipt.json")
+                    .exists()
+            );
+            let published = apply_operation(publication_id);
+            assert!(
+                published["publication"]["status"]["published"]
+                    .as_bool()
+                    .unwrap()
+            );
+        } else {
+            // A release published before Root maintenance is reusable only with its original completion proof.
+            let receipt = dir
+                .join("journal")
+                .join(&first_publication)
+                .join("publication.json");
+            let retained = std::fs::read(&receipt).unwrap();
+            std::fs::remove_file(&receipt).unwrap();
+            assert!(
+                !run(
+                    &dir,
+                    &[
+                        "fleet",
+                        "plan",
+                        "--controller",
+                        "2vxsx-fae",
+                        "--execute-at",
+                        &dispatch
+                    ]
+                )
+                .status
+                .success()
+            );
+            std::fs::write(receipt, retained).unwrap();
+        }
+        let upgrade = plan();
+        assert_eq!(upgrade["action"], "upgrade", "{upgrade}");
+        let upgrade_id = upgrade["operation"].as_str().unwrap();
+        assert_ne!(first_publication, upgrade_id);
+        assert_eq!(
+            plan(),
+            upgrade,
+            "unfinished upgrade must retain its original approval"
+        );
+        apply_operation(upgrade_id);
+        owner
+            .instance()
+            .clear_chunk_store(store, Some(root))
+            .await
+            .unwrap();
+        owner.instance().stop_progress().await;
+        owner.instance().advance_time(Duration::from_secs(35)).await;
+        for _ in 0..70 {
+            owner.instance().tick().await;
+        }
+        owner.instance().auto_progress().await;
+        let completed = apply_operation(upgrade_id);
+        assert_eq!(
+            completed["module_hash"],
+            hex(&canic_wasm_store_protocol::digest(&next)),
+            "{completed}"
+        );
+        assert_eq!(apply_operation(upgrade_id), completed);
+        assert_eq!(plan()["action"], "unchanged");
+    }
     let view = cli(&dir, &["fleet", "show"]);
     assert_eq!(view["canisters"].as_array().unwrap().len(), 4);
     assert!(view["issues"].as_array().unwrap().is_empty(), "{view}");

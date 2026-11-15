@@ -11,7 +11,7 @@ mod action;
 mod record;
 #[cfg(test)]
 mod tests;
-pub use action::{PlanAction, UpgradeTarget};
+pub use action::{PlanAction, StoreMaintenance, UpgradeTarget};
 
 /// Complete one-canister deployment approval. No implicit funding conversions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

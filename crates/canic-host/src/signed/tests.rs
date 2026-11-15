@@ -91,6 +91,7 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
     let (_, mut plan, mut call) = fixture();
     plan.version = 2;
     plan.action = crate::PlanAction::MaintainRoot {
+        store: None,
         target: crate::UpgradeTarget {
             canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
             module: "11".repeat(32),
