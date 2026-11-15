@@ -13,6 +13,7 @@ fn post_upgrade() {
 management::mount_endpoints! {
     store_publication, observe_store, observe_store_custody, store_admission,
     stage_store_maintenance, advance_store_maintenance, observe_store_maintenance,
+    install_store_maintenance, activate_store_maintenance, store_maintenance_status,
     status, observe, observe_custody, stage, reconcile,
     stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
     observe_stored_children, stage_stored_child, reconcile_stored_child,

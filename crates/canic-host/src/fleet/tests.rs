@@ -78,7 +78,7 @@ fn replicas_with_equal_principals_keep_separate_trust_bindings() {
     assert!(projections.iter().all(|item| item.approval_expired));
 }
 
-fn root_operation(network: Network) -> FleetOperation {
+pub(super) fn root_operation(network: Network) -> FleetOperation {
     let directory = directory();
     let wasm = directory.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();

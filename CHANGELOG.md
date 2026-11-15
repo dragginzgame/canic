@@ -1,5 +1,84 @@
 # Changelog
 
+## [0.210.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+Root's CUJ6 journal retains Store metadata commitments and installation evidence. Recognized
+CUJ5 records load without inventing preservation evidence; downgrade is unsupported.
+New Store-maintenance attempts require Store's closed-catalog observation contract.
+Older Stores without that endpoint remain blocked, with no fallback installation.
+Store-maintenance observations use their scoped Wire budget; child budgets are unchanged.
+
+### ▶️ Try it
+
+After `make canic`, build and inspect the development Store locally. These commands
+spend no cycles and do not upgrade an existing canister or open a browser.
+
+```sh
+canic artifact build --package canic-wasm-store --output target/wasm-store.wasm
+canic artifact inspect target/wasm-store.wasm
+```
+
+For an existing `starter` app and `mainnet` fleet, inspect its current deployment
+without applying this experimental runtime upgrade:
+
+```sh
+canic fleet show --app starter --fleet mainnet
+canic fleet show --app starter --fleet mainnet --details
+```
+
+### ➕ Added
+
+- Add `canic fleet placements` for configured mainnet bindings, using IC Query's
+  bounded placement collection pinned to Git revision
+  `0a3eca919f05d777798406087049cc51ab7ae2a8` (topology 0.106.1).
+  Keep unbound slots and partial outcomes visible, retain source evidence in JSON,
+  and reject local networks or more than 32 unique bound IDs before IO. This is
+  a one-shot diagnostic: no journal, signer, discovery or deployment effects.
+  Partial or all-unbound output exits 1; complete selected reads exit 0.
+  Text summarizes read/configured bindings, unresolved bindings, unbound slots
+  and distinct subnets from successful reads, without extra queries or JSON changes.
+
+  After `make canic`, from an existing configured app directory:
+
+  ```sh
+  canic fleet placements --app starter --fleet mainnet
+  canic fleet placements --app starter --fleet mainnet --json
+  ```
+
+  See [configured placement diagnostics](docs/design/fleet-placements.md).
+  Only explicitly configured identities are included; retained creation outputs
+  are not discovered. Query packages remain unpublished, selected by immutable Git
+  revision rather than a sibling-path dependency.
+
+Root captures every closed Store release before stopping, including unfinished
+uploads, version aliases and shared pins. Each continuation reads one entry;
+Root retains only a digest, counters and cursor. Root replacement resumes the
+scan and concurrent continuations cannot count a page twice. Matching release
+count and an explicit end page establish completion. This is metadata evidence,
+not a payload integrity scan.
+
+Root can now upload and install the approved Store replacement once, restart it
+with admission closed, compare the preserved catalog, and activate only on an
+explicit matching request. Host supplies at most 1 MiB of raw Wasm and retains
+its durable copy; Root stores no Wasm. Installed tests preserve every Store stable
+byte and recover lost callbacks across Root replacement. Expiry allows observation,
+not new effects; rejected or incompatible replacements stay blocked.
+One maintenance attempt remains retained. Host/CLI upgrade execution, repeatable
+maintenance and live use are not yet qualified.
+
+`fleet show` includes a compact, uncertified Store-maintenance report from Roots
+named by retained Store deployment plans. Details show the before/after catalog
+scan and original dispatch deadline; JSON and localhost reports carry the same
+evidence. Missing methods and foreign Store reports stay unknown. Completed
+maintenance is historical, not a claim about current Store admission or readiness.
+Viewing never signs, resumes work or changes the journal. Older Roots require a
+separately qualified upgrade before this query is available.
+
+Store-maintenance admission refuses anonymous operators before retaining state,
+matching Root's existing reopen invariant even in locally controlled fixtures.
+
 ## [0.209.0] - 2026-11-15
 
 ### ⚠️ Breaking

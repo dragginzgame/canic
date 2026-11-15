@@ -5,6 +5,7 @@ mod catalog;
 #[cfg(test)]
 mod config_tests;
 mod fleet;
+mod placements;
 mod progress;
 mod status;
 mod topology;
@@ -21,6 +22,7 @@ use std::{io::IsTerminal as _, path::PathBuf};
 enum Output {
     Json(serde_json::Value),
     Text(String),
+    Partial(Box<Output>),
 }
 
 async fn run(cli: &Cli) -> canic_host::Result<Output> {
@@ -158,6 +160,13 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 }
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
+    if let FleetCommand::Placements { selection } = command {
+        let path = selection.config.path(selection.app.as_deref())?;
+        let selected = canic_host::load_config(&path)?
+            .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+        let report = canic_host::placements::observe(&selected).await?;
+        return Ok(placements::output(&report, cli.json));
+    }
     let scope = command.scope();
     let config_path = match scope {
         Some(scope) if !scope.no_config => canic_host::resolve_config_path(
@@ -207,6 +216,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         config.check_operation(&state_dir, digest)?;
     }
     let result = match command {
+        FleetCommand::Placements { .. } => {
+            unreachable!("placements handled before journal resolution")
+        }
         FleetCommand::Canister(command) => match command {
             CanisterCommand::Bind {
                 name,
@@ -595,10 +607,15 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
 async fn main() -> std::process::ExitCode {
     let cli =
         Cli::from_arg_matches(&help_command().get_matches()).unwrap_or_else(|error| error.exit());
-    match run(&cli).await {
+    let result = run(&cli).await;
+    let (result, success) = match result {
+        Ok(Output::Partial(value)) => (Ok(*value), std::process::ExitCode::FAILURE),
+        other => (other, std::process::ExitCode::SUCCESS),
+    };
+    match result {
         Ok(Output::Text(value)) => {
             print!("{value}");
-            std::process::ExitCode::SUCCESS
+            success
         }
         Ok(Output::Json(value)) => {
             if cli.json {
@@ -606,8 +623,9 @@ async fn main() -> std::process::ExitCode {
             } else {
                 println!("{value:#}");
             }
-            std::process::ExitCode::SUCCESS
+            success
         }
+        Ok(Output::Partial(_)) => unreachable!("partial output is unwrapped once"),
         Err(error) => {
             let kind = match &error {
                 Error::Invalid(_) => "invalid",

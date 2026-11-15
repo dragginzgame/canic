@@ -158,16 +158,65 @@ control. Root retains one immutable approval and stop-request commitment outside
 Store. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJ5 journal preserves the attempt across Root replacement and loads prior
+The CUJ6 journal preserves the attempt across Root replacement and loads prior
 recognized journals without inventing an attempt. Existing complete child-custody
-observations refuse pending Store maintenance, preventing Host from omitting it.
+observations refuse any retained Store maintenance, including completion,
+preventing the current Host Root-maintenance path from omitting it.
 Run `bash scripts/dev/test-store.sh quiescence` for the installed proof.
 
-This runtime qualification ends at Stopped and is **not for live use**. It has no
-CLI entrypoint, installation, restart, activation, cancellation or reset path yet.
-One attempt remains retained. The replacement hash is bound, but its bytes still
-belong to Host and are not installed. Complete preservation checks and recovery
-must extend this same journal before admitting the full Store-upgrade workflow.
+Before stop, Root now walks `observe_preservation` one release per continuation.
+Each page requires the exact closed attempt and captured owner. Root retains the
+quota/counters, ordered metadata digest and last release, rather than a catalog
+copy. It requires unchanged counters, strictly increasing keys, the expected
+release count and an explicit end page. Aliases, incomplete-upload progress and
+all shared pins are included. Root replacement resumes the retained cursor;
+concurrent replies cannot count it twice. This does not scan payload bytes or
+commit management-cache contents. CUJ5 attempts load without scan evidence;
+already-stopped attempts never gain a fabricated preservation commitment.
+Older Stores lacking this endpoint cannot complete the new pre-stop scan.
+
+The explicit `install_store_maintenance` mount accepts the approved raw replacement
+(at most 1 MiB for this first infrastructure path). Root uploads it once to Store's
+management chunk cache, records exact upload/install commitments, and installs it
+through Platform's existing chunked management contract. Host keeps the durable
+bytes; Root never stores them. Lost upload replies recover by chunk observation;
+installation recovery checks the approved replacement code and sole Root control.
+Issued effects are never repeated, including after Root replacement.
+
+The continuation starts the replacement with admission closed, repeats the same
+catalog scan, and requires complete matching preservation before Verified.
+`advance_store_maintenance` never activates implicitly. Only explicit
+`activate_store_maintenance` issues the matching Store activation; lost replies
+recover by observation. Ready is retained historical completion, not a fresh
+readiness guarantee. It releases child/publication fences while retaining the
+operation. Every new effect retains the original deadline; observation after
+expiry cannot authorize a new start or activation. Rejected or incompatible
+replacements remain blocked without installation replay.
+
+`bash scripts/dev/test-store.sh maintenance` qualifies this runtime path using
+sole Root control and compares all Store stable bytes before/after replacement,
+including payloads, pins and an unfinished upload. Runtime verification itself
+compares metadata; it is not a full payload integrity scan. One attempt remains
+retained, with no cancellation, reset or successor history. Host/CLI upgrade execution
+and live use remain unqualified; **do not use these runtime mounts live**.
+
+`fleet show` reads Root's maintenance metadata without a signer or continuation.
+It selects only Roots and known Store identities from retained Store bootstrap
+plans. A Root built with `store_maintenance_status` reports closure, stopping,
+installation, verification and activation separately. Older Roots report unknown
+when that method is unavailable. Configuration roles alone do not select queries.
+The report is uncertified; completed maintenance is historical evidence, not
+current Store admission or readiness. The normal terminal view is compact;
+`--details` includes the original deadline and before/after catalog counts.
+For an existing selected app/fleet with its retained journal:
+
+```sh
+canic fleet show --details
+canic fleet show --json
+```
+
+The same report appears in the opt-in localhost viewer. No view signs requests,
+advances maintenance or changes completion receipts.
 
 To create a Store, use the existing named `fleet plan` workflow. The selected
 fleet must have a bound top-level `root` and an unbound `wasm-store` child with a
@@ -252,7 +301,7 @@ Publication, artifact building and inspection accept up to 8 MiB, within Storeâ€
 bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
 and inline child plans retain their smaller custody limits. No measured deployment
 speedup is claimed. Whole-fleet release selection and Root maintenance with full
-Store custody use the workflows above. Store maintenance through Root and
+Store custody use the workflows above. Host upgrade execution for Store maintenance and
 existing-fleet migration remain pending.
 
 `make publication-test` qualifies the real CLI and signer against installed Root

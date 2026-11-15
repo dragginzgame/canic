@@ -117,7 +117,7 @@ pub async fn reconcile_upgrade(
 #[must_use]
 pub fn custody() -> stored::Custody {
     assert!(
-        !super::store_maintenance::active(),
+        super::store_maintenance::observe().is_none(),
         "Store maintenance custody required"
     );
     let children: children::Custody = super::journals();

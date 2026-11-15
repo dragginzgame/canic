@@ -3,8 +3,10 @@ use canic_management_protocol::children::{self, Slot};
 use serde::Serialize;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
+mod stores;
 #[cfg(test)]
 mod tests;
+pub use stores::FleetStoreMaintenance;
 
 const MAX_OPERATIONS: usize = 128;
 
@@ -27,6 +29,8 @@ pub struct Fleet {
     pub issues: Vec<String>,
     /// Planned Roots and explicitly selected managers, each an uncertified query.
     pub managers: Vec<FleetManager>,
+    /// Uncertified Store maintenance reports from owners named by retained Store deployment plans.
+    pub stores: Vec<FleetStoreMaintenance>,
     /// Optional, explicitly selected mainnet default wallet; separate from canister balances.
     pub wallet: Option<crate::Wallet>,
 }
@@ -64,6 +68,9 @@ pub struct FleetUpgrade {
 /// One admitted deployment step's public observation projection, excluding signed requests.
 #[derive(Debug, Serialize)]
 pub struct FleetOperation {
+    /// Root selected by a Store bootstrap approval; configuration roles alone select no query.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub store_root: Option<String>,
     /// Runtime slot bound by the retained plan, never inferred from config order.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slot: Option<Slot>,
@@ -192,6 +199,7 @@ pub(crate) fn local_operation_at(
     let approved_controller = plan.application_controller().to_owned();
     Ok((
         FleetOperation {
+            store_root: plan.store_root().map(|root| root.canister.clone()),
             slot: plan.management().and_then(|owner| owner.slot),
             upgrade,
             management,
@@ -602,6 +610,12 @@ pub async fn fleet_with_config(
                 network.clone(),
             );
         }
+        if let Some(owner) = &operation.store_root {
+            targets.insert(
+                (operation.network_id.clone(), owner.clone()),
+                network.clone(),
+            );
+        }
         if let Some(canister) = &operation.canister {
             targets.insert((operation.network_id.clone(), canister.clone()), network);
         }
@@ -723,6 +737,7 @@ pub async fn fleet_with_config(
         }
     }
     let mut canisters = Vec::new();
+    let stores = stores::collect(&operations, &targets, deadline).await?;
     for ((network_id, canister), network) in targets {
         let budget = deadline
             .saturating_duration_since(tokio::time::Instant::now())
@@ -766,6 +781,7 @@ pub async fn fleet_with_config(
         operations,
         issues,
         managers,
+        stores,
         wallet: None,
     })
 }

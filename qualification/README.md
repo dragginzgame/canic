@@ -44,14 +44,35 @@ activation is refused, and an in-flight cache repair cannot continue through a
 close/reopen cycle. The fixture retains direct operator control for Store upgrade;
 it does not claim the production Root-only installation flow. Prior CWS1 settings
 migration is tested at the record codec boundary, not using a historical binary.
-`bash scripts/dev/test-store.sh quiescence` selects three installed Root-owned
+`bash scripts/dev/test-store.sh quiescence` selects four installed Root-owned
 closure/stop cases and the maintenance Wire-budget test. Store has sole Root
 control. Callback faults 13/14 preserve closure and stop intent; Root replacement
 and post-deadline observation recover without reissuing stop. Unfinished children,
 wrong Store control and expired dispatch refuse effects. The pinned predecessor
-Root binary migrates without gaining Store-maintenance authority. This runtime
-qualification ends at Stopped; it does not install, restart or activate Store and
-must not be used live. Full child-custody reads refuse its pending record.
+Root binaries migrate without gaining maintenance or preservation evidence.
+This selection ends at Stopped. Full child-custody reads refuse any retained
+Store-maintenance record, including completed operations.
+The same selection now interrupts a closed-catalog scan with Root replacement
+and concurrent continuations, retaining one cursor/count and including an
+unfinished upload. Native Store cases cover aliases, former-owner pins,
+reopen and stale/wrong-owner/open-gate refusal. Metadata page and retained Root
+status fit their scoped Wire budgets. No payload scan is claimed; old CUJ5
+attempts cannot gain preservation evidence during migration.
+
+`bash scripts/dev/test-store.sh maintenance` selects the full local runtime
+replacement witness. Root alone uploads/installs approved bytes, restarts with
+admission closed, verifies metadata and explicitly activates. Callback faults
+15–18 and pre-install dispatch fault 19 cover retained intent and observation-only
+recovery across Root replacement. The fixture compares every Store stable byte
+before/after upgrade, including chunks, shared-version pins and an unfinished
+upload; publication resumes only after activation. Wrong bytes/callers, malformed
+frames, expiry, rejected modules and incompatible replacement endpoints cannot
+activate or reissue installation. Recovery after expiry can retain an installed
+outcome but cannot start it with expired authority. This is not a CLI/mainnet
+qualification or repeatable maintenance; the single operation remains retained.
+Public Root diagnostics are checked against the private retained observation across
+the same installed phases, including a stopped Store and Root replacement. Malformed
+queries do not alter state and the replicated custody endpoint remains controller-only.
 Actual Root calls acquire pins, install a child larger than the former inline
 limit, and upgrade it using the Store cache. Lost pin/cache callbacks recover
 through observation after Root maintenance. Missing cache, unpublished releases,
@@ -88,6 +109,10 @@ of a release published before maintenance. Missing publication completion refuse
 that reuse without granting renewed mutation authority. Native
 maintenance tests reject altered pins, sources, deadlines and unexpected slots,
 without admitting legacy inline observation methods for Store custody.
+The whole-fleet journey also reads the public maintenance report before admission
+and after Root stops Store. Repeated actual `fleet show` calls preserve both
+canisters' stable bytes and keep all four inventory identities. The report does
+not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds two embedded catalog executables using the optional

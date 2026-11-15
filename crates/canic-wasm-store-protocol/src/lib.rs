@@ -1,6 +1,7 @@
 //! Immutable raw-Wasm releases and resumable publication. No deployment authority.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+pub mod preservation;
 
 /// Prepare an exact release, reserving its capacity before upload.
 pub const PREPARE: u64 = 100;
@@ -28,6 +29,8 @@ pub const PREPARE_CACHE: u64 = 110;
 pub const CUSTODY: u64 = 111;
 /// Close, inspect or explicitly reopen Store mutation admission for one exact attempt.
 pub const ADMISSION: u64 = 112;
+/// Enumerate one catalog entry under an exact closed maintenance attempt.
+pub const PRESERVATION: u64 = 113;
 
 /// Monotonic maintenance identity; a new attempt uses the previous sequence plus one.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -362,10 +365,33 @@ mod tests {
                 .collect(),
         });
         let encoded = ic_wire::native::encode_response(CUSTODY, &custody, LIMITS).unwrap();
-        assert_eq!(
+        let decoded =
             ic_wire::native::decode_response::<Result<Custody, Error>>(CUSTODY, &encoded, LIMITS)
-                .unwrap(),
-            custody
+                .unwrap();
+        assert_eq!(decoded, custody);
+        let preservation = Ok::<_, Error>(preservation::Page {
+            catalog: preservation::Catalog {
+                quota: Quota {
+                    reserved_bytes: u64::MAX,
+                    releases: u64::MAX,
+                },
+                reserved_bytes: u64::MAX,
+                releases: u64::MAX,
+                artifacts: u64::MAX,
+                chunks: u64::MAX,
+            },
+            entry: Some(decoded.unwrap()),
+        });
+        let encoded =
+            ic_wire::native::encode_response(PRESERVATION, &preservation, LIMITS).unwrap();
+        assert_eq!(
+            ic_wire::native::decode_response::<Result<preservation::Page, Error>>(
+                PRESERVATION,
+                &encoded,
+                LIMITS
+            )
+            .unwrap(),
+            preservation
         );
         let page = Ok::<_, Error>(vec![status; PAGE_SIZE]);
         let encoded = ic_wire::native::encode_response(LIST, &page, LIMITS).unwrap();

@@ -7,6 +7,223 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.210.0 release inputs: 2026-11-15
+
+The maintainer authorized delivery and confirmed the concurrent placement work
+finished and included. Product packages select 0.210.0; qualification package
+identities remain 0.0.0. Scope includes the bounded Store replacement runtime,
+public fleet diagnostics and configured placement collection. GitHub-only delivery
+remains selected; all packages retain `publish = false`.
+
+Fresh registry review found the locked first-party selections current: Host
+fs/process/artifacts 0.79.0, Host text 0.76.0, Platform 0.33.7, Runtime 0.22.5,
+Types 0.20.4, Storage 0.74.1, Timers 0.44.3, Wire 0.22.4, Testkit 0.106.0 and
+Toko Tooling 0.44.3. Placement selects unpublished `ic-topology` 0.106.1 at
+`0a3eca919f05d777798406087049cc51ab7ae2a8`, verified as Query's current main
+revision; its registry index is absent. Blob remains at qualified Git revision
+`decde204acb6d7c8362a0003e904beef72ff89b6` (0.100.6), independently of its older
+registry release 0.82.1. Reviewed its default branch again at
+`86fc663d14b5fde78db1267157ce9b1b9dbe2888`; optional adoption is deferred to the
+next dependency-maintenance batch so this release preserves the installed Blob
+witness's selected input. Neither supplier checkout is changed.
+
+Release review found anonymous-controller admission could retain Store maintenance
+that Root's existing reopen validation would reject. The initial aggregate run
+was interrupted before editing (`release-0210-ci.log`). Admission now refuses
+that operator before retaining anything. The installed CLI witness checks the
+refusal and unchanged stable bytes, then hands Root to an explicit operator for
+maintenance while continuing to observe anonymously through the CLI.
+
+The next aggregate run passed, but its post-run input comparison found four late
+placement-summary changes from the concurrent Query session: CLI presentation,
+its tests, its test-only topology dependency and the corresponding lockfile edge.
+The owning session confirmed it had stopped Canic edits/builds. Reviewed those
+changes and included the summary of read/configured/unresolved/unbound counts and
+distinct observed subnets; no extra queries or JSON changes. That mixed-input run
+(`release-0210-ci-final.log`) is not the final release gate. The combined candidate
+is captured and validated again below.
+
+The final combined Linux `make -j1 ci` gate passed with all 267 captured input
+hashes unchanged before/after. This includes 95 Host tests, 49 CLI tests, all 21
+installed Store cases, both CLI publication journeys, five installed Blob cases,
+and the effect/custody, profile, growth, Root and endpoint qualifications. Native
+and Wasm Clippy, documentation, formatting and tooling agreement passed. Optional
+historical manager/Root inputs remain explicitly ignored; macOS and mainnet were
+not exercised by this release gate. Evidence is retained under
+`target/evidence/0.210.0/release/`; final output is
+`target/qualification/release-0210-ci-combined.log`. `make canic` installed and
+verified 0.210.0 on the existing PATH without opening a browser or changing PATH.
+
+## Fleet views expose Store maintenance: 2026-11-15
+
+Continued pending 0.210.0 with read-only Host/CLI visibility before admitting a
+Host-driven replacement workflow. Reused the legacy registry/tree/list and
+topology research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded under
+“Application tree and role correction”: declared relationships do not grant
+authority, unknown observations remain unknown, and exact network bindings must
+stay separate. No legacy registry or discovery mechanism was imported.
+
+Root explicitly mounts `store_maintenance_status`, a public bounded query over
+the existing retained metadata. The private replicated custody endpoint remains
+controller-only. Host selects the query solely from retained Store bootstrap
+authority and a known creation result, deduplicated by network/Root/Store, with
+at most sixteen reports inside the existing thirty-second snapshot budget.
+Configuration role edits cannot select queries. A foreign Store report or missing
+method remains unknown; public reports cannot add canisters, replace identities,
+resume effects or create completion receipts.
+
+Terminal and localhost views share phase wording. The ordinary view stays compact;
+details expose the original deadline and both catalog scan counts. Verification
+waiting for explicit activation differs from completed historical maintenance.
+Neither claims current Store admission or readiness. JSON carries the same
+bounded report. There is no new persistent state, artifact copy, signature owner,
+workflow engine, timer, crate or dependency for this change.
+
+Focused validation passes: 32 Host fleet cases, 20 CLI fleet/render/watch cases,
+the Store bootstrap projection and scoped public/private Wire-budget probes.
+Four installed Store maintenance cases pass (7.81s), comparing anonymous public
+reports with controller-only observations through stopped/uncertain/verified/
+completed states and Root replacement. Malformed queries preserve state; public
+access does not open the private endpoint. The actual whole-fleet CLI journey
+passes (107.60s), retaining four canister identities and observing no attempt
+before maintenance, then Stopped while Store is unavailable. Repeated views leave
+both Root and Store stable bytes unchanged. Native/Wasm/qualification Clippy,
+Rustdoc, formatting and tooling agreement pass. Logs use
+`target/qualification/store-fleet-*.log`.
+
+Concurrent placement work was identified and confirmed by the maintainer; its
+files and dependency changes were preserved. This increment does not qualify
+that work or change its ownership. Store upgrade execution through Host's existing
+plan/apply/status/reconcile flow, retained Store-operation custody during subsequent
+Host-driven Root maintenance, repeated attempts and mainnet remain pending.
+No package version bump, installation to the operator's PATH, commit, push, browser
+launch or live deployment was performed for this increment.
+
+## Root installs and activates its Store: 2026-11-15
+
+Continued pending 0.210.0 from the bounded preservation scan. Reused the legacy
+manifest/custody and checkpoint interruption research recorded below; legacy did
+not establish the rewrite's upgrade guarantee. Inspected the existing child
+upgrade owner and Platform's actual Wasm management exports. `InstallCodeArgs`
+is native-only in Platform 0.33.7, so the runtime uses its existing
+`UploadChunkArgs`/`InstallChunkedCodeArgs` contract instead of adding a parallel
+management type or supplier change. The
+[management specification](https://docs.internetcomputer.org/references/ic-interface-spec/management-canister/#ic-method-install_chunked_code)
+defines installation from the controlled same-subnet management cache.
+
+Explicit installation supplies at most 1 MiB of approved raw Wasm. Root uploads
+once into Store's management cache and retains the upload commitment, then issues
+one exact chunked-install request with its original sender version. Host owns the
+durable bytes; Root never stores them. Installation uncertainty is resolved only
+by approved module/sole-controller/stopped observation. The continuation starts
+Store with admission closed and repeats the same metadata scan. Only a complete
+matching result admits explicit activation of the original attempt. No implicit
+activation, deadline renewal or upload/install/start/activation replay exists.
+Completion releases mutation fences but preserves the operation; the old child-only
+custody surface still refuses it, including Ready, so Host cannot omit that record.
+
+The existing unreleased CUJ6 shape now includes installation and before/after
+preservation evidence. CUJ5 and earlier released shapes retain explicit migration;
+no compatibility lane was added for an intermediate, unshipped CUJ6 shape. The
+maximum maintenance receipt is 910 encoded bytes in the envelope probe. Its
+scoped budget preserves the 4 KiB frame bound while allowing 256 KiB traversal
+allocation, 2,048 nodes and depth 16; child observation budgets are unchanged.
+The first budget probe exposed the original allocation limit and was corrected
+before installed qualification. An initial installed assertion also used an
+invalid publication deadline; its rejection was correct and the fixture now
+uses publication's own shorter window. Failed attempts remain recorded in
+`store-install-budget-probe.log` and `store-install-installed.log`.
+
+Four installed maintenance cases pass (7.71s), covering callback faults 15–18,
+pre-install dispatch rollback at fault 19, Root replacement with uncertain effect
+evidence, wrong bytes/callers/malformed requests, expired dispatch, rejected
+modules and a replacement lacking the required admission endpoint. The successful
+path compares every Store stable byte before/after upgrade, including all payloads,
+shared-version pins and pending upload state, then resumes publication and child
+admission after explicit activation. A separate expiry case recovers installed
+code but cannot issue a new start. Runtime verification itself compares metadata,
+not all payload hashes. No general corruption-repair guarantee is claimed.
+The focused completion rerun (7.79s) also refuses child-only custody after Ready
+and proves that replaying the completed activation cannot reopen a newer Store
+gate. The maximum 1 MiB installation frame round-trips through its scoped budget
+and remains refused by the unchanged smaller worker-staging budget.
+
+The four existing quiescence/historical-migration cases pass (7.24s), as do the
+Wire-budget test, native/Wasm/fixture Clippy, Rustdoc and formatting. Required
+`make growth-test` passes both installed cases (14.44s); its optional historical
+manager input remains ignored. Normal manager footprint is 1,070,794 raw bytes,
+763,202 code bytes and 18 stable pages. Shared journal decoding adds measured
+binary cost even when Store-maintenance mounts are absent; no additional storage
+allocation, dependency, crate, timer, catalog mirror or generic workflow engine
+was added. Logs use `target/qualification/store-install-*.log`.
+
+Remaining limits: one retained maintenance attempt, no reset/cancellation or
+successor history, no automatic repair after rejection/expiry, no larger-than-one-
+chunk infrastructure delivery, and no Host/CLI/mainnet qualification. The current
+Host Store code bindings cannot advance until that operation is integrated into
+existing plan/apply/status custody. Package versions and installed CLI remain
+0.209.0. This increment is local, with no commit, push or live deployment.
+
+## Closed Store catalog preservation: 2026-11-15
+
+Started pending 0.210.0 after reviewing the 0.209.0 push. Reused the legacy
+immutable manifest/chunk and snapshot/reopen research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, plus the checkpoint sequence/late-callback
+research recorded below. The changed requirement is an external, bounded
+preservation commitment under the rewrite's exact Store closure. Legacy's mutable
+catalog replacement and checkpoint orchestrator remain excluded.
+
+Store now returns one ordered release-custody entry under its exact closed
+attempt and captured controller. Each page includes invariant quota/counters;
+the entry includes aliases, incomplete-upload progress and every shared pin.
+Root advances one page per call, retaining only a digest, cursor and count in its
+existing journal. Concurrent responses can commit the same cursor only once.
+Strict key progression, unchanged counters, the complete release count and an
+explicit end page precede stop. There is no payload scan, catalog copy, new
+dependency/allocation/timer, installation path or CLI command.
+
+A native migration probe rejected the initial assumption that Serde's default
+field could decode the prior Wire record (`Malformed`). Removed that assumption
+and added an explicit CUJ5 decoder before writing CUJ6. The retained normal Root
+from the 0.209.0 gate is now an installed fixture, with provenance and checksum in
+`qualification/tests/fixtures/README.md`. An initial fixture setup attempted an
+unsupported downgrade from CUJ6 and correctly trapped; corrected it to install
+the predecessor fresh. Real Closed and Stopped CUJ5 attempts now preserve every
+authority/stop field, with absent preservation evidence remaining absent. Closed
+attempts may scan; already-stopped attempts cannot gain invented evidence.
+
+Focused validation passes: ten Store native cases, both protocol suites and
+maximum metadata/status envelopes; four installed quiescence cases (7.19s),
+including Root replacement mid-scan and concurrent continuations; and the required
+shared-engine growth regression (two passing installed cases, 14.67s; optional
+older-manager input ignored). Focused native/Wasm/fixture Clippy, Rustdoc and
+formatting pass. Logs use `target/qualification/store-preservation-*.log`.
+The growth witness measures the normal manager at 1,045,965 raw bytes, 746,707 code
+bytes and 18 stable pages; the shared journal codec has a measurable binary cost
+even though that manager does not mount Store-maintenance endpoints.
+
+The full upgrade remains blocked: complete payload preservation, installation,
+restart and matching activation still need qualification. Stores lacking the new
+page contract cannot complete this scan; no fallback grants replacement authority.
+Package versions and installed CLI remain 0.209.0; 0.210.0 is a local pending
+increment, with no additional push or mainnet effect.
+
+## 0.209.0 post-push review: 2026-11-15
+
+Verified remote main and peeled `v0.209.0` at
+`e3e7be86301c377db8b064d2ef914f5cde936265` (tag object
+`af4ff0561ff687bf1fbbbaaa98781ae3613060fb`). `make canic` installed 0.209.0 on
+the normal PATH. Reviewed the delivered Store gate, cache fences, Root journal,
+explicit endpoint callers, old-custody refusal and qualification boundaries.
+No duplicate authority owner, catalog mirror or unqualified live CLI path was
+introduced. The intentionally incomplete Stopped endpoint remains an experimental
+runtime boundary, not a completed upgrade feature.
+
+The next preservation gap is complete catalog coverage before Store becomes
+unavailable: 0.209 reads individual release custody but retains no ordered catalog
+commitment. Pending 0.210 addresses that through one bounded entry per
+continuation under the exact closed attempt, not another provisioning workflow.
+
 ## 0.209.0 release qualification: 2026-11-15
 
 The complete Linux `make -j1 ci` gate passed with unchanged release inputs,

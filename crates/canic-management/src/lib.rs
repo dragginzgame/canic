@@ -52,5 +52,5 @@ pub mod stored {
 /// Root-owned Store maintenance custody, mounted explicitly by Root.
 #[cfg(target_arch = "wasm32")]
 pub mod store_maintenance {
-    pub use crate::engine::store_maintenance::{advance, observe, stage};
+    pub use crate::engine::store_maintenance::{activate, advance, install, observe, stage};
 }

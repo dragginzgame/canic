@@ -61,6 +61,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         .map(|item| &item.network_id)
         .chain(snapshot.operations.iter().map(|item| &item.network_id))
         .chain(snapshot.managers.iter().map(|item| &item.network_id))
+        .chain(snapshot.stores.iter().map(|item| &item.network_id))
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .enumerate()
@@ -186,6 +187,37 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 )
                 .expect("writing to String");
             }
+        }
+    }
+    for report in &snapshot.stores {
+        let name = roles::name(snapshot, &report.network_id, &report.store)
+            .unwrap_or_else(|| report.store.clone());
+        write!(
+            output,
+            "\nStore maintenance (uncertified): {}",
+            terminal_text(&name)
+        )
+        .expect("String write");
+        if network_numbers.len() > 1 {
+            write!(
+                output,
+                " (network #{})",
+                network_numbers[&report.network_id]
+            )
+            .expect("String write");
+        }
+        writeln!(output, " — {}", super::stores::summary(report)).expect("String write");
+        if let Some(failure) = report.reported.as_ref().and_then(|s| s.failure.as_ref()) {
+            writeln!(output, "  Failure: {failure:?}").expect("String write");
+        }
+        if let Some(error) = &report.observation_error {
+            writeln!(output, "  Observation: {}", terminal_text(error)).expect("String write");
+        }
+        if details {
+            for (label, value) in super::stores::details(report) {
+                writeln!(output, "  {label}: {}", terminal_text(&value)).expect("String write");
+            }
+            output.push_str("  Retained maintenance evidence does not establish current Store admission or readiness.\n");
         }
     }
     if let Some(wallet) = &snapshot.wallet {

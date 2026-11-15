@@ -2,6 +2,7 @@ use canic_host::{Error, Fleet, Result};
 use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use std::{fmt::Write as _, num::NonZeroUsize, path::Path};
 
+mod stores;
 mod terminal;
 #[cfg(test)]
 mod tests;
@@ -212,6 +213,34 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
                 .expect("writing to String");
             }
             html.push_str("</article>");
+        }
+        html.push_str("</div>");
+    }
+    if !snapshot.stores.is_empty() {
+        html.push_str("<h2>Store maintenance</h2><p>Uncertified Root reports; completion is historical, not current Store readiness or admission.</p><div class=grid>");
+        for report in &snapshot.stores {
+            write!(
+                html,
+                "<article><h3>{}</h3><p><strong>{}</strong></p>",
+                escape(&report.store),
+                stores::summary(report)
+            )
+            .expect("String write");
+            if let Some(failure) = report.reported.as_ref().and_then(|s| s.failure.as_ref()) {
+                write!(html, "<p class=warning>Failure: {failure:?}</p>").expect("String write");
+            }
+            if let Some(error) = &report.observation_error {
+                write!(html, "<p class=warning>{}</p>", escape(error)).expect("String write");
+            }
+            html.push_str("<details><summary>Retained evidence</summary>");
+            for (label, value) in stores::details(report).into_iter().chain(std::iter::once((
+                "Network identity",
+                report.network_id.clone(),
+            ))) {
+                write!(html, "<p>{label}: <code>{}</code></p>", escape(&value))
+                    .expect("String write");
+            }
+            html.push_str("</details></article>");
         }
         html.push_str("</div>");
     }

@@ -28,6 +28,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
         scope: "test",
         canisters: vec![],
         operations: vec![FleetOperation {
+            store_root: None,
             slot: None,
             upgrade: None,
             management: None,
@@ -48,6 +49,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
         }],
         issues: vec![],
         managers: vec![],
+        stores: vec![],
         wallet: None,
     };
     assert_eq!(
@@ -119,6 +121,7 @@ fn report_escapes_untrusted_text_and_labels_partial_inventory() {
         operations: vec![],
         issues: vec!["<script>alert('unsafe')</script> & \"quoted\"".into()],
         managers: vec![],
+        stores: vec![],
         wallet: None,
     };
     snapshot.managers.push(canic_host::FleetManager {
@@ -183,6 +186,7 @@ fn declared_routes_require_unambiguous_known_network_and_escape_text() {
         operations: vec![],
         issues: vec![],
         managers: vec![],
+        stores: vec![],
         wallet: None,
     };
     let link = "entry<script>:worker".to_owned();

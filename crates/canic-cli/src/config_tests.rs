@@ -670,6 +670,7 @@ async fn declaration_messages_escape_paths_while_json_retains_original_paths() {
             .unwrap();
             cli.json = structured;
             match run(&cli).await.unwrap() {
+                Output::Partial(_) => panic!("local declaration command cannot be partial"),
                 Output::Json(value) => {
                     assert!(structured);
                     assert_eq!(value["config_path"], config);

@@ -430,7 +430,7 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Installed CLI witnesses qualify named Store bootstrap under an existing bound Root and whole-fleet bootstrap before application admission; Store maintenance through Root remains pending. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
+The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Installed CLI witnesses qualify named Store bootstrap under an existing bound Root and whole-fleet bootstrap before application admission; Root-owned Store replacement now has a local runtime witness; its Host/CLI journey remains pending. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |
@@ -927,15 +927,50 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJ5 journal loads recognized predecessors without inventing maintenance
+The CUJ6 journal loads recognized predecessors without inventing maintenance
 authority; existing full child-custody reads refuse a pending Store attempt so
 Host Root maintenance cannot silently omit it.
 
-This qualification currently ends at Stopped, retains one attempt without reset,
-and is not exposed through CLI or admitted for live use. Installation, complete
-Store preservation, restart, matching activation and repeatable maintenance must
-extend this same journal. Host retains the approved replacement bytes; Root has
-only their commitment. No installation authority follows from the drain proof.
+Before issuing stop, Root captures a bounded ordered metadata commitment over
+the closed Store catalog, one release per continuation. Every page checks the
+same closed attempt and captured owner. Root retains quota/counters, a digest,
+cursor and count; it never mirrors the catalog. Aliases, incomplete-upload
+progress and shared pins participate. Strict key progression, unchanged counters,
+matching release count and an explicit end page prevent incomplete enumeration.
+Concurrent responses to one cursor can commit only once, and Root replacement
+preserves progress. This is a metadata preservation boundary, not payload hashing
+or a cache snapshot. Old CUJ5 attempts load without this evidence; already-stopped
+records and Stores without the new observation cannot acquire it by assumption.
+
+The explicit installation request supplies the approved replacement bytes, bounded
+to one 1 MiB management-cache chunk for this first infrastructure path. Host keeps
+their durable copy. Root records one upload and one exact chunked-install request,
+including the original sender version, without persisting Wasm. Lost upload replies
+recover through cache observation; installation recovery verifies the approved
+replacement under sole Root control. Issued upload/install/start/activation effects
+are never replayed. All fresh dispatch retains the original deadline and operator
+authority; post-deadline observations cannot grant fresh restart authority.
+
+Root starts the replacement with admission still closed and repeats the same
+bounded scan. Complete matching metadata is required before Verified. Explicit
+activation then opens only the exact Store attempt. The installed two-executable
+witness additionally compares all stable bytes, including payloads and pending
+uploads; runtime metadata comparison is not a full payload integrity scan.
+Completion releases mutation fences but retains the operation as historical
+evidence. Child-only custody must refuse even this completed record until Host
+maintenance can retain it. No drain observation alone authorizes installation.
+
+This remains local runtime qualification with one retained attempt and no reset,
+cancellation or successor history. Host/CLI upgrade execution and live use remain
+unqualified. Larger infrastructure replacements, explicit repair of blocked
+attempts and repeatable maintenance need their own admitted consumer paths.
+
+The public Root maintenance query is a diagnostic projection of that same journal,
+not another evidence owner. Host selects it from retained Store bootstrap authority
+and a known Store identity, preserving the exact network binding. Missing endpoints
+and foreign Store reports remain unknown. Fleet views never advance the operation;
+an uncertified completed report establishes neither completion custody nor current
+Store admission or readiness.
 
 Deploying an older retained version is a new approved upgrade subject to the
 application's schema and lifecycle compatibility checks. Artifact availability

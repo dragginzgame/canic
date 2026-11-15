@@ -11,6 +11,8 @@ pub mod publication;
 /// One bounded publication envelope, including a transient Store chunk.
 pub const PUBLICATION_LIMITS: ic_wire::Limits = publication::REQUEST_LIMITS;
 pub mod store_maintenance;
+/// Infrastructure replacement bytes, separate from inline worker staging.
+pub const STORE_INSTALL_LIMITS: ic_wire::Limits = store_maintenance::INSTALL_LIMITS;
 pub mod stored;
 /// Store metadata request budget, independent of inline Wasm envelopes.
 pub const STORED_LIMITS: ic_wire::Limits = stored::LIMITS;

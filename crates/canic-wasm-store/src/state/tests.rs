@@ -31,6 +31,93 @@ fn upload(state: &mut State<VectorMemory>, manifest: &Manifest, payload: &[u8]) 
 }
 
 #[test]
+fn preservation_pages_require_one_closed_owner_and_keep_aliases_and_partial_uploads() {
+    use canic_wasm_store_protocol::{AdmissionCommand, MaintenanceAttempt, preservation::Request};
+    let backing = VectorMemory::default();
+    let mut state = State::open(backing.clone(), true);
+    let (first, bytes) = fixture("one", 33);
+    state.prepare(&first).unwrap();
+    upload(&mut state, &first, &bytes);
+    state.publish(&first.release).unwrap();
+    let alias = Manifest {
+        release: Release {
+            version: "two".into(),
+            ..first.release.clone()
+        },
+        ..first.clone()
+    };
+    state.prepare(&alias).unwrap();
+    state
+        .pin(
+            &[2],
+            &Pin {
+                operation: [2; 32],
+                manifest: alias.clone(),
+            },
+        )
+        .unwrap();
+    let (pending, _) = fixture("unfinished", 41);
+    state.prepare(&pending).unwrap();
+    let attempt = MaintenanceAttempt {
+        sequence: 1,
+        operation: [1; 32],
+    };
+    let mut request = Request {
+        attempt: attempt.clone(),
+        after: None,
+    };
+    assert_eq!(state.preservation(&[1], &request), Err(Error::Conflict));
+    state
+        .admission(&[1], &AdmissionCommand::Close(attempt.clone()))
+        .unwrap();
+    assert_eq!(state.preservation(&[2], &request), Err(Error::Conflict));
+    let first_page = state.preservation(&[1], &request).unwrap();
+    assert_eq!(first_page.catalog.releases, 3);
+    assert_eq!(first_page.catalog.artifacts, 2);
+    assert_eq!(first_page.entry.as_ref().unwrap().pins[0].owner, vec![2]);
+    drop(state);
+    let mut state = State::open(backing, false);
+    assert_eq!(state.preservation(&[1], &request).unwrap(), first_page);
+    let mut releases = Vec::new();
+    loop {
+        let page = state.preservation(&[1], &request).unwrap();
+        assert_eq!(page.catalog, first_page.catalog);
+        let Some(entry) = page.entry else {
+            break;
+        };
+        if entry.status.manifest == pending {
+            assert_eq!(entry.status.missing, vec![0]);
+        }
+        request.after = Some(entry.status.manifest.release.clone());
+        releases.push(entry.status.manifest.release);
+    }
+    assert_eq!(
+        releases,
+        vec![first.release, alias.release, pending.release]
+    );
+    request.after = Some(Release {
+        name: String::new(),
+        version: "bad".into(),
+    });
+    assert_eq!(state.preservation(&[1], &request), Err(Error::Invalid));
+    request.after = None;
+    state
+        .admission(&[1], &AdmissionCommand::Activate(attempt))
+        .unwrap();
+    assert_eq!(state.preservation(&[1], &request), Err(Error::Conflict));
+    state
+        .admission(
+            &[1],
+            &AdmissionCommand::Close(MaintenanceAttempt {
+                sequence: 2,
+                operation: [2; 32],
+            }),
+        )
+        .unwrap();
+    assert_eq!(state.preservation(&[1], &request), Err(Error::Conflict));
+}
+
+#[test]
 fn custody_reports_staging_and_all_shared_artifact_pins_after_reopen() {
     let backing = VectorMemory::default();
     let mut state = State::open(backing.clone(), true);

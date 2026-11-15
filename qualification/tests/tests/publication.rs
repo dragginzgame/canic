@@ -537,6 +537,11 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     let view = cli(&dir, &["fleet", "show"]);
     assert_eq!(view["canisters"].as_array().unwrap().len(), 4);
     assert!(view["issues"].as_array().unwrap().is_empty(), "{view}");
+    assert_eq!(view["stores"].as_array().unwrap().len(), 1);
+    assert_eq!(view["stores"][0]["root"], root.to_text());
+    assert_eq!(view["stores"][0]["store"], store.to_text());
+    assert!(view["stores"][0]["reported"].is_null());
+    assert!(view["stores"][0]["observation_error"].is_null(), "{view}");
     // Readiness custody is part of fleet admission, not a disposable display summary.
     let proof = path.join("store/store-observe/0/reply.bin");
     let bytes = std::fs::read(&proof).unwrap();
@@ -547,7 +552,101 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
             .success()
     );
     std::fs::write(proof, bytes).unwrap();
+    observe_stopped_store(&dir, owner.instance(), root, store, &assets).await;
     owner.instance_mut().stop_live().await;
+}
+
+async fn observe_stopped_store(
+    dir: &Path,
+    pic: &ic_testkit::pocket_ic::nonblocking::PocketIc,
+    root: CanisterId,
+    store: CanisterId,
+    assets: &Path,
+) {
+    use canic_management_protocol::store_maintenance as wire;
+    let approval = wire::Approval {
+        store: store.to_text(),
+        previous_module: canic_wasm_store_protocol::digest(
+            &std::fs::read(assets.join("store.wasm")).unwrap(),
+        ),
+        module_hash: [99; 32],
+        attempt: canic_wasm_store_protocol::MaintenanceAttempt {
+            sequence: 1,
+            operation: [123; 32],
+        },
+        expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 3_600_000_000_000,
+    };
+    let before = pic.get_stable_memory(root).await;
+    let refused = pic
+        .update_call(
+            root,
+            CanisterId::anonymous(),
+            "stage_store_maintenance",
+            ic_wire::native::encode_request(wire::STAGE, &approval, wire::LIMITS).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ic_wire::native::decode_response::<Result<wire::Status, canic_management_protocol::Refusal>>(wire::STAGE, &refused, wire::LIMITS).unwrap(), Err(canic_management_protocol::Refusal::Binding));
+    assert_eq!(pic.get_stable_memory(root).await, before);
+    let operator = CanisterId::self_authenticating(b"Store report maintenance operator");
+    pic.update_canister_settings(
+        root,
+        Some(CanisterId::anonymous()),
+        CanisterSettings {
+            controllers: Some(vec![operator]),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let response = pic
+        .update_call(
+            root,
+            operator,
+            "stage_store_maintenance",
+            ic_wire::native::encode_request(wire::STAGE, &approval, wire::LIMITS).unwrap(),
+        )
+        .await
+        .unwrap();
+    ic_wire::native::decode_response::<Result<wire::Status, canic_management_protocol::Refusal>>(
+        wire::STAGE,
+        &response,
+        wire::LIMITS,
+    )
+    .unwrap()
+    .unwrap();
+    let mut stopped = false;
+    for _ in 0..128 {
+        let response = pic
+            .update_call(
+                root,
+                operator,
+                "advance_store_maintenance",
+                ic_wire::native::encode_request(wire::ADVANCE, &approval, wire::LIMITS).unwrap(),
+            )
+            .await
+            .unwrap();
+        let status: wire::Status =
+            ic_wire::native::decode_response(wire::ADVANCE, &response, wire::LIMITS).unwrap();
+        if status.phase == wire::Phase::Stopped {
+            stopped = true;
+            break;
+        }
+    }
+    assert!(stopped);
+    let before_root = pic.get_stable_memory(root).await;
+    let before_store = pic.get_stable_memory(store).await;
+    for _ in 0..2 {
+        let snapshot = cli(dir, &["fleet", "show"]);
+        assert_eq!(snapshot["stores"].as_array().unwrap().len(), 1);
+        let report = &snapshot["stores"][0];
+        assert_eq!(report["reported"]["phase"], "Stopped", "{snapshot}");
+        assert!(report["observation_error"].is_null());
+        assert!(report["reported"]["installation"].is_null());
+        assert_eq!(snapshot["canisters"].as_array().unwrap().len(), 4);
+    }
+    assert_eq!(pic.get_stable_memory(root).await, before_root);
+    assert_eq!(pic.get_stable_memory(store).await, before_store);
 }
 
 #[tokio::test(flavor = "current_thread")]

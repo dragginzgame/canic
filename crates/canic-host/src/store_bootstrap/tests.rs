@@ -56,6 +56,14 @@ fn store_bootstrap_retains_distinct_authority_and_original_approval() {
     let decoded: Plan = serde_json::from_slice(&serde_json::to_vec(&plan).unwrap()).unwrap();
     assert_eq!(decoded, plan);
     assert_eq!(decoded.digest().unwrap(), id);
+    let projection = crate::fleet::local_operation(&journal, &id, plan.created_at_ns)
+        .unwrap()
+        .0;
+    assert_eq!(
+        projection.store_root.as_deref(),
+        Some(plan.application_controller())
+    );
+    assert!(projection.canister.is_none()); // Unknown creation never selects an arbitrary Store.
     assert_eq!(
         create_store_plan(&journal, &wasm, input(), &config, "store", &"11".repeat(32)).unwrap(),
         (id, plan.clone())

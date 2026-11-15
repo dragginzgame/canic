@@ -29,3 +29,16 @@ or fault-injection endpoint. The two-child runtime fixture installs these exact
 bytes, populates creation and serial upgrades, then verifies the full history
 survives CUJ4 migration before admitting another child. This is a retained binary
 witness, not a reproducible-build claim or another Host predecessor fallback.
+
+## Store quiescence predecessor
+
+`root-store-quiescence.wasm` is the normal Root built during the 0.209.0 release
+gate, released at `e3e7be86301c377db8b064d2ef914f5cde936265`. SHA-256:
+`f032cb36ce3599aa5141f7d6cf4673463720a634fd81aaf193ac120db590c785`.
+
+It writes CUJ5 child/Store-maintenance journals and CUA3 artifact payloads. The
+quiescence fixture creates real Closed and Stopped attempts in this executable,
+upgrades to CUJ6, and verifies that all authority and stop evidence survive while
+missing catalog-scan evidence stays absent. A still-closed Store can be scanned;
+an already-stopped attempt cannot gain an invented commitment. This is retained
+binary evidence, not a reproducible-build claim or a Host compatibility fallback.

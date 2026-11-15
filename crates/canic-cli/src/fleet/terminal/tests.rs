@@ -12,8 +12,55 @@ fn empty() -> Fleet {
         operations: vec![],
         issues: vec![],
         managers: vec![],
+        stores: vec![],
         wallet: None,
     }
+}
+
+#[test]
+fn store_maintenance_reports_keep_uncertainty_activation_and_historical_completion_distinct() {
+    use canic_management_protocol::store_maintenance::{Phase, Status};
+    let mut snapshot = empty();
+    let status: Status = serde_json::from_value(serde_json::json!({
+        "approval": { "store": "store", "previous_module": vec![1; 32], "module_hash": vec![2; 32],
+            "attempt": { "sequence": 7, "operation": vec![3; 32] }, "expires_at_ns": 10_000_000_000_u64 },
+        "operator": "operator", "phase": "Stopped", "stop_request": null, "failure": null,
+        "preservation": null, "installation": null
+    })).unwrap();
+    snapshot.stores.push(canic_host::FleetStoreMaintenance {
+        network_id: "network-a".into(),
+        root: "root<script>\x1b[2J".into(),
+        store: "store<script>\x1b[2J".into(),
+        reported: Some(status),
+        observation_error: None,
+    });
+    for (phase, wording) in [
+        (Phase::Stopped, "stopped; replacement not installed"),
+        (Phase::InstallIssued, "installation issued; outcome pending"),
+        (Phase::Verified, "verified; awaiting explicit activation"),
+        (Phase::Ready, "maintenance completed (historical)"),
+    ] {
+        snapshot.stores[0].reported.as_mut().unwrap().phase = phase;
+        let concise = render(&snapshot, &[], false, false);
+        assert!(concise.contains(wording), "{concise}");
+        assert!(!concise.contains("Dispatch deadline"));
+        assert!(!concise.contains('\x1b'));
+        let detailed = render(&snapshot, &[], true, false);
+        assert!(detailed.contains("Attempt: 7"));
+        assert!(detailed.contains("Before replacement: not retained"));
+        let html = super::super::render(&snapshot, "");
+        assert!(html.contains(wording));
+        assert!(!html.contains("store<script>"));
+        assert!(!html.contains("root<script>"));
+    }
+    snapshot.stores[0].reported = None;
+    assert!(render(&snapshot, &[], false, false).contains("no retained maintenance attempt"));
+    snapshot.stores[0].observation_error = Some("missing method <unsafe>\x1b[2J".into());
+    let text = render(&snapshot, &[], false, false);
+    assert!(text.contains("UNKNOWN"));
+    assert!(!text.contains("no retained maintenance attempt"));
+    assert!(!text.contains('\x1b'));
+    assert!(super::super::render(&snapshot, "").contains("missing method &lt;unsafe&gt;"));
 }
 
 #[test]
@@ -31,6 +78,7 @@ fn terminal_preserves_unknowns_network_identity_and_uncertain_effects() {
         });
     }
     snapshot.operations.push(FleetOperation {
+        store_root: None,
         slot: None,
         upgrade: None,
         management: None,

@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "ic-blob-storage",
  "ic-platform-runtime",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -383,6 +383,7 @@ dependencies = [
  "ic-host-fs",
  "ic-host-process",
  "ic-host-text",
+ "ic-topology",
  "serde_json",
  "time",
  "tiny_http",
@@ -392,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -402,7 +403,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -411,6 +412,7 @@ dependencies = [
  "ic-host-fs",
  "ic-host-process",
  "ic-platform",
+ "ic-topology",
  "ic-wire",
  "serde",
  "serde_json",
@@ -424,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-management-protocol",
  "canic-wasm-store-protocol",
@@ -439,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-wasm-store-protocol",
  "ic-wire",
@@ -451,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-client"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-management-protocol",
  "canic-profile-protocol",
@@ -465,7 +467,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-entry"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -476,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-manager"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-management",
  "canic-management-protocol",
@@ -488,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -497,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -509,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -521,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "canic-wasm-store-protocol",
  "ic-platform",
@@ -535,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store-protocol"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -1512,6 +1514,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-platform-protocol"
+version = "0.1.0"
+source = "git+https://github.com/dragginzgame/ic-platform-new?rev=08c72219ad6f261067c00eece9c8c71852e6b561#08c72219ad6f261067c00eece9c8c71852e6b561"
+dependencies = [
+ "ic-platform-types",
+ "serde",
+]
+
+[[package]]
 name = "ic-platform-runtime"
 version = "0.22.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1566,6 +1577,19 @@ dependencies = [
  "ic-metrics",
  "ic-platform-runtime",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "ic-topology"
+version = "0.106.1"
+source = "git+https://github.com/dragginzgame/ic-query?rev=0a3eca919f05d777798406087049cc51ab7ae2a8#0a3eca919f05d777798406087049cc51ab7ae2a8"
+dependencies = [
+ "ic-platform",
+ "ic-platform-protocol",
+ "ic-platform-types",
+ "serde",
+ "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]

@@ -7,7 +7,7 @@ use canic_management_protocol::{
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use std::time::Duration;
 
-async fn approval(root: &Client<'_>, supplier: &Client<'_>) -> Approval {
+pub(super) async fn approval(root: &Client<'_>, supplier: &Client<'_>) -> Approval {
     Approval {
         store: supplier.id.to_text(),
         previous_module: management::digest(
@@ -28,7 +28,7 @@ async fn observe(root: &Client<'_>) -> Option<Status> {
         "observe_store_maintenance",
         wire::OBSERVE,
         &(),
-        management::LIMITS,
+        wire::LIMITS,
     )
     .await
 }
@@ -37,11 +37,13 @@ async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
         "advance_store_maintenance",
         wire::ADVANCE,
         approval,
-        management::LIMITS,
+        wire::LIMITS,
     )
     .await
 }
-async fn child_stage(root: &Client<'_>) -> Result<management::Status, management::Refusal> {
+pub(super) async fn child_stage(
+    root: &Client<'_>,
+) -> Result<management::Status, management::Refusal> {
     root.update(
         "stage",
         management::STAGE,
@@ -68,7 +70,31 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     let owner = support::instance(&binary).await;
     let pic = owner.instance();
     let (root, supplier) = readiness_tests::fixture(pic).await;
-    supplier.publish_bytes("kept", b"\0asm\x01\0\0\0").await;
+    let first = supplier.publish_bytes("kept", b"\0asm\x01\0\0\0").await;
+    supplier
+        .pin(&store::Pin {
+            operation: [91; 32],
+            manifest: first.clone(),
+        })
+        .await;
+    let pending = store::Manifest {
+        release: store::Release {
+            name: "unfinished".into(),
+            version: "v1".into(),
+        },
+        hash: store::digest(b"\0asm\x01\0\0\0\0"),
+        bytes: 9,
+        chunks: vec![store::digest(b"\0asm\x01\0\0\0\0")],
+    };
+    supplier
+        .update::<_, Result<store::Status, store::Error>>(
+            "prepare",
+            store::PREPARE,
+            &pending,
+            store::LIMITS,
+        )
+        .await
+        .unwrap();
     pic.update_canister_settings(
         supplier.id,
         Some(root.operator),
@@ -80,8 +106,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     .await
     .unwrap();
     let input = approval(&root, &supplier).await;
-    let stage_frame =
-        ic_wire::native::encode_request(wire::STAGE, &input, management::LIMITS).unwrap();
+    let stage_frame = ic_wire::native::encode_request(wire::STAGE, &input, wire::LIMITS).unwrap();
     assert!(
         pic.update_call(
             root.id,
@@ -93,12 +118,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
         .is_err()
     );
     let reserved: Result<Status, management::Refusal> = root
-        .update(
-            "stage_store_maintenance",
-            wire::STAGE,
-            &input,
-            management::LIMITS,
-        )
+        .update("stage_store_maintenance", wire::STAGE, &input, wire::LIMITS)
         .await;
     assert_eq!(reserved.unwrap().phase, Phase::Reserved);
     assert_eq!(child_stage(&root).await, Err(management::Refusal::Occupied));
@@ -136,7 +156,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
         Err(publication::Error::Maintenance)
     );
     inject(&root, 13).await;
-    let frame = ic_wire::native::encode_request(wire::ADVANCE, &input, management::LIMITS).unwrap();
+    let frame = ic_wire::native::encode_request(wire::ADVANCE, &input, wire::LIMITS).unwrap();
     assert!(
         pic.update_call(
             root.id,
@@ -150,6 +170,36 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     assert_eq!(observe(&root).await.unwrap().phase, Phase::Closing);
     inject(&root, 0).await;
     assert_eq!(advance(&root, &input).await.phase, Phase::Closed);
+    let first_page = advance(&root, &input).await;
+    assert_eq!(first_page.preservation.as_ref().unwrap().observed, 1);
+    assert!(!first_page.preservation.as_ref().unwrap().complete);
+    maintain(&root).await;
+    assert_eq!(observe(&root).await.unwrap(), first_page);
+    // Concurrent responses to this same cursor must not double-count or skip an entry.
+    let (_, _) = tokio::join!(advance(&root, &input), advance(&root, &input));
+    let mut scanned = observe(&root).await.unwrap();
+    for _ in 0..3 {
+        if scanned.preservation.as_ref().unwrap().complete {
+            break;
+        }
+        scanned = advance(&root, &input).await;
+    }
+    let preservation = scanned.preservation.as_ref().unwrap();
+    assert!(preservation.complete);
+    assert_eq!(preservation.observed, 2);
+    assert_eq!(preservation.catalog.releases, 2);
+    assert_eq!(preservation.catalog.artifacts, 2);
+    assert_eq!(preservation.catalog.chunks, 1);
+    // The pre-existing maintenance helper installs a non-fault build. Restore the fault build
+    // without changing the journal so the stop callback still exercises its failure boundary.
+    pic.upgrade_canister(
+        root.id,
+        std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
     let closed_store = pic.get_stable_memory(supplier.id).await;
     inject(&root, 14).await;
     assert!(
@@ -173,12 +223,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     let mut wrong = input.clone();
     wrong.attempt.operation[0] ^= 1;
     let refused: Result<Status, management::Refusal> = root
-        .update(
-            "stage_store_maintenance",
-            wire::STAGE,
-            &wrong,
-            management::LIMITS,
-        )
+        .update("stage_store_maintenance", wire::STAGE, &wrong, wire::LIMITS)
         .await;
     assert_eq!(refused, Err(management::Refusal::Occupied));
     assert!(
@@ -209,12 +254,7 @@ async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority
     child_stage(&busy).await.unwrap();
     let input = approval(&busy, &supplier).await;
     let refused: Result<Status, management::Refusal> = busy
-        .update(
-            "stage_store_maintenance",
-            wire::STAGE,
-            &input,
-            management::LIMITS,
-        )
+        .update("stage_store_maintenance", wire::STAGE, &input, wire::LIMITS)
         .await;
     assert_eq!(refused, Err(management::Refusal::Occupied));
     assert!(observe(&busy).await.is_none());
@@ -224,7 +264,7 @@ async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority
         "stage_store_maintenance",
         wire::STAGE,
         &input,
-        management::LIMITS,
+        wire::LIMITS,
     )
     .await
     .unwrap();
@@ -246,6 +286,91 @@ async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority
     pic.advance_time(Duration::from_secs(3601)).await;
     assert_eq!(advance(&root, &input).await.phase, Phase::Reserved); // Expiry grants no new close.
     assert_eq!(pic.get_stable_memory(supplier.id).await, before);
+    owner.close().await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn cuj5_maintenance_migration_preserves_real_attempt_without_inventing_a_scan() {
+    #[derive(serde::Deserialize)]
+    struct Previous {
+        approval: Approval,
+        operator: String,
+        phase: Phase,
+        stop_request: Option<[u8; 32]>,
+        failure: Option<management::Failure>,
+    }
+    let (_, binary) = support::inputs();
+    let owner = support::instance(&binary).await;
+    let pic = owner.instance();
+    let predecessor = include_bytes!("../../fixtures/root-store-quiescence.wasm");
+    for stopped in [false, true] {
+        let (root, supplier) = readiness_tests::fixture_with_root(pic, predecessor.to_vec()).await;
+        pic.update_canister_settings(
+            supplier.id,
+            Some(root.operator),
+            CanisterSettings {
+                controllers: Some(vec![root.id]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let input = approval(&root, &supplier).await;
+        root.update::<_, Result<Previous, management::Refusal>>(
+            "stage_store_maintenance",
+            wire::STAGE,
+            &input,
+            wire::LIMITS,
+        )
+        .await
+        .unwrap();
+        let mut old: Previous = root
+            .update(
+                "advance_store_maintenance",
+                wire::ADVANCE,
+                &input,
+                wire::LIMITS,
+            )
+            .await;
+        assert_eq!(old.phase, Phase::Closed);
+        if stopped {
+            old = root
+                .update(
+                    "advance_store_maintenance",
+                    wire::ADVANCE,
+                    &input,
+                    wire::LIMITS,
+                )
+                .await;
+            assert_eq!(old.phase, Phase::StopIssued);
+            old = root
+                .update(
+                    "advance_store_maintenance",
+                    wire::ADVANCE,
+                    &input,
+                    wire::LIMITS,
+                )
+                .await;
+            assert_eq!(old.phase, Phase::Stopped);
+        }
+        maintain(&root).await;
+        let restored = observe(&root).await.unwrap();
+        assert_eq!(restored.approval, old.approval);
+        assert_eq!(restored.operator, old.operator);
+        assert_eq!(restored.phase, old.phase);
+        assert_eq!(restored.stop_request, old.stop_request);
+        assert_eq!(restored.failure, old.failure);
+        assert!(restored.preservation.is_none());
+        let resumed = advance(&root, &input).await;
+        if stopped {
+            assert_eq!(resumed, restored);
+        } else {
+            let scan = resumed.preservation.unwrap();
+            assert!(scan.complete);
+            assert_eq!(scan.observed, 0);
+            assert_eq!(resumed.phase, Phase::Closed);
+        }
+    }
     owner.close().await;
 }
 

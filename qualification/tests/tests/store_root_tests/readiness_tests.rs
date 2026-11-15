@@ -4,6 +4,16 @@ use canic_management_protocol::{self as management, publication};
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, nonblocking::PocketIc};
 
 pub(super) async fn fixture(pic: &PocketIc) -> (Client<'_>, Client<'_>) {
+    fixture_with_root(
+        pic,
+        std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
+    )
+    .await
+}
+pub(super) async fn fixture_with_root(
+    pic: &PocketIc,
+    root_wasm: Vec<u8>,
+) -> (Client<'_>, Client<'_>) {
     let operator = CanisterId::self_authenticating(b"Store bootstrap operator");
     let root = pic
         .create_canister_with_settings(Some(operator), None)
@@ -11,15 +21,15 @@ pub(super) async fn fixture(pic: &PocketIc) -> (Client<'_>, Client<'_>) {
     let supplier = pic
         .create_canister_with_settings(Some(operator), None)
         .await;
-    for (id, file) in [(root, "root-faults.wasm"), (supplier, "original.wasm")] {
+    for (id, wasm) in [
+        (root, root_wasm),
+        (
+            supplier,
+            std::fs::read(artifacts().join("original.wasm")).unwrap(),
+        ),
+    ] {
         pic.add_cycles(id, 10_000_000_000_000).await;
-        pic.install_canister(
-            id,
-            std::fs::read(artifacts().join(file)).unwrap(),
-            vec![],
-            Some(operator),
-        )
-        .await;
+        pic.install_canister(id, wasm, vec![], Some(operator)).await;
     }
     (
         Client {

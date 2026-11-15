@@ -50,7 +50,7 @@ pub fn custody() -> canic_management_protocol::custody::Custody {
 #[must_use]
 pub fn owner_custody() -> children::Custody {
     assert!(
-        !store_maintenance::active(),
+        store_maintenance::observe().is_none(),
         "Store maintenance custody required"
     );
     assert!(
@@ -180,7 +180,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
     if let (Some(first), Some(second)) = (&journals[0].0.worker, &journals[1].0.worker) {
         assert_ne!(first, second, "distinct child identities");
     }
-    // Commit the bounded v5 journal and v3 artifact payloads only after strict old/new schema validation.
+    // Commit the bounded v6 journal and v3 artifact payloads only after strict old/new schema validation.
     // A post-upgrade trap rolls back both writes with the executable change.
     state.journal.set(state.journal.get().clone());
     state.artifact.set(state.artifact.get().clone());
@@ -390,7 +390,7 @@ pub fn inject_fault(slot: Slot, value: u8) {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    assert!(value <= 14);
+    assert!(value <= 19);
     FAULT.update(|mut values| {
         values[slot.index()] = value;
         values

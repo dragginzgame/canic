@@ -19,7 +19,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.209.0"
+version = "0.210.0"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
@@ -41,6 +41,7 @@ ic-platform = { version = "0.33.0", default-features = false }
 ic-platform-runtime = { version = "0.22.1", default-features = false }
 ic-storage = "0.74.0"
 ic-timers = "0.44.1"
+ic-topology = { git = "https://github.com/dragginzgame/ic-query", rev = "0a3eca919f05d777798406087049cc51ab7ae2a8", version = "0.106.1" }
 ic-wire = { version = "0.22.1", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"

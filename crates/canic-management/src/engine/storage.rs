@@ -186,15 +186,40 @@ impl Storable for Journals {
         }
         let payload = ic_wire::native::encode(&(&self.0, &self.1), JOURNAL_LIMITS)
             .map_err(|_| CodecError::Invalid("child journals"))?;
-        let mut bytes = b"CUJ5".to_vec();
+        let mut bytes = b"CUJ6".to_vec();
         bytes.extend_from_slice(&payload);
         Ok(Cow::Owned(bytes))
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        if let Some(payload) = bytes.strip_prefix(b"CUJ5") {
+        if let Some(payload) = bytes.strip_prefix(b"CUJ6") {
             let (journals, maintenance) = ic_wire::native::decode(payload, JOURNAL_LIMITS)
                 .map_err(|_| CodecError::Invalid("Store maintenance journal"))?;
             Ok(Self(journals, maintenance))
+        } else if let Some(payload) = bytes.strip_prefix(b"CUJ5") {
+            // Wire records have exact arity: decode the historical shape explicitly.
+            #[derive(Deserialize)]
+            struct Previous {
+                approval: canic_management_protocol::store_maintenance::Approval,
+                operator: String,
+                phase: canic_management_protocol::store_maintenance::Phase,
+                stop_request: Option<[u8; 32]>,
+                failure: Option<canic_management_protocol::Failure>,
+            }
+            let (journals, maintenance): ([Journal; 2], Option<Previous>) =
+                ic_wire::native::decode(payload, JOURNAL_LIMITS)
+                    .map_err(|_| CodecError::Invalid("previous Store maintenance journal"))?;
+            Ok(Self(
+                journals,
+                maintenance.map(|old| canic_management_protocol::store_maintenance::Status {
+                    approval: old.approval,
+                    operator: old.operator,
+                    phase: old.phase,
+                    stop_request: old.stop_request,
+                    failure: old.failure,
+                    preservation: None,
+                    installation: None,
+                }),
+            ))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ4") {
             let journals: [Journal; 2] = ic_wire::native::decode(payload, JOURNAL_LIMITS)
                 .map_err(|_| CodecError::Invalid("child journals"))?;

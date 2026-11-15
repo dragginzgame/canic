@@ -156,9 +156,30 @@ authenticated tooling installer.
   refuses this pending record so Host Root maintenance cannot omit it.
   `bash scripts/dev/test-store.sh quiescence` qualifies sole-Root authority,
   callback faults 13/14, Root replacement and predecessor migration. This runtime
-  qualification stops at Stopped: no installation, start, activation, cancellation
-  or reset is admitted yet. Do not use it live or expose it through CLI until
-  the complete Store-upgrade flow qualifies.
+  now scans the complete closed catalog one entry per continuation before stop,
+  retaining only counts, a cursor and ordered metadata commitment. Store checks
+  the exact closed attempt and captured owner on every page. Concurrent replies
+  may commit a cursor once; counts and an explicit end page establish completion.
+  This does not hash payload bytes. Stores lacking this contract remain blocked.
+  Prior CUJ5 records load without preservation evidence; never invent it for an
+  already stopped attempt. Explicit `install_store_maintenance` accepts up to
+  1 MiB of approved raw Wasm, uploads once into Store's management cache, and
+  authorizes one chunked installation and restart with admission closed. Host
+  retains bytes; Root retains only request commitments and original authority.
+  After restart, reuse the same scan to verify preservation; only explicit
+  `activate_store_maintenance` can open the exact attempt. Callback faults 15–18
+  and dispatch fault 19 qualify recovery without repeating upload/install/start/
+  activation. `bash scripts/dev/test-store.sh maintenance` owns this installed proof.
+  Completion releases the mutation fence but retains the operation. Full child-only
+  custody must still refuse that retained Store record, including Ready, until Host
+  maintenance can carry it. One attempt only: no cancellation, reset or successor
+  history yet. Host/CLI upgrade execution and live use remain unqualified.
+  Root's public `store_maintenance_status` query projects the retained metadata
+  without scheduling work. `fleet show` selects it only from retained Store
+  bootstrap authority and a known Store identity, never configuration roles alone.
+  Reports are uncertified and cannot establish completion custody, current Store
+  admission or readiness. Missing methods and mismatched Store identities remain
+  unknown; the existing snapshot deadline bounds these observations as well.
   Cache preparation never grants install authority. It has no pin release or
   deletion; do not clear pins on expiry.
   Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.
@@ -209,8 +230,9 @@ authenticated tooling installer.
   approval requires a Ready predecessor without failure; retain every historical
   approval, request commitment and outcome. Uncertain, expired or failed work
   cannot be replaced, and history exhaustion never evicts records. Keep creation
-  evidence immutable. The v5 journal adds optional Store-maintenance custody and
-  migrates v1/v2/v3/v4 payloads without inventing that authority inside the original
+  evidence immutable. The v6 journal retains optional Store-maintenance custody
+  and before/after catalog scans and installation evidence, migrating v1/v2/v3/v4/v5 payloads without inventing
+  missing authority or preservation evidence inside the original
   two fixed IC Storage allocations; current and creation artifact bytes stay
   there, while historical artifact hashes and host-retained bytes preserve custody.
   Never rewrite the supplier's directory or add a second

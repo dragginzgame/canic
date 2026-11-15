@@ -63,6 +63,7 @@ endpoint!(publish, update, PUBLISH, protocol::Release, Result<protocol::Status, 
 endpoint!(status, query, STATUS, protocol::Release, Result<protocol::Status, protocol::Error>, LIMITS, LIMITS, |state, input| state.status(input));
 endpoint!(observe, update, STATUS, protocol::Release, Result<protocol::Status, protocol::Error>, LIMITS, LIMITS, |state, input| state.status(input));
 endpoint!(observe_custody, update, CUSTODY, protocol::Release, Result<protocol::Custody, protocol::Error>, LIMITS, LIMITS, |state, input| state.custody(input));
+endpoint!(observe_preservation, update, PRESERVATION, protocol::preservation::Request, Result<protocol::preservation::Page, protocol::Error>, LIMITS, LIMITS, |state, input| state.preservation(cdk::api::msg_caller().as_slice(), input));
 endpoint!(
     admission,
     update,

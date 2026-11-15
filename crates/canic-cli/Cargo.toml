@@ -26,5 +26,8 @@ time.workspace = true
 tiny_http.workspace = true
 tokio.workspace = true
 
+[dev-dependencies]
+ic-topology.workspace = true
+
 [lints]
 workspace = true

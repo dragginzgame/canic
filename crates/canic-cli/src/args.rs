@@ -222,6 +222,11 @@ pub(super) enum FleetCommand {
         #[arg(long)]
         app: Option<String>,
     },
+    /// Observe configured mainnet canister placements; no journals or deployment effects.
+    Placements {
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+    },
     /// Plan deployment, Root maintenance or an immutable Store release.
     #[command(mut_arg("icp_bin", |arg| arg.conflicts_with("controller")))]
     Plan {
@@ -402,7 +407,11 @@ impl FleetCommand {
             | Self::Status { scope, .. }
             | Self::Show { scope, .. }
             | Self::Call { scope, .. } => Some(scope),
-            Self::Canister(_) | Self::Init { .. } | Self::List { .. } | Self::View { .. } => None,
+            Self::Placements { .. }
+            | Self::Canister(_)
+            | Self::Init { .. }
+            | Self::List { .. }
+            | Self::View { .. } => None,
         }
     }
 }

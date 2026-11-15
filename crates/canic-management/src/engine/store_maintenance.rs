@@ -1,4 +1,4 @@
-//! Root retains closure and single-use stop intent outside Store. Installation is not admitted here yet.
+//! Root retains Store maintenance intent and evidence; Host retains replacement bytes.
 use super::{
     MANAGEMENT_LIMITS, OBSERVING, STATE, State, api, candid_codec, decoder, digest, management,
 };
@@ -14,6 +14,9 @@ use ic_platform_runtime::{
     Principal,
     call::{Call, WaitPolicy},
 };
+mod installation;
+mod preservation;
+pub use installation::{activate, install};
 
 pub(crate) fn active() -> bool {
     STATE.with_borrow(|state| {
@@ -23,7 +26,8 @@ pub(crate) fn active() -> bool {
             .journal
             .get()
             .1
-            .is_some()
+            .as_ref()
+            .is_some_and(|record| record.phase != Phase::Ready)
     })
 }
 fn quiescent(state: &State) -> bool {
@@ -64,15 +68,20 @@ fn binding(state: &State, approval: &Approval) -> bool {
 pub(super) fn validate(state: &State) {
     if let Some(record) = &state.journal.get().1 {
         assert!(
-            binding(state, &record.approval) && quiescent(state),
+            binding(state, &record.approval) && (record.phase == Phase::Ready || quiescent(state)),
             "maintenance owner binding"
         );
         let operator = Principal::from_text(&record.operator).expect("maintenance operator");
         assert_eq!(operator.to_text(), record.operator);
         assert_ne!(operator, Principal::anonymous());
+        preservation::validate(record);
+        installation::validate(record);
         assert_eq!(
             record.stop_request.is_some(),
-            matches!(record.phase, Phase::StopIssued | Phase::Stopped)
+            !matches!(
+                record.phase,
+                Phase::Reserved | Phase::Closing | Phase::Closed
+            )
         );
         if let Some(request) = record.stop_request {
             assert_eq!(
@@ -99,6 +108,10 @@ pub fn observe() -> Option<Status> {
 pub fn stage(approval: Approval) -> Result<Status, Refusal> {
     let operator = api::msg_caller();
     assert!(api::is_controller(&operator), "controller required");
+    // Reopen requires a captured authenticated operator; reject before retaining unusable custody.
+    if operator == Principal::anonymous() {
+        return Err(Refusal::Binding);
+    }
     if let Some(old) = observe() {
         return if old.approval == approval && old.operator == operator.to_text() {
             Ok(old)
@@ -124,6 +137,8 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
             phase: Phase::Reserved,
             stop_request: None,
             failure: None,
+            preservation: None,
+            installation: None,
         };
         let mut journals = state.journal.get().clone();
         journals.1 = Some(record.clone());
@@ -187,10 +202,16 @@ fn args(approval: &Approval) -> Vec<u8> {
     .expect("stop args")
 }
 async fn inspect(approval: &Approval) -> Result<CanisterStatusResult, Failure> {
+    inspect_module(approval, approval.previous_module).await
+}
+async fn inspect_module(
+    approval: &Approval,
+    module: [u8; 32],
+) -> Result<CanisterStatusResult, Failure> {
     let reply = management("canister_status", args(approval), 0).await?;
     let value: CanisterStatusResult =
         decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
-    if value.module_hash.as_deref() != Some(approval.previous_module.as_slice())
+    if value.module_hash.as_deref() != Some(module.as_slice())
         || value.settings.controllers != [api::canister_self()]
     {
         return Err(Failure::Mismatch);
@@ -198,8 +219,18 @@ async fn inspect(approval: &Approval) -> Result<CanisterStatusResult, Failure> {
     Ok(value)
 }
 async fn gate(approval: &Approval, command: store::AdmissionCommand) -> Result<(), Failure> {
-    let bytes = ic_wire::native::encode_request(store::ADMISSION, &command, store::LIMITS)
-        .expect("admission request");
+    admission(approval, command, true).await
+}
+fn admission_frame(command: &store::AdmissionCommand) -> Vec<u8> {
+    ic_wire::native::encode_request(store::ADMISSION, command, store::LIMITS)
+        .expect("admission request")
+}
+async fn admission(
+    approval: &Approval,
+    command: store::AdmissionCommand,
+    closed: bool,
+) -> Result<(), Failure> {
+    let bytes = admission_frame(&command);
     let reply = Call::new(
         target(approval),
         "admission",
@@ -215,7 +246,7 @@ async fn gate(approval: &Approval, command: store::AdmissionCommand) -> Result<(
     let expected = store::Admission {
         attempt: approval.attempt.clone(),
         owner: api::canister_self().as_slice().to_vec(),
-        closed: true,
+        closed,
     };
     if result != Ok(Some(expected)) {
         return Err(Failure::Mismatch);
@@ -223,8 +254,8 @@ async fn gate(approval: &Approval, command: store::AdmissionCommand) -> Result<(
     Ok(())
 }
 
-/// Advance closure/stopping under the original approval; recover issued work by observation only.
-/// Stopped is terminal for this first qualification step: no installation/start/activation is exposed.
+/// Advance the exact retained operation; issued effects are recovered by observation only.
+/// Installation and activation require their separate explicit requests.
 /// # Panics
 /// Traps for mismatched authority, invalid lifecycle, injected faults or failed durable writes.
 pub async fn advance(approval: Approval) -> Status {
@@ -270,6 +301,9 @@ async fn step(record: &Status) -> Result<(), Failure> {
             });
         }
         Phase::Closed => {
+            if !record.preservation.as_ref().is_some_and(|p| p.complete) {
+                return preservation::capture(record).await;
+            }
             if inspect(approval).await?.status != CanisterStatusType::Running {
                 return Err(Failure::Mismatch);
             }
@@ -300,6 +334,15 @@ async fn step(record: &Status) -> Result<(), Failure> {
                 value.failure = None;
             });
         }
+        Phase::UploadIssued
+        | Phase::Uploaded
+        | Phase::InstallIssued
+        | Phase::Installed
+        | Phase::StartIssued
+        | Phase::Verifying
+        | Phase::Verified
+        | Phase::ActivateIssued
+        | Phase::Ready => installation::advance(record).await?,
     }
     Ok(())
 }
