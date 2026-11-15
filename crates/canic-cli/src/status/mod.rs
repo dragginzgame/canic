@@ -164,6 +164,17 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             owner.execute_at_ns / 1_000_000_000
         )
         .expect("writing to String");
+        if let Some(source) = &owner.source {
+            writeln!(
+                output,
+                "Artifact source: Store {}\nStore module: {}\nRelease: {} / {}",
+                terminal_text(&source.store.canister),
+                terminal_text(&source.store.module),
+                terminal_text(&source.manifest.release.name),
+                terminal_text(&source.manifest.release.version)
+            )
+            .expect("String write");
+        }
         output.push_str(&management::render(
             &state["management"],
             plan.target().is_some(),

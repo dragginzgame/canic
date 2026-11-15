@@ -520,13 +520,9 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
             }
         }
     }
-    let receipt: Option<Receipt> = if dir.join("receipt.json").try_exists().map_err(supplier)? {
-        Some(store::json(&dir.join("receipt.json"))?)
-    } else {
-        None
-    };
+    let receipt = retained_receipt(dir, &plan, &bytes)?;
     if plan.store_root().is_some() {
-        for index in 0..32 {
+        for index in 0..crate::store_bootstrap::OBSERVATIONS {
             let path = dir.join(format!("store-observe/{index}"));
             if path.try_exists().map_err(supplier)? {
                 effects.insert(
@@ -534,28 +530,6 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
                     attempt_state(&path)?.into(),
                 );
             }
-        }
-        if let Some(receipt) = &receipt {
-            let canister = created(
-                &plan,
-                &store::read(&dir.join("create/reply.bin"), 2 * 1024 * 1024)?,
-            )?;
-            if receipt.canister != canister.to_text()
-                || receipt.operation != digest
-                || receipt.module_hash != plan.artifact.sha256
-                || receipt.controller != plan.application_controller()
-            {
-                return Err(Error::Invalid(
-                    "Store receipt differs from approved creation".into(),
-                ));
-            }
-            store_install_evidence(dir, &plan, &bytes, canister)?;
-            signed::validate_retained(
-                &dir.join("handover"),
-                &plan,
-                &crate::store_bootstrap::handover(&plan, canister)?,
-            )?;
-            crate::store_bootstrap::retained(dir, &plan, canister)?;
         }
     }
     let managed = match &plan.action {
@@ -585,4 +559,39 @@ pub(crate) fn attempt_state(path: &Path) -> Result<&'static str> {
         }
     }
     Ok("not_submitted")
+}
+
+/// Read completion through the effect owner, including Store handover/readiness evidence.
+pub(crate) fn retained_receipt(dir: &Path, plan: &Plan, bytes: &[u8]) -> Result<Option<Receipt>> {
+    let digest = plan.digest()?;
+    let receipt: Option<Receipt> = if dir.join("receipt.json").try_exists().map_err(supplier)? {
+        Some(store::json(&dir.join("receipt.json"))?)
+    } else {
+        None
+    };
+    if plan.store_root().is_some()
+        && let Some(receipt) = &receipt
+    {
+        let canister = created(
+            plan,
+            &store::read(&dir.join("create/reply.bin"), 2 * 1024 * 1024)?,
+        )?;
+        if receipt.canister != canister.to_text()
+            || receipt.operation != digest
+            || receipt.module_hash != plan.artifact.sha256
+            || receipt.controller != plan.application_controller()
+        {
+            return Err(Error::Invalid(
+                "Store receipt differs from approved creation".into(),
+            ));
+        }
+        store_install_evidence(dir, plan, bytes, canister)?;
+        signed::validate_retained(
+            &dir.join("handover"),
+            plan,
+            &crate::store_bootstrap::handover(plan, canister)?,
+        )?;
+        crate::store_bootstrap::retained(dir, plan, canister)?;
+    }
+    Ok(receipt)
 }

@@ -20,6 +20,18 @@ impl Method {
         self.contract(plan).1
     }
     fn contract(self, plan: &Plan) -> (&'static str, u64) {
+        if plan.management().is_some_and(|m| m.source.is_some()) {
+            use protocol::stored;
+            return match self {
+                Self::Stage => ("stage_stored_child", stored::STAGE),
+                Self::Reconcile => ("reconcile_stored_child", stored::RECONCILE),
+                Self::StageUpgrade => ("stage_stored_upgrade", stored::STAGE_UPGRADE),
+                Self::ReconcileUpgrade => ("reconcile_stored_upgrade", stored::RECONCILE_UPGRADE),
+                Self::Observe | Self::ObserveUpgrade => {
+                    ("observe_stored_children", stored::CUSTODY)
+                }
+            };
+        }
         let scoped = plan.management().and_then(|owner| owner.slot).is_some();
         match (self, scoped) {
             (Self::Stage, false) => ("stage", protocol::STAGE),
@@ -49,16 +61,20 @@ impl Method {
             .ok_or_else(|| crate::Error::Invalid("missing child scope".into()))?;
         let root = principal(&owner.root)?;
         let (method, id) = self.contract(plan);
-        let args = match owner.slot {
-            Some(slot) if matches!(self, Self::Observe) => {
-                ic_wire::native::encode_request(id, &slot, limits)
+        let args = if owner.source.is_some() {
+            super::stored::arguments(plan, id)?
+        } else {
+            match owner.slot {
+                Some(slot) if matches!(self, Self::Observe) => {
+                    ic_wire::native::encode_request(id, &slot, limits)
+                }
+                Some(slot) => {
+                    ic_wire::native::encode_request(id, &children::Request { slot, value }, limits)
+                }
+                None => ic_wire::native::encode_request(id, value, limits),
             }
-            Some(slot) => {
-                ic_wire::native::encode_request(id, &children::Request { slot, value }, limits)
-            }
-            None => ic_wire::native::encode_request(id, value, limits),
-        }
-        .map_err(supplier)?;
+            .map_err(supplier)?
+        };
         Ok(Call {
             canister: root,
             effective: root,

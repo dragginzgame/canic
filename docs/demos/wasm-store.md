@@ -9,11 +9,11 @@ bytes. Preparing a new version never removes earlier releases.
 
 Root now supports explicit Store-backed creation and serial upgrades. It retains
 immutable references, pin evidence and complete upgrade history in its original
-artifact allocation, with no application Wasm bytes. This is not yet wired into
-fleet plan/apply: selected-release policy and existing-fleet migration remain
-unimplemented. Fleet bootstrap now composes a declared Store, but application
-installation still uses the inline path. Existing inline deployments keep their
-current limits and contracts.
+artifact allocation, with no application Wasm bytes. Named `fleet plan --release`
+now selects a completed publication for child creation and its first upgrade.
+Whole-fleet bootstrap still uses inline application artifacts; release selection
+for that envelope and existing-fleet migration remain unimplemented. Existing
+inline deployments keep their current limits and contracts.
 There is no delete/reset or pin-release endpoint; incomplete uploads keep their
 reservation. No deployment approval or application readiness follows from Store
 publication. Host and Store check bounded raw Wasm framing and byte integrity. Full
@@ -180,8 +180,8 @@ is bounded to 32 attempts; exhaustion blocks without deleting evidence.
 Publication, artifact building and inspection accept up to 8 MiB, within Store’s
 bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
 and inline child plans retain their smaller custody limits. No measured deployment
-speedup is claimed. Deployment release selection,
-Store maintenance through Root and existing-fleet migration remain pending.
+speedup is claimed. Whole-fleet release selection, Store maintenance through Root
+and existing-fleet migration remain pending.
 
 `make publication-test` qualifies the real CLI and signer against installed Root
 and Store, using synthetic cycles. It creates Store through the CLI, refuses
@@ -190,7 +190,10 @@ the local handover reply and reconciles without repeating creation/install or
 changing Root's stable bytes. Missing retained readiness evidence invalidates a
 receipt. It then interrupts signing before the first chunk,
 observes without mutation, resumes the original upload, reuses bytes for a second
-immutable version and rejects mismatched code and missing receipt evidence.
+immutable version and rejects mismatched code and missing receipt evidence. It
+then creates a child from a published release above the inline size limit, recovers
+a lost admission reply, reconstructs a cleared cache during upgrade, calls the
+upgraded application and proves replay creates no extra canisters.
 
 `pin` retains an exact published manifest for the authenticated caller's operation.
 The identity is caller, operation digest and artifact hash; an operation can pin
@@ -251,3 +254,54 @@ capacity. Exhausted backing traps and rolls back the message. Increasing the
 artifact or backing ceiling requires another qualified executable, not a silent
 limit bypass. Stable records and independent collections grow incrementally;
 Root has no copy of this catalog or its payloads.
+
+## Deploy a published release
+
+Use the completed publication operation from this fleet's retained journal.
+The named application must be the sole application child under its bound Root;
+Store is infrastructure and does not count as an application child. Keep the
+app's configured Wasm input identical to the selected publication. Planning checks
+its completed signed publication evidence, app/fleet/network/operator and both
+owner identities, then freezes the exact manifest and Store code in the child
+approval. It never resolves a moving latest version. There is no payload upload
+from Host to Root during admission.
+
+From the app's config directory, with Root and Store bound and the release already
+published, replace the operation/hash placeholders below. Apply authorizes Root's
+fixed 1T creation grant from its existing cycles balance. The default dispatch
+remains ten minutes after planning; an explicit future `--execute-at UNIX_SECONDS`
+selects a different schedule within the bounded plan window. Keep Root funded.
+
+```sh
+canic fleet plan --app starter --fleet mainnet --canister app --release PUBLICATION_OPERATION --root-module ROOT_SHA256 --identity canic-mainnet
+canic fleet apply DEPLOYMENT_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status DEPLOYMENT_OPERATION --app starter --fleet mainnet
+```
+
+Apply again after dispatch to retain completion. If admission's reply was lost,
+apply reads Root's complete Store custody and checks the selected release and
+operation pin. It retains the original signed admission. Explicit `fleet reconcile`
+uses the same source-bound recovery contract and cannot renew spent or expired
+effect authority. Certified Store code/control and same-Root-subnet checks precede unfinished work;
+completed deployment replay verifies the application receipt without requiring
+Store to be available. Publication evidence is required when planning, while the
+resulting deployment journal independently retains its approved source and bytes.
+
+For the first upgrade, publish a different executable under a new immutable
+version, update the app's Wasm input, and use the existing target/predecessor
+arguments with the new publication operation:
+
+```sh
+canic fleet plan --app starter --fleet mainnet --canister app --release NEXT_PUBLICATION_OPERATION --target APP_ID --previous-module PREVIOUS_SHA256 --root-module ROOT_SHA256 --identity canic-mainnet
+canic fleet apply UPGRADE_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet call UPGRADE_OPERATION --app starter --fleet mainnet --name team
+```
+
+The final command is the greeting demo's read-only query. Root obtains an exact
+Store pin, prepares/reconstructs the derived management cache and performs the
+upgrade through its existing effect owner. An inline child cannot switch to Store
+custody through this flag. The named planner retains its existing first-upgrade
+limit; serial upgrade convergence, whole-fleet release selection and host-managed
+Root maintenance with complete Store custody need separate qualification. Runtime
+maintenance evidence already has its installed fixture, but that does not qualify
+the Host maintenance workflow. No live mainnet run or latency improvement is claimed.

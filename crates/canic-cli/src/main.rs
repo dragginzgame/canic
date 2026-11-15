@@ -417,7 +417,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         .get(canister)
                         .is_some_and(|slot| slot.role.as_deref() == Some("wasm-store"))
                     {
-                        if execute_at.is_some() {
+                        if execute_at.is_some() || publication.release.is_some() {
                             return Err(Error::Invalid("Store bootstrap is operator-driven and has no child dispatch schedule".into()));
                         }
                         canic_host::create_store_plan(
@@ -444,6 +444,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                             canister,
                             root_module,
                             execute_at,
+                            publication.release.as_deref(),
                         )?
                     }
                 } else {

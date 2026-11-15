@@ -13,6 +13,7 @@ use ic_platform::agent::Agent;
 use std::path::Path;
 
 pub(crate) mod recovery;
+pub(crate) mod stored;
 mod wire;
 use wire::Method;
 pub(crate) use wire::{observation, same_slot};
@@ -26,9 +27,15 @@ pub(crate) const OBSERVATIONS: usize = 32;
 /// The parent must be bound or have a completed named deployment in this journal.
 /// `execute_at_ns` selects a new plan's schedule (default: ten minutes from now);
 /// reopening preserves the original schedule.
+/// `release` selects a completed publication operation in this journal. Its exact
+/// bytes, app/fleet and owners must match; absence retains inline delivery.
 ///
 /// # Errors
 /// Refuses ambiguous/occupied slots, missing parent custody, invalid budgets or artifacts.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "named planning adds an explicit publication selector without introducing a second planning API"
+)]
 pub fn create_managed_plan(
     journal: &Path,
     wasm: &Path,
@@ -37,6 +44,7 @@ pub fn create_managed_plan(
     canister: &str,
     root_module: &str,
     execute_at_ns: Option<u64>,
+    release: Option<&str>,
 ) -> Result<(String, Plan)> {
     selection.validate()?;
     let child = selection
@@ -138,6 +146,12 @@ pub fn create_managed_plan(
             "child upgrade requires retained creation custody under this Root".into(),
         ));
     }
+    let root = roots
+        .pop_first()
+        .ok_or_else(|| Error::Invalid("missing Root identity".into()))?;
+    let source = release
+        .map(|id| stored::select(journal, id, &input, selection, canister, &root, root_module))
+        .transpose()?;
     let execute_at_ns = execute_at_ns.unwrap_or(crate::now()? + 600_000_000_000);
     plan::retain(
         journal,
@@ -150,9 +164,8 @@ pub fn create_managed_plan(
         }),
         Some(ManagedOwner {
             slot: None,
-            root: roots
-                .pop_first()
-                .ok_or_else(|| Error::Invalid("missing Root identity".into()))?,
+            root,
+            source,
             root_module: root_module.into(),
             execute_at_ns,
         }),
@@ -231,6 +244,9 @@ fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<(
 }
 
 fn stage_call(plan: &Plan, wasm: &[u8]) -> Result<Call<'static>> {
+    if plan.management().is_some_and(|m| m.source.is_some()) {
+        return Method::Stage.call(plan, &(), LIMITS);
+    }
     Method::Stage.call(
         plan,
         &Stage {
@@ -273,12 +289,11 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
         ] {
             let reply = dir.join(format!("observe/{index}/{name}"));
             if reply.try_exists().map_err(supplier)? {
-                let status: Status = ic_wire::native::decode_response(
+                let status = decode_observation(
+                    plan,
                     method,
-                    &store::read(&reply, LIMITS.bytes)?,
-                    LIMITS,
-                )
-                .map_err(supplier)?;
+                    &store::read(&reply, canic_management_protocol::stored::LIMITS.bytes)?,
+                )?;
                 if status.phase == Phase::Empty && status.approval.is_none() && latest.is_none() {
                     continue;
                 }
@@ -319,6 +334,7 @@ pub(crate) async fn apply(
     {
         return finish(dir, id, plan, status, agent).await;
     }
+    stored::verify(plan, agent).await?;
     let stage = dir.join("stage");
     let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
         if crate::now()? >= owner.execute_at_ns {
@@ -348,9 +364,7 @@ pub(crate) async fn apply(
         let call = observation(plan)?;
         recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &call, identity, icp, agent).await?;
-        let observed: Status =
-            ic_wire::native::decode_response(Method::Observe.id(plan), &bytes, LIMITS)
-                .map_err(supplier)?;
+        let observed = decode_observation(plan, Method::Observe.id(plan), &bytes)?;
         if observed.phase == Phase::Empty && observed.approval.is_none() && retained.is_none() {
             // Empty is not proof the original staging attempt cannot still execute.
             stage_reply(
@@ -412,4 +426,12 @@ async fn complete(
         store::put_json(&dir.join("receipt.json"), &receipt)?;
     }
     Ok(ApplyOutcome::Complete(receipt))
+}
+
+fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> {
+    if method == canic_management_protocol::stored::CUSTODY {
+        stored::creation(plan, bytes)
+    } else {
+        ic_wire::native::decode_response(method, bytes, LIMITS).map_err(supplier)
+    }
 }

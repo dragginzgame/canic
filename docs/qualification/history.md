@@ -7,6 +7,94 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.207.0 release qualification: 2026-11-15
+
+The complete Linux `make -j1 ci` gate passed on the release inputs in 242 seconds.
+It includes native/Wasm lint and documentation, effects and maintenance, artifact
+custody, 87 Host tests, 44 CLI tests, installed deployment/profile/growth,
+11 Root cases, endpoint admission, 10 Store cases, two publication/deployment
+journeys and five Blob cases. Three historical-binary migration cases remain
+explicitly opt-in and were not run. No macOS or live mainnet result is claimed.
+
+All 14 product packages select 0.207.0; the four qualification packages stay at
+0.0.0. All retain `publish = false`. Fresh registry review covered every direct
+first-party registry supplier in both workspaces and found the locked selections
+current, including the incoming Wire 0.22.4 update. Blob remains at the qualified
+immutable revision `decde204acb6d7c8362a0003e904beef72ff89b6`.
+Release logs, metadata, supplier review and source fingerprints are retained
+locally under `target/evidence/0.207.0/release/`. `make canic` installs 0.207.0 on
+the normal PATH. Delivery is GitHub-only, with no registry publication or mainnet
+mutation.
+
+## Named Store release deployment: 2026-11-15
+
+Continued from the 0.206.0 review with the two scoped cleanups: convergence now
+uses the effect owner's typed receipt validation, and readiness/status share the
+Store observation budget. Reused the Store source/test/history research at legacy
+revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded in
+[the Store decision](#versioned-wasm-store-decision-2026-11-15) and
+[Root integration](#root-uses-retained-store-references-2026-11-15). The same
+question applies: retain exact versioned content while treating management chunks
+as a reconstructible cache. No legacy catalog mirror, pruning policy, workflow
+engine or mutable latest alias was imported.
+
+Named `fleet plan --release PUBLICATION_OPERATION` now resolves completed signed
+publication custody in the same fleet. The existing child owner carries the exact
+manifest and Store code, with omitted source fields preserving old inline digests.
+Host independently checks Root/Store authority, code and subnet placement before
+unfinished delivery. Existing Store endpoints own staging, pins, creation,
+installation, readiness and upgrade; Host adds no runtime state or effect owner.
+Complete replicated custody reads check the selected slot, release and pin identity.
+Recovery and signing use the existing operation journal, deadlines and budgets.
+Changing an admitted child between inline and Store custody is refused.
+
+The installed CLI/signer witness uses a real Wasm above the inline transport limit,
+refuses changed Store control before signing, loses the creation admission reply,
+recovers through Store custody, installs, and upgrades the same child from a new
+version after clearing the derived cache. It calls the upgraded greeting endpoint
+and checks replay does not create additional canisters. The first run exposed
+simulator/host clock skew beyond ingress validity; explicit shorter fixture
+schedules preserve the production ten-minute default and five-minute ingress
+checks. A later assertion was corrected to the application's actual greeting.
+
+Focused evidence: 87 Host native cases, 44 CLI cases (three loopback cases rerun
+with the required sandbox permission), Host/CLI Clippy and Rustdoc, and publication
+harness Clippy. Both installed publication journeys pass (28.55s), including
+whole-fleet admission and missing-Store-proof convergence refusal. Formatting
+and Tooling snapshot/dependency agreement pass. Logs:
+`target/qualification/store-deploy-*.log`. Both incoming lockfiles already selected
+Wire 0.22.4; this work preserves that pending update and qualifies against it.
+The supplier checkouts and pins are unchanged.
+
+This is named first-child creation and its first upgrade. Whole-fleet release
+selection, inline migration and host maintenance carrying full Store custody are
+still separate qualification work; no generic scheduler, new crate, publication
+shortcut, mainnet action or performance claim was added. The pending changelog is
+0.207.0 because Host's public managed-plan argument and owner construction change;
+package versions and delivery remain untouched.
+
+## 0.206.0 post-push review: 2026-11-15
+
+Reviewed delivered commit `df9321fc17c99c93e07d631173200a99c2a890bc`
+after verifying remote main and the peeled `v0.206.0` tag. Focused on Store
+bootstrap, its fleet/convergence and status callers, typed signing, endpoint
+authority and the accompanying design/CLI claims. Store stays optional and
+outside application slots. Existing direct effect custody is reused; no Root
+payload/catalog mirror, alternate signer or generic forwarding endpoint was
+introduced. Retained no-Store digests and installed interruption witnesses
+support the compatibility/recovery claims. No release-blocking discrepancy was
+identified in this scoped review.
+
+Two small cleanup items remain for the next implementation pass: status repeats
+the Store observation limit (`32`) instead of obtaining it from its owner, and
+fleet convergence reads Store completion through the status JSON projection.
+Give the former one Store-owned constant and the latter a typed retained receipt
+query; keep the existing evidence validation and independent publication budget.
+These are maintenance risks, not observed qualification failures. Store release
+selection for app deployment and Store adoption/maintenance remain explicitly
+unqualified product work, rather than hidden compatibility paths. This review
+note is retained locally after the push; it is not part of the release tag.
+
 ## 0.206.0 release qualification: 2026-11-15
 
 The Linux release scope passes across the aggregate gate and its resumed stages:

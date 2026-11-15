@@ -195,6 +195,7 @@ impl FleetPlan {
             controller: self.root.controller.clone(),
             artifact: child.artifact.clone(),
             action: crate::PlanAction::CreateChild(ManagedOwner {
+                source: None,
                 slot: (self.version == 2).then_some(slot),
                 root: receipt.canister.clone(),
                 root_module: self.root.artifact.sha256.clone(),
@@ -741,4 +742,14 @@ fn store_state(dir: &Path, value: &FleetPlan) -> Result<serde_json::Value> {
     }
     let root = root_receipt(dir, value)?.ok_or_else(invalid)?;
     operation::status_at(&dir.join("store"), &value.store_plan(&root)?.digest()?)
+}
+
+fn store_receipt(dir: &Path, value: &FleetPlan) -> Result<Option<Receipt>> {
+    let path = dir.join("store");
+    if !path.join("plan.json").try_exists().map_err(supplier)? {
+        return Ok(None);
+    }
+    let root = root_receipt(dir, value)?.ok_or_else(invalid)?;
+    let (plan, bytes) = plan::load(&path, &value.store_plan(&root)?.digest()?)?;
+    operation::retained_receipt(&path, &plan, &bytes)
 }

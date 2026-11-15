@@ -95,7 +95,7 @@ fn child_completion(dir: &Path, fleet: &FleetPlan, index: Slot) -> Result<Option
 /// The creation reservation admits only its completed child's first upgrade.
 /// Called inside the same journal lock used to publish the independent approval.
 pub(crate) fn permits_upgrade(dir: &Path, fleet: &FleetPlan, proposed: &Plan) -> Result<bool> {
-    if fleet.store.is_some() && super::store_state(dir, fleet)?["receipt"].is_null() {
+    if fleet.store.is_some() && super::store_receipt(dir, fleet)?.is_none() {
         return Ok(false);
     }
     let Some((child, receipt)) = child_completion(dir, fleet, Slot::First)? else {
@@ -137,7 +137,7 @@ pub(super) fn plan(
     if fleet.store.as_ref().map(|s| &s.artifact) != desired.store.as_ref().map(|s| &s.artifact) {
         return Err(Error::Blocked("Store artifact changes require a qualified Store maintenance operation; retain the original fleet".into()));
     }
-    if fleet.store.is_some() && super::store_state(&dir, &fleet)?["receipt"].is_null() {
+    if fleet.store.is_some() && super::store_receipt(&dir, &fleet)?.is_none() {
         if !individual.is_empty()
             || desired.root.artifact != fleet.root.artifact
             || !desired

@@ -153,7 +153,7 @@ fn binding(plan: &Plan) -> Result<&Publication> {
     plan.publication()
         .ok_or_else(|| Error::Invalid("publication plan required".into()))
 }
-fn manifest(plan: &Plan, bytes: &[u8]) -> Result<protocol::Manifest> {
+pub(crate) fn manifest(plan: &Plan, bytes: &[u8]) -> Result<protocol::Manifest> {
     Ok(protocol::Manifest {
         release: binding(plan)?.release.clone(),
         hash: protocol::digest(bytes),
@@ -362,7 +362,7 @@ pub(crate) async fn apply(
     }
     Ok(ApplyOutcome::Publication { publication: value })
 }
-fn receipt(
+pub(crate) fn receipt(
     dir: &Path,
     plan: &Plan,
     digest: &str,

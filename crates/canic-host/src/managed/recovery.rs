@@ -84,6 +84,7 @@ pub(crate) async fn reconcile(
             .as_ref()
             .is_some_and(|s| s.phase == canic_management_protocol::upgrade::Phase::Ready);
     if !ready {
+        super::stored::verify(plan, agent).await?;
         operation::controllers(agent, call.canister, &plan.controller).await?;
         if operation::module(agent, call.canister).await?
             != plan.management().expect("bound call").root_module

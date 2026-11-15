@@ -1306,3 +1306,39 @@ fn publication_requires_exact_store_authority_and_refuses_deployment_options() {
         assert!(Cli::try_parse_from(base.into_iter().chain(incomplete)).is_err());
     }
 }
+
+#[test]
+fn release_selection_requires_child_authority_and_conflicts_with_publication() {
+    let base = ["canic", "fleet", "plan", "--controller", "2vxsx-fae"];
+    for tail in [
+        vec!["--release", "published"],
+        vec!["--release", "published", "--canister", "app"],
+        vec![
+            "--release",
+            "published",
+            "--canister",
+            "app",
+            "--root-module",
+            "hash",
+            "--publish-version",
+            "v1",
+            "--store",
+            "store",
+            "--store-module",
+            "hash",
+        ],
+    ] {
+        assert!(Cli::try_parse_from(base.into_iter().chain(tail)).is_err());
+    }
+    assert!(
+        Cli::try_parse_from(base.into_iter().chain([
+            "--release",
+            "published",
+            "--canister",
+            "app",
+            "--root-module",
+            "hash"
+        ]))
+        .is_ok()
+    );
+}

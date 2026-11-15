@@ -34,14 +34,19 @@ limit, and upgrade it using the Store cache. Lost pin/cache callbacks recover
 through observation after Root maintenance. Missing cache, unpublished releases,
 expired authority, retained upgrade history and mixed inline/Store custody have
 explicit cases. A separate provider fixture reconstructs a cleared cache and
-performs real chunked installation/upgrade. Fleet CLI deployment remains on its
-existing inline path. `make publication-test` focuses on the actual CLI, ICP signer
+performs real chunked installation/upgrade. Named CLI deployment can now select
+a completed publication operation. `make publication-test` focuses on the actual CLI, ICP signer
 and installed Root/Store bootstrap and publication path: named creation, controller
 handover, lost handover reply recovery, missing readiness evidence refusal,
 unchanged application custody, interrupted upload, read-only
 reconciliation, exact resumption, immutable version reuse, certified-code refusal
 and signed observation custody. It needs the prepared simulator and ICP signer,
-uses synthetic cycles, and leaves Root stable memory unchanged. Publication does
+uses synthetic cycles, and leaves Root stable memory unchanged during publication.
+The same named journey creates a child from a release larger than the inline
+limit, refuses changed Store control, recovers missing admission evidence, upgrades
+the same child after cache clearing, and calls the upgraded greeting application.
+Run only that journey with `bash scripts/dev/test-publication.sh bootstrap_store_then_publish_resume_and_retain_versions`.
+Publication does
 not create a canister or reserve a deployment slot; see [Store scope](../docs/demos/wasm-store.md).
 The same runner also qualifies a fresh whole fleet with Root, Store and two
 application children. Store readiness blocks both application admissions;

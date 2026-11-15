@@ -161,6 +161,7 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
 async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     let (_, mut plan, _) = fixture();
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        source: None,
         slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
@@ -292,6 +293,7 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
 async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     let (_, mut plan, mut call) = fixture_expiry(false);
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        source: None,
         slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
@@ -360,6 +362,7 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
 async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing() {
     let (_, mut plan, _) = fixture();
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        source: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,

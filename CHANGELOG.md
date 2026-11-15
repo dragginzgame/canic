@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.207.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+Host library callers must supply the new optional publication-operation argument
+when creating a managed plan, and an explicit optional artifact source when
+constructing a management owner. Use `None` for inline delivery. Existing CLI
+commands and retained inline approvals keep their contracts.
+
+### ▶️ Try it
+
+Run `make canic` from this checkout to install the updated CLI on PATH. From an
+app's config directory, with Root/Store bound and publication completed in the
+same fleet, select that exact release for the sole application child. Its configured
+Wasm must match the publication. Substitute the reviewed hash and operation IDs;
+apply authorizes Root to spend its creation grant and install the child. No browser opens.
+
+```sh
+canic fleet plan --app starter --fleet mainnet --canister app --release PUBLICATION_OPERATION --root-module ROOT_SHA256 --identity canic-mainnet
+canic fleet apply DEPLOYMENT_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status DEPLOYMENT_OPERATION --app starter --fleet mainnet
+```
+
+### ➕ Added
+
+Named child creation and its first upgrade can use an immutable Store release,
+including artifacts above the inline limit. Root retains references and pins;
+Store owns bytes and cache reconstruction. Lost admission replies recover through
+source-bound custody without replacing signed attempts. The [Store guide](docs/demos/wasm-store.md#deploy-a-published-release)
+includes upgrade commands and the existing dispatch schedule. Whole-fleet release
+selection and migration from inline custody remain pending.
+
+### 🧹 Cleanup
+
+Fleet convergence reads typed Store completion evidence instead of status JSON;
+Store readiness and its status view share one observation limit.
+
 ## [0.206.0] - 2026-11-15
 
 ### ▶️ Try it

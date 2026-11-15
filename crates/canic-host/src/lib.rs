@@ -36,7 +36,7 @@ pub use fleet_plan::{
     Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,
     cancel_fleet_plan, plan_fleet,
 };
-pub use managed::create_managed_plan;
+pub use managed::{create_managed_plan, stored::StoredArtifact};
 pub use network::{Network, greet};
 pub use operation::{ApplyOutcome, ChildOutcome, Receipt, apply, reconcile, status};
 pub use plan::{ManagedOwner, Plan, PlanAction, PlanInput, UpgradeTarget, create_plan};

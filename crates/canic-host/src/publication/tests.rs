@@ -185,8 +185,51 @@ fn store_declarations_cannot_use_the_greeting_child_contract() {
         "store",
         &"11".repeat(32),
         None,
+        None,
     )
     .unwrap_err();
     assert!(matches!(failure, Error::Invalid(_)));
     assert!(!dir.join("journal").exists());
+}
+
+#[test]
+fn deployment_refuses_an_unpublished_release_before_reserving_the_child() {
+    let dir = directory();
+    let wasm = dir.join("app.wasm");
+    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
+    let selected = selection();
+    let (id, _) = create_publication_plan(
+        &dir,
+        &wasm,
+        &selected,
+        &input().controller,
+        publication("v1"),
+    )
+    .unwrap();
+    assert!(matches!(
+        crate::create_managed_plan(
+            &dir,
+            &wasm,
+            input(),
+            &selected,
+            "app",
+            &"11".repeat(32),
+            None,
+            Some(&id)
+        ),
+        Err(Error::Blocked(_))
+    ));
+    // Publication did not reserve the child: an ordinary independent approval still fits.
+    crate::create_managed_plan(
+        &dir,
+        &wasm,
+        input(),
+        &selected,
+        "app",
+        &"11".repeat(32),
+        None,
+        None,
+    )
+    .unwrap();
+    std::fs::remove_dir_all(dir).unwrap();
 }

@@ -921,8 +921,12 @@ references, pin/callback recovery and preserved upgrade history through the same
 effect owner. Fleet Host/CLI can publish an explicit immutable release through
 an already-bound Root-owned Store using the existing plan/apply/status/reconcile
 owners; this grants no installation authority. The approval binds both modules,
-principals and exact bytes, with separately retained read-only recovery. Generated
-Selecting a Store release for deployment is still pending. See the
+principals and exact bytes, with separately retained read-only recovery. Named
+child planning now selects a completed publication operation, freezes its immutable
+manifest and Store code, and reuses the existing Store-backed creation/upgrade
+contracts. Observations validate complete source and pin custody. Whole-fleet
+release selection, inline-to-Store migration and host maintenance carrying Store
+custody remain pending. See the
 [current implementation scope](../demos/wasm-store.md). First prove fresh
 Root/Store/app creation, multiple coexisting versions, interrupted upload/resume,
 hash/version conflicts, quota exhaustion, cache reconstruction, pin/deletion

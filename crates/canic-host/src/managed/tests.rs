@@ -47,6 +47,7 @@ async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
         "app",
         &"01".repeat(32),
         None,
+        None,
     )
     .unwrap();
     let before = plan.clone();
@@ -85,6 +86,7 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
         &selection(),
         "app",
         &"01".repeat(32),
+        None,
         None,
     )
     .unwrap();
@@ -141,6 +143,7 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
         "app",
         &"01".repeat(32),
         None,
+        None,
     )
     .unwrap();
     assert_eq!(
@@ -155,6 +158,7 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
             &selected,
             "app",
             &"01".repeat(32),
+            None,
             None
         )
         .unwrap(),
@@ -168,7 +172,8 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
             &selected,
             "app",
             &"01".repeat(32),
-            Some(1)
+            Some(1),
+            None
         )
         .unwrap(),
         (id.clone(), plan.clone())
@@ -181,6 +186,7 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
             &selected,
             "app",
             &"02".repeat(32),
+            None,
             None
         ),
         Err(Error::Blocked(_))
@@ -188,7 +194,16 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
     let mut other = selected;
     other.app = "another".into();
     assert!(matches!(
-        create_managed_plan(&dir, &wasm, input(), &other, "app", &"01".repeat(32), None),
+        create_managed_plan(
+            &dir,
+            &wasm,
+            input(),
+            &other,
+            "app",
+            &"01".repeat(32),
+            None,
+            None
+        ),
         Err(Error::Blocked(_))
     ));
     let mut invalid = serde_json::to_value(&plan).unwrap();
@@ -229,6 +244,7 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
         "app",
         &"01".repeat(32),
         None,
+        None,
     )
     .unwrap();
     let scheduled = Status {
@@ -268,8 +284,17 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let selected = selection();
     let root_hash = "01".repeat(32);
-    let (created_id, created) =
-        create_managed_plan(&dir, &wasm, input(), &selected, "app", &root_hash, None).unwrap();
+    let (created_id, created) = create_managed_plan(
+        &dir,
+        &wasm,
+        input(),
+        &selected,
+        "app",
+        &root_hash,
+        None,
+        None,
+    )
+    .unwrap();
     let child = "ryjl3-tyaaa-aaaaa-aaaba-cai";
     let upgrade_input = || PlanInput {
         target: Some(child.into()),
@@ -286,6 +311,7 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
             &selected,
             "app",
             &root_hash,
+            None,
             None
         )
         .is_err()
@@ -314,6 +340,7 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
             &selected,
             "app",
             &root_hash,
+            None,
             None
         )
         .is_err()
@@ -333,7 +360,10 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
             _ => invalid.creation_cycles = 1,
         }
         assert!(
-            create_managed_plan(&dir, &wasm, invalid, &selected, "app", &root_hash, None).is_err()
+            create_managed_plan(
+                &dir, &wasm, invalid, &selected, "app", &root_hash, None, None
+            )
+            .is_err()
         );
     }
     let (id, plan) = create_managed_plan(
@@ -343,6 +373,7 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
         &selected,
         "app",
         &root_hash,
+        None,
         None,
     )
     .unwrap();
@@ -360,7 +391,8 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
             &selected,
             "app",
             &root_hash,
-            Some(1)
+            Some(1),
+            None
         )
         .unwrap(),
         (id, plan)
@@ -378,6 +410,7 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
             &selected,
             "app",
             &"02".repeat(32),
+            None,
             None
         )
         .is_err()
@@ -391,6 +424,7 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
             &selected,
             "app",
             &root_hash,
+            None,
             None
         )
         .is_err()
@@ -411,6 +445,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         &selection(),
         "app",
         &"01".repeat(32),
+        None,
         None,
     )
     .unwrap();
@@ -488,5 +523,164 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
     )
     .unwrap();
     assert!(upgrade::evidence(&evidence_dir, &plan).is_err());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() {
+    use canic_management_protocol::{children, stored as wire};
+    use canic_wasm_store_protocol::{Manifest, Release};
+    let dir = directory();
+    let wasm = dir.join("app.wasm");
+    let bytes = b"\0asm\x01\0\0\0";
+    std::fs::write(&wasm, bytes).unwrap();
+    let (_, mut plan) = create_managed_plan(
+        &dir,
+        &wasm,
+        input(),
+        &selection(),
+        "app",
+        &"01".repeat(32),
+        None,
+        None,
+    )
+    .unwrap();
+    let source = crate::StoredArtifact {
+        store: crate::UpgradeTarget {
+            canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+            module: "02".repeat(32),
+        },
+        manifest: Manifest {
+            release: Release {
+                name: "app".into(),
+                version: "v1".into(),
+            },
+            hash: canic_wasm_store_protocol::digest(bytes),
+            bytes: bytes.len() as u64,
+            chunks: vec![canic_wasm_store_protocol::digest(bytes)],
+        },
+    };
+    let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
+        panic!("creation")
+    };
+    owner.source = Some(source.clone());
+    plan.validate().unwrap();
+    let digest = plan.digest().unwrap();
+    let call = stage_call(&plan, bytes).unwrap();
+    assert_eq!(call.method, "stage_stored_child");
+    let request: children::Request<wire::Stage<Approval>> =
+        ic_wire::native::decode_request(wire::STAGE, &call.args, wire::LIMITS).unwrap();
+    assert_eq!(request.slot, children::Slot::First);
+    assert_eq!(request.value.reference.manifest, source.manifest);
+    let recovery = recovery::call(&plan).unwrap();
+    let recovered: children::Request<wire::Stage<Approval>> =
+        ic_wire::native::decode_request(wire::RECONCILE, &recovery.args, wire::LIMITS).unwrap();
+    assert_eq!(recovered.value, request.value);
+    assert_eq!(
+        observation(&plan).unwrap().method,
+        "observe_stored_children"
+    );
+    let status = Status {
+        approval: Some(approval(&plan).unwrap()),
+        phase: Phase::Scheduled,
+        ..Default::default()
+    };
+    let delivery = wire::Delivery {
+        reference: request.value.reference.clone(),
+        operation: request.value.pin(wire::STAGE, request.slot).operation,
+        state: wire::PinState::Pending,
+        cache_deadline: None,
+    };
+    let mut custody = wire::Custody {
+        children: [
+            canic_management_protocol::custody::Custody {
+                creation: status.clone(),
+                upgrades: vec![],
+            },
+            canic_management_protocol::custody::Custody {
+                creation: Status::default(),
+                upgrades: vec![],
+            },
+        ],
+        sources: [
+            Some(wire::Sources {
+                creation: delivery.clone(),
+                upgrades: vec![],
+            }),
+            None,
+        ],
+    };
+    let encode = |value: &wire::Custody| {
+        ic_wire::native::encode_response(wire::CUSTODY, value, wire::LIMITS).unwrap()
+    };
+    assert_eq!(stored::creation(&plan, &encode(&custody)).unwrap(), status);
+    custody.sources[0]
+        .as_mut()
+        .unwrap()
+        .creation
+        .reference
+        .manifest
+        .release
+        .version = "different".into();
+    assert!(matches!(
+        stored::creation(&plan, &encode(&custody)),
+        Err(Error::Invalid(_))
+    ));
+    custody.sources[0].as_mut().unwrap().creation = delivery;
+    custody.sources[0].as_mut().unwrap().creation.operation = request
+        .value
+        .pin(wire::STAGE, children::Slot::Second)
+        .operation;
+    assert!(stored::creation(&plan, &encode(&custody)).is_err());
+    let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
+        panic!("creation")
+    };
+    owner.source.as_mut().unwrap().manifest.release.version = "v2".into();
+    assert_ne!(plan.digest().unwrap(), digest);
+    let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
+        panic!("creation")
+    };
+    owner.source.as_mut().unwrap().manifest.hash[0] ^= 1;
+    assert!(plan.validate().is_err());
+    let mut owner = plan.management().unwrap().clone();
+    owner.source = Some(source);
+    plan.action = crate::PlanAction::UpgradeChild {
+        owner,
+        target: crate::UpgradeTarget {
+            canister: "r7inp-6aaaa-aaaaa-aaabq-cai".into(),
+            module: "03".repeat(32),
+        },
+    };
+    plan.validate().unwrap();
+    let call = Method::StageUpgrade.call(&plan, &(), LIMITS).unwrap();
+    let expected: children::Request<wire::Stage<canic_management_protocol::upgrade::Approval>> =
+        ic_wire::native::decode_request(wire::STAGE_UPGRADE, &call.args, wire::LIMITS).unwrap();
+    let upgraded = canic_management_protocol::upgrade::Status {
+        approval: Some(expected.value.approval.clone()),
+        phase: canic_management_protocol::upgrade::Phase::Scheduled,
+        ..Default::default()
+    };
+    custody.children[0].upgrades.push(upgraded.clone());
+    custody.sources[0]
+        .as_mut()
+        .unwrap()
+        .upgrades
+        .push(wire::Delivery {
+            operation: expected
+                .value
+                .pin(wire::STAGE_UPGRADE, expected.slot)
+                .operation,
+            reference: expected.value.reference,
+            state: wire::PinState::Pending,
+            cache_deadline: None,
+        });
+    assert_eq!(
+        stored::upgraded(&plan, &encode(&custody)).unwrap(),
+        upgraded
+    );
+    custody.sources[0].as_mut().unwrap().upgrades[0]
+        .reference
+        .store = "rrkah-fqaaa-aaaaa-aaaaq-cai".into();
+    assert!(stored::upgraded(&plan, &encode(&custody)).is_err());
     std::fs::remove_dir_all(dir).unwrap();
 }

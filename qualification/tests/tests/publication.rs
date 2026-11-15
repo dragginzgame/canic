@@ -628,5 +628,195 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         cli(&dir, &["fleet", "status", id])["publication"],
         completed["publication"]
     );
+    // Complete the real application journey from retained publication, without inline staging.
+    let deploy = |publication: &str, target: Option<(&str, &str)>| {
+        let dispatch = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + if target.is_some() { 120 } else { 60 })
+        .to_string();
+        let mut args = vec![
+            "fleet",
+            "plan",
+            "--canister",
+            "app",
+            "--root-module",
+            &root_hash,
+            "--controller",
+            "2vxsx-fae",
+            "--release",
+            publication,
+            "--execute-at",
+            &dispatch,
+        ];
+        if let Some((child, previous)) = target {
+            args.extend(["--target", child, "--previous-module", previous]);
+        }
+        cli(&dir, &args)
+    };
+    let child_plan = deploy(id, None);
+    let child_id = child_plan["operation"].as_str().unwrap();
+    let child_dir = dir.join("journal").join(child_id);
+    assert_eq!(
+        child_plan["plan"]["management"]["source"]["manifest"]["release"]["version"],
+        "v1"
+    );
+    // A changed Store controller must fail before child admission is signed.
+    owner
+        .instance()
+        .update_canister_settings(
+            store,
+            Some(root),
+            CanisterSettings {
+                controllers: Some(vec![operator]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        !run(
+            &dir,
+            &[
+                "fleet",
+                "apply",
+                child_id,
+                "--identity",
+                "anonymous",
+                "--icp-bin",
+                signer.to_str().unwrap()
+            ]
+        )
+        .status
+        .success()
+    );
+    assert!(!child_dir.join("stage/signed.json").exists());
+    owner
+        .instance()
+        .update_canister_settings(
+            store,
+            Some(operator),
+            CanisterSettings {
+                controllers: Some(vec![root]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let admitted = apply("apply", child_id);
+    assert_eq!(admitted["status"]["phase"], "Scheduled");
+    let signed_stage = std::fs::read(child_dir.join("stage/signed.json")).unwrap();
+    assert!(
+        std::fs::metadata(child_dir.join("stage/arguments.bin"))
+            .unwrap()
+            .len()
+            < 8192
+    );
+    std::fs::remove_file(child_dir.join("stage/reply.bin")).unwrap();
+    let recovered = apply("apply", child_id);
+    assert_eq!(recovered["status"]["phase"], "Scheduled");
+    assert_eq!(
+        std::fs::read(child_dir.join("stage/signed.json")).unwrap(),
+        signed_stage
+    );
+    assert!(!child_dir.join("stage/reply.bin").exists());
+    assert_eq!(deploy(id, None)["operation"], child_id);
+    // Same bytes under a different immutable label cannot replace an admitted source.
+    assert!(
+        !run(
+            &dir,
+            &[
+                "fleet",
+                "plan",
+                "--canister",
+                "app",
+                "--root-module",
+                &root_hash,
+                "--controller",
+                "2vxsx-fae",
+                "--release",
+                second_id
+            ]
+        )
+        .status
+        .success()
+    );
+    owner.instance().stop_progress().await;
+    owner.instance().advance_time(Duration::from_secs(65)).await;
+    for _ in 0..70 {
+        owner.instance().tick().await;
+    }
+    owner.instance().auto_progress().await;
+    let created = apply("apply", child_id);
+    let child = created["canister"].as_str().unwrap();
+    assert_eq!(created["module_hash"], inspected["sha256"]);
+    assert_eq!(created["controller"], root.to_text());
+    let canister_count = owner
+        .instance()
+        .get_subnet_metrics(subnet)
+        .await
+        .unwrap()
+        .num_canisters;
+    assert_eq!(apply("apply", child_id), created);
+    assert_eq!(
+        owner
+            .instance()
+            .get_subnet_metrics(subnet)
+            .await
+            .unwrap()
+            .num_canisters,
+        canister_count
+    );
+    // A new executable/version upgrades the same child; cache loss is reconstructed by Store.
+    let mut next = std::fs::read(&wasm).unwrap();
+    *next.last_mut().unwrap() = 43;
+    std::fs::write(&wasm, &next).unwrap();
+    let next_publication = plan("v4", &store_hash);
+    let next_id = next_publication["operation"].as_str().unwrap();
+    assert_eq!(
+        apply("apply", next_id)["publication"]["status"]["published"],
+        true
+    );
+    let upgrade = deploy(
+        next_id,
+        Some((child, created["module_hash"].as_str().unwrap())),
+    );
+    let upgrade_id = upgrade["operation"].as_str().unwrap();
+    let admitted = apply("apply", upgrade_id);
+    assert_eq!(admitted["upgrade"]["phase"], "Scheduled");
+    owner
+        .instance()
+        .clear_chunk_store(store, Some(root))
+        .await
+        .unwrap();
+    owner.instance().stop_progress().await;
+    owner.instance().advance_time(Duration::from_secs(65)).await;
+    for _ in 0..70 {
+        owner.instance().tick().await;
+    }
+    owner.instance().auto_progress().await;
+    let upgraded = apply("apply", upgrade_id);
+    assert_eq!(upgraded["canister"], child);
+    assert_eq!(
+        upgraded["module_hash"],
+        hex(&canic_wasm_store_protocol::digest(&next))
+    );
+    assert_eq!(apply("reconcile", upgrade_id), upgraded);
+    assert_eq!(
+        cli(&dir, &["fleet", "call", upgrade_id, "--name", "Store"])["greeting"],
+        "Hello from Canic, Store!"
+    );
+    assert_eq!(
+        owner
+            .instance()
+            .get_subnet_metrics(subnet)
+            .await
+            .unwrap()
+            .num_canisters,
+        canister_count
+    );
+    let view = cli(&dir, &["fleet", "show"]);
+    assert!(view["issues"].as_array().unwrap().is_empty(), "{view}");
     owner.instance_mut().stop_live().await;
 }

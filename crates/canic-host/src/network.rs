@@ -127,3 +127,10 @@ pub async fn greet(network: &Network, canister: &str, name: &str) -> Result<cani
     .await?;
     ic_wire::native::decode_response(canic::GREET, &reply, canic::LIMITS).map_err(supplier)
 }
+
+/// Certified subnet identity shared by bootstrap and artifact-delivery admission.
+pub(crate) async fn subnet(agent: &Agent, canister: &str) -> Result<Principal> {
+    let id = canister.parse().map_err(supplier)?;
+    let subnet = crate::network::bounded(agent.fetch_subnet_by_canister(&id)).await?;
+    principal(&subnet.id().to_text())
+}

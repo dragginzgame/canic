@@ -107,17 +107,21 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
         ] {
             let path = dir.join(format!("observe/{index}/{name}"));
             if path.try_exists().map_err(supplier)? {
-                let bytes = store::read(&path, LIMITS.bytes)?;
-                let status: Status = ic_wire::native::decode_response(method, &bytes, LIMITS)
-                    .or_else(|error| {
-                        // Historical on-disk unit observations remain readable; no live fallback.
-                        if method == OBSERVE {
-                            ic_wire::native::decode_response(STATUS, &bytes, LIMITS)
-                        } else {
-                            Err(error)
-                        }
-                    })
-                    .map_err(supplier)?;
+                let bytes = store::read(&path, canic_management_protocol::stored::LIMITS.bytes)?;
+                let status: Status = if method == canic_management_protocol::stored::CUSTODY {
+                    super::stored::upgraded(plan, &bytes)?
+                } else {
+                    ic_wire::native::decode_response(method, &bytes, LIMITS)
+                        .or_else(|error| {
+                            // Historical on-disk unit observations remain readable; no live fallback.
+                            if method == OBSERVE {
+                                ic_wire::native::decode_response(STATUS, &bytes, LIMITS)
+                            } else {
+                                Err(error)
+                            }
+                        })
+                        .map_err(supplier)?
+                };
                 if status == Status::default() && latest.is_none() {
                     continue;
                 }
@@ -154,15 +158,20 @@ pub(super) async fn apply(
     {
         return complete(dir, id, plan, child, agent).await;
     }
+    super::stored::verify(plan, agent).await?;
     let stage = dir.join("stage");
-    let call = Method::StageUpgrade.call(
-        plan,
-        &Stage {
-            approval: approval(plan)?,
-            wasm: wasm.to_vec(),
-        },
-        STAGE_LIMITS,
-    )?;
+    let call = if owner.source.is_some() {
+        Method::StageUpgrade.call(plan, &(), LIMITS)?
+    } else {
+        Method::StageUpgrade.call(
+            plan,
+            &Stage {
+                approval: approval(plan)?,
+                wasm: wasm.to_vec(),
+            },
+            STAGE_LIMITS,
+        )?
+    };
     let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
         if crate::now()? >= owner.execute_at_ns {
             return Err(Error::Blocked(
@@ -196,9 +205,12 @@ pub(super) async fn apply(
         let read = super::observation(plan)?;
         super::recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &read, identity, icp, agent).await?;
-        let observed: Status =
+        let observed: Status = if owner.source.is_some() {
+            super::stored::upgraded(plan, &bytes)?
+        } else {
             ic_wire::native::decode_response(Method::ObserveUpgrade.id(plan), &bytes, LIMITS)
-                .map_err(supplier)?;
+                .map_err(supplier)?
+        };
         if observed == Status::default() && retained.is_none() {
             stage_reply(
                 plan,

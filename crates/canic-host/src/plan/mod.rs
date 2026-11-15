@@ -48,6 +48,9 @@ pub struct ManagedOwner {
     /// Authenticated runtime slot; absent preserves the original one-child contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slot: Option<canic_management_protocol::children::Slot>,
+    /// Exact published Store content; absent selects the existing inline contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<crate::StoredArtifact>,
 }
 
 /// Operator-selected inputs for a one-canister plan.
@@ -66,7 +69,7 @@ pub struct PlanInput {
 
 impl Plan {
     pub(crate) fn artifact_limit(&self) -> usize {
-        if self.publication().is_some() {
+        if self.publication().is_some() || self.management().is_some_and(|m| m.source.is_some()) {
             artifact::MAX_ARTIFACT_BYTES
         } else {
             artifact::MAX_WASM
@@ -115,13 +118,17 @@ impl Plan {
         }
         if let Some(managed) = self.management() {
             let root = principal(&managed.root)?;
+            if let Some(source) = &managed.source {
+                crate::managed::stored::validate(self, source)?;
+            }
             if let PlanAction::UpgradeChild { target, .. } = &self.action
                 && (target.module == self.artifact.sha256 || principal(&target.canister)? == root)
             {
                 return Err(Error::Invalid("invalid child upgrade target".into()));
             }
             if self.version != 2
-                || self.artifact.bytes > canic_management_protocol::MAX_WASM
+                || (managed.source.is_none()
+                    && self.artifact.bytes > canic_management_protocol::MAX_WASM)
                 || crate::unhex(&managed.root_module)?.len() != 32
                 || root == principal("aaaaa-aa")?
                 || root == principal("2vxsx-fae")?
@@ -192,7 +199,12 @@ pub(crate) fn retain(
     deployment: Option<crate::DeploymentName>,
     management: Option<ManagedOwner>,
 ) -> Result<(String, Plan)> {
-    let bytes = store::read(wasm, artifact::MAX_WASM)?;
+    let limit = if management.as_ref().is_some_and(|m| m.source.is_some()) {
+        artifact::MAX_ARTIFACT_BYTES
+    } else {
+        artifact::MAX_WASM
+    };
+    let bytes = store::read(wasm, limit)?;
     let now = now()?;
     let expires_at_ns = management
         .as_ref()
@@ -231,7 +243,7 @@ pub(crate) fn retain(
         deployment,
         network: input.network,
         controller: input.controller,
-        artifact: artifact::admit(&bytes)?,
+        artifact: artifact::admit_bounded(&bytes, limit)?,
         action,
         created_at_ns: now,
         expires_at_ns,
@@ -327,6 +339,14 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                         .is_some_and(|(old, new)| old.root == new.root)
                     && existing.target().is_some() != plan.target().is_some()
                 {
+                    if existing
+                        .management()
+                        .and_then(|m| m.source.as_ref())
+                        .is_some()
+                        != plan.management().and_then(|m| m.source.as_ref()).is_some()
+                    {
+                        return Err(Error::Blocked("changing an admitted child between inline and Store custody requires qualified migration".into()));
+                    }
                     continue;
                 }
                 if existing.network == plan.network
@@ -338,10 +358,10 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                     && existing.store_root() == plan.store_root()
                     && existing
                         .management()
-                        .map(|owner| (&owner.root, &owner.root_module, owner.slot))
-                        == plan
-                            .management()
-                            .map(|owner| (&owner.root, &owner.root_module, owner.slot))
+                        .map(|owner| (&owner.root, &owner.root_module, owner.slot, &owner.source))
+                        == plan.management().map(|owner| {
+                            (&owner.root, &owner.root_module, owner.slot, &owner.source)
+                        })
                 {
                     return Ok((existing_id, existing));
                 }

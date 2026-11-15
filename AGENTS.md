@@ -113,9 +113,15 @@ authenticated tooling installer.
   handover reply without renewing effect authority. Reconcile cannot create,
   install or hand over. Never consume a greeting-child slot for Store. Whole-fleet
   bootstrap composes this same action before the application children.
-  Store-backed deployment release selection remains pending.
-  Cache preparation never grants install authority. It has no pin release,
-  deletion or Store-backed application deployment integration yet; do not clear pins on expiry.
+  Named child `fleet plan --release PUBLICATION_OPERATION` selects a completed
+  signed publication in the same fleet, binding its exact manifest and Store code.
+  Retain source-bound staging/reconciliation and complete Store custody reads;
+  never recover through an inline observation that omits artifact custody. The
+  app input must match publication bytes. This qualifies creation and the named
+  planner's first upgrade only. Whole-fleet release selection, inline-to-Store
+  migration and host Root maintenance carrying Store custody remain pending.
+  Cache preparation never grants install authority. It has no pin release or
+  deletion; do not clear pins on expiry.
   Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.
   The installed fixture uses synthetic cycles and two different executables;
   `maintenance-candidate` is a qualification marker, not a live release choice.

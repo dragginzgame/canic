@@ -92,6 +92,7 @@ fn root_operation(network: Network) -> FleetOperation {
             canister: "app".into(),
         }),
         Some(crate::ManagedOwner {
+            source: None,
             slot: None,
             root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
             root_module: "01".repeat(32),

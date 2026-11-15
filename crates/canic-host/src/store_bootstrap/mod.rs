@@ -1,7 +1,9 @@
 //! Store handover and readiness extend the existing direct deployment owner.
 use crate::{
     DeploymentName, Error, Plan, PlanAction, PlanInput, Result, SelectedFleet, UpgradeTarget,
-    artifact, network::principal, operation, plan, signed, store, supplier,
+    artifact,
+    network::{principal, subnet},
+    operation, plan, signed, store, supplier,
 };
 use canic_management_protocol::publication as wire;
 use canic_wasm_store_protocol::Info;
@@ -13,7 +15,7 @@ use std::path::Path;
 
 #[cfg(test)]
 mod tests;
-const OBSERVATIONS: usize = 32;
+pub(crate) const OBSERVATIONS: usize = 32;
 
 /// Create a separately controlled Store under an explicitly bound existing Root.
 /// Uses direct creation/install custody, then retained controller handover and readiness.
@@ -89,12 +91,6 @@ pub(crate) async fn verify_root(agent: &Agent, plan: &Plan) -> Result<()> {
         }
     }
     Ok(())
-}
-
-async fn subnet(agent: &Agent, canister: &str) -> Result<Principal> {
-    let id = canister.parse().map_err(supplier)?;
-    let subnet = crate::network::bounded(agent.fetch_subnet_by_canister(&id)).await?;
-    principal(&subnet.id().to_text())
 }
 
 pub(crate) fn placement(dir: &Path, plan: &Plan) -> Result<Option<Principal>> {

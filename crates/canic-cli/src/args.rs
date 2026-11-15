@@ -490,6 +490,9 @@ pub(super) struct PublicationArgs {
     /// Publish this named canister's artifact only; does not install or deploy it.
     #[arg(long, value_name = "VERSION", requires_all = ["canister", "root_module", "store", "store_module"], conflicts_with_all = ["target", "previous_module", "execute_at", "cycles"])]
     pub(super) publish_version: Option<String>,
+    /// Deploy the exact release from this completed publication operation.
+    #[arg(long, value_name = "PUBLICATION_OPERATION", requires_all = ["canister", "root_module"], conflicts_with = "publish_version")]
+    pub(super) release: Option<String>,
     /// Existing bound wasm-store slot under the same Root as the artifact.
     #[arg(long, value_name = "SLOT", requires = "publish_version")]
     pub(super) store: Option<String>,

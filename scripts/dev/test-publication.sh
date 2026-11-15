@@ -13,4 +13,4 @@ for entry in root:canic-root store:canic-wasm-store app:canic-hello; do
     cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
 done
 CANIC_CLI="$cli" CANIC_PUBLICATION_ARTIFACTS="$root/target/publication" \
-    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test publication -- --nocapture
+    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test publication "$@" -- --nocapture
