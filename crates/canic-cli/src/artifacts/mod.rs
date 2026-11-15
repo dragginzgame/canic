@@ -4,11 +4,11 @@ use canic_host::FleetArtifacts;
 use ic_host_text::{escape::terminal_text, table::render_bordered};
 use std::fmt::Write as _;
 
-pub(crate) fn output(report: &FleetArtifacts, json: bool) -> Output {
+pub(crate) fn output(report: &FleetArtifacts, json: bool, details: bool) -> Output {
     let output = if json {
         Output::Json(serde_json::json!(report))
     } else {
-        Output::Text(render(report))
+        Output::Text(render(report, details))
     };
     if report.issues.is_empty() {
         output
@@ -17,7 +17,7 @@ pub(crate) fn output(report: &FleetArtifacts, json: bool) -> Output {
     }
 }
 
-fn render(report: &FleetArtifacts) -> String {
+fn render(report: &FleetArtifacts, details: bool) -> String {
     let mut output = format!(
         "App: {} · Fleet: {}\nLocal publication evidence\n\n",
         terminal_text(&report.app),
@@ -58,6 +58,36 @@ fn render(report: &FleetArtifacts) -> String {
             render_bordered(&["ARTIFACT", "VERSION", "BYTES", "EVIDENCE"], &rows)
         )
         .expect("String write");
+        if details {
+            for entry in group {
+                writeln!(
+                    output,
+                    "{} / {}",
+                    terminal_text(&entry.publication.release.name),
+                    terminal_text(&entry.publication.release.version),
+                )
+                .expect("String write");
+                for (label, value) in [
+                    ("App canister", &entry.deployment.canister),
+                    ("Wasm SHA-256", &entry.artifact.sha256),
+                    ("Operation", &entry.operation),
+                    ("Root", &entry.publication.root.canister),
+                    ("Approved Root module", &entry.publication.root.module),
+                    ("Approved Store module", &entry.publication.store.module),
+                ] {
+                    writeln!(output, "  {label}: {}", terminal_text(value)).expect("String write");
+                }
+                if entry.publication_operation != entry.operation {
+                    writeln!(
+                        output,
+                        "  Nested publication approval: {}",
+                        terminal_text(&entry.publication_operation)
+                    )
+                    .expect("String write");
+                }
+                output.push('\n');
+            }
+        }
     }
     for issue in &report.issues {
         writeln!(output, "Journal issue: {}", terminal_text(issue)).expect("String write");

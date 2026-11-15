@@ -108,9 +108,12 @@ profile journey. These fixtures use synthetic cycles. Never select `fault-inject
 for live deployment; `maintenance-candidate` is a qualification marker.
 
 Store implementation, passive protocol and supplier tests live in
-`dragginzgame/ic-wasm-store`. Both workspaces pin the same Git revision. The public
-artifact builder resolves `ic-wasm-store` from that locked protocol source and
-uses its committed lockfile; no sibling checkout or copied runtime is required.
+`dragginzgame/ic-wasm-store`. Both workspaces select the crates.io protocol through
+their lockfiles. Host declares the registry runtime as a `cfg(any())` artifact
+input: the builder consumes its source through Cargo metadata without linking it
+into Host. The public builder requires matching runtime/protocol versions and
+uses the runtime archive's packaged lockfile, checking its protocol selection too.
+No sibling checkout, copied runtime or Git fallback is required.
 
 The qualification harness owns explicit `make qualification-setup`; simulator setup
 and tests share `IC_TESTKIT_SERVER_DIRECTORY`, defaulting to

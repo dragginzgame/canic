@@ -7,6 +7,104 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.216.1 release qualification: 2026-11-15
+
+The complete sequential Linux `make -j1 ci` gate passed with all 280 captured
+input hashes unchanged. Coverage includes 108 Host tests, 63 CLI tests, twelve
+installed Root cases, 26 Store cases, all three CLI publication journeys and five
+Blob cases, plus effect/custody, profile/growth, endpoint composition, native/Wasm
+Clippy, Rustdoc, formatting and tooling agreement. Existing explicitly ignored
+historical fixtures remain exclusions. The gate log is
+`target/qualification/release-0216-1-ci.log`; captured inputs and metadata are under
+`target/evidence/0.216.1/release/`.
+
+Fresh supplier review confirms Store/protocol 0.2.2 and the other selected direct
+registry suppliers are current, except Timers 0.44.3 versus 0.45.9. The optional
+Timer refresh is deferred to the next requested runtime-supplier maintenance
+batch with dispatch/recovery qualification. Blob retains the qualified Git
+0.100.6 Service; its registry remains 0.82.1 and optional Git 0.100.9 at
+`61d4ce02e7afd421bb48d9b8e5a198333e6055a0` remains deferred to the next requested
+supplier-maintenance batch. Topology stays at the verified current Git revision
+`0a3eca919f05d777798406087049cc51ab7ae2a8`; no registry package is available.
+
+After the gate, product metadata advances to 0.216.1, with only the twelve root
+and three qualification-local product lock entries changing. Qualification
+packages remain 0.0.0. Delivery selects `main` and annotated tag `v0.216.1` at
+`https://github.com/dragginzgame/canic.git`; no registry publication or mainnet
+deployment is authorized by this release. The retained 0.1.0 Store executable
+and the separate 0.2.2 archive inputs remain recorded below.
+
+## Pre-registry Store upgrade witness: 2026-11-15
+
+The existing installed replacement proof now runs from both the current Store
+and the retained 0.1.0 executable. The predecessor is 501,823 bytes, SHA-256
+`e8a74f2155d91da7964525984c0d4e83d53d037f11190a71ce0c664b5933a3ad`, matching
+the earlier extraction evidence. It is retained with provenance in the existing
+qualification fixtures, without a Git build fallback or copied implementation.
+
+Both lockfiles separately advanced to registry 0.2.2; the maintainer confirmed
+there is no active session and asked to preserve them. This witness therefore
+qualifies 0.1.0 → 0.2.2, not an inferred transition from the prior 0.2.1 run.
+The runtime/protocol archive hashes are
+`5ac8eeefd0b49bc36a1e946bc984dcabae974cb6510150296d90ae205d5e1cd0` and
+`85f5b667c70c507beac46ccd0bd86d2330d27faf63deaa99d37754234016d253`;
+their recorded source is `ed89b13cd63d6f4bdf1205f90a83798f3c022d6c`.
+The normal and maintenance-candidate Wasm hashes used here are
+`7b522a37d7f865dcf64e5ce1377a7dee944411b6fe48342261fa1e0ce5b9e825` and
+`a51740c5e501f46fc2c26b6fea1783df3790884b78a42c41b8282c052a1b5f0e`.
+
+Seven installed maintenance cases pass, including shared releases/pins, unfinished
+upload progress, equality of every Store stable byte across replacement, lost
+callbacks, Root replacement, expired recovery and explicit/stale activation.
+The new case first exposed a fixture assumption that predecessor code always
+matched today's build; the approval now binds the installed code observed by its
+actual controller before handover and asserts the supplied predecessor digest.
+One direct rerun omitted the runner's required artifact variable and failed before
+simulation; the corrected invocation passed all seven cases in 11.14s. Both failed
+runs remain in `target/qualification/store-registry-predecessor*.log`.
+
+The selected protocol budget test, Host source-selection test, nine CLI Store
+cases, native/qualification Clippy, formatting and tooling agreement pass.
+Additional logs use `target/qualification/store-predecessor-*`. Production
+maintenance logic is unchanged; both predecessors reuse one test body and setup
+owner. This adds local preservation evidence, not mainnet deployment authority
+or tombstone-maintenance support. Pending work remains 0.216.1 and unpushed.
+
+## Registry Wasm Store adoption: 2026-11-15
+
+The requested registry adoption selects Store and protocol 0.2.1, published from
+`05755252817fdaff23455ab6550d98695fe3a169`. Archive SHA-256 values are
+`141a4945cdec9fb63dd651996c79c7a796c8adcb4e69f0fc93385c933920e3f5`
+(runtime) and `d6dbd06b94cd7d9a18af9f733bde5cc1e2c06e9575889f2eb041f21dc2b1e4b0`
+(protocol). Both consumer locks retain the same protocol; unrelated dependency
+selections are unchanged. All 25 archived files match the unpacked build sources.
+The sibling checkout was inspected read-only; its pending changes were not inputs.
+
+The existing artifact builder now selects a matching crates.io runtime/protocol
+pair through locked metadata, builds with the archive's packaged lockfile and
+checks that lock's protocol too. Host's false-target artifact dependency supplies
+source without linking the Store runtime; the native normal/build graph confirms
+only the passive protocol is present. Compiler output stays under Canic's target
+directory and the consumer workspace selects the Rust toolchain. Git layout
+assumptions and their selection path were removed, with no fallback or new crate.
+This reuses the extraction ownership/legacy research recorded below; source
+distribution changes, while Store keeps custody and Canic keeps orchestration.
+
+Focused source-selection refusal tests, native Host/CLI and Wasm Root/management
+Clippy, Host/CLI Rustdoc, formatting and tooling agreement pass. The installed
+fleet witness passes in 82.78s: bootstrap, two Store replacements, interrupted
+upload recovery, Root maintenance and a later application upgrade. The final
+public-builder check produces the same 576,047-byte Store used by that witness,
+SHA-256 `d239918a1510089b4ec3319a12b6406e020eb447b08e476a5a5c0bf094b951cc`.
+Logs and locked metadata use `target/qualification/store-registry-*`.
+
+Supplier 0.2 adds removal/restoration; Canic's typed publication commands do not
+forward them. Tombstone identity and ordering need a preservation contract before
+qualifying that flow, as recorded in the Store demo. This is Linux/local evidence,
+not mainnet replacement or tombstone maintenance qualification. `make canic`
+installs the development CLI; product version remains 0.216.0, with compatible
+pending notes under 0.216.1. No commit, push or live deployment was performed.
+
 ## 0.216.0 release qualification: 2026-11-15
 
 The maintainer authorized GitHub delivery of the repeat Store-maintenance increment.

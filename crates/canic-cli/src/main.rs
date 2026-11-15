@@ -165,6 +165,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
     if let FleetCommand::Artifact(args::FleetArtifactCommand::List {
         selection,
         state_dir,
+        details,
     }) = command
     {
         let path = selection.config.path(selection.app.as_deref())?;
@@ -176,6 +177,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         return Ok(artifacts::output(
             &canic_host::fleet_artifacts(&journal, &selected)?,
             cli.json,
+            *details,
         ));
     }
     if let FleetCommand::CompareSubnets {

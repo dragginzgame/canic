@@ -105,7 +105,7 @@ pub fn inspect(path: &Path) -> Result<Artifact> {
 }
 
 /// Build one explicit Cargo package and select its Wasm from artifact records.
-/// `ic-wasm-store` uses the Git source selected by the workspace's locked Store protocol.
+/// `ic-wasm-store` uses the workspace's locked registry artifact input and its packaged lockfile.
 /// An output path atomically receives a copy, replacing a prior build input.
 ///
 /// # Errors
@@ -125,7 +125,9 @@ pub fn build(
     let mut command = Command::new("cargo");
     command
         .current_dir(
-            manifest
+            // Registry archives have no rust-toolchain.toml. Keep the consumer's
+            // toolchain selection even when building the standalone Store manifest.
+            workspace_manifest
                 .parent()
                 .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?,
         )
@@ -142,7 +144,7 @@ pub fn build(
         .arg(manifest)
         .args(["-p", package]);
     if package == "ic-wasm-store" {
-        // Keep compiler output in the consuming workspace, never Cargo's source checkout.
+        // Keep compiler output in the consuming workspace, never Cargo's registry source.
         command.arg("--target-dir").arg(
             workspace_manifest
                 .parent()

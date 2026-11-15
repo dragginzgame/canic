@@ -42,19 +42,35 @@ fn store_maintenance_reports_keep_uncertainty_activation_and_historical_completi
     ] {
         snapshot.stores[0].reported.as_mut().unwrap().phase = phase;
         let concise = render(&snapshot, &[], false, false);
-        assert!(concise.contains(wording), "{concise}");
+        assert!(
+            concise.contains(&format!("attempt 7 — {wording}")),
+            "{concise}"
+        );
+        assert!(!concise.contains("history limit"));
         assert!(!concise.contains("Dispatch deadline"));
         assert!(!concise.contains('\x1b'));
         let detailed = render(&snapshot, &[], true, false);
-        assert!(detailed.contains("Attempt: 7"));
+        assert!(detailed.contains("Qualified history limit: 8 retained attempts"));
         assert!(detailed.contains("Before replacement: not retained"));
         let html = super::super::render(&snapshot, "");
-        assert!(html.contains(wording));
+        assert!(html.contains(&format!("attempt 7 — {wording}")));
         assert!(!html.contains("store<script>"));
         assert!(!html.contains("root<script>"));
     }
+    snapshot.stores[0]
+        .reported
+        .as_mut()
+        .unwrap()
+        .approval
+        .attempt
+        .sequence = 8;
+    assert!(
+        render(&snapshot, &[], false, false)
+            .contains("attempt 8 — maintenance completed (historical)")
+    );
     snapshot.stores[0].reported = None;
     assert!(render(&snapshot, &[], false, false).contains("no retained maintenance attempt"));
+    assert!(!render(&snapshot, &[], false, false).contains("attempt 0"));
     snapshot.stores[0].observation_error = Some("missing method <unsafe>\x1b[2J".into());
     let text = render(&snapshot, &[], false, false);
     assert!(text.contains("UNKNOWN"));

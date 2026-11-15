@@ -19,7 +19,8 @@ fn artifact_list_has_its_own_scope_and_no_effect_arguments() {
             "journal",
             "--config",
             "demo.json",
-            "--json"
+            "--json",
+            "--details"
         ])
         .is_ok()
     );
@@ -39,7 +40,7 @@ fn listing_distinguishes_publication_evidence_and_retains_partial_results() {
         publications: vec![],
         issues: vec![],
     };
-    assert!(render(&report).contains("No publication evidence found."));
+    assert!(render(&report, false).contains("No publication evidence found."));
     report.publications.push(FleetArtifact {
         operation: "01".repeat(32),
         publication_operation: "02".repeat(32),
@@ -66,14 +67,20 @@ fn listing_distinguishes_publication_evidence_and_retains_partial_results() {
         },
         publication_retained: false,
     });
-    assert!(render(&report).contains("unconfirmed"));
+    assert!(render(&report, false).contains("unconfirmed"));
     report.publications[0].publication_retained = true;
-    assert!(render(&report).contains("published"));
+    assert!(render(&report, false).contains("published"));
+    assert!(!render(&report, false).contains(&"01".repeat(32)));
+    let detailed = render(&report, true);
+    assert!(detailed.contains(&format!("Operation: {}", "01".repeat(32))));
+    assert!(detailed.contains(&format!("Nested publication approval: {}", "02".repeat(32))));
+    assert!(detailed.contains(&format!("Wasm SHA-256: {}", "33".repeat(32))));
+    report.publications[0].publication.root.canister = "root\u{1b}[2J".into();
     report.issues.push("bad\u{1b}[2Jrecord".into());
-    let text = render(&report);
+    let text = render(&report, true);
     assert!(!text.contains('\u{1b}'));
-    assert!(matches!(output(&report, false), Output::Partial(_)));
-    let Output::Partial(json) = output(&report, true) else {
+    assert!(matches!(output(&report, false, true), Output::Partial(_)));
+    let Output::Partial(json) = output(&report, true, true) else {
         panic!("partial JSON")
     };
     let Output::Json(value) = *json else {
@@ -81,4 +88,7 @@ fn listing_distinguishes_publication_evidence_and_retains_partial_results() {
     };
     assert_eq!(value["publications"][0]["operation"], "01".repeat(32));
     assert_eq!(value["issues"].as_array().unwrap().len(), 1);
+    let entry = &mut report.publications[0];
+    entry.publication_operation.clone_from(&entry.operation);
+    assert!(!render(&report, true).contains("Nested publication approval"));
 }

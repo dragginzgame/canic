@@ -131,8 +131,10 @@ fn store_catalog_summary_distinguishes_partial_absent_and_completed_scans() {
 #[test]
 fn store_upgrade_status_exposes_phase_without_claiming_completion() {
     let mut state = store_state();
+    state["store_maintenance"]["approval"]["attempt"]["sequence"] = 2.into();
     let text = render(&state, Path::new("journal")).unwrap();
-    assert!(text.contains("Store maintenance: Verified"));
+    assert!(text.contains("Store maintenance: Verified (attempt 2)"));
+    assert!(text.contains("Qualified history limit: 8 retained attempts"));
     assert!(text.contains("Root: rrkah-fqaaa-aaaaa-aaaaq-cai"));
     assert!(text.contains("deployment completion is not established"));
     state["store_maintenance"] = serde_json::Value::Null;

@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.216.1] - 2026-11-15
+
+### 🔧 Changed
+
+Wasm Store and its protocol now come from crates.io with matching locked versions.
+The artifact builder uses the locked runtime archive and its packaged lockfile, requires a matching
+protocol, and removes the Git checkout layout dependency. Store is a build input
+only; its runtime is not linked into Host.
+
+With the Wasm toolchain prepared and registry access for uncached sources:
+
+```sh
+make canic
+canic artifact build --package ic-wasm-store --output target/wasm-store.wasm
+canic artifact inspect target/wasm-store.wasm
+```
+
+Building does not deploy or change retained fleet approvals. Supplier removal
+and restoration endpoints are not exposed through Canic's publication workflow.
+
+### 🧪 Testing
+
+The installed maintenance witness now starts from a retained pre-registry Store
+0.1.0 executable as well as the current build. It verifies cross-version
+preservation of uploads, shared releases and pins, including callback loss,
+Root replacement and explicit activation, through the existing upgrade workflow.
+
+### 🩹 Fixed
+
+Store maintenance status, progress and fleet views identify the exact attempt,
+so successive upgrades are distinguishable. Detailed output includes the qualified
+eight-attempt history limit; it does not infer remaining capacity or current
+Store readiness. The demo no longer lists repeat maintenance as pending.
+
+For an existing Store-backed fleet, these commands only read observations or
+retained operation evidence; use the operation digest returned by planning:
+
+```sh
+canic fleet show --app starter --fleet local
+canic fleet show --app starter --fleet local --details
+canic fleet status OPERATION --app starter --fleet local
+```
+
+### ➕ Added
+
+`fleet artifact list --details` shows exact Wasm and authority bindings alongside
+the operation IDs needed for status and recovery. The ordinary listing stays
+compact, and JSON retains its existing shape. For a fleet with retained publication
+evidence, copy the displayed outer Operation into the status command:
+
+```sh
+canic fleet artifact list --app starter --fleet local --details
+canic fleet status OPERATION --app starter --fleet local
+```
+
 ## [0.216.0] - 2026-11-15
 
 ### ✨ Added

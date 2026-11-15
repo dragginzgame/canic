@@ -14,6 +14,18 @@ pub(super) async fn fixture_with_root(
     pic: &PocketIc,
     root_wasm: Vec<u8>,
 ) -> (Client<'_>, Client<'_>) {
+    fixture_with_code(
+        pic,
+        root_wasm,
+        std::fs::read(artifacts().join("original.wasm")).unwrap(),
+    )
+    .await
+}
+pub(super) async fn fixture_with_code(
+    pic: &PocketIc,
+    root_wasm: Vec<u8>,
+    store_wasm: Vec<u8>,
+) -> (Client<'_>, Client<'_>) {
     let operator = CanisterId::self_authenticating(b"Store bootstrap operator");
     let root = pic
         .create_canister_with_settings(Some(operator), None)
@@ -21,13 +33,7 @@ pub(super) async fn fixture_with_root(
     let supplier = pic
         .create_canister_with_settings(Some(operator), None)
         .await;
-    for (id, wasm) in [
-        (root, root_wasm),
-        (
-            supplier,
-            std::fs::read(artifacts().join("original.wasm")).unwrap(),
-        ),
-    ] {
+    for (id, wasm) in [(root, root_wasm), (supplier, store_wasm)] {
         pic.add_cycles(id, 10_000_000_000_000).await;
         pic.install_canister(id, wasm, vec![], Some(operator)).await;
     }

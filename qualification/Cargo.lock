@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.216.0"
+version = "0.216.1"
 dependencies = [
  "ic-blob-storage",
  "ic-platform-runtime",
@@ -256,7 +256,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.216.0"
+version = "0.216.1"
 dependencies = [
  "ic-wasm-store-protocol",
  "ic-wire 0.24.1",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.216.0"
+version = "0.216.1"
 dependencies = [
  "ic-wire 0.24.1",
  "serde",
@@ -1011,8 +1011,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store-protocol"
-version = "0.1.0"
-source = "git+https://github.com/dragginzgame/ic-wasm-store?rev=541d911410dae0f38eefc371693024bf2068c55b#541d911410dae0f38eefc371693024bf2068c55b"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85f5b667c70c507beac46ccd0bd86d2330d27faf63deaa99d37754234016d253"
 dependencies = [
  "ic-wire 0.24.1",
  "serde",

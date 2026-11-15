@@ -96,6 +96,17 @@ pub(super) async fn stopped(
     supplier: &Client<'_>,
     replacement: &[u8],
 ) -> Approval {
+    // Capture the installed predecessor while the fixture operator still controls
+    // Store; it need not be the executable built by the current checkout.
+    let previous_module = root
+        .pic
+        .canister_status(supplier.id, Some(root.operator))
+        .await
+        .unwrap()
+        .module_hash
+        .unwrap()
+        .try_into()
+        .unwrap();
     root.pic
         .update_canister_settings(
             supplier.id,
@@ -108,6 +119,7 @@ pub(super) async fn stopped(
         .await
         .unwrap();
     let mut approval = quiescence_tests::approval(root, supplier).await;
+    approval.previous_module = previous_module;
     approval.module_hash = store::digest(replacement);
     approval.expires_at_ns =
         root.pic.get_time().await.as_nanos_since_unix_epoch() + 1_800_000_000_000;
@@ -124,7 +136,7 @@ pub(super) async fn stopped(
             return approval;
         }
     }
-    panic!("bounded closure/scan/stop");
+    panic!("bounded closure/scan/stop: {:?}", observe(root).await);
 }
 async fn lost_advance(root: &Client<'_>, approval: &Approval, point: u8, phase: Phase) {
     inject(root, point).await;
@@ -164,10 +176,25 @@ async fn restore_faults(root: &Client<'_>) {
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callback() {
+    replacement_preserves_state(std::fs::read(artifacts().join("original.wasm")).unwrap()).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn root_upgrades_pre_registry_store_preserving_state_and_uncertain_effects() {
+    replacement_preserves_state(include_bytes!("../../fixtures/store-0.1.0.wasm").to_vec()).await;
+}
+
+async fn replacement_preserves_state(store_wasm: Vec<u8>) {
+    let previous_module = store::digest(&store_wasm);
     let (_, binary) = support::inputs();
     let owner = support::instance(&binary).await;
     let pic = owner.instance();
-    let (root, supplier) = readiness_tests::fixture(pic).await;
+    let (root, supplier) = readiness_tests::fixture_with_code(
+        pic,
+        std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
+        store_wasm,
+    )
+    .await;
     let mut payload = vec![42; store::CHUNK_BYTES + 17];
     payload[..8].copy_from_slice(b"\0asm\x01\0\0\0");
     let first = supplier.publish_bytes("first", &payload).await;
@@ -219,6 +246,7 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
         .unwrap();
     let replacement = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
     let approval = stopped(&root, &supplier, &replacement).await;
+    assert_eq!(approval.previous_module, previous_module);
     let closed = observe(&root).await;
     assert_eq!(recover_store(&root, &approval).await, closed);
     let before_store = pic.get_stable_memory(supplier.id).await;

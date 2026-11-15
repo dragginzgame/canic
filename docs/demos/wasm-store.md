@@ -2,12 +2,24 @@
 
 Implementation and passive protocol now live in
 [ic-wasm-store](https://github.com/dragginzgame/ic-wasm-store).
-Canic pins the supplier revision in both Cargo workspaces; `canic artifact build
---package ic-wasm-store` builds that source with its committed lockfile. No sibling
+Canic selects the same locked crates.io protocol in both Cargo workspaces and
+the matching runtime as a Host artifact input. `canic artifact build --package ic-wasm-store`
+builds that registry archive with its packaged lockfile. Both selections and the
+archive's protocol must match; Git/path overrides are refused. No sibling
 checkout is needed. Existing generated configurations must change only their Store
 `build.package` from `canic-wasm-store` to `ic-wasm-store`; keep `build.manifest`
 pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
 are unchanged. Rebuilding does not authorize installing the changed executable.
+
+The supplier also supports exact removal/restoration and tombstones. Canic does
+not forward those mutation endpoints. This adoption qualifies the existing
+publication, pin and maintenance journey; maintenance of Stores containing
+tombstones needs separate qualification before exposing removal through Canic.
+The supplier's preservation page projects a tombstone as an unpublished upload
+with all chunks missing, while Root checks ordering by release name/version.
+Removal needs an explicit tombstone-preservation contract and compatible scan
+ordering; ordinary upload progress cannot prove that a removed identity stayed
+removed across an upgrade.
 
 The standalone Store is the first implementation of the
 [per-fleet artifact contract](../design/canic-system-design.md#per-fleet-versioned-wasm-store).
@@ -23,7 +35,7 @@ now selects a completed publication for child creation and its first upgrade.
 Fresh whole fleets with a declared Store publish immutable child releases before
 admission and support bounded serial upgrades. Existing-fleet migration remains
 unimplemented; retained inline deployments keep their current limits and contracts.
-There is no delete/reset or pin-release endpoint; incomplete uploads keep their
+Canic exposes no deletion/reset or pin-release flow; incomplete uploads keep their
 reservation. No deployment approval or application readiness follows from Store
 publication. Host and Store check bounded raw Wasm framing and byte integrity. Full
 executable validation remains with the IC installation boundary.
@@ -34,6 +46,7 @@ Inspect locally retained versions for an existing configured fleet:
 
 ```sh
 canic fleet artifact list --app starter
+canic fleet artifact list --app starter --details
 canic fleet artifact list --app starter --json
 ```
 
@@ -42,8 +55,11 @@ checks as publication status. It includes bootstrap publications once their exac
 Root/Store identities and publication plans are retained, plus independent
 publication plans. **Published** means a validated completion observation is in
 this journal; **unconfirmed** means it is absent, not proof that nothing happened
-remotely. JSON includes exact hashes and the outer `operation` usable with
-`fleet status`; a nested `publication_operation` identifies its narrower approval.
+remotely. `--details` exposes exact Wasm hashes, original Root/Store code bindings
+and the outer **Operation** usable with `fleet status`. A different nested
+publication approval identifies the narrower bootstrap step; use the outer
+operation for status/apply/reconcile. JSON retains both identities and the same
+structured evidence independently of `--details`.
 Versions sort lexically without selecting a latest release. This is not a live
 Store catalog or deployment listing. No signer or network request is used.
 Keep `--config`, `--fleet` and any `--state-dir` override when selecting a journal.
@@ -184,7 +200,7 @@ remote calls have drained or authorize installation. These are runtime primitive
 not another CLI upgrade path. `bash scripts/dev/test-store.sh admission` qualifies
 them locally; its test controller still performs Store installation explicitly.
 Store record migration and downgrade restrictions are owned by the supplier's
-[settings codec](https://github.com/dragginzgame/ic-wasm-store/blob/541d911410dae0f38eefc371693024bf2068c55b/crates/ic-wasm-store/src/state/records.rs).
+[settings codec](https://github.com/dragginzgame/ic-wasm-store/blob/05755252817fdaff23455ab6550d98695fe3a169/crates/ic-wasm-store/src/state/records.rs).
 
 Root's `stage_store_maintenance`, `advance_store_maintenance` and
 `observe_store_maintenance` mounts now qualify the next boundary under sole Root
@@ -245,8 +261,12 @@ plans. A Root built with `store_maintenance_status` reports closure, stopping,
 installation, verification and activation separately. Older Roots report unknown
 when that method is unavailable. Configuration roles alone do not select queries.
 The report is uncertified; completed maintenance is historical evidence, not
-current Store admission or readiness. The normal terminal view is compact;
-`--details` includes the original deadline and before/after catalog counts.
+current Store admission or readiness. Terminal and localhost views identify the
+reported attempt. `fleet status` and apply/reconcile progress identify their own
+retained attempt, which may precede the latest fleet report. `--details` includes
+the original deadline, before/after catalog counts and the current implementation's
+qualified eight-attempt limit. That limit is not an observation of remaining
+capacity or proof that an older deployed Root supports repeat maintenance.
 For an existing selected app/fleet with its retained journal:
 
 ```sh
@@ -402,8 +422,8 @@ Publication, artifact building and inspection accept up to 8 MiB, within Storeâ€
 bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
 and inline child plans retain their smaller custody limits. No measured deployment
 speedup is claimed. Whole-fleet release selection and Root maintenance with full
-Store custody use the workflows above, including repeat Store replacement. Existing-fleet
-migration and repeatable Store maintenance remain pending.
+Store custody use the workflows above, including repeat Store replacement.
+Existing-fleet migration remains pending.
 
 `make publication-test` qualifies the real CLI and signer against installed Root
 and Store, using synthetic cycles. It creates Store through the CLI, refuses

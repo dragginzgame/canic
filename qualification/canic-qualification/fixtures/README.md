@@ -55,3 +55,19 @@ fixture completes a real Store replacement with these bytes, upgrades Root, then
 checks that the original outcome survives before admitting successors. The older
 executable must refuse CUJ7 rather than discard history. This is retained binary
 evidence, not a reproducible-build claim or a Host compatibility fallback.
+
+## Pre-registry Store predecessor
+
+`store-0.1.0.wasm` is the normal standalone Store retained from Canic's extraction
+qualification and subsequent 0.215/0.216 gates. It was built from supplier commit
+`541d911410dae0f38eefc371693024bf2068c55b`. Its 501,823 bytes have SHA-256
+`e8a74f2155d91da7964525984c0d4e83d53d037f11190a71ce0c664b5933a3ad`, matching the
+retained `target/evidence/store-extraction/supplier-build.json` and Store runner
+artifact. This is an exact binary witness, not a reproducible-build claim.
+
+The maintenance fixture initializes these bytes, creates shared releases, pins
+and an incomplete upload, then replaces Store under sole Root control with the
+selected registry executable. It reuses the current replacement/recovery proof,
+including all stable bytes, callback loss, Root maintenance, explicit activation,
+expired-operation recovery and rejection of stale activation. The fixture does
+not add a Git build fallback, runtime migration API or live upgrade authorization.

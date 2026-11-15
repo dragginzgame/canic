@@ -3,7 +3,8 @@
 This workspace owns installed effect-boundary and product regression tests.
 Store-native tests and the standalone upload/reopen/version-reuse witness now live
 in `dragginzgame/ic-wasm-store`. The two local workspaces pin its passive protocol;
-the existing artifact builder selects the runtime from that exact supplier source.
+the existing artifact builder selects the matching locked crates.io runtime and
+builds it using its packaged lockfile.
 This workspace retains Root integration, chunked installation and complete CLI
 journeys. `make store-test` does not rerun the supplier's native suite.
 Its packages are named by responsibility, independently of design milestones:
@@ -74,8 +75,11 @@ admission closed, verifies metadata and explicitly activates. Callback faults
 15–18 and pre-install dispatch fault 19 cover retained intent and observation-only
 recovery across Root replacement. The fixture compares every Store stable byte
 before/after upgrade, including chunks, shared-version pins and an unfinished
-upload; publication resumes only after activation. Wrong bytes/callers, malformed
-frames, expiry, rejected modules and incompatible replacement endpoints cannot
+upload; publication resumes only after activation. The same checks also start
+from the retained Store 0.1.0 executable in `canic-qualification/fixtures`, proving
+the pre-registry transition without rebuilding the predecessor or copying its
+implementation. Wrong bytes/callers, malformed frames, expiry, rejected modules
+and incompatible replacement endpoints cannot
 activate or reissue installation. Recovery after expiry can retain an installed
 outcome but cannot start it with expired authority. The repeat fixture migrates
 both an issued installation and a completed attempt from a retained 0.215 Root,

@@ -5,8 +5,9 @@ Canic's first native CLI and deployable greeting application. The CLI lives in
 Wire contract in `crates/canic`, and the demo in `apps/hello/canic-hello`.
 
 The standalone [Wasm Store](https://github.com/dragginzgame/ic-wasm-store) owns
-artifact custody and its own qualification. Canic pins its protocol and builds
-its executable from the same Git revision; no sibling checkout is needed.
+artifact custody and its own qualification. Canic locks its crates.io protocol
+and runtime packages and builds the runtime archive with its packaged lockfile;
+no sibling checkout is needed.
 
 The [Root journey](docs/demos/root.md) generates a greeting workspace
 and deploys Root, Wasm Store and one application through one fleet plan/apply approval.

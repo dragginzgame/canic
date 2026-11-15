@@ -439,6 +439,9 @@ pub(super) enum FleetArtifactCommand {
         /// Override the selected fleet's journal directory.
         #[arg(long)]
         state_dir: Option<PathBuf>,
+        /// Show operation IDs and original Wasm, Root and Store bindings.
+        #[arg(long)]
+        details: bool,
     },
 }
 

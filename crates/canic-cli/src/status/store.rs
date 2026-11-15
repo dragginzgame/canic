@@ -1,5 +1,5 @@
 //! Presentation of retained Store evidence; recommendations grant no effect authority.
-use canic_management_protocol::store_maintenance::{Preservation, Status};
+use canic_management_protocol::store_maintenance::{MAX_UPGRADES, Preservation, Status};
 use std::fmt::Write as _;
 
 pub(crate) fn continuation(status: &Status, now: Option<u128>) -> (&'static str, &'static str) {
@@ -50,7 +50,10 @@ pub(crate) fn continuation(status: &Status, now: Option<u128>) -> (&'static str,
 }
 
 pub(crate) fn render(status: &Status, now: Option<u128>, receipt: bool) -> String {
-    let mut output = format!("Store maintenance: {:?}\n", status.phase);
+    let mut output = format!(
+        "Store maintenance: {:?} (attempt {})\nQualified history limit: {MAX_UPGRADES} retained attempts\n",
+        status.phase, status.approval.attempt.sequence
+    );
     if let Some(failure) = &status.failure {
         writeln!(output, "Retained failure: {failure:?}").expect("String write");
     }

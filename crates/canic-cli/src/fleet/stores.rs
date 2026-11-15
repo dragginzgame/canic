@@ -1,15 +1,15 @@
 //! Shared wording for terminal and localhost Store-maintenance diagnostics.
 use canic_host::FleetStoreMaintenance;
-use canic_management_protocol::store_maintenance::Phase;
+use canic_management_protocol::store_maintenance::{MAX_UPGRADES, Phase};
 
-pub(super) fn summary(report: &FleetStoreMaintenance) -> &'static str {
+pub(super) fn summary(report: &FleetStoreMaintenance) -> String {
     if report.observation_error.is_some() {
-        return "UNKNOWN";
+        return "UNKNOWN".into();
     }
     let Some(status) = &report.reported else {
-        return "no retained maintenance attempt";
+        return "no retained maintenance attempt".into();
     };
-    match status.phase {
+    let phase = match status.phase {
         Phase::Reserved => "reserved; closure pending",
         Phase::Closing => "closure issued; outcome pending",
         Phase::Closed => "closed; capturing catalog",
@@ -24,13 +24,17 @@ pub(super) fn summary(report: &FleetStoreMaintenance) -> &'static str {
         Phase::Verified => "verified; awaiting explicit activation",
         Phase::ActivateIssued => "activation issued; outcome pending",
         Phase::Ready => "maintenance completed (historical)",
-    }
+    };
+    format!("attempt {} — {phase}", status.approval.attempt.sequence)
 }
 
 pub(super) fn details(report: &FleetStoreMaintenance) -> Vec<(&'static str, String)> {
     let mut rows = vec![("Root", report.root.clone())];
     if let Some(status) = &report.reported {
-        rows.push(("Attempt", status.approval.attempt.sequence.to_string()));
+        rows.push((
+            "Qualified history limit",
+            format!("{MAX_UPGRADES} retained attempts"),
+        ));
         rows.push((
             "Dispatch deadline (Unix seconds)",
             (status.approval.expires_at_ns / 1_000_000_000).to_string(),
