@@ -3,7 +3,7 @@ use super::{Client, artifacts, custody, inject, maintain, store, support};
 use canic_management_protocol::{self as management, publication};
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, nonblocking::PocketIc};
 
-async fn fixture(pic: &PocketIc) -> (Client<'_>, Client<'_>) {
+pub(super) async fn fixture(pic: &PocketIc) -> (Client<'_>, Client<'_>) {
     let operator = CanisterId::self_authenticating(b"Store bootstrap operator");
     let root = pic
         .create_canister_with_settings(Some(operator), None)
@@ -56,6 +56,242 @@ async fn handover(root: &Client<'_>, supplier: &Client<'_>) {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn store_custody_observation_preserves_all_owners_without_root_copies() {
+    let (_, binary) = support::inputs();
+    let owner = support::instance(&binary).await;
+    let pic = owner.instance();
+    let (root, supplier) = fixture(pic).await;
+    let first = supplier.publish_bytes("one", b"\0asm\x01\0\0\0").await;
+    let second = store::Manifest {
+        release: store::Release {
+            version: "two".into(),
+            ..first.release.clone()
+        },
+        ..first.clone()
+    };
+    supplier
+        .update::<_, Result<store::Status, store::Error>>(
+            "prepare",
+            store::PREPARE,
+            &second,
+            store::LIMITS,
+        )
+        .await
+        .unwrap();
+    let other = CanisterId::self_authenticating(b"previous Store controller");
+    pic.update_canister_settings(
+        supplier.id,
+        Some(root.operator),
+        CanisterSettings {
+            controllers: Some(vec![root.operator, other]),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    for (principal, manifest) in [(root.operator, first.clone()), (other, second.clone())] {
+        Client {
+            pic,
+            id: supplier.id,
+            operator: principal,
+        }
+        .pin(&store::Pin {
+            operation: [7; 32],
+            manifest,
+        })
+        .await;
+    }
+    let expected: Result<store::Custody, store::Error> = supplier
+        .update(
+            "observe_custody",
+            store::CUSTODY,
+            &first.release,
+            store::LIMITS,
+        )
+        .await;
+    let expected = expected.unwrap();
+    assert_eq!(expected.pins.len(), 2);
+    assert_eq!(expected.pins[0].owner, root.operator.as_slice());
+    assert_eq!(expected.pins[1].owner, other.as_slice());
+    assert_eq!(expected.pins[1].release, second.release);
+
+    let mut pending = first.clone();
+    pending.release.version = "pending".into();
+    pending.hash = [8; 32];
+    pending.chunks = vec![[9; 32]];
+    supplier
+        .update::<_, Result<store::Status, store::Error>>(
+            "prepare",
+            store::PREPARE,
+            &pending,
+            store::LIMITS,
+        )
+        .await
+        .unwrap();
+    let staged: Result<store::Custody, store::Error> = supplier
+        .update(
+            "observe_custody",
+            store::CUSTODY,
+            &pending.release,
+            store::LIMITS,
+        )
+        .await;
+    let staged = staged.unwrap();
+    assert!(!staged.status.published);
+    assert_eq!(staged.status.missing, vec![0]);
+    assert!(staged.pins.is_empty());
+
+    // Qualification controls Store directly here; this is not a Host-driven maintenance flow.
+    pic.stop_canister(supplier.id, Some(root.operator))
+        .await
+        .unwrap();
+    pic.upgrade_canister(
+        supplier.id,
+        std::fs::read(artifacts().join("candidate.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    pic.start_canister(supplier.id, Some(root.operator))
+        .await
+        .unwrap();
+    assert!(supplier.info().await.maintenance_candidate);
+    handover(&root, &supplier).await;
+    let input = publication::CustodyRequest {
+        store: supplier.id.to_text(),
+        expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
+        release: first.release.clone(),
+    };
+    async fn read(
+        root: &Client<'_>,
+        input: publication::CustodyRequest,
+    ) -> publication::CustodyReply {
+        root.update(
+            "observe_store_custody",
+            publication::CUSTODY,
+            &input,
+            store::LIMITS,
+        )
+        .await
+    }
+    let root_bytes = pic.get_stable_memory(root.id).await;
+    let store_bytes = pic.get_stable_memory(supplier.id).await;
+    assert_eq!(read(&root, input.clone()).await.unwrap(), expected);
+    assert_eq!(
+        read(
+            &root,
+            publication::CustodyRequest {
+                release: pending.release,
+                ..input.clone()
+            }
+        )
+        .await
+        .unwrap(),
+        staged
+    );
+    assert_eq!(
+        read(
+            &root,
+            publication::CustodyRequest {
+                release: second.release,
+                ..input.clone()
+            }
+        )
+        .await
+        .unwrap()
+        .pins,
+        expected.pins
+    );
+    let frame =
+        ic_wire::native::encode_request(publication::CUSTODY, &input, store::LIMITS).unwrap();
+    assert!(
+        pic.update_call(
+            root.id,
+            CanisterId::anonymous(),
+            "observe_store_custody",
+            frame.clone()
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        pic.update_call(
+            supplier.id,
+            root.operator,
+            "observe_custody",
+            ic_wire::native::encode_request(store::CUSTODY, &first.release, store::LIMITS).unwrap()
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        pic.update_call(
+            root.id,
+            root.operator,
+            "observe_store_custody",
+            vec![0; store::LIMITS.bytes + 1]
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        pic.update_call(root.id, root.operator, "observe_store_custody", vec![0, 1])
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        read(
+            &root,
+            publication::CustodyRequest {
+                expires_at_ns: 0,
+                ..input.clone()
+            }
+        )
+        .await,
+        Err(publication::Error::Expired)
+    );
+    assert_eq!(
+        read(
+            &root,
+            publication::CustodyRequest {
+                store: root.id.to_text(),
+                ..input.clone()
+            }
+        )
+        .await,
+        Err(publication::Error::Invalid)
+    );
+    assert_eq!(
+        read(
+            &root,
+            publication::CustodyRequest {
+                release: store::Release {
+                    name: "greeting".into(),
+                    version: "absent".into()
+                },
+                ..input.clone()
+            }
+        )
+        .await,
+        Err(publication::Error::Store(store::Error::NotFound))
+    );
+    inject(&root, 12).await;
+    assert!(
+        pic.update_call(root.id, root.operator, "observe_store_custody", frame)
+            .await
+            .is_err()
+    );
+    inject(&root, 0).await;
+    assert_eq!(read(&root, input.clone()).await.unwrap(), expected);
+    maintain(&root).await;
+    assert_eq!(read(&root, input).await.unwrap(), expected);
+    assert_eq!(pic.get_stable_memory(root.id).await, root_bytes);
+    assert_eq!(pic.get_stable_memory(supplier.id).await, store_bytes);
+    owner.close().await;
 }
 
 #[tokio::test(flavor = "current_thread")]

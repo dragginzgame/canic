@@ -39,14 +39,16 @@ fn encode(reply: Result<CacheReady, CacheError>) -> Vec<u8> {
     ic_wire::native::encode_response(protocol::PREPARE_CACHE, &reply, protocol::LIMITS)
         .expect("cache reply")
 }
-fn authority(caller: &Principal, expires: u64) -> Result<(), CacheError> {
+fn authority(caller: &Principal, expires: u64, epoch: u64) -> Result<(), CacheError> {
     if !cdk::api::is_controller(caller) {
         return Err(CacheError::Authority);
     }
     if cdk::api::time() > expires {
         return Err(CacheError::Expired);
     }
-    Ok(())
+    STATE
+        .with_borrow(|state| state.as_ref().expect("Store state").cache_fence(epoch))
+        .map_err(CacheError::Pin)
 }
 async fn management(method: &str, bytes: Vec<u8>) -> Result<Vec<u8>, CacheError> {
     let reply = Call::new(
@@ -67,7 +69,10 @@ async fn management(method: &str, bytes: Vec<u8>) -> Result<Vec<u8>, CacheError>
 #[cdk::update(guard = "admit", decode_with = "decode", encode_with = "encode")]
 async fn prepare_cache(input: PrepareCache) -> Result<CacheReady, CacheError> {
     let caller = cdk::api::msg_caller();
-    authority(&caller, input.expires_at_ns)?;
+    let epoch = STATE
+        .with_borrow(|state| state.as_ref().expect("Store state").admission_epoch())
+        .map_err(CacheError::Pin)?;
+    authority(&caller, input.expires_at_ns, epoch)?;
     if input.expires_at_ns.saturating_sub(cdk::api::time()) > 300_000_000_000 {
         return Err(CacheError::Invalid);
     }
@@ -87,7 +92,7 @@ async fn prepare_cache(input: PrepareCache) -> Result<CacheReady, CacheError> {
         decoder::decode_one(&reply, REPLY_LIMITS).map_err(|_| CacheError::Uncertain)?;
     let mut uploaded = 0;
     for (index, hash) in input.pin.manifest.chunks.iter().enumerate() {
-        authority(&caller, input.expires_at_ns)?;
+        authority(&caller, input.expires_at_ns, epoch)?;
         if chunks.iter().any(|chunk| chunk.hash == *hash) {
             continue;
         }
@@ -119,7 +124,11 @@ async fn prepare_cache(input: PrepareCache) -> Result<CacheReady, CacheError> {
         chunks.push(result);
         uploaded += 1;
     }
-    // Late completion is evidence, never permission to install past the approval deadline.
+    // A close/reopen cycle fences even the final callback; it cannot report fresh readiness.
+    STATE
+        .with_borrow(|state| state.as_ref().expect("Store state").cache_fence(epoch))
+        .map_err(CacheError::Pin)?;
+    // Late completion remains evidence, never permission to install past the approval deadline.
     Ok(CacheReady {
         pin: input.pin,
         uploaded,

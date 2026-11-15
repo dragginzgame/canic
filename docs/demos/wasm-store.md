@@ -126,6 +126,49 @@ bootstrap; it does not certify module identity, sole control or sufficient quota
 for future work. Host binds certified code/controller evidence separately in
 named Store bootstrap.
 
+For preservation inspection, Store's replicated `observe_custody` takes one exact
+release and returns its progress plus every retained pin on the shared artifact.
+Pins preserve their original owner, operation and release label, including former
+controllers and different labels sharing those bytes. Root mounts
+`observe_store_custody` under the same controller/target/deadline checks, so a
+Root-owned Store does not need to give the external operator direct access.
+The result is bounded by one manifest and 32 compact pin records, reads metadata
+only and creates no Root copy. It is not an atomic catalog snapshot, payload
+integrity scan, maintenance approval or proof of installed code. Host-driven
+Store upgrades remain unqualified. Run the focused installed observation witness
+with `bash scripts/dev/test-store.sh custody` after simulator preparation.
+
+Store's `admission` endpoint accepts only close, observe and activate. It captures
+the controller and retains the exact operation and increasing sequence in its
+existing settings allocation. Root forwards those commands through
+`store_admission` with the same controller/deadline checks as publication. While
+closed, prepare/put/publish, pin acquisition, quota changes and fresh cache work
+are refused; reads and exact attempt recovery remain available. Store upgrades
+leave the gate closed until explicit matching activation. Old cache callbacks
+are fenced even if admission has reopened. The gate does not certify that earlier
+remote calls have drained or authorize installation. These are runtime primitives,
+not another CLI upgrade path. `bash scripts/dev/test-store.sh admission` qualifies
+them locally; its test controller still performs Store installation explicitly.
+The CWS2 settings codec loads recognized prior CWS1 settings. Unknown or malformed
+records fail closed, and downgrading after writing CWS2 is unsupported.
+
+Root's `stage_store_maintenance`, `advance_store_maintenance` and
+`observe_store_maintenance` mounts now qualify the next boundary under sole Root
+control. Root retains one immutable approval and stop-request commitment outside
+Store. It fences child/publication mutations and raw gate changes, closes Store,
+then issues stop once. Lost callbacks recover through observations; expiry never
+renews dispatch authority. A stopped observation establishes this drain boundary.
+The CUJ5 journal preserves the attempt across Root replacement and loads prior
+recognized journals without inventing an attempt. Existing complete child-custody
+observations refuse pending Store maintenance, preventing Host from omitting it.
+Run `bash scripts/dev/test-store.sh quiescence` for the installed proof.
+
+This runtime qualification ends at Stopped and is **not for live use**. It has no
+CLI entrypoint, installation, restart, activation, cancellation or reset path yet.
+One attempt remains retained. The replacement hash is bound, but its bytes still
+belong to Host and are not installed. Complete preservation checks and recovery
+must extend this same journal before admitting the full Store-upgrade workflow.
+
 To create a Store, use the existing named `fleet plan` workflow. The selected
 fleet must have a bound top-level `root` and an unbound `wasm-store` child with a
 Wasm input. The reviewed Root executable must mount `observe_store` and

@@ -167,7 +167,10 @@ impl Storable for Artifact {
 
 // Both children share the original checked leases; each retains separate payloads.
 #[derive(Clone, Default)]
-pub(super) struct Journals(pub [Journal; 2]);
+pub(super) struct Journals(
+    pub [Journal; 2],
+    pub Option<canic_management_protocol::store_maintenance::Status>,
+);
 impl Storable for Journals {
     const BOUND: Bound = Bound::Bounded {
         max_size: JOURNAL_BYTES as u32,
@@ -181,14 +184,18 @@ impl Storable for Journals {
         {
             return Err(CodecError::Invalid("upgrade history bound"));
         }
-        let payload = ic_wire::native::encode(&self.0, JOURNAL_LIMITS)
+        let payload = ic_wire::native::encode(&(&self.0, &self.1), JOURNAL_LIMITS)
             .map_err(|_| CodecError::Invalid("child journals"))?;
-        let mut bytes = b"CUJ4".to_vec();
+        let mut bytes = b"CUJ5".to_vec();
         bytes.extend_from_slice(&payload);
         Ok(Cow::Owned(bytes))
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        if let Some(payload) = bytes.strip_prefix(b"CUJ4") {
+        if let Some(payload) = bytes.strip_prefix(b"CUJ5") {
+            let (journals, maintenance) = ic_wire::native::decode(payload, JOURNAL_LIMITS)
+                .map_err(|_| CodecError::Invalid("Store maintenance journal"))?;
+            Ok(Self(journals, maintenance))
+        } else if let Some(payload) = bytes.strip_prefix(b"CUJ4") {
             let journals: [Journal; 2] = ic_wire::native::decode(payload, JOURNAL_LIMITS)
                 .map_err(|_| CodecError::Invalid("child journals"))?;
             if journals
@@ -197,9 +204,9 @@ impl Storable for Journals {
             {
                 return Err(CodecError::Invalid("upgrade history bound"));
             }
-            Ok(Self(journals))
+            Ok(Self(journals, None))
         } else {
-            Ok(Self([Journal::decode(&bytes)?, Journal::default()]))
+            Ok(Self([Journal::decode(&bytes)?, Journal::default()], None))
         }
     }
 }

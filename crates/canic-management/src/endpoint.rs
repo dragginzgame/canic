@@ -35,7 +35,10 @@ pub fn response_limits(method: u64) -> wire::Limits {
     }
     if matches!(
         method,
-        protocol::publication::EXECUTE | protocol::publication::INFO
+        protocol::publication::EXECUTE
+            | protocol::publication::INFO
+            | protocol::publication::CUSTODY
+            | protocol::publication::ADMISSION
     ) {
         return protocol::publication::RESPONSE_LIMITS;
     }
@@ -65,6 +68,10 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// `reconcile_stored_child`, `stage_stored_upgrade` and `reconcile_stored_upgrade`.
 /// `store_publication` mounts a separate, controller-only bounded publication call.
 /// `observe_store` reads initialized Store state through Root without claiming deployment.
+/// `observe_store_custody` reads one release and all pins on its shared artifact.
+/// `store_admission` forwards an exact Store close/observe/activate command, not an upgrade.
+/// `stage_store_maintenance`, `advance_store_maintenance` and `observe_store_maintenance`
+/// retain and recover Root-owned closure/stopping without installation authority.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
@@ -77,6 +84,31 @@ pub fn response_limits(method: u64) -> wire::Limits {
 #[macro_export]
 macro_rules! mount_endpoints {
     ($($name:ident),+ $(,)?) => { $($crate::mount_endpoints!(@select $name);)+ };
+    (@select stage_store_maintenance) => {
+        $crate::mount_endpoints!(@method stage_store_maintenance, update, true, store_maintenance::STAGE, LIMITS,
+            [] (input: $crate::endpoint::protocol::store_maintenance::Approval) -> Result<$crate::endpoint::protocol::store_maintenance::Status, $crate::endpoint::protocol::Refusal>,
+            $crate::store_maintenance::stage(input), "Store maintenance request", "Store maintenance reply");
+    };
+    (@select advance_store_maintenance) => {
+        $crate::mount_endpoints!(@method advance_store_maintenance, update, true, store_maintenance::ADVANCE, LIMITS,
+            [async] (input: $crate::endpoint::protocol::store_maintenance::Approval) -> $crate::endpoint::protocol::store_maintenance::Status,
+            $crate::store_maintenance::advance(input).await, "Store maintenance request", "Store maintenance reply");
+    };
+    (@select observe_store_maintenance) => {
+        $crate::mount_endpoints!(@method observe_store_maintenance, update, true, store_maintenance::OBSERVE, LIMITS,
+            [] () -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
+            $crate::store_maintenance::observe(), "Store maintenance request", "Store maintenance reply");
+    };
+    (@select store_admission) => {
+        $crate::mount_endpoints!(@method store_admission, update, true, publication::ADMISSION, LIMITS,
+            [async] (input: $crate::endpoint::protocol::publication::AdmissionRequest) -> $crate::endpoint::protocol::publication::AdmissionReply,
+            $crate::publication::admission(input).await, "Store admission request", "Store admission reply");
+    };
+    (@select observe_store_custody) => {
+        $crate::mount_endpoints!(@method observe_store_custody, update, true, publication::CUSTODY, LIMITS,
+            [async] (input: $crate::endpoint::protocol::publication::CustodyRequest) -> $crate::endpoint::protocol::publication::CustodyReply,
+            $crate::publication::observe_custody(input).await, "Store custody request", "Store custody reply");
+    };
     (@select observe_store) => {
         $crate::mount_endpoints!(@method observe_store, update, true, publication::INFO, LIMITS,
             [async] (input: $crate::endpoint::protocol::publication::InfoRequest) -> $crate::endpoint::protocol::publication::InfoReply,

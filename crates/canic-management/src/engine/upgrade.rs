@@ -189,6 +189,9 @@ pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Ref
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
+    if super::store_maintenance::active() {
+        return Err(Refusal::Occupied);
+    }
     let approval = input.approval().clone();
     if delivery::is_stored(slot) != matches!(&input, Input::Stored(_)) {
         return Err(Refusal::Binding);
@@ -524,6 +527,10 @@ pub async fn reconcile(
     reconcile_bound(slot, expected).await
 }
 pub(super) async fn reconcile_bound(slot: Slot, expected: Approval) -> UpgradeStatus {
+    assert!(
+        !super::store_maintenance::active(),
+        "Store maintenance active"
+    );
     let retained = observe(slot, &expected);
     assert_eq!(
         retained.approval.as_ref(),

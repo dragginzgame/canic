@@ -11,6 +11,9 @@ use ic_storage::{
 use records::{Artifact, Key, Payload, RetainedPin, Settings};
 use sha2::{Digest, Sha256};
 use std::ops::Bound::{Excluded, Unbounded};
+mod admission;
+#[cfg(test)]
+mod admission_tests;
 mod records;
 #[cfg(test)]
 mod tests;
@@ -96,6 +99,7 @@ impl<M: MemoryBacking> State<M> {
                     Settings {
                         quota: Quota::default(),
                         reserved_bytes: 0,
+                        admission: None,
                     },
                 )
             } else {
@@ -158,7 +162,27 @@ impl<M: MemoryBacking> State<M> {
             missing,
         })
     }
+    pub fn custody(&self, release: &Release) -> Result<canic_wasm_store_protocol::Custody, Error> {
+        let status = self.status(release)?;
+        let artifact = self
+            .artifacts
+            .get(&status.manifest.hash)
+            .expect("retained artifact");
+        Ok(canic_wasm_store_protocol::Custody {
+            status,
+            pins: artifact
+                .pins
+                .into_iter()
+                .map(|pin| canic_wasm_store_protocol::Retention {
+                    owner: pin.owner,
+                    operation: pin.operation,
+                    release: pin.release,
+                })
+                .collect(),
+        })
+    }
     pub fn prepare(&mut self, manifest: &Manifest) -> Result<Status, Error> {
+        self.admission_epoch()?;
         if !manifest.valid() {
             return Err(Error::Invalid);
         }
@@ -207,6 +231,7 @@ impl<M: MemoryBacking> State<M> {
         self.status(&manifest.release)
     }
     pub fn put(&mut self, input: &Put) -> Result<Status, Error> {
+        self.admission_epoch()?;
         let (_, artifact) = self.artifact(&input.release)?;
         let index = input.index as usize;
         let expected = artifact.chunks.get(index).ok_or(Error::Invalid)?;
@@ -223,6 +248,7 @@ impl<M: MemoryBacking> State<M> {
         self.status(&input.release)
     }
     pub fn publish(&mut self, release: &Release) -> Result<Status, Error> {
+        self.admission_epoch()?;
         let (hash, mut artifact) = self.artifact(release)?;
         if artifact.published {
             return self.status(release);
@@ -283,6 +309,7 @@ impl<M: MemoryBacking> State<M> {
         }
     }
     pub fn configure(&mut self, quota: &Quota) -> Result<Info, Error> {
+        self.admission_epoch()?;
         if !quota.valid() {
             return Err(Error::Invalid);
         }
@@ -291,10 +318,9 @@ impl<M: MemoryBacking> State<M> {
         {
             return Err(Error::Capacity);
         }
-        self.settings.set(Settings {
-            quota: quota.clone(),
-            reserved_bytes: self.settings.get().reserved_bytes,
-        });
+        let mut settings = self.settings.get().clone();
+        settings.quota = quota.clone();
+        self.settings.set(settings);
         Ok(self.info())
     }
 
@@ -316,6 +342,7 @@ impl<M: MemoryBacking> State<M> {
     }
 
     pub fn pin(&mut self, caller: &[u8], pin: &Pin) -> Result<PinReceipt, Error> {
+        self.admission_epoch()?;
         let mut artifact = self.pin_artifact(caller, pin)?;
         if let Some(old) = artifact
             .pins

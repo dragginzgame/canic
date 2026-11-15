@@ -27,6 +27,7 @@ use std::cell::RefCell;
 use storage::{ARTIFACT_BYTES, Artifact, Artifacts, JOURNAL_BYTES, Journals};
 mod delivery;
 mod storage;
+pub(crate) mod store_maintenance;
 pub(crate) mod stored_api;
 
 pub(crate) mod upgrade;
@@ -48,6 +49,10 @@ pub fn custody() -> canic_management_protocol::custody::Custody {
 /// Traps when lifecycle has not opened the engine.
 #[must_use]
 pub fn owner_custody() -> children::Custody {
+    assert!(
+        !store_maintenance::active(),
+        "Store maintenance custody required"
+    );
     assert!(
         ![Slot::First, Slot::Second]
             .into_iter()
@@ -170,11 +175,12 @@ pub fn open(fresh: bool, readiness: Readiness) {
         delivery::validate(&state, slot);
     }
     assert!(state.artifact.get().fits(), "aggregate artifact budget");
+    store_maintenance::validate(&state);
     let journals = &state.journal.get().0;
     if let (Some(first), Some(second)) = (&journals[0].0.worker, &journals[1].0.worker) {
         assert_ne!(first, second, "distinct child identities");
     }
-    // Commit the bounded v4 journal and v3 artifact payloads only after strict old/new schema validation.
+    // Commit the bounded v5 journal and v3 artifact payloads only after strict old/new schema validation.
     // A post-upgrade trap rolls back both writes with the executable change.
     state.journal.set(state.journal.get().clone());
     state.artifact.set(state.artifact.get().clone());
@@ -331,7 +337,7 @@ pub fn stage(slot: Slot, input: Stage) -> Result<Status, Refusal> {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    if delivery::is_stored(slot) {
+    if store_maintenance::active() || delivery::is_stored(slot) {
         return Err(Refusal::Occupied);
     }
     if let Some(previous) = snapshot(slot).approval {
@@ -384,7 +390,7 @@ pub fn inject_fault(slot: Slot, value: u8) {
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    assert!(value <= 12);
+    assert!(value <= 14);
     FAULT.update(|mut values| {
         values[slot.index()] = value;
         values
@@ -401,6 +407,8 @@ pub(crate) fn reply_fault(method: u64) -> bool {
             | (10, canic_management_protocol::RECONCILE)
             | (12, canic_management_protocol::publication::EXECUTE)
             | (12, canic_management_protocol::publication::INFO)
+            | (12, canic_management_protocol::publication::CUSTODY)
+            | (12, canic_management_protocol::publication::ADMISSION)
     )
 }
 
@@ -627,6 +635,7 @@ pub async fn reconcile(slot: Slot, expected: canic_management_protocol::Approval
     reconcile_bound(slot, expected).await
 }
 async fn reconcile_bound(slot: Slot, expected: Approval) -> Status {
+    assert!(!store_maintenance::active(), "Store maintenance active");
     assert_eq!(
         snapshot(slot).approval,
         Some(expected),

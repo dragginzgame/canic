@@ -39,6 +39,8 @@ pub struct Request {
 /// Failure distinguishes pre-dispatch refusal from an unknown remote outcome.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Error {
+    /// Root has retained exclusive Store maintenance; no publication/admission mutation issued.
+    Maintenance,
     /// Target, dispatch window or bounded request encoding is invalid; no call issued.
     Invalid,
     /// Dispatch authority expired; no call issued.
@@ -64,3 +66,33 @@ pub struct InfoRequest {
 }
 /// Replicated Store state at observation time, not a controller or module certificate.
 pub type InfoReply = Result<store::Info, Error>;
+
+/// Observe a release and every pin on its artifact through the actual Store controller.
+pub const CUSTODY: u64 = 48;
+/// Bounded preservation evidence, without granting maintenance or pin authority.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CustodyRequest {
+    /// Canonical Store principal; Store independently checks Root control.
+    pub store: String,
+    /// Last dispatch time, at most five minutes from Root admission.
+    pub expires_at_ns: u64,
+    /// Exact existing release, including an incomplete upload.
+    pub release: store::Release,
+}
+/// One replicated metadata observation, not a certificate of installed code or full catalog.
+pub type CustodyReply = Result<store::Custody, Error>;
+
+/// Explicit Store-local admission transition through its controller; never installs code.
+pub const ADMISSION: u64 = 49;
+/// Root forwards only Store's fixed close/observe/activate contract.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AdmissionRequest {
+    /// Canonical Store principal.
+    pub store: String,
+    /// Last dispatch time, at most five minutes from Root admission.
+    pub expires_at_ns: u64,
+    /// Exact Store attempt or a read-only observation.
+    pub command: store::AdmissionCommand,
+}
+/// Store's retained admission phase; no quiescence or installation receipt.
+pub type AdmissionReply = Result<Option<store::Admission>, Error>;

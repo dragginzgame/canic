@@ -48,3 +48,9 @@ pub mod stored {
         custody, reconcile, reconcile_upgrade, stage, stage_upgrade,
     };
 }
+
+/// Root-owned Store maintenance custody, mounted explicitly by Root.
+#[cfg(target_arch = "wasm32")]
+pub mod store_maintenance {
+    pub use crate::engine::store_maintenance::{advance, observe, stage};
+}

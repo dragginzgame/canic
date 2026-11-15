@@ -73,10 +73,19 @@ impl Artifact {
 pub(super) struct Settings {
     pub quota: Quota,
     pub reserved_bytes: u64,
+    pub admission: Option<canic_wasm_store_protocol::Admission>,
 }
 impl Settings {
     fn valid(&self) -> bool {
-        self.quota.valid() && self.reserved_bytes <= self.quota.reserved_bytes
+        self.quota.valid()
+            && self.reserved_bytes <= self.quota.reserved_bytes
+            && self.admission.as_ref().is_none_or(|gate| {
+                gate.attempt.sequence > 0
+                    && gate.attempt.operation != [0; 32]
+                    && !gate.owner.is_empty()
+                    && gate.owner.len() <= 29
+                    && gate.owner != [4]
+            })
     }
 }
 
@@ -156,14 +165,28 @@ impl Storable for Settings {
         if !self.valid() {
             return Err(CodecError::Invalid("settings invariant"));
         }
-        encode(self, b"CWS1")
+        encode(self, b"CWS2")
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        let payload = bytes
-            .strip_prefix(b"CWS1")
-            .ok_or(CodecError::Invalid("settings schema"))?;
-        let value: Self = ic_wire::native::decode(payload, LIMITS)
-            .map_err(|_| CodecError::Invalid("settings record"))?;
+        let value: Self = if let Some(payload) = bytes.strip_prefix(b"CWS2") {
+            ic_wire::native::decode(payload, LIMITS)
+                .map_err(|_| CodecError::Invalid("settings record"))?
+        } else if let Some(payload) = bytes.strip_prefix(b"CWS1") {
+            #[derive(Deserialize)]
+            struct Previous {
+                quota: Quota,
+                reserved_bytes: u64,
+            }
+            let old: Previous = ic_wire::native::decode(payload, LIMITS)
+                .map_err(|_| CodecError::Invalid("previous settings record"))?;
+            Self {
+                quota: old.quota,
+                reserved_bytes: old.reserved_bytes,
+                admission: None,
+            }
+        } else {
+            return Err(CodecError::Invalid("settings schema"));
+        };
         if !value.valid() {
             return Err(CodecError::Invalid("settings invariant"));
         }

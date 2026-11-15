@@ -907,6 +907,36 @@ staged uploads and pins across two executables; Root retains the maintenance
 journal outside Store. A Store outage blocks dependent installation, not normal
 application calls or access to Root's retained operation status.
 
+The first preservation observation is a bounded replicated read of one release's
+progress and all retention obligations on its shared artifact. It uses existing
+Store metadata and Root's typed controller/deadline route; former pin owners and
+other labels remain visible. This adds no mirror catalog or maintenance owner.
+Separate reads are not an atomic catalog snapshot. Store's persistent admission
+gate closes publication, quota, pin and fresh cache work while retaining read
+access. It binds a monotonic sequence, operation and actual controller; only the
+same attempt/owner can activate it. Reopening storage during upgrade leaves the
+gate unchanged. Delayed closure cannot re-close an activated attempt, and stale
+activation cannot reopen a successor. Cache continuations retain their admission
+generation and cannot continue through a close/reopen cycle. Already-dispatched
+remote cache work may still finish: closed admission is not proof of drained calls.
+Root forwards this fixed contract without an installation effect or catalog copy.
+Its explicit maintenance mounts now retain one immutable approval outside Store,
+fence new child/publication mutations and raw gate changes, close Store and issue
+stop once. Intent and call enqueue share the local dispatch commit; separate
+callback faults qualify recovery through observation without repeating stop.
+Root replacement preserves that record. Stopped status under the approved old
+code and sole Root control establishes the drain boundary, even when observed
+after the dispatch deadline. This does not rely on canister-version arithmetic.
+The CUJ5 journal loads recognized predecessors without inventing maintenance
+authority; existing full child-custody reads refuse a pending Store attempt so
+Host Root maintenance cannot silently omit it.
+
+This qualification currently ends at Stopped, retains one attempt without reset,
+and is not exposed through CLI or admitted for live use. Installation, complete
+Store preservation, restart, matching activation and repeatable maintenance must
+extend this same journal. Host retains the approved replacement bytes; Root has
+only their commitment. No installation authority follows from the drain proof.
+
 Deploying an older retained version is a new approved upgrade subject to the
 application's schema and lifecycle compatibility checks. Artifact availability
 does not make application-state rollback safe.

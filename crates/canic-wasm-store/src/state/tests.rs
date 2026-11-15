@@ -31,6 +31,58 @@ fn upload(state: &mut State<VectorMemory>, manifest: &Manifest, payload: &[u8]) 
 }
 
 #[test]
+fn custody_reports_staging_and_all_shared_artifact_pins_after_reopen() {
+    let backing = VectorMemory::default();
+    let mut state = State::open(backing.clone(), true);
+    let (first, bytes) = fixture("one", 33);
+    assert_eq!(state.custody(&first.release), Err(Error::NotFound));
+    state.prepare(&first).unwrap();
+    let staged = state.custody(&first.release).unwrap();
+    assert_eq!(staged.status.missing, vec![0]);
+    assert!(!staged.status.published);
+    assert!(staged.pins.is_empty());
+    upload(&mut state, &first, &bytes);
+    state.publish(&first.release).unwrap();
+    let second = Manifest {
+        release: Release {
+            version: "two".into(),
+            ..first.release.clone()
+        },
+        ..first.clone()
+    };
+    state.prepare(&second).unwrap();
+    for (owner, manifest) in [(&[1][..], &first), (&[2][..], &second)] {
+        state
+            .pin(
+                owner,
+                &Pin {
+                    operation: [7; 32],
+                    manifest: manifest.clone(),
+                },
+            )
+            .unwrap();
+    }
+    let expected = state.custody(&first.release).unwrap();
+    assert_eq!(expected.pins.len(), 2);
+    assert_eq!(expected.pins[0].owner, vec![1]);
+    assert_eq!(expected.pins[1].owner, vec![2]);
+    assert_eq!(expected.pins[0].release, first.release);
+    assert_eq!(expected.pins[1].release, second.release);
+    assert_eq!(state.custody(&second.release).unwrap().pins, expected.pins);
+    drop(state);
+    let state = State::open(backing, false);
+    assert_eq!(state.custody(&first.release).unwrap(), expected);
+    assert_eq!(
+        state.custody(&Release {
+            name: String::new(),
+            version: "one".into()
+        }),
+        Err(Error::Invalid)
+    );
+    assert_eq!(state.custody(&first.release).unwrap(), expected);
+}
+
+#[test]
 fn interrupted_upload_reopens_multiple_versions_without_duplicate_payloads() {
     let backing = VectorMemory::default();
     let mut state = State::open(backing.clone(), true);

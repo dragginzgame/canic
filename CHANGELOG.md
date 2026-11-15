@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.209.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+Store's error contract adds `Closed`. Its settings codec now retains maintenance
+admission in `CWS2`, loading recognized `CWS1` settings without inventing a prior
+attempt. Older executables cannot read the new settings; downgrade is unsupported.
+Root's CUJ5 journal retains Store-maintenance intent beside child journals,
+loading prior recognized records without a maintenance attempt. Older executables
+cannot read CUJ5. Publication's error contract adds `Maintenance`.
+
+### ▶️ Try it
+
+From this checkout after `make canic` and Wasm toolchain preparation, build and
+inspect the development Store locally. These commands spend no cycles and open
+no browser; they do not upgrade an existing Store.
+
+```sh
+canic artifact build --package canic-wasm-store --output target/wasm-store.wasm
+canic artifact inspect target/wasm-store.wasm
+```
+
+### ➕ Added
+
+Store's replicated `observe_custody` reports one release's upload progress and
+every retained pin on its shared artifact, including other release labels and
+former controllers. Root explicitly mounts `observe_store_custody` through its
+existing controller/deadline checks. Observations read existing metadata, retain
+no Root copy and grant no maintenance authority. This is preservation evidence
+for the next Store upgrade flow; Host-driven Store upgrades remain blocked.
+
+Store now persists a controller-owned close/observe/activate attempt in its
+existing settings allocation. Publication, pins, quota changes and fresh cache
+work stop while closed; reads remain available. Upgrade/reopen does not activate
+the Store. Exact activation and a monotonic sequence prevent old requests or
+cache callbacks from reopening or continuing a newer maintenance attempt. Root
+forwards this fixed contract through `store_admission`; it does not install code.
+The installed witness covers lost replies, preserved pins/uploads across Store
+and Root upgrades, stale activation and an interrupted cache repair. Closure is
+not proof of drained calls.
+
+Root now retains one Store-maintenance approval, fences competing mutations,
+closes Store and issues stop once. Installed tests recover lost closure/stop
+callbacks and preserve the journal across Root replacement; stopped-state
+observation can settle after the original dispatch deadline. This qualification
+primitive ends at Stopped and has no CLI entrypoint: installation, restart,
+explicit activation and repeatable maintenance remain pending. Do not use it live.
+
 ## [0.208.0] - 2026-11-15
 
 ### ⚠️ Breaking

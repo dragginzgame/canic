@@ -134,6 +134,31 @@ authenticated tooling installer.
   Store authority/code/placement as well as child identity/code/controllers. Reuse
   the original direct install attempt and refuse incomplete or mismatched evidence.
   Inline-to-Store migration and Host-driven Store upgrades remain pending.
+  Store's `observe_custody` returns one release's progress and all pins on its
+  shared artifact; Root mounts `observe_store_custody` through the existing typed
+  controller/deadline admission. This reads metadata only, adds no stable owner
+  or pin authority, and is not an atomic catalog snapshot. `bash scripts/dev/test-store.sh custody` qualifies this read
+  across Store/Root maintenance, shared versions, former owners and reply loss.
+  Store owns its persistent mutation gate in CWS2 settings under the original
+  allocation. Recognized CWS1 settings load without a prior attempt; malformed
+  or unknown state never initializes. Close/observe/activate binds a monotonic
+  sequence, operation and captured controller. Exact replay cannot re-close an
+  activated attempt or reopen a newer one. Root mounts only this fixed contract
+  as `store_admission`; it grants no install authority. Cache continuations retain
+  their admission epoch and recheck it after awaits, including the final reply.
+  Closed is not drained: already-issued remote cache work may still finish.
+  `bash scripts/dev/test-store.sh admission` qualifies the gate, two-executable
+  preservation and in-flight cache fencing. Root's explicit Store-maintenance
+  stage/advance/observe mounts retain one approval outside Store and qualify
+  closure followed by a single stop issuance. New child/publication mutations
+  and raw gate changes are fenced while it exists. Lost callbacks recover by
+  observation, including after expiry; never reissue stop. Full child custody
+  refuses this pending record so Host Root maintenance cannot omit it.
+  `bash scripts/dev/test-store.sh quiescence` qualifies sole-Root authority,
+  callback faults 13/14, Root replacement and predecessor migration. This runtime
+  qualification stops at Stopped: no installation, start, activation, cancellation
+  or reset is admitted yet. Do not use it live or expose it through CLI until
+  the complete Store-upgrade flow qualifies.
   Cache preparation never grants install authority. It has no pin release or
   deletion; do not clear pins on expiry.
   Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.
@@ -184,7 +209,8 @@ authenticated tooling installer.
   approval requires a Ready predecessor without failure; retain every historical
   approval, request commitment and outcome. Uncertain, expired or failed work
   cannot be replaced, and history exhaustion never evicts records. Keep creation
-  evidence immutable. The v4 journal migrates v1/v2/v3 payloads inside the original
+  evidence immutable. The v5 journal adds optional Store-maintenance custody and
+  migrates v1/v2/v3/v4 payloads without inventing that authority inside the original
   two fixed IC Storage allocations; current and creation artifact bytes stay
   there, while historical artifact hashes and host-retained bytes preserve custody.
   Never rewrite the supplier's directory or add a second

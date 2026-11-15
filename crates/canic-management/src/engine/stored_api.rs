@@ -17,6 +17,9 @@ pub fn stage(slot: Slot, input: stored::Stage<Approval>) -> Result<Status, Refus
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
+    if super::store_maintenance::active() {
+        return Err(Refusal::Occupied);
+    }
     if let Some(previous) = snapshot(slot).approval {
         return if previous == input.approval
             && delivery::source(slot, false)
@@ -113,6 +116,10 @@ pub async fn reconcile_upgrade(
 /// Traps if lifecycle has not opened storage.
 #[must_use]
 pub fn custody() -> stored::Custody {
+    assert!(
+        !super::store_maintenance::active(),
+        "Store maintenance custody required"
+    );
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {
         state

@@ -62,6 +62,17 @@ endpoint!(put, update, PUT, protocol::Put, Result<protocol::Status, protocol::Er
 endpoint!(publish, update, PUBLISH, protocol::Release, Result<protocol::Status, protocol::Error>, LIMITS, LIMITS, |state, input| state.publish(input));
 endpoint!(status, query, STATUS, protocol::Release, Result<protocol::Status, protocol::Error>, LIMITS, LIMITS, |state, input| state.status(input));
 endpoint!(observe, update, STATUS, protocol::Release, Result<protocol::Status, protocol::Error>, LIMITS, LIMITS, |state, input| state.status(input));
+endpoint!(observe_custody, update, CUSTODY, protocol::Release, Result<protocol::Custody, protocol::Error>, LIMITS, LIMITS, |state, input| state.custody(input));
+endpoint!(
+    admission,
+    update,
+    ADMISSION,
+    protocol::AdmissionCommand,
+    Result<Option<protocol::Admission>, protocol::Error>,
+    LIMITS,
+    LIMITS,
+    |state, input| state.admission(cdk::api::msg_caller().as_slice(), input)
+);
 endpoint!(read, query, READ, protocol::Read, Result<protocol::Chunk, protocol::Error>, LIMITS, CHUNK_LIMITS, |state, input| state.read(input));
 endpoint!(read_chunk, update, READ, protocol::Read, Result<protocol::Chunk, protocol::Error>, LIMITS, CHUNK_LIMITS, |state, input| state.read(input));
 endpoint!(

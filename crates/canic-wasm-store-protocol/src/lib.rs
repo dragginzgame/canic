@@ -24,6 +24,40 @@ pub const PIN: u64 = 108;
 pub const OBSERVE_PIN: u64 = 109;
 /// Populate missing management-cache chunks from one pinned artifact.
 pub const PREPARE_CACHE: u64 = 110;
+/// Replicated release progress and all pins on its shared artifact; no payload scan.
+pub const CUSTODY: u64 = 111;
+/// Close, inspect or explicitly reopen Store mutation admission for one exact attempt.
+pub const ADMISSION: u64 = 112;
+
+/// Monotonic maintenance identity; a new attempt uses the previous sequence plus one.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MaintenanceAttempt {
+    /// Nonzero sequence; never wraps or resets after activation.
+    pub sequence: u64,
+    /// Nonzero operation commitment supplied by the current controller.
+    pub operation: [u8; 32],
+}
+/// Latest retained admission transition. Closed does not mean in-flight calls have drained.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Admission {
+    /// Original attempt, retained after activation to fence stale requests.
+    pub attempt: MaintenanceAttempt,
+    /// Actual controller that closed admission; activation requires that same caller.
+    #[serde(with = "serde_bytes")]
+    pub owner: Vec<u8>,
+    /// All publication, pin, quota and fresh cache work is refused while true.
+    pub closed: bool,
+}
+/// Explicit local admission operations; no installation or automatic activation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AdmissionCommand {
+    /// Read the latest attempt, or None before the first closure.
+    Observe,
+    /// Close only the next sequence; exact replay returns its retained phase.
+    Close(MaintenanceAttempt),
+    /// Reopen only the exact current attempt owned by the captured caller.
+    Activate(MaintenanceAttempt),
+}
 /// Bounded retained pin records per artifact; exhaustion never evicts a pin.
 pub const MAX_PINS: usize = 32;
 
@@ -45,6 +79,29 @@ pub struct PinReceipt {
     pub owner: Vec<u8>,
     /// Exact retained pin.
     pub pin: Pin,
+}
+
+/// One retained obligation on the artifact identified by a custody observation.
+/// Labels may differ from the requested release when several versions share bytes.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Retention {
+    /// Actual principal captured when the pin was admitted.
+    #[serde(with = "serde_bytes")]
+    pub owner: Vec<u8>,
+    /// Caller-owned operation identity.
+    pub operation: [u8; 32],
+    /// Exact release selected by that operation.
+    pub release: Release,
+}
+
+/// One bounded observation, not an atomic catalog snapshot or maintenance approval.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Custody {
+    /// Requested release's progress, including staged and unpublished content.
+    pub status: Status,
+    /// All retained pins on its artifact, at most `MAX_PINS`, in admission order.
+    /// The manifest is shared rather than repeated for every pin.
+    pub pins: Vec<Retention>,
 }
 
 /// One explicitly bounded, idempotent cache preparation request; never installs code.
@@ -236,6 +293,8 @@ pub enum Error {
     Hash,
     /// Finite quota cannot admit this request.
     Capacity,
+    /// Store mutation admission is closed; reads and exact maintenance recovery remain available.
+    Closed,
 }
 /// Canonical content hashing, shared by producer and Store.
 #[must_use]
@@ -288,6 +347,26 @@ mod tests {
             published: false,
             missing: (0..MAX_CHUNKS as u32).collect(),
         };
+        let custody = Ok::<_, Error>(Custody {
+            status: Status {
+                published: true,
+                missing: vec![],
+                ..status.clone()
+            },
+            pins: (0..MAX_PINS)
+                .map(|i| Retention {
+                    owner: vec![255; 29],
+                    operation: [i as u8 + 1; 32],
+                    release: manifest.release.clone(),
+                })
+                .collect(),
+        });
+        let encoded = ic_wire::native::encode_response(CUSTODY, &custody, LIMITS).unwrap();
+        assert_eq!(
+            ic_wire::native::decode_response::<Result<Custody, Error>>(CUSTODY, &encoded, LIMITS)
+                .unwrap(),
+            custody
+        );
         let page = Ok::<_, Error>(vec![status; PAGE_SIZE]);
         let encoded = ic_wire::native::encode_response(LIST, &page, LIMITS).unwrap();
         assert_eq!(

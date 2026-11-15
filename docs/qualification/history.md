@@ -7,6 +7,174 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.209.0 release qualification: 2026-11-15
+
+The complete Linux `make -j1 ci` gate passed with unchanged release inputs,
+including native/Wasm lint and documentation, effect/custody fixtures, 89 Host
+and 44 CLI tests, profile/growth/Root journeys, all 16 installed Store cases,
+both CLI publication cases and all five installed Blob composition cases.
+Optional historical-manager/Root inputs remain explicitly ignored; macOS and
+mainnet were not exercised. Input hashes are retained under
+`target/evidence/0.209.0/release/`; the complete output is
+`target/qualification/release-209-ci.log`. All 14 product packages select 0.209.0;
+qualification packages stay 0.0.0 and crates.io publication remains disabled.
+
+Fresh registry review found the locked first-party selections current:
+Host fs/process/artifacts 0.79.0, Host text 0.76.0, Platform 0.33.7,
+Platform Runtime 0.22.5, Platform Types 0.20.4, Storage 0.74.1, Timers 0.44.3,
+Wire 0.22.4, Testkit 0.106.0 and Toko Tooling 0.44.3. Blob remains at reviewed
+Git revision `decde204acb6d7c8362a0003e904beef72ff89b6` (0.100.6); the registry's
+latest stable is 0.82.1. Its development branch now points to
+`86fc663d14b5fde78db1267157ce9b1b9dbe2888`. Review/adoption of that optional newer
+Git input is deferred to the next dependency-maintenance batch; it is not part
+of this qualified release. No external dependency selection changed.
+
+## Root-owned Store quiescence: 2026-11-15
+
+Continued pending 0.209.0 with the surviving Root journal and closure/stop proof.
+Reused the legacy checkpoint sequence, retained-intent and late-callback research
+recorded below. No checkpoint orchestrator or second workflow engine was imported.
+Root explicitly mounts stage/advance/observe for one immutable Store approval,
+capturing the real operator, old/replacement code commitments, Store attempt and
+original dispatch deadline. CUJ5 adds its optional record beside existing child
+journals under the same two storage allocations; recognized predecessors load
+without inventing Store authority. Downgrade after writing CUJ5 is unsupported.
+
+Staging requires quiescent child work and fences child admission/reconciliation,
+publication mutations and raw Store gate changes. Existing complete child-custody
+reads refuse the pending record, so Host Root maintenance cannot omit it. Root
+verifies old Store code and sole control before closing and stopping. Dispatch
+retains intent before enqueueing, with separate callback faults 13/14. Recovery
+observes the matching gate or stopped status, including after expiry; it never
+issues another stop or renews dispatch authority. Stopped status is the drain
+boundary; no exact canister-version increment is assumed.
+
+Focused Linux validation: the metadata-budget test passes; three installed
+quiescence cases pass (6.88s), covering actual sole-Root authority, both callback
+faults, Root replacement, post-deadline recovery, unfinished-child and wrong-control
+refusal. The retained `root-one-child-history.wasm` predecessor migrates without
+gaining Store authority. The existing Store-backed creation/upgrade/custody case
+passes (9.75s). Required shared-engine `make growth-test` reports two passing
+installed cases (14.24s), covering autonomous creation and persistent child
+upgrades; its optional older-manager fixture remains explicitly ignored.
+Focused protocol/runtime/fixture Clippy, Wasm Rustdoc, formatting, shell syntax
+and diff whitespace checks pass. Logs are
+`target/qualification/store-quiescence-{native,installed,child-regression,growth,lint,doc,format}.log`.
+
+The new runtime path deliberately ends at Stopped. It cannot install, restart,
+activate, cancel or reset; one attempt remains retained. It is not exposed through
+CLI and must not be used live. Installation, full Store preservation and matching
+activation must extend this same journal before a complete upgrade is admitted.
+Host retains replacement bytes; Root retains only their commitment. No new crate,
+dependency, storage allocation, timer, catalog mirror or automatic activation was
+added. No commit, push, version change, mainnet effect or full repository gate was
+performed; package versions remain 0.208.0.
+
+## Store admission survives maintenance: 2026-11-15
+
+Continued the pending 0.209.0 increment with Store-local mutation admission.
+Additional read-only legacy research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` covered
+`workflow/application_checkpoint/mod.rs`, `ops/application_checkpoint/mod.rs`
+and `ops/application_checkpoint/tests.rs` under `crates/canic-control-plane/src`.
+The test `original_unit_storage_replay_and_release_fence_delayed_prepares`
+demonstrates exact operation/sequence selection, persistence, idempotent replay,
+mutation closure and rejection of delayed acknowledgements. The workflow also
+rechecks its authority after await. Reviewed the file history at `d704f4d` and
+`aed32be`. Adapted these invariants; did not import participant discovery,
+installation registries, checkpoint orchestration or the older Store retirement
+workflow (`workflow/wasm_store/mod.rs`), which solves a different lifecycle.
+
+Store persists the latest sequence, operation, captured controller and closed
+phase in CWS2 settings under its original allocation. Only the next sequence may
+close an open gate; only the exact attempt/owner can activate it. Replaying Close
+after activation observes that completed phase rather than closing again.
+Unknown/corrupt records fail; recognized CWS1 settings migrate without inventing
+a prior attempt. Quota changes preserve the gate. This is a one-way payload codec
+transition, not support for downgrading the executable.
+
+All publication/pin/quota mutations check the gate; reads remain available.
+Cache work captures an epoch before dispatch and rechecks it after awaits and
+before returning readiness. A close/reopen cycle fences old continuations even
+when the current phase is open. Already-issued cache uploads can finish; closure
+is not a drain certificate. Root's fixed `store_admission` mount reuses current
+controller/deadline admission and the bounded metadata transport. Store commits
+survive a Root reply trap and are recovered through exact observation/replay.
+
+Focused Linux validation: nine Store native tests and the metadata budget test
+pass. Two installed admission cases pass (7.13s): closed admission survives Store
+and Root replacement, pins/incomplete uploads persist, wrong-owner and stale
+activation fail, and an actual in-flight cache repair is fenced while a fresh
+repair after activation succeeds. The existing cold/warm/cache-loss installation
+and child upgrade witness also passes (6.60s), using hash-verified unchanged
+greeting artifacts. Focused native/Wasm and fixture Clippy, Wasm Rustdoc, formatting
+and shell syntax pass. A redundant clone in a test was removed during linting.
+Logs are `target/qualification/store-admission-{native,installed,cache-regression,lint,doc}.log`.
+
+The installed fixture deliberately retains direct operator control to upgrade
+Store; it does not impersonate Root or qualify the Root-only installation path.
+CWS1 migration is covered by its actual record codec, not a historical installed
+binary. No general workflow engine, dependency, crate, memory allocation, timer,
+CLI alias or automatic activation was added. Host-driven Store upgrades remain
+blocked pending the external Root effect journal, quiescence and recovery proof.
+No push, release, mainnet mutation or full repository gate was performed.
+
+## Bounded Store preservation observation: 2026-11-15
+
+Started the pending 0.209.0 increment after the 0.208.0 post-push review. Reused
+the legacy manifest/chunk storage, snapshot/reopen regressions and history at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded in the
+[Store research](#versioned-wasm-store-decision-2026-11-15). Stable bytes, exact
+release identity and retained obligations remain authoritative. Legacy's mutable
+catalog replacement is still excluded, and its maintenance mechanics do not
+establish the rewrite's preservation guarantee.
+
+Added a replicated Store observation of one release's progress and all pins on
+its shared artifact. Compact owner/operation/release records avoid repeating a
+full manifest per pin; the maximum 32 pins and 32-chunk manifest fit the existing
+metadata budget. Store reads its existing stable records without changing their
+codecs or leases. Root explicitly mounts a typed controller/deadline read using
+the same bounded transport as readiness. No caller can supply a claimed pin owner,
+and observation never creates a pin or retains a second catalog in Root.
+
+The focused installed witness passes (7.02s): two real controllers pin shared
+bytes under different release labels, both pins and an incomplete upload survive
+a Store executable change, and actual Root calls read them after sole-control
+handover. Malformed, unauthorized, expired and missing-release requests, reply
+fault 12 and Root replacement preserve both owners' stable bytes. Store's upgrade
+is performed by its test controller before handover, not by a claimed Host flow.
+The two existing readiness regressions also pass (6.98s) after sharing transport.
+All seven Store native cases and the maximum Wire budget test pass, as do focused
+native/Wasm Clippy, fixture Clippy, Wasm Rustdoc, formatting and shell syntax.
+Logs are `target/qualification/store-custody-{native,installed,readiness,lint,doc}.log`.
+
+Added one focused runner selection; the readiness selection continues to run only
+its own cases. No crate, dependency, persisted schema, CLI command, lifecycle hook,
+timer, installation path or catalog mirror was added. These separate reads are
+not an atomic catalog snapshot or a payload integrity scan. Store maintenance
+still needs qualified quiescence, an external effect journal and same-operation
+recovery before Host can admit it. No new release or mainnet mutation was made;
+package versions and the installed CLI remain 0.208.0.
+
+## 0.208.0 post-push review: 2026-11-15
+
+Verified remote main and the peeled `v0.208.0` tag at
+`cc37504fdbb2219cdc325a6e80ddfb1a97eb1ac4`. Reviewed the delivered fleet release
+composition, convergence chain, publication reuse, Root custody checks, record
+codecs and CLI callers against the installed witness and design. No actionable
+release discrepancy was found in that scope. Publication and installation keep
+separate approvals, completed historical publication cannot renew mutation
+authority, and old inline encodings remain covered. No new runtime owner or
+dependency was added. Two private Host modules group existing responsibilities;
+they do not introduce parallel workflows.
+
+Store's own upgrade remains explicitly blocked in convergence. Its current
+observations expose release progress or a known caller/operation pin, but cannot
+enumerate every retention obligation for a release's shared artifact. The next
+increment starts with this missing bounded preservation observation, reusing
+Store's existing records and Root's typed controller/deadline admission. It must
+not claim an atomic fleet snapshot or a completed Store upgrade workflow.
+
 ## 0.208.0 release qualification: 2026-11-15
 
 The complete Linux `make -j1 ci` gate passed in 271 seconds with unchanged source
