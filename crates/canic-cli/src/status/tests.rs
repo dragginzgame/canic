@@ -5,14 +5,10 @@ fn state() -> serde_json::Value {
         "operation": "a".repeat(64),
         "plan": Plan {
             version: 2,
-        maintenance: None,
-        management: None,
             network: Network::Mainnet,
             controller: "aaaaa-aa".into(),
             artifact: canic_host::Artifact { sha256: "b".repeat(64), bytes: 8 },
-            target: None,
-            previous_module: None,
-            creation_cycles: 1_000_000_000_000,
+            action: canic_host::PlanAction::Create {cycles: 1_000_000_000_000},
             created_at_ns: 1_000_000_000,
             expires_at_ns: 2_000_000_000,
             deployment: Some(canic_host::DeploymentName {
@@ -253,4 +249,19 @@ fn fleet_budget_and_utc_labels_preserve_exact_boundaries() {
         "2000-02-29 00:00:00 UTC"
     );
     assert_eq!(super::utc(u64::MAX), "2554-07-21 23:34:33 UTC");
+}
+
+#[test]
+fn greeting_selection_uses_retained_child_names_and_refuses_ambiguity() {
+    let state = serde_json::json!({"fleet_plan": {}, "children": [{"name":"app", "state":{"receipt":"first"}}, {"name":"worker", "state":{"receipt":"second"}}]});
+    assert!(super::call_state(&state, None).is_err());
+    assert!(super::call_state(&state, Some("missing")).is_err());
+    assert_eq!(
+        super::call_state(&state, Some("app")).unwrap()["receipt"],
+        "first"
+    );
+    assert_eq!(
+        super::call_state(&state, Some("worker")).unwrap()["receipt"],
+        "second"
+    );
 }

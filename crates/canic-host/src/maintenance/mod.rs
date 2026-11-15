@@ -17,10 +17,20 @@ const SINGLE_UPGRADE_ROOT: &str =
     "e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296";
 
 fn single_upgrade_root(plan: &Plan) -> bool {
-    plan.previous_module.as_deref() == Some(SINGLE_UPGRADE_ROOT)
+    plan.previous_module().map(String::as_str) == Some(SINGLE_UPGRADE_ROOT)
 }
 
 fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
+    if plan
+        .maintenance()
+        .is_some_and(|children| children.len() > 1)
+    {
+        return if after {
+            &[("custody-after", "observe_children")]
+        } else {
+            &[("custody-before", "observe_children")]
+        };
+    }
     if after {
         &[("custody-after", "observe_custody")]
     } else if single_upgrade_root(plan) {
@@ -37,7 +47,20 @@ fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static s
 pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
     validate(plan)?;
     let (id, limits) = match method {
-        "observe_custody" => (custody::OBSERVE, custody::LIMITS),
+        "observe_children"
+            if plan
+                .maintenance()
+                .is_some_and(|children| children.len() > 1) =>
+        {
+            (canic_management_protocol::children::CUSTODY, LIMITS)
+        }
+        "observe_custody"
+            if plan
+                .maintenance()
+                .is_some_and(|children| children.len() == 1) =>
+        {
+            (custody::OBSERVE, custody::LIMITS)
+        }
         "observe" if single_upgrade_root(plan) => (STATUS, LIMITS),
         "observe_upgrade" if single_upgrade_root(plan) => (upgrade::STATUS, LIMITS),
         _ => return Err(invalid()),
@@ -46,32 +69,52 @@ pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn validate(plan: &Plan) -> Result<()> {
-    let expected = plan.maintenance.as_ref().ok_or_else(invalid)?;
-    let creation = expected.creation.approval.as_ref().ok_or_else(invalid)?;
-    if plan.version != 2
-        || plan.management.is_some()
-        || plan.creation_cycles != 0
-        || plan.target.as_ref() != Some(&creation.manager)
-        || plan.previous_module.as_ref() == Some(&plan.artifact.sha256)
-        || expected.creation.phase != Phase::Ready
-        || expected.creation.failure.is_some()
-        || expected.creation.worker.is_none()
-        || expected.creation.stable_pages != 0
-        || expected.creation.maintenance_candidate
-        || expected.upgrades.len() > upgrade::MAX_UPGRADES
-        || (single_upgrade_root(plan) && expected.upgrades.len() > 1)
-        || expected.upgrades.iter().any(|s| {
-            s.phase != upgrade::Phase::Ready
-                || s.failure.is_some()
-                || s.approval.as_ref().is_none_or(|a| {
-                    a.manager != creation.manager
-                        || Some(&a.child) != expected.creation.worker.as_ref()
-                })
-        })
+    let crate::PlanAction::MaintainRoot {
+        target,
+        children: expected,
+    } = &plan.action
+    else {
+        return Err(invalid());
+    };
+    if expected.is_empty()
+        || expected.len() > crate::fleet_plan::SLOTS.len()
+        || (single_upgrade_root(plan) && expected.len() != 1)
+        || expected
+            .iter()
+            .map(|c| &c.creation.worker)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+            != expected.len()
     {
         return Err(invalid());
     }
-    ic_wire::native::encode(expected, custody::LIMITS).map_err(supplier)?;
+    for expected in expected {
+        let creation = expected.creation.approval.as_ref().ok_or_else(invalid)?;
+        if plan.version != 2
+            || target.canister != creation.manager
+            || target.module == plan.artifact.sha256
+            || expected.creation.phase != Phase::Ready
+            || expected.creation.failure.is_some()
+            || expected.creation.worker.is_none()
+            || expected.creation.stable_pages != 0
+            || expected.creation.maintenance_candidate
+            || expected.upgrades.len() > upgrade::MAX_UPGRADES
+            || (single_upgrade_root(plan) && expected.upgrades.len() > 1)
+            || expected.upgrades.iter().any(|s| {
+                s.phase != upgrade::Phase::Ready
+                    || s.failure.is_some()
+                    || s.approval.as_ref().is_none_or(|a| {
+                        a.manager != creation.manager
+                            || Some(&a.child) != expected.creation.worker.as_ref()
+                    })
+            })
+        {
+            return Err(invalid());
+        }
+        ic_wire::native::encode(expected, custody::LIMITS).map_err(supplier)?;
+    }
+    ic_wire::native::encode(expected, canic_management_protocol::children::LIMITS)
+        .map_err(supplier)?;
     Ok(())
 }
 
@@ -82,28 +125,46 @@ fn invalid() -> Error {
 }
 
 pub(crate) fn retained(dir: &Path, plan: &Plan) -> Result<bool> {
-    if plan.maintenance.is_none() {
+    if plan.maintenance().is_none() {
         return Ok(true);
     }
     Ok(retained_at(dir, plan, false)? && retained_at(dir, plan, true)?)
 }
 
 fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
-    let expected = plan.maintenance.as_ref().ok_or_else(invalid)?;
     for (step, method) in observations(plan, after) {
         let path = dir.join(step).join("reply.bin");
         if !path.try_exists().map_err(supplier)? {
             return Ok(false);
         }
-        if !matches(
-            expected,
+        if !matches_plan(
+            plan,
             method,
-            &store::read(&path, custody::LIMITS.bytes)?,
+            &store::read(&path, canic_management_protocol::children::LIMITS.bytes)?,
         )? {
             return Err(invalid());
         }
     }
     Ok(true)
+}
+
+fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
+    let expected = plan.maintenance().ok_or_else(invalid)?;
+    if method == "observe_children" {
+        let observed: canic_management_protocol::children::Custody =
+            ic_wire::native::decode_response(
+                canic_management_protocol::children::CUSTODY,
+                bytes,
+                canic_management_protocol::children::LIMITS,
+            )
+            .map_err(supplier)?;
+        Ok(observed.as_slice() == expected)
+    } else {
+        let [child] = expected else {
+            return Err(invalid());
+        };
+        matches(child, method, bytes)
+    }
 }
 
 fn matches(expected: &Custody, method: &str, bytes: &[u8]) -> Result<bool> {
@@ -132,7 +193,7 @@ fn matches(expected: &Custody, method: &str, bytes: &[u8]) -> Result<bool> {
 }
 
 pub(crate) fn require_before(dir: &Path, plan: &Plan) -> Result<()> {
-    if plan.maintenance.is_some() && !retained_at(dir, plan, false)? {
+    if plan.maintenance().is_some() && !retained_at(dir, plan, false)? {
         return Err(Error::Blocked(
             "maintenance install lacks its retained preflight custody; preserve this operation"
                 .into(),
@@ -149,15 +210,15 @@ pub(crate) async fn observe(
     icp: &Path,
     agent: &Agent,
 ) -> Result<()> {
-    let Some(expected) = &plan.maintenance else {
+    let Some(expected) = plan.maintenance() else {
         return Ok(());
     };
-    let target = principal(plan.target.as_deref().ok_or_else(invalid)?)?;
+    let target = principal(plan.target().map(String::as_str).ok_or_else(invalid)?)?;
     operation::controllers(agent, target, &plan.controller).await?;
     let hash = if after {
         &plan.artifact.sha256
     } else {
-        plan.previous_module.as_ref().ok_or_else(invalid)?
+        plan.previous_module().ok_or_else(invalid)?
     };
     if operation::module(agent, target).await? != *hash {
         return Err(Error::Blocked(
@@ -172,33 +233,35 @@ pub(crate) async fn observe(
             args: observation_args(plan, method)?,
         };
         let bytes = signed::observe(&dir.join(step), plan, &call, identity, icp, agent).await?;
-        if !matches(expected, method, &bytes)? {
+        if !matches_plan(plan, method, &bytes)? {
             return Err(Error::Blocked(
                 "Root journal differs from approved maintenance custody; retain this operation"
                     .into(),
             ));
         }
     }
-    // The child's live identity, code and controller also remain fixed by this window.
-    let child = principal(expected.creation.worker.as_deref().ok_or_else(invalid)?)?;
-    operation::controllers(agent, child, &target.to_text()).await?;
-    let module = expected
-        .upgrades
-        .last()
-        .and_then(|s| s.approval.as_ref())
-        .map(|a| a.module_hash)
-        .unwrap_or(
-            expected
-                .creation
-                .approval
-                .as_ref()
-                .ok_or_else(invalid)?
-                .module_hash,
-        );
-    if operation::module(agent, child).await? != crate::hex(&module) {
-        return Err(Error::Blocked(
-            "child code changed during Root maintenance".into(),
-        ));
+    for expected in expected {
+        // The child's live identity, code and controller also remain fixed by this window.
+        let child = principal(expected.creation.worker.as_deref().ok_or_else(invalid)?)?;
+        operation::controllers(agent, child, &target.to_text()).await?;
+        let module = expected
+            .upgrades
+            .last()
+            .and_then(|s| s.approval.as_ref())
+            .map(|a| a.module_hash)
+            .unwrap_or(
+                expected
+                    .creation
+                    .approval
+                    .as_ref()
+                    .ok_or_else(invalid)?
+                    .module_hash,
+            );
+        if operation::module(agent, child).await? != crate::hex(&module) {
+            return Err(Error::Blocked(
+                "child code changed during Root maintenance".into(),
+            ));
+        }
     }
     Ok(())
 }

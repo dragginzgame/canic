@@ -15,24 +15,27 @@ fn fixture() -> (std::path::PathBuf, Plan) {
         fleet: "mainnet".into(),
         canister: "root".into(),
     });
-    plan.target = Some("rrkah-fqaaa-aaaaa-aaaaq-cai".into());
-    plan.previous_module = Some(SINGLE_UPGRADE_ROOT.into());
-    plan.creation_cycles = 0;
-    plan.maintenance = Some(Custody {
-        creation: Status {
-            approval: Some(canic_management_protocol::Approval {
-                manager: plan.target.clone().unwrap(),
-                module_hash: [1; 32],
-                creation_cycles: canic_management_protocol::CREATION_CYCLES,
-                execute_at_ns: 1,
-                expires_at_ns: 2,
-            }),
-            worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
-            phase: Phase::Ready,
-            ..Default::default()
+    plan.action = crate::PlanAction::MaintainRoot {
+        target: crate::UpgradeTarget {
+            canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+            module: SINGLE_UPGRADE_ROOT.into(),
         },
-        upgrades: vec![],
-    });
+        children: vec![Custody {
+            creation: Status {
+                approval: Some(canic_management_protocol::Approval {
+                    manager: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+                    module_hash: [1; 32],
+                    creation_cycles: canic_management_protocol::CREATION_CYCLES,
+                    execute_at_ns: 1,
+                    expires_at_ns: 2,
+                }),
+                worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
+                phase: Phase::Ready,
+                ..Default::default()
+            },
+            upgrades: vec![],
+        }],
+    };
     plan.validate().unwrap();
     (dir, plan)
 }
@@ -40,7 +43,7 @@ fn fixture() -> (std::path::PathBuf, Plan) {
 #[test]
 fn predecessor_requires_both_observations_and_current_postflight() {
     let (dir, plan) = fixture();
-    let expected = plan.maintenance.as_ref().unwrap();
+    let expected = &plan.maintenance().unwrap()[0];
     assert!(!retained(&dir, &plan).unwrap());
     let mut creation = expected.creation.clone();
     creation.stable_pages = 18;
@@ -75,7 +78,10 @@ fn predecessor_refuses_unknown_code_extra_history_and_foreign_reads() {
         observation_args(&plan, method).unwrap();
     }
     assert!(observation_args(&plan, "stage_upgrade").is_err());
-    plan.previous_module = Some("ff".repeat(32));
+    let crate::PlanAction::MaintainRoot { target, .. } = &mut plan.action else {
+        panic!("maintenance")
+    };
+    target.module = "ff".repeat(32);
     for method in ["observe", "observe_upgrade"] {
         assert!(observation_args(&plan, method).is_err());
     }
@@ -83,15 +89,18 @@ fn predecessor_refuses_unknown_code_extra_history_and_foreign_reads() {
         observations(&plan, false),
         &[("custody-before", "observe_custody")]
     );
-    plan.previous_module = Some(SINGLE_UPGRADE_ROOT.into());
-    plan.maintenance.as_mut().unwrap().upgrades = vec![upgrade::Status::default(); 2];
+    let crate::PlanAction::MaintainRoot { target, children } = &mut plan.action else {
+        panic!("maintenance")
+    };
+    target.module = SINGLE_UPGRADE_ROOT.into();
+    children[0].upgrades = vec![upgrade::Status::default(); 2];
     assert!(plan.validate().is_err());
 }
 
 #[test]
 fn predecessor_compares_complete_creation_and_single_upgrade_custody() {
     let (_, plan) = fixture();
-    let mut expected = plan.maintenance.unwrap();
+    let mut expected = plan.maintenance().unwrap()[0].clone();
     let mut changed = expected.creation.clone();
     changed.requests[0] = Some([9; 32]);
     assert!(

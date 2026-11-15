@@ -1,4 +1,5 @@
 use crate::{Error, Network, Plan, Receipt, Result, network, operation, store, supplier};
+use canic_management_protocol::children::{self, Slot};
 use serde::Serialize;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -33,6 +34,9 @@ pub struct Fleet {
 /// Management protocol observation; reports do not grant authority or output custody.
 #[derive(Debug, Serialize)]
 pub struct FleetManager {
+    /// Selected child scope; absent retains the original manager observation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<Slot>,
     /// Exact network binding from the manager's local plan or configuration.
     pub network_id: String,
     /// Known manager principal.
@@ -60,6 +64,9 @@ pub struct FleetUpgrade {
 /// One admitted deployment step's public observation projection, excluding signed requests.
 #[derive(Debug, Serialize)]
 pub struct FleetOperation {
+    /// Runtime slot bound by the retained plan, never inferred from config order.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<Slot>,
     /// Exact planned Root-owned work, used only to select and check read-only reports.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub management: Option<canic_management_protocol::Approval>,
@@ -143,9 +150,9 @@ pub(crate) fn local_operation_at(
     let plan: Plan = serde_json::from_value(state["plan"].clone()).map_err(supplier)?;
     let receipt: Option<Receipt> =
         serde_json::from_value(state["receipt"].clone()).map_err(supplier)?;
-    let canister = if let Some(target) = &plan.target {
+    let canister = if let Some(target) = plan.target() {
         Some(target.clone())
-    } else if plan.management.is_some() {
+    } else if plan.management().is_some() {
         crate::managed::evidence(dir, &plan)?.and_then(|status| status.worker)
     } else if dir
         .join("create/reply.bin")
@@ -174,22 +181,20 @@ pub(crate) fn local_operation_at(
             "receipt does not match retained plan and target evidence".into(),
         ));
     }
+    let (management, upgrade) = match plan.action {
+        crate::PlanAction::CreateChild(_) => (Some(crate::managed::approval(&plan)?), None),
+        crate::PlanAction::UpgradeChild { .. } => {
+            (None, Some(crate::managed::upgrade::approval(&plan)?))
+        }
+        _ => (None, None),
+    };
     let network_id = plan.network.binding_id()?;
     let approved_controller = plan.application_controller().to_owned();
     Ok((
         FleetOperation {
-            upgrade: plan
-                .management
-                .as_ref()
-                .filter(|_| plan.target.is_some())
-                .map(|_| crate::managed::upgrade::approval(&plan))
-                .transpose()?,
-            management: plan
-                .management
-                .as_ref()
-                .filter(|_| plan.target.is_none())
-                .map(|_| crate::managed::approval(&plan))
-                .transpose()?,
+            slot: plan.management().and_then(|owner| owner.slot),
+            upgrade,
+            management,
             deployment: plan.deployment,
             operation: id.into(),
             network_id,
@@ -267,6 +272,7 @@ fn check_report(
     operations: &[FleetOperation],
     network_id: &str,
     manager: &str,
+    slot: Option<Slot>,
     report: &canic_management_protocol::Status,
 ) -> Result<()> {
     if report
@@ -287,14 +293,14 @@ fn check_report(
     if !empty
         && operations
             .iter()
-            .filter(|operation| operation.network_id == network_id)
+            .filter(|operation| operation.network_id == network_id && operation.slot == slot)
             .filter_map(|operation| operation.management.as_ref())
             .filter(|approval| approval.manager == manager)
             .any(|approval| report.approval.as_ref() != Some(approval))
     {
         return Err(Error::Invalid("Root report differs from retained child approval; reported child not admitted to inventory".into()));
     }
-    let upgrades = ordered_upgrades(operations, network_id, manager);
+    let upgrades = ordered_upgrades(operations, network_id, manager, slot);
     validate_upgrade_order(&upgrades)?;
     if !empty
         && upgrades.first().is_some_and(|operation| {
@@ -338,11 +344,13 @@ fn ordered_upgrades<'a>(
     operations: &'a [FleetOperation],
     network_id: &str,
     manager: &str,
+    slot: Option<Slot>,
 ) -> Vec<&'a FleetOperation> {
     let mut matching: Vec<_> = operations
         .iter()
         .filter(|operation| {
             operation.network_id == network_id
+                && operation.slot == slot
                 && operation
                     .upgrade
                     .as_ref()
@@ -381,10 +389,11 @@ async fn observe_upgrade(
     operations: &[FleetOperation],
     network_id: &str,
     manager: &str,
+    slot: Option<Slot>,
     network: &Network,
     deadline: tokio::time::Instant,
 ) -> Option<FleetUpgrade> {
-    let matching = ordered_upgrades(operations, network_id, manager);
+    let matching = ordered_upgrades(operations, network_id, manager, slot);
     // Observe only the tip of a proven local chain; historical rows remain in inventory.
     let operation = *matching.last()?;
     let approval = operation.upgrade.as_ref().expect("selected upgrade");
@@ -397,24 +406,40 @@ async fn observe_upgrade(
     } else {
         tokio::time::timeout_at(deadline, async {
             let agent = network.agent()?;
-            let bytes = ic_wire::native::encode_request(
-                canic_management_protocol::upgrade::STATUS,
-                &(),
-                canic_management_protocol::LIMITS,
-            )
-            .map_err(supplier)?;
+            let (method, id, bytes) = if let Some(slot) = slot {
+                (
+                    "child_upgrade_status",
+                    children::OBSERVE_UPGRADE,
+                    ic_wire::native::encode_request(
+                        children::OBSERVE_UPGRADE,
+                        &children::Request {
+                            slot,
+                            value: approval,
+                        },
+                        canic_management_protocol::LIMITS,
+                    ),
+                )
+            } else {
+                (
+                    "upgrade_status",
+                    canic_management_protocol::upgrade::STATUS,
+                    ic_wire::native::encode_request(
+                        canic_management_protocol::upgrade::STATUS,
+                        &(),
+                        canic_management_protocol::LIMITS,
+                    ),
+                )
+            };
+            let bytes = bytes.map_err(supplier)?;
             let response = agent
-                .query(&manager.parse().map_err(supplier)?, "upgrade_status")
+                .query(&manager.parse().map_err(supplier)?, method)
                 .with_arg(bytes)
                 .call()
                 .await
                 .map_err(supplier)?;
-            let report = ic_wire::native::decode_response(
-                canic_management_protocol::upgrade::STATUS,
-                &response,
-                canic_management_protocol::LIMITS,
-            )
-            .map_err(supplier)?;
+            let report =
+                ic_wire::native::decode_response(id, &response, canic_management_protocol::LIMITS)
+                    .map_err(supplier)?;
             check_upgrade_report(approval, &report)?;
             Ok(report)
         })
@@ -603,53 +628,89 @@ pub async fn fleet_with_config(
     for ((network_id, manager), network) in selected {
         // Creation and upgrade share this owner's existing five-second budget.
         let owner_deadline = deadline.min(tokio::time::Instant::now() + Duration::from_secs(5));
-        let budget = owner_deadline
-            .saturating_duration_since(tokio::time::Instant::now())
-            .min(Duration::from_secs(5));
-        let report = tokio::time::timeout(budget, async {
-            let agent = network.agent()?;
-            let bytes = ic_wire::native::encode_request(
-                canic_management_protocol::STATUS,
-                &(),
-                canic_management_protocol::LIMITS,
-            )
-            .map_err(supplier)?;
-            let response = agent
-                .query(&manager.parse().map_err(supplier)?, "status")
-                .with_arg(bytes)
-                .call()
-                .await
+        let mut slots: std::collections::BTreeSet<_> = operations
+            .iter()
+            .filter(|op| {
+                op.network_id == network_id && op.management_owner() == Some(manager.as_str())
+            })
+            .map(|op| op.slot)
+            .collect();
+        if slots.is_empty() {
+            slots.insert(None);
+        }
+        for slot in slots {
+            let budget = owner_deadline
+                .saturating_duration_since(tokio::time::Instant::now())
+                .min(Duration::from_secs(5));
+            let report = tokio::time::timeout(budget, async {
+                let agent = network.agent()?;
+                let (method, id, bytes) = if let Some(slot) = slot {
+                    (
+                        "child_status",
+                        children::STATUS,
+                        ic_wire::native::encode_request(
+                            children::STATUS,
+                            &slot,
+                            canic_management_protocol::LIMITS,
+                        ),
+                    )
+                } else {
+                    (
+                        "status",
+                        canic_management_protocol::STATUS,
+                        ic_wire::native::encode_request(
+                            canic_management_protocol::STATUS,
+                            &(),
+                            canic_management_protocol::LIMITS,
+                        ),
+                    )
+                };
+                let bytes = bytes.map_err(supplier)?;
+                let response = agent
+                    .query(&manager.parse().map_err(supplier)?, method)
+                    .with_arg(bytes)
+                    .call()
+                    .await
+                    .map_err(supplier)?;
+                let report: canic_management_protocol::Status = ic_wire::native::decode_response(
+                    id,
+                    &response,
+                    canic_management_protocol::LIMITS,
+                )
                 .map_err(supplier)?;
-            let report: canic_management_protocol::Status = ic_wire::native::decode_response(
-                canic_management_protocol::STATUS,
-                &response,
-                canic_management_protocol::LIMITS,
-            )
-            .map_err(supplier)?;
-            check_report(&operations, &network_id, &manager, &report)?;
-            Ok::<_, Error>(report)
-        })
-        .await
-        .map_err(|_| Error::Blocked("manager observation timed out".into()))
-        .and_then(|value| value);
-        let (reported, observation_error) = match report {
-            Ok(report) => {
-                if let Some(child) = &report.worker {
-                    targets.insert((network_id.clone(), child.clone()), network.clone());
+                check_report(&operations, &network_id, &manager, slot, &report)?;
+                Ok::<_, Error>(report)
+            })
+            .await
+            .map_err(|_| Error::Blocked("manager observation timed out".into()))
+            .and_then(|value| value);
+            let (reported, observation_error) = match report {
+                Ok(report) => {
+                    if let Some(child) = &report.worker {
+                        targets.insert((network_id.clone(), child.clone()), network.clone());
+                    }
+                    (Some(report), None)
                 }
-                (Some(report), None)
-            }
-            Err(error) => (None, Some(error.to_string().chars().take(500).collect())),
-        };
-        let upgrade =
-            observe_upgrade(&operations, &network_id, &manager, &network, owner_deadline).await;
-        managers.push(FleetManager {
-            network_id,
-            manager,
-            reported,
-            observation_error,
-            upgrade,
-        });
+                Err(error) => (None, Some(error.to_string().chars().take(500).collect())),
+            };
+            let upgrade = observe_upgrade(
+                &operations,
+                &network_id,
+                &manager,
+                slot,
+                &network,
+                owner_deadline,
+            )
+            .await;
+            managers.push(FleetManager {
+                slot,
+                network_id: network_id.clone(),
+                manager: manager.clone(),
+                reported,
+                observation_error,
+                upgrade,
+            });
+        }
     }
     let mut canisters = Vec::new();
     for ((network_id, canister), network) in targets {

@@ -29,9 +29,11 @@ authenticated tooling installer.
   and existing identities. Spawn permissions, placement and budgets still require
   their admitted management contracts. Initialization declares an app and its
   first fleet; optional source generation creates a standalone greeting workspace.
-  Whole-fleet plan/apply accepts a new Root-plus-app tree and bounded serial child upgrades. One
-  immutable fleet approval binds both artifacts and the Root's typed creation
-  output; both steps reuse the existing signer/effect owners under the journal
+  Added buildable canisters use the existing `--manifest`, `--package` and `--wasm`
+  recipe fields together; paths remain relative to the app config.
+  Whole-fleet plan/apply accepts a new Root with one or two direct children and bounded serial child upgrades. One
+  immutable fleet approval binds all artifacts, permanent name/slot assignments and the Root's typed creation
+  output; all steps reuse the existing signer/effect owners under the journal
   lock. Retain nested Root/child attempts, preserve original deadlines on replan,
   and refuse competing individual plans. `fleet cancel` may release an approval
   only before effect preparation; retain its revocation and never apply it again.
@@ -45,8 +47,14 @@ authenticated tooling installer.
   trees and existing-fleet adoption remain unsupported.
   Whole-fleet planning validates one ordered chain under the journal lock before
   publishing each existing managed Plan; a pending tip cannot be overtaken.
+  Host operations use one explicit `PlanAction`; do not reintroduce independent
+  optional authority fields. Fleet children have permanent identities in one ordered
+  collection. Keep historical field names and directory layouts in record codecs;
+  preserve approval digests and signed attempts. The current one/two-child limit
+  is a qualification boundary, not the shape of every host consumer.
   Individually created children retain their existing first-upgrade planning path.
-  Change Root and child artifacts in separate approvals. Maintenance binds the
+  Change one artifact per approval. Existing one-child fleets cannot gain a child
+  by replanning or rename a retained slot. Maintenance binds every child's
   exact completed journal, reads it through the selected controller-only observations
   before installation and verifies preservation before retaining a receipt.
   Reuse direct install/signed-attempt custody; never reset slots or rewrite prior
@@ -83,7 +91,8 @@ authenticated tooling installer.
   and Wire owns codecs without endpoint knowledge. Keep shared protocols passive
   and Testkit Wire test-only. Migrate callers before retiring Wire Endpoint;
   do not add another codec/executor implementation or implicit lifecycle owner.
-- `crates/canic-root` is the experimental one-child Root for the greeting app.
+- `crates/canic-root` qualifies up to two greeting children through the runtime and
+  installed CLI, including independent upgrades, complete Root maintenance and fleet views.
   `canic-management` owns the shared creation/artifact/evidence engine;
   `canic-management-protocol` owns its bounded Wire contract independently of
   runtime dependencies. Root and the profile manager explicitly mount their own
@@ -96,11 +105,18 @@ authenticated tooling installer.
   the profile manager select exports with `canic_management::mount_endpoints!`;
   their lifecycle and readiness remain explicit. Fault points 9/10 exercise
   staging/reconciliation reply encoding only in `fault-injection` builds.
-  Root admits one child creation and at most eight serial upgrades. Each new
+  Root admits two permanent child slots and at most eight serial upgrades per child.
+  Scope every callback, timer and reconciliation explicitly to its stable slot.
+  Reserve all pending creation attachments against one shared liquid-cycle budget.
+  Creation/current-upgrade artifacts share a 1,048,512-byte budget; refuse overflow
+  before replacing either slot. Keep both checked storage leases and the original
+  directory capacities. Original endpoint contracts retain first-slot authority;
+  legacy full-custody observation must refuse when the second slot is occupied.
+  The new complete custody observation always includes both slots, even Empty. Each new
   approval requires a Ready predecessor without failure; retain every historical
   approval, request commitment and outcome. Uncertain, expired or failed work
   cannot be replaced, and history exhaustion never evicts records. Keep creation
-  evidence immutable. The v3 journal migrates v1/v2 payloads inside the original
+  evidence immutable. The v4 journal migrates v1/v2/v3 payloads inside the original
   two fixed IC Storage allocations; current and creation artifact bytes stay
   there, while historical artifact hashes and host-retained bytes preserve custody.
   Never rewrite the supplier's directory or add a second
@@ -109,7 +125,7 @@ authenticated tooling installer.
   parent from a configured identity or completed named deployment; check exact
   Root code and sole operator control before admission and observation. Keep
   staging's original signed attempt. Only Root's matching replicated, read-only
-  `observe`, `observe_upgrade` or maintenance `observe_custody` endpoint may receive
+  observations selected by the retained plan (original or child-scoped) may receive
   fresh read authority after the effect deadline; public
   queries cannot establish the created child's custody. Upgrade observations use
   approval-bound ID 29; unit ID 25 remains public latest-status only. Read old
@@ -256,6 +272,16 @@ explicit overrides and qualification fixtures.
 
 ## Development checks
 
+Qualification lives in `qualification/`: `canic-qualification` owns all native
+installed harnesses and explicit `make qualification-setup`; `canic-effect-probe`
+and `canic-artifact-probe` retain isolated platform-boundary fixtures. Use descriptive
+Make targets (`effect-test`, `artifact-custody-test`, `journey-test`) without
+milestone aliases. Simulator preparation and tests share `IC_TESTKIT_SERVER_DIRECTORY`,
+defaulting to `target/qualification/server`; tests only verify prepared assets.
+Keep dated decisions in `docs/qualification/history.md` and current test scope in
+`qualification/README.md`. Retire a probe only when its failure cases have a
+qualified product owner; renaming alone does not replace regression coverage.
+
 Do not automatically open desktop windows, terminals or browsers. The maintainer
 has paused automatic launches; only launch a window when explicitly requested.
 Browser-facing demos and reports must be served over localhost. Give the
@@ -275,5 +301,5 @@ then `make tools-check`. The formatting hook is available via `make install-hook
 `make lint` checks both workspaces' Clippy, Rustdoc, formatting and tooling
 agreement without running application or simulator tests. Every package inherits
 its workspace lint table; scoped `expect` attributes need an explicit reason.
-Use `make m1-test`, `make m1-clippy` and `make m1-doc` for the CLI/demo journey;
+Use `make journey-test`, `make journey-clippy` and `make journey-doc` for the CLI/demo journey;
 simulator and pinned ICP signer preparation remain explicit.

@@ -69,7 +69,10 @@ fn plan_identity_admission_and_artifact_custody() {
     let reread: crate::Plan = serde_json::from_str(&json).unwrap();
     assert_eq!(reread.digest().unwrap(), id);
     let mut changed = plan;
-    changed.creation_cycles += 1;
+    let crate::PlanAction::Create { cycles } = &mut changed.action else {
+        panic!("creation")
+    };
+    *cycles += 1;
     assert_ne!(changed.digest().unwrap(), id);
     std::fs::write(root.join(&id).join("module.wasm"), b"\0asm\x01\0\0\0\0").unwrap();
     assert!(matches!(

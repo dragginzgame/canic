@@ -1,24 +1,23 @@
 //! Authenticated one-use child upgrade custody through the existing plan and signer.
-use super::{OBSERVATIONS, complete};
+use super::{OBSERVATIONS, complete, wire::Method};
 use crate::{
     ApplyOutcome, Error, Plan, Result,
     network::principal,
     operation,
-    signed::{self, Call},
+    signed::{self},
     store, supplier,
 };
 use canic_management_protocol::{
     LIMITS, Refusal, STAGE_LIMITS,
-    upgrade::{Approval, OBSERVE, Phase, STAGE, STATUS, Stage, Status},
+    upgrade::{Approval, OBSERVE, Phase, STATUS, Stage, Status},
 };
 use ic_platform::agent::Agent;
 use std::path::Path;
 
 pub(crate) fn approval(plan: &Plan) -> Result<Approval> {
-    let owner = plan
-        .management
-        .as_ref()
-        .ok_or_else(|| Error::Invalid("upgrade requires Root".into()))?;
+    let crate::PlanAction::UpgradeChild { target, owner } = &plan.action else {
+        return Err(Error::Invalid("expected Root-owned child upgrade".into()));
+    };
     let hash = |value: &str| {
         crate::unhex(value)?
             .try_into()
@@ -26,15 +25,8 @@ pub(crate) fn approval(plan: &Plan) -> Result<Approval> {
     };
     Ok(Approval {
         manager: owner.root.clone(),
-        child: plan
-            .target
-            .clone()
-            .ok_or_else(|| Error::Invalid("upgrade requires child".into()))?,
-        previous_module: hash(
-            plan.previous_module
-                .as_deref()
-                .ok_or_else(|| Error::Invalid("upgrade requires old code".into()))?,
-        )?,
+        child: target.canister.clone(),
+        previous_module: hash(&target.module)?,
         module_hash: hash(&plan.artifact.sha256)?,
         execute_at_ns: owner.execute_at_ns,
         expires_at_ns: plan.expires_at_ns,
@@ -85,9 +77,10 @@ pub(super) fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) 
     }
     Ok(())
 }
-fn stage_reply(bytes: &[u8]) -> Result<Status> {
+fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     let reply: std::result::Result<Status, Refusal> =
-        ic_wire::native::decode_response(STAGE, bytes, LIMITS).map_err(supplier)?;
+        ic_wire::native::decode_response(Method::StageUpgrade.id(plan), bytes, LIMITS)
+            .map_err(supplier)?;
     reply.map_err(|refusal| {
         Error::Blocked(format!(
             "Root refused upgrade: {refusal:?}; original attempt retained"
@@ -98,7 +91,7 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     let mut latest = None;
     let path = dir.join("stage/reply.bin");
     if path.try_exists().map_err(supplier)? {
-        match stage_reply(&store::read(&path, LIMITS.bytes)?) {
+        match stage_reply(plan, &store::read(&path, LIMITS.bytes)?) {
             Ok(status) => {
                 validate(plan, None, &status)?;
                 latest = Some(status);
@@ -109,11 +102,8 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     }
     for index in 0..OBSERVATIONS {
         for (name, method) in [
-            (
-                "reconcile/reply.bin",
-                canic_management_protocol::upgrade::RECONCILE,
-            ),
-            ("reply.bin", OBSERVE),
+            ("reconcile/reply.bin", Method::ReconcileUpgrade.id(plan)),
+            ("reply.bin", Method::ObserveUpgrade.id(plan)),
         ] {
             let path = dir.join(format!("observe/{index}/{name}"));
             if path.try_exists().map_err(supplier)? {
@@ -148,10 +138,7 @@ pub(super) async fn apply(
     icp: &Path,
     agent: &Agent,
 ) -> Result<ApplyOutcome> {
-    let owner = plan
-        .management
-        .as_ref()
-        .expect("managed upgrade dispatcher");
+    let owner = plan.management().expect("managed upgrade dispatcher");
     let root = principal(&owner.root)?;
     operation::controllers(agent, root, &plan.controller).await?;
     if operation::module(agent, root).await? != owner.root_module {
@@ -160,7 +147,7 @@ pub(super) async fn apply(
         ));
     }
     let retained = evidence(dir, plan)?;
-    let child = plan.target.as_ref().expect("upgrade target");
+    let child = plan.target().expect("upgrade target");
     if retained
         .as_ref()
         .is_some_and(|status| status.phase == Phase::Ready)
@@ -168,20 +155,14 @@ pub(super) async fn apply(
         return complete(dir, id, plan, child, agent).await;
     }
     let stage = dir.join("stage");
-    let call = Call {
-        canister: root,
-        effective: root,
-        method: "stage_upgrade",
-        args: ic_wire::native::encode_request(
-            STAGE,
-            &Stage {
-                approval: approval(plan)?,
-                wasm: wasm.to_vec(),
-            },
-            STAGE_LIMITS,
-        )
-        .map_err(supplier)?,
-    };
+    let call = Method::StageUpgrade.call(
+        plan,
+        &Stage {
+            approval: approval(plan)?,
+            wasm: wasm.to_vec(),
+        },
+        STAGE_LIMITS,
+    )?;
     let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
         if crate::now()? >= owner.execute_at_ns {
             return Err(Error::Blocked(
@@ -190,13 +171,16 @@ pub(super) async fn apply(
         }
         operation::controllers(agent, principal(child)?, &owner.root).await?;
         if operation::module(agent, principal(child)?).await?
-            != *plan.previous_module.as_ref().expect("old code")
+            != *plan.previous_module().expect("old code")
         {
             return Err(Error::Blocked(
                 "upgrade precondition: previous module hash changed".into(),
             ));
         }
-        stage_reply(&signed::execute(&stage, plan, &call, identity, icp, agent).await?)?
+        stage_reply(
+            plan,
+            &signed::execute(&stage, plan, &call, identity, icp, agent).await?,
+        )?
     } else {
         let mut path = None;
         for index in 0..OBSERVATIONS {
@@ -209,19 +193,17 @@ pub(super) async fn apply(
         let path = path.ok_or_else(|| {
             Error::Blocked("32 upgrade observations exhausted; preserve journal".into())
         })?;
-        let read = Call {
-            canister: root,
-            effective: root,
-            method: "observe_upgrade",
-            args: ic_wire::native::encode_request(OBSERVE, &approval(plan)?, LIMITS)
-                .map_err(supplier)?,
-        };
+        let read = super::observation(plan)?;
         super::recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &read, identity, icp, agent).await?;
         let observed: Status =
-            ic_wire::native::decode_response(OBSERVE, &bytes, LIMITS).map_err(supplier)?;
+            ic_wire::native::decode_response(Method::ObserveUpgrade.id(plan), &bytes, LIMITS)
+                .map_err(supplier)?;
         if observed == Status::default() && retained.is_none() {
-            stage_reply(&signed::execute(&stage, plan, &call, identity, icp, agent).await?)?
+            stage_reply(
+                plan,
+                &signed::execute(&stage, plan, &call, identity, icp, agent).await?,
+            )?
         } else {
             observed
         }

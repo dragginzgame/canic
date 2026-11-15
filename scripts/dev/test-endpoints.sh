@@ -19,4 +19,4 @@ for variant in root manager faults maintenance worker; do
     "$cli" artifact build --json --package "$package" "${features[@]}" > "target/endpoints/$variant.json"
     cp -- "$(jq -r .wasm "target/endpoints/$variant.json")" "target/endpoints/$variant.wasm"
 done
-cargo test --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --test endpoints -- --nocapture
+cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test endpoints -- --nocapture

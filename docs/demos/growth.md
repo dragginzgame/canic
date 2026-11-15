@@ -65,9 +65,9 @@ address derivation; see the [wallet guide](../../README.md#check-the-mainnet-wal
 Evidence is retained under `.canic/growth-mainnet/`, alongside the host deployment
 journal for operation
 `2cfe76adf294be8d03c2afeca2f5f64dc4be51ca4ba470dd66517f629dd6ce42`.
-See [the mainnet record](../design/m0-first-journey.md#autonomous-mainnet-worker).
+See [the mainnet record](../qualification/history.md#autonomous-mainnet-worker).
 Maintenance evidence is in `.canic/growth-mainnet-maintenance/`; its
-[preservation and receipt-recovery record](../design/m0-first-journey.md#mainnet-manager-maintenance)
+[preservation and receipt-recovery record](../qualification/history.md#mainnet-manager-maintenance)
 includes the exact upgraded module and original operation identity.
 The remaining fresh-deployment instructions create another manager and worker;
 they are not needed to use these existing canisters. This manager's slot is spent.

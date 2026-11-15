@@ -1,23 +1,61 @@
-# Canic M0 management-effect experiments
+# Canic qualification
+
+This workspace owns installed effect-boundary and product regression tests.
+Its packages are named by responsibility, independently of design milestones:
+
+| Package | Responsibility |
+| --- | --- |
+| `canic-qualification` (`tests/`) | Native harnesses, retained predecessor binaries and explicit shared simulator preparation |
+| `canic-effect-probe` (`effect-probe/`) | Small Wasm probe isolating creation/funding commit boundaries and owner rollback |
+| `canic-artifact-probe` (`artifact-probe/`) | Small Wasm probe isolating retained-byte installation onto an existing target |
+
+M0/M1 package and Make names are retired without aliases. `make qualification-setup`
+prepares the simulator for every suite. Select `make effect-test`,
+`make artifact-custody-test` or `make journey-test` for the renamed workflows;
+`root-test`, `growth-test`, `profile-test` and `endpoint-test` keep their names.
+Tests never install the simulator themselves. Preparation and tests use the same
+`IC_TESTKIT_SERVER_DIRECTORY` override, defaulting to `target/qualification/server`.
+Existing files under `target/m0/` are historical outputs and are not deleted or
+silently used as a fallback; run setup once for the new location.
+
+## Coverage retained from the initial experiments
+
+The first retirement review keeps every effect scenario because the product
+fixtures do not yet replace all of their obligations:
+
+| Coverage | Why it remains |
+| --- | --- |
+| Creation dispatch, callback-write and later-message traps | Isolates each IC commit boundary; product growth covers a narrower set of interruption points |
+| Direct-cycle funding, rejected recipient and refunds | Product runtime has no equivalent funding journey yet |
+| Failed/successful owner upgrade with empty, successful, rejected and uncertain journals | Preserves the combined creation/funding rollback matrix |
+| Retained artifact, occupied target, lost upload/install replies and maintenance | Proves install-only behavior on a pre-existing target; product growth creates its own target |
+
+The separate native M0 harness has been removed; all tests now share the native
+qualification package. The two probe implementations remain intentionally
+isolated. Delete one only after product regressions cover its remaining cases.
+The current Root-plus-two-child scope is described in the [Root guide](../docs/demos/root.md);
+dated decisions and measured results live in [qualification history](../docs/qualification/history.md).
+
+## Management-effect boundaries
 
 These installed PocketIC experiments ask whether the management owner can retain
 creation, funding and artifact evidence across traps and owner upgrades. They use
 the published Platform runtime and real local management calls. These are
-qualification fixtures, not a deployable Canic runtime or the M1 Hello World CLI.
+qualification fixtures, not a deployable Canic runtime or the Hello World CLI.
 
 From the repository root, after the normal development tool preparation:
 
 ```sh
 rustup target add wasm32-unknown-unknown --toolchain 1.100.0
 cargo fetch --locked --manifest-path qualification/Cargo.toml
-make m0-setup
-make m0-test
+make qualification-setup
+make effect-test
 ```
 
-`m0-setup` explicitly provisions Testkit's authenticated PocketIC 16.1.0 bundle
-under `target/m0/server`. Tests only check that prepared bundle; they never
+`qualification-setup` explicitly provisions Testkit's authenticated PocketIC bundle
+under `target/qualification/server`. Tests only check that prepared bundle; they never
 download a server. An already prepared bundle can be selected with
-`IC_TESTKIT_SERVER_DIRECTORY=/absolute/path make m0-test`. Tests need permission
+`IC_TESTKIT_SERVER_DIRECTORY=/absolute/path make effect-test`. Tests need permission
 to bind a local loopback port. They create isolated local instances, use synthetic
 cycles, and close each instance after its case. No mainnet endpoint or signer is
 configured.
@@ -75,9 +113,9 @@ no extra child or deposit. Cases cover an empty slot, retained successes, a
 retained rejection/refund, lost callback evidence and failure in later work.
 An unauthorized principal must be unable to upgrade the executor.
 
-Run just that rehearsal with `make m0-maintenance-test`. `make m0-test` includes
+Run just that rehearsal with `make effect-maintenance-test`. `make effect-test` includes
 it alongside the creation/funding boundary cases. The runner builds both Wasms
-and saves their separate inputs under `target/m0/` before executing the tests.
+and saves their separate inputs under `target/effects/` before executing the tests.
 The checkpoint stores each journal in its existing bounded Wire frame, using
 one 64 KiB stable page through Platform Runtime. This isolated test owns that
 raw backing; it does not qualify a production `ic-storage` integration. Existing
@@ -94,7 +132,7 @@ Rust-only `await` is not a commit boundary.
 
 ## Artifact custody without the operator
 
-Run `make m0-artifact-test` after the same preparation. This separate fixture
+Run `make artifact-custody-test` after the same preparation. This separate fixture
 keeps the preceding creation/funding probe unchanged. It builds the actual Hello
 World worker and two executor executables from Cargo artifact records. The
 controller approves one exact target, uncompressed Wasm hash, retained module,
@@ -105,9 +143,9 @@ replaced, even after a rejection or unknown outcome.
 The executor survives a failed upgrade and a successful upgrade before dispatch.
 With no subsequent operator command, a test-only heartbeat uploads the retained
 bytes to its own IC-managed chunk store and calls `install_chunked_code` on an
-existing empty worker. The released Platform 0.32.2 `InstallCodeArgs` is
-native-only; this fixture qualifies the available on-chain chunked API. It uses
-one chunk and adds no Store canister. Direct host installation remains the M1
+existing empty worker. This fixture qualifies the on-chain chunked API selected
+during the initial experiment; current supplier versions are pinned by Cargo.lock. It uses
+one chunk and adds no Store canister. Direct host installation remains the CLI
 baseline; this is not a second product deployment engine.
 
 Four installed cases cover success, a lost upload callback, a lost installation
@@ -123,15 +161,15 @@ The fixture limits artifacts to 64 KiB. Its checkpoint owns raw stable backing
 only within this experiment; the provider chunk store is separately measured.
 Neither proves production Storage integration, a production scheduling policy,
 multi-chunk handling, chunk cleanup, callback-in-flight upgrades, application
-readiness or a mainnet cost estimate. The worker is pre-created by the harness;
-combining creation and installation into the product path remains M2 work. The
-first team-facing multi-canister demo still requires the full fleet-view gate.
-The CLI's initial JSON/HTML inventory is separately exercised by `make m1-test`
+readiness or a mainnet cost estimate. The worker is pre-created by the harness.
+Product Root/growth fixtures separately qualify combined creation, installation,
+readiness, maintenance and fleet views; this probe does not replace those tests.
+The CLI's initial JSON/HTML inventory is separately exercised by `make journey-test`
 against two greeting deployments, an uncertain upgrade and a stopped provider.
 
-Focused checks are `make m0-artifact-clippy` and `make m0-artifact-doc`.
+Focused checks are `make artifact-custody-clippy` and `make artifact-custody-doc`.
 The aggregate `make ci` includes the artifact experiment separately from
-`make m0-test`.
+`make effect-test`.
 
 ## Checks and evidence
 
@@ -145,15 +183,15 @@ to this qualification workspace. `make profile-clippy` and `make profile-doc`
 cover its native and Wasm graphs. These targets are included in the corresponding
 repository aggregates.
 
-Focused checks are `make m0-clippy`, `make m0-doc`, `make fmt-check` and
+Focused checks are `make effect-clippy`, `make effect-doc`, `make fmt-check` and
 `make toko-tooling-check`. The aggregate `make ci` includes the fixture and
-requires prior `m0-setup`; it does not install tools. Qualification packages have
+requires prior `qualification-setup`; it does not install tools. Qualification packages have
 their own catalog and lockfile, with no dependency from the product workspace.
-Build output lives in `qualification/target`; root `target/m0` holds preparation
-and Cargo artifact records.
+Build output lives in `qualification/target`; `target/effects` and
+`target/artifact-custody` retain probe inputs and Cargo artifact records.
 
-The [M0 record](../docs/design/m0-first-journey.md) reports observed results and
-remaining decisions. Passing this experiment does not complete M0 or establish
+The [historical record](../docs/qualification/history.md) retains dated observations
+and decisions. Passing these experiments does not establish
 general effect recovery. Local dispatch-resource failures, cross-subnet funding
 and production approval of blocked exposure remain unqualified.
 

@@ -165,6 +165,14 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
                 escape(&manager.manager)
             )
             .expect("writing to String");
+            if let Some(name) = child_name(snapshot, manager) {
+                write!(
+                    html,
+                    "<p>Application: <strong>{}</strong></p>",
+                    escape(name)
+                )
+                .expect("String write");
+            }
             if let Some(status) = &manager.reported {
                 write!(html, "<p>Creation phase: <strong>{:?}</strong></p><p>Create / upload / install attempts: {} / {} / {}</p><div class=topology><code>{}</code><span class=arrow>↓ reports child</span><code>{}</code></div>", status.phase, status.attempts[0], status.attempts[1], status.attempts[2], escape(&manager.manager), escape(status.worker.as_deref().unwrap_or("No reported principal"))).expect("writing to String");
                 if status.phase == canic_host::ManagementPhase::CreateIssued {
@@ -404,4 +412,21 @@ pub(crate) fn publish(
         crate::view::serve(path, port, open)?;
     }
     Ok(())
+}
+
+fn child_name<'a>(
+    snapshot: &'a canic_host::Fleet,
+    manager: &canic_host::FleetManager,
+) -> Option<&'a str> {
+    manager.slot?;
+    snapshot
+        .operations
+        .iter()
+        .find(|op| {
+            op.network_id == manager.network_id
+                && op.slot == manager.slot
+                && op.management_owner() == Some(manager.manager.as_str())
+        })
+        .and_then(|op| op.deployment.as_ref())
+        .map(|name| name.canister.as_str())
 }

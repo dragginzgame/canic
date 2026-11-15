@@ -3,6 +3,7 @@ use crate::{
     CanisterConfig, FleetConfig, Network,
     tests::{directory, input},
 };
+use canic_management_protocol::{STAGE, STATUS};
 use std::collections::BTreeMap;
 
 fn selection() -> SelectedFleet {
@@ -65,7 +66,9 @@ async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
             .unwrap();
     assert_eq!(bound, approval(&plan).unwrap());
     let mut unmanaged = plan;
-    unmanaged.management = None;
+    unmanaged.action = crate::PlanAction::Create {
+        cycles: unmanaged.creation_cycles(),
+    };
     assert!(recovery::call(&unmanaged).is_err());
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -188,15 +191,18 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
         create_managed_plan(&dir, &wasm, input(), &other, "app", &"01".repeat(32), None),
         Err(Error::Blocked(_))
     ));
-    let mut invalid = plan.clone();
-    invalid.creation_cycles += 1;
-    assert!(invalid.digest().is_err());
+    let mut invalid = serde_json::to_value(&plan).unwrap();
+    invalid["creation_cycles"] = serde_json::json!(plan.creation_cycles() + 1);
+    assert!(serde_json::from_value::<Plan>(invalid).is_err());
     let mut invalid = plan.clone();
     invalid.version = 1;
     invalid.deployment = None;
     assert!(invalid.digest().is_err());
     let mut invalid = plan.clone();
-    invalid.management.as_mut().unwrap().root = "2vxsx-fae".into();
+    let crate::PlanAction::CreateChild(owner) = &mut invalid.action else {
+        panic!("child creation")
+    };
+    owner.root = "2vxsx-fae".into();
     assert!(invalid.digest().is_err());
     let mut invalid = plan;
     invalid.expires_at_ns += 1;
@@ -341,7 +347,7 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
     )
     .unwrap();
     assert_ne!(id, created_id);
-    assert_eq!(plan.target.as_deref(), Some(child));
+    assert_eq!(plan.target().map(String::as_str), Some(child));
     assert_eq!(
         plan.application_controller(),
         created.application_controller()
@@ -408,9 +414,13 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         None,
     )
     .unwrap();
-    plan.target = Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into());
-    plan.previous_module = Some("02".repeat(32));
-    plan.creation_cycles = 0;
+    plan.action = crate::PlanAction::UpgradeChild {
+        target: crate::UpgradeTarget {
+            canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+            module: "02".repeat(32),
+        },
+        owner: plan.management().unwrap().clone(),
+    };
     let evidence_dir = dir.join("evidence");
     let staged = evidence_dir.join("stage/reply.bin");
     let observed = evidence_dir.join("observe/0/reply.bin");

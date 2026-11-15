@@ -5,6 +5,7 @@ mod tests;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+pub mod children;
 pub mod custody;
 pub mod upgrade;
 
@@ -38,7 +39,7 @@ pub const STAGE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 12,
 };
 
-/// Exact immutable controller-approved work. No second slot or reset exists.
+/// Exact immutable controller-approved work. A slot cannot be reset or reused.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Approval {
     /// Exact manager principal on the caller-selected network.
@@ -134,9 +135,9 @@ pub struct Status {
 /// Staging refusal; the unchanged original slot remains authoritative.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Refusal {
-    /// Different work already owns the only slot.
+    /// Different work already owns the selected slot.
     Occupied,
-    /// Artifact is oversized, not raw Wasm, or has the wrong digest.
+    /// Artifact is oversized, exceeds combined custody capacity, is not raw Wasm, or has the wrong digest.
     Artifact,
     /// Wrong manager or cycle ceiling.
     Binding,

@@ -33,7 +33,7 @@ Private profile reads are explicitly uncertified queries;
 deployment metadata and update replies use the certified paths described below.
 
 The creation and upgrade receipts are retained in `.canic/` under their original
-operation IDs; see [the mainnet evidence](../design/m0-first-journey.md#profile-mainnet-deployment-and-preservation).
+operation IDs; see [the mainnet evidence](../qualification/history.md#profile-mainnet-deployment-and-preservation).
 The following fresh-deployment instructions create another pair; they are not
 needed to use this existing demo.
 
@@ -46,7 +46,7 @@ make profile
 make profile-test
 ```
 
-The test needs the already prepared PocketIC server (`make m0-setup`) and ICP CLI
+The test needs the already prepared PocketIC server (`make qualification-setup`) and ICP CLI
 (`make install-ic-tools`). It deploys through Canic, exercises the profile Wire
 endpoints, fills the bounded store, rejects unauthorized calls, rolls back a
 failed upgrade, installs a second executable and checks the retained values.

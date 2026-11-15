@@ -42,6 +42,15 @@ pub struct Receipt {
     pub controller: String,
 }
 
+/// One named child outcome within a fleet operation.
+#[derive(Debug, Serialize)]
+pub struct ChildOutcome {
+    /// Retained application canister name.
+    pub name: String,
+    /// Admission or completion evidence for this child.
+    pub outcome: ApplyOutcome,
+}
+
 /// Applying may admit autonomous work before the child is ready.
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
@@ -52,8 +61,8 @@ pub enum ApplyOutcome {
         operation: String,
         /// Verified Root installation.
         root: Receipt,
-        /// Child admission or verified completion; pending is not fleet completion.
-        child: Box<ApplyOutcome>,
+        /// Named outcomes in permanent child order.
+        children: Vec<ChildOutcome>,
     },
     /// Verified completed installation; direct deployment JSON remains unchanged.
     Complete(Receipt),
@@ -83,7 +92,7 @@ fn create_call(plan: &Plan) -> Result<Call<'static>> {
         let args = ledger::CreateCanisterArgs {
             from_subaccount: None,
             created_at_time: Some(plan.created_at_ns),
-            amount: (plan.creation_cycles - LEDGER_FEE).into(),
+            amount: (plan.creation_cycles() - LEDGER_FEE).into(),
             creation_args: Some(ledger::CmcCreateCanisterArgs {
                 subnet_selection: None,
                 settings: Some(ledger::CanisterSettings {
@@ -108,7 +117,7 @@ fn create_call(plan: &Plan) -> Result<Call<'static>> {
         })
     } else {
         let args = mgmt::ProvisionalCreateCanisterWithCyclesArgs {
-            amount: Some(plan.creation_cycles.into()),
+            amount: Some(plan.creation_cycles().into()),
             settings: Some(mgmt::CanisterSettings {
                 controllers: Some(vec![controller]),
                 ..Default::default()
@@ -233,12 +242,15 @@ pub(crate) async fn apply_at(
 ) -> Result<ApplyOutcome> {
     let (plan, wasm) = plan::load(dir, digest)?;
     let agent = plan.network.agent()?;
-    if plan.management.is_some() {
+    if matches!(
+        plan.action,
+        crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. }
+    ) {
         return crate::managed::apply(dir, digest, &plan, &wasm, identity, icp, &agent).await;
     }
     if dir.join("receipt.json").try_exists().map_err(supplier)? {
         let receipt: Receipt = store::json(&dir.join("receipt.json"))?;
-        let expected = if let Some(target) = &plan.target {
+        let expected = if let Some(target) = plan.target() {
             principal(target)?
         } else {
             created(
@@ -259,7 +271,7 @@ pub(crate) async fn apply_at(
         }
         return Ok(ApplyOutcome::Complete(receipt));
     }
-    let canister = if let Some(target) = &plan.target {
+    let canister = if let Some(target) = plan.target() {
         principal(target)?
     } else {
         if plan.network == Network::Mainnet
@@ -296,7 +308,7 @@ pub(crate) async fn apply_at(
         .join("install/signed.json")
         .try_exists()
         .map_err(supplier)?
-        && let Some(expected) = &plan.previous_module
+        && let Some(expected) = plan.previous_module()
         && module(&agent, canister).await? != *expected
     {
         return Err(Error::Blocked(
@@ -312,7 +324,7 @@ pub(crate) async fn apply_at(
     }
     crate::maintenance::require_before(dir, &plan)?;
     let args = mgmt::InstallCodeArgs {
-        mode: if plan.target.is_some() {
+        mode: if plan.target().is_some() {
             mgmt::CanisterInstallMode::Upgrade(None)
         } else {
             mgmt::CanisterInstallMode::Install
@@ -382,18 +394,16 @@ pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
 pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     let (plan, _) = plan::load(dir, digest)?;
     let mut effects = serde_json::Map::new();
-    let effect_names: &[&str] = if plan.maintenance.is_some() {
-        &["custody-before", "install", "custody-after"]
-    } else if plan.management.is_some() {
-        &["stage"]
-    } else {
-        &["create", "install"]
+    let effect_names: &[&str] = match plan.action {
+        crate::PlanAction::MaintainRoot { .. } => &["custody-before", "install", "custody-after"],
+        crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. } => &["stage"],
+        crate::PlanAction::Create { .. } | crate::PlanAction::Upgrade(_) => &["create", "install"],
     };
     for effect in effect_names {
         let path = dir.join(effect);
         effects.insert((*effect).into(), attempt_state(&path)?.into());
     }
-    if plan.management.is_some() {
+    if plan.management().is_some() {
         for index in 0..crate::managed::OBSERVATIONS {
             let path = dir.join(format!("observe/{index}/reconcile"));
             if path.join("authority.json").try_exists().map_err(supplier)? {
@@ -406,12 +416,15 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     } else {
         None
     };
-    let managed = if plan.management.is_some() && plan.target.is_some() {
-        serde_json::to_value(crate::managed::upgrade::evidence(dir, &plan)?).map_err(supplier)?
-    } else if plan.management.is_some() {
-        serde_json::to_value(crate::managed::evidence(dir, &plan)?).map_err(supplier)?
-    } else {
-        serde_json::Value::Null
+    let managed = match &plan.action {
+        crate::PlanAction::UpgradeChild { .. } => {
+            serde_json::to_value(crate::managed::upgrade::evidence(dir, &plan)?)
+                .map_err(supplier)?
+        }
+        crate::PlanAction::CreateChild(_) => {
+            serde_json::to_value(crate::managed::evidence(dir, &plan)?).map_err(supplier)?
+        }
+        _ => serde_json::Value::Null,
     };
     Ok(
         serde_json::json!({"operation": digest, "plan": plan, "effects": effects, "receipt": receipt, "management": managed}),

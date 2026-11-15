@@ -12,8 +12,6 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     let plan = Plan {
         deployment: None,
         version: 1,
-        maintenance: None,
-        management: None,
         network: Network::Local {
             url: "http://127.0.0.1:8000/".into(),
             root_key: "00".repeat(133),
@@ -24,9 +22,9 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
             sha256: "00".repeat(32),
             bytes: 8,
         },
-        target: None,
-        previous_module: None,
-        creation_cycles: 1_000_000_000_000,
+        action: crate::PlanAction::Create {
+            cycles: 1_000_000_000_000,
+        },
         created_at_ns: time,
         expires_at_ns: time + 3_600_000_000_000,
     };
@@ -92,24 +90,27 @@ fn fixture() -> (Vec<u8>, Plan, Call<'static>) {
 async fn maintenance_observation_cannot_sign_another_root_or_effect() {
     let (_, mut plan, mut call) = fixture();
     plan.version = 2;
-    plan.creation_cycles = 0;
-    plan.target = Some("rrkah-fqaaa-aaaaa-aaaaq-cai".into());
-    plan.previous_module = Some("11".repeat(32));
-    plan.maintenance = Some(canic_management_protocol::custody::Custody {
-        creation: canic_management_protocol::Status {
-            approval: Some(canic_management_protocol::Approval {
-                manager: plan.target.clone().unwrap(),
-                module_hash: [1; 32],
-                creation_cycles: canic_management_protocol::CREATION_CYCLES,
-                execute_at_ns: 1,
-                expires_at_ns: 2,
-            }),
-            worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
-            phase: canic_management_protocol::Phase::Ready,
-            ..Default::default()
+    plan.action = crate::PlanAction::MaintainRoot {
+        target: crate::UpgradeTarget {
+            canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+            module: "11".repeat(32),
         },
-        upgrades: vec![],
-    });
+        children: vec![canic_management_protocol::custody::Custody {
+            creation: canic_management_protocol::Status {
+                approval: Some(canic_management_protocol::Approval {
+                    manager: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+                    module_hash: [1; 32],
+                    creation_cycles: canic_management_protocol::CREATION_CYCLES,
+                    execute_at_ns: 1,
+                    expires_at_ns: 2,
+                }),
+                worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
+                phase: canic_management_protocol::Phase::Ready,
+                ..Default::default()
+            },
+            upgrades: vec![],
+        }],
+    };
     let agent = plan.network.agent().unwrap();
     let dir = crate::tests::directory();
     for case in 0..4 {
@@ -135,8 +136,10 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
             call.args.push(0);
         }
         if case == 3 {
-            plan.maintenance.as_mut().unwrap().creation.phase =
-                canic_management_protocol::Phase::CreateIssued;
+            let crate::PlanAction::MaintainRoot { children, .. } = &mut plan.action else {
+                panic!("maintenance")
+            };
+            children[0].creation.phase = canic_management_protocol::Phase::CreateIssued;
         }
         assert!(matches!(
             super::observe(
@@ -157,7 +160,8 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
 #[tokio::test]
 async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     let (_, mut plan, _) = fixture();
-    plan.management = Some(crate::ManagedOwner {
+    plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
@@ -287,7 +291,8 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
 #[tokio::test]
 async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     let (_, mut plan, mut call) = fixture_expiry(false);
-    plan.management = Some(crate::ManagedOwner {
+    plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
@@ -307,7 +312,18 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
         (true, "install_chunked_code"),
         (true, "observe"),
     ] {
-        plan.target = upgrade.then(|| "ryjl3-tyaaa-aaaaa-aaaba-cai".into());
+        let owner = plan.management().unwrap().clone();
+        plan.action = if upgrade {
+            crate::PlanAction::UpgradeChild {
+                target: crate::UpgradeTarget {
+                    canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+                    module: "11".repeat(32),
+                },
+                owner,
+            }
+        } else {
+            crate::PlanAction::CreateChild(owner)
+        };
         call.method = method;
         assert!(matches!(
             super::observe(
@@ -338,4 +354,38 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     ));
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
     std::fs::remove_dir(dir).unwrap();
+}
+
+#[tokio::test]
+async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing() {
+    let (_, mut plan, _) = fixture();
+    plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        root_module: "00".repeat(32),
+        execute_at_ns: 1,
+        slot: Some(canic_management_protocol::children::Slot::Second),
+    });
+    let agent = plan.network.agent().unwrap();
+    let dir = crate::tests::directory();
+    for slot in [None, Some(canic_management_protocol::children::Slot::First)] {
+        let mut other = plan.clone();
+        let crate::PlanAction::CreateChild(owner) = &mut other.action else {
+            panic!("child creation")
+        };
+        owner.slot = slot;
+        let call = crate::managed::observation(&other).unwrap();
+        assert!(matches!(
+            super::observe(
+                &dir,
+                &plan,
+                &call,
+                "must-not-run",
+                std::path::Path::new("must-not-run"),
+                &agent
+            )
+            .await,
+            Err(Error::Invalid(_))
+        ));
+    }
+    assert!(!dir.join("signed.json").exists());
 }

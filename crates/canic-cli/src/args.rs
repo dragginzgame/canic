@@ -152,6 +152,12 @@ pub(super) enum AppCanisterCommand {
         /// Wasm input relative to the config file; planning retains the exact bytes.
         #[arg(long, value_name = "WASM_FILE")]
         wasm: Option<PathBuf>,
+        /// Workspace manifest relative to the config file, for app build.
+        #[arg(long, requires_all = ["package", "wasm"])]
+        manifest: Option<PathBuf>,
+        /// Cargo package producing this canister's Wasm.
+        #[arg(long, requires = "manifest")]
+        package: Option<String>,
     },
     /// List shared app definitions; no network or journal access.
     List {
@@ -344,6 +350,9 @@ pub(super) enum FleetCommand {
         /// Completed hello-demo deployment operation; this is not a generic canister call.
         #[arg(value_name = "OPERATION")]
         digest: String,
+        /// Select the application in a multi-child fleet operation.
+        #[arg(long)]
+        canister: Option<String>,
         #[arg(long, default_value = "team")]
         name: String,
     },
@@ -464,7 +473,11 @@ pub(super) fn help_command() -> clap::Command {
     fn banner(command: clap::Command) -> clap::Command {
         command
             .display_order(None)
-            .before_help(concat!("Canic ", env!("CARGO_PKG_VERSION")))
+            .help_template(concat!(
+                "Canic ",
+                env!("CARGO_PKG_VERSION"),
+                " : {about-with-newline}\n{usage-heading} {usage}\n\n{all-args}{after-help}"
+            ))
             .mut_subcommands(banner)
     }
     banner(Cli::command())

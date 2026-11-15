@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
-description = "Root for one approved greeting application canister"
+description = "Root for bounded controller-approved greeting canisters"
 
 [target.'cfg(any())'.dev-dependencies]
 toko-tooling.workspace = true
@@ -20,6 +20,7 @@ ic-wire.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
+fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
 
 [lints]

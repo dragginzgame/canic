@@ -1,7 +1,7 @@
 # Canic system design
 
-Status: accepted architectural basis; M0 is underway and the first M1 CLI/demo path is implemented. See the [current evidence record](m0-first-journey.md) for qualified paths and remaining work.
-Date: 2026-11-14. Domain/configuration consistency reviewed against the implemented CLI; see the [review evidence](m0-first-journey.md#domain-and-configuration-review).
+Status: accepted architectural basis; implementation is working toward M2, with narrow M3 autonomy and preservation paths qualified. See the [current qualification scope](../../qualification/README.md) and [dated evidence](../qualification/history.md). Retiring milestone names from test packages does not declare a milestone gate complete.
+Date: 2026-11-14. Domain/configuration consistency reviewed against the implemented CLI; see the [review evidence](../qualification/history.md#domain-and-configuration-review).
 
 Naming: Canic is this fresh rewrite. Legacy Canic is the predecessor now hosted
 as [canic-legacy](https://github.com/dragginzgame/canic-legacy). Historical package
@@ -245,7 +245,7 @@ Use direct functions and domain modules first. A module may contain its transiti
 
 The next generated starter selects one Root/management owner controlling one application canister. Retain an explicit external controller for that owner's maintenance and recovery; qualify its exact controller graph before deployment. This selects the responsibility and minimal topology, not a public rename or the old Root implementation. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
 
-The experimental `canic-root` now qualifies the one-child greeting path locally,
+The experimental `canic-root` now qualifies one or two direct greeting children locally,
 using the same bounded management engine as the profile manager. Its controller
 is the external operator; its created application's sole controller is Root.
 Lifecycle mounting and application readiness remain explicit in each canister.
@@ -253,10 +253,13 @@ The CLI now generates a standalone greeting workspace whose artifact passes that
 same installed qualification. Managed-child CLI plan/apply now pins Root code,
 retains exact admission attempts and recovers completion through replicated
 observations. One child upgrade is now locally qualified, including persistent
-application state and interrupted callbacks. Each Root has one permanent creation
-slot and bounded history for eight serial child upgrades; whole-fleet convergence and subtree operations
-remain unqualified. See the
-[managed-child evidence](m0-first-journey.md#managed-child-cli-approval).
+application state and interrupted callbacks. The runtime now qualifies two permanent child slots, each with a bounded history
+for eight serial upgrades and independent continuations. Both share finite cycle
+and artifact custody budgets. The installed CLI qualifies both children through
+creation, independent upgrades, recovery and fleet views. Root maintenance
+compares complete custody for both slots, including Empty. General trees and
+subtree operations remain unqualified. See the
+[managed-child evidence](../qualification/history.md#managed-child-cli-approval).
 
 Artifact distribution is a responsibility to assign, not a mandatory Store canister. Compare direct reviewed uploads and executor-local storage against a separate service using artifact size, retention, autonomous installation, memory pressure and recurring canister cost. Select the simplest qualified arrangement for the first workload. A separate service earns its place through demonstrated distribution or isolation needs. Artifact possession never supplies approval authority.
 
@@ -473,6 +476,15 @@ Store current state and the minimum durable evidence required for reconciliation
 
 Host custody and remote authority have different records. The host retains signed ingress and received evidence needed to resume; remote domains retain reservations and accepted effects. They reference one business operation rather than reconstructing independent business decisions. A new host may continue only after custody transfer or sufficient authenticated reconstruction; a copied filename is not that proof.
 
+The current Host operation model selects one explicit action with its complete
+required authority: direct creation/upgrade, Root-owned child creation/upgrade,
+or Root maintenance with the full ordered child custody. Fleet children form one
+ordered collection of permanent identities. The selected runtime supports one
+or two direct children; that capacity does not justify separate child/sibling
+branches throughout planning, execution and presentation. Retained-format codecs
+preserve existing approval digests, journal locations and signed attempts while
+the working model changes. Replanning cannot remap names to different slots.
+
 ### First effect contracts
 
 The table specifies required evidence, not provider guarantees already demonstrated. M0 pins the actual provider/API and qualifies the first managed path. Ledger effects apply only to the selected cycle-funding/creation provider; no ICP conversion adapter is planned. Each adapter retains exact request bytes or commitment, caller, network, target, authority, amount and transport identity before dispatch. A Canic operation ID provides no provider deduplication by itself.
@@ -570,8 +582,8 @@ Shared tenancy is a first-class qualification workload. Do not equate one logica
 ### Delivery and upgrade qualification
 
 The four patterns are the intended product scope; their implementations enter
-incrementally with a named consumer and bounded fixture. Today the one-child
-Root journey qualifies a fixed slot and bounded serial child upgrades, not general singleton
+incrementally with a named consumer and bounded fixture. Today the Root
+journey qualifies up to two fixed child slots and bounded serial upgrades, not general singleton
 admission, scaling, sharding or keyed-instance APIs. Keep those limits visible;
 do not add unused configuration variants or a general pool catalogue in advance.
 
@@ -669,7 +681,7 @@ a state cascade cannot install code or imply an atomic distributed upgrade.
 
 First qualify two sibling branches, a grandchild, repeated roles, a failed/lost
 reply and retry, stale delivery, upgrade recovery and concurrent child admission.
-The [legacy evaluation](m0-first-journey.md#cascading-and-workflow-scope-review)
+The [legacy evaluation](../qualification/history.md#cascading-and-workflow-scope-review)
 records source/history evidence and the differences needing new qualification.
 
 ### Memory and scheduling
@@ -762,7 +774,7 @@ and test adapter alignment in [IC Tooling #359](https://github.com/dragginzgame/
 
 The first local Canic implementation now explicitly mounts Root and profile-manager
 management methods through `canic_management::mount_endpoints!`, using the existing
-Platform hooks and Wire codec API. Its [installed evidence](m0-first-journey.md#endpoint-composition-ownership-decision)
+Platform hooks and Wire codec API. Its [installed evidence](../qualification/history.md#endpoint-composition-ownership-decision)
 covers admission and reply rollback. This fixed management adapter does not yet
 supply general actor declarations or catalogue generation; supplier retirement
 remains separate work.
@@ -915,15 +927,15 @@ Record accepted workload bounds before claiming scale: occupied subnets, physica
 
 These are implementation milestones after design acceptance, not a version allocation or authorization to release the old repository. Each is a coherent outcome with its own narrow checks and a team-usable result. Deliver runnable increments within milestones instead of withholding the CLI until the architecture is complete. M0 produces a concrete walkthrough and small executable provider experiments; M1 completes the first product deployment loop. Do not create a package or framework solely to prepare for a later milestone.
 
-The [M0 decision and evidence record](m0-first-journey.md) scopes the initial investigation. Section 17 governs admission: a later milestone names a possible delivery boundary, not permission to implement every integration with a documented owner.
+The [M0 decision and evidence record](../qualification/history.md) scopes the initial investigation. Section 17 governs admission: a later milestone names a possible delivery boundary, not permission to implement every integration with a documented owner.
 
 The first fleet CLI finish line is M2: initialize an app/fleet, build and review
 one plan for its declared tree, apply it, repeat with no unnecessary effects,
 inspect progress and recover supported interruptions through CLI commands,
 then upgrade while preserving the application's invariant. The same definition
 must serve a second isolated fleet. The initial whole-fleet path now deploys a
-new Root-plus-app tree, resumes the same authority, and derives its next child
-upgrade from retained completion, retaining at most eight upgrades. Matching
+new Root with one or two direct children, resumes the same authority, and derives its next child
+upgrade from retained completion, retaining at most eight upgrades per child. Matching
 artifacts report no change against
 retained completion, not freshly observed network state. A separate Root-only
 maintenance plan now preserves the full completed journal through the direct
@@ -992,7 +1004,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Root control plane | One surviving Root/management owner controls the generated starter's app, sections 4, 7–9 | Required — selected starter topology; general executor behavior still needs qualification | Installed management journey and custody/artifact availability during operator absence |
 | Wasm Store and templates | Preserve artifact integrity; select physical distribution after comparison, sections 4, 12 | Required — integrity; separate Store consumer-gated | Integrity/retention proof and justified deployment overhead |
 | Network enrollment and subnet catalog | Retain exact trust and typed evidence, sections 5–6 | Required — selected network and subnet | Wrong network and stale evidence refusal |
-| Fleet generation and Ensure | One compiler and plan/apply owner, sections 5, 7 | Required — whole selected fleet; current CLI still plans one canister | Repeated convergence has no effects; interrupted apply retains exact targets |
+| Fleet generation and Ensure | One compiler and plan/apply owner, sections 5, 7 | Required — whole selected fleet; current CLI qualifies Root with one or two direct children | Repeated convergence has no effects; interrupted apply retains exact targets |
 | Infrastructure bootstrap and supplied IDs | Explicit retained operation, section 7 | Required — bootstrap; supplied-ID breadth consumer-gated | Lost reply and controller mismatch |
 | Capacity import, reset and recycling | Rebuild around asset/allocation identity, sections 8, 13 | Consumer-gated — reusable-capacity need | Reuse with late callbacks and exact custody |
 | Component lifecycle and application initialization | One provisioning/readiness operation, sections 7, 10 | Required — first stateful consumer | Installed but unready stays unpublished |

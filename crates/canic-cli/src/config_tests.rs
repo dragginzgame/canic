@@ -256,8 +256,22 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
     ])
     .await;
     json(&[
-        "app", "canister", "add", "backend", "--app", "hello", "--role", "worker", "--wasm",
-        "app.wasm", "--config", config,
+        "app",
+        "canister",
+        "add",
+        "backend",
+        "--app",
+        "hello",
+        "--role",
+        "worker",
+        "--wasm",
+        "app.wasm",
+        "--manifest",
+        "Cargo.toml",
+        "--package",
+        "hello-app",
+        "--config",
+        config,
     ])
     .await;
     json(&[
@@ -277,6 +291,14 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
     ])
     .await;
     assert_eq!(listed["canisters"]["backend"]["wasm"], "app.wasm");
+    assert_eq!(
+        listed["canisters"]["backend"]["build"]["manifest"],
+        "Cargo.toml"
+    );
+    assert_eq!(
+        listed["canisters"]["backend"]["build"]["package"],
+        "hello-app"
+    );
     let fleets = json(&["fleet", "list", "--app", "hello", "--config", config]).await;
     assert!(
         fleets["fleets"]
@@ -1019,7 +1041,14 @@ fn help_includes_version_and_sorted_commands_at_every_level() {
             let help = help_command().try_get_matches_from(args).unwrap_err();
             assert_eq!(help.kind(), clap::error::ErrorKind::DisplayHelp);
             let text = help.to_string();
-            assert!(text.starts_with(concat!("Canic ", env!("CARGO_PKG_VERSION"))));
+            assert_eq!(
+                text.lines().next().unwrap(),
+                format!(
+                    "Canic {} : {}",
+                    env!("CARGO_PKG_VERSION"),
+                    command.get_about().unwrap()
+                )
+            );
             if let Some(commands) = text.split("Commands:\n").nth(1) {
                 let names: Vec<_> = commands
                     .split("\n\n")
@@ -1207,6 +1236,30 @@ fn managed_planning_arguments_require_the_named_child_context() {
             "rrkah-fqaaa-aaaaa-aaaaq-cai",
             "--previous-module",
             "01"
+        ]))
+        .is_ok()
+    );
+}
+
+#[test]
+fn build_recipe_requires_manifest_package_and_wasm() {
+    let base = ["canic", "app", "canister", "add", "worker"];
+    for incomplete in [
+        vec!["--manifest", "Cargo.toml"],
+        vec!["--package", "demo-worker"],
+        vec!["--manifest", "Cargo.toml", "--package", "demo-worker"],
+        vec!["--manifest", "Cargo.toml", "--wasm", "worker.wasm"],
+    ] {
+        assert!(Cli::try_parse_from(base.into_iter().chain(incomplete)).is_err());
+    }
+    assert!(
+        Cli::try_parse_from(base.into_iter().chain([
+            "--manifest",
+            "Cargo.toml",
+            "--package",
+            "demo-worker",
+            "--wasm",
+            "worker.wasm",
         ]))
         .is_ok()
     );

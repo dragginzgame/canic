@@ -14,10 +14,10 @@ pub struct Cancellation {
 }
 
 fn pristine(dir: &Path) -> Result<()> {
-    for (leaf, expected) in [
-        ("root", &["module.wasm", "plan.json"][..]),
-        ("child", &["module.wasm"][..]),
-    ] {
+    for (leaf, expected, required) in super::record::effect_directories() {
+        if !required && !dir.join(leaf).try_exists().map_err(supplier)? {
+            continue;
+        }
         for entry in std::fs::read_dir(dir.join(leaf)).map_err(supplier)? {
             let entry = entry.map_err(supplier)?;
             if !entry.file_type().map_err(supplier)?.is_file()

@@ -235,45 +235,20 @@ pub(crate) async fn observe(
     icp: &Path,
     agent: &Agent,
 ) -> Result<Vec<u8>> {
-    let (root, method, args) = if plan.maintenance.is_some() {
+    let (root, method, args) = if plan.maintenance().is_some() {
         let args = crate::maintenance::observation_args(plan, call.method)?;
         (
             principal(
-                plan.target
-                    .as_deref()
+                plan.target()
+                    .map(String::as_str)
                     .expect("validated maintenance target"),
             )?,
             call.method,
             args,
         )
     } else {
-        let owner = plan
-            .management
-            .as_ref()
-            .ok_or_else(|| Error::Invalid("observation needs Root binding".into()))?;
-        let (method, args) = if plan.target.is_some() {
-            (
-                "observe_upgrade",
-                ic_wire::native::encode_request(
-                    canic_management_protocol::upgrade::OBSERVE,
-                    &crate::managed::upgrade::approval(plan)?,
-                    canic_management_protocol::LIMITS,
-                )
-                .map_err(supplier)?,
-            )
-        } else {
-            (
-                "observe",
-                ic_wire::native::encode_request(
-                    canic_management_protocol::STATUS,
-                    &(),
-                    canic_management_protocol::LIMITS,
-                )
-                .map_err(supplier)?,
-            )
-        };
-
-        (principal(&owner.root)?, method, args)
+        let selected = crate::managed::observation(plan)?;
+        (selected.canister, selected.method, selected.args)
     };
     if call.canister != root
         || call.effective != call.canister

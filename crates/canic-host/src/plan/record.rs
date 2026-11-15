@@ -1,0 +1,133 @@
+//! Retained v1/v2 encoding only. Optional fields never enter the operation model.
+use super::{ManagedOwner, Plan, PlanAction, UpgradeTarget};
+use crate::{Artifact, Error, Network, Result};
+use serde::{Deserialize, Serialize};
+// Field order and omitted options are part of retained approval digests.
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PlanRecord {
+    version: u32,
+    network: Network,
+    controller: String,
+    artifact: Artifact,
+    target: Option<String>,
+    previous_module: Option<String>,
+    creation_cycles: u64,
+    created_at_ns: u64,
+    expires_at_ns: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    deployment: Option<crate::DeploymentName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    management: Option<ManagedOwner>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    maintenance: Option<canic_management_protocol::custody::Custody>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    maintenance_sibling: Option<canic_management_protocol::custody::Custody>,
+}
+
+fn invalid() -> Error {
+    Error::Invalid("incomplete or conflicting retained operation authority".into())
+}
+
+impl TryFrom<PlanRecord> for Plan {
+    type Error = Error;
+    fn try_from(record: PlanRecord) -> Result<Self> {
+        let PlanRecord {
+            version,
+            network,
+            controller,
+            artifact,
+            target,
+            previous_module,
+            creation_cycles,
+            created_at_ns,
+            expires_at_ns,
+            deployment,
+            management,
+            maintenance,
+            maintenance_sibling,
+        } = record;
+        let action = match (
+            target,
+            previous_module,
+            management,
+            maintenance,
+            maintenance_sibling,
+        ) {
+            (None, None, None, None, None) => PlanAction::Create {
+                cycles: creation_cycles,
+            },
+            (None, None, Some(owner), None, None)
+                if creation_cycles == canic_management_protocol::CREATION_CYCLES =>
+            {
+                PlanAction::CreateChild(owner)
+            }
+            (Some(canister), Some(module), None, None, None) if creation_cycles == 0 => {
+                PlanAction::Upgrade(UpgradeTarget { canister, module })
+            }
+            (Some(canister), Some(module), Some(owner), None, None) if creation_cycles == 0 => {
+                PlanAction::UpgradeChild {
+                    target: UpgradeTarget { canister, module },
+                    owner,
+                }
+            }
+            (Some(canister), Some(module), None, Some(first), sibling) if creation_cycles == 0 => {
+                PlanAction::MaintainRoot {
+                    target: UpgradeTarget { canister, module },
+                    children: std::iter::once(first).chain(sibling).collect(),
+                }
+            }
+            _ => return Err(invalid()),
+        };
+        Ok(Self {
+            version,
+            network,
+            controller,
+            artifact,
+            action,
+            created_at_ns,
+            expires_at_ns,
+            deployment,
+        })
+    }
+}
+impl TryFrom<Plan> for PlanRecord {
+    type Error = Error;
+    fn try_from(plan: Plan) -> Result<Self> {
+        let target = plan.target().cloned();
+        let previous_module = plan.previous_module().cloned();
+        let creation_cycles = plan.creation_cycles();
+        let management = plan.management().cloned();
+        let (maintenance, maintenance_sibling) = match plan.maintenance() {
+            None => (None, None),
+            Some([first]) => (Some(first.clone()), None),
+            Some([first, second]) => (Some(first.clone()), Some(second.clone())),
+            _ => return Err(invalid()),
+        };
+        Ok(Self {
+            version: plan.version,
+            network: plan.network,
+            controller: plan.controller,
+            artifact: plan.artifact,
+            target,
+            previous_module,
+            creation_cycles,
+            created_at_ns: plan.created_at_ns,
+            expires_at_ns: plan.expires_at_ns,
+            deployment: plan.deployment,
+            management,
+            maintenance,
+            maintenance_sibling,
+        })
+    }
+}
+impl Serialize for Plan {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        PlanRecord::try_from(self.clone())
+            .map_err(serde::ser::Error::custom)?
+            .serialize(serializer)
+    }
+}

@@ -8,13 +8,14 @@ use crate::{
     signed::{self, Call},
     store, supplier,
 };
-use canic_management_protocol::{
-    Approval, LIMITS, Phase, Refusal, STAGE, STAGE_LIMITS, STATUS, Stage, Status,
-};
+use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, STAGE_LIMITS, Stage, Status};
 use ic_platform::agent::Agent;
 use std::path::Path;
 
 pub(crate) mod recovery;
+mod wire;
+use wire::Method;
+pub(crate) use wire::{observation, same_slot};
 #[cfg(test)]
 mod tests;
 pub(crate) mod upgrade;
@@ -141,6 +142,7 @@ pub fn create_managed_plan(
             canister: canister.into(),
         }),
         Some(ManagedOwner {
+            slot: None,
             root: roots
                 .pop_first()
                 .ok_or_else(|| Error::Invalid("missing Root identity".into()))?,
@@ -151,16 +153,17 @@ pub fn create_managed_plan(
 }
 
 pub(crate) fn approval(plan: &Plan) -> Result<Approval> {
-    let owner = plan
-        .management
-        .as_ref()
-        .ok_or_else(|| Error::Invalid("missing Root approval".into()))?;
+    let crate::PlanAction::CreateChild(owner) = &plan.action else {
+        return Err(Error::Invalid(
+            "expected Root-owned creation approval".into(),
+        ));
+    };
     Ok(Approval {
         manager: owner.root.clone(),
         module_hash: crate::unhex(&plan.artifact.sha256)?
             .try_into()
             .map_err(|_| Error::Invalid("invalid child module hash".into()))?,
-        creation_cycles: plan.creation_cycles,
+        creation_cycles: plan.creation_cycles(),
         execute_at_ns: owner.execute_at_ns,
         expires_at_ns: plan.expires_at_ns,
     })
@@ -221,27 +224,20 @@ fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<(
 }
 
 fn stage_call(plan: &Plan, wasm: &[u8]) -> Result<Call<'static>> {
-    let approval = approval(plan)?;
-    let root = principal(&approval.manager)?;
-    Ok(Call {
-        canister: root,
-        effective: root,
-        method: "stage",
-        args: ic_wire::native::encode_request(
-            STAGE,
-            &Stage {
-                approval,
-                wasm: wasm.to_vec(),
-            },
-            STAGE_LIMITS,
-        )
-        .map_err(supplier)?,
-    })
+    Method::Stage.call(
+        plan,
+        &Stage {
+            approval: approval(plan)?,
+            wasm: wasm.to_vec(),
+        },
+        STAGE_LIMITS,
+    )
 }
 
-fn stage_reply(bytes: &[u8]) -> Result<Status> {
+fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     let reply: std::result::Result<Status, Refusal> =
-        ic_wire::native::decode_response(STAGE, bytes, LIMITS).map_err(supplier)?;
+        ic_wire::native::decode_response(Method::Stage.id(plan), bytes, LIMITS)
+            .map_err(supplier)?;
     reply.map_err(|refusal| {
         Error::Blocked(format!(
             "Root refused admission: {refusal:?}; original attempt retained"
@@ -254,7 +250,7 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     let mut latest = None;
     let stage = dir.join("stage/reply.bin");
     if stage.try_exists().map_err(supplier)? {
-        match stage_reply(&store::read(&stage, LIMITS.bytes)?) {
+        match stage_reply(plan, &store::read(&stage, LIMITS.bytes)?) {
             Ok(status) => {
                 validate(plan, None, &status)?;
                 latest = Some(status);
@@ -265,8 +261,8 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     }
     for index in 0..OBSERVATIONS {
         for (name, method) in [
-            ("reconcile/reply.bin", canic_management_protocol::RECONCILE),
-            ("reply.bin", STATUS),
+            ("reconcile/reply.bin", Method::Reconcile.id(plan)),
+            ("reply.bin", Method::Observe.id(plan)),
         ] {
             let reply = dir.join(format!("observe/{index}/{name}"));
             if reply.try_exists().map_err(supplier)? {
@@ -296,10 +292,13 @@ pub(crate) async fn apply(
     icp: &Path,
     agent: &Agent,
 ) -> Result<ApplyOutcome> {
-    if plan.target.is_some() {
-        return upgrade::apply(dir, id, plan, wasm, identity, icp, agent).await;
-    }
-    let owner = plan.management.as_ref().expect("managed dispatcher");
+    let owner = match &plan.action {
+        crate::PlanAction::CreateChild(owner) => owner,
+        crate::PlanAction::UpgradeChild { .. } => {
+            return upgrade::apply(dir, id, plan, wasm, identity, icp, agent).await;
+        }
+        _ => return Err(Error::Invalid("expected Root-owned child operation".into())),
+    };
     let root = principal(&owner.root)?;
     operation::controllers(agent, root, &plan.controller).await?;
     if operation::module(agent, root).await? != owner.root_module {
@@ -321,6 +320,7 @@ pub(crate) async fn apply(
             ));
         }
         stage_reply(
+            plan,
             &signed::execute(&stage, plan, &stage_call(plan, wasm)?, identity, icp, agent).await?,
         )?
     } else {
@@ -338,19 +338,16 @@ pub(crate) async fn apply(
                 "32 retained observation attempts exhausted; preserve this journal".into(),
             )
         })?;
-        let call = Call {
-            canister: root,
-            effective: root,
-            method: "observe",
-            args: ic_wire::native::encode_request(STATUS, &(), LIMITS).map_err(supplier)?,
-        };
+        let call = observation(plan)?;
         recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &call, identity, icp, agent).await?;
         let observed: Status =
-            ic_wire::native::decode_response(STATUS, &bytes, LIMITS).map_err(supplier)?;
+            ic_wire::native::decode_response(Method::Observe.id(plan), &bytes, LIMITS)
+                .map_err(supplier)?;
         if observed.phase == Phase::Empty && observed.approval.is_none() && retained.is_none() {
             // Empty is not proof the original staging attempt cannot still execute.
             stage_reply(
+                plan,
                 &signed::execute(&stage, plan, &stage_call(plan, wasm)?, identity, icp, agent)
                     .await?,
             )?

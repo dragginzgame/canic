@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "root": {
+    "version": 2,
+    "network": {
+      "kind": "Mainnet"
+    },
+    "controller": "o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe",
+    "artifact": {
+      "sha256": "e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296",
+      "bytes": 826979
+    },
+    "target": null,
+    "previous_module": null,
+    "creation_cycles": 3000000000000,
+    "created_at_ns": 1794679774328434609,
+    "expires_at_ns": 1794680494000000000,
+    "deployment": {
+      "fleet": "mainnet",
+      "app": "starter",
+      "canister": "root"
+    }
+  },
+  "child": {
+    "deployment": {
+      "fleet": "mainnet",
+      "app": "starter",
+      "canister": "app"
+    },
+    "parent": {
+      "operation": "e1d81294227ccd4e4d2bc2941f509cd8f4b57fce917215bb9186994fb1c63749"
+    },
+    "artifact": {
+      "sha256": "2e4c774d9fdabe34922a4b353c71c54c7edbe7a21e94e6df102273f740eef071",
+      "bytes": 44889
+    },
+    "creation_cycles": 1000000000000,
+    "execute_at_ns": 1794679894000000000
+  }
+}

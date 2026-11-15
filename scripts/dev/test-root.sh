@@ -18,6 +18,8 @@ cp -- "$(jq -r .wasm target/root/app-v2.json)" target/root/app-v2.wasm
 cp -- "$scratch/project/artifacts/root.wasm" target/root/root.wasm
 "$cli" artifact build --json --package canic-root --features maintenance-candidate > target/root/maintenance.json
 cp -- "$(jq -r .wasm target/root/maintenance.json)" target/root/maintenance.wasm
+"$cli" artifact build --json --package canic-root --features fault-injection > target/root/faults.json
+cp -- "$(jq -r .wasm target/root/faults.json)" target/root/faults.wasm
 for item in 'canic-profile-manager profile-manager' 'canic-profile-worker profile-worker'; do
     read -r package output <<< "$item"
     "$cli" artifact build --json --package "$package" > "target/root/$output.json"
@@ -27,5 +29,5 @@ done
 cp -- "$(jq -r .wasm target/root/profile-worker-v2.json)" target/root/profile-worker-v2.wasm
 "$cli" artifact build --json --package canic-profile-manager --features maintenance-candidate > target/root/profile-maintenance.json
 cp -- "$(jq -r .wasm target/root/profile-maintenance.json)" target/root/profile-maintenance.wasm
-CANIC_CLI="$cli" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --test root -- --nocapture
+CANIC_CLI="$cli" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root -- --nocapture
 printf 'Generated starter retained at %s/project\n' "$scratch"

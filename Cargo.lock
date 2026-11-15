@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -390,7 +390,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic-management-protocol",
  "ic-platform",
@@ -429,12 +429,13 @@ dependencies = [
  "ic-storage",
  "ic-timers",
  "ic-wire",
+ "serde",
  "toko-tooling",
 ]
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -445,7 +446,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-client"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic-management-protocol",
  "canic-profile-protocol",
@@ -459,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-entry"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -470,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-manager"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic-management",
  "canic-management-protocol",
@@ -482,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -491,7 +492,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -503,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -1437,9 +1438,9 @@ checksum = "e169441b0ee18cfe2825c18474a90ababa65059096c75ce5b732ce1924862b52"
 
 [[package]]
 name = "ic-platform"
-version = "0.33.5"
+version = "0.33.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e61489a7377a2a67791f949a70976ec1445c75ac3dcc0ab5229cc1ea569385a"
+checksum = "24586654cc055365afd1c4bfb8dcd8f26f389bedba5cbee3dc722d99fce4a00a"
 dependencies = [
  "crc32fast",
  "data-encoding",

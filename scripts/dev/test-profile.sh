@@ -20,4 +20,4 @@ done
 "$cli" artifact build --json --package canic-profile-entry > target/profile/entry.json
 cp -- "$(jq -r .wasm target/profile/entry.json)" target/profile/entry.wasm
 CANIC_CLI="$cli" CANIC_PROFILE_CLIENT="$client" cargo test --locked \
-    --manifest-path qualification/Cargo.toml -p canic-m1-tests --test profile -- --nocapture
+    --manifest-path qualification/Cargo.toml -p canic-qualification --test profile -- --nocapture

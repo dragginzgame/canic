@@ -13,6 +13,8 @@ fn post_upgrade() {
 management::mount_endpoints! {
     status, observe, observe_custody, stage, reconcile,
     stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
+    observe_children, child_status, observe_child, stage_child, reconcile_child,
+    stage_child_upgrade, observe_child_upgrade, child_upgrade_status, reconcile_child_upgrade,
 }
 
 fn readiness() -> Readiness {
@@ -32,3 +34,6 @@ fn readiness() -> Readiness {
         },
     }
 }
+
+#[cfg(feature = "fault-injection")]
+management::mount_endpoints! { inject_child_fault }

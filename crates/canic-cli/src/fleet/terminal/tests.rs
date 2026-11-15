@@ -31,6 +31,7 @@ fn terminal_preserves_unknowns_network_identity_and_uncertain_effects() {
         });
     }
     snapshot.operations.push(FleetOperation {
+        slot: None,
         upgrade: None,
         management: None,
         deployment: None,
@@ -101,6 +102,7 @@ fn terminal_escapes_external_unicode_controls_without_changing_evidence() {
 fn terminal_distinguishes_unknown_wallet_balance_and_uncertified_manager() {
     let mut snapshot = empty();
     snapshot.managers.push(FleetManager {
+        slot: None,
         upgrade: None,
         network_id: "mainnet".into(),
         manager: "manager".into(),
@@ -206,6 +208,7 @@ fn roles_follow_observed_authority_without_inventing_root_or_crossing_networks()
         });
     }
     snapshot.managers.push(FleetManager {
+        slot: None,
         upgrade: None,
         network_id: "a".into(),
         manager: "manager".into(),
@@ -315,6 +318,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
         });
     }
     snapshot.managers.push(FleetManager {
+        slot: None,
         upgrade: None,
         network_id: network,
         manager: declarations[2].1.into(),
@@ -437,6 +441,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
 fn upgrade_progress_stays_uncertified_and_unknowns_do_not_hide_creation() {
     let mut snapshot = empty();
     snapshot.managers.push(FleetManager {
+        slot: None,
         network_id: "mainnet".into(),
         manager: "root".into(),
         reported: Some(Default::default()),

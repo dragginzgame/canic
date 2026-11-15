@@ -208,14 +208,14 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "ic-wire",
  "serde",
 ]
 
 [[package]]
-name = "canic-m0-artifact"
+name = "canic-artifact-probe"
 version = "0.0.0"
 dependencies = [
  "ic-platform",
@@ -228,7 +228,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-m0-probe"
+name = "canic-effect-probe"
 version = "0.0.0"
 dependencies = [
  "ic-platform",
@@ -240,36 +240,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-m0-tests"
-version = "0.0.0"
-dependencies = [
- "canic",
- "canic-m0-artifact",
- "canic-m0-probe",
- "ic-testkit",
- "ic-wire",
- "tokio",
- "toko-tooling",
-]
-
-[[package]]
-name = "canic-m1-tests"
-version = "0.0.0"
-dependencies = [
- "canic",
- "canic-management-protocol",
- "canic-profile-protocol",
- "ic-host-artifacts",
- "ic-testkit",
- "ic-wire",
- "serde_json",
- "tokio",
- "toko-tooling",
-]
-
-[[package]]
 name = "canic-management-protocol"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -279,10 +251,27 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.204.1"
+version = "0.205.0"
 dependencies = [
  "ic-wire",
  "serde",
+]
+
+[[package]]
+name = "canic-qualification"
+version = "0.0.0"
+dependencies = [
+ "canic",
+ "canic-artifact-probe",
+ "canic-effect-probe",
+ "canic-management-protocol",
+ "canic-profile-protocol",
+ "ic-host-artifacts",
+ "ic-testkit",
+ "ic-wire",
+ "serde_json",
+ "tokio",
+ "toko-tooling",
 ]
 
 [[package]]
@@ -886,9 +875,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform"
-version = "0.33.5"
+version = "0.33.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e61489a7377a2a67791f949a70976ec1445c75ac3dcc0ab5229cc1ea569385a"
+checksum = "24586654cc055365afd1c4bfb8dcd8f26f389bedba5cbee3dc722d99fce4a00a"
 dependencies = [
  "ic-platform-types",
  "num-bigint 0.5.1",

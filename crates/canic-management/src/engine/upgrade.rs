@@ -1,11 +1,13 @@
 //! Serial child upgrades with bounded immutable history and one active effect owner.
 use super::{
-    MANAGEMENT_LIMITS, OBSERVING, STATE, State, failure, fault, management, schedule, snapshot,
+    MANAGEMENT_LIMITS, OBSERVING, STATE, State, failure, fault, management, observing,
+    reserved_cycles, schedule, snapshot,
 };
+use canic_management_protocol::children::Slot;
 use canic_management_protocol::upgrade::{
     Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage, Status as UpgradeStatus,
 };
-use canic_management_protocol::{Failure, Phase, RESERVE_CYCLES, Refusal, STAGE_LIMITS, digest};
+use canic_management_protocol::{Failure, Phase, Refusal, STAGE_LIMITS, digest};
 use ic_platform::{
     candid_codec::{self, decoder},
     management_canister_types::{
@@ -23,22 +25,18 @@ use ic_platform_runtime::{
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
 #[must_use]
-pub fn status() -> UpgradeStatus {
+pub fn status(slot: Slot) -> UpgradeStatus {
     STATE.with_borrow(|state| {
-        state
-            .as_ref()
-            .expect("initialized manager")
-            .journal
-            .get()
+        state.as_ref().expect("initialized manager").journal.get().0[slot.index()]
             .1
             .clone()
     })
 }
-fn mutate(f: impl FnOnce(&mut UpgradeStatus)) {
+fn mutate(slot: Slot, f: impl FnOnce(&mut UpgradeStatus)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
         let mut value = state.journal.get().clone();
-        f(&mut value.1);
+        f(&mut value.0[slot.index()].1);
         state.journal.set(value);
     });
 }
@@ -46,9 +44,9 @@ fn mutate(f: impl FnOnce(&mut UpgradeStatus)) {
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
 #[must_use]
-pub fn observe(expected: &Approval) -> UpgradeStatus {
+pub fn observe(slot: Slot, expected: &Approval) -> UpgradeStatus {
     STATE.with_borrow(|state| {
-        let journal = state.as_ref().expect("initialized manager").journal.get();
+        let journal = &state.as_ref().expect("initialized manager").journal.get().0[slot.index()];
         journal
             .2
             .iter()
@@ -59,8 +57,8 @@ pub fn observe(expected: &Approval) -> UpgradeStatus {
     })
 }
 
-pub(super) fn validate(state: &State) {
-    let journal = state.journal.get();
+pub(super) fn validate(state: &State, slot: Slot) {
+    let journal = &state.journal.get().0[slot.index()];
     assert!(journal.2.len() < MAX_UPGRADES, "bounded upgrade history");
     let mut previous = journal
         .0
@@ -96,12 +94,12 @@ pub(super) fn validate(state: &State) {
     }
     if let Some(a) = &journal.1.approval {
         assert_eq!(
-            digest(&state.artifact.get().1),
+            digest(&state.artifact.get().0[slot.index()].1),
             a.module_hash,
             "current artifact custody"
         );
     } else {
-        assert!(state.artifact.get().1.is_empty());
+        assert!(state.artifact.get().0[slot.index()].1.is_empty());
     }
 }
 
@@ -157,12 +155,12 @@ fn validate_record(
 /// Refuses incomplete creation, changed authority, invalid bytes/time or inadequate reserve.
 /// # Panics
 /// Traps for noncontrollers, uninitialized storage or failed durable writes.
-pub fn stage(input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
+pub fn stage(slot: Slot, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    let retained = observe(&input.approval);
+    let retained = observe(slot, &input.approval);
     if retained.approval.is_some() {
         return if digest(&input.wasm) == input.approval.module_hash {
             Ok(retained)
@@ -170,21 +168,21 @@ pub fn stage(input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
             Err(Refusal::Artifact)
         };
     }
-    let current = status();
-    if OBSERVING.get()
+    let current = status(slot);
+    if OBSERVING.get()[slot.index()]
         || (current.approval.is_some()
             && (current.phase != UpgradePhase::Ready || current.failure.is_some()))
     {
         return Err(Refusal::Occupied);
     }
     let full = STATE.with_borrow(|state| {
-        let journal = state.as_ref().expect("initialized manager").journal.get();
+        let journal = &state.as_ref().expect("initialized manager").journal.get().0[slot.index()];
         journal.2.len() + usize::from(journal.1.approval.is_some()) >= MAX_UPGRADES
     });
     if full {
         return Err(Refusal::Occupied);
     }
-    let creation = snapshot();
+    let creation = snapshot(slot);
     if creation.phase != Phase::Ready {
         return Err(Refusal::Binding);
     }
@@ -211,18 +209,33 @@ pub fn stage(input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
         &previous,
         api::time(),
     )?;
-    if api::canister_liquid_cycle_balance() < u128::from(RESERVE_CYCLES) {
+    if api::canister_liquid_cycle_balance() < reserved_cycles() {
         return Err(Refusal::Reserve);
     }
+    let artifacts = STATE.with_borrow(|state| {
+        let mut artifacts = state
+            .as_ref()
+            .expect("initialized manager")
+            .artifact
+            .get()
+            .clone();
+        artifacts.0[slot.index()].1 = input.wasm;
+        artifacts
+    });
+    if !artifacts.fits() {
+        return Err(Refusal::Artifact);
+    }
     STATE.with_borrow_mut(|state| {
-        let state = state.as_mut().expect("initialized manager");
-        let mut artifacts = state.artifact.get().clone();
-        artifacts.1 = input.wasm;
-        state.artifact.set(artifacts);
+        state
+            .as_mut()
+            .expect("initialized manager")
+            .artifact
+            .set(artifacts);
     });
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
-        let mut journal = state.journal.get().clone();
+        let mut journals = state.journal.get().clone();
+        let journal = &mut journals.0[slot.index()];
         if journal.1.approval.is_some() {
             journal.2.push(journal.1.clone());
         }
@@ -231,13 +244,13 @@ pub fn stage(input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
             phase: UpgradePhase::Scheduled,
             ..Default::default()
         };
-        state.journal.set(journal);
+        state.journal.set(journals);
     });
-    schedule();
-    Ok(status())
+    schedule(slot);
+    Ok(status(slot))
 }
-pub(super) fn next() -> Option<u64> {
-    let s = status();
+pub(super) fn next(slot: Slot) -> Option<u64> {
+    let s = status(slot);
     if s.failure.is_some() {
         return None;
     }
@@ -266,16 +279,16 @@ async fn inspect(a: &Approval) -> Result<CanisterStatusResult, Failure> {
     }
     Ok(value)
 }
-fn issue(index: usize, phase: UpgradePhase, bytes: &[u8]) {
-    mutate(|s| {
+fn issue(slot: Slot, index: usize, phase: UpgradePhase, bytes: &[u8]) {
+    mutate(slot, |s| {
         assert_eq!(s.attempts[index], 0, "no effect replay");
         s.attempts[index] = 1;
         s.requests[index] = Some(digest(bytes));
         s.phase = phase;
     });
 }
-pub(super) async fn step() {
-    let s = status();
+pub(super) async fn step(slot: Slot) {
+    let s = status(slot);
     let Some(a) = &s.approval else {
         return;
     };
@@ -284,14 +297,14 @@ pub(super) async fn step() {
         UpgradePhase::Scheduled | UpgradePhase::Checked | UpgradePhase::Uploaded
     ) {
         if api::time() > a.expires_at_ns {
-            mutate(|s| s.phase = UpgradePhase::Expired);
+            mutate(slot, |s| s.phase = UpgradePhase::Expired);
             return;
         }
         if api::time() < a.execute_at_ns {
             return;
         }
-        if api::canister_liquid_cycle_balance() < u128::from(RESERVE_CYCLES) {
-            mutate(|s| s.phase = UpgradePhase::ReserveBlocked);
+        if api::canister_liquid_cycle_balance() < reserved_cycles() {
+            mutate(slot, |s| s.phase = UpgradePhase::ReserveBlocked);
             return;
         }
     }
@@ -300,11 +313,7 @@ pub(super) async fn step() {
             if value.module_hash.as_deref() != Some(a.previous_module.as_slice())
                 || value.version == u64::MAX
                 || STATE.with_borrow(|state| {
-                    state
-                        .as_ref()
-                        .expect("initialized manager")
-                        .journal
-                        .get()
+                    state.as_ref().expect("initialized manager").journal.get().0[slot.index()]
                         .2
                         .last()
                         .is_some_and(|old| {
@@ -315,15 +324,18 @@ pub(super) async fn step() {
             {
                 return Err(Failure::Mismatch);
             }
-            mutate(|s| {
+            mutate(slot, |s| {
                 s.previous_version = Some(value.version);
                 s.phase = UpgradePhase::Checked;
             });
             Ok(())
         }),
         UpgradePhase::Checked => {
-            let wasm =
-                STATE.with_borrow(|state| state.as_ref().expect("state").artifact.get().1.clone());
+            let wasm = STATE.with_borrow(|state| {
+                state.as_ref().expect("state").artifact.get().0[slot.index()]
+                    .1
+                    .clone()
+            });
             let bytes = candid_codec::encode_one(
                 &UploadChunkArgs {
                     canister_id: api::canister_self(),
@@ -332,7 +344,7 @@ pub(super) async fn step() {
                 STAGE_LIMITS.bytes,
             )
             .expect("upload args");
-            issue(0, UpgradePhase::UploadIssued, &bytes);
+            issue(slot, 0, UpgradePhase::UploadIssued, &bytes);
             let result = management("upload_chunk", bytes, 0)
                 .await
                 .and_then(|bytes| {
@@ -341,10 +353,10 @@ pub(super) async fn step() {
                     if hash.hash != a.module_hash {
                         return Err(Failure::Mismatch);
                     }
-                    mutate(|s| s.phase = UpgradePhase::Uploaded);
+                    mutate(slot, |s| s.phase = UpgradePhase::Uploaded);
                     Ok(())
                 });
-            fault(6); // Lost upload callback is recoverable from the chunk store.
+            fault(slot, 6); // Lost upload callback is recoverable from the chunk store.
             result
         }
         UpgradePhase::Uploaded => {
@@ -359,11 +371,11 @@ pub(super) async fn step() {
                 Ok(_) => {
                     // Inspection awaits: check the original deadline/reserve again at dispatch.
                     if api::time() > a.expires_at_ns {
-                        mutate(|s| s.phase = UpgradePhase::Expired);
+                        mutate(slot, |s| s.phase = UpgradePhase::Expired);
                         return;
                     }
-                    if api::canister_liquid_cycle_balance() < u128::from(RESERVE_CYCLES) {
-                        mutate(|s| s.phase = UpgradePhase::ReserveBlocked);
+                    if api::canister_liquid_cycle_balance() < reserved_cycles() {
+                        mutate(slot, |s| s.phase = UpgradePhase::ReserveBlocked);
                         return;
                     }
                     let bytes = candid_codec::encode_one(
@@ -382,8 +394,8 @@ pub(super) async fn step() {
                         4096,
                     )
                     .expect("upgrade args");
-                    issue(1, UpgradePhase::InstallIssued, &bytes);
-                    fault(7); // Trap rolls back dispatch and intent together.
+                    issue(slot, 1, UpgradePhase::InstallIssued, &bytes);
+                    fault(slot, 7); // Trap rolls back dispatch and intent together.
                     let result =
                         management("install_chunked_code", bytes, 0)
                             .await
@@ -394,23 +406,23 @@ pub(super) async fn step() {
                                     decoder::Arity::Exact,
                                 )
                                 .map_err(|_| Failure::InvalidReply)?;
-                                mutate(|s| s.phase = UpgradePhase::Installed);
+                                mutate(slot, |s| s.phase = UpgradePhase::Installed);
                                 Ok(())
                             });
-                    fault(8); // The upgrade may commit while its callback evidence rolls back.
+                    fault(slot, 8); // The upgrade may commit while its callback evidence rolls back.
                     result
                 }
             }
         }
-        UpgradePhase::Installed | UpgradePhase::Verified => observation().await,
+        UpgradePhase::Installed | UpgradePhase::Verified => observation(slot).await,
         _ => Ok(()),
     };
     if let Err(error) = result {
-        mutate(|s| s.failure = Some(error));
+        mutate(slot, |s| s.failure = Some(error));
     }
 }
-async fn observation() -> Result<(), Failure> {
-    let s = status();
+async fn observation(slot: Slot) -> Result<(), Failure> {
+    let s = status(slot);
     let Some(a) = &s.approval else {
         return Ok(());
     };
@@ -429,7 +441,7 @@ async fn observation() -> Result<(), Failure> {
             if !chunks.iter().any(|c| c.hash == a.module_hash) {
                 return Err(Failure::Mismatch);
             }
-            mutate(|s| {
+            mutate(slot, |s| {
                 s.phase = UpgradePhase::Uploaded;
                 s.failure = None;
             });
@@ -441,7 +453,7 @@ async fn observation() -> Result<(), Failure> {
             {
                 return Err(Failure::Mismatch);
             }
-            mutate(|s| {
+            mutate(slot, |s| {
                 s.phase = UpgradePhase::Verified;
                 s.observed_version = Some(value.version);
                 s.failure = None;
@@ -460,7 +472,7 @@ async fn observation() -> Result<(), Failure> {
             .await
             .map_err(failure)?;
             (readiness.accept)(&reply)?;
-            mutate(|s| {
+            mutate(slot, |s| {
                 s.phase = UpgradePhase::Ready;
                 s.failure = None;
             });
@@ -472,27 +484,30 @@ async fn observation() -> Result<(), Failure> {
 /// Recover observations and resume only effects that were never issued.
 /// # Panics
 /// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
-pub async fn reconcile(expected: canic_management_protocol::upgrade::Approval) -> UpgradeStatus {
+pub async fn reconcile(
+    slot: Slot,
+    expected: canic_management_protocol::upgrade::Approval,
+) -> UpgradeStatus {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
-    let retained = observe(&expected);
+    let retained = observe(slot, &expected);
     assert_eq!(
         retained.approval.as_ref(),
         Some(&expected),
         "reconciliation approval mismatch"
     );
-    if status().approval.as_ref() != Some(&expected) {
+    if status(slot).approval.as_ref() != Some(&expected) {
         return retained;
     }
-    if OBSERVING.replace(true) {
-        return status();
+    if observing(slot, true) {
+        return status(slot);
     }
-    if let Err(error) = observation().await {
-        mutate(|s| s.failure = Some(error));
+    if let Err(error) = observation(slot).await {
+        mutate(slot, |s| s.failure = Some(error));
     }
-    OBSERVING.set(false);
-    schedule();
-    status()
+    observing(slot, false);
+    schedule(slot);
+    status(slot)
 }

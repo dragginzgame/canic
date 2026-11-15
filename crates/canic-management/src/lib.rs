@@ -1,19 +1,31 @@
-//! Bounded one-child management engine. Canisters own endpoints and lifecycle composition.
+//! Bounded two-child management engine. Canisters own endpoints and lifecycle composition.
 //! Host consumers use canic-management-protocol without this runtime.
 
 #[cfg(target_arch = "wasm32")]
 pub mod endpoint;
 #[cfg(target_arch = "wasm32")]
 mod engine;
+#[cfg(target_arch = "wasm32")]
+mod single;
+#[cfg(target_arch = "wasm32")]
+pub use engine::{custody, open};
 #[cfg(all(target_arch = "wasm32", feature = "fault-injection"))]
-pub use engine::inject_fault;
+pub use single::inject_fault;
 #[cfg(target_arch = "wasm32")]
-pub use engine::upgrade::{
-    observe as observe_upgrade, reconcile as reconcile_upgrade, stage as stage_upgrade,
-    status as upgrade_status,
+pub use single::{
+    observe_upgrade, reconcile, reconcile_upgrade, stage, stage_upgrade, status, upgrade_status,
 };
+
+/// Explicit child-scoped operations. The wrapper decides which endpoints to mount.
 #[cfg(target_arch = "wasm32")]
-pub use engine::{custody, open, reconcile, stage, status};
+pub mod children {
+    #[cfg(feature = "fault-injection")]
+    pub use crate::engine::inject_fault;
+    pub use crate::engine::upgrade::{
+        observe as observe_upgrade, reconcile as reconcile_upgrade, stage as stage_upgrade,
+    };
+    pub use crate::engine::{owner_custody as custody, reconcile, stage, status};
+}
 
 /// Application-owned bounded readiness request and response admission.
 /// The engine observes the exact installed module and controller before calling this method.

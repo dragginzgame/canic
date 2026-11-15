@@ -100,8 +100,11 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         writeln!(output, "\nSnapshot: {} Unix seconds. Read-only sampled observations.\nCode/control verification does not establish readiness, running status or canister cycles.\nTree and explicit roles are declared; fallback roles come from manager reports or routes. Controller relationships are observed separately.", snapshot.finished_at_ns / 1_000_000_000).expect("writing to String");
     }
     for manager in &snapshot.managers {
-        let name = roles::name(snapshot, &manager.network_id, &manager.manager)
+        let mut name = roles::name(snapshot, &manager.network_id, &manager.manager)
             .unwrap_or_else(|| manager.manager.clone());
+        if let Some(child) = super::child_name(snapshot, manager) {
+            name.push_str(&format!(" / {child}"));
+        }
         write!(
             output,
             "\n{} report (uncertified): {}",

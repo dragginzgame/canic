@@ -1,5 +1,99 @@
 # Changelog
 
+## [0.205.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+Host plans now contain one explicit `PlanAction`: direct creation, direct upgrade,
+Root-owned creation, Root-owned upgrade, or Root maintenance. Rust callers supply
+that action instead of combining optional target/management/maintenance fields.
+`FleetPlan.children` is an ordered collection with permanent slot identities;
+maintenance contains an ordered custody collection. `ManagedOwner.slot` remains
+`None` for the original unscoped request contract.
+
+Saved approval JSON, digests, journal paths and signed-attempt bytes are unchanged;
+private record codecs retain the old fields. No migration or renewed approval is
+needed. Fleet apply/reconcile JSON now returns `children: [{name, outcome}]`, and
+fleet status returns `children: [{name, state}]`; consumers must use these named
+collections instead of top-level `child`/`sibling`. The nested `fleet_plan`
+approval retains its original encoding.
+
+### ➕ Added
+
+Fleet plan/apply now supports a new Root with one or two direct children. Each
+child retains its own creation, eight-entry upgrade history and recovery evidence.
+The same CLI plans independent child upgrades and Root maintenance covering both
+complete journals. Terminal and HTML fleet views show both named children.
+
+Create a fresh two-child greeting project from this checkout, with the Wasm target
+prepared. Initialization/build are local only; these commands open no browser:
+
+```sh
+canic app init siblings --fleet mainnet --network ic --source siblings
+canic app canister add worker --app siblings --parent root --role worker --wasm artifacts/worker.wasm --manifest Cargo.toml --package siblings-app
+canic app build --app siblings
+canic fleet plan --app siblings --identity canic-mainnet
+```
+
+Planning retains a local approval. With the signer prepared and cycles supplied,
+review its budget before applying: the two-child default is 4T cycles. Replace
+`OPERATION` with the displayed approval ID; apply creates real mainnet canisters:
+
+```sh
+canic fleet apply OPERATION --app siblings --identity canic-mainnet
+canic fleet show --app siblings
+canic fleet call OPERATION --app siblings --canister worker
+```
+
+Change one artifact per upgrade approval. Existing one-child fleets retain their
+original format and cannot acquire a second child through replanning. General
+trees, dynamic growth and adopting existing deployments remain unqualified.
+
+### 🔧 Changed
+
+Help headings put the version and command description on one line, for example
+`Canic 0.205.0 : Manage Canic apps, fleet deployments and Wasm artifacts`.
+
+```sh
+canic --help
+canic fleet --help
+```
+
+The v4 journal and v3 artifact payload retain both children inside the original
+IC Storage allocations. Combined creation/current-upgrade Wasm custody is capped
+at 1,048,512 bytes; admission refuses overflow without changing either child.
+Each artifact still has the existing 512 KiB ceiling. Migration refuses an older
+payload above the new aggregate bound and rolls back the executable change.
+Original signed request contracts retain their first-slot meaning. Old full-custody
+reads refuse an occupied second slot; the new controller-only observation includes
+both slots. Multi-child maintenance verifies both live children before and after
+installation; untracked work in either child blocks the upgrade.
+
+Inspect a retained operation without submitting work or opening a browser:
+
+```sh
+canic fleet status OPERATION --app siblings
+canic fleet status OPERATION --app siblings --json
+```
+
+### 🧹 Cleanup
+
+Share signed method selection across creation, upgrade, recovery and fresh-read
+authorization. Retain a golden unsigned v1 fleet approval to guard old digests.
+Remove one-child assumptions from convergence and fleet observation instead of
+adding a parallel workflow. `app canister add` now accepts the existing manifest/
+package build recipe, so adding a child can preserve the normal `app build` flow.
+Keep names and slots bound to retained approvals even when configuration changes.
+
+Qualification no longer uses M0/M1 package names: one native
+`canic-qualification` harness owns shared simulator preparation and installed
+tests, alongside the effect and artifact probes. Use `make qualification-setup`,
+`make effect-test`, `make artifact-custody-test` and `make journey-test`;
+the old Make names have no aliases. The prepared server now lives under
+`target/qualification/server` (or the shared `IC_TESTKIT_SERVER_DIRECTORY`
+override). Existing outputs are preserved. Unique failure scenarios remain;
+dated M0 decisions and later evidence move to `docs/qualification/history.md`.
+
 ## [0.204.1] - 2026-11-14
 
 ### ➕ Added
@@ -14,7 +108,7 @@ Keep original plans and signed attempts, including interrupted-install recovery.
 The generated `starter/mainnet` demo now runs this transition: Root and app keep
 their identities, then the maintained Root upgrades the greeting app. Local
 qualification covers interruption recovery; the mainnet run verifies the normal
-path. See the [retained journey evidence](docs/design/m0-first-journey.md#mainnet-predecessor-transition-and-subsequent-app-upgrade).
+path. See the [retained journey evidence](docs/qualification/history.md#mainnet-predecessor-transition-and-subsequent-app-upgrade).
 
 ### ▶️ Try it
 

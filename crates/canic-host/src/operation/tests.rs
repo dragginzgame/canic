@@ -11,17 +11,15 @@ fn plan() -> Plan {
     Plan {
         deployment: None,
         version: 1,
-        maintenance: None,
-        management: None,
         network: Network::Mainnet,
         controller: input.controller,
         artifact: Artifact {
             sha256: "00".repeat(32),
             bytes: 8,
         },
-        target: None,
-        previous_module: None,
-        creation_cycles: input.creation_cycles,
+        action: crate::PlanAction::Create {
+            cycles: input.creation_cycles,
+        },
         created_at_ns: 10,
         expires_at_ns: 100,
     }
@@ -35,7 +33,7 @@ fn mainnet_provider_request_binds_funding_identity_and_controller() {
     assert_eq!(call.canister.to_text(), super::LEDGER);
     assert_eq!(call.method, "create_canister");
     assert_eq!(args.created_at_time, Some(plan.created_at_ns));
-    assert_eq!(args.amount, plan.creation_cycles - LEDGER_FEE);
+    assert_eq!(args.amount, plan.creation_cycles() - LEDGER_FEE);
     assert_eq!(args.from_subaccount, None);
     let settings = args.creation_args.unwrap().settings.unwrap();
     assert_eq!(

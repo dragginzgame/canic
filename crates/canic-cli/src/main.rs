@@ -49,6 +49,8 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 role,
                 parent,
                 wasm,
+                manifest,
+                package,
             } => {
                 let path = selection.config.path(selection.app.as_deref())?;
                 let declaration = canic_host::load_config(&path)?;
@@ -61,7 +63,12 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                         role: role.clone(),
                         parent: parent.clone(),
                         wasm: wasm.clone(),
-                        build: None,
+                        build: manifest.as_ref().zip(package.as_ref()).map(
+                            |(manifest, package)| canic_host::BuildInput {
+                                manifest: manifest.clone(),
+                                package: package.clone(),
+                            },
+                        ),
                     },
                 )?;
                 if !cli.json {
@@ -524,13 +531,14 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             }
             Ok(serde_json::json!(snapshot))
         }
-        FleetCommand::Call { digest, name, .. } => {
+        FleetCommand::Call {
+            digest,
+            name,
+            canister,
+            ..
+        } => {
             let state = canic_host::status(&state_dir, digest)?;
-            let state = if state.get("fleet_plan").is_some() {
-                &state["child"]
-            } else {
-                &state
-            };
+            let state = status::call_state(&state, canister.as_deref())?;
             let receipt: canic_host::Receipt = serde_json::from_value(state["receipt"].clone())
                 .map_err(|_| {
                     Error::Invalid("operation has no completed deployment receipt".into())

@@ -40,12 +40,19 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
                 |phase| format!("{phase}; no completion receipt"),
             )
         };
+        let mut rows = vec![["Root".into(), evidence(&state["root"])]];
+        let children = state["children"]
+            .as_array()
+            .ok_or_else(|| Error::Invalid("missing fleet child states".into()))?;
+        for child in children {
+            rows.push([
+                child["name"].as_str().unwrap_or("unknown").into(),
+                evidence(&child["state"]),
+            ]);
+        }
         output.push_str(&table::render(
             &["STEP", "RETAINED EVIDENCE"],
-            &[
-                ["Root".into(), evidence(&state["root"])],
-                ["Application".into(), evidence(&state["child"])],
-            ],
+            &rows,
             &[Alignment::Left; 2],
             Options {
                 column_gap: 2,
@@ -55,12 +62,15 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         output.push_str(
             "\n\nLocal evidence only. Resume this same fleet operation with fleet apply.\n",
         );
-        if !state["child"]["management"].is_null() {
-            output.push_str(&management::render(
-                &state["child"]["management"],
-                false,
-                !state["child"]["receipt"].is_null(),
-            )?);
+        for child in children {
+            let state = &child["state"];
+            if !state["management"].is_null() {
+                output.push_str(&management::render(
+                    &state["management"],
+                    false,
+                    !state["receipt"].is_null(),
+                )?);
+            }
         }
         return Ok(output);
     }
@@ -99,26 +109,27 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        if plan.maintenance.is_some() { "upgrade Root, preserving child custody" } else if plan.management.is_some() && plan.target.is_some() { "Root upgrades its existing child" } else if plan.management.is_some() { "Root creates and installs its child" } else if plan.target.is_some() { "upgrade existing canister" } else { "create and install canister" },
+        match plan.action { canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
         terminal_text(&plan.artifact.sha256),
         plan.artifact.bytes,
-        plan.creation_cycles,
+        plan.creation_cycles(),
         plan.expires_at_ns / 1_000_000_000,
         if now >= u128::from(plan.expires_at_ns) { "expired" } else { "within original deadline" },
     )
     .expect("writing to String");
-    if let Some(custody) = &plan.maintenance {
+    for custody in plan.maintenance().into_iter().flatten() {
         writeln!(
             output,
-            "Preserve: original child creation and {} completed child upgrade(s)",
+            "Preserve: child {} creation and {} completed child upgrade(s)",
+            terminal_text(custody.creation.worker.as_deref().unwrap_or("unknown")),
             custody.upgrades.len()
         )
         .expect("writing to String");
     }
-    if let Some(owner) = &plan.management {
+    if let Some(owner) = plan.management() {
         writeln!(
             output,
             "Root: {}\nRoot module: {}\nOperator: {}\nAutonomous dispatch: {} Unix seconds",
@@ -130,14 +141,14 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         .expect("writing to String");
         output.push_str(&management::render(
             &state["management"],
-            plan.target.is_some(),
+            plan.target().is_some(),
             receipt.is_some(),
         )?);
     }
-    if let Some(target) = &plan.target {
+    if let Some(target) = plan.target() {
         writeln!(output, "Upgrade target: {}", terminal_text(target)).expect("writing to String");
     }
-    if let Some(module) = &plan.previous_module {
+    if let Some(module) = plan.previous_module() {
         writeln!(
             output,
             "Required previous module: {}",
@@ -149,7 +160,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         .iter()
         .map(|(effect, evidence)| {
             let description = match evidence.as_str() {
-                "not_submitted" if effect == "create" && plan.target.is_some() => {
+                "not_submitted" if effect == "create" && plan.target().is_some() => {
                     "Not applicable to this upgrade (not submitted)"
                 }
                 "not_submitted" => "Not submitted",
@@ -214,20 +225,33 @@ pub(crate) fn fleet_preview(
         .deployment
         .as_ref()
         .ok_or_else(|| Error::Invalid("missing Root slot".into()))?;
-    let rows = [
-        [
-            root.canister.clone(),
-            "operator".into(),
-            format!("{} debit ceiling", cycles(plan.root.creation_cycles)),
-        ],
-        [
-            plan.child.deployment.canister.clone(),
+    let mut rows = vec![[
+        root.canister.clone(),
+        "operator".into(),
+        format!("{} debit ceiling", cycles(plan.root.creation_cycles())),
+    ]];
+    let mut modules = format!("Root module: {}\n", plan.root.artifact.sha256);
+    for (index, child) in plan.children.iter().enumerate() {
+        let branch = if index + 1 < plan.children.len() {
+            "├─"
+        } else {
+            "└─"
+        };
+        rows.push([
+            format!("{branch} {}", child.deployment.canister),
             format!("{}.result.canister", root.canister),
-            format!("{} from Root", cycles(plan.child.creation_cycles)),
-        ],
-    ];
+            format!("{} from Root", cycles(child.creation_cycles)),
+        ]);
+        writeln!(
+            modules,
+            "{} module: {}",
+            terminal_text(&child.deployment.canister),
+            child.artifact.sha256
+        )
+        .expect("String write");
+    }
     Ok(format!(
-        "CANIC FLEET PLAN\nOperation: {}\nApp: {}\nFleet: {}\nNetwork: {}\nOperator: {}\nJournal: {}\n\n{}\n\nRoot module: {}\nApplication module: {}\nAdmission before: {}\nChild effect deadline: {}\n\n",
+        "CANIC FLEET PLAN\nOperation: {}\nApp: {}\nFleet: {}\nNetwork: {}\nOperator: {}\nJournal: {}\n\n{}\n\n{}Admission before: {}\nChild effect deadline: {}\n\n",
         terminal_text(id),
         terminal_text(&root.app),
         terminal_text(&root.fleet),
@@ -246,10 +270,9 @@ pub(crate) fn fleet_preview(
                 header_separator: true
             }
         ),
-        plan.root.artifact.sha256,
-        plan.child.artifact.sha256,
-        deadline(plan.child.execute_at_ns),
-        deadline(plan.child.execute_at_ns + 600_000_000_000)
+        modules,
+        deadline(plan.children[0].execute_at_ns),
+        deadline(plan.children[0].execute_at_ns + 600_000_000_000)
     ))
 }
 
@@ -297,4 +320,38 @@ fn cycles(value: u64) -> String {
         format!("{whole}.{fraction}")
     };
     format!("{amount}{unit} cycles ({value})")
+}
+
+// Select against retained names before making a network call; configuration changes
+// cannot redirect a completed operation to another application.
+pub(crate) fn call_state<'a>(
+    state: &'a serde_json::Value,
+    selected: Option<&str>,
+) -> Result<&'a serde_json::Value> {
+    if state.get("fleet_plan").is_some() {
+        let children = state["children"]
+            .as_array()
+            .ok_or_else(|| Error::Invalid("missing fleet child states".into()))?;
+        if let Some(child) = children.iter().find(|child| {
+            selected.map_or(children.len() == 1, |name| {
+                child["name"].as_str() == Some(name)
+            })
+        }) {
+            return Ok(&child["state"]);
+        }
+        return Err(Error::Invalid(format!(
+            "select --canister from: {}",
+            children
+                .iter()
+                .filter_map(|c| c["name"].as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )));
+    }
+    if selected.is_some_and(|name| state["plan"]["deployment"]["canister"].as_str() != Some(name)) {
+        return Err(Error::Invalid(
+            "--canister does not match this retained operation".into(),
+        ));
+    }
+    Ok(state)
 }

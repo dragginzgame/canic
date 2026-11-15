@@ -25,4 +25,4 @@ for variant in manager faults maintenance; do
     "$cli" artifact build --json --package canic-profile-manager "${features[@]}" > "target/growth/$variant.json"
     cp -- "$(jq -r .wasm "target/growth/$variant.json")" "target/growth/$variant.wasm"
 done
-CANIC_CLI="$cli" CANIC_PROFILE_CLIENT="$client" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-m1-tests --test growth -- --nocapture
+CANIC_CLI="$cli" CANIC_PROFILE_CLIENT="$client" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test growth -- --nocapture

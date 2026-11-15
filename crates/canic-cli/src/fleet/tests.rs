@@ -28,6 +28,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
         scope: "test",
         canisters: vec![],
         operations: vec![FleetOperation {
+            slot: None,
             upgrade: None,
             management: None,
             deployment: Some(DeploymentName {
@@ -121,6 +122,7 @@ fn report_escapes_untrusted_text_and_labels_partial_inventory() {
         wallet: None,
     };
     snapshot.managers.push(canic_host::FleetManager {
+        slot: None,
         upgrade: None,
         network_id: "local".into(),
         manager: "manager<script>".into(),

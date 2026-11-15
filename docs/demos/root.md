@@ -1,6 +1,7 @@
-# One-child Root
+# Root and its children
 
-The experimental Root creates and installs one approved Hello World canister:
+The generated starter begins with one approved Hello World child; a fresh fleet
+can include a second direct child:
 
 ```text
 Root
@@ -24,7 +25,7 @@ canic fleet call 0a68a8de48d4ca642147087a893813359ca4b7eda6847cf554acfaaa91c757c
 ```
 
 The greeting is `Hello from upgraded Canic, team!`. Keep `starter/.canic/` for
-recovery. The [journey record](../design/m0-first-journey.md#mainnet-predecessor-transition-and-subsequent-app-upgrade)
+recovery. The [journey record](../qualification/history.md#mainnet-predecessor-transition-and-subsequent-app-upgrade)
 contains the exact operations, artifact hashes and funding evidence. The creation
 walkthrough below is for a fresh project; the existing demo needs no new creation.
 
@@ -62,7 +63,7 @@ generated config, and its sole app/fleet can be inferred by listing commands.
 
 Back in the Canic checkout, qualify the installed graph with the same generator:
 
-Prepare the simulator once with `make m0-setup`, then run:
+Prepare the simulator once with `make qualification-setup`, then run:
 
 ```sh
 make root-test
@@ -76,6 +77,52 @@ without another operator mutation. It checks the physical controller sets,
 unauthorized admission, a greeting response, exact replay and refusal of changed
 authority. Cycles are synthetic; no browser or terminal window opens. The local
 simulator stops when qualification finishes.
+
+The same suite also qualifies two children through the runtime and installed CLI: separate
+creation and upgrade histories, sibling progress after callback loss, full-budget
+artifact custody, shared cycle reservations and migration from a retained old
+Root. The CLI fixture covers creation, lost admission replies, separate child
+upgrades, maintenance with both full journals, and terminal/HTML views. Untracked
+work in either child blocks Root maintenance before installation.
+
+## A fresh two-child fleet
+
+From the Canic checkout, choose an unused project name. This adds a second
+instance of the generated greeting package with its own artifact output:
+
+```sh
+canic app init siblings --fleet mainnet --network ic --source siblings
+canic app canister add worker --app siblings --parent root --role worker --wasm artifacts/worker.wasm --manifest Cargo.toml --package siblings-app
+canic app build --app siblings
+canic fleet plan --app siblings --identity canic-mainnet
+```
+
+The manifest and Wasm paths are relative to the generated config. `--manifest`
+and `--package` attach the existing build recipe; both require a Wasm output.
+Planning retains an approval but has no network effects. Prepare the signer and
+fund its cycles-ledger account before applying the reviewed plan. The default
+two-child budget is 4T cycles, including 1T attached to each child creation:
+
+```sh
+canic fleet apply OPERATION --app siblings --identity canic-mainnet
+canic fleet show --app siblings
+canic fleet call OPERATION --app siblings --canister app
+canic fleet call OPERATION --app siblings --canister worker
+```
+
+Apply again to retain completed outcomes after autonomous work finishes. Two-child
+greeting calls select the retained child name with `--canister`; the sole child
+remains inferred for the starter. Fleet views remain read-only and open no browser.
+Each child has up to eight serial upgrades. Change one child artifact at a time,
+then use the same plan/apply commands; change Root separately after both complete.
+Maintenance verifies complete custody and both children's code/controllers.
+
+The initial approval fixes names and permanent slots. Renaming, adding or removing
+children from a retained fleet is refused. To try two children, create a fresh
+fleet; this does not expand the existing mainnet starter. Arbitrary tree depth,
+dynamic growth and subtree cascades remain future qualification work.
+
+## Inspect the starter inputs
 
 To inspect/build the inputs yourself:
 

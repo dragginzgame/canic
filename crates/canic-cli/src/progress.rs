@@ -86,12 +86,17 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
 
 fn outcome(value: &ApplyOutcome, text: &mut String) -> bool {
     match value {
-        ApplyOutcome::Fleet { root, child, .. } => {
+        ApplyOutcome::Fleet { root, children, .. } => {
             text.push_str(&format!(
                 "Root installed: {}\n",
                 terminal_text(&root.canister)
             ));
-            outcome(child, text)
+            let mut complete = true;
+            for child in children {
+                text.push_str(&format!("Application: {}\n", terminal_text(&child.name)));
+                complete &= outcome(&child.outcome, text);
+            }
+            complete
         }
         ApplyOutcome::Complete(receipt) => {
             text.push_str(&format!(

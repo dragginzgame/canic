@@ -4,12 +4,12 @@ Canic's first native CLI and deployable greeting application. The CLI lives in
 `crates/canic-cli`, deployment logic in `crates/canic-host`, the small shared
 Wire contract in `crates/canic`, and the demo in `apps/hello/canister`.
 
-The [one-child Root journey](docs/demos/root.md) generates a greeting workspace
-and deploys Root and its application through one fleet plan/apply approval.
+The [Root journey](docs/demos/root.md) generates a greeting workspace
+and deploys Root and one or two direct children through one fleet plan/apply approval.
 The installed local journey qualifies admission, lost-reply recovery and completion
 receipts. Run `make root-test`
-after simulator preparation. The first fleet path supports a new Root-plus-app
-tree and plans successive child upgrades from retained completion. Identical artifacts
+after simulator preparation. The bounded fleet path plans successive child upgrades
+from retained completion, changing one artifact per approval. Identical artifacts
 produce no new approval; unfinished work retains its original authority. Larger
 trees and adopting existing deployments remain upcoming; existing
 mainnet demos are unchanged.
@@ -22,7 +22,7 @@ are refused before installation. See the [maintenance walkthrough](docs/demos/ro
 
 The current increment also qualifies bounded serial Root-owned child upgrades locally,
 including retained outcomes, callback-loss recovery and application persistence.
-The experimental Root has one creation slot and retains up to eight upgrades.
+The experimental Root has two permanent child slots and retains up to eight upgrades per child.
 Only successful completion permits a successor; failed or uncertain work remains
 blocked, and full history is never cleared.
 See the [upgrade walkthrough](docs/demos/root.md).
@@ -53,7 +53,7 @@ Build from this repository in the meantime.
 The accepted [Canic system design](docs/design/canic-system-design.md) defines
 the restart: product scope, architecture, capability ownership, deferred ideas,
 qualification and delivery milestones. Current evidence is recorded in
-[the journey notes](docs/design/m0-first-journey.md). Development is working toward
+[the journey notes](docs/qualification/history.md). Development is working toward
 M2's complete fleet workflow; narrow M3 autonomy and preservation paths are already
 qualified. This is not formal completion of either milestone. The first M1
 deployment path is implemented. Mainnet creation, installation and greeting have
@@ -69,7 +69,7 @@ Delivery starts with a hands-on Hello World deployment locally and on mainnet,
 followed by stateful composition and bounded autonomous operation. Each increment
 will include a runnable example and team-facing instructions so feedback can
 shape the next step. Early mainnet experiments do not imply production lifecycle
-support. A starter fleet approval composes Root and one application under one
+support. A starter fleet approval composes Root and up to two applications under one
 operator; individual canister plans remain available for existing workflows.
 The CLI can inspect multiple retained deployments without a Coordinator or Store.
 
@@ -83,10 +83,10 @@ an explicit direct readiness check and a declared entry-to-worker arrow through
 `canic fleet show --app profile --fleet mainnet --link ENTRY:WORKER --open`. See
 the [visualization acceptance contract](docs/design/canic-system-design.md#demo-fleet-visualization-from-the-first-multi-canister-increment).
 
-The runnable [M0 experiments](qualification/README.md) exercise creation,
+The runnable [effect-boundary fixtures](qualification/README.md) exercise creation,
 direct-cycle funding and owner maintenance on local PocketIC instances. Run
-`make m0-setup`, then `make m0-test` after preparing the documented Rust target.
-`make m0-artifact-test` separately proves retained-artifact installation while
+`make qualification-setup`, then `make effect-test` after preparing the documented Rust target.
+`make artifact-custody-test` separately proves retained-artifact installation while
 the operator is absent, including maintenance and callback-loss cases.
 
 Build and install the CLI from the repository root. `make canic` installs it into
@@ -113,11 +113,11 @@ Prepare the Wasm target and the local simulator explicitly:
 
 ```sh
 rustup target add wasm32-unknown-unknown --toolchain 1.100.0
-make m0-setup
-make m1-test
+make qualification-setup
+make journey-test
 ```
 
-`make m1-test` builds both demo executables and exercises the actual CLI against
+`make journey-test` builds both demo executables and exercises the actual CLI against
 PocketIC: create, install, greet, recover retained requests and upgrade the same
 canister. It uses synthetic cycles only. The simulator invokes the compiled CLI
 as a process, keeping its older pinned dependency graph separate from Host.
@@ -664,7 +664,7 @@ repository root. Read `AGENTS.md` and `TOKO-TOOLING.md` before making changes.
 Use `toko-cloc` for line counts; `make cloc` was retired in 0.43.0.
 The qualification workspace uses IC Testkit 0.104.0 for PocketIC lifecycle and
 raw calls, with application encoding supplied directly by IC Wire.
-Focused M1 checks are `make m1-test`, `make m1-clippy` and `make m1-doc`.
+CLI journey checks are `make journey-test`, `make journey-clippy` and `make journey-doc`.
 Linux execution is qualified locally; native macOS execution remains to be checked.
 
 `make deps-list` lists local product and qualification package versions.
