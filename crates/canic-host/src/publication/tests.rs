@@ -170,22 +170,12 @@ fn publication_evidence_cannot_become_an_installation_receipt_or_change_the_mani
 }
 
 #[test]
-fn store_declarations_cannot_enter_the_greeting_child_bootstrap() {
+fn store_declarations_cannot_use_the_greeting_child_contract() {
     let dir = directory();
     let mut selected = selection();
     for slot in selected.config.canisters.values_mut() {
         slot.id = None;
     }
-    let failure = crate::plan_fleet(
-        &dir.join("journal"),
-        &dir.join("canic.json"),
-        &selected,
-        &input().controller,
-        None,
-        None,
-    )
-    .unwrap_err();
-    assert!(failure.to_string().contains("Store bootstrap"));
     selected.config.canisters.remove("app");
     let failure = crate::create_managed_plan(
         &dir.join("journal"),
@@ -197,6 +187,6 @@ fn store_declarations_cannot_enter_the_greeting_child_bootstrap() {
         None,
     )
     .unwrap_err();
-    assert!(failure.to_string().contains("Store bootstrap"));
+    assert!(matches!(failure, Error::Invalid(_)));
     assert!(!dir.join("journal").exists());
 }

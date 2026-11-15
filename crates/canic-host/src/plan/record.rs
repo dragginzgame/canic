@@ -25,6 +25,8 @@ pub(super) struct PlanRecord {
     maintenance_sibling: Option<canic_management_protocol::custody::Custody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     publication: Option<crate::Publication>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    store_root: Option<UpgradeTarget>,
 }
 
 fn invalid() -> Error {
@@ -49,8 +51,24 @@ impl TryFrom<PlanRecord> for Plan {
             maintenance,
             maintenance_sibling,
             publication,
+            store_root,
         } = record;
-        let action = if let Some(value) = publication {
+        let action = if let Some(root) = store_root {
+            if version != 2
+                || target.is_some()
+                || previous_module.is_some()
+                || management.is_some()
+                || maintenance.is_some()
+                || maintenance_sibling.is_some()
+                || publication.is_some()
+            {
+                return Err(invalid());
+            }
+            PlanAction::CreateStore {
+                cycles: creation_cycles,
+                root,
+            }
+        } else if let Some(value) = publication {
             if target.is_some()
                 || previous_module.is_some()
                 || management.is_some()
@@ -117,6 +135,7 @@ impl TryFrom<Plan> for PlanRecord {
         let creation_cycles = plan.creation_cycles();
         let management = plan.management().cloned();
         let publication = plan.publication().cloned();
+        let store_root = plan.store_root().cloned();
         let (maintenance, maintenance_sibling) = match plan.maintenance() {
             None => (None, None),
             Some([first]) => (Some(first.clone()), None),
@@ -138,6 +157,7 @@ impl TryFrom<Plan> for PlanRecord {
             maintenance,
             maintenance_sibling,
             publication,
+            store_root,
         })
     }
 }

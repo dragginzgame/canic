@@ -1,0 +1,304 @@
+//! Store handover and readiness extend the existing direct deployment owner.
+use crate::{
+    DeploymentName, Error, Plan, PlanAction, PlanInput, Result, SelectedFleet, UpgradeTarget,
+    artifact, network::principal, operation, plan, signed, store, supplier,
+};
+use canic_management_protocol::publication as wire;
+use canic_wasm_store_protocol::Info;
+use ic_platform::{
+    agent::Agent, candid_codec, management_canister_types as mgmt, principal::Principal,
+};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+#[cfg(test)]
+mod tests;
+const OBSERVATIONS: usize = 32;
+
+/// Create a separately controlled Store under an explicitly bound existing Root.
+/// Uses direct creation/install custody, then retained controller handover and readiness.
+/// # Errors
+/// Refuses occupied slots, non-Store roles, missing Root identity or unrelated effect authority.
+pub fn create_store_plan(
+    journal: &Path,
+    wasm: &Path,
+    input: PlanInput,
+    selection: &SelectedFleet,
+    canister: &str,
+    root_module: &str,
+) -> Result<(String, Plan)> {
+    selection.validate()?;
+    let slot = selection
+        .config
+        .canisters
+        .get(canister)
+        .ok_or_else(|| Error::Invalid("unknown Store slot".into()))?;
+    let root = slot
+        .parent
+        .as_ref()
+        .and_then(|p| selection.config.canisters.get(p))
+        .ok_or_else(|| Error::Invalid("Store requires a declared Root parent".into()))?;
+    if slot.role.as_deref() != Some("wasm-store")
+        || slot.id.is_some()
+        || root.role.as_deref() != Some("root")
+        || root.parent.is_some()
+        || input.network != selection.config.network
+        || input.target.is_some()
+        || input.previous_module.is_some()
+    {
+        return Err(Error::Invalid(
+            "Store bootstrap requires an unbound wasm-store under a bound top-level Root".into(),
+        ));
+    }
+    let root = UpgradeTarget {
+        canister: root.id.clone().ok_or_else(|| {
+            Error::Invalid("bind the existing Root before Store bootstrap".into())
+        })?,
+        module: root_module.into(),
+    };
+    let bytes = store::read(wasm, artifact::MAX_WASM)?;
+    let now = crate::now()?;
+    let plan = Plan {
+        version: 2,
+        network: input.network,
+        controller: input.controller,
+        artifact: artifact::admit(&bytes)?,
+        action: PlanAction::CreateStore {
+            cycles: input.creation_cycles,
+            root,
+        },
+        created_at_ns: now,
+        expires_at_ns: now + 3_600_000_000_000,
+        deployment: Some(DeploymentName {
+            app: selection.app.clone(),
+            fleet: selection.fleet.clone(),
+            canister: canister.into(),
+        }),
+    };
+    plan::retain_locked(&store::Store::open(journal)?, plan, &bytes)
+}
+
+pub(crate) async fn verify_root(agent: &Agent, plan: &Plan) -> Result<()> {
+    if let Some(root) = plan.store_root() {
+        let id = principal(&root.canister)?;
+        operation::controllers(agent, id, &plan.controller).await?;
+        if operation::module(agent, id).await? != root.module {
+            return Err(Error::Blocked(
+                "Store bootstrap Root code differs from approval".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+async fn subnet(agent: &Agent, canister: &str) -> Result<Principal> {
+    let id = canister.parse().map_err(supplier)?;
+    let subnet = crate::network::bounded(agent.fetch_subnet_by_canister(&id)).await?;
+    principal(&subnet.id().to_text())
+}
+
+pub(crate) fn placement(dir: &Path, plan: &Plan) -> Result<Option<Principal>> {
+    if plan.store_root().is_none() {
+        return Ok(None);
+    }
+    let id: String = store::json(&dir.join("store-subnet.json"))?;
+    Ok(Some(principal(&id)?))
+}
+
+/// Store creation means colocating with the approved Root, never arbitrary CMC placement.
+pub(crate) async fn prepare_placement(dir: &Path, plan: &Plan, agent: &Agent) -> Result<()> {
+    let Some(root) = plan.store_root() else {
+        return Ok(());
+    };
+    let current = subnet(agent, &root.canister).await?;
+    let path = dir.join("store-subnet.json");
+    if path.try_exists().map_err(supplier)? {
+        if placement(dir, plan)? != Some(current) {
+            return Err(Error::Blocked(
+                "Root subnet differs from retained Store placement".into(),
+            ));
+        }
+    } else {
+        if dir
+            .join("create/signed.json")
+            .try_exists()
+            .map_err(supplier)?
+        {
+            return Err(Error::Invalid(
+                "Store creation lost its retained subnet binding".into(),
+            ));
+        }
+        store::put_json(&path, &current.to_text())?;
+    }
+    Ok(())
+}
+
+pub(crate) async fn verify_placement(
+    dir: &Path,
+    plan: &Plan,
+    canister: Principal,
+    agent: &Agent,
+) -> Result<()> {
+    if plan.store_root().is_some()
+        && placement(dir, plan)? != Some(subnet(agent, &canister.to_text()).await?)
+    {
+        return Err(Error::Blocked(
+            "created Store is not on the approved Root subnet".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn handover(plan: &Plan, canister: Principal) -> Result<signed::Call<'static>> {
+    let root = plan
+        .store_root()
+        .ok_or_else(|| Error::Invalid("Store bootstrap plan required".into()))?;
+    Ok(signed::Call {
+        canister: Principal::management_canister(),
+        effective: canister,
+        method: "update_settings",
+        args: candid_codec::encode_one(
+            &mgmt::UpdateSettingsArgs {
+                canister_id: canister,
+                settings: mgmt::CanisterSettings {
+                    controllers: Some(vec![principal(&root.canister)?]),
+                    ..Default::default()
+                },
+                sender_canister_version: None,
+            },
+            4096,
+        )
+        .map_err(Error::Encode)?,
+    })
+}
+
+pub(crate) fn observation(
+    plan: &Plan,
+    canister: Principal,
+    deadline: u64,
+) -> Result<signed::Call<'static>> {
+    let root = plan
+        .store_root()
+        .ok_or_else(|| Error::Invalid("Store bootstrap plan required".into()))?;
+    let id = principal(&root.canister)?;
+    Ok(signed::Call {
+        canister: id,
+        effective: id,
+        method: "observe_store",
+        args: ic_wire::native::encode_request(
+            wire::INFO,
+            &wire::InfoRequest {
+                store: canister.to_text(),
+                expires_at_ns: deadline,
+            },
+            canic_management_protocol::LIMITS,
+        )
+        .map_err(supplier)?,
+    })
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Readiness {
+    observation: usize,
+    info: Info,
+}
+
+fn decode(bytes: &[u8]) -> Result<Info> {
+    let result: wire::InfoReply =
+        ic_wire::native::decode_response(wire::INFO, bytes, wire::RESPONSE_LIMITS)
+            .map_err(supplier)?;
+    result.map_err(|error| {
+        Error::Blocked(format!(
+            "Store readiness returned {error:?}; retain evidence and reconcile"
+        ))
+    })
+}
+
+/// Offline receipt admission still requires its original signed readiness observation.
+pub(crate) fn retained(dir: &Path, plan: &Plan, canister: Principal) -> Result<()> {
+    let value: Readiness = store::json(&dir.join("store-ready.json"))?;
+    if value.observation >= OBSERVATIONS {
+        return Err(Error::Invalid("Store observation budget exceeded".into()));
+    }
+    let reply = signed::retained_store(
+        &dir.join(format!("store-observe/{}", value.observation)),
+        plan,
+        canister,
+    )?;
+    if decode(&reply)? != value.info {
+        return Err(Error::Invalid(
+            "Store readiness differs from retained observation".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// The caller has retained creation and installation evidence under the same journal lock.
+pub(crate) async fn finish(
+    dir: &Path,
+    plan: &Plan,
+    canister: Principal,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+    read_only: bool,
+) -> Result<()> {
+    verify_placement(dir, plan, canister, agent).await?;
+    let path = dir.join("handover");
+    let call = handover(plan, canister)?;
+    let prepared = path.join("signed.json").try_exists().map_err(supplier)?;
+    if prepared {
+        signed::validate_retained(&path, plan, &call)?;
+    }
+    if !prepared
+        || operation::controllers(agent, canister, plan.application_controller())
+            .await
+            .is_err()
+    {
+        if read_only {
+            return Err(Error::Blocked(
+                "Store handover is not established; reconcile grants no mutation authority".into(),
+            ));
+        }
+        operation::controllers(agent, canister, &plan.controller).await?;
+        // Module and Root binding are checked before surrendering operator control.
+        if operation::module(agent, canister).await? != plan.artifact.sha256 {
+            return Err(Error::Blocked("Store code differs before handover".into()));
+        }
+        verify_root(agent, plan).await?;
+        signed::execute(&path, plan, &call, identity, icp, agent).await?;
+    }
+    operation::controllers(agent, canister, plan.application_controller()).await?;
+    if operation::module(agent, canister).await? != plan.artifact.sha256 {
+        return Err(Error::Blocked("Store code differs after handover".into()));
+    }
+    if dir
+        .join("store-ready.json")
+        .try_exists()
+        .map_err(supplier)?
+    {
+        return retained(dir, plan, canister);
+    }
+    for index in 0..OBSERVATIONS {
+        let path = dir.join(format!("store-observe/{index}"));
+        if path.join("reply.bin").try_exists().map_err(supplier)?
+            || path.join("rejected.json").try_exists().map_err(supplier)?
+        {
+            continue;
+        }
+        let reply = signed::observe_store(&path, plan, canister, identity, icp, agent).await?;
+        let info = decode(&reply)?;
+        store::put_json(
+            &dir.join("store-ready.json"),
+            &Readiness {
+                observation: index,
+                info,
+            },
+        )?;
+        return Ok(());
+    }
+    Err(Error::Blocked(
+        "Store readiness observation budget exhausted; retain evidence".into(),
+    ))
+}

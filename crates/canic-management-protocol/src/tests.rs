@@ -112,3 +112,44 @@ fn growth_frames_cover_declared_artifact_and_retained_evidence() {
         status
     );
 }
+
+#[test]
+fn store_readiness_frame_is_separate_from_publication_and_carries_bounded_info() {
+    use crate::publication;
+    use canic_wasm_store_protocol as store;
+    let input = publication::InfoRequest {
+        store: "a".repeat(63),
+        expires_at_ns: u64::MAX,
+    };
+    let frame = ic_wire::native::encode_request(publication::INFO, &input, LIMITS).unwrap();
+    let decoded: publication::InfoRequest =
+        ic_wire::native::decode_request(publication::INFO, &frame, LIMITS).unwrap();
+    assert_eq!(decoded.store, input.store);
+    assert!(
+        ic_wire::native::decode_request::<publication::InfoRequest>(
+            publication::EXECUTE,
+            &frame,
+            LIMITS
+        )
+        .is_err()
+    );
+    let expected = store::Info {
+        quota: store::Quota {
+            reserved_bytes: u64::MAX,
+            releases: u64::MAX,
+        },
+        reserved_bytes: u64::MAX,
+        releases: u64::MAX,
+        artifacts: u64::MAX,
+        chunks: u64::MAX,
+        maintenance_candidate: true,
+    };
+    let reply: publication::InfoReply = Ok(expected.clone());
+    let frame =
+        ic_wire::native::encode_response(publication::INFO, &reply, publication::RESPONSE_LIMITS)
+            .unwrap();
+    let decoded: publication::InfoReply =
+        ic_wire::native::decode_response(publication::INFO, &frame, publication::RESPONSE_LIMITS)
+            .unwrap();
+    assert_eq!(decoded.unwrap(), expected);
+}

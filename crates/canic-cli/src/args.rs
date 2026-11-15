@@ -254,7 +254,7 @@ pub(super) enum FleetCommand {
         /// Certified module hash from the previous deployment receipt.
         #[arg(long, requires = "target")]
         previous_module: Option<String>,
-        /// Exact reviewed Root module for child management or Store publication.
+        /// Exact reviewed Root module for child management, Store bootstrap or publication.
         #[arg(long, value_name = "SHA256", requires = "canister")]
         root_module: Option<String>,
         #[command(flatten)]
@@ -263,7 +263,7 @@ pub(super) enum FleetCommand {
         /// Reopening a slot keeps its original schedule.
         #[arg(long, value_name = "UNIX_SECONDS")]
         execute_at: Option<u64>,
-        /// Creation debit ceiling including fee: whole-fleet Root defaults to 3T, single creation 1T, upgrade zero.
+        /// Total creation debit ceiling including fees: fleet defaults to 3T/4T for one/two apps, plus 1T for Store; single creation 1T, upgrade zero.
         #[arg(long, value_parser = clap::value_parser!(u64).range(0..=5_000_000_000_000))]
         cycles: Option<u64>,
     },

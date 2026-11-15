@@ -1,5 +1,6 @@
 //! Actual Root is the Store caller and sole child controller, not an impersonated ingress sender.
 mod publication_tests;
+mod readiness_tests;
 use super::{Client, store, support};
 use canic_management_protocol::{
     self as management,

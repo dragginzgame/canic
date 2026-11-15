@@ -28,7 +28,7 @@ fn plan() -> Plan {
 #[test]
 fn mainnet_provider_request_binds_funding_identity_and_controller() {
     let plan = plan();
-    let call = create_call(&plan).unwrap();
+    let call = create_call(&plan, None).unwrap();
     let args: ledger::CreateCanisterArgs = decoder::decode_one(&call.args, DECODE).unwrap();
     assert_eq!(call.canister.to_text(), super::LEDGER);
     assert_eq!(call.method, "create_canister");
@@ -39,6 +39,40 @@ fn mainnet_provider_request_binds_funding_identity_and_controller() {
     assert_eq!(
         settings.controllers,
         Some(vec![Principal::from_text(&plan.controller).unwrap()])
+    );
+}
+
+#[test]
+fn store_creation_binds_root_subnet_without_changing_direct_placement() {
+    let mut value = plan();
+    let root = crate::UpgradeTarget {
+        canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        module: "11".repeat(32),
+    };
+    value.action = crate::PlanAction::CreateStore {
+        cycles: 1_000_000_000_000,
+        root: root.clone(),
+    };
+    let subnet = crate::network::principal("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap();
+    assert!(create_call(&value, None).is_err());
+    let call = create_call(&value, Some(subnet)).unwrap();
+    let request: ic_platform::cycles_ledger_types::CreateCanisterArgs =
+        ic_platform::candid_codec::decoder::decode_one(&call.args, DECODE).unwrap();
+    assert_eq!(
+        request.creation_args.unwrap().subnet_selection,
+        Some(ic_platform::cycles_ledger_types::SubnetSelection::Subnet { subnet })
+    );
+    value.network = crate::Network::Local {
+        url: "http://127.0.0.1:8000/".into(),
+        root_key: "00".repeat(133),
+        routing_canister: "aaaaa-aa".into(),
+    };
+    assert_eq!(
+        create_call(&value, Some(subnet))
+            .unwrap()
+            .effective
+            .to_text(),
+        root.canister
     );
 }
 

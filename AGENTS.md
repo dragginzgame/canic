@@ -31,7 +31,14 @@ authenticated tooling installer.
   first fleet; optional source generation creates a standalone greeting workspace.
   Added buildable canisters use the existing `--manifest`, `--package` and `--wasm`
   recipe fields together; paths remain relative to the app config.
-  Whole-fleet plan/apply accepts a new Root with one or two direct children and bounded serial child upgrades. One
+  Whole-fleet plan/apply accepts a new Root, an optional declared `wasm-store`,
+  and one or two direct application children with bounded serial upgrades. Store
+  resolves Root's approved creation output and completes handover/readiness before
+  application admission; it never consumes an application slot. The total operator
+  debit includes Store's separate 1T creation allowance. Preserve nested Store
+  attempts under the same fleet journal and cancellation boundary. Refuse Store
+  addition/removal or artifact replacement on retained fleets until the relevant
+  adoption/maintenance flow qualifies. One
   immutable fleet approval binds all artifacts, permanent name/slot assignments and the Root's typed creation
   output; all steps reuse the existing signer/effect owners under the journal
   lock. Retain nested Root/child attempts, preserve original deadlines on replan,
@@ -88,15 +95,27 @@ authenticated tooling installer.
   Root retains no publication catalog, payload or retry journal. A reply trap
   cannot undo Store commits; recover by observation and exact idempotent commands.
   Fault point 12 exercises this remote-commit boundary only in qualification.
+  Root's explicit `observe_store` mount reads initialized Store state through
+  replicated `observe_info`, under the same controller/deadline admission. It
+  reserves no app slot and certifies neither module identity nor sole control.
+  `make store-readiness-test` qualifies handover, refusal, reply fault 12 and Root
+  maintenance. Retained bootstrap combines this observation with certified
+  code/controller evidence.
   Fleet publication uses existing plan/apply/status/reconcile with explicit version,
   bound Root/Store code and original signed attempts. V3 publication plans never
   reserve deployment slots or produce installation receipts. Reconcile grants only
   typed release observation, not fresh mutation authority. Use `make publication-test`
-  for the installed CLI/signer witness. Generated Store bootstrap and deployment
-  release selection remain pending. Refuse `wasm-store` in the greeting-child
-  bootstrap rather than silently assigning it application readiness semantics.
+  for the installed CLI/signer witness. A named `wasm-store` plan with
+  `--root-module` now creates/installs through the direct effect owner, retains
+  Root's certified subnet before creation, and hands sole control to that Root.
+  Root must already have a configured identity. Retain the exact handover attempt;
+  certified sole control plus signed replicated readiness can resolve a lost
+  handover reply without renewing effect authority. Reconcile cannot create,
+  install or hand over. Never consume a greeting-child slot for Store. Whole-fleet
+  bootstrap composes this same action before the application children.
+  Store-backed deployment release selection remains pending.
   Cache preparation never grants install authority. It has no pin release,
-  deletion or fleet-deployment integration yet; do not clear pins on expiry.
+  deletion or Store-backed application deployment integration yet; do not clear pins on expiry.
   Use `make store-test`, `make store-clippy` and `make store-doc` for this scope.
   The installed fixture uses synthetic cycles and two different executables;
   `maintenance-candidate` is a qualification marker, not a live release choice.

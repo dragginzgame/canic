@@ -122,3 +122,22 @@ fn local_network_cannot_disable_mainnet_trust() {
     };
     assert!(matches!(network.validate(), Err(Error::Invalid(_))));
 }
+
+#[test]
+fn artifact_inspection_uses_store_capacity_without_expanding_direct_install_authority() {
+    let root = directory();
+    let wasm = root.join("large.wasm");
+    let mut bytes = vec![42; crate::artifact::MAX_ARTIFACT_BYTES];
+    bytes[..8].copy_from_slice(b"\0asm\x01\0\0\0");
+    std::fs::write(&wasm, &bytes).unwrap();
+    let artifact = crate::inspect(&wasm).unwrap();
+    assert_eq!(artifact.bytes, bytes.len());
+    assert_eq!(artifact.sha256, crate::artifact::digest(&bytes));
+    assert!(create_plan(&root.join("journal"), &wasm, input()).is_err());
+    assert!(!root.join("journal").exists());
+    bytes.push(0);
+    std::fs::write(&wasm, bytes).unwrap();
+    assert!(crate::inspect(&wasm).is_err());
+    std::fs::write(&wasm, b"not wasm").unwrap();
+    assert!(crate::inspect(&wasm).is_err());
+}

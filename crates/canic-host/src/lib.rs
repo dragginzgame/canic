@@ -14,6 +14,7 @@ mod publication;
 mod signed;
 mod starter;
 mod store;
+mod store_bootstrap;
 #[cfg(test)]
 mod tests;
 mod wallet;
@@ -32,8 +33,8 @@ pub use fleet::{
     fleet_with_managers,
 };
 pub use fleet_plan::{
-    Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, cancel_fleet_plan,
-    plan_fleet,
+    Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,
+    cancel_fleet_plan, plan_fleet,
 };
 pub use managed::create_managed_plan;
 pub use network::{Network, greet};
@@ -44,6 +45,7 @@ pub use publication::{
 };
 pub use signed::signing_principal;
 pub use starter::create_starter;
+pub use store_bootstrap::create_store_plan;
 pub use wallet::{Wallet, WalletBalance, wallet, wallet_address};
 
 use std::time::{SystemTime, UNIX_EPOCH};

@@ -57,6 +57,102 @@ fn create(dir: &Path, selected: &SelectedFleet) -> Result<(String, FleetPlan)> {
 }
 
 #[test]
+fn fleet_store_is_an_independent_output_binding_and_debit() {
+    let (dir, mut selected) = fixture();
+    selected.config.canisters.insert(
+        "store".into(),
+        CanisterConfig {
+            role: Some("wasm-store".into()),
+            parent: Some("root".into()),
+            wasm: Some("root.wasm".into()),
+            ..Default::default()
+        },
+    );
+    selected
+        .config
+        .canisters
+        .insert("worker".into(), selected.config.canisters["app"].clone());
+    let plan = || {
+        plan_fleet(
+            &dir.join("journal"),
+            &dir.join("canic.json"),
+            &selected,
+            &input().controller,
+            None,
+            None,
+        )
+    };
+    let FleetPlanning::Create {
+        operation: id,
+        fleet_plan: value,
+    } = plan().unwrap()
+    else {
+        panic!("creation");
+    };
+    assert_eq!(value.children.len(), 2);
+    assert_eq!(value.creation_cycles(), 5_000_000_000_000);
+    assert_eq!(value.root.creation_cycles(), 4_000_000_000_000);
+    let store = value.store.as_ref().unwrap();
+    assert_eq!(store.parent.operation, value.root.digest().unwrap());
+    assert_eq!(
+        plan().unwrap(),
+        FleetPlanning::Create {
+            operation: id.clone(),
+            fleet_plan: value.clone()
+        }
+    );
+    let receipt = Receipt {
+        operation: value.root.digest().unwrap(),
+        canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        module_hash: value.root.artifact.sha256.clone(),
+        controller: value.root.controller.clone(),
+    };
+    let resolved = value.store_plan(&receipt).unwrap();
+    assert!(resolved.management().is_none());
+    assert_eq!(resolved.application_controller(), receipt.canister);
+    assert_eq!(resolved.creation_cycles(), 1_000_000_000_000);
+    let path = dir.join("journal").join(&id);
+    assert!(
+        !permits_upgrade(
+            &path,
+            &value,
+            &value.child_plan(&receipt, Slot::First).unwrap()
+        )
+        .unwrap()
+    );
+    assert!(path.join("store/module.wasm").exists());
+    assert!(!path.join("store/plan.json").exists());
+    let mut invalid = value.clone();
+    invalid.store.as_mut().unwrap().parent.operation = "00".repeat(32);
+    assert!(invalid.digest().is_err());
+    // Altering/removing infrastructure cannot be treated as an application upgrade.
+    let mut changed = selected.clone();
+    changed.config.canisters.remove("store");
+    assert!(matches!(create(&dir, &changed), Err(Error::Blocked(_))));
+    std::fs::write(dir.join("store.wasm"), b"\0asm\x01\0\0\0\0\x01\0").unwrap();
+    changed = selected.clone();
+    changed.config.canisters.get_mut("store").unwrap().wasm = Some("store.wasm".into());
+    assert!(matches!(
+        plan_fleet(
+            &dir.join("journal"),
+            &dir.join("canic.json"),
+            &changed,
+            &input().controller,
+            None,
+            None
+        ),
+        Err(Error::Blocked(_))
+    ));
+    let prepared = path.join("store/create");
+    std::fs::create_dir(&prepared).unwrap();
+    assert!(cancel_fleet_plan(&dir.join("journal"), &id).is_err());
+    std::fs::remove_dir(prepared).unwrap();
+    cancel_fleet_plan(&dir.join("journal"), &id).unwrap();
+    assert!(cancelled(&path, &id).unwrap());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority() {
     use canic_management_protocol::{LIMITS, Phase, STATUS, Status};
     use ic_platform::{candid_codec, cycles_ledger_types as ledger, principal::Principal};

@@ -95,6 +95,9 @@ fn child_completion(dir: &Path, fleet: &FleetPlan, index: Slot) -> Result<Option
 /// The creation reservation admits only its completed child's first upgrade.
 /// Called inside the same journal lock used to publish the independent approval.
 pub(crate) fn permits_upgrade(dir: &Path, fleet: &FleetPlan, proposed: &Plan) -> Result<bool> {
+    if fleet.store.is_some() && super::store_state(dir, fleet)?["receipt"].is_null() {
+        return Ok(false);
+    }
     let Some((child, receipt)) = child_completion(dir, fleet, Slot::First)? else {
         return Ok(false);
     };
@@ -131,6 +134,27 @@ pub(super) fn plan(
     individual: &[(String, Plan)],
 ) -> Result<FleetPlanning> {
     let dir = store.operation(id)?;
+    if fleet.store.as_ref().map(|s| &s.artifact) != desired.store.as_ref().map(|s| &s.artifact) {
+        return Err(Error::Blocked("Store artifact changes require a qualified Store maintenance operation; retain the original fleet".into()));
+    }
+    if fleet.store.is_some() && super::store_state(&dir, &fleet)?["receipt"].is_null() {
+        if !individual.is_empty()
+            || desired.root.artifact != fleet.root.artifact
+            || !desired
+                .children
+                .iter()
+                .map(|c| &c.artifact)
+                .eq(fleet.children.iter().map(|c| &c.artifact))
+        {
+            return Err(Error::Blocked(
+                "Store bootstrap is unfinished; resume the original fleet artifacts".into(),
+            ));
+        }
+        return Ok(FleetPlanning::Create {
+            operation: id.into(),
+            fleet_plan: fleet,
+        });
+    }
     let mut children = Vec::new();
     for definition in &fleet.children {
         let index = definition.slot;

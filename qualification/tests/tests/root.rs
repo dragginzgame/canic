@@ -1106,7 +1106,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             cli(&config, &["fleet", "status", id, "--fleet", fleet])["children"][0]["state"]
                 .is_null()
         );
-        assert!(status_text(&config, id, fleet).contains("Waiting for retained Root completion"));
+        assert!(status_text(&config, id, fleet).contains("Not yet admitted"));
         // Cross-fleet selection refuses before invoking an absent signer.
         let other = if fleet == "first" { "second" } else { "first" };
         let rejected = std::process::Command::new(&executable)

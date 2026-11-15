@@ -400,6 +400,7 @@ pub(crate) fn reply_fault(method: u64) -> bool {
         (9, canic_management_protocol::STAGE)
             | (10, canic_management_protocol::RECONCILE)
             | (12, canic_management_protocol::publication::EXECUTE)
+            | (12, canic_management_protocol::publication::INFO)
     )
 }
 

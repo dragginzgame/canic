@@ -99,11 +99,22 @@ fn outcome(value: &ApplyOutcome, text: &mut String) -> bool {
             ));
             published
         }
-        ApplyOutcome::Fleet { root, children, .. } => {
+        ApplyOutcome::Fleet {
+            root,
+            store,
+            children,
+            ..
+        } => {
             text.push_str(&format!(
                 "Root installed: {}\n",
                 terminal_text(&root.canister)
             ));
+            if let Some(store) = store {
+                text.push_str(&format!(
+                    "Store ready: {} (controlled by Root)\n",
+                    terminal_text(&store.canister)
+                ));
+            }
             let mut complete = true;
             for child in children {
                 text.push_str(&format!("Application: {}\n", terminal_text(&child.name)));

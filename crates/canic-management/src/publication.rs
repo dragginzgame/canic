@@ -15,25 +15,7 @@ use ic_platform_runtime::{
 /// # Panics
 /// Traps unless the actual caller currently controls this Root.
 pub async fn execute(input: Request) -> Reply {
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
-    let target = Principal::from_text(&input.store).map_err(|_| Error::Invalid)?;
-    if target.to_text() != input.store
-        || target == Principal::anonymous()
-        || target == Principal::management_canister()
-        || target == api::canister_self()
-    {
-        return Err(Error::Invalid);
-    }
-    let now = api::time();
-    if input.expires_at_ns <= now {
-        return Err(Error::Expired);
-    }
-    if input.expires_at_ns - now > MAX_WINDOW_NS {
-        return Err(Error::Invalid);
-    }
+    let target = admit(&input.store, input.expires_at_ns)?;
     let (method, id, bytes, release) = match &input.command {
         Command::Prepare(value) => (
             "prepare",
@@ -77,4 +59,52 @@ pub async fn execute(input: Request) -> Reply {
         return Err(Error::Uncertain);
     }
     Ok(status)
+}
+
+fn admit(store: &str, expires_at_ns: u64) -> Result<Principal, Error> {
+    assert!(
+        api::is_controller(&api::msg_caller()),
+        "controller required"
+    );
+    let target = Principal::from_text(store).map_err(|_| Error::Invalid)?;
+    if target.to_text() != store
+        || target == Principal::anonymous()
+        || target == Principal::management_canister()
+        || target == api::canister_self()
+    {
+        return Err(Error::Invalid);
+    }
+    let now = api::time();
+    if expires_at_ns <= now {
+        return Err(Error::Expired);
+    }
+    if expires_at_ns - now > MAX_WINDOW_NS {
+        return Err(Error::Invalid);
+    }
+    Ok(target)
+}
+
+/// Read Store state after handover through the actual controller canister.
+/// This performs no storage write, timer registration or management effect.
+/// # Errors
+/// Refuses invalid/expired targets or reports an unavailable/invalid Store reply.
+/// # Panics
+/// Traps unless the actual caller currently controls Root.
+pub async fn observe_info(
+    input: canic_management_protocol::publication::InfoRequest,
+) -> canic_management_protocol::publication::InfoReply {
+    let target = admit(&input.store, input.expires_at_ns)?;
+    let bytes = ic_wire::native::encode_request(store::INFO, &(), store::LIMITS)
+        .map_err(|_| Error::Invalid)?;
+    let reply = Call::new(
+        target,
+        "observe_info",
+        WaitPolicy::Bounded { timeout_seconds: 5 },
+    )
+    .take_raw_args(bytes)
+    .execute()
+    .await
+    .map_err(|_| Error::Uncertain)?;
+    ic_wire::native::decode_response(store::INFO, &reply, store::LIMITS)
+        .map_err(|_| Error::Uncertain)
 }

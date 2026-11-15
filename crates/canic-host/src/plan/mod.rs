@@ -67,7 +67,7 @@ pub struct PlanInput {
 impl Plan {
     pub(crate) fn artifact_limit(&self) -> usize {
         if self.publication().is_some() {
-            crate::publication::MAX_WASM
+            artifact::MAX_ARTIFACT_BYTES
         } else {
             artifact::MAX_WASM
         }
@@ -94,6 +94,20 @@ impl Plan {
         if self.maintenance().is_some() {
             crate::maintenance::validate(self)?;
         }
+        if let Some(root) = self.store_root() {
+            let id = principal(&root.canister)?;
+            if self.version != 2
+                || id.to_text() != root.canister
+                || id == principal("aaaaa-aa")?
+                || id == principal("2vxsx-fae")?
+                || crate::unhex(&root.module)?.len() != 32
+                || root.module != root.module.to_ascii_lowercase()
+            {
+                return Err(Error::Invalid(
+                    "Store bootstrap requires canonical Root identity and exact code".into(),
+                ));
+            }
+        }
         if self.network == Network::Mainnet && controller == principal("2vxsx-fae")? {
             return Err(Error::Invalid(
                 "mainnet requires an authenticated controller".into(),
@@ -119,7 +133,7 @@ impl Plan {
         }
         match &self.action {
             PlanAction::Publish(value) => crate::publication::validate(self, value)?,
-            PlanAction::Create { cycles }
+            PlanAction::Create { cycles } | PlanAction::CreateStore { cycles, .. }
                 if !(500_000_000_000..=5_000_000_000_000).contains(cycles) =>
             {
                 return Err(Error::Invalid("creation needs 0.5T–5T cycles".into()));
@@ -134,7 +148,9 @@ impl Plan {
                     ));
                 }
             }
-            PlanAction::Create { .. } | PlanAction::CreateChild(_) => {}
+            PlanAction::Create { .. }
+            | PlanAction::CreateStore { .. }
+            | PlanAction::CreateChild(_) => {}
         }
         Ok(())
     }
@@ -153,6 +169,9 @@ impl Plan {
     /// Sole controller of the resulting application canister.
     #[must_use]
     pub fn application_controller(&self) -> &str {
+        if let Some(root) = self.store_root() {
+            return &root.canister;
+        }
         self.management()
             .map_or(&self.controller, |owner| &owner.root)
     }
@@ -316,6 +335,7 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                     && existing.creation_cycles() == plan.creation_cycles()
                     && existing.target() == plan.target()
                     && existing.previous_module() == plan.previous_module()
+                    && existing.store_root() == plan.store_root()
                     && existing
                         .management()
                         .map(|owner| (&owner.root, &owner.root_module, owner.slot))

@@ -10,6 +10,8 @@ struct Record {
     child: Child,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sibling: Option<Child>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    store: Option<super::FleetStore>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -52,6 +54,7 @@ impl Serialize for FleetPlan {
                 root: self.root.clone(),
                 child: Child::from_child(first),
                 sibling: None,
+                store: self.store.clone(),
             },
             [first, second]
                 if first.slot == Slot::First
@@ -63,6 +66,7 @@ impl Serialize for FleetPlan {
                     root: self.root.clone(),
                     child: Child::from_child(first),
                     sibling: Some(Child::from_child(second)),
+                    store: self.store.clone(),
                 }
             }
             _ => return Err(serde::ser::Error::custom(invalid())),
@@ -81,6 +85,7 @@ impl<'de> Deserialize<'de> for FleetPlan {
             version: r.version,
             root: r.root,
             children,
+            store: r.store,
         };
         value.validate().map_err(serde::de::Error::custom)?;
         Ok(value)
@@ -101,6 +106,7 @@ pub(super) fn effect_directories()
         ("root", &["module.wasm", "plan.json"][..], true),
         ("child", &["module.wasm"][..], true),
         ("sibling", &["module.wasm"][..], false),
+        ("store", &["module.wasm"][..], false),
     ]
     .into_iter()
 }

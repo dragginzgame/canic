@@ -455,3 +455,68 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
     );
     assert!(!absent.exists());
 }
+
+#[tokio::test]
+async fn store_readiness_authority_cannot_change_target_or_renew_handover() {
+    let (_, mut plan, _) = fixture();
+    let now = crate::now().unwrap();
+    plan.version = 2;
+    plan.created_at_ns = now - 3_600_000_000_000;
+    plan.expires_at_ns = now - 1;
+    plan.deployment = Some(crate::DeploymentName {
+        app: "demo".into(),
+        fleet: "local".into(),
+        canister: "store".into(),
+    });
+    plan.action = crate::PlanAction::CreateStore {
+        cycles: 1_000_000_000_000,
+        root: crate::UpgradeTarget {
+            canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+            module: "11".repeat(32),
+        },
+    };
+    let canister = principal("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
+    let path = crate::tests::directory();
+    let deadline = now + 300_000_000_000;
+    let call = crate::store_bootstrap::observation(&plan, canister, deadline).unwrap();
+    crate::store::put_json(&path.join("authority.json"), &(deadline + 300_000_000_000)).unwrap();
+    crate::store::put(
+        &path.join("signed.json"),
+        &signed_fixture(&plan, &call, deadline),
+    )
+    .unwrap();
+    crate::store::put(&path.join("reply.bin"), &[42]).unwrap();
+    let agent = plan.network.agent().unwrap();
+    let absent = path.join("no-signer");
+    assert_eq!(
+        super::observe_store(&path, &plan, canister, "unused", &absent, &agent)
+            .await
+            .unwrap(),
+        [42]
+    );
+    assert_eq!(super::retained_store(&path, &plan, canister).unwrap(), [42]);
+    assert!(
+        super::retained_store(
+            &path,
+            &plan,
+            principal("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap()
+        )
+        .is_err()
+    );
+    let handover = crate::store_bootstrap::handover(&plan, canister).unwrap();
+    std::fs::write(
+        path.join("signed.json"),
+        signed_fixture(&plan, &handover, deadline),
+    )
+    .unwrap();
+    assert!(super::retained_store(&path, &plan, canister).is_err());
+    assert!(super::validate_retained(&path, &plan, &handover).is_err());
+    std::fs::remove_file(path.join("reply.bin")).unwrap();
+    assert!(
+        super::execute(&path, &plan, &handover, "unused", &absent, &agent)
+            .await
+            .is_err()
+    );
+    assert!(!absent.exists());
+    std::fs::remove_dir_all(path).unwrap();
+}

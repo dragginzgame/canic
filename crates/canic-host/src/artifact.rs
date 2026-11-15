@@ -8,7 +8,11 @@ use std::{
     time::Duration,
 };
 
+// Direct ingress installation retains its original transport bound.
 pub(crate) const MAX_WASM: usize = 1_500_000;
+// Build/inspection can admit the complete Store artifact without granting installation authority.
+pub(crate) const MAX_ARTIFACT_BYTES: usize =
+    canic_wasm_store_protocol::CHUNK_BYTES * canic_wasm_store_protocol::MAX_CHUNKS;
 
 /// Identity of the exact uncompressed Wasm bytes selected for installation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -45,7 +49,10 @@ pub(crate) fn admit_bounded(bytes: &[u8], limit: usize) -> Result<Artifact> {
 /// # Errors
 /// Refuses unreadable, oversized or non-Wasm inputs. Full Wasm validation is the IC's responsibility.
 pub fn inspect(path: &Path) -> Result<Artifact> {
-    admit(&ic_host_fs::read::read_file(path, MAX_WASM).map_err(supplier)?)
+    admit_bounded(
+        &ic_host_fs::read::read_file(path, MAX_ARTIFACT_BYTES).map_err(supplier)?,
+        MAX_ARTIFACT_BYTES,
+    )
 }
 
 /// Build one explicit Cargo package and select its Wasm from artifact records.
@@ -126,8 +133,8 @@ pub fn build(
     let path = paths.remove(0);
     inspect(&path)?;
     if let Some(output) = destination {
-        let bytes = ic_host_fs::read::read_file(&path, MAX_WASM).map_err(supplier)?;
-        admit(&bytes)?;
+        let bytes = ic_host_fs::read::read_file(&path, MAX_ARTIFACT_BYTES).map_err(supplier)?;
+        admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
         if let Some(parent) = output
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())

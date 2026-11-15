@@ -235,11 +235,35 @@ pub(crate) async fn observe_publication(
     icp: &Path,
     agent: &Agent,
 ) -> Result<Vec<u8>> {
-    if plan.publication().is_none() {
-        return Err(Error::Invalid(
-            "publication observation requires its own plan".into(),
-        ));
+    observe_metadata(path, plan, None, identity, icp, agent).await
+}
+
+pub(crate) async fn observe_store(
+    path: &Path,
+    plan: &Plan,
+    canister: Principal,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+) -> Result<Vec<u8>> {
+    observe_metadata(path, plan, Some(canister), identity, icp, agent).await
+}
+
+// Only these typed read contracts may obtain fresh authority, never mutation calls.
+fn metadata_call(plan: &Plan, store: Option<Principal>, deadline: u64) -> Result<Call<'static>> {
+    match store {
+        Some(canister) => crate::store_bootstrap::observation(plan, canister, deadline),
+        None => crate::publication::observation(plan, deadline),
     }
+}
+async fn observe_metadata(
+    path: &Path,
+    plan: &Plan,
+    store: Option<Principal>,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+) -> Result<Vec<u8>> {
     ic_host_fs::durable::prepare_private_parents(path).map_err(supplier)?;
     let authority = path.join("authority.json");
     let expires_at_ns = if authority.try_exists().map_err(supplier)? {
@@ -251,8 +275,8 @@ pub(crate) async fn observe_publication(
     };
     let dispatch_deadline = expires_at_ns
         .checked_sub(300_000_000_000)
-        .ok_or_else(|| Error::Invalid("invalid publication observation authority".into()))?;
-    let call = crate::publication::observation(plan, dispatch_deadline)?;
+        .ok_or_else(|| Error::Invalid("invalid metadata observation authority".into()))?;
+    let call = metadata_call(plan, store, dispatch_deadline)?;
     execute_with(
         path,
         &Authority {
@@ -270,11 +294,17 @@ pub(crate) async fn observe_publication(
 
 /// Admit retained publication evidence against its exact signed read contract.
 pub(crate) fn retained_publication(path: &Path, plan: &Plan) -> Result<Vec<u8>> {
+    retained_metadata(path, plan, None)
+}
+pub(crate) fn retained_store(path: &Path, plan: &Plan, canister: Principal) -> Result<Vec<u8>> {
+    retained_metadata(path, plan, Some(canister))
+}
+fn retained_metadata(path: &Path, plan: &Plan, store: Option<Principal>) -> Result<Vec<u8>> {
     let expires_at_ns: u64 = store::json(&path.join("authority.json"))?;
     let deadline = expires_at_ns
         .checked_sub(300_000_000_000)
-        .ok_or_else(|| Error::Invalid("invalid publication observation authority".into()))?;
-    let call = crate::publication::observation(plan, deadline)?;
+        .ok_or_else(|| Error::Invalid("invalid metadata observation authority".into()))?;
+    let call = metadata_call(plan, store, deadline)?;
     admit(
         &store::read(&path.join("signed.json"), store::MAX_RECORD)?,
         &Authority {
@@ -285,6 +315,16 @@ pub(crate) fn retained_publication(path: &Path, plan: &Plan) -> Result<Vec<u8>> 
         &call,
     )?;
     store::read(&path.join("reply.bin"), 2 * 1024 * 1024)
+}
+
+/// Check original effect custody without resubmission, including after authority handover.
+pub(crate) fn validate_retained(path: &Path, plan: &Plan, call: &Call<'_>) -> Result<()> {
+    admit(
+        &store::read(&path.join("signed.json"), store::MAX_RECORD)?,
+        &Authority::from(plan),
+        call,
+    )?;
+    Ok(())
 }
 
 /// Only the selected Root observation contract receives fresh read authority after plan expiry.

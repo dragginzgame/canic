@@ -66,6 +66,9 @@ pub enum ApplyOutcome {
         operation: String,
         /// Verified Root installation.
         root: Receipt,
+        /// Optional infrastructure completion, separate from application slots.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        store: Option<Receipt>,
         /// Named outcomes in permanent child order.
         children: Vec<ChildOutcome>,
     },
@@ -91,7 +94,12 @@ pub enum ApplyOutcome {
     },
 }
 
-fn create_call(plan: &Plan) -> Result<Call<'static>> {
+fn create_call(plan: &Plan, subnet: Option<Principal>) -> Result<Call<'static>> {
+    if plan.store_root().is_some() != subnet.is_some() {
+        return Err(Error::Invalid(
+            "Store creation requires retained Root subnet placement".into(),
+        ));
+    }
     let controller = principal(&plan.controller)?;
     if plan.network == Network::Mainnet {
         let args = ledger::CreateCanisterArgs {
@@ -99,7 +107,7 @@ fn create_call(plan: &Plan) -> Result<Call<'static>> {
             created_at_time: Some(plan.created_at_ns),
             amount: (plan.creation_cycles() - LEDGER_FEE).into(),
             creation_args: Some(ledger::CmcCreateCanisterArgs {
-                subnet_selection: None,
+                subnet_selection: subnet.map(|subnet| ledger::SubnetSelection::Subnet { subnet }),
                 settings: Some(ledger::CanisterSettings {
                     controllers: Some(vec![controller]),
                     compute_allocation: Some(0_u64.into()),
@@ -137,7 +145,10 @@ fn create_call(plan: &Plan) -> Result<Call<'static>> {
         };
         Ok(Call {
             canister: Principal::management_canister(),
-            effective: principal(routing_canister)?,
+            effective: principal(
+                plan.store_root()
+                    .map_or(routing_canister.as_str(), |root| root.canister.as_str()),
+            )?,
             method: "provisional_create_canister_with_cycles",
             args: candid_codec::encode_one(&args, 4096).map_err(Error::Encode)?,
         })
@@ -237,6 +248,9 @@ pub(crate) async fn reconcile_at(
     if plan.publication().is_some() {
         return crate::publication::apply(dir, digest, &plan, &bytes, identity, icp, true).await;
     }
+    if plan.store_root().is_some() {
+        return apply_operation(dir, digest, identity, icp, true).await;
+    }
     let agent = plan.network.agent()?;
     crate::managed::recovery::reconcile(dir, digest, &plan, &bytes, identity, icp, &agent).await
 }
@@ -248,11 +262,23 @@ pub(crate) async fn apply_at(
     identity: &str,
     icp: &Path,
 ) -> Result<ApplyOutcome> {
+    apply_operation(dir, digest, identity, icp, false).await
+}
+
+async fn apply_operation(
+    dir: &Path,
+    digest: &str,
+    identity: &str,
+    icp: &Path,
+    read_only: bool,
+) -> Result<ApplyOutcome> {
     let (plan, wasm) = plan::load(dir, digest)?;
     if plan.publication().is_some() {
         return crate::publication::apply(dir, digest, &plan, &wasm, identity, icp, false).await;
     }
     let agent = plan.network.agent()?;
+    crate::store_bootstrap::verify_root(&agent, &plan).await?;
+    crate::store_bootstrap::prepare_placement(dir, &plan, &agent).await?;
     if matches!(
         plan.action,
         crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. }
@@ -274,6 +300,16 @@ pub(crate) async fn apply_at(
                 "receipt substituted the approved target or retained creation output".into(),
             ));
         }
+        if plan.store_root().is_some() {
+            crate::store_bootstrap::verify_placement(dir, &plan, expected, &agent).await?;
+            store_install_evidence(dir, &plan, &wasm, expected)?;
+            signed::validate_retained(
+                &dir.join("handover"),
+                &plan,
+                &crate::store_bootstrap::handover(&plan, expected)?,
+            )?;
+            crate::store_bootstrap::retained(dir, &plan, expected)?;
+        }
         verify_receipt(&agent, &plan, digest, &receipt).await?;
         if !crate::maintenance::retained(dir, &plan)? {
             return Err(Error::Invalid(
@@ -282,7 +318,23 @@ pub(crate) async fn apply_at(
         }
         return Ok(ApplyOutcome::Complete(receipt));
     }
-    let canister = if let Some(target) = plan.target() {
+    let handover_prepared = plan.store_root().is_some()
+        && dir
+            .join("handover/signed.json")
+            .try_exists()
+            .map_err(supplier)?;
+    if read_only && !handover_prepared {
+        return Err(Error::Blocked(
+            "Store reconcile requires a retained handover attempt; use apply for approved effects"
+                .into(),
+        ));
+    }
+    let canister = if handover_prepared {
+        created(
+            &plan,
+            &store::read(&dir.join("create/reply.bin"), 2 * 1024 * 1024)?,
+        )?
+    } else if let Some(target) = plan.target() {
         principal(target)?
     } else {
         if plan.network == Network::Mainnet
@@ -307,33 +359,59 @@ pub(crate) async fn apply_at(
                 ));
             }
         }
-        let call = create_call(&plan)?;
+        let call = create_call(&plan, crate::store_bootstrap::placement(dir, &plan)?)?;
         let reply =
             signed::execute(&dir.join("create"), &plan, &call, identity, icp, &agent).await?;
         created(&plan, &reply)?
     };
-    controllers(&agent, canister, &plan.controller).await?;
-    // Before the first install signature, enforce the exact old module for an
-    // upgrade. On resume, the retained attempt owns settlement; do not replace it.
-    if !dir
-        .join("install/signed.json")
-        .try_exists()
-        .map_err(supplier)?
-        && let Some(expected) = plan.previous_module()
-        && module(&agent, canister).await? != *expected
-    {
-        return Err(Error::Blocked(
-            "upgrade precondition: previous module hash changed".into(),
-        ));
+    crate::store_bootstrap::verify_placement(dir, &plan, canister, &agent).await?;
+    if handover_prepared {
+        store_install_evidence(dir, &plan, &wasm, canister)?;
+    } else {
+        controllers(&agent, canister, &plan.controller).await?;
+        // Before the first install signature, enforce the exact old module for an
+        // upgrade. On resume, the retained attempt owns settlement; do not replace it.
+        if !dir
+            .join("install/signed.json")
+            .try_exists()
+            .map_err(supplier)?
+            && let Some(expected) = plan.previous_module()
+            && module(&agent, canister).await? != *expected
+        {
+            return Err(Error::Blocked(
+                "upgrade precondition: previous module hash changed".into(),
+            ));
+        }
+        if !dir
+            .join("install/signed.json")
+            .try_exists()
+            .map_err(supplier)?
+        {
+            crate::maintenance::observe(dir, &plan, false, identity, icp, &agent).await?;
+        }
+        crate::maintenance::require_before(dir, &plan)?;
+        let call = install_call(&plan, &wasm, canister)?;
+        let reply =
+            signed::execute(&dir.join("install"), &plan, &call, identity, icp, &agent).await?;
+        decoder::decode_args::<()>(&reply, DECODE, decoder::Arity::Exact).map_err(Error::Decode)?;
+        crate::maintenance::observe(dir, &plan, true, identity, icp, &agent).await?;
     }
-    if !dir
-        .join("install/signed.json")
-        .try_exists()
-        .map_err(supplier)?
-    {
-        crate::maintenance::observe(dir, &plan, false, identity, icp, &agent).await?;
+    if plan.store_root().is_some() {
+        crate::store_bootstrap::finish(dir, &plan, canister, identity, icp, &agent, read_only)
+            .await?;
     }
-    crate::maintenance::require_before(dir, &plan)?;
+    let receipt = Receipt {
+        operation: digest.into(),
+        canister: canister.to_text(),
+        module_hash: plan.artifact.sha256.clone(),
+        controller: plan.application_controller().into(),
+    };
+    verify_receipt(&agent, &plan, digest, &receipt).await?;
+    store::put_json(&dir.join("receipt.json"), &receipt)?;
+    Ok(ApplyOutcome::Complete(receipt))
+}
+
+fn install_call(plan: &Plan, wasm: &[u8], canister: Principal) -> Result<Call<'static>> {
     let args = mgmt::InstallCodeArgs {
         mode: if plan.target().is_some() {
             mgmt::CanisterInstallMode::Upgrade(None)
@@ -341,28 +419,36 @@ pub(crate) async fn apply_at(
             mgmt::CanisterInstallMode::Install
         },
         canister_id: canister,
-        wasm_module: wasm,
+        wasm_module: wasm.to_vec(),
         arg: vec![],
         sender_canister_version: None,
     };
-    let call = Call {
+    Ok(Call {
         canister: Principal::management_canister(),
         effective: canister,
         method: "install_code",
         args: candid_codec::encode_one(&args, 2 * 1024 * 1024).map_err(Error::Encode)?,
-    };
-    let reply = signed::execute(&dir.join("install"), &plan, &call, identity, icp, &agent).await?;
-    decoder::decode_args::<()>(&reply, DECODE, decoder::Arity::Exact).map_err(Error::Decode)?;
-    crate::maintenance::observe(dir, &plan, true, identity, icp, &agent).await?;
-    let receipt = Receipt {
-        operation: digest.into(),
-        canister: canister.to_text(),
-        module_hash: plan.artifact.sha256.clone(),
-        controller: plan.controller.clone(),
-    };
-    verify_receipt(&agent, &plan, digest, &receipt).await?;
-    store::put_json(&dir.join("receipt.json"), &receipt)?;
-    Ok(ApplyOutcome::Complete(receipt))
+    })
+}
+
+fn store_install_evidence(dir: &Path, plan: &Plan, wasm: &[u8], canister: Principal) -> Result<()> {
+    signed::validate_retained(
+        &dir.join("create"),
+        plan,
+        &create_call(plan, crate::store_bootstrap::placement(dir, plan)?)?,
+    )?;
+    signed::validate_retained(
+        &dir.join("install"),
+        plan,
+        &install_call(plan, wasm, canister)?,
+    )?;
+    decoder::decode_args::<()>(
+        &store::read(&dir.join("install/reply.bin"), 2 * 1024 * 1024)?,
+        DECODE,
+        decoder::Arity::Exact,
+    )
+    .map_err(Error::Decode)?;
+    Ok(())
 }
 
 pub(crate) async fn verify_receipt(
@@ -420,6 +506,7 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
         crate::PlanAction::Create { .. } | crate::PlanAction::Upgrade(_) => {
             vec!["create", "install"]
         }
+        crate::PlanAction::CreateStore { .. } => vec!["create", "install", "handover"],
     };
     for effect in effect_names {
         let path = dir.join(effect);
@@ -438,6 +525,39 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
     } else {
         None
     };
+    if plan.store_root().is_some() {
+        for index in 0..32 {
+            let path = dir.join(format!("store-observe/{index}"));
+            if path.try_exists().map_err(supplier)? {
+                effects.insert(
+                    format!("store-observe/{index}"),
+                    attempt_state(&path)?.into(),
+                );
+            }
+        }
+        if let Some(receipt) = &receipt {
+            let canister = created(
+                &plan,
+                &store::read(&dir.join("create/reply.bin"), 2 * 1024 * 1024)?,
+            )?;
+            if receipt.canister != canister.to_text()
+                || receipt.operation != digest
+                || receipt.module_hash != plan.artifact.sha256
+                || receipt.controller != plan.application_controller()
+            {
+                return Err(Error::Invalid(
+                    "Store receipt differs from approved creation".into(),
+                ));
+            }
+            store_install_evidence(dir, &plan, &bytes, canister)?;
+            signed::validate_retained(
+                &dir.join("handover"),
+                &plan,
+                &crate::store_bootstrap::handover(&plan, canister)?,
+            )?;
+            crate::store_bootstrap::retained(dir, &plan, canister)?;
+        }
+    }
     let managed = match &plan.action {
         crate::PlanAction::UpgradeChild { .. } => {
             serde_json::to_value(crate::managed::upgrade::evidence(dir, &plan)?)

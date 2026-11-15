@@ -33,7 +33,10 @@ pub fn response_limits(method: u64) -> wire::Limits {
             ..protocol::LIMITS
         };
     }
-    if method == protocol::publication::EXECUTE {
+    if matches!(
+        method,
+        protocol::publication::EXECUTE | protocol::publication::INFO
+    ) {
         return protocol::publication::RESPONSE_LIMITS;
     }
     if method == protocol::stored::CUSTODY {
@@ -61,6 +64,7 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// Store-bound selections: `observe_stored_children`, `stage_stored_child`,
 /// `reconcile_stored_child`, `stage_stored_upgrade` and `reconcile_stored_upgrade`.
 /// `store_publication` mounts a separate, controller-only bounded publication call.
+/// `observe_store` reads initialized Store state through Root without claiming deployment.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
@@ -73,6 +77,11 @@ pub fn response_limits(method: u64) -> wire::Limits {
 #[macro_export]
 macro_rules! mount_endpoints {
     ($($name:ident),+ $(,)?) => { $($crate::mount_endpoints!(@select $name);)+ };
+    (@select observe_store) => {
+        $crate::mount_endpoints!(@method observe_store, update, true, publication::INFO, LIMITS,
+            [async] (input: $crate::endpoint::protocol::publication::InfoRequest) -> $crate::endpoint::protocol::publication::InfoReply,
+            $crate::publication::observe_info(input).await, "Store observation request", "Store observation reply");
+    };
     (@select store_publication) => {
         $crate::mount_endpoints!(@method store_publication, update, true, publication::EXECUTE, PUBLICATION_LIMITS,
             [async] (input: $crate::endpoint::protocol::publication::Request) -> $crate::endpoint::protocol::publication::Reply,

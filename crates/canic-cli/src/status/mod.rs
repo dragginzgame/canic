@@ -30,7 +30,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         }
         let evidence = |step: &serde_json::Value| -> String {
             if step.is_null() {
-                return "Waiting for retained Root completion".into();
+                return "Not yet admitted".into();
             }
             if !step["receipt"].is_null() {
                 return "Completion receipt retained".into();
@@ -41,6 +41,12 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             )
         };
         let mut rows = vec![["Root".into(), evidence(&state["root"])]];
+        if let Some(store) = &plan.store {
+            rows.push([
+                store.deployment.canister.clone(),
+                evidence(&state["store"]["state"]),
+            ]);
+        }
         let children = state["children"]
             .as_array()
             .ok_or_else(|| Error::Invalid("missing fleet child states".into()))?;
@@ -113,7 +119,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        match plan.action { canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
+        match plan.action { canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
@@ -124,6 +130,15 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         if now >= u128::from(plan.expires_at_ns) { "expired" } else { "within original deadline" },
     )
     .expect("writing to String");
+    if let Some(root) = plan.store_root() {
+        writeln!(
+            output,
+            "Root: {}\nRoot module: {}",
+            terminal_text(&root.canister),
+            terminal_text(&root.module)
+        )
+        .expect("String write");
+    }
     if let Some(publication) = plan.publication() {
         writeln!(output, "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nPublished receipt retained: {}",
             terminal_text(&publication.root.canister), terminal_text(&publication.root.module),
@@ -241,6 +256,26 @@ pub(crate) fn fleet_preview(
         format!("{} debit ceiling", cycles(plan.root.creation_cycles())),
     ]];
     let mut modules = format!("Root module: {}\n", plan.root.artifact.sha256);
+    if let Some(store) = &plan.store {
+        rows.push([
+            format!("├─ {} [WASM STORE]", store.deployment.canister),
+            format!("{}.result.canister", root.canister),
+            format!("{} separate debit ceiling", cycles(store.creation_cycles)),
+        ]);
+        writeln!(
+            modules,
+            "{} module: {}",
+            terminal_text(&store.deployment.canister),
+            store.artifact.sha256
+        )
+        .expect("String write");
+    }
+    writeln!(
+        modules,
+        "Total operator debit ceiling: {}",
+        cycles(plan.creation_cycles())
+    )
+    .expect("String write");
     for (index, child) in plan.children.iter().enumerate() {
         let branch = if index + 1 < plan.children.len() {
             "├─"

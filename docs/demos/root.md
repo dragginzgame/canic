@@ -12,6 +12,14 @@ Root's controller is the external operator identity. The application's sole
 controller is Root. External identities appear as controller metadata, never as
 nodes above the canister tree.
 
+A fresh fleet can also declare one `wasm-store` child of Root, alongside both
+application slots. Whole-fleet apply completes Store handover/readiness before
+admitting either app; the approval includes its separate 1T debit. See the
+[Store bootstrap workflow](wasm-store.md). Adding Store to an already retained
+fleet remains an unqualified adoption path; the existing mainnet demo below is
+unchanged. Applications still use inline deployment until Store release selection
+is integrated.
+
 ## Current mainnet demo
 
 The maintainer's generated `starter/` project now has a live Root and greeting app.

@@ -11,7 +11,7 @@ fn post_upgrade() {
     management::open(false, readiness());
 }
 management::mount_endpoints! {
-    store_publication,
+    store_publication, observe_store,
     status, observe, observe_custody, stage, reconcile,
     stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
     observe_stored_children, stage_stored_child, reconcile_stored_child,

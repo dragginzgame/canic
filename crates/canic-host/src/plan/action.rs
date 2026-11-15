@@ -22,6 +22,13 @@ pub enum PlanAction {
         /// Exact creation debit ceiling.
         cycles: u64,
     },
+    /// Create/install a Store, then hand sole control to the approved Root.
+    CreateStore {
+        /// Exact creation debit ceiling.
+        cycles: u64,
+        /// Existing Root identity and reviewed code; consumes no application slot.
+        root: UpgradeTarget,
+    },
     /// Upgrade a directly controlled canister.
     Upgrade(UpgradeTarget),
     /// Root creates its permanently assigned child with the protocol's fixed grant.
@@ -43,6 +50,14 @@ pub enum PlanAction {
 }
 
 impl super::Plan {
+    /// Approved Store controller, only for infrastructure bootstrap.
+    #[must_use]
+    pub fn store_root(&self) -> Option<&UpgradeTarget> {
+        match &self.action {
+            PlanAction::CreateStore { root, .. } => Some(root),
+            _ => None,
+        }
+    }
     /// Exact publication authority, independent of deployment slots and receipts.
     #[must_use]
     pub fn publication(&self) -> Option<&crate::Publication> {
@@ -67,14 +82,17 @@ impl super::Plan {
             PlanAction::Upgrade(target)
             | PlanAction::UpgradeChild { target, .. }
             | PlanAction::MaintainRoot { target, .. } => Some(target),
-            PlanAction::Create { .. } | PlanAction::CreateChild(_) | PlanAction::Publish(_) => None,
+            PlanAction::Create { .. }
+            | PlanAction::CreateStore { .. }
+            | PlanAction::CreateChild(_)
+            | PlanAction::Publish(_) => None,
         }
     }
     /// Creation debit/attachment; upgrades have no creation authority.
     #[must_use]
     pub fn creation_cycles(&self) -> u64 {
         match self.action {
-            PlanAction::Create { cycles } => cycles,
+            PlanAction::Create { cycles } | PlanAction::CreateStore { cycles, .. } => cycles,
             PlanAction::CreateChild(_) => canic_management_protocol::CREATION_CYCLES,
             _ => 0,
         }

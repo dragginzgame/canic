@@ -7,6 +7,195 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.206.0 release qualification: 2026-11-15
+
+The Linux release scope passes across the aggregate gate and its resumed stages:
+lint (including optional Blob), native libraries, effects, artifact custody,
+Host/CLI, installed deployment, profile, growth, Root, endpoints, Store,
+publication and Blob. This includes 85 Host tests, 43 CLI tests, 11 Root cases,
+10 Store cases, two publication journeys and five Blob cases. Three historical
+binary migrations remain explicitly opt-in; they were not run. The gate caught
+two stale test expectations: an unconditional refusal of Store in whole-fleet
+plans and the old pending-admission label. Corrected those tests, reran their
+affected journeys and Clippy, and retained successful evidence for unchanged
+inputs. No production changes were needed to repair the release gate.
+
+All 14 product packages select 0.206.0; four qualification packages remain 0.0.0.
+Every package retains `publish = false`. A fresh registry review found the
+selected first-party registry suppliers current. Blob remains pinned to the
+qualified 0.100.6 source revision
+`decde204acb6d7c8362a0003e904beef72ff89b6`; no sibling checkout was changed.
+Release logs, dependency metadata and source fingerprints are retained locally
+under `target/evidence/0.206.0/release/`. Delivery is GitHub-only; this evidence
+does not claim macOS or live mainnet qualification, or registry publication.
+
+## Whole-fleet Store bootstrap: 2026-11-15
+
+The existing fleet envelope now admits one declared Store alongside Root and one
+or two application children. Reuse the legacy bootstrap-ordering research below
+and the qualified named Store action: infrastructure readiness precedes dependent
+application admission, while original output references and effect custody stay
+with their existing owners. No legacy scheduler, catalog mirror or implicit
+service activation was imported.
+
+Store binds Root's approved creation output, its own exact executable and a
+separate 1T operator debit. Whole-fleet `--cycles` is the total, divided into that
+Store debit and Root funding (which already covers child grants). Defaults are
+4T for one app plus Store and 5T for two. Store's nested journal uses the existing
+direct creation/install/handover/readiness path. Both application slots remain
+available. A lost handover reply is recoverable before child admission;
+reconcile never admits those children, and apply retains their original schedule.
+Cancellation, inventory, status and convergence all include Store. Existing
+one/two-child approval fixtures retain their exact digests and output layouts
+when Store is absent.
+
+Nine focused fleet tests and eight CLI status tests pass. The installed
+`make publication-test` runner passes both the named publication journey and a
+four-canister fleet witness (18.67s together): pause after Store handover, prove
+neither child was admitted, recover the removed local handover reply, then admit
+and complete both children. Root's stable state remains unchanged until application
+admission. Replay creates nothing extra, four-canister inventory has no issues,
+no-change uses retained completion, and missing Store readiness proof refuses
+convergence. The first native run caught a changed no-Store reconciliation error;
+restoring the original admission ordering resolved it. Host/CLI and installed
+harness Clippy, Rustdoc and the retained-digest regressions pass. Logs:
+`target/qualification/fleet-store-*.log`.
+
+The simplification is composition over the existing owners, with one explicit
+infrastructure field rather than another application slot or lifecycle engine.
+Store remains optional and the generated starter remains minimal. Store artifact
+replacement and addition/removal on retained fleets are deliberately refused;
+adoption and maintenance need their own qualification. Application deployment
+still uses inline payloads; selecting a published Store release is the next
+integration gap. No mainnet action or push accompanies this work.
+
+## Named Store bootstrap through the CLI: 2026-11-15
+
+Continued the existing 0.206.0 work using the legacy bootstrap ordering and
+failure research recorded immediately below. The enduring requirements are exact
+creation output custody, explicit controller handover and initialized-state
+evidence before completion. Reuse the current direct creation/install signer and
+journal, rather than copying legacy's bootstrap scheduler or fitting Store into
+Root's greeting-child slots. No supplier or legacy checkout was changed.
+
+A named `wasm-store` plan with `--root-module` now selects a distinct semantic
+action under an already-bound Root. It binds Store bytes, Root identity/code,
+operator, budget and same-Root-subnet placement. Before creation, retain Root's
+certified subnet; select it in the cycles-ledger request or route local creation
+through Root. Recheck placement before installation/handover and on completed
+replay. A changed subnet blocks instead of rebinding an existing attempt.
+Root controller/code checks precede effects. Operator-controlled installation
+uses the original direct owner; sole-controller handover retains its exact
+signed management call. After handover preparation, recovery validates original
+creation/install custody without dispatching either effect again. A lost handover
+reply can be reconstructed from certified sole Root control, exact code and a
+retained signed replicated readiness response. Reconcile grants read authority
+only; expired uncertain mutations are never re-signed.
+
+Retained deployment digests stay unchanged: the record codec adds an omitted
+optional Store binding, while semantic authority stays in `PlanAction`. Store
+does not consume an application slot. Publication and Store readiness share
+the existing narrowly typed fresh-read signing mechanism; no arbitrary call
+forwarding, second signer, runtime catalog, payload mirror or new crate was added.
+
+Focused evidence: two native bootstrap admission/reopen cases, the retained
+approval digest case, nine signed-authority cases and four direct provider/plan
+cases pass. The installed CLI witness (17.75s) creates Store on Root's subnet,
+refuses changed Root control before creation, interrupts readiness after handover,
+removes the local handover reply, reconciles and replays without new canisters
+or changed effect signatures, refuses missing readiness proof, then publishes
+multiple versions and resumes an interrupted upload. Root stable bytes remain
+unchanged. Host/CLI and harness Clippy and Rustdoc pass. Logs are under
+`target/qualification/store-bootstrap-*.log`.
+The focused installed direct-deployment regression also passes (9.62s), including
+receipt recovery, replay and upgrade of the same canister through the shared
+installation path. Formatting and Tooling snapshot/dependency agreement pass.
+`make canic` installs the updated 0.206.0 CLI on PATH.
+
+The installed evidence uses synthetic local cycles. Mainnet validation here
+covers the typed cycles-ledger request with an explicit subnet; no live mainnet
+Store was created. Whole-fleet Store composition, release-selected deployment,
+Store maintenance through Root and general placement remain pending. Unknown
+creation/install results and exhausted/expired unresolved observation attempts
+retain their bounded blocked outcomes. No push accompanies this increment.
+
+## Store readiness after Root handover: 2026-11-15
+
+Continued 0.206.0 with one prerequisite to retained Store bootstrap. Re-read
+legacy's [Root bootstrap](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/bootstrap/root/mod.rs)
+at the pinned research revision, alongside the previously recorded Store tests
+and bootstrap diagnostic history below. Preserve its ordering of authority,
+required-component readiness and activation. Do not import its catalog mirroring,
+pruning or implicit reconciliation into Root. The current bounded Store already
+owns the source of truth; Root's application slots have greeting semantics and
+cannot stand in for infrastructure readiness.
+
+Store now exposes replicated `observe_info`; Root explicitly mounts
+`observe_store` with controller/target/deadline admission shared with publication.
+The new method has its own Wire identity, leaving existing publication encoding
+unchanged. It issues one bounded typed call with no cycles, timers, durable Root
+state or app slot. Its report is not a code/controller certificate, deployment
+receipt or capacity reservation. Automatic Host creation/handover must retain its
+own operation and bind certified module/controller evidence before completion;
+existing Store bootstrap refusals remain in place.
+
+Focused validation passed: one native readiness-frame case and two installed
+readiness cases (6.92s), then the existing publication-frame case and both
+installed publication regressions (7.63s). Actual Root calls fail before handover
+and succeed afterward, including repeated reads, reply fault 12 and Root
+maintenance. Both empty application slots and both owners' stable bytes remain
+unchanged. Unauthorized, malformed, expired, invalid-target and unavailable-target
+requests cannot establish readiness. Publication still resumes after maintenance
+and recovers retained Store commits after lost Root replies. Root/Store native
+and Wasm Clippy, installed-harness Clippy and Rustdoc passed. Logs:
+`target/qualification/store-readiness-{tests,publication-regression,lint,doc}.log`.
+
+The existing Store runner now selects this focused scope without building unused
+application artifacts; the aggregate still includes every Store case. No parallel
+bootstrap engine, catalog, payload owner or new package was added. No mainnet
+operation or push accompanied this increment.
+
+## Post-push review: 0.205.1
+
+Reviewed delivered commit `0086d49e13ef7e8c8e74a9c2f829707e3869e338` and its
+direct Host/CLI, Root/Store, Blob and validation callers after the atomic main/tag
+push. Remote `main` and peeled `v0.205.1` both resolve to that commit. The
+normal pre-commit hook passed with the immutable Blob input; no override remains
+necessary. Publication stays out of deployment reservations and canister inventory;
+Root retains no artifact catalog or payload, and receipts bind signed observations.
+
+Two actionable follow-ups begin 0.206.0:
+
+- `crates/canic-host/src/artifact.rs` reused direct ingress size admission for
+  build/inspection, requiring external builds for otherwise accepted Store inputs.
+  Share Store’s bounded artifact capacity across build, inspection and publication;
+  preserve direct/inline deployment admission at their existing owners. The
+  earlier Store/legacy research covers this same custody/transport distinction.
+- `Makefile` omitted the optional Blob feature from `lint` and its installed
+  witness from `ci`. Release 0.205.1 explicitly ran these existing checks; include
+  them in the normal aggregates once each, without a second validation runner.
+
+Generated Store bootstrap, deployment release selection and Blob management
+lifecycle integration remain explicit unqualified paths, not hidden fallbacks.
+No broader redesign or additional push follows from this review.
+
+## 0.206.0 first increment: artifact capacity
+
+The public builder and inspector now use the same 8 MiB capacity owner as Store
+publication. Direct ingress planning still uses 1.5 MB and inline children keep
+their runtime custody bounds. No new transport, planner, adapter or configuration
+mode was added. Aggregate lint/CI now schedule the existing Blob checks.
+
+Eight focused Host tests passed, covering artifact capacity/refusal, publication
+admission and original direct-plan digests. The installed CLI witness inspected
+and published a valid Wasm over 2 MB, resumed interrupted upload, retained signed
+evidence and reused the same bytes under another version (14.94s). Host/CLI and
+the publication harness passed Clippy. An admitted Make preview confirms one
+Blob feature-lint invocation and one Blob installed-test invocation in CI; the
+full repository gate was not rerun for this development increment. Logs:
+`target/qualification/206-{tests,lint,publication}.log` and
+`target/qualification/206-ci-roster.txt`. This work remains local after the 0.205.1 release.
+
 ## 0.205.1 release qualification: 2026-11-15
 
 Fourteen product packages move to 0.205.1; the four qualification packages remain

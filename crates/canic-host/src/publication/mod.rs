@@ -11,7 +11,6 @@ use std::path::Path;
 
 #[cfg(test)]
 mod tests;
-pub(crate) const MAX_WASM: usize = protocol::CHUNK_BYTES * protocol::MAX_CHUNKS;
 const OBSERVATIONS: usize = 32;
 
 /// Exact canister/code identities and immutable release label; no deployment authority.
@@ -131,13 +130,13 @@ pub fn create_publication_plan(
             version: input.version,
         },
     };
-    let bytes = store::read(wasm, MAX_WASM)?;
+    let bytes = store::read(wasm, artifact::MAX_ARTIFACT_BYTES)?;
     let now = crate::now()?;
     let plan = Plan {
         version: 3,
         network: selection.config.network.clone(),
         controller: controller.into(),
-        artifact: artifact::admit_bounded(&bytes, MAX_WASM)?,
+        artifact: artifact::admit_bounded(&bytes, artifact::MAX_ARTIFACT_BYTES)?,
         action: PlanAction::Publish(binding),
         created_at_ns: now,
         expires_at_ns: now + 3_600_000_000_000,

@@ -22,6 +22,13 @@ Root-mediated publication remains usable after controller handover: incomplete
 uploads resume after Root maintenance without changing Root stable bytes.
 Malformed/unauthorized/expired requests preserve state; lost Root replies retain
 Store commits and exact replays recover through replicated observation.
+`make store-readiness-test` selects the installed handover/readiness cases and
+their bounded protocol test without building application artifacts. Actual Root
+calls are refused before Store handover and succeed afterward, across repeated
+reads, a reply trap and Root maintenance. Both application slots and both owners'
+stable bytes remain unchanged; malformed, unauthorized and expired requests are
+refused. The full `store-test` includes these cases. This observation alone does
+not certify code/controllers or complete CLI bootstrap.
 Actual Root calls acquire pins, install a child larger than the former inline
 limit, and upgrade it using the Store cache. Lost pin/cache callbacks recover
 through observation after Root maintenance. Missing cache, unpublished releases,
@@ -29,11 +36,19 @@ expired authority, retained upgrade history and mixed inline/Store custody have
 explicit cases. A separate provider fixture reconstructs a cleared cache and
 performs real chunked installation/upgrade. Fleet CLI deployment remains on its
 existing inline path. `make publication-test` focuses on the actual CLI, ICP signer
-and installed Root/Store publication path: interrupted upload, read-only
+and installed Root/Store bootstrap and publication path: named creation, controller
+handover, lost handover reply recovery, missing readiness evidence refusal,
+unchanged application custody, interrupted upload, read-only
 reconciliation, exact resumption, immutable version reuse, certified-code refusal
 and signed observation custody. It needs the prepared simulator and ICP signer,
 uses synthetic cycles, and leaves Root stable memory unchanged. Publication does
 not create a canister or reserve a deployment slot; see [Store scope](../docs/demos/wasm-store.md).
+The same runner also qualifies a fresh whole fleet with Root, Store and two
+application children. Store readiness blocks both application admissions;
+reconciliation recovers a lost handover reply without admitting either child,
+then apply resumes the original approval. Both children finish, replay creates
+nothing extra, four-canister inventory is complete, and missing Store readiness
+proof refuses convergence. Original fleets without Store retain their digests.
 `make blob-test` builds two embedded catalog executables using the optional
 Canic adapter and the real Blob Service at its pinned Git revision. Five installed cases cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,

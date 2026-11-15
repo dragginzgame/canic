@@ -84,6 +84,16 @@ endpoint!(
     LIMITS,
     |state, _| state.info()
 );
+endpoint!(
+    observe_info,
+    update,
+    INFO,
+    (),
+    protocol::Info,
+    LIMITS,
+    LIMITS,
+    |state, _| state.info()
+);
 endpoint!(configure, update, CONFIGURE, protocol::Quota, Result<protocol::Info, protocol::Error>, LIMITS, LIMITS, |state, input| state.configure(input));
 endpoint!(pin, update, PIN, protocol::Pin, Result<protocol::PinReceipt, protocol::Error>, LIMITS, LIMITS, |state, input| state.pin(cdk::api::msg_caller().as_slice(), input));
 endpoint!(observe_pin, update, OBSERVE_PIN, protocol::Pin, Result<protocol::PinReceipt, protocol::Error>, LIMITS, LIMITS, |state, input| state.observe_pin(cdk::api::msg_caller().as_slice(), input));

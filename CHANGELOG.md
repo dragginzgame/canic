@@ -1,5 +1,82 @@
 # Changelog
 
+## [0.206.0] - 2026-11-15
+
+### ▶️ Try it
+
+From this checkout, install the updated CLI on PATH and build Store locally
+after tool/dependency preparation:
+
+```sh
+make canic
+canic artifact build --package canic-wasm-store --output target/wasm-store.wasm
+```
+
+In the app's config directory, with an existing bound Root, reviewed Root hash,
+and an unbound `store` definition (`role: wasm-store`, `parent: root`, built Wasm
+path), plan its bootstrap. These examples select `starter/mainnet`; substitute
+the configured app/fleet and returned operation. Planning spends nothing; apply
+debits the signer's cycles-ledger account up to the approved creation ceiling
+(default 1T), installs Store and hands sole control to Root. No browser opens.
+
+```sh
+canic fleet plan --app starter --fleet mainnet --canister store --root-module ROOT_SHA256 --identity canic-mainnet
+canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status OPERATION --app starter --fleet mainnet
+```
+
+The [Store guide](docs/demos/wasm-store.md) includes declaration, binding and
+publication. Installed qualification uses local synthetic cycles; no live
+mainnet bootstrap was performed for this increment.
+
+For a fresh, unbound fleet whose built definitions include Root, Store and one
+or two applications, omit `--canister` to review all creation together. Defaults
+are 4T total for one application or 5T for two; applying spends that reviewed
+budget and admits apps only after Store handover/readiness completes:
+
+```sh
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet show --app starter --fleet mainnet
+```
+
+### 🩹 Fixed
+
+Artifact build and inspection now accept the Store’s 8 MiB payload capacity.
+Direct deployment plans retain their existing 1.5 MB transport ceiling; Root’s
+inline child limits also remain unchanged. With the Wasm toolchain and
+dependencies prepared, build and inspect locally:
+
+```sh
+canic artifact build --package canic-hello --output target/hello.wasm
+canic artifact inspect target/hello.wasm
+```
+
+The publication witness now inspects and uploads a real Wasm larger than 1.5 MB.
+The aggregate lint and CI targets include the existing optional Blob checks,
+using its pinned immutable source. No browser or mainnet operation is involved.
+
+### ✨ Added
+
+Root can now observe initialized Store state after controller handover, using a
+bounded replicated read. Installed tests cover handover, refusal, reply failure
+and Root upgrade while preserving both empty application slots. Named CLI Store
+bootstrap now combines this read with certified code/controller checks, original
+creation/install custody and an exact handover attempt. It retains Root's subnet
+before creation and selects that placement. A lost handover reply can be reconciled
+without repeating creation/install or renewing mutation authority. Whole-fleet
+bootstrap composes this same Store action under one approval, with a separate
+budget and retained evidence. Both app slots remain available. Status and fleet
+views include Store; cancellation and replan preserve its pending effects.
+Store artifact replacement and existing-fleet adoption remain refused.
+Store-backed release selection remains pending.
+Build its two production artifacts locally after `make canic` and tool preparation:
+
+```sh
+canic artifact build --package canic-root --output target/root.wasm
+canic artifact build --package canic-wasm-store --output target/wasm-store.wasm
+```
+
 ## [0.205.1] - 2026-11-15
 
 ### 🔧 Changed

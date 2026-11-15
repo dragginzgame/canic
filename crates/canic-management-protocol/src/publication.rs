@@ -1,4 +1,4 @@
-//! Controller-admitted publication through Root; Store alone owns release custody.
+//! Controller-admitted Store publication and observation; Store owns release custody.
 use canic_wasm_store_protocol as store;
 use serde::{Deserialize, Serialize};
 
@@ -51,3 +51,16 @@ pub enum Error {
 
 /// Retained Store progress, not a deployment receipt or Root journal entry.
 pub type Reply = Result<store::Status, Error>;
+
+/// Observe initialized Store state through its actual Root controller.
+pub const INFO: u64 = 47;
+/// Bounded read-only Store observation; grants no bootstrap or deployment authority.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct InfoRequest {
+    /// Canonical Store identity, independent of any application child slot.
+    pub store: String,
+    /// Last dispatch time, at most five minutes from Root admission.
+    pub expires_at_ns: u64,
+}
+/// Replicated Store state at observation time, not a controller or module certificate.
+pub type InfoReply = Result<store::Info, Error>;

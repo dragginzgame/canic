@@ -62,7 +62,9 @@ pub fn create_managed_plan(
             .config
             .canisters
             .values()
-            .filter(|slot| slot.parent.as_ref() == Some(parent))
+            .filter(|slot| {
+                slot.parent.as_ref() == Some(parent) && slot.role.as_deref() != Some("wasm-store")
+            })
             .count()
             != 1
     {

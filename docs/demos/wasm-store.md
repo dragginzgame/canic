@@ -10,8 +10,9 @@ bytes. Preparing a new version never removes earlier releases.
 Root now supports explicit Store-backed creation and serial upgrades. It retains
 immutable references, pin evidence and complete upgrade history in its original
 artifact allocation, with no application Wasm bytes. This is not yet wired into
-fleet plan/apply: selected-release policy, generated Store topology and existing-
-fleet migration remain unimplemented. Existing inline deployments keep their
+fleet plan/apply: selected-release policy and existing-fleet migration remain
+unimplemented. Fleet bootstrap now composes a declared Store, but application
+installation still uses the inline path. Existing inline deployments keep their
 current limits and contracts.
 There is no delete/reset or pin-release endpoint; incomplete uploads keep their
 reservation. No deployment approval or application readiness follows from Store
@@ -36,8 +37,9 @@ All Store endpoints require the current IC controller. `prepare`, `put` and
 query/replicated progress; `read`/`read_chunk` expose query/replicated published
 bytes. `list` returns at most four metadata entries after an exclusive release
 cursor. These transport distinctions do not grant fresh installation authority.
-`configure` changes admission quotas without reinstalling; `info` reports their
-usage. Root controls the Store during autonomous work. Root's controller-only
+`configure` changes admission quotas without reinstalling; `info`/`observe_info`
+report their usage through query/replicated reads. Root controls the Store during
+autonomous work. Root's controller-only
 `store_publication` endpoint now accepts four fixed commands from
 `canic-management-protocol::publication`: prepare an immutable manifest, supply
 one chunk, publish, or observe retained progress. Each request binds a canonical
@@ -58,15 +60,96 @@ not remote rollback. Call/decode/binding failures return uncertainty; a lost rep
 is never evidence of no effect. The calling Host must retain exact commands and
 source/code authority before using this route in fleet operations.
 
-The fleet Host now uses this route for explicit publication into an existing
+Root also explicitly mounts `observe_store`: one replicated `observe_info` call
+under the same controller, target and deadline checks. It returns Store's bounded
+initialized-state report, without a release label, application slot or storage
+write. `make store-readiness-test` proves refusal before controller handover,
+successful actual Root calls afterward, and unchanged state across repeated reads,
+reply fault 12 and Root maintenance. Invalid/expired requests and unavailable
+targets cannot produce a successful report. This is one readiness input for
+bootstrap; it does not certify module identity, sole control or sufficient quota
+for future work. Host binds certified code/controller evidence separately in
+named Store bootstrap.
+
+To create a Store, use the existing named `fleet plan` workflow. The selected
+fleet must have a bound top-level `root` and an unbound `wasm-store` child with a
+Wasm input. The reviewed Root executable must mount `observe_store` and
+`store_publication`. Planning retains exact Store bytes, Root identity/code,
+operator, network and creation budget; it creates nothing.
+
+From the app's config directory, after installing this CLI with `make canic`,
+building Store, and binding the existing Root ID, declare the Store if absent.
+The Wasm path is relative to the config. Substitute reviewed hashes and returned
+operation/Store IDs below. Apply creates a canister using synthetic cycles on a
+local fleet or debits the operator's cycles-ledger account on mainnet (default
+ceiling 1T, including the ledger fee):
+
+```sh
+canic app canister add store --app starter --role wasm-store --parent root --wasm target/wasm-store.wasm
+canic fleet plan --app starter --fleet mainnet --canister store --root-module ROOT_SHA256 --identity canic-mainnet
+canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status OPERATION --app starter --fleet mainnet
+canic fleet canister bind store --app starter --fleet mainnet --id STORE_ID
+```
+
+Creation retains Root's certified subnet first and explicitly selects that subnet
+through the cycles ledger; local creation routes through Root. A changed Root
+subnet or a created Store elsewhere blocks progress. Host uses its original
+direct creation/install attempts while the operator controls Store, then retains
+an exact `update_settings` attempt handing sole control to Root. After handover
+starts, recovery validates the original creation/install evidence without trying
+to reinstall. Completion requires certified Store code/sole Root control and a
+retained signed replicated readiness reply. Root code/control are checked too;
+keep the operator's maintenance window exclusive during this process.
+
+If the handover reply is lost, `canic fleet reconcile OPERATION` with the same
+app/fleet and identity can establish completion from certified sole control and
+fresh read authority. It never creates, installs or hands over. Apply may resume
+an original live handover attempt, but cannot replace an expired uncertain one.
+Unknown creation/install results remain blocked under the existing direct-effect
+contract. Readiness has 32 retained attempts; unresolved expired reads and
+exhaustion remain blocked. Keep the journal and signer. A receipt is historical
+completion evidence, not perpetual readiness or a Store maintenance contract.
+
+For a fresh fleet, declare `store` under `root` before whole-fleet planning. The
+fleet may have one or two application children in addition to Store; every slot
+must be unbound. Root, Store and application Wasm paths must already be built.
+From that app's config directory:
+
+```sh
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet status OPERATION --app starter --fleet mainnet
+canic fleet show --app starter --fleet mainnet
+```
+
+The default total debit is 4T for Root + Store + one application, or 5T for two
+applications. `--cycles` sets the total: Store receives a separate 1T allowance,
+and Root receives the remainder, including its child funding. The preview shows
+each debit and the total. One immutable approval binds Store to Root's retained
+creation output. Apply completes Root, then Store installation/handover/readiness,
+then admits the application children under the original dispatch deadline.
+Store does not consume either application slot. Retained fleet digests without
+Store remain unchanged.
+
+Reconcile can recover Store before application admission, but reports blocked
+until apply admits every approved child. That is not a completed fleet. Replan
+keeps the original operation and deadlines; cancellation is unavailable after
+any effect preparation. Completed Store evidence is required for convergence.
+Adding/removing Store or changing its artifact on a retained fleet is refused:
+existing-fleet adoption and Store maintenance need their own qualified contracts.
+The generated starter still begins with one app and Root; Store is explicitly
+declared rather than imposed on every application.
+
+The fleet Host uses this route for explicit publication into an existing
 Store. Prerequisites: the selected fleet has bound `root` and `store` slots, with
 roles `root` and `wasm-store`; `store` and the app-defined artifact slot
 `app` share that Root parent. The artifact slot has a Wasm path. Root must have
 the signing operator as its sole controller; Store must have Root as its sole
-controller. Both reviewed module hashes must match certified metadata. Existing
-fleets need a separately qualified Store installation/handover; these commands
-do not bootstrap it. Whole-fleet and named application-child planning refuse a
-Store declaration until its bootstrap/readiness contract is qualified.
+controller. Both reviewed module hashes must match certified metadata. Complete
+the named bootstrap above and bind its returned Store ID before publication.
+After whole-fleet bootstrap, bind both returned Root and Store IDs for this
+publication workflow; bindings project identity and do not grant new authority.
 
 With those prerequisites and the repository signer prepared, substitute the
 reviewed hashes and returned operation digest:
@@ -94,14 +177,18 @@ mutation can be bypassed only when exact Store evidence establishes that step.
 An unfinished step still needs its original live authority. Observation history
 is bounded to 32 attempts; exhaustion blocks without deleting evidence.
 
-Publication accepts up to 8 MiB, within Store's bounded chunk contract. The
-existing artifact builder/inspector and direct-install path still have a 1.5 MB
-limit; larger inputs currently need an external build. No measured deployment
-speedup is claimed. Generated Store topology, deployment release selection,
+Publication, artifact building and inspection accept up to 8 MiB, within Store’s
+bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
+and inline child plans retain their smaller custody limits. No measured deployment
+speedup is claimed. Deployment release selection,
 Store maintenance through Root and existing-fleet migration remain pending.
 
 `make publication-test` qualifies the real CLI and signer against installed Root
-and Store, using synthetic cycles. It interrupts signing before the first chunk,
+and Store, using synthetic cycles. It creates Store through the CLI, refuses
+changed Root control before creation, interrupts readiness after handover, removes
+the local handover reply and reconciles without repeating creation/install or
+changing Root's stable bytes. Missing retained readiness evidence invalidates a
+receipt. It then interrupts signing before the first chunk,
 observes without mutation, resumes the original upload, reuses bytes for a second
 immutable version and rejects mismatched code and missing receipt evidence.
 

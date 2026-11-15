@@ -430,7 +430,7 @@ For fenced revocation, status distinguishes `Requested`, `Fencing`, `Completed` 
 
 ### Controller and recovery graph
 
-The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Existing Root/manager fixtures do not qualify Store bootstrap or maintenance. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
+The selected next starter has an explicitly trusted operator recovery authority R controlling Root/management owner E, which controls the application and Wasm Store canisters. R is an external principal with retained host custody, not a canister tree node. R performs E's maintenance; its power to replace E is explicit transitive trust. Installed CLI witnesses qualify named Store bootstrap under an existing bound Root and whole-fleet bootstrap before application admission; Store maintenance through Root remains pending. The direct-host comparison establishes bootstrap cost and authority; it cannot satisfy autonomous operation without a surviving on-chain effect owner.
 
 | Role | Controllers and management-effect caller | Upgrade owner and surviving journal | Failed migration, restoration or retirement custody |
 | --- | --- | --- | --- |
@@ -821,8 +821,19 @@ Build records bind exact sources, selected lock graph, toolchain, features, targ
 
 Selected on 2026-11-15. Store implements versioned publication, chunk custody,
 quota changes, durable pins and bounded management-cache preparation. Root
-qualifies reference-backed effects/custody and controller-mediated publication;
-fleet Host/CLI integration remains pending. See the
+qualifies reference-backed effects/custody, controller-mediated publication and
+replicated Store observation after handover. Fleet Host/CLI publication works
+with an already-bound Store; named Store bootstrap now combines direct creation,
+installation, controller handover and replicated readiness in the same retained
+operation. Creation selects the approved Root's certified subnet, retained before
+signing; changed placement blocks recovery. Store observation establishes
+initialized state through Root's actual call path, alongside separate certified
+code and sole-controller checks. No application child slot is reserved.
+Whole-fleet planning now includes an optional declared Store, bound to the same
+Root creation output and completed before application admission. Its separate 1T
+creation debit appears in the total approval; no app slot is consumed. Retained
+Store definitions cannot be added, removed or replaced through replan.
+Store-backed deployment release selection remains pending. See the
 [current scope](../demos/wasm-store.md). The full contract below still requires
 pin release, reclamation and fleet integration. Each managed
 fleet owns a separate Store with a persistent, dynamically extensible catalog.
@@ -911,7 +922,7 @@ effect owner. Fleet Host/CLI can publish an explicit immutable release through
 an already-bound Root-owned Store using the existing plan/apply/status/reconcile
 owners; this grants no installation authority. The approval binds both modules,
 principals and exact bytes, with separately retained read-only recovery. Generated
-Store bootstrap and selecting a Store release for deployment are still pending. See the
+Selecting a Store release for deployment is still pending. See the
 [current implementation scope](../demos/wasm-store.md). First prove fresh
 Root/Store/app creation, multiple coexisting versions, interrupted upload/resume,
 hash/version conflicts, quota exhaustion, cache reconstruction, pin/deletion

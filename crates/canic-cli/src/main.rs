@@ -411,22 +411,41 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         },
                     )?
                 } else if let Some(root_module) = root_module {
-                    let execute_at = execute_at
-                        .map(|seconds| {
-                            seconds
-                                .checked_mul(1_000_000_000)
-                                .ok_or_else(|| Error::Invalid("dispatch timestamp overflow".into()))
-                        })
-                        .transpose()?;
-                    canic_host::create_managed_plan(
-                        &state_dir,
-                        &wasm,
-                        input,
-                        config,
-                        canister,
-                        root_module,
-                        execute_at,
-                    )?
+                    if config
+                        .config
+                        .canisters
+                        .get(canister)
+                        .is_some_and(|slot| slot.role.as_deref() == Some("wasm-store"))
+                    {
+                        if execute_at.is_some() {
+                            return Err(Error::Invalid("Store bootstrap is operator-driven and has no child dispatch schedule".into()));
+                        }
+                        canic_host::create_store_plan(
+                            &state_dir,
+                            &wasm,
+                            input,
+                            config,
+                            canister,
+                            root_module,
+                        )?
+                    } else {
+                        let execute_at = execute_at
+                            .map(|seconds| {
+                                seconds.checked_mul(1_000_000_000).ok_or_else(|| {
+                                    Error::Invalid("dispatch timestamp overflow".into())
+                                })
+                            })
+                            .transpose()?;
+                        canic_host::create_managed_plan(
+                            &state_dir,
+                            &wasm,
+                            input,
+                            config,
+                            canister,
+                            root_module,
+                            execute_at,
+                        )?
+                    }
                 } else {
                     canic_host::create_configured_plan(&state_dir, &wasm, input, config, canister)?
                 }

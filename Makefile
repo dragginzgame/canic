@@ -13,9 +13,10 @@ help:
 	  'make growth-test             Qualify one autonomous worker and interrupted effects' \
 	  'make endpoint-test           Qualify management mounts, guards and reply rollback' \
 	  'make root-test               Qualify Root creation, upgrades and child isolation' \
-	  'make blob-test               Qualify embedded Blob/catalog composition (local supplier)' \
+	  'make blob-test               Qualify embedded Blob/catalog composition' \
 	  'make store-test              Qualify versioned Store uploads and maintenance' \
-	  'make publication-test        Qualify CLI publication through Root to Store' \
+	  'make store-readiness-test    Qualify Store observation after Root handover' \
+	  'make publication-test        Qualify CLI Store bootstrap and publication' \
 	  'make check                   Check the canic library' \
 	  'make test                    Run canic tests' \
 	  'make clippy                  Check canic lints' \
@@ -60,9 +61,9 @@ doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --no-deps
 
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
-lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy store-doc
+lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy store-doc blob-clippy blob-doc
 
-ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test
+ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test
 
 # The runner selects the Wasm path from Cargo artifact messages.
 qualification-setup:
@@ -143,9 +144,12 @@ root-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 
-.PHONY: store-test store-clippy store-doc publication-test
+.PHONY: store-test store-readiness-test store-clippy store-doc publication-test
 publication-test:
 	bash scripts/dev/test-publication.sh
+
+store-readiness-test:
+	bash scripts/dev/test-store.sh readiness
 
 store-test:
 	bash scripts/dev/test-store.sh

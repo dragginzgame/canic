@@ -44,7 +44,21 @@ pub struct FleetChild {
     pub execute_at_ns: u64,
 }
 
-/// Bounded first fleet journey: one new Root and one or two application children.
+/// Infrastructure installation bound to the approved Root creation output.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetStore {
+    /// App/fleet/canister identity, outside the application slot allocation.
+    pub deployment: DeploymentName,
+    /// Root's exact approved creation output.
+    pub parent: CreatedCanister,
+    /// Retained Store executable, installed by the host before handover.
+    pub artifact: Artifact,
+    /// Separate operator debit, including the ledger fee.
+    pub creation_cycles: u64,
+}
+
+/// Bounded fleet journey: one new Root, optional Store and one or two application children.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FleetPlan {
     /// Fleet envelope format, independent of existing single-canister plan formats.
@@ -53,9 +67,16 @@ pub struct FleetPlan {
     pub root: Plan,
     /// Approved children in permanent slot order.
     pub children: Vec<FleetChild>,
+    /// Optional per-fleet infrastructure, completed before application admission.
+    pub store: Option<FleetStore>,
 }
 
 impl FleetPlan {
+    /// Total operator debit ceiling; child grants are already included in Root funding.
+    #[must_use]
+    pub fn creation_cycles(&self) -> u64 {
+        self.root.creation_cycles() + self.store.as_ref().map_or(0, |s| s.creation_cycles)
+    }
     /// Digest of bounded Wire-encoded authority, independent of JSON formatting.
     /// # Errors
     /// Rejects invalid authority, output references or unbounded inputs.
@@ -125,6 +146,23 @@ impl FleetPlan {
                 return Err(invalid());
             }
         }
+        if let Some(store) = &self.store {
+            store.deployment.validate()?;
+            if store.deployment.app != root.app
+                || store.deployment.fleet != root.fleet
+                || store.deployment.canister == root.canister
+                || self
+                    .children
+                    .iter()
+                    .any(|c| c.deployment == store.deployment)
+                || store.parent.operation != self.root.digest()?
+                || store.creation_cycles != STORE_CYCLES
+                || store.artifact.bytes > artifact::MAX_WASM
+                || crate::unhex(&store.artifact.sha256)?.len() != 32
+            {
+                return Err(invalid());
+            }
+        }
         if self
             .children()
             .map(|(_, c)| c.artifact.bytes)
@@ -150,12 +188,7 @@ impl FleetPlan {
     }
     fn child_plan(&self, receipt: &Receipt, slot: Slot) -> Result<Plan> {
         let child = self.child(slot)?;
-        if receipt.operation != child.parent.operation
-            || receipt.module_hash != self.root.artifact.sha256
-            || receipt.controller != self.root.controller
-        {
-            return Err(invalid());
-        }
+        self.verify_root_receipt(receipt)?;
         let plan = Plan {
             version: 2,
             network: self.root.network.clone(),
@@ -173,6 +206,34 @@ impl FleetPlan {
         };
         plan.validate()?;
         Ok(plan)
+    }
+    fn store_plan(&self, receipt: &Receipt) -> Result<Plan> {
+        let store = self.store.as_ref().ok_or_else(invalid)?;
+        // The same Root receipt checks bind both kinds of dependent operation.
+        self.verify_root_receipt(receipt)?;
+        let plan = Plan {
+            artifact: store.artifact.clone(),
+            action: crate::PlanAction::CreateStore {
+                cycles: store.creation_cycles,
+                root: crate::UpgradeTarget {
+                    canister: receipt.canister.clone(),
+                    module: self.root.artifact.sha256.clone(),
+                },
+            },
+            deployment: Some(store.deployment.clone()),
+            ..self.root.clone()
+        };
+        plan.validate()?;
+        Ok(plan)
+    }
+    fn verify_root_receipt(&self, receipt: &Receipt) -> Result<()> {
+        if receipt.operation != self.root.digest()?
+            || receipt.module_hash != self.root.artifact.sha256
+            || receipt.controller != self.root.controller
+        {
+            return Err(invalid());
+        }
+        Ok(())
     }
 }
 fn invalid() -> Error {
@@ -208,6 +269,20 @@ pub(crate) fn load(dir: &Path, id: &str) -> Result<FleetPlan> {
             }
         }
     }
+    if let Some(definition) = &value.store {
+        let path = dir.join("store");
+        if artifact::admit(&store::read(&path.join("module.wasm"), artifact::MAX_WASM)?)?
+            != definition.artifact
+        {
+            return Err(invalid());
+        }
+        if path.join("plan.json").try_exists().map_err(supplier)? {
+            let expected = value.store_plan(&root_receipt(dir, &value)?.ok_or_else(invalid)?)?;
+            if plan::load(&path, &expected.digest()?)?.0 != expected {
+                return Err(invalid());
+            }
+        }
+    }
     cancellation::read(dir, id)?;
     Ok(value)
 }
@@ -227,14 +302,14 @@ fn root_receipt(dir: &Path, value: &FleetPlan) -> Result<Option<Receipt>> {
     if created.to_text() != receipt.canister {
         return Err(invalid());
     }
-    value.child_plan(&receipt, Slot::First)?;
+    value.verify_root_receipt(&receipt)?;
     Ok(Some(receipt))
 }
 
 /// Compare artifacts with retained completion and approve creation, child upgrade or Root maintenance.
 /// Unfinished identical work retains its original schedule, even after expiry. No network calls.
 /// # Errors
-/// Refuses anything other than an unbound Root with one or two direct children, occupied fleet authority,
+/// Refuses anything other than an unbound Root, optional Store and one or two direct applications, occupied fleet authority,
 /// unavailable artifacts, invalid budgets, journal corruption or concurrent writers.
 pub fn plan_fleet(
     journal: &Path,
@@ -246,15 +321,12 @@ pub fn plan_fleet(
 ) -> Result<FleetPlanning> {
     selected.validate()?;
     let slots = &selected.config.canisters;
-    if slots
-        .values()
-        .any(|s| s.role.as_deref() == Some("wasm-store"))
-    {
-        return Err(Error::Invalid(
-            "Store bootstrap is not qualified yet; publish into an existing bound Store with --publish-version".into(),
-        ));
-    }
-    if !(2..=SLOTS.len() + 1).contains(&slots.len())
+    let stores: Vec<_> = slots
+        .iter()
+        .filter(|(_, s)| s.role.as_deref() == Some("wasm-store"))
+        .collect();
+    if stores.len() > 1
+        || !(2 + stores.len()..=SLOTS.len() + 1 + stores.len()).contains(&slots.len())
         || slots.values().any(|s| s.id.is_some() || s.profile_manager)
     {
         return Err(invalid());
@@ -265,9 +337,15 @@ pub fn plan_fleet(
         .ok_or_else(invalid)?;
     let children: Vec<_> = slots
         .iter()
-        .filter(|(_, s)| s.parent.as_ref() == Some(root_name))
+        .filter(|(_, s)| {
+            s.parent.as_ref() == Some(root_name) && s.role.as_deref() != Some("wasm-store")
+        })
         .collect();
-    if children.len() + 1 != slots.len() {
+    if children.len() + 1 + stores.len() != slots.len()
+        || stores
+            .first()
+            .is_some_and(|(_, s)| s.parent.as_ref() != Some(root_name))
+    {
         return Err(invalid());
     }
     let root_bytes = store::read(
@@ -283,6 +361,16 @@ pub fn plan_fleet(
             )
         })
         .collect::<Result<_>>()?;
+    let store_bytes = stores
+        .first()
+        .map(|(name, _)| {
+            store::read(
+                &selected.wasm_path(config_path, name, None)?,
+                artifact::MAX_WASM,
+            )
+        })
+        .transpose()?;
+    let store_cycles = if stores.is_empty() { 0 } else { STORE_CYCLES };
     let now = crate::now()?;
     let dispatch = execute_at_ns.unwrap_or(now + 600_000_000_000);
     let name = |slot: &str| DeploymentName {
@@ -296,7 +384,10 @@ pub fn plan_fleet(
         controller: controller.into(),
         artifact: artifact::admit(&root_bytes)?,
         action: crate::PlanAction::Create {
-            cycles: cycles.unwrap_or((children.len() as u64 + 2) * 1_000_000_000_000),
+            cycles: cycles
+                .unwrap_or((children.len() as u64 + 2) * 1_000_000_000_000 + store_cycles)
+                .checked_sub(store_cycles)
+                .ok_or_else(invalid)?,
         },
         created_at_ns: now,
         expires_at_ns: dispatch.checked_add(600_000_000_000).ok_or_else(invalid)?,
@@ -318,6 +409,20 @@ pub fn plan_fleet(
         version: children.len() as u32,
         children: (0..children.len()).map(definition).collect::<Result<_>>()?,
         root,
+        store: stores
+            .first()
+            .zip(store_bytes.as_ref())
+            .map(|((slot, _), bytes)| -> Result<FleetStore> {
+                Ok(FleetStore {
+                    deployment: name(slot),
+                    parent: CreatedCanister {
+                        operation: String::new(),
+                    },
+                    artifact: artifact::admit(bytes)?,
+                    creation_cycles: STORE_CYCLES,
+                })
+            })
+            .transpose()?,
     };
     let store = Store::open(journal)?;
     // One fleet reservation covers Root and its children before any ID is known.
@@ -339,7 +444,9 @@ pub fn plan_fleet(
             if old.reserves(&name(root_name)) {
                 if old.belongs(selected)
                     && old.root.controller == controller
-                    && cycles.is_none_or(|budget| old.root.creation_cycles() == budget)
+                    && cycles.is_none_or(|budget| old.creation_cycles() == budget)
+                    && old.store.as_ref().map(|s| &s.deployment)
+                        == value.store.as_ref().map(|s| &s.deployment)
                     && old.root.deployment == value.root.deployment
                     && old
                         .children()
@@ -389,6 +496,9 @@ pub fn plan_fleet(
     for child in &mut value.children {
         child.parent.operation = value.root.digest()?;
     }
+    if let Some(store) = &mut value.store {
+        store.parent.operation = value.root.digest()?;
+    }
     let id = value.digest()?;
     let dir = store.operation(&id)?;
     let staging = ic_host_fs::directory::create_unique_directory(
@@ -404,6 +514,10 @@ pub fn plan_fleet(
     }
     store::put(&staging.join("root/module.wasm"), &root_bytes)?;
     store::put_json(&staging.join("root/plan.json"), &value.root)?;
+    if let Some(bytes) = store_bytes {
+        ic_host_fs::durable::prepare_private_parents(&staging.join("store")).map_err(supplier)?;
+        store::put(&staging.join("store/module.wasm"), &bytes)?;
+    }
     for (index, bytes) in child_bytes.iter().enumerate() {
         store::put(
             &staging
@@ -452,6 +566,22 @@ pub(crate) async fn apply(
     let ApplyOutcome::Complete(root) = root else {
         return Err(invalid());
     };
+    let store = if value.store.is_some() {
+        let plan = value.store_plan(&root)?;
+        let path = dir.join("store");
+        if !path.join("plan.json").try_exists().map_err(supplier)? {
+            store::put_json(&path.join("plan.json"), &plan)?;
+        }
+        load(dir, id)?;
+        let ApplyOutcome::Complete(receipt) =
+            operation::apply_at(&path, &plan.digest()?, identity, icp).await?
+        else {
+            return Err(invalid());
+        };
+        Some(receipt)
+    } else {
+        None
+    };
     let mut outcomes = Vec::new();
     for (index, definition) in value.children() {
         let child = value.child_plan(&root, index)?;
@@ -469,6 +599,7 @@ pub(crate) async fn apply(
     Ok(ApplyOutcome::Fleet {
         operation: id.into(),
         root,
+        store,
         children: outcomes,
     })
 }
@@ -485,6 +616,24 @@ pub(crate) async fn reconcile(
             "this fleet approval was cancelled; plan and review a new operation".into(),
         ));
     }
+    let store = if value.store.is_some() {
+        let root = root_receipt(dir, &value)?.ok_or_else(invalid)?;
+        let path = dir.join("store");
+        if !path.join("plan.json").try_exists().map_err(supplier)? {
+            return Err(Error::Blocked(
+                "Store bootstrap has not begun; resume fleet apply".into(),
+            ));
+        }
+        let ApplyOutcome::Complete(receipt) =
+            operation::reconcile_at(&path, &value.store_plan(&root)?.digest()?, identity, icp)
+                .await?
+        else {
+            return Err(invalid());
+        };
+        Some(receipt)
+    } else {
+        None
+    };
     for (index, _) in value.children() {
         if !dir
             .join(record::child_leaf(index))
@@ -513,6 +662,7 @@ pub(crate) async fn reconcile(
     Ok(ApplyOutcome::Fleet {
         operation: id.into(),
         root,
+        store,
         children: outcomes,
     })
 }
@@ -521,6 +671,9 @@ pub(crate) fn status(dir: &Path, id: &str) -> Result<serde_json::Value> {
     let value = load(dir, id)?;
     let root = operation::status_at(&dir.join("root"), &value.root.digest()?)?;
     let mut result = serde_json::json!({"operation": id, "fleet_plan": value, "root": root, "cancellation": cancellation::read(dir,id)?});
+    if let Some(definition) = &value.store {
+        result["store"] = serde_json::json!({"name": definition.deployment.canister, "state": store_state(dir, &value)?});
+    }
     let mut children = Vec::new();
     for (index, definition) in value.children() {
         let path = dir.join(record::child_leaf(index));
@@ -550,6 +703,14 @@ pub(crate) fn inventory(
         &value.root.digest()?,
         now,
     )?];
+    if value.store.is_some() && dir.join("store/plan.json").try_exists().map_err(supplier)? {
+        let root = root_receipt(dir, &value)?.ok_or_else(invalid)?;
+        records.push(crate::fleet::local_operation_at(
+            &dir.join("store"),
+            &value.store_plan(&root)?.digest()?,
+            now,
+        )?);
+    }
     for (index, _) in value.children() {
         let path = dir.join(record::child_leaf(index));
         if path.join("plan.json").try_exists().map_err(supplier)? {
@@ -572,3 +733,12 @@ pub(crate) fn cancelled(dir: &Path, id: &str) -> Result<bool> {
 }
 
 pub(crate) const SLOTS: [Slot; 2] = [Slot::First, Slot::Second];
+const STORE_CYCLES: u64 = 1_000_000_000_000;
+
+fn store_state(dir: &Path, value: &FleetPlan) -> Result<serde_json::Value> {
+    if !dir.join("store/plan.json").try_exists().map_err(supplier)? {
+        return Ok(serde_json::Value::Null);
+    }
+    let root = root_receipt(dir, value)?.ok_or_else(invalid)?;
+    operation::status_at(&dir.join("store"), &value.store_plan(&root)?.digest()?)
+}
