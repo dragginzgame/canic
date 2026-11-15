@@ -7,6 +7,202 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.211.1 release qualification: 2026-11-15
+
+The maintainer authorized GitHub delivery and subsequent development. All fourteen
+product packages select 0.211.1; qualification packages retain 0.0.0. Both locks
+retain the confirmed rand 0.10.4 update and otherwise preserve supplier selections.
+Packages remain unpublished; this release authorizes neither crates.io publication
+nor mainnet effects. Scope includes ready-to-dispatch planning, bounded runtime
+admission, compact Store progress and installed publication measurements.
+
+The full Linux `make -j1 ci` gate passed with all 280 captured input hashes unchanged.
+It includes 101 Host tests, 60 CLI tests, 24 installed Store cases, three CLI
+publication journeys and five installed Blob cases, plus effect/custody, profile,
+growth, Root and endpoint qualification. Native/Wasm Clippy, Rustdoc, formatting
+and tooling agreement passed. Three optional historical-binary cases remain
+explicitly ignored; the Host's separately ignored installed entrypoint is exercised
+by Store's complete-custody harness. macOS and mainnet were not exercised.
+The publication journeys took 106.08s together and Blob 7.42s. In this run the
+default bootstrap measured 8,199 ms and the later child upgrade 4,771 ms; those are
+local samples with the limits recorded above, not mainnet performance claims.
+
+Gate log: `target/qualification/release-0211-1-ci.log`; before/after source evidence:
+`target/evidence/0.211.1/release/`. This release-result entry was added after the
+matching input comparison; executable inputs and release metadata remain unchanged.
+
+## Ready-to-dispatch Host and CLI journey: 2026-11-15
+
+Connected the qualified runtime contract to fleet and named child planning.
+New plans use one captured timestamp for plan creation and earliest dispatch,
+with expiry ten minutes later. Host's single admission-cutoff function uses that
+expiry only when the two timestamps are equal; explicit future timestamps keep
+their earlier pre-dispatch cutoff. All historically valid plans had strictly
+future dispatch, so their original digests, cutoffs and signed attempts remain
+unchanged. Replanning still returns the retained approval, including after expiry.
+Bootstrap and artifact publication consume the same finite window; no phase gets
+an independent renewal. Existing Root code may refuse late admission, so it needs
+an explicit future schedule or separately reviewed maintenance before this default.
+
+Reused the legacy/bootstrap analysis and runtime proof in the following entry.
+The change adds no wire field, serialized timing mode, endpoint, configuration
+switch, scheduler or retry owner. Plan/expiry validation admits equality but still
+refuses dispatch before plan creation. The existing CLI help and status renderer
+now describe readiness instead of showing a fictitious future wait; generated
+starter instructions and current demo/design guidance use the same workflow.
+
+Twenty focused Host tests passed, including historical digest fixtures, repeated
+planning, named defaults, explicit cutoffs, and expired unsubmitted immediate and
+scheduled fleets refusing to sign creation. Seventeen CLI status/progress cases,
+Host/CLI and publication-harness Clippy, Host Rustdoc, formatting and diff checks
+passed. The installed publication Store-upgrade journey passed in 49.38 seconds:
+default fleet plan/apply created Root, Store and app in 7,873 ms, then after Store
+recovery and Root maintenance a default child plan/apply upgraded the existing app
+in 4,870 ms. The latter timing excludes its earlier artifact publication. Neither
+uses `--execute-at` or simulated clock jumps. These are individual local samples,
+not mainnet performance measurements or comparisons with the earlier publication-only
+baseline. Existing lost-reply, original-authority and complete-custody checks remain.
+
+`make canic` installed the local development CLI. Its actual retained fleet status
+reports `Child dispatch: when approved prerequisites are ready` alongside the
+original effect deadline. The installed help also describes the new default.
+Logs and captures: `target/qualification/ready-planning-*`; installed journal:
+`target/publication/store-upgrade-2111591/journal`. Both retained lockfile hashes
+stayed unchanged, preserving the maintainer-confirmed rand update. This increment
+remains local under 0.211.1, with package versions still at released 0.211.0.
+No push, mainnet operation or browser launch was performed.
+
+## Earliest-dispatch runtime admission: 2026-11-15
+
+The latency investigation found two meanings attached to `execute_at_ns`: the
+earliest timer dispatch and the last acceptable admission time. The protocol now
+uses it only as the earliest dispatch bound. Creation and upgrade admission accept
+that timestamp at or before current time while the original expiry is still future.
+Creation keeps its ten-minute interval bound. Upgrade explicitly bounds the
+original interval to one hour, preserving the restriction previously implied by
+future-only admission plus the one-hour expiry horizon. No timestamp, deadline,
+request commitment or retry allowance is rewritten.
+
+Reused the pinned legacy Root-bootstrap and retained-work research under
+[the Root extraction](#one-child-root-implementation)
+and the [Store decision](#versioned-wasm-store-decision-2026-11-15): revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, Root bootstrap
+`crates/canic-control-plane/src/workflow/bootstrap/root/mod.rs`, publication chunk
+custody and bootstrap diagnostic history `ed9f133`. Their invariant is retained
+authority/artifact custody before deferred work and truthful readiness. They do
+not require a fixed ten-minute delay. The current Root already has a durable
+approval and one timer owner; changing admission needs neither another scheduler
+nor a new endpoint, wire shape, stable record or supplier.
+
+`bash scripts/dev/test-store.sh dispatch` passed two installed witnesses in 8.05s.
+One uses the real Root and Store to create and upgrade after the earliest timestamp,
+without an operator continuation. Exact approvals, attempts, references and installed
+modules survive Root maintenance; expired admission leaves state unchanged and exact
+replays after expiry retain completed evidence. The other proves future work still
+waits and a timer first run after expiry performs no creation. Native boundary
+checks cover equality, expiry, oversized intervals and integer extremes. Protocol
+and installed-harness Clippy, runtime Wasm Clippy, protocol Rustdoc, formatting,
+shell syntax and diff checks passed. Logs: `target/qualification/ready-dispatch-*`.
+
+This qualifies the runtime step, not an immediate-dispatch Host journey. The Host
+still defaults to ten minutes and refuses fresh admission after that time. The next
+step must bind readiness to the immutable plan and verify the public CLI path before
+changing that default; older Roots remain unsupported for elapsed-time admission.
+No mainnet effects or release were performed. The maintainer confirmed preserving
+the pre-existing `rand 0.10.4` lockfile update; its input hashes stayed unchanged
+during these checks. Earlier local 0.211.1 status and measurement work is retained.
+
+## Local publication measurement baseline: 2026-11-15
+
+Extended the existing installed publication witness rather than adding a benchmark
+runner, CLI mode or runtime metrics owner. This follows design section 12 and the
+[versioned Store research](#versioned-wasm-store-decision-2026-11-15): legacy
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` publication/chunk custody and bootstrap
+diagnostics establish reuse and retained-evidence requirements, but supply no
+latency benchmark. No scheduling or authority contract changed.
+
+The first measurement assertion incorrectly equated file size with uploaded
+payload. The real installed run exposed existing intra-Wasm chunk reuse. The
+corrected witness independently hashes input chunks, compares unique counts/bytes
+with decoded retained Put requests, and requires zero requests for warm reuse.
+The padded 2,044,909-byte artifact retained three unique Put payloads totaling
+734,189 bytes; its second version retained zero. A passing local sample measured:
+
+| Command segment | Host wall time |
+| --- | ---: |
+| Cold plan | 54 ms |
+| Prepare interrupted before first chunk signing | 1,131 ms |
+| Observation-only reconcile | 747 ms |
+| Resume upload and publish | 2,292 ms |
+| Warm version plan | 59 ms |
+| Warm version publication | 1,343 ms |
+
+These are command durations including signer/transport/observation overhead, not
+isolated Store execution or full deployment latency. Builds, replica setup, Store
+bootstrap, child scheduling/installations and cycles are excluded. Payload totals
+describe retained completed requests, not network retransmissions. No speedup,
+mainnet performance or timing threshold is claimed; original ten-minute default
+dispatch timestamps remain unchanged.
+
+The selected installed journey passed in 29.57 seconds, including its existing
+interruption, version retention, child creation/upgrade and cache-reconstruction
+checks. Harness Clippy, formatting and diff checks passed. Evidence is in
+`target/publication/run-1972926/publication-measurements.json`, with artifact hashes
+and original operation IDs; logs are `target/qualification/publication-measurements-*`.
+No dependencies, product endpoints, recovery owners or runtime state were added.
+Changes remain local in the pending 0.211.1 entry.
+
+## 0.211.0 post-push review and 0.211.1 status cleanup: 2026-11-15
+
+Verified GitHub main and peeled `v0.211.0` at
+`7092a627f49b55f82f0c9bc518dd750891d98256`, with annotated tag object
+`cb7c212ec9c7d2fa85116b3e186875b0d6efcad6`. The local tracking reference was
+refreshed. Reviewed that delivered commit and its direct Root/Store, signed
+authority, fleet-planning, status and subnet-comparison callers. The existing
+runtime remains the sole effect owner; complete custody selection is explicit,
+and subnet diagnostics do not acquire journal or deployment authority. One Store
+attempt, the infrastructure size bound and mainnet qualification remain deliberate
+limits rather than hidden compatibility fallbacks.
+
+One presentation issue was actionable: Store status printed every retained scan
+and continuation row, including placeholders with no submitted attempt. The
+completed installed witness produced 74 lines. The new 0.211.1 draft groups these
+states through the existing IC Host table renderer; its same retained operation
+now produces 31 lines. Rejections, unknown outcomes, the original deadline and
+historical receipt stay visible. Counts do not establish completion. Full JSON
+is byte-identical before/after and retains individual attempt paths. No Host
+journal, protocol, effect, endpoint, command or dependency changes were needed.
+
+Reused the pinned legacy progress-rendering research under
+[readable retained-operation status](#readable-retained-operation-status), including
+revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` and history `afc2521`:
+unknown readiness and applied counts cannot claim success. The focused regressions
+exercise 1024 retained replies alongside unresolved, rejected and unsigned requests,
+bounded terminal output, absent observations and unchanged source evidence.
+All 11 CLI status tests, CLI Clippy, formatting and diff checks passed. `make canic`
+installed the development display; the actual local status command confirmed the
+line reduction and unchanged JSON without network observations or a browser.
+Logs: `target/qualification/store-status-*.log` and matching text/JSON captures.
+The patch remains local and unpushed; package versions stay at released 0.211.0
+until the next release. The completed release gate remains evidence for the
+unchanged runtime; it was not repeated for this presentation-only patch.
+
+The next focused continuation shares one CLI Store renderer between local status
+and apply/reconcile outcomes. Issued effects and post-install verification suggest
+restricted reconcile even after dispatch expiry. Fresh-effect phases suggest apply
+only before the original deadline and without a retained failure; otherwise they
+suggest local status review. This is presentation, not a second admission policy:
+Root and Host still enforce the original operation. Catalog scan counters distinguish
+incomplete, complete and absent metadata evidence without claiming payload integrity.
+The same legacy retained-evidence research applies; no runtime or journal changes
+were needed. Seventeen focused status/progress tests, CLI Clippy, formatting and
+diff checks passed, covering every phase, exact expiry, missing host time, retained
+failures and shell-safe scope/signer follow-ups. `make canic` installed the local
+change. The retained installed witness now renders 32 lines, including both catalog
+scans; its JSON remains byte-identical. Logs and captures:
+`target/qualification/store-guidance-*`. No deployment, network observation or
+browser launch was needed. This continuation remains local and unpushed.
+
 ## 0.211.0 release inputs: 2026-11-15
 
 The maintainer authorized the GitHub release and subsequent development. Scope

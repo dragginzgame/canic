@@ -59,7 +59,7 @@ pub struct Approval {
     pub module_hash: [u8; 32],
     /// Must equal the fixed single-worker ceiling.
     pub creation_cycles: u64,
-    /// Earliest dispatch, within one hour of admission.
+    /// Earliest dispatch; may already have passed at admission. Future dispatch is within one hour.
     pub execute_at_ns: u64,
     /// Last time a new effect may be issued, at most ten minutes after dispatch.
     pub expires_at_ns: u64,
@@ -192,8 +192,8 @@ impl Approval {
         if a.manager != manager || a.creation_cycles != CREATION_CYCLES {
             return Err(Refusal::Binding);
         }
-        if a.execute_at_ns <= now
-            || a.execute_at_ns - now > 3_600_000_000_000
+        if a.expires_at_ns <= now
+            || a.execute_at_ns.saturating_sub(now) > 3_600_000_000_000
             || a.expires_at_ns <= a.execute_at_ns
             || a.expires_at_ns - a.execute_at_ns > 600_000_000_000
         {

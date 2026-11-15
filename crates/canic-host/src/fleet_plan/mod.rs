@@ -143,7 +143,7 @@ impl FleetPlan {
                 || child.artifact.bytes > child.artifact_limit()
                 || child.creation_cycles != canic_management_protocol::CREATION_CYCLES
                 || crate::unhex(&child.artifact.sha256)?.len() != 32
-                || child.execute_at_ns <= self.root.created_at_ns
+                || child.execute_at_ns < self.root.created_at_ns
                 || child.execute_at_ns != self.children[0].execute_at_ns
                 || child.execute_at_ns.checked_add(600_000_000_000) != Some(self.root.expires_at_ns)
                 || child.execute_at_ns - self.root.created_at_ns > 3_000_000_000_000
@@ -398,7 +398,7 @@ pub fn plan_fleet(
         .transpose()?;
     let store_cycles = if stores.is_empty() { 0 } else { STORE_CYCLES };
     let now = crate::now()?;
-    let dispatch = execute_at_ns.unwrap_or(now + 600_000_000_000);
+    let dispatch = execute_at_ns.unwrap_or(now);
     let name = |slot: &str| DeploymentName {
         app: selected.app.clone(),
         fleet: selected.fleet.clone(),
@@ -603,7 +603,12 @@ pub(crate) async fn apply(
             "this fleet approval was cancelled; plan and review a new operation".into(),
         ));
     }
-    if crate::now()? >= value.children[0].execute_at_ns
+    if crate::now()?
+        >= plan::admission_deadline(
+            value.root.created_at_ns,
+            value.children[0].execute_at_ns,
+            value.root.expires_at_ns,
+        )
         && !dir
             .join("root/create/signed.json")
             .try_exists()

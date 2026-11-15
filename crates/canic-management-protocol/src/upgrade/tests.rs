@@ -92,8 +92,19 @@ fn upgrade_binds_original_child_old_and_new_code_and_time() {
         input.validate("root", "child", &[2; 32], 99),
         Err(Refusal::Binding)
     );
+    for now in [100, 101, 199] {
+        assert_eq!(input.validate("root", "child", &[1; 32], now), Ok(()));
+    }
+    for now in [200, 201, u64::MAX] {
+        assert_eq!(
+            input.validate("root", "child", &[1; 32], now),
+            Err(Refusal::Time)
+        );
+    }
+    let mut too_long = input.clone();
+    too_long.approval.expires_at_ns = 3_600_000_000_101;
     assert_eq!(
-        input.validate("root", "child", &[1; 32], 101),
+        too_long.validate("root", "child", &[1; 32], 3_600_000_000_100),
         Err(Refusal::Time)
     );
     let mut changed = input.clone();

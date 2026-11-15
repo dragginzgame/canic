@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.211.1] - 2026-11-15
+
+### 🔧 Changed
+
+New fleet and named child plans dispatch once approved prerequisites are ready,
+with a fixed ten-minute effect window from planning. Bootstrap and publication
+consume that same window. Explicit future `--execute-at` schedules and retained
+plans keep their original admission cutoffs, timestamps and digests. Use a Root
+built with this timing contract; older Roots require a future schedule or reviewed
+Root maintenance. For a built/configured local starter and prepared local signer:
+
+```sh
+canic fleet plan --app starter --fleet local --identity canic-local
+canic fleet apply OPERATION --app starter --fleet local --identity canic-local
+canic fleet status OPERATION --app starter --fleet local
+```
+
+Copy the returned operation digest after reviewing the plan. Apply spends its
+approved budget; status only reads the journal. No scheduling override is needed.
+
+Store upgrade status summarizes retained attempt states instead of listing every
+catalog-read and continuation row. Unknown outcomes and rejections stay visible;
+counts never establish completion. Full attempt details remain in `--json`.
+Both forms read only the selected local journal and open no browser:
+
+```sh
+canic fleet status STORE_OPERATION --app starter --fleet local
+canic fleet status STORE_OPERATION --app starter --fleet local --json
+```
+
+Store maintenance output shows before/after catalog scan progress and suggests
+`reconcile` for issued effects or verification. Fresh-effect phases suggest `apply`
+only within the original dispatch window and without a retained failure. Expired
+or failed continuations instead point to local status review. The runtime still
+owns effect admission; these hints grant no retry or replacement authority.
+For an already-approved operation with an issued effect, use its original signer:
+
+```sh
+canic fleet reconcile STORE_OPERATION --app starter --fleet local --identity canic-local
+```
+
+The installed publication witness now records separate local timings for planning,
+interrupted prepare, reconciliation, resumed upload and warm version reuse. It
+decodes retained chunk requests to check the cold unique-chunk payload total and zero payload
+uploads for the reused version. This adds measurement evidence, not a deployment
+speedup or a change to existing dispatch deadlines.
+
+Root admission now treats `execute_at_ns` as the earliest dispatch time: creation
+and upgrade may be admitted after it, before the original expiry. The existing
+timer and effect journal still own execution. Installed Store-backed qualification
+covers immediate work, future scheduling, expiry, replay and Root maintenance.
+Wire layouts and finite limits are retained. The installed CLI journey qualifies
+fresh default-timed fleet creation and a later child upgrade, including intervening
+Store recovery and Root maintenance. These are local synthetic-cycle checks, not
+mainnet timing measurements.
+
 ## [0.211.0] - 2026-11-15
 
 ### ⚠️ Breaking

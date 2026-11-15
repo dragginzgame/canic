@@ -11,10 +11,27 @@ fn retained_actions_preserve_approval_digests() {
         serde_json::from_str(include_str!("fixtures/retained.json")).unwrap();
     for fixture in fixtures {
         assert_eq!(fixture.plan.digest().unwrap(), fixture.digest);
+        if let Some(owner) = fixture.plan.management() {
+            assert!(owner.execute_at_ns > fixture.plan.created_at_ns);
+            assert_eq!(
+                admission_deadline(
+                    fixture.plan.created_at_ns,
+                    owner.execute_at_ns,
+                    fixture.plan.expires_at_ns
+                ),
+                owner.execute_at_ns
+            );
+        }
         let encoded = serde_json::to_vec(&fixture.plan).unwrap();
         let decoded: Plan = serde_json::from_slice(&encoded).unwrap();
         assert_eq!(decoded, fixture.plan);
     }
+}
+
+#[test]
+fn ready_admission_ends_at_original_expiry_and_scheduled_admission_stays_earlier() {
+    assert_eq!(admission_deadline(100, 100, 200), 200);
+    assert_eq!(admission_deadline(100, 150, 200), 150);
 }
 
 #[test]

@@ -9,7 +9,7 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Output},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 fn run(dir: &Path, args: &[&str]) -> Output {
@@ -31,6 +31,35 @@ fn cli(dir: &Path, args: &[&str]) -> Value {
 }
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+// Count retained completed Put requests, not network retransmissions or management calls.
+fn publication_payload(dir: &Path, operation: &str) -> (usize, usize) {
+    use canic_management_protocol::publication as protocol;
+    let mut chunks = 0;
+    let mut bytes = 0;
+    for entry in std::fs::read_dir(dir.join("journal").join(operation).join("publication")).unwrap()
+    {
+        let entry = entry.unwrap();
+        if !entry.file_name().to_str().unwrap().starts_with("chunk-") {
+            continue;
+        }
+        let path = entry.path();
+        assert!(path.join("signed.json").exists());
+        assert!(path.join("reply.bin").exists());
+        let request: protocol::Request = ic_wire::native::decode_request(
+            protocol::EXECUTE,
+            &std::fs::read(path.join("arguments.bin")).unwrap(),
+            protocol::REQUEST_LIMITS,
+        )
+        .unwrap();
+        let protocol::Command::Put(put) = request.command else {
+            panic!("chunk journal must retain Put");
+        };
+        chunks += 1;
+        bytes += put.bytes.len();
+    }
+    (chunks, bytes)
 }
 fn padded(mut bytes: Vec<u8>) -> Vec<u8> {
     // Valid custom section: more than one transfer, without changing executable behavior.
@@ -905,7 +934,9 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
             ],
         )
     };
+    let started = Instant::now();
     let first = plan("v1", &store_hash);
+    let cold_plan_ms = started.elapsed().as_millis();
     assert_eq!(first["plan"]["artifact"], inspected);
     let id = first["operation"].as_str().unwrap();
     let retained = dir.join("journal").join(id);
@@ -913,6 +944,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let interrupted = dir.join("interrupted-icp");
     std::fs::write(&interrupted, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */publication/chunk-0/arguments.bin) exit 71;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
     std::fs::set_permissions(&interrupted, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let started = Instant::now();
     let failed = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "apply", id, "--json", "--config"])
         .arg(dir.join("canic.json"))
@@ -921,6 +953,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         .env("CANIC_REAL_SIGNER", &signer)
         .output()
         .unwrap();
+    let interrupted_prepare_ms = started.elapsed().as_millis();
     assert!(!failed.status.success());
     assert!(
         String::from_utf8_lossy(&failed.stderr).contains("signing failed"),
@@ -946,7 +979,9 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
             ],
         )
     };
+    let started = Instant::now();
     let observed = apply("reconcile", id);
+    let interrupted_reconcile_ms = started.elapsed().as_millis();
     assert_eq!(observed["publication"]["status"]["published"], false);
     assert!(
         !observed["publication"]["status"]["missing"]
@@ -958,7 +993,9 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         owner.instance().get_stable_memory(store).await,
         store_before
     );
+    let started = Instant::now();
     let completed = apply("apply", id);
+    let cold_resume_ms = started.elapsed().as_millis();
     assert_eq!(completed["publication"]["status"]["published"], true);
     assert_eq!(std::fs::read(&prepare).unwrap(), signed);
     assert!(!retained.join("receipt.json").exists());
@@ -984,12 +1021,44 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(apply("apply", id), completed);
     assert_eq!(owner.instance().get_stable_memory(store).await, published);
     // A new immutable label can reuse existing chunks; it gets no new chunk signatures.
+    let started = Instant::now();
     let second = plan("v2", &store_hash);
+    let warm_plan_ms = started.elapsed().as_millis();
     let second_id = second["operation"].as_str().unwrap();
+    let started = Instant::now();
     assert_eq!(
         apply("apply", second_id)["publication"]["status"]["published"],
         true
     );
+    let warm_apply_ms = started.elapsed().as_millis();
+    let (cold_chunks, cold_bytes) = publication_payload(&dir, id);
+    let (warm_chunks, warm_bytes) = publication_payload(&dir, second_id);
+    let input = std::fs::read(&wasm).unwrap();
+    let unique_chunks: std::collections::BTreeMap<_, _> = input
+        .chunks(canic_wasm_store_protocol::CHUNK_BYTES)
+        .map(|chunk| (canic_wasm_store_protocol::digest(chunk), chunk.len()))
+        .collect();
+    assert_eq!(cold_chunks, unique_chunks.len());
+    assert_eq!(cold_bytes, unique_chunks.values().sum::<usize>());
+    assert!(
+        cold_bytes < input.len(),
+        "fixture must exercise intra-Wasm chunk reuse"
+    );
+    assert!(cold_chunks > 1, "witness must exercise multiple chunks");
+    assert_eq!((warm_chunks, warm_bytes), (0, 0));
+    let measurements = json!({
+        "scope": "local installed publication; interrupted cold upload and warm version reuse",
+        "clock": "host monotonic wall time; milliseconds",
+        "excludes": ["build", "replica setup", "Store bootstrap", "child deployment", "cycles", "network retransmissions"],
+        "inputs": {"root_sha256": root_hash, "store_sha256": store_hash, "artifact": inspected,
+            "unique_chunk_payload_bytes": unique_chunks.values().sum::<usize>()},
+        "cold": {"operation": id, "plan_ms": cold_plan_ms,
+            "interrupted_prepare_ms": interrupted_prepare_ms,
+            "reconcile_ms": interrupted_reconcile_ms, "resume_ms": cold_resume_ms,
+            "retained_put_requests": cold_chunks, "retained_put_payload_bytes": cold_bytes},
+        "warm": {"operation": second_id, "plan_ms": warm_plan_ms, "apply_ms": warm_apply_ms,
+            "retained_put_requests": warm_chunks, "retained_put_payload_bytes": warm_bytes}
+    });
     assert!(
         !dir.join("journal")
             .join(second_id)
@@ -1214,5 +1283,12 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     let view = cli(&dir, &["fleet", "show"]);
     assert!(view["issues"].as_array().unwrap().is_empty(), "{view}");
+    let measurements_path = dir.join("publication-measurements.json");
+    std::fs::write(
+        &measurements_path,
+        serde_json::to_vec_pretty(&measurements).unwrap(),
+    )
+    .unwrap();
+    println!("Publication measurements: {}", measurements_path.display());
     owner.instance_mut().stop_live().await;
 }

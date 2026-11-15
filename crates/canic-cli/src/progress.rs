@@ -5,6 +5,7 @@ use ic_host_text::{
     escape::terminal_text,
     table::{self, Alignment, Options},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn quote(value: &str) -> String {
     if !value.is_empty()
@@ -84,18 +85,15 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
     )
 }
 
-fn outcome(value: &ApplyOutcome, text: &mut String) -> bool {
+fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
     match value {
         ApplyOutcome::StorePending {
             root,
             store_maintenance,
             ..
         } => {
-            text.push_str(&format!(
-                "Root: {}\nStore upgrade: {:?}; completion not yet retained.\n",
-                terminal_text(root),
-                store_maintenance.phase
-            ));
+            text.push_str(&format!("Root: {}\n", terminal_text(root),));
+            text.push_str(&crate::status::store::render(store_maintenance, now, false));
             false
         }
         ApplyOutcome::Publication { publication } => {
@@ -130,7 +128,7 @@ fn outcome(value: &ApplyOutcome, text: &mut String) -> bool {
             let mut complete = true;
             for child in children {
                 text.push_str(&format!("Application: {}\n", terminal_text(&child.name)));
-                complete &= outcome(&child.outcome, text);
+                complete &= outcome(&child.outcome, text, now);
             }
             complete
         }
@@ -167,13 +165,19 @@ pub(crate) fn applied(value: &ApplyOutcome, command: &FleetCommand) -> String {
         unreachable!("apply renderer")
     };
     let mut text = format!("Fleet operation {digest}\n\n");
-    let complete = outcome(value, &mut text);
-    text.push_str(&next(
-        command,
-        digest,
-        if complete { "status" } else { "apply" },
-        Some(identity),
-    ));
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|time| time.as_nanos());
+    let complete = outcome(value, &mut text, now);
+    let action = match value {
+        ApplyOutcome::StorePending {
+            store_maintenance, ..
+        } => crate::status::store::continuation(store_maintenance, now).0,
+        _ if complete => "status",
+        _ => "apply",
+    };
+    text.push_str(&next(command, digest, action, Some(identity)));
     text
 }
 

@@ -118,8 +118,32 @@ The same named journey creates a child from a release larger than the inline
 limit, refuses changed Store control, recovers missing admission evidence, upgrades
 the same child after cache clearing, and calls the upgraded greeting application.
 Run only that journey with `bash scripts/dev/test-publication.sh bootstrap_store_then_publish_resume_and_retain_versions`.
+After a successful run it writes `target/publication/run-PID/publication-measurements.json`.
+The report separates monotonic host wall time for cold planning, interrupted
+prepare, observation-only reconciliation, resumed upload, warm planning and warm
+publication. It records the actual artifact hashes and operations, and decodes
+retained completed Put requests to verify the cold unique-chunk payload total and zero warm
+payload requests. These are request payload bytes, not network retransmissions
+or management-call counts. Build, replica setup, Store bootstrap, child scheduling,
+deployment and cycles are outside this measurement. There is no timing threshold
+or mainnet latency claim; use this as a local diagnostic baseline.
 Publication does
 not create a canister or reserve a deployment slot; see [Store scope](../docs/demos/wasm-store.md).
+
+`bash scripts/dev/test-store.sh dispatch` qualifies Root's earliest-dispatch
+contract independently of Host's current scheduling policy. Actual Store-backed
+creation and upgrade admit elapsed dispatch timestamps before their original
+expiry, complete without operator continuations and preserve exact custody across
+Root replacement. Expired admission preserves state, future work still waits,
+and a timer first run after expiry creates no child. Replays remain observational,
+including after expiry. Native checks cover exact time boundaries and bounded
+intervals. The publication runner's Store-upgrade journey additionally qualifies
+the CLI default: initial fleet creation and the later child upgrade omit
+`--execute-at`, bind earliest dispatch to plan creation and finish without simulated
+clock jumps. It prints local wall timings separately for bootstrap and child upgrade
+(publication already retained for the latter). This does not qualify older Root
+binaries or mainnet timings; original code selection and expiry remain binding.
+
 The same runner also qualifies a fresh whole fleet with Root, Store and two
 application children above 2 MB each. Store readiness and complete publication
 evidence block both application admissions;

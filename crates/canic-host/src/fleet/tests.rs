@@ -98,6 +98,7 @@ pub(super) fn root_operation(network: Network) -> FleetOperation {
             root_module: "01".repeat(32),
             execute_at_ns: crate::now().unwrap() + 600_000_000_000,
         }),
+        crate::now().unwrap(),
     )
     .unwrap();
     let operation = local_operation(&directory, &id, crate::now().unwrap())

@@ -162,9 +162,11 @@ canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainn
 The preview binds both artifacts, the network, a default 3T Root debit, its 1T
 child attachment and a fixed dispatch/deadline. The child's parent is the typed
 output of Root creation. Apply creates/installs Root and admits the child without
-asking for a second approval or editing the original plan. Root dispatches ten
-minutes after planning; the final effect deadline is ten minutes later. Apply
-promptly. After dispatch, use the same operation to retain completion:
+asking for a second approval or editing the original plan. New plans dispatch once
+approved prerequisites are ready, within ten minutes of planning. Apply promptly;
+bootstrap and publication consume that same window. Explicit future `--execute-at`
+schedules still require admission before their dispatch time. Retained plans keep
+their original timing. Use the same operation to retain completion:
 
 ```sh
 canic fleet show --app starter --fleet mainnet
@@ -299,8 +301,8 @@ The named `--canister` / `--root-module` path remains for individually deployed
 children; both paths use the same immutable managed plan and runtime owner.
 
 Add `--fleet NAME` when the app has multiple fleets. Copy UPGRADE_OPERATION from
-the new plan. The ten-minute default dispatch delay and following ten-minute
-effect window apply. Replanning returns that original authority. After dispatch,
+the new plan. New upgrades dispatch when ready within the original ten-minute
+effect window. Replanning returns that original authority. After dispatch,
 repeat the same apply to retain authenticated completion:
 
 ```sh

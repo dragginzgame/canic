@@ -59,6 +59,15 @@ authenticated tooling installer.
   collection. Keep historical field names and directory layouts in record codecs;
   preserve approval digests and signed attempts. The current one/two-child limit
   is a qualification boundary, not the shape of every host consumer.
+  Root admission treats `execute_at_ns` as an earliest dispatch bound and may
+  accept elapsed timestamps before the original expiry. The same timer and
+  journal own execution; preserve finite intervals and never renew deadlines.
+  `bash scripts/dev/test-store.sh dispatch` qualifies the local runtime contract.
+  New Host plans bind earliest dispatch to plan creation and expire ten minutes
+  later; prerequisites consume the same window. Explicit future and retained
+  historical schedules keep their pre-dispatch admission cutoff. Preserve exact
+  times and digests on replan; never renew expired authority. Older Root code is
+  not assumed to support elapsed-time admission or selected through fallback.
   Individually created children retain their existing first-upgrade planning path.
   Change one artifact per approval. Existing one-child fleets cannot gain a child
   by replanning or rename a retained slot. Maintenance binds every child's

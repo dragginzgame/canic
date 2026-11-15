@@ -25,7 +25,7 @@ pub(crate) const OBSERVATIONS: usize = 32;
 
 /// Retain one Root-owned creation or first upgrade for a declared parent/child pair.
 /// The parent must be bound or have a completed named deployment in this journal.
-/// `execute_at_ns` selects a new plan's schedule (default: ten minutes from now);
+/// `execute_at_ns` selects a new plan's schedule (default: ready once approved);
 /// reopening preserves the original schedule.
 /// `release` selects a completed publication operation in this journal. Its exact
 /// bytes, app/fleet and owners must match; absence retains inline delivery.
@@ -152,7 +152,8 @@ pub fn create_managed_plan(
     let source = release
         .map(|id| stored::select(journal, id, &input, selection, canister, &root, root_module))
         .transpose()?;
-    let execute_at_ns = execute_at_ns.unwrap_or(crate::now()? + 600_000_000_000);
+    let now = crate::now()?;
+    let execute_at_ns = execute_at_ns.unwrap_or(now);
     plan::retain(
         journal,
         wasm,
@@ -169,6 +170,7 @@ pub fn create_managed_plan(
             root_module: root_module.into(),
             execute_at_ns,
         }),
+        now,
     )
 }
 
@@ -351,7 +353,9 @@ pub(crate) async fn apply(
     stored::verify(plan, agent).await?;
     let stage = dir.join("stage");
     let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
-        if crate::now()? >= owner.execute_at_ns {
+        if crate::now()?
+            >= plan::admission_deadline(plan.created_at_ns, owner.execute_at_ns, plan.expires_at_ns)
+        {
             return Err(Error::Blocked(
                 "Root admission time passed; no new stage attempt was signed".into(),
             ));

@@ -909,6 +909,7 @@ async fn legacy_upgrades_follow_retained_named_identity_without_rewriting_eviden
             canister: "backend".into(),
         }),
         None,
+        crate::now().unwrap(),
     )
     .unwrap();
     let (legacy, _) = crate::create_plan(&root, &wasm, upgrade()).unwrap();

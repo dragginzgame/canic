@@ -43,9 +43,10 @@ canic fleet apply OPERATION --identity canic-mainnet
 
 Copy OPERATION from planning. Apply creates and installs Root, then admits the
 application using the retained Root result. It does not invent a principal or
-rewrite the approval. Root dispatches ten minutes after planning and may finish
-without the host; its effect deadline is ten minutes later. Review and apply
-promptly. Replanning preserves the original schedule, including after expiry.
+rewrite the approval. Root dispatches once approved prerequisites are ready and may
+finish without the host; the effect deadline is ten minutes after planning.
+Review and apply promptly. An explicit future `--execute-at` schedule requires
+admission before dispatch. Replanning preserves original timing, including after expiry.
 
 After dispatch, repeat the same apply to retain a replicated progress observation
 and, once ready, a verified completion receipt:

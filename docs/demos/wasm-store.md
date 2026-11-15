@@ -40,8 +40,9 @@ or 5T with two apps. It creates Root/Store, hands Store to Root, publishes every
 selected child release, then admits children using exact references. Application
 artifacts can be up to 8 MiB each, subject to Store quota. Identical content under
 different application names reuses bytes. Root's scheduled work can continue
-after the operator leaves. Default dispatch remains ten minutes after planning;
-resume the same operation promptly after an interruption rather than making a new
+after the operator leaves. New plans dispatch when approved prerequisites are ready,
+within ten minutes of planning; bootstrap and publication use that same window.
+Resume the same operation promptly after an interruption rather than making a new
 approval. Reconcile observes publication but cannot publish or admit a new child.
 `--cycles` sets the total fleet debit: Store receives a separate 1T allowance,
 and Root receives the remainder, including child funding. Store consumes no
@@ -252,10 +253,17 @@ canic fleet reconcile OPERATION --fleet local --identity canic-local
 Use the returned operation digest. Planning binds both canister identities, their
 code, replacement bytes and original operator/deadline; it does not dispatch effects.
 Apply closes, scans, stops, installs, restarts, verifies and explicitly activates
-through Root. Each invocation has at most 32 continuations; repeat the same apply
-if it returns pending. Reconcile can settle issued effects and verification, but
+through Root. Each invocation has at most 32 continuations. Pending output suggests
+reconcile for issued effects and verification, or explicit apply for new effects
+within the original dispatch window. Reconcile can settle issued effects and verification, but
 leaves a stopped or verified Store waiting for explicit apply. `status` reads only
 retained local evidence. Interrupted attempts keep their signatures and deadlines.
+Terminal status groups retained requests by evidence state so catalog scans do
+not fill the display with repeated rows. Unknown and rejected attempts remain
+visible; `--json` retains every individual attempt. Counts are not completion proof.
+Before/after catalog counts describe retained metadata scans, not payload integrity.
+Expired dispatch authority or a retained failure in a fresh-effect phase points
+to status review; it does not authorize a new plan or replacement attempt.
 
 The planner refuses concurrent artifact changes and unfinished child/publication
 work. Authenticated Ready evidence advances the retained Store hash, enabling later
@@ -436,9 +444,12 @@ from Host to Root during admission.
 
 From the app's config directory, with Root and Store bound and the release already
 published, replace the operation/hash placeholders below. Apply authorizes Root's
-fixed 1T creation grant from its existing cycles balance. The default dispatch
-remains ten minutes after planning; an explicit future `--execute-at UNIX_SECONDS`
-selects a different schedule within the bounded plan window. Keep Root funded.
+fixed 1T creation grant from its existing cycles balance. New plans default to
+dispatch when ready, with an expiry ten minutes after planning. An explicit future
+`--execute-at UNIX_SECONDS` retains pre-dispatch admission and the following
+ten-minute effect window. Existing Root code must support elapsed-time admission;
+older Roots need an explicit future schedule or separately reviewed maintenance.
+Keep Root funded. Replanning never rewrites retained deadlines.
 
 ```sh
 canic fleet plan --app starter --fleet mainnet --canister app --release PUBLICATION_OPERATION --root-module ROOT_SHA256 --identity canic-mainnet

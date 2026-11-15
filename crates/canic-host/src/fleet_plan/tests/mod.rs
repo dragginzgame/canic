@@ -380,6 +380,11 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
 fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
     let (dir, selected) = fixture();
     let (id, value) = create(&dir, &selected).unwrap();
+    assert_eq!(value.children[0].execute_at_ns, value.root.created_at_ns);
+    assert_eq!(
+        value.root.expires_at_ns - value.root.created_at_ns,
+        600_000_000_000
+    );
     let journal = dir.join("journal");
     let original = store::read(&journal.join(&id).join("fleet.json"), store::MAX_RECORD).unwrap();
     assert_eq!(
@@ -486,38 +491,40 @@ fn fleet_refuses_unsupported_trees_conflicts_and_tampered_artifacts() {
 
 #[tokio::test]
 async fn expired_unsubmitted_fleet_cannot_start_root_or_renew_its_schedule() {
-    let (dir, selected) = fixture();
-    let (original_id, mut value) = create(&dir, &selected).unwrap();
-    let journal = dir.join("journal");
-    value.root.created_at_ns = 1;
-    value.children[0].execute_at_ns = 2;
-    value.root.expires_at_ns = 600_000_000_002;
-    value.children[0].parent.operation = value.root.digest().unwrap();
-    let id = value.digest().unwrap();
-    let path = journal.join(&id);
-    for leaf in ["root", "child"] {
-        std::fs::create_dir_all(path.join(leaf)).unwrap();
-        std::fs::copy(
-            journal.join(&original_id).join(leaf).join("module.wasm"),
-            path.join(leaf).join("module.wasm"),
-        )
-        .unwrap();
+    for dispatch in [1, 2] {
+        let (dir, selected) = fixture();
+        let (original_id, mut value) = create(&dir, &selected).unwrap();
+        let journal = dir.join("journal");
+        value.root.created_at_ns = 1;
+        value.children[0].execute_at_ns = dispatch;
+        value.root.expires_at_ns = 600_000_000_000 + dispatch;
+        value.children[0].parent.operation = value.root.digest().unwrap();
+        let id = value.digest().unwrap();
+        let path = journal.join(&id);
+        for leaf in ["root", "child"] {
+            std::fs::create_dir_all(path.join(leaf)).unwrap();
+            std::fs::copy(
+                journal.join(&original_id).join(leaf).join("module.wasm"),
+                path.join(leaf).join("module.wasm"),
+            )
+            .unwrap();
+        }
+        store::put_json(&path.join("root/plan.json"), &value.root).unwrap();
+        store::put_json(&path.join("fleet.json"), &value).unwrap();
+        let error = crate::reconcile(&journal, &id, "unused", Path::new("must-not-run"))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("retained child admission"));
+        let error = crate::apply(&journal, &id, "unused", Path::new("must-not-run"))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("no Root creation was signed"));
+        assert!(!path.join("root/create").exists());
+        assert!(!path.join("child/plan.json").exists());
+        cancel_fleet_plan(&journal, &original_id).unwrap();
+        cancel_fleet_plan(&journal, &id).unwrap();
+        assert_ne!(create(&dir, &selected).unwrap().0, id);
     }
-    store::put_json(&path.join("root/plan.json"), &value.root).unwrap();
-    store::put_json(&path.join("fleet.json"), &value).unwrap();
-    let error = crate::reconcile(&journal, &id, "unused", Path::new("must-not-run"))
-        .await
-        .unwrap_err();
-    assert!(error.to_string().contains("retained child admission"));
-    let error = crate::apply(&journal, &id, "unused", Path::new("must-not-run"))
-        .await
-        .unwrap_err();
-    assert!(error.to_string().contains("no Root creation was signed"));
-    assert!(!path.join("root/create").exists());
-    assert!(!path.join("child/plan.json").exists());
-    cancel_fleet_plan(&journal, &original_id).unwrap();
-    cancel_fleet_plan(&journal, &id).unwrap();
-    assert_ne!(create(&dir, &selected).unwrap().0, id);
 }
 
 #[tokio::test]

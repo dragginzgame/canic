@@ -13,6 +13,7 @@ use std::{
 };
 
 mod management;
+pub(crate) mod store;
 #[cfg(test)]
 mod tests;
 
@@ -154,10 +155,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             serde_json::from_value(state["store_maintenance"].clone())
                 .map_err(|error| Error::Supplier(Box::new(error)))?;
         if let Some(status) = status {
-            writeln!(output, "Store maintenance: {:?}", status.phase).expect("String write");
-            if let Some(failure) = status.failure {
-                writeln!(output, "Retained failure: {failure:?}").expect("String write");
-            }
+            output.push_str(&store::render(&status, Some(now), receipt.is_some()));
         } else {
             output.push_str("Store maintenance: no retained observation\n");
         }
@@ -195,11 +193,11 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     if let Some(owner) = plan.management() {
         writeln!(
             output,
-            "Root: {}\nRoot module: {}\nOperator: {}\nAutonomous dispatch: {} Unix seconds",
+            "Root: {}\nRoot module: {}\nOperator: {}\nAutonomous dispatch: {}",
             terminal_text(&owner.root),
             terminal_text(&owner.root_module),
             terminal_text(&plan.controller),
-            owner.execute_at_ns / 1_000_000_000
+            dispatch(plan.created_at_ns, owner.execute_at_ns)
         )
         .expect("writing to String");
         if let Some(source) = &owner.source {
@@ -230,32 +228,56 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         )
         .expect("writing to String");
     }
-    let rows: Vec<_> = effects
-        .iter()
-        .map(|(effect, evidence)| {
-            let description = match evidence.as_str() {
-                "not_submitted" if effect == "create" && plan.target().is_some() => {
-                    "Not applicable to this upgrade (not submitted)"
-                }
-                "not_submitted" => "Not submitted",
-                "authority_retained_not_signed" => "Recovery request prepared; not signed",
-                "signed_attempt_retained_outcome_unknown" => {
-                    "Signed attempt retained; outcome UNKNOWN"
-                }
-                "reply_retained" => "Reply retained; not itself proof of success",
-                "rejection_retained" => "Rejection retained",
-                _ => evidence,
-            };
-            [effect.clone(), description.into()]
-        })
-        .collect();
+    let store_upgrade = plan.store_upgrade_root().is_some();
+    let rows: Vec<_> = if store_upgrade {
+        // Scans retain many read/continuation pairs. Summarize their states here;
+        // the original per-attempt evidence remains in Host JSON and the journal.
+        let mut counts = BTreeMap::<&str, usize>::new();
+        for evidence in effects.values().filter(|s| s.as_str() != "not_submitted") {
+            *counts.entry(evidence.as_str()).or_default() += 1;
+        }
+        if counts.is_empty() {
+            vec![["No retained request attempts".into(), "0".into()]]
+        } else {
+            counts
+                .into_iter()
+                .map(|(state, count)| {
+                    [
+                        evidence_description("", state, false).into(),
+                        count.to_string(),
+                    ]
+                })
+                .collect()
+        }
+    } else {
+        effects
+            .iter()
+            .map(|(effect, evidence)| {
+                [
+                    effect.clone(),
+                    evidence_description(effect, evidence, plan.target().is_some()).into(),
+                ]
+            })
+            .collect()
+    };
     writeln!(
         output,
         "\n{}",
         table::render(
-            &["EFFECT", "RETAINED EVIDENCE"],
+            if store_upgrade {
+                &["RETAINED EVIDENCE", "ATTEMPTS"]
+            } else {
+                &["EFFECT", "RETAINED EVIDENCE"]
+            },
             &rows,
-            &[Alignment::Left, Alignment::Left],
+            &[
+                Alignment::Left,
+                if store_upgrade {
+                    Alignment::Right
+                } else {
+                    Alignment::Left
+                }
+            ],
             Options {
                 column_gap: 2,
                 header_separator: true
@@ -284,6 +306,20 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
     }
     output.push_str("Current code, controllers, readiness and balances are not checked here.\n");
     Ok(output)
+}
+
+fn evidence_description<'a>(effect: &str, evidence: &'a str, upgrade: bool) -> &'a str {
+    match evidence {
+        "not_submitted" if effect == "create" && upgrade => {
+            "Not applicable to this upgrade (not submitted)"
+        }
+        "not_submitted" => "Not submitted",
+        "authority_retained_not_signed" => "Recovery request prepared; not signed",
+        "signed_attempt_retained_outcome_unknown" => "Signed attempt retained; outcome UNKNOWN",
+        "reply_retained" => "Reply retained; not itself proof of success",
+        "rejection_retained" => "Rejection retained",
+        _ => evidence,
+    }
 }
 
 pub(crate) fn fleet_preview(
@@ -354,7 +390,7 @@ pub(crate) fn fleet_preview(
         }
     }
     Ok(format!(
-        "CANIC FLEET PLAN\nOperation: {}\nApp: {}\nFleet: {}\nNetwork: {}\nOperator: {}\nJournal: {}\n\n{}\n\n{}Admission before: {}\nChild effect deadline: {}\n\n",
+        "CANIC FLEET PLAN\nOperation: {}\nApp: {}\nFleet: {}\nNetwork: {}\nOperator: {}\nJournal: {}\n\n{}\n\n{}Child dispatch: {}\nChild effect deadline: {}\n\n",
         terminal_text(id),
         terminal_text(&root.app),
         terminal_text(&root.fleet),
@@ -374,9 +410,17 @@ pub(crate) fn fleet_preview(
             }
         ),
         modules,
-        deadline(plan.children[0].execute_at_ns),
+        dispatch(plan.root.created_at_ns, plan.children[0].execute_at_ns),
         deadline(plan.children[0].execute_at_ns + 600_000_000_000)
     ))
+}
+
+fn dispatch(created: u64, earliest: u64) -> String {
+    if earliest == created {
+        "when approved prerequisites are ready".into()
+    } else {
+        deadline(earliest)
+    }
 }
 
 fn deadline(ns: u64) -> String {

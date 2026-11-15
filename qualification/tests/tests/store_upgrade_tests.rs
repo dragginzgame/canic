@@ -10,7 +10,7 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 fn quoted(path: &Path) -> String {
@@ -144,22 +144,11 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":hex(&pic.root_key().await.unwrap()),"routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
     }}});
     write_config(&dir, &config);
-    let dispatch = (SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        + 30)
-        .to_string();
-    let initial = cli(
-        &dir,
-        &[
-            "fleet",
-            "plan",
-            "--controller",
-            &controller,
-            "--execute-at",
-            &dispatch,
-        ],
+    let started = Instant::now();
+    let initial = cli(&dir, &["fleet", "plan", "--controller", &controller]);
+    assert_eq!(
+        initial["fleet_plan"]["child"]["execute_at_ns"],
+        initial["fleet_plan"]["root"]["created_at_ns"]
     );
     let creation = initial["operation"].as_str().unwrap();
     let mut deployed = Value::Null;
@@ -173,6 +162,10 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     let root = CanisterId::from_text(deployed["root"]["canister"].as_str().unwrap()).unwrap();
     let store = CanisterId::from_text(deployed["store"]["canister"].as_str().unwrap()).unwrap();
     assert!(deployed["children"][0]["outcome"]["canister"].is_string());
+    println!(
+        "Ready-dispatch fleet bootstrap: {} ms (local wall time, no schedule override)",
+        started.elapsed().as_millis()
+    );
     config["apps"]["demo"]["canisters"]["store"]["wasm"] =
         json!(assets.join("store-candidate.wasm"));
     write_config(&dir, &config);
@@ -349,22 +342,11 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         publication["operation"].as_str().unwrap(),
         &signer,
     );
-    let dispatch = (SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        + 10)
-        .to_string();
-    let child = cli(
-        &dir,
-        &[
-            "fleet",
-            "plan",
-            "--controller",
-            &controller,
-            "--execute-at",
-            &dispatch,
-        ],
+    let started = Instant::now();
+    let child = cli(&dir, &["fleet", "plan", "--controller", &controller]);
+    assert_eq!(
+        child["plan"]["management"]["execute_at_ns"],
+        child["plan"]["created_at_ns"]
     );
     assert_eq!(child["action"], "upgrade");
     assert_eq!(
@@ -384,6 +366,10 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     assert!(ready["canister"].is_string());
+    println!(
+        "Ready-dispatch child upgrade: {} ms (local wall time, publication already retained)",
+        started.elapsed().as_millis()
+    );
     assert_eq!(
         cli(&dir, &["fleet", "plan", "--controller", &controller])["action"],
         "unchanged"

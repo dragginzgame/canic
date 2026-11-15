@@ -4,6 +4,30 @@ use crate::{
 };
 
 #[test]
+fn creation_admission_uses_original_expiry_not_earliest_dispatch() {
+    let mut approval = Approval {
+        manager: "root".into(),
+        module_hash: [1; 32],
+        creation_cycles: CREATION_CYCLES,
+        execute_at_ns: 100,
+        expires_at_ns: 200,
+    };
+    for now in [99, 100, 101, 199] {
+        assert_eq!(approval.validate("root", now), Ok(()));
+    }
+    for now in [200, 201, u64::MAX] {
+        assert_eq!(approval.validate("root", now), Err(Refusal::Time));
+    }
+    approval.expires_at_ns = 100;
+    assert_eq!(approval.validate("root", 99), Err(Refusal::Time));
+    approval.expires_at_ns = 600_000_000_101;
+    assert_eq!(approval.validate("root", 101), Err(Refusal::Time));
+    approval.execute_at_ns = 3_600_000_000_100;
+    approval.expires_at_ns = approval.execute_at_ns + 1;
+    assert_eq!(approval.validate("root", 99), Err(Refusal::Time));
+}
+
+#[test]
 fn publication_envelope_carries_a_maximum_chunk_and_bounded_status() {
     use crate::publication::{self, Command, Request};
     use canic_wasm_store_protocol as store;

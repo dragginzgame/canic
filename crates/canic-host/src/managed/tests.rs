@@ -146,6 +146,16 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
         None,
     )
     .unwrap();
+    assert_eq!(plan.management().unwrap().execute_at_ns, plan.created_at_ns);
+    assert_eq!(plan.expires_at_ns - plan.created_at_ns, 600_000_000_000);
+    assert_eq!(
+        plan::admission_deadline(
+            plan.created_at_ns,
+            plan.management().unwrap().execute_at_ns,
+            plan.expires_at_ns
+        ),
+        plan.expires_at_ns
+    );
     assert_eq!(
         plan.application_controller(),
         selected.config.canisters["root"].id.as_ref().unwrap()

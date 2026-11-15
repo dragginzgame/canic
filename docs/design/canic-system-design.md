@@ -1014,12 +1014,29 @@ management calls, cycles, build time, scheduled waiting and readiness observatio
 The acceptance witness includes an unchanged artifact reused by a second child
 with no payload re-upload while the verified cache remains available.
 
-Current fleet and individual managed planning default dispatch to ten minutes
-after planning. This is a code-derived scheduling delay, not a measured Store
-bottleneck. The next interactive contract should dispatch once approved
-prerequisites are ready within the original bounded validity window; deliberate
-future scheduling remains explicit. Qualify that contract before changing the
-default. Existing plans keep their exact timestamps, digests and signed attempts;
+The installed publication witness records cold interrupted-upload and warm
+version-reuse command timings plus retained chunk payload totals. Its unique-chunk
+accounting includes deduplication within a single Wasm. This is a local publication
+baseline, not a full deployment or mainnet benchmark; build, bootstrap, scheduled
+waiting, installation and cycles still need separate measurements. See the
+[qualification guide](../../qualification/README.md) for the existing runner and
+report location.
+
+New fleet and individual managed plans dispatch once approved prerequisites are
+ready. They bind earliest dispatch to plan creation and expire ten minutes later;
+bootstrap, publication and admission consume that same immutable window. Host has
+one admission-cutoff calculation: equality with plan creation uses expiry, while
+an explicit future timestamp retains pre-dispatch admission. Historical approvals
+already have future timestamps and keep that original behavior. No new serialized
+mode, field or workflow is required. Deliberate future scheduling remains explicit.
+Root accepts an elapsed earliest-dispatch timestamp before original expiry through
+the same approval, pin, journal and timer. Creation retains its ten-minute interval
+bound; runtime upgrade retains its one-hour bound while Host plans select ten minutes.
+Installed local witnesses cover runtime boundaries and the public CLI's default
+fleet bootstrap and later child upgrade across Store recovery and Root maintenance.
+Older Root executables may reject the new timing: select an explicit future schedule
+or separately reviewed Root maintenance first. No endpoint probing, fallback or
+deadline renewal is authorized. Existing plans keep exact timestamps, digests and signed attempts;
 no performance change silently extends authority. Report phase timings before
 claiming a speedup; an extra canister can increase cold-bootstrap cost.
 

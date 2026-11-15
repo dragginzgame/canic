@@ -273,7 +273,7 @@ pub(super) enum FleetCommand {
         root_module: Option<String>,
         #[command(flatten)]
         publication: Box<PublicationArgs>,
-        /// Unix seconds for Root's child dispatch; default is ten minutes from planning.
+        /// Optional future Unix seconds for Root's child dispatch; default is ready once approved.
         /// Reopening a slot keeps its original schedule.
         #[arg(long, value_name = "UNIX_SECONDS")]
         execute_at: Option<u64>,

@@ -780,5 +780,6 @@ pub fn create_configured_plan(
             canister: canister.into(),
         }),
         None,
+        crate::now()?,
     )
 }

@@ -139,7 +139,7 @@ impl Plan {
                 || crate::unhex(&managed.root_module)?.len() != 32
                 || root == principal("aaaaa-aa")?
                 || root == principal("2vxsx-fae")?
-                || managed.execute_at_ns <= self.created_at_ns
+                || managed.execute_at_ns < self.created_at_ns
                 || self.expires_at_ns.checked_sub(managed.execute_at_ns) != Some(600_000_000_000)
             {
                 return Err(Error::Invalid("invalid Root-owned child approval".into()));
@@ -200,7 +200,17 @@ impl Plan {
 /// # Errors
 /// Refuses invalid budgets, occupied records, concurrent operators or failed durable publication.
 pub fn create_plan(root: &Path, wasm: &Path, input: PlanInput) -> Result<(String, Plan)> {
-    retain(root, wasm, input, None, None)
+    retain(root, wasm, input, None, None, now()?)
+}
+
+// Equality is the ready-to-dispatch plan. Historical future schedules retain their
+// original pre-dispatch admission cutoff; no serialized authority is rewritten.
+pub(crate) fn admission_deadline(created: u64, dispatch: u64, expires: u64) -> u64 {
+    if dispatch == created {
+        expires
+    } else {
+        dispatch
+    }
 }
 
 pub(crate) fn retain(
@@ -209,6 +219,7 @@ pub(crate) fn retain(
     input: PlanInput,
     deployment: Option<crate::DeploymentName>,
     management: Option<ManagedOwner>,
+    now: u64,
 ) -> Result<(String, Plan)> {
     let limit = if management.as_ref().is_some_and(|m| m.source.is_some()) {
         artifact::MAX_ARTIFACT_BYTES
@@ -216,7 +227,6 @@ pub(crate) fn retain(
         artifact::MAX_WASM
     };
     let bytes = store::read(wasm, limit)?;
-    let now = now()?;
     let expires_at_ns = management
         .as_ref()
         .map_or(Ok(now + 3_600_000_000_000), |owner| {

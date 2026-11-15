@@ -187,7 +187,13 @@ pub(super) async fn apply(
         )?
     };
     let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
-        if crate::now()? >= owner.execute_at_ns {
+        if crate::now()?
+            >= crate::plan::admission_deadline(
+                plan.created_at_ns,
+                owner.execute_at_ns,
+                plan.expires_at_ns,
+            )
+        {
             return Err(Error::Blocked(
                 "Root upgrade admission time passed; no new attempt signed".into(),
             ));

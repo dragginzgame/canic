@@ -27,7 +27,7 @@ pub struct Approval {
     pub previous_module: [u8; 32],
     /// Approved replacement module.
     pub module_hash: [u8; 32],
-    /// Earliest dispatch time in Unix nanoseconds.
+    /// Earliest dispatch time in Unix nanoseconds; may already have passed at admission.
     pub execute_at_ns: u64,
     /// Last time a new effect can be issued.
     pub expires_at_ns: u64,
@@ -133,9 +133,10 @@ impl Approval {
         {
             return Err(Refusal::Binding);
         }
-        if a.execute_at_ns < now
+        if a.expires_at_ns <= now
             || a.execute_at_ns.saturating_sub(now) > 3_600_000_000_000
             || a.expires_at_ns <= a.execute_at_ns
+            || a.expires_at_ns - a.execute_at_ns > 3_600_000_000_000
             || a.expires_at_ns.saturating_sub(now) > 3_600_000_000_000
         {
             return Err(Refusal::Time);

@@ -20,8 +20,7 @@ fn state() -> serde_json::Value {
     })
 }
 
-#[test]
-fn store_upgrade_status_exposes_phase_without_claiming_completion() {
+fn store_state() -> serde_json::Value {
     let mut state = state();
     state["plan"]["creation_cycles"] = 0.into();
     state["plan"]["target"] = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
@@ -50,6 +49,43 @@ fn store_upgrade_status_exposes_phase_without_claiming_completion() {
             installation: None,
         })
         .unwrap();
+    state
+}
+
+#[test]
+fn store_catalog_summary_distinguishes_partial_absent_and_completed_scans() {
+    use canic_management_protocol::store_maintenance::{Installation, Preservation, Status};
+    let mut status: Status =
+        serde_json::from_value(store_state()["store_maintenance"].clone()).unwrap();
+    let mut scan: Preservation = serde_json::from_value(serde_json::json!({
+        "catalog": {"quota": {"reserved_bytes": 1024, "releases": 8},
+            "reserved_bytes": 128, "releases": 3, "artifacts": 1, "chunks": 1},
+        "after": null, "observed": 2, "digest": ([0; 32]), "complete": false
+    }))
+    .unwrap();
+    status.preservation = Some(scan.clone());
+    let text = super::store::render(&status, Some(0), false);
+    assert!(text.contains("before 2/3 releases (incomplete); after not retained"));
+    assert!(text.contains("Continuation:"));
+    scan.observed = 3;
+    scan.complete = true;
+    status.preservation = Some(scan.clone());
+    status.installation = Some(Installation {
+        upload_request: [1; 32],
+        request: Some([2; 32]),
+        sender_version: Some(1),
+        start_request: Some([3; 32]),
+        verification: Some(scan),
+        activation_request: Some([4; 32]),
+    });
+    let text = super::store::render(&status, Some(0), true);
+    assert!(text.contains("before 3/3 releases (complete); after 3/3 releases (complete)"));
+    assert!(!text.contains("Continuation:"));
+}
+
+#[test]
+fn store_upgrade_status_exposes_phase_without_claiming_completion() {
+    let mut state = store_state();
     let text = render(&state, Path::new("journal")).unwrap();
     assert!(text.contains("Store maintenance: Verified"));
     assert!(text.contains("Root: rrkah-fqaaa-aaaaa-aaaaq-cai"));
@@ -60,6 +96,179 @@ fn store_upgrade_status_exposes_phase_without_claiming_completion() {
             .unwrap()
             .contains("no retained observation")
     );
+}
+
+#[test]
+fn store_scan_summary_keeps_unknown_and_rejected_attempts_visible() {
+    let mut state = store_state();
+    let effects = state["effects"].as_object_mut().unwrap();
+    for index in 0..512 {
+        for step in ["observe", "continue"] {
+            effects.insert(format!("store/{index}/{step}"), "reply_retained".into());
+        }
+    }
+    for (index, status) in [
+        "signed_attempt_retained_outcome_unknown",
+        "signed_attempt_retained_outcome_unknown",
+        "rejection_retained",
+        "authority_retained_not_signed",
+    ]
+    .iter()
+    .enumerate()
+    {
+        effects.insert(format!("store/{}/continue", 512 + index), (*status).into());
+    }
+    let before = state.clone();
+    let text = render(&state, Path::new("journal")).unwrap();
+    for (description, count) in [
+        ("Reply retained; not itself proof of success", "1024"),
+        ("Signed attempt retained; outcome UNKNOWN", "2"),
+        ("Rejection retained", "1"),
+        ("Recovery request prepared; not signed", "1"),
+    ] {
+        assert!(
+            text.lines()
+                .any(|line| line.starts_with(description) && line.ends_with(count))
+        );
+    }
+    assert!(text.lines().count() < 40);
+    assert!(!text.contains("store/511"));
+    assert!(text.contains("expiry does not establish failure or authorize a replacement"));
+    assert!(text.contains("deployment completion is not established"));
+    assert_eq!(
+        state, before,
+        "presentation must not change the complete JSON evidence"
+    );
+}
+
+#[test]
+fn store_without_prepared_attempts_does_not_claim_no_effect() {
+    let mut state = store_state();
+    state["store_maintenance"] = serde_json::Value::Null;
+    let text = render(&state, Path::new("journal")).unwrap();
+    assert!(text.contains("No retained request attempts"));
+    assert!(text.contains("no retained observation"));
+    assert!(text.contains("deployment completion is not established"));
+}
+
+#[test]
+fn store_continuations_observe_issued_effects_even_after_dispatch_expiry() {
+    use canic_management_protocol::store_maintenance::{Phase, Status};
+    let mut status: Status =
+        serde_json::from_value(store_state()["store_maintenance"].clone()).unwrap();
+    status.approval.expires_at_ns = 100;
+    status.failure = Some(canic_management_protocol::Failure::Uncertain);
+    for phase in [
+        Phase::Closing,
+        Phase::StopIssued,
+        Phase::UploadIssued,
+        Phase::InstallIssued,
+        Phase::StartIssued,
+        Phase::ActivateIssued,
+        Phase::Verifying,
+        Phase::Ready,
+    ] {
+        status.phase = phase;
+        for now in [Some(99), Some(100), None] {
+            assert_eq!(
+                store::continuation(&status, now).0,
+                "reconcile",
+                "{phase:?}"
+            );
+        }
+        if phase != Phase::Ready {
+            assert!(store::render(&status, Some(100), false).contains("Dispatch window expired"));
+        }
+    }
+}
+
+#[test]
+fn store_continuations_never_suggest_fresh_effects_after_expiry_or_failure() {
+    use canic_management_protocol::store_maintenance::{Phase, Status};
+    let mut status: Status =
+        serde_json::from_value(store_state()["store_maintenance"].clone()).unwrap();
+    status.approval.expires_at_ns = 100;
+    for phase in [
+        Phase::Reserved,
+        Phase::Closed,
+        Phase::Stopped,
+        Phase::Uploaded,
+        Phase::Installed,
+        Phase::Verified,
+    ] {
+        status.phase = phase;
+        status.failure = None;
+        assert_eq!(
+            store::continuation(&status, Some(99)).0,
+            "apply",
+            "{phase:?}"
+        );
+        assert_eq!(
+            store::continuation(&status, Some(100)).0,
+            "status",
+            "{phase:?}"
+        );
+        assert!(
+            store::continuation(&status, Some(100))
+                .1
+                .contains("expired")
+        );
+        assert_eq!(store::continuation(&status, None).0, "status");
+        status.failure = Some(canic_management_protocol::Failure::Mismatch);
+        assert_eq!(store::continuation(&status, Some(99)).0, "status");
+        assert!(store::continuation(&status, Some(99)).1.contains("failure"));
+    }
+}
+
+#[test]
+fn store_apply_followup_keeps_scope_and_signer_only_for_signed_commands() {
+    use canic_management_protocol::store_maintenance::{Phase, Status};
+    use clap::Parser as _;
+    let cli = crate::args::Cli::try_parse_from([
+        "canic",
+        "fleet",
+        "apply",
+        "original",
+        "--config",
+        "project's config.json",
+        "--app",
+        "demo",
+        "--fleet",
+        "local",
+        "--state-dir",
+        "journal path",
+        "--identity",
+        "operator",
+        "--icp-bin",
+        "signer path",
+    ])
+    .unwrap();
+    let crate::args::Commands::Fleet(command) = cli.command else {
+        unreachable!()
+    };
+    for (phase, deadline, expected) in [
+        (Phase::InstallIssued, 1, "reconcile"),
+        (Phase::Verified, u64::MAX, "apply"),
+        (Phase::Verified, 1, "status"),
+    ] {
+        let mut status: Status =
+            serde_json::from_value(store_state()["store_maintenance"].clone()).unwrap();
+        status.phase = phase;
+        status.approval.expires_at_ns = deadline;
+        let outcome = canic_host::ApplyOutcome::StorePending {
+            operation: "original".into(),
+            root: "root".into(),
+            store_maintenance: Box::new(status),
+        };
+        let text = crate::progress::applied(&outcome, &command);
+        assert!(text.contains(&format!("canic fleet {expected} original")));
+        assert!(text.contains("--config 'project'\"'\"'s config.json'"));
+        assert!(text.contains("--state-dir 'journal path' --app demo --fleet local"));
+        assert_eq!(
+            text.contains("--identity operator --icp-bin 'signer path'"),
+            expected != "status"
+        );
+    }
 }
 
 #[test]
@@ -268,6 +477,11 @@ fn ready_root_evidence_requires_a_separate_receipt_and_unknown_evidence_stays_un
 }
 #[test]
 fn fleet_budget_and_utc_labels_preserve_exact_boundaries() {
+    assert_eq!(
+        super::dispatch(100, 100),
+        "when approved prerequisites are ready"
+    );
+    assert!(!super::dispatch(100, 200).contains("when approved"));
     assert_eq!(super::cycles(0), "0 cycles");
     assert_eq!(
         super::cycles(3_000_000_000_000),

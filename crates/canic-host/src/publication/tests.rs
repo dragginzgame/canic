@@ -83,7 +83,15 @@ fn immutable_release_plans_retain_deadlines_without_reserving_deployment_slots()
     );
     // Publishing a canister's artifact does not claim to have deployed that canister.
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    plan::retain(&dir, &wasm, input(), original.deployment, None).unwrap();
+    plan::retain(
+        &dir,
+        &wasm,
+        input(),
+        original.deployment,
+        None,
+        crate::now().unwrap(),
+    )
+    .unwrap();
     assert!(!dir.join(&id).join("receipt.json").exists());
 }
 #[test]

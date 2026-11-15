@@ -8,12 +8,13 @@ case "$scope" in
     all) filter= ;;
     readiness) filter=store_readiness_ ;;
     publication) filter=store_root_tests::publication_tests ;;
+    dispatch) filter=store_root_tests::dispatch_tests ;;
     custody) filter=store_custody_observation ;;
     admission) filter=store_root_tests::admission_tests ;;
     quiescence) filter=store_root_tests::quiescence_tests ;;
     maintenance) filter=store_root_tests::maintenance_tests ;;
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
-    *) printf 'Usage: %s [all|readiness|publication|custody|admission|quiescence|maintenance|root-maintenance]\n' "$0" >&2; exit 2 ;;
+    *) printf 'Usage: %s [all|readiness|publication|dispatch|custody|admission|quiescence|maintenance|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
 build() {
     local name=$1 package=$2
@@ -31,7 +32,7 @@ if [[ "$scope" == all || "$scope" == root-maintenance ]]; then
     CANIC_HOST_CUSTODY_TEST=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic_host") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected Host test executable") end' "$records")
     export CANIC_HOST_CUSTODY_TEST
 fi
-if [[ "$scope" == all || "$scope" == publication || "$scope" == root-maintenance ]]; then
+if [[ "$scope" == all || "$scope" == publication || "$scope" == dispatch || "$scope" == root-maintenance ]]; then
     build root canic-root
     build app canic-hello
     build app-v2 canic-hello --features greeting-v2
@@ -51,6 +52,9 @@ elif [[ "$scope" == root-maintenance ]]; then
     cargo test --locked -p canic-management-protocol --lib complete_root_custody
 elif [[ "$scope" == quiescence || "$scope" == maintenance ]]; then
     cargo test --locked -p canic-management-protocol --lib store_maintenance
+elif [[ "$scope" == dispatch ]]; then
+    cargo test --locked -p canic-management-protocol --lib admission
+    cargo test --locked -p canic-management-protocol --lib upgrade_binds
 else
     case "$scope" in readiness) native=store_readiness ;; publication) native=publication_envelope ;; esac
     cargo test --locked -p canic-management-protocol --lib "$native"
