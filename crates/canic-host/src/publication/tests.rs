@@ -50,6 +50,110 @@ fn publication(version: &str) -> PublicationInput {
         store_module: "22".repeat(32),
     }
 }
+
+#[test]
+fn artifact_listing_preserves_unknown_outcomes_scope_and_corrupt_evidence() {
+    let dir = directory();
+    let selected = selection();
+    let absent = dir.join("absent");
+    assert!(
+        crate::fleet_artifacts(&absent, &selected)
+            .unwrap()
+            .publications
+            .is_empty()
+    );
+    assert!(!absent.exists());
+    let wasm = dir.join("app.wasm");
+    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
+    let (second, _) = create_publication_plan(
+        &dir,
+        &wasm,
+        &selected,
+        &input().controller,
+        publication("v2"),
+    )
+    .unwrap();
+    let (first, plan) = create_publication_plan(
+        &dir,
+        &wasm,
+        &selected,
+        &input().controller,
+        publication("v1"),
+    )
+    .unwrap();
+    let private = dir.join(&first).join("publication/prepare");
+    std::fs::create_dir_all(&private).unwrap();
+    std::fs::write(private.join("signed.json"), "PRIVATE_ATTEMPT_SENTINEL").unwrap();
+    let report = crate::fleet_artifacts(&dir, &selected).unwrap();
+    assert!(report.issues.is_empty());
+    assert_eq!(
+        report
+            .publications
+            .iter()
+            .map(|p| p.publication.release.version.as_str())
+            .collect::<Vec<_>>(),
+        ["v1", "v2"]
+    );
+    assert!(report.publications.iter().all(|p| !p.publication_retained));
+    assert_eq!(report.publications[0].operation, first);
+    assert_eq!(report.publications[0].publication_operation, first);
+    assert_eq!(report.publications[0].artifact, plan.artifact);
+    assert!(
+        !serde_json::to_string(&report)
+            .unwrap()
+            .contains("PRIVATE_ATTEMPT_SENTINEL")
+    );
+    for selector in 0..3 {
+        let mut other = selected.clone();
+        match selector {
+            0 => other.app = "other".into(),
+            1 => other.fleet = "other".into(),
+            _ => {
+                other.config.network = Network::Local {
+                    url: "http://127.0.0.1:1/".into(),
+                    root_key: "aa".repeat(133),
+                    routing_canister: "aaaaa-aa".into(),
+                }
+            }
+        }
+        assert!(
+            crate::fleet_artifacts(&dir, &other)
+                .unwrap()
+                .publications
+                .is_empty()
+        );
+    }
+    // A completion-shaped record cannot establish publication without its signed observation.
+    store::put_json(
+        &dir.join(&first).join("publication.json"),
+        &progress(
+            &plan,
+            &first,
+            0,
+            Some(protocol::Status {
+                manifest: manifest(&plan, b"\0asm\x01\0\0\0").unwrap(),
+                published: true,
+                missing: vec![],
+            }),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let report = crate::fleet_artifacts(&dir, &selected).unwrap();
+    assert_eq!(report.publications.len(), 1);
+    assert_eq!(report.publications[0].operation, second);
+    assert!(!report.publications[0].publication_retained);
+    assert_eq!(report.issues.len(), 1);
+    assert!(report.issues[0].starts_with(&first));
+    assert_eq!(
+        std::fs::read_to_string(private.join("signed.json")).unwrap(),
+        "PRIVATE_ATTEMPT_SENTINEL"
+    );
+    std::fs::write(dir.join(&second).join("module.wasm"), b"tampered").unwrap();
+    let report = crate::fleet_artifacts(&dir, &selected).unwrap();
+    assert!(report.publications.is_empty());
+    assert_eq!(report.issues.len(), 2);
+}
 #[test]
 fn immutable_release_plans_retain_deadlines_without_reserving_deployment_slots() {
     let dir = directory();

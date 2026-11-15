@@ -7,6 +7,122 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.214.0 release qualification: 2026-11-15
+
+The maintainer authorized GitHub delivery of the retained artifact listing and
+Host/status simplification. The complete Linux `make -j1 ci` gate passed:
+106 Host and 63 CLI tests, installed effect/custody, profile/growth, Root/endpoint,
+24 Store cases, three publication journeys and five Blob cases, plus native/Wasm
+lint, Rustdoc, formatting and tooling agreement. Existing explicitly ignored
+installed/predecessor cases remain excluded; this run does not claim macOS or
+mainnet qualification. All 288 captured input hashes remained unchanged.
+
+Fresh public registry review confirms the locked direct first-party registry
+selections are current. Blob 0.100.6 and topology 0.106.1 keep their qualified Git
+revisions: Blob's registry release lacks the selected Service contract, and
+topology has no registry entry. No supplier selection or sibling checkout changed.
+Review evidence and input hashes are under `target/evidence/0.214.0/release/`;
+the gate log is `target/qualification/release-0214-0-ci.log`.
+
+After validation, prepare the coordinated product version and both lockfiles for
+0.214.0, date the changelog and record this result. Qualification packages retain
+0.0.0 and every package remains unpublished. The native Rust status return type
+changes; CLI JSON and retained approval/journal formats do not. No crates.io
+publication or application deployment is authorized by this delivery.
+
+## Host/status simplification: 2026-11-15
+
+Pending 0.214.0 removes the internal JSON transport between Host status, fleet
+inventory and CLI. One typed projection carries the existing operation evidence;
+serialization remains an output boundary. Inventory reuses its admitted plan and
+artifact under the existing lock and consumes the already-read child evidence.
+Store execution and CLI guidance share Host's continuation classification. No
+new journal, cache, effect authority or persistence format is introduced.
+
+Legacy research used `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`:
+`crates/canic-host/src/fleet_ensure/dto/progress/mod.rs`,
+`crates/canic-cli/src/fleet/progress/render/mod.rs`, and the regression cases in
+`crates/canic-host/src/fleet_ensure/ops/current_protocol/component_progress/tests.rs`.
+The DTO path history includes `8c87ae4c8e09cdbb6f2eb3562ecb0a821e871bcf` and
+`aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f`. Reuse its owner-derived typed progress
+principle and distinction between unknown progress and completion; do not import
+its Coordinator phases, placement cursors or rendering framework into this
+bounded workflow. Current regression coverage retains unknown outcomes, separate
+receipts, exact child selection, failures and expired recovery guidance.
+
+Source inspection started at `6c05a8d7c351f80d7ed93128c41bc3d7e7aa206c` with the
+pending artifact-list work preserved. Focused validation on Rust 1.100.0:
+
+- Host native tests: 105 passed, one existing installed test ignored; the added
+  JSON-shape regression subsequently passed separately. Host/CLI Clippy, Root's
+  Wasm all-feature Clippy and Host Rustdoc passed.
+- CLI tests: 60 initially passed; three loopback-viewer cases were denied socket
+  access by the sandbox and then passed with socket access. The final focused
+  status selection passed all 15 tests after the typed representation was final.
+- The installed `fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`
+  fixture passed in 57.44 seconds, including original-effect recovery, Store/Root
+  maintenance and subsequent child work. Synthetic cycles only.
+- Captured six existing operation status outputs before replacing the installed
+  CLI, then compared the same journal through `canic` after `make canic`. All six
+  JSON outputs matched byte for byte, including nested fleet steps, publication,
+  Store/Root maintenance and child upgrades. The comparison used no replica or
+  signer. Evidence is in `target/qualification/simplification-before/`,
+  `simplification-after/` and `simplification-*.log`.
+- Formatting and tooling agreement passed. The module-layout scan found no
+  remaining `name.rs`/`name/` pairs in the maintained Rust source roots. AGENTS
+  links/anchors resolve after replacing repeated implementation history with
+  canonical design/demo links and retaining durable constraints.
+
+The native `status` return type is a pending Rust API change; CLI JSON and retained
+approval/journal formats are unchanged. Historical readers and independent
+canister authority checks remain. No mainnet action, publication or push occurred.
+
+## Retained fleet artifact listing: 2026-11-15
+
+Pending 0.214.0 adds `fleet artifact list` under the deployed-fleet context.
+It exposes the publication history already retained by independent plans and
+materialized whole-fleet bootstrap. Store still owns live releases/bytes; Host
+owns the existing approvals and signed completion evidence. The listing creates
+no catalog, runtime endpoint, selector alias, latest-version rule or effect owner.
+No supplier or package version is changed during development.
+
+Read legacy `api/template/mod.rs`, `api/template/status_tests.rs` and
+`storage/stable/template/manifest/tests/mod.rs` in `crates/canic-control-plane`
+at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, plus the API's path history
+(`aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f`,
+`e8605c44ffaf77ceb7ddaf85b374f42b7a48703d`,
+`aed32be2afbaf66d7e2867292da52f75ce028e41`). Preserve exact operation/release
+identity, deterministic listing and the separation between catalog metadata,
+publication progress and effect authority. Do not import the former Root overview,
+template catalog or activation/GC machinery. This consumer asks for local retained
+evidence; a live catalog would require its separate controller-mediated read path.
+
+The reader reuses the bounded journal enumerator, existing per-operation lock,
+plan/Wasm validation and signed publication receipt admission. Fleet code resolves
+its own nested paths and approved Root/Store outputs. Rows retain both the outer
+status address and exact nested publication digest. Selection compares app, fleet
+and the complete network binding. Invalid records produce partial results instead
+of disappearing; absent completion remains unconfirmed, not proven no effect.
+The shared IC Host table renderer owns spacing/escaping. Only JSON exposes full
+artifact hashes and operation metadata; signed request bodies are never exported.
+
+Focused native checks cover missing journals without creation, immutable version
+ordering, app/fleet/network isolation, retained-but-unconfirmed attempts, forged
+completion without a signed observation, corrupt Wasm and partial results without
+signed-body disclosure. CLI cases cover supported scope, refused effect arguments,
+terminal escaping, empty evidence and JSON partial results. Host/CLI and publication
+qualification Clippy, Host Rustdoc, formatting and tooling agreement pass.
+
+The installed Store-maintenance/publication/starter-upgrade witness passed in
+57.21s. It checks no publication row before bootstrap materializes its future
+identities, the nested completion's outer status address and exact artifact,
+and independent publication moving from unconfirmed to retained completion after
+infrastructure maintenance. After the replica stopped, the installed `canic`
+listed both historical versions from the same local journal. Logs and the JSON
+example are under `target/qualification/artifact-list-*`. No runtime changes,
+mainnet effects, browser launches or push occurred. Package metadata remains
+0.213.0 pending release of the 0.214.0 increment.
+
 ## 0.213.0 release qualification: 2026-11-15
 
 The maintainer authorized GitHub delivery. Fourteen product packages select

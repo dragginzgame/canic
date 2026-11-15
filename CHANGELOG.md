@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.214.0] - 2026-11-15
+
+### ⚠️ Breaking
+
+The native Host `status` API now returns typed operation evidence instead of a
+JSON value. Rust callers should match the returned operation and use its fields;
+serialize it when JSON is needed. CLI JSON, retained journals and approval bytes
+keep their existing formats. No fleet migration or reinstall is required.
+
+### ▶️ Try it
+
+With a configured starter fleet and its retained journal, inspect local Wasm
+publication evidence without contacting the network or opening a browser:
+
+```sh
+make canic
+canic fleet artifact list --app starter
+canic fleet artifact list --app starter --json
+```
+
+### ✨ Added
+
+`fleet artifact list` shows immutable version labels, artifact sizes and retained
+publication completion, grouped by Store. It includes both materialized whole-fleet
+bootstrap publications and separate publication approvals. JSON preserves exact
+hashes, Root/Store code bindings and the operation address for `fleet status`.
+Missing completion stays **unconfirmed**, even if a remote publication may have
+succeeded. Invalid journal entries remain explicit partial results with exit 1;
+they cannot become publication or deployment receipts. App, fleet and exact
+network bindings keep histories separate. A missing journal is left absent.
+
+This is historical local evidence, not the complete live Store catalog, current
+availability or installed application versions. No latest-version alias, copied
+catalog, new runtime endpoint or deployment authority is introduced.
+
+### 🧹 Cleanup
+
+Fleet inspection reuses validated plans and artifacts within the journal lock,
+and status flows directly from Host to CLI without JSON round trips. Host owns
+Store continuation classification; CLI renders its recommendation. Historical
+recovery readers and independent canister authority checks remain intact.
+
 ## [0.213.0] - 2026-11-15
 
 ### ▶️ Try it

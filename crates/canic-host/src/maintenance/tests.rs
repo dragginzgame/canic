@@ -279,7 +279,7 @@ fn predecessor_requires_both_observations_and_current_postflight() {
     )
     .unwrap();
     let id = plan.digest().unwrap();
-    let status = || operation::status_at(&dir, &id).unwrap();
+    let status = || serde_json::to_value(operation::status_at(&dir, &id).unwrap()).unwrap();
     assert_eq!(
         status()["effects"],
         serde_json::json!({

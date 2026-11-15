@@ -15,6 +15,12 @@ use ic_platform::{
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+mod status;
+pub use status::{
+    CanisterStatus, FleetChildStatus, FleetStatus, FleetStepStatus, ManagementStatus,
+    OperationStatus, StatusDetail,
+};
+
 #[cfg(test)]
 mod tests;
 
@@ -494,24 +500,34 @@ pub(crate) async fn verify_receipt(
 ///
 /// # Errors
 /// Refuses malformed or altered retained inputs. Reports local evidence, not current network state.
-pub fn status(root: &Path, digest: &str) -> Result<serde_json::Value> {
+pub fn status(root: &Path, digest: &str) -> Result<OperationStatus> {
     let store = Store::open(root)?;
     let dir = store.operation(digest)?;
     if crate::fleet_plan::exists(&dir)? {
-        return crate::fleet_plan::status(&dir, digest);
+        return crate::fleet_plan::status(&dir, digest)
+            .map(|s| OperationStatus::Fleet(Box::new(s)));
     }
-    status_at(&dir, digest)
+    status_at(&dir, digest).map(|s| OperationStatus::Canister(Box::new(s)))
 }
 
-pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
+pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<CanisterStatus> {
     let (plan, bytes) = plan::load(dir, digest)?;
+    status_loaded(dir, digest, plan, &bytes)
+}
+
+pub(crate) fn status_loaded(
+    dir: &Path,
+    digest: &str,
+    plan: Plan,
+    bytes: &[u8],
+) -> Result<CanisterStatus> {
     if plan.store_upgrade_root().is_some() {
         return crate::store_upgrade::status(dir, &plan);
     }
     if plan.publication().is_some() {
-        return crate::publication::status(dir, digest, &plan, &bytes);
+        return crate::publication::status(dir, digest, &plan, bytes);
     }
-    let mut effects = serde_json::Map::new();
+    let mut effects = std::collections::BTreeMap::<String, String>::new();
     let effect_names: Vec<_> = match plan.action {
         crate::PlanAction::Publish(_) => unreachable!("publication status selected above"),
         crate::PlanAction::UpgradeStore { .. } => unreachable!("Store status selected above"),
@@ -539,7 +555,7 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
             }
         }
     }
-    let receipt = retained_receipt(dir, &plan, &bytes)?;
+    let receipt = retained_receipt(dir, &plan, bytes)?;
     if plan.store_root().is_some() {
         for index in 0..crate::store_bootstrap::OBSERVATIONS {
             let path = dir.join(format!("store-observe/{index}"));
@@ -551,19 +567,23 @@ pub(crate) fn status_at(dir: &Path, digest: &str) -> Result<serde_json::Value> {
             }
         }
     }
-    let managed = match &plan.action {
+    let management = match &plan.action {
         crate::PlanAction::UpgradeChild { .. } => {
-            serde_json::to_value(crate::managed::upgrade::evidence(dir, &plan)?)
-                .map_err(supplier)?
+            crate::managed::upgrade::evidence(dir, &plan)?.map(ManagementStatus::Upgrade)
         }
         crate::PlanAction::CreateChild(_) => {
-            serde_json::to_value(crate::managed::evidence(dir, &plan)?).map_err(supplier)?
+            crate::managed::evidence(dir, &plan)?.map(ManagementStatus::Creation)
         }
-        _ => serde_json::Value::Null,
+        _ => None,
     };
-    Ok(
-        serde_json::json!({"operation": digest, "plan": plan, "effects": effects, "receipt": receipt, "management": managed}),
-    )
+    Ok(CanisterStatus {
+        operation: digest.into(),
+        plan,
+        effects,
+        receipt,
+        management,
+        detail: StatusDetail::Deployment {},
+    })
 }
 
 pub(crate) fn attempt_state(path: &Path) -> Result<&'static str> {

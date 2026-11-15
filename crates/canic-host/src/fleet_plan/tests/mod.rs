@@ -419,7 +419,7 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
         original,
         store::read(&journal.join(&id).join("fleet.json"), store::MAX_RECORD).unwrap()
     );
-    let state = crate::status(&journal, &id).unwrap();
+    let state = serde_json::to_value(crate::status(&journal, &id).unwrap()).unwrap();
     assert!(state["children"][0]["state"].is_null());
     assert!(state["root"]["receipt"].is_null());
     assert_eq!(
@@ -455,7 +455,10 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
     assert!(create(&dir, &changed).is_err());
     std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0\0").unwrap();
     assert!(create(&dir, &selected).is_err());
-    assert_eq!(crate::status(&journal, &id).unwrap(), state);
+    assert_eq!(
+        serde_json::to_value(crate::status(&journal, &id).unwrap()).unwrap(),
+        state
+    );
 }
 
 #[test]
@@ -554,7 +557,10 @@ async fn cancellation_retains_evidence_and_permanently_revokes_only_unprepared_w
     let record = cancel_fleet_plan(&journal, &id).unwrap();
     assert_eq!(cancel_fleet_plan(&journal, &id).unwrap(), record);
     assert_eq!(before, std::fs::read(path.join("fleet.json")).unwrap());
-    assert!(crate::status(&journal, &id).unwrap()["cancellation"].is_object());
+    assert!(
+        serde_json::to_value(crate::status(&journal, &id).unwrap()).unwrap()["cancellation"]
+            .is_object()
+    );
     let failure = crate::apply(&journal, &id, "unused", Path::new("must-not-run"))
         .await
         .unwrap_err();

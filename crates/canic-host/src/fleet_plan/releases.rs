@@ -142,14 +142,43 @@ pub(super) async fn apply(
     Ok(())
 }
 
-pub(super) fn status(dir: &Path, fleet: &FleetPlan, slot: Slot) -> Result<serde_json::Value> {
+pub(super) fn status(
+    dir: &Path,
+    fleet: &FleetPlan,
+    slot: Slot,
+) -> Result<Option<crate::CanisterStatus>> {
     let path = dir.join(record::child_leaf(slot)).join("publication");
     if !path.join("plan.json").try_exists().map_err(supplier)? {
-        return Ok(serde_json::Value::Null);
+        return Ok(None);
     }
     let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
     let value = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
-    operation::status_at(&path, &value.digest()?)
+    operation::status_at(&path, &value.digest()?).map(Some)
+}
+
+pub(super) fn inventory(
+    dir: &Path,
+    id: &str,
+    fleet: &FleetPlan,
+) -> Result<Vec<crate::FleetArtifact>> {
+    let mut result = Vec::new();
+    for (slot, _) in fleet
+        .children()
+        .filter(|(_, child)| child.release.is_some())
+    {
+        let path = dir.join(record::child_leaf(slot)).join("publication");
+        if !path.join("plan.json").try_exists().map_err(supplier)? {
+            continue;
+        }
+        let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
+        let expected = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+        let digest = expected.digest()?;
+        let (plan, bytes) = plan::load(&path, &digest)?;
+        result.push(crate::publication::list::project(
+            &path, id, &digest, &plan, &bytes,
+        )?);
+    }
+    Ok(result)
 }
 
 pub(super) async fn reconcile(

@@ -1,4 +1,5 @@
 use super::*;
+use crate::Receipt;
 use crate::{
     PlanInput, create_plan,
     tests::{directory, input},

@@ -1,61 +1,48 @@
 //! Presentation of retained Store evidence; recommendations grant no effect authority.
-use canic_management_protocol::store_maintenance::{Phase, Preservation, Status};
+use canic_management_protocol::store_maintenance::{Preservation, Status};
 use std::fmt::Write as _;
 
 pub(crate) fn continuation(status: &Status, now: Option<u128>) -> (&'static str, &'static str) {
-    let expired = now.is_some_and(|now| now >= u128::from(status.approval.expires_at_ns));
-    let note = match status.phase {
-        Phase::Closing
-        | Phase::StopIssued
-        | Phase::UploadIssued
-        | Phase::InstallIssued
-        | Phase::StartIssued
-        | Phase::ActivateIssued => {
-            return (
-                "reconcile",
-                if expired {
-                    "Dispatch window expired; observe the issued effect only."
-                } else {
-                    "Observe the issued effect; do not issue a replacement."
-                },
-            );
-        }
-        Phase::Verifying => {
-            return (
-                "reconcile",
-                if expired {
-                    "Dispatch window expired; finish catalog verification with admission closed."
-                } else {
-                    "Finish catalog verification; admission stays closed."
-                },
-            );
-        }
-        Phase::Ready => {
-            return (
-                "reconcile",
-                "Retain completion evidence for this original operation.",
-            );
-        }
-        Phase::Reserved => "Continue the approved Store closure.",
-        Phase::Closed => "Finish the catalog scan and stop Store under this approval.",
-        Phase::Stopped => "Explicitly install the approved replacement.",
-        Phase::Uploaded => "Continue the approved installation.",
-        Phase::Installed => "Start the replacement with admission closed.",
-        Phase::Verified => "Explicitly activate the verified replacement.",
-    };
-    if status.failure.is_some() {
-        return (
+    use canic_host::StoreContinuation as Next;
+    match canic_host::store_continuation(status, now) {
+        Next::RecoverIssued { expired } => (
+            "reconcile",
+            if expired {
+                "Dispatch window expired; observe the issued effect only."
+            } else {
+                "Observe the issued effect; do not issue a replacement."
+            },
+        ),
+        Next::VerifyCatalog { expired } => (
+            "reconcile",
+            if expired {
+                "Dispatch window expired; finish catalog verification with admission closed."
+            } else {
+                "Finish catalog verification; admission stays closed."
+            },
+        ),
+        Next::RetainCompletion => (
+            "reconcile",
+            "Retain completion evidence for this original operation.",
+        ),
+        Next::Close => ("apply", "Continue the approved Store closure."),
+        Next::ScanAndStop => (
+            "apply",
+            "Finish the catalog scan and stop Store under this approval.",
+        ),
+        Next::Install => ("apply", "Explicitly install the approved replacement."),
+        Next::ContinueInstallation => ("apply", "Continue the approved installation."),
+        Next::Start => ("apply", "Start the replacement with admission closed."),
+        Next::Activate => ("apply", "Explicitly activate the verified replacement."),
+        Next::ReviewFailure => (
             "status",
             "Review the retained failure; preserve this original operation.",
-        );
-    }
-    match now {
-        Some(now) if now < u128::from(status.approval.expires_at_ns) => ("apply", note),
-        Some(_) => (
+        ),
+        Next::Expired => (
             "status",
             "Dispatch window expired; new maintenance effects remain blocked.",
         ),
-        None => (
+        Next::ClockUnavailable => (
             "status",
             "Host clock unavailable; review the original dispatch deadline.",
         ),

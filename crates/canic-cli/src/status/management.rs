@@ -1,20 +1,18 @@
 //! Explain retained Root evidence without granting recovery or replay authority.
-use canic_host::{Error, Result};
-use canic_management_protocol::{Failure, Phase, Status, upgrade};
+use canic_host::ManagementStatus;
+use canic_management_protocol::{Failure, Phase, upgrade};
 use ic_host_text::{
     escape::terminal_text,
     table::{self, Alignment, Options},
 };
 use std::fmt::Write as _;
 
-pub(super) fn render(value: &serde_json::Value, is_upgrade: bool, receipt: bool) -> Result<String> {
-    if value.is_null() {
-        return Ok("Root evidence: none retained; admission and progress are unknown.\nNext: inspect the host attempt below. Keep its original operation and signed attempt; absence of Root evidence does not prove no effect.\n".into());
-    }
+pub(super) fn render(value: Option<&ManagementStatus>, receipt: bool) -> String {
+    let Some(value) = value else {
+        return "Root evidence: none retained; admission and progress are unknown.\nNext: inspect the host attempt below. Keep its original operation and signed attempt; absence of Root evidence does not prove no effect.\n".into();
+    };
     let mut output = String::new();
-    if is_upgrade {
-        let status: upgrade::Status = serde_json::from_value(value.clone())
-            .map_err(|error| Error::Supplier(Box::new(error)))?;
+    if let ManagementStatus::Upgrade(status) = value {
         writeln!(output, "Retained Root phase: {:?}", status.phase).expect("String write");
         output.push_str(&dispatches(
             &["upload", "upgrade"],
@@ -29,11 +27,9 @@ pub(super) fn render(value: &serde_json::Value, is_upgrade: bool, receipt: bool)
         )
         .expect("String write");
         failure(&mut output, status.failure.as_ref());
-        let guidance = upgrade_continuation(&status, receipt).1;
+        let guidance = upgrade_continuation(status, receipt).1;
         writeln!(output, "Next: {guidance}").expect("String write");
-    } else {
-        let status: Status = serde_json::from_value(value.clone())
-            .map_err(|error| Error::Supplier(Box::new(error)))?;
+    } else if let ManagementStatus::Creation(status) = value {
         writeln!(output, "Retained Root phase: {:?}", status.phase).expect("String write");
         output.push_str(&dispatches(
             &["create", "upload", "install"],
@@ -65,7 +61,7 @@ pub(super) fn render(value: &serde_json::Value, is_upgrade: bool, receipt: bool)
         };
         writeln!(output, "Next: {guidance}").expect("String write");
     }
-    Ok(output)
+    output
 }
 
 const PENDING: &str = "observe Root with fleet show for current progress. Apply this original operation when Root reports Ready to retain completion.";

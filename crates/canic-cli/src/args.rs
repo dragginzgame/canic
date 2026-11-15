@@ -190,6 +190,9 @@ pub(super) enum ArtifactCommand {
 
 #[derive(Subcommand)]
 pub(super) enum FleetCommand {
+    /// Inspect retained Wasm publications for this fleet; no network calls.
+    #[command(subcommand)]
+    Artifact(FleetArtifactCommand),
     /// Cancel an unsubmitted whole-fleet approval; retain its evidence and release its slots.
     Cancel {
         #[command(flatten)]
@@ -417,6 +420,7 @@ impl FleetCommand {
             | Self::Show { scope, .. }
             | Self::Call { scope, .. } => Some(scope),
             Self::CompareSubnets { .. }
+            | Self::Artifact(_)
             | Self::Placements { .. }
             | Self::Canister(_)
             | Self::Init { .. }
@@ -424,6 +428,18 @@ impl FleetCommand {
             | Self::View { .. } => None,
         }
     }
+}
+
+#[derive(Subcommand)]
+pub(super) enum FleetArtifactCommand {
+    /// List local publication approvals and validated completion; not the live Store catalog.
+    List {
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+        /// Override the selected fleet's journal directory.
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+    },
 }
 
 pub(super) fn checkout() -> PathBuf {

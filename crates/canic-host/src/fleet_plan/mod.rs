@@ -726,31 +726,47 @@ pub(crate) async fn reconcile(
     })
 }
 
-pub(crate) fn status(dir: &Path, id: &str) -> Result<serde_json::Value> {
+pub(crate) fn status(dir: &Path, id: &str) -> Result<crate::FleetStatus> {
     let value = load(dir, id)?;
     let root = operation::status_at(&dir.join("root"), &value.root.digest()?)?;
-    let mut result = serde_json::json!({"operation": id, "fleet_plan": value, "root": root, "cancellation": cancellation::read(dir,id)?});
-    if let Some(definition) = &value.store {
-        result["store"] = serde_json::json!({"name": definition.deployment.canister, "state": store_state(dir, &value)?});
-    }
+    let store = value
+        .store
+        .as_ref()
+        .map(|definition| {
+            Ok(crate::FleetStepStatus {
+                name: definition.deployment.canister.clone(),
+                state: store_state(dir, &value)?,
+            })
+        })
+        .transpose()?;
     let mut children = Vec::new();
     for (index, definition) in value.children() {
         let path = dir.join(record::child_leaf(index));
-        let child = if path.join("plan.json").try_exists().map_err(supplier)? {
+        let state = if path.join("plan.json").try_exists().map_err(supplier)? {
             let receipt = root_receipt(dir, &value)?.ok_or_else(invalid)?;
-            operation::status_at(
+            Some(operation::status_at(
                 &path,
                 &value
                     .child_plan(&receipt, store_receipt(dir, &value)?.as_ref(), index)?
                     .digest()?,
-            )?
+            )?)
         } else {
-            serde_json::Value::Null
+            None
         };
-        children.push(serde_json::json!({"name": definition.deployment.canister, "state": child, "publication": releases::status(dir, &value, index)?}));
+        children.push(crate::FleetChildStatus {
+            name: definition.deployment.canister.clone(),
+            state,
+            publication: releases::status(dir, &value, index)?,
+        });
     }
-    result["children"] = children.into();
-    Ok(result)
+    Ok(crate::FleetStatus {
+        operation: id.into(),
+        fleet_plan: value,
+        root,
+        store,
+        children,
+        cancellation: cancellation::read(dir, id)?,
+    })
 }
 
 pub(crate) fn inventory(
@@ -798,15 +814,27 @@ pub(crate) fn cancelled(dir: &Path, id: &str) -> Result<bool> {
     cancellation::read(dir, id).map(|record| record.is_some())
 }
 
+pub(crate) fn artifact_inventory(
+    dir: &Path,
+    id: &str,
+    selection: &SelectedFleet,
+) -> Result<Vec<crate::FleetArtifact>> {
+    let value = load(dir, id)?;
+    if !crate::publication::list::selected(&value.root, selection) || cancelled(dir, id)? {
+        return Ok(Vec::new());
+    }
+    releases::inventory(dir, id, &value)
+}
+
 pub(crate) const SLOTS: [Slot; 2] = [Slot::First, Slot::Second];
 const STORE_CYCLES: u64 = 1_000_000_000_000;
 
-fn store_state(dir: &Path, value: &FleetPlan) -> Result<serde_json::Value> {
+fn store_state(dir: &Path, value: &FleetPlan) -> Result<Option<crate::CanisterStatus>> {
     if !dir.join("store/plan.json").try_exists().map_err(supplier)? {
-        return Ok(serde_json::Value::Null);
+        return Ok(None);
     }
     let root = root_receipt(dir, value)?.ok_or_else(invalid)?;
-    operation::status_at(&dir.join("store"), &value.store_plan(&root)?.digest()?)
+    operation::status_at(&dir.join("store"), &value.store_plan(&root)?.digest()?).map(Some)
 }
 
 fn store_receipt(dir: &Path, value: &FleetPlan) -> Result<Option<Receipt>> {

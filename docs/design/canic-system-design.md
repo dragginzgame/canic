@@ -1187,6 +1187,14 @@ Keep the initial view limited to these observations. Protected observations reta
 
 ### Measurements and developer projections
 
+Host returns typed local operation evidence to inventory and CLI consumers; JSON
+serialization belongs at the output boundary. Preserve the existing JSON field
+shapes and the distinction between absent, uncertain and completed evidence.
+Reuse validated plan/artifact inputs within the journal lock, without introducing
+a cache or another receipt owner. Host classifies Store continuations for both
+execution and operator guidance; CLI supplies wording, while canisters retain
+their independent authority checks.
+
 Measure per-role total Wasm and code-section size, validator function count, initial and steady stable-memory allocation, instruction cost, idle timer burn, cross-subnet bytes, queue depth and recovery latency. Measure physical canister overhead and retained reserves separately from logical tenants and consumed cycles. Numeric targets are set against a workload before implementation; historical limits and prices are not universal current constants.
 
 Frontend export is a read-only projection from verified deployment bindings. It names network, application, exact endpoints, protocol and artifact identity, excludes secrets, and cannot make an unready component appear published.

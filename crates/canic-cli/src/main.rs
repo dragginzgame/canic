@@ -1,6 +1,7 @@
 //! Canic command line interface.
 
 mod args;
+mod artifacts;
 mod catalog;
 #[cfg(test)]
 mod config_tests;
@@ -161,6 +162,22 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 }
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
+    if let FleetCommand::Artifact(args::FleetArtifactCommand::List {
+        selection,
+        state_dir,
+    }) = command
+    {
+        let path = selection.config.path(selection.app.as_deref())?;
+        let selected = canic_host::load_config(&path)?
+            .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+        let journal = state_dir
+            .clone()
+            .unwrap_or_else(|| selected.journal_path(&path));
+        return Ok(artifacts::output(
+            &canic_host::fleet_artifacts(&journal, &selected)?,
+            cli.json,
+        ));
+    }
     if let FleetCommand::CompareSubnets {
         selection,
         left,
@@ -229,8 +246,10 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         config.check_operation(&state_dir, digest)?;
     }
     let result = match command {
-        FleetCommand::CompareSubnets { .. } | FleetCommand::Placements { .. } => {
-            unreachable!("placements handled before journal resolution")
+        FleetCommand::Artifact(_)
+        | FleetCommand::CompareSubnets { .. }
+        | FleetCommand::Placements { .. } => {
+            unreachable!("read-only commands handled before journal resolution")
         }
         FleetCommand::Canister(command) => match command {
             CanisterCommand::Bind {
@@ -541,7 +560,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             if !cli.json {
                 return status::render(&state, &state_dir).map(Output::Text);
             }
-            Ok(state)
+            Ok(serde_json::json!(state))
         }
         FleetCommand::View { report, port, open } => {
             view::serve(report, *port, *open)?;
@@ -602,12 +621,10 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         } => {
             let state = canic_host::status(&state_dir, digest)?;
             let state = status::call_state(&state, canister.as_deref())?;
-            let receipt: canic_host::Receipt = serde_json::from_value(state["receipt"].clone())
-                .map_err(|_| {
-                    Error::Invalid("operation has no completed deployment receipt".into())
-                })?;
-            let plan: canic_host::Plan = serde_json::from_value(state["plan"].clone())
-                .map_err(|_| Error::Invalid("operation plan cannot be read".into()))?;
+            let receipt = state.receipt.as_ref().ok_or_else(|| {
+                Error::Invalid("operation has no completed deployment receipt".into())
+            })?;
+            let plan = &state.plan;
             let result = canic_host::greet(&plan.network, &receipt.canister, name).await?;
             Ok(
                 serde_json::json!({"canister": receipt.canister, "certified": false, "greeting": result.message}),

@@ -1,4 +1,49 @@
 use super::*;
+use canic_host::Plan;
+
+// Existing JSON-shaped examples remain output-contract fixtures; production callers
+// now carry typed evidence and never decode their own presentation output.
+fn fixture(value: &serde_json::Value) -> Result<CanisterStatus> {
+    let decode = |error| Error::Supplier(Box::new(error));
+    let plan: Plan = serde_json::from_value(value["plan"].clone()).map_err(decode)?;
+    let management = if value["management"].is_null() {
+        None
+    } else if plan.target().is_some() {
+        Some(ManagementStatus::Upgrade(
+            serde_json::from_value(value["management"].clone()).map_err(decode)?,
+        ))
+    } else {
+        Some(ManagementStatus::Creation(
+            serde_json::from_value(value["management"].clone()).map_err(decode)?,
+        ))
+    };
+    let detail = if plan.store_upgrade_root().is_some() {
+        StatusDetail::StoreMaintenance {
+            store_maintenance: serde_json::from_value(value["store_maintenance"].clone())
+                .map_err(decode)?,
+        }
+    } else if plan.publication().is_some() {
+        StatusDetail::Publication {
+            publication: serde_json::from_value(value["publication"].clone()).map_err(decode)?,
+        }
+    } else {
+        StatusDetail::Deployment {}
+    };
+    Ok(CanisterStatus {
+        operation: value["operation"].as_str().unwrap().into(),
+        plan,
+        effects: serde_json::from_value(value["effects"].clone()).map_err(decode)?,
+        receipt: serde_json::from_value(value["receipt"].clone()).map_err(decode)?,
+        management,
+        detail,
+    })
+}
+fn render(value: &serde_json::Value, journal: &Path) -> Result<String> {
+    super::render(
+        &OperationStatus::Canister(Box::new(fixture(value)?)),
+        journal,
+    )
+}
 
 fn state() -> serde_json::Value {
     serde_json::json!({
@@ -512,15 +557,49 @@ fn fleet_budget_and_utc_labels_preserve_exact_boundaries() {
 
 #[test]
 fn greeting_selection_uses_retained_child_names_and_refuses_ambiguity() {
-    let state = serde_json::json!({"fleet_plan": {}, "children": [{"name":"app", "state":{"receipt":"first"}}, {"name":"worker", "state":{"receipt":"second"}}]});
+    let first = fixture(&state()).unwrap();
+    let mut second = fixture(&state()).unwrap();
+    second.operation = "second".into();
+    let root = fixture(&state()).unwrap();
+    let fleet_plan = canic_host::FleetPlan {
+        version: 1,
+        root: root.plan.clone(),
+        children: vec![],
+        store: None,
+    };
+    let state = OperationStatus::Fleet(Box::new(canic_host::FleetStatus {
+        operation: "fleet".into(),
+        fleet_plan,
+        root,
+        cancellation: None,
+        store: None,
+        children: vec![
+            canic_host::FleetChildStatus {
+                name: "app".into(),
+                state: Some(first),
+                publication: None,
+            },
+            canic_host::FleetChildStatus {
+                name: "worker".into(),
+                state: Some(second),
+                publication: None,
+            },
+            canic_host::FleetChildStatus {
+                name: "unadmitted".into(),
+                state: None,
+                publication: None,
+            },
+        ],
+    }));
     assert!(super::call_state(&state, None).is_err());
     assert!(super::call_state(&state, Some("missing")).is_err());
+    assert!(super::call_state(&state, Some("unadmitted")).is_err());
     assert_eq!(
-        super::call_state(&state, Some("app")).unwrap()["receipt"],
-        "first"
+        super::call_state(&state, Some("app")).unwrap().operation,
+        "a".repeat(64)
     );
     assert_eq!(
-        super::call_state(&state, Some("worker")).unwrap()["receipt"],
+        super::call_state(&state, Some("worker")).unwrap().operation,
         "second"
     );
 }

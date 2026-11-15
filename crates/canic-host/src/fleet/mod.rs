@@ -1,4 +1,4 @@
-use crate::{Error, Network, Plan, Receipt, Result, network, operation, store, supplier};
+use crate::{Error, Network, Result, network, operation, store, supplier};
 use canic_management_protocol::children::{self, Slot};
 use serde::Serialize;
 use std::{collections::BTreeMap, path::Path, time::Duration};
@@ -154,13 +154,29 @@ pub(crate) fn local_operation_at(
     now: u64,
 ) -> Result<(FleetOperation, Network)> {
     let state = operation::status_at(dir, id)?;
-    let plan: Plan = serde_json::from_value(state["plan"].clone()).map_err(supplier)?;
-    let receipt: Option<Receipt> =
-        serde_json::from_value(state["receipt"].clone()).map_err(supplier)?;
+    local_operation_status(dir, id, now, state)
+}
+
+fn local_operation_status(
+    dir: &Path,
+    id: &str,
+    now: u64,
+    state: crate::CanisterStatus,
+) -> Result<(FleetOperation, Network)> {
+    let crate::CanisterStatus {
+        plan,
+        receipt,
+        management: evidence,
+        effects,
+        ..
+    } = state;
     let canister = if let Some(target) = plan.target() {
         Some(target.clone())
     } else if plan.management().is_some() {
-        crate::managed::evidence(dir, &plan)?.and_then(|status| status.worker)
+        match evidence {
+            Some(crate::ManagementStatus::Creation(status)) => status.worker,
+            _ => None,
+        }
     } else if dir
         .join("create/reply.bin")
         .try_exists()
@@ -213,7 +229,7 @@ pub(crate) fn local_operation_at(
             canister,
             approved_module: plan.artifact.sha256,
             approved_controller,
-            effects: serde_json::from_value(state["effects"].clone()).map_err(supplier)?,
+            effects,
             receipt_retained: receipt.is_some(),
             approval_expired: now >= plan.expires_at_ns,
         },
@@ -503,14 +519,13 @@ pub(crate) fn inventory(
                 // Publication has no deployed identity or deployment-slot reservation.
                 // Admit its retained plan/bytes before excluding it from canister inventory.
                 let _store = crate::store::Store::open(root)?;
-                if crate::plan::load(&root.join(&id), &id)?
-                    .0
-                    .publication()
-                    .is_some()
-                {
+                let dir = root.join(&id);
+                let (plan, bytes) = crate::plan::load(&dir, &id)?;
+                if plan.publication().is_some() {
                     return Ok(vec![]);
                 }
-                local_operation_at(&root.join(&id), &id, started_at_ns).map(|record| vec![record])
+                let state = operation::status_loaded(&dir, &id, plan, &bytes)?;
+                local_operation_status(&dir, &id, started_at_ns, state).map(|record| vec![record])
             }
         })();
         match result {

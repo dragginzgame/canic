@@ -21,6 +21,26 @@ executable validation remains with the IC installation boundary.
 
 ## Whole-fleet artifacts
 
+Inspect locally retained versions for an existing configured fleet:
+
+```sh
+canic fleet artifact list --app starter
+canic fleet artifact list --app starter --json
+```
+
+The listing groups releases by Store and uses the same plan and signed-receipt
+checks as publication status. It includes bootstrap publications once their exact
+Root/Store identities and publication plans are retained, plus independent
+publication plans. **Published** means a validated completion observation is in
+this journal; **unconfirmed** means it is absent, not proof that nothing happened
+remotely. JSON includes exact hashes and the outer `operation` usable with
+`fleet status`; a nested `publication_operation` identifies its narrower approval.
+Versions sort lexically without selecting a latest release. This is not a live
+Store catalog or deployment listing. No signer or network request is used.
+Keep `--config`, `--fleet` and any `--state-dir` override when selecting a journal.
+Bad records are reported alongside valid rows and exit 1; they are never treated
+as empty or complete. Missing journals remain absent.
+
 `canic app init starter --fleet mainnet --network ic --source starter` generates Root, one `wasm-store` child
 and one application. Custom fresh fleets can declare the same topology with one or two application children,
 with built Wasm inputs and no existing ID bindings. The usual whole-fleet plan

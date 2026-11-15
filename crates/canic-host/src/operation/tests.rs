@@ -26,6 +26,55 @@ fn plan() -> Plan {
 }
 
 #[test]
+fn typed_status_preserves_json_evidence_and_absent_field_shapes() {
+    use crate::{CanisterStatus, ManagementStatus, OperationStatus, StatusDetail};
+    let mut status = CanisterStatus {
+        operation: "original".into(),
+        plan: plan(),
+        effects: std::collections::BTreeMap::from([(
+            "install".into(),
+            "signed_attempt_retained_outcome_unknown".into(),
+        )]),
+        receipt: None,
+        management: None,
+        detail: StatusDetail::Deployment {},
+    };
+    let mut expected = serde_json::json!({
+        "operation": "original", "plan": status.plan,
+        "effects": {"install":"signed_attempt_retained_outcome_unknown"},
+        "receipt":null, "management":null,
+    });
+    assert_eq!(serde_json::to_value(&status).unwrap(), expected);
+    let creation = canic_management_protocol::Status {
+        phase: canic_management_protocol::Phase::CreateIssued,
+        attempts: [1, 0, 0],
+        failure: Some(canic_management_protocol::Failure::Uncertain),
+        ..Default::default()
+    };
+    expected["management"] = serde_json::to_value(&creation).unwrap();
+    status.management = Some(ManagementStatus::Creation(creation));
+    assert_eq!(serde_json::to_value(&status).unwrap(), expected);
+    let upgrade = canic_management_protocol::upgrade::Status::default();
+    expected["management"] = serde_json::to_value(&upgrade).unwrap();
+    status.management = Some(ManagementStatus::Upgrade(upgrade));
+    assert_eq!(serde_json::to_value(&status).unwrap(), expected);
+    status.management = None;
+    expected["management"] = serde_json::Value::Null;
+    status.detail = StatusDetail::Publication { publication: None };
+    expected["publication"] = serde_json::Value::Null;
+    assert_eq!(serde_json::to_value(&status).unwrap(), expected);
+    expected.as_object_mut().unwrap().remove("publication");
+    expected["store_maintenance"] = serde_json::Value::Null;
+    status.detail = StatusDetail::StoreMaintenance {
+        store_maintenance: None,
+    };
+    assert_eq!(
+        serde_json::to_value(OperationStatus::Canister(Box::new(status))).unwrap(),
+        expected
+    );
+}
+
+#[test]
 fn mainnet_provider_request_binds_funding_identity_and_controller() {
     let plan = plan();
     let call = create_call(&plan, None).unwrap();

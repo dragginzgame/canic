@@ -1,6 +1,8 @@
 //! Human projection of retained operation evidence; never a live status check.
 
-use canic_host::{Error, Network, Plan, Receipt, Result};
+use canic_host::{
+    CanisterStatus, Error, ManagementStatus, Network, OperationStatus, Result, StatusDetail,
+};
 use ic_host_text::{
     escape::terminal_text,
     table::{self, Alignment, Options},
@@ -17,93 +19,15 @@ pub(crate) mod store;
 #[cfg(test)]
 mod tests;
 
-pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String> {
-    if let Some(value) = state.get("fleet_plan") {
-        let plan: canic_host::FleetPlan = serde_json::from_value(value.clone())
-            .map_err(|error| Error::Supplier(Box::new(error)))?;
-        let operation = state["operation"]
-            .as_str()
-            .ok_or_else(|| Error::Invalid("missing fleet operation".into()))?;
-        let mut output = fleet_preview(operation, &plan, journal)?;
-        if !state["cancellation"].is_null() {
-            output.push_str("Cancelled before effect preparation. This approval cannot apply.\n");
-            return Ok(output);
-        }
-        let evidence = |step: &serde_json::Value| -> String {
-            if step.is_null() {
-                return "Not yet admitted".into();
-            }
-            if !step["receipt"].is_null() {
-                return "Completion receipt retained".into();
-            }
-            step["management"]["phase"].as_str().map_or_else(
-                || "No completion receipt; inspect host effects with --json".into(),
-                |phase| format!("{phase}; no completion receipt"),
-            )
-        };
-        let mut rows = vec![["Root".into(), evidence(&state["root"])]];
-        if let Some(store) = &plan.store {
-            rows.push([
-                store.deployment.canister.clone(),
-                evidence(&state["store"]["state"]),
-            ]);
-        }
-        let children = state["children"]
-            .as_array()
-            .ok_or_else(|| Error::Invalid("missing fleet child states".into()))?;
-        for child in children {
-            if !child["publication"].is_null() {
-                rows.push([
-                    format!("{} release", child["name"].as_str().unwrap_or("unknown")),
-                    if child["publication"]["publication"].is_null() {
-                        "Publication unfinished; resume fleet apply".into()
-                    } else {
-                        "Published release evidence retained".into()
-                    },
-                ]);
-            }
-            rows.push([
-                child["name"].as_str().unwrap_or("unknown").into(),
-                evidence(&child["state"]),
-            ]);
-        }
-        output.push_str(&table::render(
-            &["STEP", "RETAINED EVIDENCE"],
-            &rows,
-            &[Alignment::Left; 2],
-            Options {
-                column_gap: 2,
-                header_separator: true,
-            },
-        ));
-        output.push_str(
-            "\n\nLocal evidence only. Resume this same fleet operation with fleet apply.\n",
-        );
-        for child in children {
-            let state = &child["state"];
-            if !state["management"].is_null() {
-                let name = child["name"]
-                    .as_str()
-                    .ok_or_else(|| Error::Invalid("missing fleet child name".into()))?;
-                writeln!(output, "\nChild: {}", terminal_text(name)).expect("String write");
-                output.push_str(&management::render(
-                    &state["management"],
-                    false,
-                    !state["receipt"].is_null(),
-                )?);
-            }
-        }
-        return Ok(output);
-    }
-    let plan: Plan = serde_json::from_value(state["plan"].clone())
-        .map_err(|error| Error::Supplier(Box::new(error)))?;
-    let receipt: Option<Receipt> = serde_json::from_value(state["receipt"].clone())
-        .map_err(|error| Error::Supplier(Box::new(error)))?;
-    let effects: BTreeMap<String, String> = serde_json::from_value(state["effects"].clone())
-        .map_err(|error| Error::Supplier(Box::new(error)))?;
-    let operation = state["operation"]
-        .as_str()
-        .ok_or_else(|| Error::Invalid("operation status has no digest".into()))?;
+pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> {
+    let state = match state {
+        OperationStatus::Fleet(state) => return render_fleet(state, journal),
+        OperationStatus::Canister(state) => state,
+    };
+    let plan = &state.plan;
+    let receipt = state.receipt.as_ref();
+    let effects = &state.effects;
+    let operation = &state.operation;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| Error::Supplier(Box::new(error)))?
@@ -151,11 +75,11 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         .expect("String write");
     }
     if plan.store_upgrade_root().is_some() {
-        let status: Option<canic_management_protocol::store_maintenance::Status> =
-            serde_json::from_value(state["store_maintenance"].clone())
-                .map_err(|error| Error::Supplier(Box::new(error)))?;
-        if let Some(status) = status {
-            output.push_str(&store::render(&status, Some(now), receipt.is_some()));
+        if let StatusDetail::StoreMaintenance {
+            store_maintenance: Some(status),
+        } = &state.detail
+        {
+            output.push_str(&store::render(status, Some(now), receipt.is_some()));
         } else {
             output.push_str("Store maintenance: no retained observation\n");
         }
@@ -164,7 +88,7 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         writeln!(output, "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nPublished receipt retained: {}",
             terminal_text(&publication.root.canister), terminal_text(&publication.root.module),
             terminal_text(&publication.store.canister), terminal_text(&publication.store.module),
-            terminal_text(&publication.release.name), terminal_text(&publication.release.version), !state["publication"].is_null()).expect("String write");
+            terminal_text(&publication.release.name), terminal_text(&publication.release.version), matches!(&state.detail, StatusDetail::Publication { publication: Some(_) })).expect("String write");
     }
     for custody in plan.maintenance().into_iter().flatten() {
         writeln!(
@@ -212,10 +136,9 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
             .expect("String write");
         }
         output.push_str(&management::render(
-            &state["management"],
-            plan.target().is_some(),
+            state.management.as_ref(),
             receipt.is_some(),
-        )?);
+        ));
     }
     if let Some(target) = plan.target() {
         writeln!(output, "Upgrade target: {}", terminal_text(target)).expect("writing to String");
@@ -305,6 +228,73 @@ pub(crate) fn render(state: &serde_json::Value, journal: &Path) -> Result<String
         output.push_str("An uncertain attempt may have executed. Preserve this operation and its signed attempt; expiry does not establish failure or authorize a replacement.\n");
     }
     output.push_str("Current code, controllers, readiness and balances are not checked here.\n");
+    Ok(output)
+}
+
+fn render_fleet(state: &canic_host::FleetStatus, journal: &Path) -> Result<String> {
+    let mut output = fleet_preview(&state.operation, &state.fleet_plan, journal)?;
+    if state.cancellation.is_some() {
+        output.push_str("Cancelled before effect preparation. This approval cannot apply.\n");
+        return Ok(output);
+    }
+    let evidence = |step: Option<&CanisterStatus>| -> String {
+        let Some(step) = step else {
+            return "Not yet admitted".into();
+        };
+        if step.receipt.is_some() {
+            return "Completion receipt retained".into();
+        }
+        match &step.management {
+            Some(ManagementStatus::Creation(s)) => format!("{:?}; no completion receipt", s.phase),
+            Some(ManagementStatus::Upgrade(s)) => format!("{:?}; no completion receipt", s.phase),
+            None => "No completion receipt; inspect host effects with --json".into(),
+        }
+    };
+    let mut rows = vec![["Root".into(), evidence(Some(&state.root))]];
+    if let Some(store) = &state.store {
+        rows.push([store.name.clone(), evidence(store.state.as_ref())]);
+    }
+    for child in &state.children {
+        if let Some(publication) = &child.publication {
+            rows.push([
+                format!("{} release", child.name),
+                if matches!(
+                    &publication.detail,
+                    StatusDetail::Publication {
+                        publication: Some(_)
+                    }
+                ) {
+                    "Published release evidence retained"
+                } else {
+                    "Publication unfinished; resume fleet apply"
+                }
+                .into(),
+            ]);
+        }
+        rows.push([child.name.clone(), evidence(child.state.as_ref())]);
+    }
+    output.push_str(&table::render(
+        &["STEP", "RETAINED EVIDENCE"],
+        &rows,
+        &[Alignment::Left; 2],
+        Options {
+            column_gap: 2,
+            header_separator: true,
+        },
+    ));
+    output
+        .push_str("\n\nLocal evidence only. Resume this same fleet operation with fleet apply.\n");
+    for child in &state.children {
+        if let Some(step) = &child.state
+            && step.management.is_some()
+        {
+            writeln!(output, "\nChild: {}", terminal_text(&child.name)).expect("String write");
+            output.push_str(&management::render(
+                step.management.as_ref(),
+                step.receipt.is_some(),
+            ));
+        }
+    }
     Ok(output)
 }
 
@@ -472,33 +462,43 @@ fn cycles(value: u64) -> String {
 // Select against retained names before making a network call; configuration changes
 // cannot redirect a completed operation to another application.
 pub(crate) fn call_state<'a>(
-    state: &'a serde_json::Value,
+    state: &'a OperationStatus,
     selected: Option<&str>,
-) -> Result<&'a serde_json::Value> {
-    if state.get("fleet_plan").is_some() {
-        let children = state["children"]
-            .as_array()
-            .ok_or_else(|| Error::Invalid("missing fleet child states".into()))?;
-        if let Some(child) = children.iter().find(|child| {
-            selected.map_or(children.len() == 1, |name| {
-                child["name"].as_str() == Some(name)
-            })
-        }) {
-            return Ok(&child["state"]);
-        }
-        return Err(Error::Invalid(format!(
-            "select --canister from: {}",
-            children
+) -> Result<&'a CanisterStatus> {
+    match state {
+        OperationStatus::Fleet(fleet) => {
+            if let Some(child) = fleet
+                .children
                 .iter()
-                .filter_map(|c| c["name"].as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )));
+                .find(|child| selected.map_or(fleet.children.len() == 1, |name| child.name == name))
+            {
+                return child.state.as_ref().ok_or_else(|| {
+                    Error::Invalid("operation has no completed deployment receipt".into())
+                });
+            }
+            Err(Error::Invalid(format!(
+                "select --canister from: {}",
+                fleet
+                    .children
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )))
+        }
+        OperationStatus::Canister(state) => {
+            if selected.is_some_and(|name| {
+                state
+                    .plan
+                    .deployment
+                    .as_ref()
+                    .is_none_or(|d| d.canister != name)
+            }) {
+                return Err(Error::Invalid(
+                    "--canister does not match this retained operation".into(),
+                ));
+            }
+            Ok(state)
+        }
     }
-    if selected.is_some_and(|name| state["plan"]["deployment"]["canister"].as_str() != Some(name)) {
-        return Err(Error::Invalid(
-            "--canister does not match this retained operation".into(),
-        ));
-    }
-    Ok(state)
 }

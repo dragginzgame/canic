@@ -124,7 +124,7 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
     assert!(recovery::require_settled(&slot).is_ok());
     assert_eq!(evidence(&operation, &plan).unwrap(), Some(retained.clone()));
     assert_eq!(
-        crate::status(&dir, &id).unwrap()["effects"]["reconcile/0"],
+        serde_json::to_value(crate::status(&dir, &id).unwrap()).unwrap()["effects"]["reconcile/0"],
         "reply_retained"
     );
     let earlier = Status {
@@ -253,7 +253,7 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
     let mut invalid = plan;
     invalid.expires_at_ns += 1;
     assert!(invalid.digest().is_err());
-    let status = crate::status(&dir, &id).unwrap();
+    let status = serde_json::to_value(crate::status(&dir, &id).unwrap()).unwrap();
     assert_eq!(
         status["effects"],
         serde_json::json!({"stage":"not_submitted"})

@@ -9,6 +9,7 @@ use ic_platform::agent::Agent;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+pub(crate) mod list;
 #[cfg(test)]
 mod tests;
 const OBSERVATIONS: usize = 32;
@@ -445,9 +446,9 @@ pub(crate) fn status(
     digest: &str,
     plan: &Plan,
     bytes: &[u8],
-) -> Result<serde_json::Value> {
+) -> Result<crate::CanisterStatus> {
     let expected = manifest(plan, bytes)?;
-    let mut effects = serde_json::Map::new();
+    let mut effects = std::collections::BTreeMap::<String, String>::new();
     for step in steps(&expected)
         .into_iter()
         .chain((0..OBSERVATIONS).map(|i| format!("observe/{i}")))
@@ -459,7 +460,14 @@ pub(crate) fn status(
         effects.insert(step, operation::attempt_state(&path)?.into());
     }
     let publication = receipt(dir, plan, digest, &expected)?;
-    Ok(
-        serde_json::json!({"operation":digest,"plan":plan,"effects":effects,"receipt":null,"management":null,"publication":publication}),
-    )
+    Ok(crate::CanisterStatus {
+        operation: digest.into(),
+        plan: plan.clone(),
+        effects,
+        receipt: None,
+        management: None,
+        detail: crate::StatusDetail::Publication {
+            publication: publication.map(Box::new),
+        },
+    })
 }

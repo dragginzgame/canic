@@ -182,6 +182,9 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         initial["fleet_plan"]["root"]["created_at_ns"]
     );
     let creation = initial["operation"].as_str().unwrap();
+    let unpublished = cli(&dir, &["fleet", "artifact", "list"]);
+    assert!(unpublished["publications"].as_array().unwrap().is_empty());
+    assert!(unpublished["issues"].as_array().unwrap().is_empty());
     let mut deployed = Value::Null;
     for _ in 0..100 {
         deployed = call(&dir, "apply", creation, &signer);
@@ -194,6 +197,21 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     let store = CanisterId::from_text(deployed["store"]["canister"].as_str().unwrap()).unwrap();
     assert!(deployed["children"][0]["outcome"]["canister"].is_string());
     let application = deployed["children"][0]["outcome"]["canister"].clone();
+    let artifacts = cli(&dir, &["fleet", "artifact", "list"]);
+    let entries = artifacts["publications"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert!(artifacts["issues"].as_array().unwrap().is_empty());
+    assert_eq!(entries[0]["operation"], creation);
+    assert_ne!(entries[0]["publication_operation"], creation);
+    assert_eq!(
+        entries[0]["publication"]["store"]["canister"],
+        store.to_text()
+    );
+    assert_eq!(
+        entries[0]["artifact"]["sha256"],
+        initial["fleet_plan"]["child"]["artifact"]["sha256"]
+    );
+    assert_eq!(entries[0]["publication_retained"], true);
     println!(
         "Ready-dispatch fleet bootstrap: {} ms (local wall time, no schedule override)",
         started.elapsed().as_millis()
@@ -421,11 +439,29 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     assert_eq!(std::fs::read(dir.join("Cargo.lock")).unwrap(), lock);
     let publication = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(publication["action"], "publication");
+    let artifacts = cli(&dir, &["fleet", "artifact", "list"]);
+    assert_eq!(artifacts["publications"].as_array().unwrap().len(), 2);
+    let pending = artifacts["publications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["operation"] == publication["operation"])
+        .unwrap();
+    assert_eq!(pending["publication_retained"], false);
     call(
         &dir,
         "apply",
         publication["operation"].as_str().unwrap(),
         &signer,
+    );
+    let artifacts = cli(&dir, &["fleet", "artifact", "list"]);
+    assert!(artifacts["issues"].as_array().unwrap().is_empty());
+    assert!(
+        artifacts["publications"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["publication_retained"] == true)
     );
     let started = Instant::now();
     let child = cli(&dir, &["fleet", "plan", "--controller", &controller]);

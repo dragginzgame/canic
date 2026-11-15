@@ -139,6 +139,7 @@ have no aliases.
 | `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
 | `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
 | `fleet list` | Read fleet declarations; optional `--app APP` filters them. |
+| `fleet artifact list` | Read retained publication approvals/completion for the selected app, fleet and exact network. Includes materialized bootstrap publications; no network calls. `--json` retains full hashes and operation IDs. |
 | `fleet init FLEET --network ic` | Instantiate the selected app's shared definitions with no existing IDs; deploys nothing. |
 | `app canister add CANISTER` | Define a canister once for all selected app fleets; optional `--role`, `--parent` and `--wasm` describe its topology and artifact input. |
 | `app canister list` | List the selected app's shared definitions. |

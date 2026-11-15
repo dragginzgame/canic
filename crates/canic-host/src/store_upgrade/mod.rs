@@ -7,6 +7,8 @@ use canic_management_protocol::store_maintenance::{self as wire, Phase, Status};
 use ic_platform::agent::Agent;
 use std::path::{Path, PathBuf};
 
+mod continuation;
+pub use continuation::{StoreContinuation, store_continuation};
 #[cfg(test)]
 mod tests;
 
@@ -224,17 +226,6 @@ async fn verify(plan: &Plan, agent: &Agent) -> Result<()> {
     }
     Ok(())
 }
-fn needs_recovery(phase: Phase) -> bool {
-    matches!(
-        phase,
-        Phase::Closing
-            | Phase::StopIssued
-            | Phase::UploadIssued
-            | Phase::InstallIssued
-            | Phase::StartIssued
-            | Phase::ActivateIssued
-    )
-}
 
 pub(crate) async fn apply(
     dir: &Path,
@@ -304,12 +295,18 @@ pub(crate) async fn apply(
         if ready(&current) {
             break;
         }
-        if read_only && !needs_recovery(current.phase) && current.phase != Phase::Verifying {
+        let next = continuation::step(current.phase);
+        if read_only
+            && !matches!(
+                next,
+                StoreContinuation::RecoverIssued { .. } | StoreContinuation::VerifyCatalog { .. }
+            )
+        {
             break;
         }
         verify(plan, &agent).await?;
         let action = path(dir, index).join("continue");
-        if read_only || needs_recovery(current.phase) {
+        if read_only || matches!(next, StoreContinuation::RecoverIssued { .. }) {
             let reply = signed::reconcile(&action, plan, identity, icp, &agent).await?;
             let result: Status = ic_wire::decode(
                 &reply,
@@ -322,8 +319,8 @@ pub(crate) async fn apply(
             .map_err(supplier)?;
             admit(plan, &result)?;
         } else {
-            let (request, id, result) = match current.phase {
-                Phase::Stopped => (
+            let (request, id, result) = match next {
+                StoreContinuation::Install => (
                     call(
                         plan,
                         "install_store_maintenance",
@@ -337,7 +334,7 @@ pub(crate) async fn apply(
                     wire::INSTALL,
                     true,
                 ),
-                Phase::Verified => (
+                StoreContinuation::Activate => (
                     call(
                         plan,
                         "activate_store_maintenance",
@@ -410,9 +407,9 @@ pub(crate) async fn apply(
     })
 }
 
-pub(crate) fn status(dir: &Path, plan: &Plan) -> Result<serde_json::Value> {
+pub(crate) fn status(dir: &Path, plan: &Plan) -> Result<crate::CanisterStatus> {
     let end = next(dir)?;
-    let mut effects = serde_json::Map::new();
+    let mut effects = std::collections::BTreeMap::<String, String>::new();
     effects.insert(
         "stage".into(),
         operation::attempt_state(&dir.join("stage"))?.into(),
@@ -436,7 +433,14 @@ pub(crate) fn status(dir: &Path, plan: &Plan) -> Result<serde_json::Value> {
     } else {
         None
     };
-    Ok(
-        serde_json::json!({"operation":plan.digest()?, "plan":plan, "effects":effects, "receipt":receipt(dir, plan)?.map(|(r,_)|r), "management":null, "store_maintenance":current}),
-    )
+    Ok(crate::CanisterStatus {
+        operation: plan.digest()?,
+        plan: plan.clone(),
+        effects,
+        receipt: receipt(dir, plan)?.map(|(r, _)| r),
+        management: None,
+        detail: crate::StatusDetail::StoreMaintenance {
+            store_maintenance: current.map(Box::new),
+        },
+    })
 }

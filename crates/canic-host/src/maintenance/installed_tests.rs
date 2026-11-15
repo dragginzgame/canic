@@ -111,7 +111,9 @@ async fn root_maintenance_preserves_store_operation() {
         std::fs::read(path.join("install/signed.json")).unwrap(),
         signed
     );
-    assert!(crate::status(&journal, &id).unwrap()["receipt"].is_object());
+    assert!(
+        serde_json::to_value(crate::status(&journal, &id).unwrap()).unwrap()["receipt"].is_object()
+    );
     for side in ["custody-before", "custody-after"] {
         let reply = std::fs::read(path.join(side).join("reply.bin")).unwrap();
         assert_eq!(

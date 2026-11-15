@@ -41,16 +41,21 @@ pub use fleet_plan::{
 };
 pub use managed::{create_managed_plan, stored::StoredArtifact};
 pub use network::{Network, greet};
-pub use operation::{ApplyOutcome, ChildOutcome, Receipt, apply, reconcile, status};
+pub use operation::{
+    ApplyOutcome, CanisterStatus, ChildOutcome, FleetChildStatus, FleetStatus, FleetStepStatus,
+    ManagementStatus, OperationStatus, Receipt, StatusDetail, apply, reconcile, status,
+};
 pub use plan::{
     ManagedOwner, Plan, PlanAction, PlanInput, StoreMaintenance, UpgradeTarget, create_plan,
 };
+pub use publication::list::{FleetArtifact, FleetArtifacts, fleet_artifacts};
 pub use publication::{
     Publication, PublicationInput, PublicationProgress, create_publication_plan,
 };
 pub use signed::signing_principal;
 pub use starter::create_starter;
 pub use store_bootstrap::create_store_plan;
+pub use store_upgrade::{StoreContinuation, store_continuation};
 pub use wallet::{Wallet, WalletBalance, wallet, wallet_address};
 
 use std::time::{SystemTime, UNIX_EPOCH};
