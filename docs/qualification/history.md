@@ -7,6 +7,95 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.216.2 release qualification: 2026-11-15
+
+The sequential Linux `make -j1 ci` gate passed with all 281 captured input hashes
+unchanged. It includes 108 Host tests (one existing explicit ignore), 65 CLI tests,
+twelve installed Root cases, 26 Store cases, all three CLI publication journeys,
+five Blob cases and the effect, artifact-custody, profile, growth and endpoint
+checks, plus native/Wasm Clippy, Rustdoc, formatting and tooling agreement.
+The gate log is `target/qualification/release-0216-2-ci.log`; inputs, metadata,
+supplier review and delivery intent are under `target/evidence/0.216.2/release/`.
+
+Fresh supplier review leaves every selection unchanged. Timers 0.45.10 is now
+available; its module/command refactoring over 0.45.9 remains part of the deferred
+runtime-supplier maintenance batch. Blob retains the qualified 0.100.6 Git input;
+registry 0.82.1 lacks the admitted Service boundary. Newer Blob Git work remains
+deferred. Store/protocol remain the non-yanked registry 0.2.2 pair.
+After the gate, only the twelve product versions and three qualification references
+advance to 0.216.2; private qualification packages stay 0.0.0. No supplier update,
+crates.io publication or mainnet deployment is part of this release.
+
+## Selected application recipe build: 2026-11-15
+
+Pending 0.216.2 adds `app build --canister NAME` to the existing recipe owner.
+Omitting it retains all-recipe builds. Selection names an app canister, never a
+role or inferred Cargo package. All recipes are admitted before compilation;
+unknown selection and invalid recipes refuse before creating locks or outputs.
+Only selected recipes reach the existing locked artifact builder. JSON keeps the
+same canister-list shape, with one entry for a selected build.
+
+This reuses **Starter workflow simplification** research below at legacy
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, including `canister_build` tests and
+history `95bdb4ed61aaead6bddfc4a68f6e509063106f64`: package/workspace ownership
+comes from declarations. No new build owner, alias, configuration or dependency
+was introduced. The installed Store-upgrade witness removes its manual
+manifest/package/output argument assembly and uses the app recipe directly.
+
+The native preflight case and CLI context/help checks passed. The installed
+`fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`
+witness passed in 83.07s, including exact preservation of the unselected Root and
+Store artifact bytes and Cargo.lock, then publication and upgrade of the edited
+application at its original principal. Affected Host/CLI and publication Clippy,
+Host Rustdoc, formatting and tooling checks passed. Evidence is under
+`target/qualification/app-build-selection-*`; `make canic` installed the pending
+CLI and its help exposes the selector. No mainnet change or release was made.
+
+## Retained child delivery in operation status: 2026-11-15
+
+Pending 0.216.2 projects the existing validated `Delivery` from Host's creation
+and upgrade evidence readers instead of discarding it. Store-backed status adds
+`delivery` (nullable); inline status keeps its original JSON shape. Terminal
+output shows pin state, the original cache deadline in UTC and `prepare cache`
+in the effect table. It does not observe current cache contents or admit repair.
+
+This reuses the legacy research in **Versioned Wasm Store decision** below at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: durable artifact custody and management
+cache are separate, and readiness failures need useful diagnostics. The rewrite
+keeps the existing bounded effect authority; legacy cache reconstruction does
+not justify a retry allowance in this presentation change.
+
+Focused checks passed: the Host source-binding and JSON-shape cases, sixteen CLI
+status cases, the terminal-error safety case, affected native and publication
+Clippy, Host Rustdoc, formatting and tooling agreement. The installed
+`bootstrap_store_then_publish_resume_and_retain_versions` case passed in 30.15s,
+covering absent admission-only evidence, retained creation/upgrade pins and
+deadlines, exact manifests and unchanged earlier delivery. Logs are
+`target/qualification/delivery-*.log`; the fixture is
+`target/publication/run-895829`. `make canic` installed the pending CLI. Human and
+JSON status also succeeded after the simulator stopped, using only its retained
+journal (`delivery-status-human.txt` and `delivery-status.json` beside the logs).
+No runtime, wire contract, persistent format, supplier or dependency changed.
+
+The follow-up reproduced a retained delivery disappearing after a partial Root
+recovery reply (`delivery-history-before.log`). Both creation and upgrade readers
+now preserve that earlier evidence and reject backwards pin transitions or any
+change/removal of an observed cache deadline. Full observations that omit required
+delivery still refuse; partial replies cannot supply evidence never observed.
+This reuses the immutable-intent and late-callback research recorded below at the
+same legacy revision, without importing a retry workflow or adding a persisted
+record. The shared readers also serve continuation and fleet maintenance planning.
+
+Seven managed-operation and ten fleet-planning tests passed, including forward
+pin progression, partial replies, historical replay, shorter/longer/removed
+deadlines and explicit delivery loss for both child actions. The installed
+`fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`
+witness passed in 81.60s. Affected Host/CLI Clippy, Host Rustdoc, formatting and
+tooling checks passed; `make canic` installed the pending update. Evidence is in
+`target/qualification/delivery-history-*.log`. The command contract also corrects
+its stale two-artifact description to match the qualified Root, optional Store
+and one/two-child planner.
+
 ## 0.216.1 release qualification: 2026-11-15
 
 The complete sequential Linux `make -j1 ci` gate passed with all 280 captured

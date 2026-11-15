@@ -129,11 +129,19 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
             _ => root.wasm = Some("artifacts/app.wasm".into()),
         }
         std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
-        assert!(crate::build_app(&path, None).is_err());
+        assert!(crate::build_app(&path, None, None).is_err());
+        assert!(crate::build_app(&path, None, Some("app")).is_err());
         assert!(!destination.join("Cargo.lock").exists());
         assert!(!destination.join("artifacts").exists());
         assert!(!destination.join(".canic").exists());
     }
+    std::fs::write(&path, crate::config::encode_config(&original).unwrap()).unwrap();
+    assert!(matches!(
+        crate::build_app(&path, None, Some("missing")),
+        Err(Error::Invalid(_))
+    ));
+    assert!(!destination.join("Cargo.lock").exists());
+    assert!(!destination.join("artifacts").exists());
     std::fs::remove_dir_all(parent).unwrap();
 }
 

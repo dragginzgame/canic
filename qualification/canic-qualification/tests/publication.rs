@@ -1219,6 +1219,10 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         .unwrap();
     let admitted = apply("apply", child_id);
     assert_eq!(admitted["status"]["phase"], "Scheduled");
+    let status = cli(&dir, &["fleet", "status", child_id]);
+    // Admission alone carries no delivery observation; never infer a pin.
+    assert!(status.as_object().unwrap().contains_key("delivery"));
+    assert!(status["delivery"].is_null());
     let signed_stage = std::fs::read(child_dir.join("stage/signed.json")).unwrap();
     assert!(
         std::fs::metadata(child_dir.join("stage/arguments.bin"))
@@ -1265,6 +1269,15 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let child = created["canister"].as_str().unwrap();
     assert_eq!(created["module_hash"], inspected["sha256"]);
     assert_eq!(created["controller"], root.to_text());
+    let status = cli(&dir, &["fleet", "status", child_id]);
+    assert_eq!(status["delivery"]["state"], "Retained");
+    assert_eq!(status["delivery"]["reference"]["store"], store.to_text());
+    assert_eq!(
+        status["delivery"]["reference"]["manifest"],
+        status["plan"]["management"]["source"]["manifest"]
+    );
+    assert!(status["delivery"]["cache_deadline"].as_u64().is_some());
+    let creation_delivery = status["delivery"].clone();
     let canister_count = owner
         .instance()
         .get_subnet_metrics(subnet)
@@ -1311,6 +1324,21 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     owner.instance().auto_progress().await;
     let upgraded = apply("apply", upgrade_id);
     assert_eq!(upgraded["canister"], child);
+    let status = cli(&dir, &["fleet", "status", upgrade_id]);
+    assert_eq!(status["delivery"]["state"], "Retained");
+    assert_eq!(
+        status["delivery"]["reference"]["manifest"],
+        status["plan"]["management"]["source"]["manifest"]
+    );
+    assert!(status["delivery"]["cache_deadline"].as_u64().is_some());
+    assert_ne!(
+        status["delivery"]["operation"],
+        creation_delivery["operation"]
+    );
+    assert_eq!(
+        cli(&dir, &["fleet", "status", child_id])["delivery"],
+        creation_delivery
+    );
     assert_eq!(
         upgraded["module_hash"],
         hex(&ic_wasm_store_protocol::digest(&next))

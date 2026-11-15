@@ -707,6 +707,40 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         .unwrap()
     };
     assert_eq!(stored::creation(&plan, &encode(&custody)).unwrap(), status);
+    assert_delivery_history(&plan, custody.clone());
+    // Project the existing authenticated observation; status must not create a
+    // second source record or infer delivery from the approved manifest.
+    let evidence_dir = dir.join("delivery-evidence");
+    std::fs::create_dir_all(&evidence_dir).unwrap();
+    let projected = |plan: &Plan| {
+        crate::operation::status_loaded(&evidence_dir, &plan.digest().unwrap(), plan.clone(), bytes)
+    };
+    assert!(matches!(
+        projected(&plan).unwrap().detail,
+        crate::StatusDetail::StoredChild { delivery: None }
+    ));
+    let observation_dir = evidence_dir.join("observe/0");
+    std::fs::create_dir_all(&observation_dir).unwrap();
+    let reply = observation_dir.join("reply.bin");
+    for state in [
+        wire::PinState::Pending,
+        wire::PinState::Issued,
+        wire::PinState::Retained,
+    ] {
+        let delivery = &mut custody.sources[0].as_mut().unwrap().creation;
+        delivery.state = state;
+        delivery.cache_deadline = (state == wire::PinState::Retained).then_some(123);
+        let original = encode(&custody);
+        std::fs::write(&reply, &original).unwrap();
+        let value = projected(&plan).unwrap();
+        assert_eq!(
+            serde_json::to_value(&value).unwrap()["delivery"],
+            serde_json::to_value(&custody.sources[0].as_ref().unwrap().creation).unwrap()
+        );
+        assert_eq!(std::fs::read(&reply).unwrap(), original);
+        assert!(!evidence_dir.join("stage").exists());
+    }
+    custody.sources[0].as_mut().unwrap().creation = delivery.clone();
     // A successor Store binding selects the complete contract explicitly. The
     // old frame, another attempt or incomplete preservation cannot stand in for it.
     {
@@ -810,6 +844,8 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         stored::creation(&plan, &encode(&custody)),
         Err(Error::Invalid(_))
     ));
+    std::fs::write(&reply, encode(&custody)).unwrap();
+    assert!(matches!(projected(&plan), Err(Error::Invalid(_))));
     custody.sources[0].as_mut().unwrap().creation = delivery;
     custody.sources[0].as_mut().unwrap().creation.operation = request
         .value
@@ -870,9 +906,155 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         stored::upgraded(&plan, &encode(&custody)).unwrap(),
         upgraded
     );
+    assert_delivery_history(&plan, custody.clone());
+    std::fs::write(&reply, encode(&custody)).unwrap();
+    let value = projected(&plan).unwrap();
+    assert!(matches!(
+        value.management,
+        Some(crate::ManagementStatus::Upgrade(_))
+    ));
+    assert_eq!(
+        serde_json::to_value(&value).unwrap()["delivery"],
+        serde_json::to_value(&custody.sources[0].as_ref().unwrap().upgrades[0]).unwrap()
+    );
     custody.sources[0].as_mut().unwrap().upgrades[0]
         .reference
         .store = "rrkah-fqaaa-aaaaa-aaaaq-cai".into();
     assert!(stored::upgraded(&plan, &encode(&custody)).is_err());
+    std::fs::write(&reply, encode(&custody)).unwrap();
+    assert!(matches!(projected(&plan), Err(Error::Invalid(_))));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+// Both effect readers must retain delivery across partial recovery replies and
+// refuse later custody that would erase a pin or renew its cache deadline.
+fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::stored::Custody) {
+    use canic_management_protocol::{stored as wire, upgrade as protocol_upgrade};
+    let dir = directory();
+    let upgrading = plan.target().is_some();
+    let source = |value: &mut wire::Custody, delivery: wire::Delivery| {
+        let sources = value.sources[0].as_mut().unwrap();
+        if upgrading {
+            sources.upgrades[0] = delivery;
+        } else {
+            sources.creation = delivery;
+        }
+    };
+    let sources = custody.sources[0].as_ref().unwrap();
+    let mut delivery = if upgrading {
+        sources.upgrades[0].clone()
+    } else {
+        sources.creation.clone()
+    };
+    let write = |index: usize, value: &wire::Custody| {
+        let path = dir.join(format!("observe/{index}/reply.bin"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let bytes = ic_wire::encode(
+            value,
+            ic_wire::Encoding::Frame {
+                method: wire::CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            wire::LIMITS,
+        )
+        .unwrap();
+        std::fs::write(path, bytes).unwrap();
+    };
+    let read = || crate::operation::status_loaded(&dir, &plan.digest().unwrap(), plan.clone(), &[]);
+    for (index, state) in [
+        wire::PinState::Pending,
+        wire::PinState::Issued,
+        wire::PinState::Retained,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        delivery.state = state;
+        source(&mut custody, delivery.clone());
+        write(index, &custody);
+        let crate::StatusDetail::StoredChild {
+            delivery: Some(observed),
+        } = read().unwrap().detail
+        else {
+            panic!("retained delivery");
+        };
+        assert_eq!(*observed, delivery);
+        if state == wire::PinState::Issued {
+            let mut regressed = delivery.clone();
+            regressed.state = wire::PinState::Pending;
+            source(&mut custody, regressed);
+            write(index + 1, &custody);
+            assert!(matches!(read(), Err(Error::Invalid(_))));
+        }
+    }
+    delivery.cache_deadline = Some(plan.expires_at_ns);
+    source(&mut custody, delivery.clone());
+    // The later recovery reply contains child progress, but no delivery fields.
+    let partial = if upgrading {
+        let status = &mut custody.children[0].upgrades[0];
+        status.phase = protocol_upgrade::Phase::UploadIssued;
+        status.attempts = [1, 0];
+        status.requests = [Some([1; 32]), None];
+        status.previous_version = Some(1);
+        ic_wire::encode(
+            status,
+            ic_wire::Encoding::Frame {
+                method: wire::RECONCILE_UPGRADE,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap()
+    } else {
+        let status = &mut custody.children[0].creation;
+        status.phase = Phase::UploadIssued;
+        status.worker = Some("r7inp-6aaaa-aaaaa-aaabq-cai".into());
+        status.attempts = [1, 1, 0];
+        status.requests = [Some([1; 32]), Some([2; 32]), None];
+        ic_wire::encode(
+            status,
+            ic_wire::Encoding::Frame {
+                method: wire::RECONCILE,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .unwrap()
+    };
+    write(3, &custody);
+    let partial_path = dir.join("observe/4/reconcile/reply.bin");
+    std::fs::create_dir_all(partial_path.parent().unwrap()).unwrap();
+    std::fs::write(&partial_path, &partial).unwrap();
+    let crate::StatusDetail::StoredChild {
+        delivery: Some(observed),
+    } = read().unwrap().detail
+    else {
+        panic!("partial recovery must preserve earlier delivery");
+    };
+    assert_eq!(*observed, delivery);
+    // A repeated full observation is admissible; changed deadlines and pin
+    // regressions after the partial reply are not.
+    write(5, &custody);
+    assert!(read().is_ok());
+    for change in 0..5 {
+        let mut changed = delivery.clone();
+        match change {
+            0 => changed.cache_deadline = None,
+            1 => changed.cache_deadline = Some(plan.expires_at_ns - 1),
+            2 => changed.cache_deadline = Some(plan.expires_at_ns + 1),
+            3 => changed.state = wire::PinState::Issued,
+            _ => changed.state = wire::PinState::Pending,
+        }
+        source(&mut custody, changed);
+        write(5, &custody);
+        assert!(
+            matches!(read(), Err(Error::Invalid(_))),
+            "mutation {change}"
+        );
+        assert_eq!(std::fs::read(&partial_path).unwrap(), partial);
+    }
+    custody.sources[0] = None;
+    write(5, &custody);
+    assert!(matches!(read(), Err(Error::Invalid(_))));
     std::fs::remove_dir_all(dir).unwrap();
 }

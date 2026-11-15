@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.216.2] - 2026-11-15
+
+### 🔧 Changed
+
+Rebuild one app canister with its existing recipe, without spelling out its Cargo
+package or output path. Other canisters are not rebuilt. All recipes are validated
+first; existing lockfiles stay locked, and the command does not deploy:
+
+```sh
+# After editing the generated starter's application source:
+canic app build --app starter --canister app
+# Rebuild every recipe when intended:
+canic app build --app starter
+```
+
+`fleet status` now shows a Store-backed child's retained pin state and original
+cache preparation deadline, for creation and upgrade operations and nested fleet
+steps. The effect table calls Store delivery `prepare cache`; inline artifacts
+keep `upload`. These are local historical observations, not live cache checks or
+permission to repeat preparation or installation.
+
+For an existing Store-backed child or whole-fleet operation:
+
+```sh
+canic fleet status OPERATION --app starter --fleet local
+canic fleet status OPERATION --app starter --fleet local --json
+```
+
+JSON adds `delivery` only to Store-backed child status: `null` means no retained
+delivery observation; otherwise it contains the validated Root delivery record,
+including exact release, pin operation and nanosecond deadline. Existing fields,
+approvals, journals and inline status shapes are unchanged.
+
+Partial Root recovery replies now preserve earlier delivery evidence. Host
+refuses later observations that regress a pin or remove/change the original cache
+deadline, using the same reader for status, continuation and maintenance planning.
+
+### 🩹 Fixed
+
+Command failures use readable terminal text by default. `--json` preserves the
+existing structured error fields, and failures still exit unsuccessfully on
+stderr. Multiline diagnostics stay readable while terminal controls are escaped.
+
 ## [0.216.1] - 2026-11-15
 
 ### 🔧 Changed

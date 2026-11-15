@@ -91,10 +91,13 @@ pub(super) struct FleetScope {
 
 #[derive(Subcommand)]
 pub(super) enum AppCommand {
-    /// Build every app canister from its declared Cargo recipe; deploys nothing.
+    /// Build app canisters from their declared Cargo recipes; deploys nothing.
     Build {
         #[command(flatten)]
         selection: AppConfigArgs,
+        /// Build only this app canister's recipe; omit to build all canisters.
+        #[arg(long, value_name = "CANISTER")]
+        canister: Option<String>,
     },
     /// Define or list reusable app canisters; affects declarations for every fleet.
     #[command(subcommand)]

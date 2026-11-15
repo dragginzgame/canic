@@ -27,12 +27,39 @@ enum Output {
     Partial(Box<Output>),
 }
 
+fn error_text(error: &Error, json: bool) -> String {
+    let message = error.to_string();
+    if json {
+        let kind = match error {
+            Error::Invalid(_) => "invalid",
+            Error::Blocked(_) => "blocked",
+            Error::Supplier(_) => "supplier",
+            Error::Encode(_) | Error::Decode(_) => "codec",
+        };
+        return serde_json::json!({"error":kind, "message":message}).to_string();
+    }
+    let mut lines = message.split('\n');
+    let mut text = format!(
+        "Error: {}",
+        ic_host_text::escape::terminal_text(lines.next().unwrap_or_default())
+    );
+    for line in lines {
+        text.push_str("\n  ");
+        text.push_str(&ic_host_text::escape::terminal_text(line));
+    }
+    text
+}
+
 async fn run(cli: &Cli) -> canic_host::Result<Output> {
     let result = match &cli.command {
-        Commands::App(AppCommand::Build { selection }) => {
+        Commands::App(AppCommand::Build {
+            selection,
+            canister,
+        }) => {
             let built = canic_host::build_app(
                 &selection.config.path(selection.app.as_deref())?,
                 selection.app.as_deref(),
+                canister.as_deref(),
             )?;
             if !cli.json {
                 return Ok(Output::Text(progress::built(&built)));
@@ -659,17 +686,11 @@ async fn main() -> std::process::ExitCode {
         }
         Ok(Output::Partial(_)) => unreachable!("partial output is unwrapped once"),
         Err(error) => {
-            let kind = match &error {
-                Error::Invalid(_) => "invalid",
-                Error::Blocked(_) => "blocked",
-                Error::Supplier(_) => "supplier",
-                Error::Encode(_) | Error::Decode(_) => "codec",
-            };
-            eprintln!(
-                "{}",
-                serde_json::json!({"error":kind, "message":error.to_string()})
-            );
+            eprintln!("{}", error_text(&error, cli.json));
             std::process::ExitCode::FAILURE
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

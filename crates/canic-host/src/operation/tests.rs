@@ -60,6 +60,10 @@ fn typed_status_preserves_json_evidence_and_absent_field_shapes() {
     assert_eq!(serde_json::to_value(&status).unwrap(), expected);
     status.management = None;
     expected["management"] = serde_json::Value::Null;
+    status.detail = StatusDetail::StoredChild { delivery: None };
+    expected["delivery"] = serde_json::Value::Null;
+    assert_eq!(serde_json::to_value(&status).unwrap(), expected);
+    expected.as_object_mut().unwrap().remove("delivery");
     status.detail = StatusDetail::Publication { publication: None };
     expected["publication"] = serde_json::Value::Null;
     assert_eq!(serde_json::to_value(&status).unwrap(), expected);

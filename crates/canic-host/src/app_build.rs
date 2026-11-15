@@ -19,15 +19,25 @@ pub struct BuiltCanister {
     pub artifact: Artifact,
 }
 
-/// Build all declared app recipes, initializing absent workspace locks once.
+/// Build all declared app recipes or one selected canister, initializing absent workspace locks once.
+/// All recipes are validated before building; selection does not hide invalid app declarations.
 /// Existing locks are preserved and compilation always uses `--locked`.
 /// # Errors
-/// Refuses missing recipes, non-workspace manifests, duplicate output paths or failed builds.
-pub fn build_app(path: &Path, app: Option<&str>) -> Result<Vec<BuiltCanister>> {
+/// Refuses unknown canisters, missing recipes, non-workspace manifests, duplicate output paths or failed builds.
+pub fn build_app(
+    path: &Path,
+    app: Option<&str>,
+    canister: Option<&str>,
+) -> Result<Vec<BuiltCanister>> {
     let config = crate::load_config(path)?;
     let (_, app) = config.select_app(app)?;
     if app.canisters.is_empty() {
         return Err(Error::Invalid("app has no canister build recipes".into()));
+    }
+    if let Some(name) = canister
+        && !app.canisters.contains_key(name)
+    {
+        return Err(Error::Invalid(format!("app has no canister named {name}")));
     }
     let base = path.parent().unwrap_or(Path::new("."));
     let mut recipes = Vec::new();
@@ -59,6 +69,9 @@ pub fn build_app(path: &Path, app: Option<&str>) -> Result<Vec<BuiltCanister>> {
     }
     let mut built = Vec::new();
     for (name, recipe, manifest, output) in recipes {
+        if canister.is_some_and(|selected| selected != name) {
+            continue;
+        }
         let workspace = manifest
             .parent()
             .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?;

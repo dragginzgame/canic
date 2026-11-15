@@ -255,6 +255,35 @@ pub(crate) fn delivery<A: Serialize>(
     }
     Ok(())
 }
+
+/// Combine already source-validated observations without forgetting a committed
+/// pin or replacing the original cache deadline. Partial recovery replies carry
+/// no delivery fields; they cannot revoke evidence retained by an earlier read.
+pub(super) fn retain_delivery(
+    previous: Option<&wire::Delivery>,
+    observed: Option<wire::Delivery>,
+) -> Result<Option<wire::Delivery>> {
+    let Some(observed) = observed else {
+        return Ok(previous.cloned());
+    };
+    if let Some(previous) = previous
+        && (matches!(
+            (previous.state, observed.state),
+            (wire::PinState::Issued, wire::PinState::Pending)
+                | (
+                    wire::PinState::Retained,
+                    wire::PinState::Pending | wire::PinState::Issued
+                )
+        ) || (previous.cache_deadline.is_some()
+            && previous.cache_deadline != observed.cache_deadline))
+    {
+        return Err(Error::Invalid(
+            "Root delivery evidence regressed or replaced the original cache deadline".into(),
+        ));
+    }
+    Ok(Some(observed))
+}
+
 pub(super) fn creation(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     creation_evidence(plan, bytes).map(|(status, _)| status)
 }

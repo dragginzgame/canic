@@ -567,14 +567,26 @@ pub(crate) fn status_loaded(
             }
         }
     }
-    let management = match &plan.action {
+    let evidence = match &plan.action {
         crate::PlanAction::UpgradeChild { .. } => {
-            crate::managed::upgrade::evidence(dir, &plan)?.map(ManagementStatus::Upgrade)
+            crate::managed::upgrade::evidence_with_source(dir, &plan)?
+                .map(|(status, delivery)| (ManagementStatus::Upgrade(status), delivery))
         }
-        crate::PlanAction::CreateChild(_) => {
-            crate::managed::evidence(dir, &plan)?.map(ManagementStatus::Creation)
-        }
+        crate::PlanAction::CreateChild(_) => crate::managed::evidence_with_source(dir, &plan)?
+            .map(|(status, delivery)| (ManagementStatus::Creation(status), delivery)),
         _ => None,
+    };
+    let (management, delivery) =
+        evidence.map_or((None, None), |(status, delivery)| (Some(status), delivery));
+    let detail = if plan
+        .management()
+        .is_some_and(|owner| owner.source.is_some())
+    {
+        StatusDetail::StoredChild {
+            delivery: delivery.map(Box::new),
+        }
+    } else {
+        StatusDetail::Deployment {}
     };
     Ok(CanisterStatus {
         operation: digest.into(),
@@ -582,7 +594,7 @@ pub(crate) fn status_loaded(
         effects,
         receipt,
         management,
-        detail: StatusDetail::Deployment {},
+        detail,
     })
 }
 

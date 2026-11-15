@@ -139,7 +139,7 @@ have no aliases.
 | Command | Input and scope |
 | --- | --- |
 | `app init APP --fleet FLEET --network ic` | Declare an app in `--config PATH`, or add `--source DIRECTORY` (checkout override: `--canic-source CHECKOUT`) to generate a new standalone workspace and its own config. No deployment. |
-| `app build` | Build the selected app’s declared workspace/package recipes, preparing missing Cargo locks once. Existing locks are preserved. |
+| `app build` | Build the selected app’s declared workspace/package recipes; `--canister NAME` builds only that canister. Prepare missing Cargo locks once and preserve existing locks. |
 | `app list` | List apps in the current/direct-child configs, or only `--config PATH`. Duplicate names require explicit config selection. |
 | `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `ic-wasm-store` builds from the workspace's locked supplier protocol source. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
 | `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
@@ -290,6 +290,16 @@ names a Cargo workspace and resolves beside the config; each supplied Root/Store
 points to its Canic workspace. `canic app build --app starter` builds all declared
 recipes and writes their Wasm outputs. Older/custom definitions need explicit
 recipes before using app build; Canic does not guess packages from roles.
+After editing one application's canister, select its definition name to rebuild
+only that output:
+
+```sh
+canic app build --app starter --canister app
+```
+
+All app recipes are still checked before compilation. Other canister recipes are
+not built; no fleet, identity or deployment approval is needed. Omit `--canister`
+to rebuild the whole app. The artifact builder continues to own compilation.
 For starters generated before the Store extraction, change the Store recipe's
 `build.package` from `canic-wasm-store` to `ic-wasm-store`, retaining its Canic
 manifest path. This changes future builds, not existing approvals or deployments.

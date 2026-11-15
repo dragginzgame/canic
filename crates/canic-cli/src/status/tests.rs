@@ -1,6 +1,64 @@
 use super::*;
 use canic_host::Plan;
 
+#[test]
+fn stored_delivery_keeps_pin_evidence_separate_from_current_cache_and_retry_authority() {
+    use canic_management_protocol::stored::{Delivery, PinState};
+    let mut delivery: Delivery = serde_json::from_value(serde_json::json!({
+        "reference": {
+            "store": "aaaaa-aa",
+            "manifest": {
+                "release": {"name": "app", "version": "v1"},
+                "hash": vec![1; 32], "bytes": 8, "chunks": vec![[1; 32]],
+            },
+        },
+        "operation": vec![2; 32], "state": "Pending", "cache_deadline": null,
+    }))
+    .unwrap();
+    for status in [
+        ManagementStatus::Creation(canic_management_protocol::Status {
+            phase: canic_management_protocol::Phase::UploadIssued,
+            ..Default::default()
+        }),
+        ManagementStatus::Upgrade(canic_management_protocol::upgrade::Status {
+            phase: canic_management_protocol::upgrade::Phase::UploadIssued,
+            ..Default::default()
+        }),
+    ] {
+        for (state, expected) in [
+            (PinState::Pending, "not dispatched in this observation"),
+            (PinState::Issued, "issued; retention outcome unknown"),
+            (
+                PinState::Retained,
+                "retained for this exact operation and release",
+            ),
+        ] {
+            delivery.state = state;
+            delivery.cache_deadline = (state == PinState::Retained).then_some(123);
+            let detail = StatusDetail::StoredChild {
+                delivery: Some(Box::new(delivery.clone())),
+            };
+            let before = serde_json::to_value(&detail).unwrap();
+            let text = management::render(Some(&status), &detail, false);
+            assert!(text.contains(expected), "{text}");
+            assert!(text.contains("prepare cache"));
+            assert!(text.contains("Cache contents are not observed here"));
+            assert!(text.contains("do not authorize re-preparation or installation replay"));
+            if state == PinState::Retained {
+                assert!(text.contains("1970-01-01 00:00:00 UTC (original)"));
+                assert!(!text.contains("no dispatch retained"));
+            } else {
+                assert!(text.contains("no dispatch retained in this observation"));
+            }
+            assert_eq!(serde_json::to_value(&detail).unwrap(), before);
+        }
+    }
+    let unknown = management::render(None, &StatusDetail::StoredChild { delivery: None }, false);
+    assert!(unknown.contains("pin and cache preparation are unknown"));
+    assert!(!unknown.contains("Store pin:"));
+    assert!(!management::render(None, &StatusDetail::Deployment {}, false).contains("Store"));
+}
+
 // Existing JSON-shaped examples remain output-contract fixtures; production callers
 // now carry typed evidence and never decode their own presentation output.
 fn fixture(value: &serde_json::Value) -> Result<CanisterStatus> {

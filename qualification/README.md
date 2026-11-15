@@ -127,8 +127,10 @@ The same witness calls the generated greeting before and after editing its actua
 source and rebuilding through the public artifact builder. The changed executable
 keeps the original application principal. An unchanged `app build` preserves all
 three artifact identities and Cargo.lock and produces no new deployment approval.
-The later targeted app build preserves the feature-selected infrastructure used
-for maintenance fault qualification. No alternate greeting artifact stands in
+The later `app build --canister app` selects the declared recipe and returns only
+that canister, preserving the exact Root/Store artifact bytes and Cargo.lock used
+for maintenance fault qualification. Unknown selection and invalid recipes refuse
+before lock/output creation in the native checks. No alternate greeting artifact stands in
 for the generated application upgrade.
 Actual Root calls acquire pins, install a child larger than the former inline
 limit, and upgrade it using the Store cache. Lost pin/cache callbacks recover
@@ -143,6 +145,14 @@ unchanged application custody, interrupted upload, read-only
 reconciliation, exact resumption, immutable version reuse, certified-code refusal
 and signed observation custody. It needs the prepared simulator and ICP signer,
 uses synthetic cycles, and leaves Root stable memory unchanged during publication.
+The publication/resumption case also checks `fleet status` delivery evidence:
+admission alone stays unknown; completed creation and upgrade expose their own
+retained pin, exact manifest and original cache deadline without changing the
+earlier operation. Native cases refuse substituted source evidence, backward pin
+transitions and changed or removed cache deadlines across observation history.
+Partial recovery replies preserve earlier delivery; explicit loss in a later full
+observation refuses. Inline JSON shapes remain unchanged; terminal tests distinguish
+pin retention from live cache readiness and replay permission.
 The same named journey creates a child from a release larger than the inline
 limit, refuses changed Store control, recovers missing admission evidence, upgrades
 the same child after cache clearing, and calls the upgraded greeting application.

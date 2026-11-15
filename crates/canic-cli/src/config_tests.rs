@@ -1120,6 +1120,7 @@ fn source_generation_defaults_its_checkout_and_owns_its_new_config() {
 #[test]
 fn commands_reject_context_they_do_not_use() {
     for args in [
+        vec!["app", "build", "--canister", "app", "--fleet", "mainnet"],
         vec![
             "app", "canister", "add", "backend", "--app", "hello", "--fleet", "mainnet",
         ],

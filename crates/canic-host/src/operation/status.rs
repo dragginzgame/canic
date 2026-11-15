@@ -1,6 +1,6 @@
 //! Typed local evidence. JSON is an output format, never an internal transport.
 use crate::{Cancellation, FleetPlan, Plan, PublicationProgress, Receipt};
-use canic_management_protocol::{Status, store_maintenance, upgrade};
+use canic_management_protocol::{Status, store_maintenance, stored, upgrade};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -42,12 +42,17 @@ pub enum ManagementStatus {
     Upgrade(upgrade::Status),
 }
 
-/// Additional evidence owned by publication or Store maintenance.
+/// Additional evidence owned by artifact delivery, publication or Store maintenance.
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum StatusDetail {
     /// Deployment has no additional fields.
     Deployment {},
+    /// Store-backed child delivery retained from authenticated Root observations.
+    StoredChild {
+        /// No observation means unknown, including after an admission-only reply.
+        delivery: Option<Box<stored::Delivery>>,
+    },
     /// Publication completion is distinct from deployment completion.
     Publication {
         /// Validated retained publication, or an unconfirmed outcome.

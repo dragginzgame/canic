@@ -163,6 +163,10 @@ pub(crate) fn evidence_with_source(
                     continue;
                 }
                 validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
+                let source = super::stored::retain_delivery(
+                    latest.as_ref().and_then(|(_, source)| source.as_ref()),
+                    source,
+                )?;
                 latest = Some((status, source));
             }
         }

@@ -100,9 +100,11 @@ not modify existing projects or migrate retained inline fleets.
 
 After creation completes, change and rebuild one child. For an unpublished
 artifact, planning returns publication authority first. Apply it, then replan
-and review installation:
+and review installation. A generated app recipe can rebuild just the selected
+child while keeping the existing Root and Store artifacts:
 
 ```sh
+canic app build --app starter --canister app
 canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
 canic fleet apply PUBLICATION_OPERATION --app starter --fleet mainnet --identity canic-mainnet
 canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
@@ -486,6 +488,25 @@ conversion remain pending. Root-driven Store
 maintenance and fleet CLI integration are qualified above. The management-cache
 listing has a bounded 64 KiB reply decoder; an oversized
 listing blocks preparation/recovery rather than allocating without a bound.
+
+Inspect a retained child creation, child upgrade or whole-fleet operation locally:
+
+```sh
+canic fleet status OPERATION --app starter --fleet local
+canic fleet status OPERATION --app starter --fleet local --json
+```
+
+Status shows the pin state and original cache preparation deadline from retained
+authenticated Root observations. Partial recovery replies update child progress
+without erasing earlier delivery evidence. A later full observation cannot move
+a pin backwards, remove a retained deadline or replace it with a different one;
+conflicting journals refuse status and further operation processing. Admission-only
+replies contain no delivery evidence and display unknown until it is observed,
+even when a release is approved.
+Store-backed child JSON includes `delivery` (or `null`); inline children omit it.
+The effect table distinguishes `prepare cache` from inline `upload`. Neither a
+retained pin nor a past preparation establishes current cache contents. Status
+does not call Root or Store, sign requests or grant a new repair allowance.
 
 The initial bounded contract accepts raw artifacts up to 8 MiB in 256 KiB chunks.
 The default quota reserves 128 MiB of distinct artifact payloads and 1,024 release

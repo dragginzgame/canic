@@ -469,7 +469,8 @@ owns up to 8 MiB per artifact and the derived management cache.
 
 ## Remaining work
 
-This qualifies a generated two-canister fleet through one CLI approval. It does
+The generated starter qualifies Root, a separate Store and one application
+through one CLI approval, with a separate two-application witness. It does
 not yet admit larger trees, active-work Root maintenance, unbounded upgrade history,
 cascading discovery or subtree operations. Root maintenance preserves
 its authority and child identity; the stateless greeting makes no application

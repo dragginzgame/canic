@@ -489,36 +489,30 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         "unchanged"
     );
 
-    // Rebuild the actual generated app. The infrastructure now selects
-    // qualification-only feature artifacts, so use the public single-artifact
-    // builder rather than replacing those owners with the default build recipes.
+    // Rebuild only the generated app through its declared recipe. Infrastructure
+    // now selects feature artifacts and must not be replaced by default builds.
+    let infrastructure = ["root", "store"].map(|name| {
+        let path = PathBuf::from(
+            config["apps"]["demo"]["canisters"][name]["wasm"]
+                .as_str()
+                .unwrap(),
+        );
+        let bytes = std::fs::read(&path).unwrap();
+        (path, bytes)
+    });
     let source = dir.join("starter-app/src/lib.rs");
     let original = std::fs::read_to_string(&source).unwrap();
     let changed = original.replace("Hello from Canic", "Hello from rebuilt starter");
     assert_ne!(changed, original);
     std::fs::write(&source, changed).unwrap();
-    let rebuilt = Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args([
-            "artifact",
-            "build",
-            "--manifest",
-            dir.join("Cargo.toml").to_str().unwrap(),
-            "--package",
-            config["apps"]["demo"]["canisters"]["app"]["build"]["package"]
-                .as_str()
-                .unwrap(),
-            "--output",
-            dir.join("artifacts/app.wasm").to_str().unwrap(),
-            "--json",
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        rebuilt.status.success(),
-        "{}",
-        String::from_utf8_lossy(&rebuilt.stderr)
-    );
-    let replacement: Value = serde_json::from_slice(&rebuilt.stdout).unwrap();
+    let rebuilt = cli(&dir, &["app", "build", "--canister", "app"]);
+    let selected = rebuilt["canisters"].as_array().unwrap();
+    assert_eq!(selected.len(), 1);
+    let replacement = &selected[0];
+    assert_eq!(replacement["canister"], "app");
+    for (path, bytes) in infrastructure {
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
     assert_eq!(std::fs::read(dir.join("Cargo.lock")).unwrap(), lock);
     let publication = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(publication["action"], "publication");

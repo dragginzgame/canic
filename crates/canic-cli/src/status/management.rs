@@ -1,21 +1,59 @@
 //! Explain retained Root evidence without granting recovery or replay authority.
-use canic_host::ManagementStatus;
-use canic_management_protocol::{Failure, Phase, upgrade};
+use canic_host::{ManagementStatus, StatusDetail};
+use canic_management_protocol::{Failure, Phase, stored::PinState, upgrade};
 use ic_host_text::{
     escape::terminal_text,
     table::{self, Alignment, Options},
 };
 use std::fmt::Write as _;
 
-pub(super) fn render(value: Option<&ManagementStatus>, receipt: bool) -> String {
-    let Some(value) = value else {
-        return "Root evidence: none retained; admission and progress are unknown.\nNext: inspect the host attempt below. Keep its original operation and signed attempt; absence of Root evidence does not prove no effect.\n".into();
-    };
+pub(super) fn render(
+    value: Option<&ManagementStatus>,
+    detail: &StatusDetail,
+    receipt: bool,
+) -> String {
     let mut output = String::new();
+    let upload = if let StatusDetail::StoredChild { delivery } = detail {
+        match delivery {
+            None => output.push_str(
+                "Store delivery: no retained observation; pin and cache preparation are unknown.\n",
+            ),
+            Some(delivery) => {
+                writeln!(
+                    output,
+                    "Store pin: {}",
+                    match delivery.state {
+                        PinState::Pending => "not dispatched in this observation",
+                        PinState::Issued => "issued; retention outcome unknown",
+                        PinState::Retained => "retained for this exact operation and release",
+                    }
+                )
+                .expect("String write");
+                match delivery.cache_deadline {
+                    Some(deadline) => writeln!(
+                        output,
+                        "Cache preparation deadline: {} (original)",
+                        super::utc(deadline)
+                    )
+                    .expect("String write"),
+                    None => output
+                        .push_str("Cache preparation: no dispatch retained in this observation.\n"),
+                }
+            }
+        }
+        output.push_str("Cache contents are not observed here. Missing chunks do not authorize re-preparation or installation replay.\n");
+        "prepare cache"
+    } else {
+        "upload"
+    };
+    let Some(value) = value else {
+        output.push_str("Root evidence: none retained; admission and progress are unknown.\nNext: inspect the host attempt below. Keep its original operation and signed attempt; absence of Root evidence does not prove no effect.\n");
+        return output;
+    };
     if let ManagementStatus::Upgrade(status) = value {
         writeln!(output, "Retained Root phase: {:?}", status.phase).expect("String write");
         output.push_str(&dispatches(
-            &["upload", "upgrade"],
+            &[upload, "upgrade"],
             &status.attempts,
             &status.requests,
         ));
@@ -32,7 +70,7 @@ pub(super) fn render(value: Option<&ManagementStatus>, receipt: bool) -> String 
     } else if let ManagementStatus::Creation(status) = value {
         writeln!(output, "Retained Root phase: {:?}", status.phase).expect("String write");
         output.push_str(&dispatches(
-            &["create", "upload", "install"],
+            &["create", upload, "install"],
             &status.attempts,
             &status.requests,
         ));

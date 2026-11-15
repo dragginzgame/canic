@@ -137,6 +137,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         }
         output.push_str(&management::render(
             state.management.as_ref(),
+            &state.detail,
             receipt.is_some(),
         ));
     }
@@ -291,6 +292,7 @@ fn render_fleet(state: &canic_host::FleetStatus, journal: &Path) -> Result<Strin
             writeln!(output, "\nChild: {}", terminal_text(&child.name)).expect("String write");
             output.push_str(&management::render(
                 step.management.as_ref(),
+                &step.detail,
                 step.receipt.is_some(),
             ));
         }

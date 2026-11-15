@@ -393,7 +393,7 @@ deployment; a selector may be omitted only when its choice is unique. See the
 
 | Journey | Commands |
 | --- | --- |
-| Initialize and build | `canic app init APP --fleet FLEET --network NETWORK`, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
+| Initialize and build | `canic app init APP --fleet FLEET --network NETWORK`, `canic app build [--canister SLOT]` from declared recipes, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
 | List local declarations | `canic app list`, `canic fleet list`, optionally `--app APP` for fleets |
 | Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
 | Define reusable canisters | `canic app canister add SLOT --app APP [--role ROLE] [--parent SLOT] [--wasm PATH]`, `canic app canister list --app APP`; app-owned topology and artifact inputs, shared by all fleets |
@@ -406,9 +406,10 @@ deployment; a selector may be omitted only when its choice is unique. See the
 Only structured output (`--json`) is global. App/fleet selection and journal
 arguments belong to deployment actions, not artifact inspection, saved-report
 viewing or wallet queries. Without a canister, Wasm override or target,
-`fleet plan` consumes the selected fleet's two declared Root/app artifacts. It
-refuses other trees, existing bindings and competing individual plans rather than
-deploying a partial fleet. Its immutable approval names the future Root as the
+`fleet plan` consumes the selected fleet's declared Root, optional Store and one
+or two application artifacts. Fresh creation refuses unsupported trees, existing
+bindings and competing individual plans rather than deploying a partial fleet.
+Its immutable approval names the future Root as the
 typed output of its approved creation. Root and child signing/evidence remain
 with the same existing effect owners; the journal lock covers their composition.
 Replanning identical desired inputs returns original authority, including after
