@@ -105,7 +105,14 @@ pub(crate) fn permits_upgrade(dir: &Path, fleet: &FleetPlan, proposed: &Plan) ->
     if fleet.store.is_some() && super::store_receipt(dir, fleet)?.is_none() {
         return Ok(false);
     }
-    let Some((child, receipt)) = child_completion(dir, fleet, Slot::First)? else {
+    let Some(definition) = fleet
+        .children
+        .iter()
+        .find(|child| proposed.deployment.as_ref() == Some(&child.deployment))
+    else {
+        return Ok(false);
+    };
+    let Some((child, receipt)) = child_completion(dir, fleet, definition.slot)? else {
         return Ok(false);
     };
     Ok(proposed.deployment == child.deployment

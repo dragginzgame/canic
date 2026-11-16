@@ -7,6 +7,136 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.216.4 release qualification: 2026-11-16
+
+The final sequential Linux `make -j1 ci` gate passed with all 290 captured inputs
+unchanged. It includes 110 Host tests (one existing ignore), 68 CLI tests,
+14 installed Root cases (two existing predecessor ignores), 26 Store cases,
+three publication journeys and five Blob cases, plus the effect, artifact-custody,
+profile, growth and endpoint checks and native/Wasm linting/documentation.
+The first gate found an older installed fixture expecting the pre-slot-label
+heading; the assertion was corrected and the full gate rerun. Both logs remain
+under `target/qualification/release-0216-4-ci*`; input and release evidence are
+under `target/evidence/0.216.4/release/`.
+
+Fresh registry review confirms current non-yanked first-party registry selections.
+Topology remains at its current Git 0.106.1 revision. Blob retains the qualified
+Service Git 0.100.6 input; current upstream 0.100.10 provider/browser work and its
+transitive Wire refresh remain deferred to the next requested Blob maintenance
+batch. This release changes no supplier selections.
+
+After the gate, twelve product package versions and three qualification references
+advance to 0.216.4; private qualification packages remain 0.0.0. GitHub delivery is
+the selected effect. No crates.io publication or mainnet deployment is included.
+The two-child runtime bound remains explicit; the release improves observation,
+report identity and retained-slot upgrade planning without a new allocation engine.
+
+## Named upgrades preserve each child's allocation identity: 2026-11-16
+
+Pending 0.216.4 removes first-child assumptions from the existing named upgrade
+planner. It carries the original slot alongside the controller from retained
+creation evidence; fleet reservation admission resolves that named child rather
+than always reading First. The single-child declaration restriction now applies
+to creation only. Exact target, network, previous module, Root code, completion
+and original signed-attempt constraints remain. No slot option, new allocator,
+record format, supplier dependency or deployed runtime change is introduced.
+
+This reuses the pinned legacy research under “First Root-owned child upgrade” and
+“Managed-child CLI approval” below: revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, component operation/workflow, transport
+and lifecycle regressions, and their recorded path history. Preserve immutable
+target identity and uncertainty; the historical single-child declaration guard
+does not apply to an upgrade with exact retained allocation custody.
+
+Eleven focused Host tests pass, including the named-upgrade custody fixture for
+legacy None, explicit First and Second. It rejects missing completion, changed
+targets/modules/funding and changed pending authority, preserves creation records,
+and still refuses ambiguous new allocation before opening a journal. The installed
+multi-child CLI journey passes with a named second-child upgrade, lost-reply
+recovery, unchanged later planning and complete Root maintenance. Its first run
+exposed the overbroad creation guard; the corrected focused rerun passes.
+Host and Root-witness Clippy, Host Rustdoc, formatting and tooling agreement pass;
+logs are under `target/qualification/named-child-upgrade-*`.
+
+Section 8 now explicitly distinguishes today's two-slot bound from future
+operator-approved capacity and spare pools. General allocation requires stable
+IDs, a bounded collection and qualified preservation, not more fixed enum variants.
+This increment does not implement that collection or increase admitted capacity.
+
+## Child report identity and naming: 2026-11-16
+
+Pending 0.216.4 gives terminal and HTML child reports one shared slot label:
+the stable physical slot plus an unambiguous local name, falling back to the
+reported principal. Legacy None and explicit First refer to the same slot.
+Conflicting retained names cannot select whichever record appears first, and
+HTML now says Child rather than incorrectly calling each canister an application.
+The existing role/name projection moved from terminal-only ownership to the
+shared fleet module; no duplicate resolver, tree edges or identity registry was
+added. This reuses the legacy application-tree/name-ambiguity research recorded
+below at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, including its implementation,
+regressions and path history. Declared parentage remains independent of controllers.
+
+All 19 CLI fleet tests pass, including escaped fallback identities, repeated and
+conflicting names, record-order independence, network/owner separation, unknown
+reports and unchanged JSON. Both affected installed CLI journeys pass with actual
+terminal/HTML assertions, including discovery without a local journal. The first
+run exposed stale expected labels and an attempted overwrite of a saved report;
+the fixtures now retain a distinct report per observation and the focused rerun
+passes. CLI and Root-witness Clippy, formatting and tooling agreement pass.
+Logs are under `target/qualification/child-labels-*`. `make canic` installs the
+pending CLI; package versions remain 0.216.3 until release. No browser was opened.
+
+## Child discovery without a local deployment journal: 2026-11-16
+
+Pending 0.216.4 observes both supported child slots of each selected management
+owner. Previously the local operation list selected slots, so a child admitted
+through another operator's journal could be absent. The first-slot legacy query
+and explicit First slot now share retained creation/upgrade constraints without
+changing any persisted records. Empty unplanned second slots stay hidden;
+unavailable observations produce an inventory issue rather than an empty claim.
+The existing owner/global time budgets and single metrics observation remain.
+
+Research reuses the application-tree implementation, regression and history review
+below at legacy `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`. It also inspected
+`crates/canic-host/src/registry_discovery/mod.rs` and
+`crates/canic-host/src/canister_protocol/registry_read/mod.rs`, with discovery path
+history `aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f` and
+`aed32be2afbaf66d7e2867292da52f75ce028e41`. Retain the separation between
+observation and custody/authority. Today's two fixed slots need neither legacy's
+Coordinator registry nor its release-schema/partition discovery machinery.
+
+Thirteen focused Host inventory tests pass, including legacy/explicit first-slot
+approval mismatch rejection and unchanged records. The installed
+`discovers_both_children_without_local_deployment_records` witness passes with the
+real CLI, Root and two children admitted in reverse order. It verifies observed
+controllers, unchanged Root stable bytes, no local journal, one metrics report
+per owner and unknown status for an older Root's missing second-slot endpoint.
+The existing `multi_child_cli_creation_upgrades_maintenance_and_views` also passes.
+Host/CLI and Root-witness Clippy, formatting and tooling agreement pass. Logs are
+under `target/qualification/child-discovery-*`.
+
+This remains sampled public inventory, not authenticated completion, atomic
+membership or recursive cascading discovery. No canister executable, state format,
+supplier dependency or mainnet deployment changes.
+
+## Fleet browser metrics projection: 2026-11-15
+
+Pending 0.216.4 completes the existing observation surface: a collapsed timer
+section in saved/live HTML uses the same counter rows as terminal details.
+It preserves decimal totals, overflow quality, initialization windows and unknown
+reports without adding requests, rates, persistent history or another collector.
+Legacy research reused the metrics work below and inspected
+`crates/canic-host/src/observatory/view/metrics/mod.rs` at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, with path history `ad8852d`:
+retain exact text, source reset identity and unavailable state; the legacy cached
+family/registration hierarchy is unnecessary for this fixed aggregate report.
+
+All 18 focused CLI `fleet::` tests and CLI Clippy pass; logs are under
+`target/qualification/metrics-view-*`. The projection checks cover maximum values,
+unknown versus zero, escaped identity/error text and unchanged input snapshots.
+No browser window, live deployment or installed-runtime requalification is part
+of this host-only change. The recording and endpoint contracts remain 0.216.3's.
+
 ## 0.216.3 release qualification: 2026-11-15
 
 The sequential Linux `make -j1 ci` gate passed with all 288 captured input hashes

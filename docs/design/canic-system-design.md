@@ -614,6 +614,15 @@ journey qualifies up to two fixed child slots and bounded serial upgrades, not g
 admission, scaling, sharding or keyed-instance APIs. Keep those limits visible;
 do not add unused configuration variants or a general pool catalogue in advance.
 
+The current First/Second slots are an implementation qualification bound, not
+the intended application capacity policy or a pool of spare canisters. General
+allocation uses stable allocation identities in a bounded collection, with
+application demand constrained by explicit operator-approved capacity and funding.
+Do not extend the fixed enum with Third/Fourth variants. Its replacement must
+preserve existing child identities, signed attempts and retained custody through
+an explicitly qualified migration; numeric position must never silently reassign
+an existing allocation. Reusable empty capacity remains a separate owner contract.
+
 Each pattern's useful journey includes creation, resolution, bounded growth where
 applicable, upgrade and interrupted-operation recovery. Before extending to many
 children, qualify repeatable maintenance without resetting spent or uncertain

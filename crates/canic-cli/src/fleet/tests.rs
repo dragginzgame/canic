@@ -231,6 +231,92 @@ fn declared_routes_require_unambiguous_known_network_and_escape_text() {
 }
 
 #[test]
+fn metrics_views_preserve_exact_text_unknowns_and_reset_windows() {
+    let mut snapshot = Fleet {
+        configuration: None,
+        started_at_ns: 0,
+        finished_at_ns: 100,
+        scope: "fixture",
+        canisters: vec![],
+        operations: vec![],
+        issues: vec![],
+        managers: vec![],
+        metrics: vec![],
+        stores: vec![],
+        wallet: None,
+    };
+    assert!(!render(&snapshot, "").contains("Timer metrics ·"));
+    let counter =
+        |total: &str, overflowed: bool| serde_json::json!({"total":total,"overflowed":overflowed});
+    snapshot.metrics.push(canic_host::FleetMetrics {
+        network_id: "network<script>".into(),
+        canister: "owner<img>".into(),
+        reported: Some(
+            serde_json::from_value(serde_json::json!({
+                "observed_at_ns":3_000_000_000_u64,
+                "timers":{
+                    "started_at_version":7,"started_at_ns":2_000_000_000_u64,
+                    "accepted":counter(&u128::MAX.to_string(),true),
+                    "completed":counter("4",false), "abandoned":counter("1",false),
+                    "expected_failures":counter("0",false),
+                    "deferred_submissions":counter("2",false), "provider_faults":counter("0",false),
+                }
+            }))
+            .unwrap(),
+        ),
+        observation_error: None,
+    });
+    snapshot.metrics.push(canic_host::FleetMetrics {
+        network_id: "network<script>".into(),
+        canister: "old-owner".into(),
+        reported: None,
+        observation_error: Some("<script>unavailable</script>".into()),
+    });
+    snapshot.metrics.push(canic_host::FleetMetrics {
+        network_id: "network<script>".into(),
+        canister: "no-provider".into(),
+        reported: Some(
+            serde_json::from_value(serde_json::json!({"observed_at_ns":0,"timers":null})).unwrap(),
+        ),
+        observation_error: None,
+    });
+    let before = serde_json::to_value(&snapshot).unwrap();
+    let html = render(&snapshot, "");
+    let text = terminal(&snapshot, &[], true, false);
+    assert!(html.contains(
+        "<details class=metrics><summary>Timer metrics · uncertified diagnostics</summary>"
+    ));
+    assert!(html.contains("Runtime started at version 7"));
+    assert!(html.contains("data-ns=\"2000000000\""));
+    assert!(html.contains("data-ns=\"3000000000\""));
+    assert!(html.contains("owner&lt;img&gt;"));
+    assert!(html.contains("network&lt;script&gt;"));
+    assert!(html.contains("&lt;script&gt;unavailable&lt;/script&gt;"));
+    assert!(!html.contains("<script>unavailable"));
+    assert_eq!(html.matches("<table class=metrics-table>").count(), 1);
+    assert_eq!(html.matches("<strong>UNKNOWN</strong>").count(), 2);
+    for value in [
+        "Accepted",
+        "Completed",
+        "Abandoned",
+        "Expected failures",
+        "Deferred submissions",
+        "Provider faults",
+        "clipped",
+        "exact",
+        "timer metrics unavailable",
+        &u128::MAX.to_string(),
+    ] {
+        assert!(html.contains(value), "HTML omitted {value}");
+        assert!(text.contains(value), "terminal omitted {value}");
+    }
+    assert!(
+        html.contains("<th scope=row>Expected failures</th><td><code>0</code></td><td>exact</td>")
+    );
+    assert_eq!(serde_json::to_value(&snapshot).unwrap(), before);
+}
+
+#[test]
 fn browser_handoff_uses_localhost_and_preserves_background_lifetime() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()

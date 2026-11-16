@@ -213,8 +213,8 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     assert!(!path.join("child/receipt.json").exists());
     assert!(!path.join("sibling/receipt.json").exists());
     let html = std::fs::read_to_string(&report).unwrap();
-    assert!(html.contains("Application: <strong>app</strong>"));
-    assert!(html.contains("Application: <strong>worker</strong>"));
+    assert!(html.contains("Child: <strong>slot 1 · app</strong>"));
+    assert!(html.contains("Child: <strong>slot 2 · worker</strong>"));
     let complete = cli(&config, &apply);
     let root = CanisterId::from_text(complete["root"]["canister"].as_str().unwrap()).unwrap();
     let app = complete["children"][0]["outcome"]["canister"]
@@ -255,8 +255,8 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         .output()
         .unwrap();
     let terminal = String::from_utf8(terminal.stdout).unwrap();
-    assert!(terminal.contains("root / app"));
-    assert!(terminal.contains("root / worker"));
+    assert!(terminal.contains("root / slot 1 · app"));
+    assert!(terminal.contains("root / slot 2 · worker"));
     // Configuration cannot remove/reassign a retained child or redirect its slot.
     let mut renamed: serde_json::Value = serde_json::from_slice(&config_bytes).unwrap();
     let definition = renamed["apps"]["starter"]["canisters"]
@@ -289,18 +289,48 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             / 1_000_000_000
             + 60)
             .to_string();
-        let upgrade = cli(
-            &config,
-            &[
-                "fleet",
-                "plan",
-                "--identity",
-                "anonymous",
-                "--execute-at",
-                &dispatch,
-            ],
-        );
-        assert_eq!(upgrade["action"], "upgrade");
+        let upgrade = if name == "worker" {
+            // Named planning must recover Second from creation custody, not
+            // silently use the original first-slot endpoint.
+            let root_module = complete["root"]["module_hash"].as_str().unwrap();
+            let previous_module = complete["children"][1]["outcome"]["module_hash"]
+                .as_str()
+                .unwrap();
+            cli(
+                &config,
+                &[
+                    "fleet",
+                    "plan",
+                    "--canister",
+                    name,
+                    "--root-module",
+                    root_module,
+                    "--target",
+                    child,
+                    "--previous-module",
+                    previous_module,
+                    "--identity",
+                    "anonymous",
+                    "--execute-at",
+                    &dispatch,
+                ],
+            )
+        } else {
+            cli(
+                &config,
+                &[
+                    "fleet",
+                    "plan",
+                    "--identity",
+                    "anonymous",
+                    "--execute-at",
+                    &dispatch,
+                ],
+            )
+        };
+        if name == "app" {
+            assert_eq!(upgrade["action"], "upgrade");
+        }
         assert_eq!(upgrade["plan"]["management"]["slot"], slot);
         assert_eq!(upgrade["plan"]["target"], child);
         let operation = upgrade["operation"].as_str().unwrap();

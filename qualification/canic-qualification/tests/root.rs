@@ -605,7 +605,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     assert!(
         std::str::from_utf8(&terminal.stdout)
             .unwrap()
-            .contains("Root report (uncertified): root — creation Ready")
+            .contains("Root report (uncertified): root / slot 1 · app — creation Ready")
     );
     assert_eq!(ready_view["managers"][0]["reported"]["phase"], "Ready");
     assert_eq!(ready_view["canisters"].as_array().unwrap().len(), 2);

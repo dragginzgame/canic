@@ -382,6 +382,20 @@ bash scripts/dev/test-root.sh whole_fleet managed_child_cli multi_child_cli reta
 
 These fixtures explicitly select inline custody. The publication runner above
 owns the generated Root/Store/app default; neither fixture migrates retained fleets.
+The multi-child journey plans the second child's first upgrade through the named
+`--canister` path, verifies its retained slot and lost-reply recovery, then includes
+it in whole-fleet convergence and Root maintenance. General dynamic allocation
+and new-child admission are not qualified by this named-upgrade path.
+
+`bash scripts/dev/test-root.sh discovers_both_children_without_local_deployment_records`
+checks the shipped CLI against an installed Root with no local deployment journal.
+It discovers children admitted in reverse slot order, verifies their controllers,
+omits an empty additional slot and reports an older executable's missing endpoint
+as unknown. Actual terminal and saved HTML output identify both child slots and
+their reported principals. Repeated observations preserve Root stable bytes and
+create no journal.
+Discovery is bounded to the selected owners' two slots; it is not recursive tree
+discovery or authenticated completion evidence.
 
 `bash scripts/dev/test-root.sh profile_store` qualifies the profile manager as a
 Store-backed management owner. It preserves two users' private state and Store
@@ -412,6 +426,11 @@ CLI fleet JSON. This proves local aggregate diagnostics, not historical metrics,
 fleet-wide rates, persistence or mainnet deployment. Passive codec tests preserve
 maximum counter totals/overflow quality; CLI tests retain unknown/clipped states
 and keep metrics out of the compact terminal view.
+The CLI's focused `fleet::` tests also cover the saved/live HTML projection:
+the diagnostics section starts collapsed, exact decimal totals and overflow
+quality match terminal details, unknown readings never become zero, and owner,
+network and error text is escaped. Rendering preserves the source snapshot and
+uses the existing bounded localhost viewer; it adds no browser RPC client.
 
 `make profile-test` runs the [Canic-owned profile demo](../docs/demos/profile.md)
 through the existing deployment CLI, with private ownership, bounded capacity,

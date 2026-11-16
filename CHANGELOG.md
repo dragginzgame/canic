@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.216.4] - 2026-11-16
+
+### ▶️ Try it
+
+From the Canic checkout, install the updated CLI with `make canic`. For an existing
+configured fleet, inspect both supported child slots of each selected Root, even
+when another operator created a child and its deployment journal is absent here:
+
+```sh
+canic fleet show --app starter --fleet mainnet
+canic fleet show --app starter --fleet mainnet --json
+```
+
+These commands only observe. Empty additional slots stay out of the display;
+unavailable slot endpoints are reported as unknown inventory. Retained approvals
+still constrain observations; discovery never creates deployment receipts.
+
+### 🔧 Changed
+
+Child reports in terminal and browser views now identify their stable slot and
+local name, or the reported principal when no name is available. Conflicting
+historical names cannot silently select the first record. Child names are no
+longer labelled as applications in the browser view.
+
+The saved/live fleet browser view now includes collapsed timer diagnostics, using
+the same counter labels, exact totals and overflow quality as terminal details.
+It shows each owner's initialization window and sample time; unavailable reports
+stay unknown. This reuses existing observations and adds no collection or history.
+
+For a configured fleet, serve a fresh snapshot or watch read-only refreshes at
+`http://localhost:8787/`. Neither command opens a browser; Ctrl-C stops the viewer:
+
+```sh
+canic fleet show --app starter --fleet mainnet --serve
+canic fleet show --app starter --fleet mainnet --watch
+```
+
+### 🩹 Fixed
+
+Named child upgrade planning now carries the slot from retained creation custody.
+The fleet reservation check resolves the requested child instead of always checking
+the first. This fixes first upgrades of the second child through the existing
+`--canister` path; it adds no slot flag or additional runtime capacity.
+
+For a retained inline fleet with a declared `worker`, rebuild its changed artifact,
+then substitute the exact principals/hashes from its receipts to retain a first
+upgrade plan. Planning does not submit the upgrade:
+
+```sh
+canic app build --app starter --canister worker
+canic fleet plan --app starter --fleet mainnet --canister worker \
+  --root-module ROOT_SHA256 --target WORKER_PRINCIPAL \
+  --previous-module WORKER_SHA256 --identity canic-mainnet
+```
+
+Whole-fleet planning remains the normal workflow, resolving these inputs for you.
+Store-backed named plans also require their completed publication via `--release`.
+
 ## [0.216.3] - 2026-11-15
 
 ### 🔧 Changed

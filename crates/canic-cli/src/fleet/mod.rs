@@ -2,6 +2,8 @@ use canic_host::{Error, Fleet, Result};
 use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use std::{fmt::Write as _, num::NonZeroUsize, path::Path};
 
+mod metrics;
+mod roles;
 mod stores;
 mod terminal;
 #[cfg(test)]
@@ -166,14 +168,12 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
                 escape(&manager.manager)
             )
             .expect("writing to String");
-            if let Some(name) = child_name(snapshot, manager) {
-                write!(
-                    html,
-                    "<p>Application: <strong>{}</strong></p>",
-                    escape(name)
-                )
-                .expect("String write");
-            }
+            write!(
+                html,
+                "<p>Child: <strong>{}</strong></p>",
+                escape(&child_label(snapshot, manager))
+            )
+            .expect("String write");
             if let Some(status) = &manager.reported {
                 write!(html, "<p>Creation phase: <strong>{:?}</strong></p><p>Create / upload / install attempts: {} / {} / {}</p><div class=topology><code>{}</code><span class=arrow>↓ reports child</span><code>{}</code></div>", status.phase, status.attempts[0], status.attempts[1], status.attempts[2], escape(&manager.manager), escape(status.worker.as_deref().unwrap_or("No reported principal"))).expect("writing to String");
                 if status.phase == canic_host::ManagementPhase::CreateIssued {
@@ -244,6 +244,7 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
         }
         html.push_str("</div>");
     }
+    html.push_str(&metrics::render(snapshot));
     html.push_str("<h2>Deployment &amp; recovery operations</h2><p>Receipts are retained historical evidence. An approved plan is not proof of deployment; an old receipt need not match a later upgrade.</p><div class=grid>");
     for operation in &snapshot.operations {
         let observed = snapshot.canisters.iter().find(|item| {
@@ -443,19 +444,33 @@ pub(crate) fn publish(
     Ok(())
 }
 
-fn child_name<'a>(
-    snapshot: &'a canic_host::Fleet,
-    manager: &canic_host::FleetManager,
-) -> Option<&'a str> {
-    manager.slot?;
-    snapshot
+fn child_label(snapshot: &Fleet, manager: &canic_host::FleetManager) -> String {
+    use canic_management_protocol::children::Slot;
+    let slot = manager.slot.unwrap_or(Slot::First);
+    let mut names = snapshot
         .operations
         .iter()
-        .find(|op| {
+        .filter(|op| {
             op.network_id == manager.network_id
-                && op.slot == manager.slot
+                && op.slot.unwrap_or(Slot::First) == slot
                 && op.management_owner() == Some(manager.manager.as_str())
         })
-        .and_then(|op| op.deployment.as_ref())
-        .map(|name| name.canister.as_str())
+        .filter_map(|op| op.deployment.as_ref());
+    // Repeated records may name one child; conflicting names cannot choose a winner.
+    let planned = names
+        .next()
+        .filter(|first| names.all(|name| name == *first));
+    let reported = manager
+        .reported
+        .as_ref()
+        .and_then(|status| status.worker.as_deref());
+    let identity = planned
+        .map(|name| name.canister.clone())
+        .or_else(|| reported.and_then(|id| roles::name(snapshot, &manager.network_id, id)))
+        .or_else(|| reported.map(str::to_owned));
+    let label = format!("slot {}", slot.index() + 1);
+    match identity {
+        Some(identity) => format!("{label} · {identity}"),
+        None => label,
+    }
 }

@@ -13,7 +13,7 @@ pub(super) fn role<'a>(snapshot: &'a Fleet, target: &FleetCanister, links: &[Str
     if let Some(manager) = snapshot.managers.iter().find(|manager| {
         manager.network_id == target.network_id && manager.manager == target.canister
     }) {
-        return if super::super::manager_kind(snapshot, manager) == "Root" {
+        return if super::manager_kind(snapshot, manager) == "Root" {
             "root"
         } else {
             "manager"
@@ -26,7 +26,7 @@ pub(super) fn role<'a>(snapshot: &'a Fleet, target: &FleetCanister, links: &[Str
                 .as_ref()
                 .is_some_and(|status| status.worker.as_ref() == Some(&target.canister))
     }) {
-        return if super::super::manager_kind(snapshot, manager) == "Root" {
+        return if super::manager_kind(snapshot, manager) == "Root" {
             "child"
         } else {
             "worker"
@@ -62,7 +62,7 @@ pub(super) fn name(snapshot: &Fleet, network: &str, principal: &str) -> Option<S
         .config
         .canisters
         .keys()
-        .filter(|slot| super::super::slot_state(snapshot, slot).identity() == Some(principal))
+        .filter(|slot| super::slot_state(snapshot, slot).identity() == Some(principal))
         .cloned()
         .collect();
     match names.as_slice() {

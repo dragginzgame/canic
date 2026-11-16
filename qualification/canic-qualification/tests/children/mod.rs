@@ -5,6 +5,8 @@ use canic_management_protocol::{
     custody, upgrade,
 };
 
+mod discovery;
+
 async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
     let reply = pic
         .update_call(

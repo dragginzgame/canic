@@ -326,7 +326,7 @@ pub(super) enum FleetCommand {
         #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
         color: ColorMode,
 
-        /// Include module hashes and network identity fingerprints in terminal output.
+        /// Include code hashes, network bindings and timer diagnostics in terminal output.
         #[arg(long)]
         details: bool,
         /// Include this mainnet wallet's public default-account balances and receive address.

@@ -310,22 +310,72 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
 
 #[test]
 fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
+    use canic_management_protocol::children::Slot;
+    for slot in [None, Some(Slot::First), Some(Slot::Second)] {
+        check_named_upgrade_custody(slot);
+    }
+}
+
+fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children::Slot>) {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let selected = selection();
+    let mut selected = selection();
     let root_hash = "01".repeat(32);
-    let (created_id, created) = create_managed_plan(
-        &dir,
-        &wasm,
-        input(),
-        &selected,
-        "app",
-        &root_hash,
-        None,
-        None,
-    )
+    let (created_id, created) = if slot.is_some() {
+        let now = crate::now().unwrap();
+        plan::retain(
+            &dir,
+            &wasm,
+            input(),
+            Some(DeploymentName {
+                app: selected.app.clone(),
+                fleet: selected.fleet.clone(),
+                canister: "app".into(),
+            }),
+            Some(ManagedOwner {
+                slot,
+                root: selected.config.canisters["root"].id.clone().unwrap(),
+                root_module: root_hash.clone(),
+                execute_at_ns: now,
+                source: None,
+            }),
+            now,
+        )
+    } else {
+        create_managed_plan(
+            &dir,
+            &wasm,
+            input(),
+            &selected,
+            "app",
+            &root_hash,
+            None,
+            None,
+        )
+    }
     .unwrap();
+    selected
+        .config
+        .canisters
+        .insert("sibling".into(), selected.config.canisters["app"].clone());
+    // Creating among multiple declarations still needs an allocation policy;
+    // an upgrade instead has an exact retained child identity.
+    let unallocated = dir.join("unallocated");
+    assert!(
+        create_managed_plan(
+            &unallocated,
+            &wasm,
+            input(),
+            &selected,
+            "app",
+            &root_hash,
+            None,
+            None
+        )
+        .is_err()
+    );
+    assert!(!unallocated.exists());
     let child = "ryjl3-tyaaa-aaaaa-aaaba-cai";
     let upgrade_input = || PlanInput {
         target: Some(child.into()),
@@ -363,7 +413,11 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
         &ic_wire::encode(
             &Ok::<_, Refusal>(ready),
             ic_wire::Encoding::Frame {
-                method: STAGE,
+                method: if slot.is_some() {
+                    canic_management_protocol::children::STAGE
+                } else {
+                    STAGE
+                },
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -417,6 +471,7 @@ fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
     )
     .unwrap();
     assert_ne!(id, created_id);
+    assert_eq!(plan.management().unwrap().slot, slot);
     assert_eq!(plan.target().map(String::as_str), Some(child));
     assert_eq!(
         plan.application_controller(),

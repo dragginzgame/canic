@@ -27,7 +27,7 @@ pub struct Fleet {
     pub canisters: Vec<FleetCanister>,
     /// Retained deployment steps, including unknown targets. Fleet steps share their approval digest.
     pub operations: Vec<FleetOperation>,
-    /// Local records that could not be admitted. Other records remain visible.
+    /// Rejected local records and incomplete discovery. Other observations remain visible.
     pub issues: Vec<String>,
     /// Planned Roots and explicitly selected managers, each an uncertified query.
     pub managers: Vec<FleetManager>,
@@ -299,6 +299,15 @@ fn select_managers(
     Ok(selected)
 }
 
+fn empty_report(report: &canic_management_protocol::Status) -> bool {
+    report
+        == &canic_management_protocol::Status {
+            stable_pages: report.stable_pages,
+            maintenance_candidate: report.maintenance_candidate,
+            ..Default::default()
+        }
+}
+
 fn check_report(
     operations: &[FleetOperation],
     network_id: &str,
@@ -315,16 +324,14 @@ fn check_report(
             "reported approval names another manager".into(),
         ));
     }
-    let empty = report
-        == &canic_management_protocol::Status {
-            stable_pages: report.stable_pages,
-            maintenance_candidate: report.maintenance_candidate,
-            ..Default::default()
-        };
+    let empty = empty_report(report);
     if !empty
         && operations
             .iter()
-            .filter(|operation| operation.network_id == network_id && operation.slot == slot)
+            .filter(|operation| {
+                operation.network_id == network_id
+                    && operation.slot.unwrap_or(Slot::First) == slot.unwrap_or(Slot::First)
+            })
             .filter_map(|operation| operation.management.as_ref())
             .filter(|approval| approval.manager == manager)
             .any(|approval| report.approval.as_ref() != Some(approval))
@@ -381,7 +388,7 @@ fn ordered_upgrades<'a>(
         .iter()
         .filter(|operation| {
             operation.network_id == network_id
-                && operation.slot == slot
+                && operation.slot.unwrap_or(Slot::First) == slot.unwrap_or(Slot::First)
                 && operation
                     .upgrade
                     .as_ref()
@@ -687,17 +694,19 @@ pub async fn fleet_with_config(
     for ((network_id, manager), network) in selected {
         // Creation and upgrade share this owner's existing five-second budget.
         let owner_deadline = deadline.min(tokio::time::Instant::now() + Duration::from_secs(5));
-        let mut slots: std::collections::BTreeSet<_> = operations
+        let retained_slots: std::collections::BTreeSet<_> = operations
             .iter()
             .filter(|op| {
                 op.network_id == network_id && op.management_owner() == Some(manager.as_str())
             })
             .map(|op| op.slot)
             .collect();
-        if slots.is_empty() {
-            slots.insert(None);
-        }
-        for slot in slots {
+        // None is the historical first-slot endpoint, not a third child. Keep
+        // its query for old owners while discovering both current physical slots.
+        let first = retained_slots
+            .contains(&Some(Slot::First))
+            .then_some(Slot::First);
+        for slot in [first, Some(Slot::Second)] {
             let budget = owner_deadline
                 .saturating_duration_since(tokio::time::Instant::now())
                 .min(Duration::from_secs(5));
@@ -752,6 +761,19 @@ pub async fn fleet_with_config(
             .await
             .map_err(|_| Error::Blocked("manager observation timed out".into()))
             .and_then(|value| value);
+            if slot == Some(Slot::Second) && !retained_slots.contains(&slot) {
+                match &report {
+                    Ok(report) if empty_report(report) => continue,
+                    Err(error) => {
+                        issues.push(format!(
+                            "{manager} on {network_id}: second child slot unknown: {}",
+                            error.to_string().chars().take(500).collect::<String>()
+                        ));
+                        continue;
+                    }
+                    Ok(_) => {}
+                }
+            }
             let (reported, observation_error) = match report {
                 Ok(report) => {
                     if let Some(child) = &report.worker {

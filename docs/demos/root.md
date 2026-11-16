@@ -235,6 +235,17 @@ child to its declared slot or create a completion receipt. These reads consume
 none of the 32 retained signed observation attempts. Root reports and reported
 child identity remain labelled separately from authenticated deployment evidence.
 
+Each selected Root is queried for both supported child slots, including children
+created through another operator's journal. A configured Root can be selected
+explicitly with `canic fleet show --manager ROOT_PRINCIPAL`; its identity must
+already have an exact configured network binding. Confirmed empty additional
+slots are omitted, while unavailable endpoints produce an inventory issue.
+Discovery neither names an undeclared child nor grants custody, and currently
+stops at these two slots rather than recursively traversing descendants.
+Terminal and browser reports label each physical slot (`slot 1` or `slot 2`),
+alongside an unambiguous local child name or its reported principal. The slot
+label is diagnostic context, not a new app definition or an inferred tree edge.
+
 The read-only replicated observation can recover a lost staging response without
 re-signing admission. Its fresh signing authority cannot invoke management
 effects or extend Root's effect deadline. Up to 32 observation attempts are
@@ -320,8 +331,11 @@ artifacts together is refused. Unfinished creation must complete with its origin
 An already retained upgrade keeps its original bytes and schedule; a different
 input cannot replace it, including after expiry or failure.
 
-The named `--canister` / `--root-module` path remains for individually deployed
-children; both paths use the same immutable managed plan and runtime owner.
+The named `--canister` / `--root-module` path can also plan a child's first upgrade
+from a whole-fleet deployment. It resolves the original runtime slot from retained
+creation custody, including the second child, rather than configuration order.
+Both paths use the same immutable managed plan and runtime owner. Whole-fleet
+planning remains the normal workflow and also handles subsequent upgrades.
 
 Add `--fleet NAME` when the app has multiple fleets. Copy UPGRADE_OPERATION from
 the new plan. New upgrades dispatch when ready within the original ten-minute

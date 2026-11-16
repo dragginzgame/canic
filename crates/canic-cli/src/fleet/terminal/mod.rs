@@ -1,10 +1,10 @@
+use super::roles;
 use canic_host::Fleet;
 use ic_host_text::escape::terminal_text;
 use std::{collections::BTreeMap, fmt::Write as _};
 
 mod inventory;
 mod metrics;
-mod roles;
 #[cfg(test)]
 mod tests;
 
@@ -104,9 +104,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
     for manager in &snapshot.managers {
         let mut name = roles::name(snapshot, &manager.network_id, &manager.manager)
             .unwrap_or_else(|| manager.manager.clone());
-        if let Some(child) = super::child_name(snapshot, manager) {
-            name.push_str(&format!(" / {child}"));
-        }
+        name.push_str(&format!(" / {}", super::child_label(snapshot, manager)));
         write!(
             output,
             "\n{} report (uncertified): {}",

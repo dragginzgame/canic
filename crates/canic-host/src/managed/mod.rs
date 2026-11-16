@@ -66,15 +66,17 @@ pub fn create_managed_plan(
         || (input.target.is_none() && (child.id.is_some() || input.previous_module.is_some()))
         || owner.role.as_deref() != Some("root")
         || owner.parent.is_some()
-        || selection
-            .config
-            .canisters
-            .values()
-            .filter(|slot| {
-                slot.parent.as_ref() == Some(parent) && slot.role.as_deref() != Some("wasm-store")
-            })
-            .count()
-            != 1
+        || (input.target.is_none()
+            && selection
+                .config
+                .canisters
+                .values()
+                .filter(|slot| {
+                    slot.parent.as_ref() == Some(parent)
+                        && slot.role.as_deref() != Some("wasm-store")
+                })
+                .count()
+                != 1)
     {
         return Err(Error::Invalid(
             "select one child of a top-level Root on this fleet's network; creation requires an unbound slot".into(),
@@ -115,7 +117,7 @@ pub fn create_managed_plan(
                 ));
             }
             if creation
-                .replace(record.approved_controller.clone())
+                .replace((record.approved_controller.clone(), record.slot))
                 .is_some()
             {
                 return Err(Error::Invalid("ambiguous child creation evidence".into()));
@@ -141,7 +143,7 @@ pub fn create_managed_plan(
             "parent needs one unambiguous configured or retained deployment identity".into(),
         ));
     }
-    if input.target.is_some() && creation.as_ref() != roots.first() {
+    if input.target.is_some() && creation.as_ref().map(|(root, _)| root) != roots.first() {
         return Err(Error::Invalid(
             "child upgrade requires retained creation custody under this Root".into(),
         ));
@@ -164,7 +166,7 @@ pub fn create_managed_plan(
             canister: canister.into(),
         }),
         Some(ManagedOwner {
-            slot: None,
+            slot: creation.and_then(|(_, slot)| slot),
             root,
             source,
             root_module: root_module.into(),

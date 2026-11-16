@@ -19,6 +19,82 @@ fn empty() -> Fleet {
 }
 
 #[test]
+fn child_reports_keep_slots_names_and_ambiguity_distinct() {
+    use canic_management_protocol::{Approval, children::Slot};
+    let mut snapshot = empty();
+    for slot in [None, Some(Slot::Second)] {
+        snapshot.managers.push(FleetManager {
+            slot,
+            upgrade: None,
+            network_id: "a".into(),
+            manager: "root".into(),
+            reported: Some(canic_management_protocol::Status {
+                worker: Some("child<untrusted>".into()),
+                ..Default::default()
+            }),
+            observation_error: None,
+        });
+    }
+    let check = |snapshot: &Fleet, label: &str| {
+        let before = serde_json::to_value(snapshot).unwrap();
+        let text = render(snapshot, &[], false, false);
+        let html = super::super::render(snapshot, "");
+        assert!(text.contains(&format!(" / {label}")), "{text}");
+        assert!(html.contains(&format!(
+            "Child: <strong>{}</strong>",
+            super::super::escape(label)
+        )));
+        assert!(!html.contains("child<untrusted>"));
+        assert_eq!(serde_json::to_value(snapshot).unwrap(), before);
+    };
+    check(&snapshot, "slot 1 · child<untrusted>");
+    check(&snapshot, "slot 2 · child<untrusted>");
+    let operation = |canister: &str| FleetOperation {
+        store_root: None,
+        slot: Some(Slot::First),
+        upgrade: None,
+        management: Some(Approval {
+            manager: "root".into(),
+            module_hash: [0; 32],
+            creation_cycles: 1,
+            execute_at_ns: 1,
+            expires_at_ns: 2,
+        }),
+        deployment: Some(canic_host::DeploymentName {
+            fleet: "fleet".into(),
+            app: "app".into(),
+            canister: canister.into(),
+        }),
+        operation: "operation".into(),
+        network_id: "a".into(),
+        network: "local".into(),
+        canister: None,
+        approved_module: String::new(),
+        approved_controller: "root".into(),
+        effects: BTreeMap::new(),
+        receipt_retained: false,
+        approval_expired: false,
+    };
+    snapshot.operations = vec![operation("named"), operation("named")];
+    // Legacy None and explicit First denote the same physical slot.
+    snapshot.operations[0].slot = None;
+    check(&snapshot, "slot 1 · named");
+    check(&snapshot, "slot 2 · child<untrusted>");
+    snapshot.operations.push(operation("another-name"));
+    check(&snapshot, "slot 1 · child<untrusted>");
+    snapshot.operations.reverse();
+    check(&snapshot, "slot 1 · child<untrusted>");
+    snapshot.operations[0].network_id = "other-binding".into();
+    check(&snapshot, "slot 1 · named");
+    snapshot.operations[0].network_id = "a".into();
+    snapshot.operations[0].management.as_mut().unwrap().manager = "another-root".into();
+    check(&snapshot, "slot 1 · named");
+    snapshot.managers[1].reported = None;
+    snapshot.managers[1].observation_error = Some("unavailable".into());
+    assert!(render(&snapshot, &[], false, false).contains(" / slot 2 — UNKNOWN"));
+}
+
+#[test]
 fn metrics_details_keep_unknown_and_clipped_counts_separate_from_outcomes() {
     let mut snapshot = empty();
     let counter = serde_json::json!({"total":u128::MAX.to_string(), "overflowed":true});

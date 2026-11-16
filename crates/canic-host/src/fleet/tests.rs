@@ -176,6 +176,41 @@ fn root_reports_cannot_substitute_another_approval_or_a_self_child() {
 }
 
 #[test]
+fn first_slot_observations_share_legacy_creation_and_upgrade_constraints() {
+    for mut operation in [
+        root_operation(Network::Mainnet),
+        upgrade_operation(Network::Mainnet),
+    ] {
+        let manager = operation.management_owner().unwrap().to_owned();
+        let network = operation.network_id.clone();
+        let report = canic_management_protocol::Status {
+            phase: canic_management_protocol::Phase::Ready,
+            worker: Some("r7inp-6aaaa-aaaaa-aaabq-cai".into()),
+            approval: Some(canic_management_protocol::Approval {
+                manager: manager.clone(),
+                module_hash: [8; 32],
+                creation_cycles: canic_management_protocol::CREATION_CYCLES,
+                execute_at_ns: 1,
+                expires_at_ns: 2,
+            }),
+            ..Default::default()
+        };
+        for retained in [None, Some(Slot::First)] {
+            operation.slot = retained;
+            let operations = std::slice::from_ref(&operation);
+            let before = serde_json::to_value(operations).unwrap();
+            for observed in [None, Some(Slot::First)] {
+                assert!(check_report(operations, &network, &manager, observed, &report).is_err());
+            }
+            assert!(
+                check_report(operations, &network, &manager, Some(Slot::Second), &report).is_ok()
+            );
+            assert_eq!(serde_json::to_value(operations).unwrap(), before);
+        }
+    }
+}
+
+#[test]
 fn manager_observation_budget_includes_every_network_bound_owner() {
     let targets: BTreeMap<_, _> = (1..=17)
         .map(|value| {

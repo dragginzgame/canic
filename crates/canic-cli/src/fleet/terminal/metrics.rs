@@ -49,21 +49,7 @@ pub(super) fn render(snapshot: &Fleet) -> String {
                 .observed_at_ns
         )
         .expect("String write");
-        let rows = [
-            ("Accepted", timers.accepted),
-            ("Completed", timers.completed),
-            ("Abandoned", timers.abandoned),
-            ("Expected failures", timers.expected_failures),
-            ("Deferred submissions", timers.deferred_submissions),
-            ("Provider faults", timers.provider_faults),
-        ]
-        .map(|(name, value)| {
-            [
-                name.to_owned(),
-                value.total.to_string(),
-                if value.overflowed { "clipped" } else { "exact" }.to_owned(),
-            ]
-        });
+        let rows = super::super::metrics::rows(report).expect("reported timers");
         output.push_str(&table::render(
             &["COUNTER", "TOTAL", "QUALITY"],
             &rows,
