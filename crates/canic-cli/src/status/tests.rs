@@ -148,7 +148,7 @@ fn store_state() -> serde_json::Value {
             phase: canic_management_protocol::store_maintenance::Phase::Verified,
             stop_request: Some([2; 32]),
             failure: None,
-            preservation: None,
+            preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
             installation: None,
         })
         .unwrap();
@@ -163,22 +163,25 @@ fn store_catalog_summary_distinguishes_partial_absent_and_completed_scans() {
     let mut scan: Preservation = serde_json::from_value(serde_json::json!({
         "catalog": {"quota": {"reserved_bytes": 1024, "releases": 8},
             "reserved_bytes": 128, "releases": 3, "artifacts": 1, "chunks": 1},
-        "after": null, "observed": 2, "digest": ([0; 32]), "complete": false
+        "after": null, "observed": 2, "digest": ([0; 32]), "complete": false,
+        "after_removed": false
     }))
     .unwrap();
-    status.preservation = Some(scan.clone());
+    status.preservation =
+        canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan.clone()));
     let text = super::store::render(&status, Some(0), false);
     assert!(text.contains("before 2/3 releases (incomplete); after not retained"));
     assert!(text.contains("Continuation:"));
     scan.observed = 3;
     scan.complete = true;
-    status.preservation = Some(scan.clone());
+    status.preservation =
+        canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan.clone()));
     status.installation = Some(Installation {
         upload_request: [1; 32],
         request: Some([2; 32]),
         sender_version: Some(1),
         start_request: Some([3; 32]),
-        verification: Some(scan),
+        verification: canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan)),
         activation_request: Some([4; 32]),
     });
     let text = super::store::render(&status, Some(0), true);

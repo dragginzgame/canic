@@ -14,8 +14,9 @@ case "$scope" in
     quiescence) filter=store_root_tests::quiescence_tests ;;
     maintenance) filter=store_root_tests::maintenance_ ;;
     preservation) filter=store_root_tests::preservation_limits_tests ;;
+    removal) filter=store_root_tests::removal_tests ;;
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
-    *) printf 'Usage: %s [all|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|root-maintenance]\n' "$0" >&2; exit 2 ;;
+    *) printf 'Usage: %s [all|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
 build() {
     local name=$1 package=$2
@@ -52,7 +53,7 @@ elif [[ "$scope" == dispatch ]]; then
     cargo test --locked -p canic-management-protocol --lib admission
     cargo test --locked -p canic-management-protocol --lib upgrade_binds
 else
-    case "$scope" in readiness) native=store_readiness ;; publication) native=publication_envelope ;; esac
+    case "$scope" in readiness) native=store_readiness ;; publication) native=publication_envelope ;; removal) native=removal_envelope ;; esac
     cargo test --locked -p canic-management-protocol --lib "$native"
 fi
 CANIC_EFFECT_PROBE_WASM="$root/target/store/original.wasm" \

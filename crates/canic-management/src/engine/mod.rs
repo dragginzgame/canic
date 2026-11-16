@@ -448,6 +448,7 @@ pub(crate) fn reply_fault(method: u64) -> bool {
             | (Some(12), canic_management_protocol::publication::INFO)
             | (Some(12), canic_management_protocol::publication::CUSTODY)
             | (Some(12), canic_management_protocol::publication::ADMISSION)
+            | (Some(12), canic_management_protocol::publication::REMOVE)
     )
 }
 

@@ -1009,7 +1009,7 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJ8 journal loads recognized predecessors, including CUJ6/CUJ7, without inventing
+The CUJ9 journal loads recognized predecessors, including CUJ6/CUJ7/CUJ8, without inventing
 maintenance authority. Current and completed attempts remain in the original
 checked allocation. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any
@@ -1025,6 +1025,45 @@ Concurrent responses to one cursor can commit only once, and Root replacement
 preserves progress. This is a metadata preservation boundary, not payload hashing
 or a cache snapshot. Old CUJ5 attempts load without this evidence; already-stopped
 records and Stores without the new observation cannot acquire it by assumption.
+
+New attempts select Store 0.2.3's explicit active/removed entry and defined
+`(name, removed, version)` order. The selected scan contract survives before the
+first page; its cursor retains the removed flag, and its digest has a separate
+domain including the entry kind. Historical attempts retain method 113, their
+original digest and name/version ordering, including an existing refusal. Their
+Wire discriminants and Host JSON encodings stay exact. Versioned evidence uses a
+new discriminant rejected by historical readers; CUJ9 prevents an older executable
+from dropping that evidence. No endpoint probing or mirrored catalog is added.
+Existing fleets must upgrade Store to 0.2.3 using their old Root before installing
+the new Root. Fresh attempts require method 117; missing support blocks before
+stop without falling back.
+
+Root's separate `store_removal` contract forwards one exact deletion or cancellation
+under captured controller authority and the original dispatch deadline. Store
+still owns pin refusal, immutable tombstones and quota. The call uses unbounded
+wait so a successful reply follows the actual Store response, rather than a
+best-effort timeout; a stalled or lost outcome remains blocked. See the IC's
+[message-execution guarantees](https://docs.internetcomputer.org/references/message-execution-properties/).
+Root adds no removal catalog or retry journal. Its caller must retain the exact
+signed attempt, settle every removal for the label, and let all original dispatch
+deadlines expire before restoration. Expiry alone does not settle an already-issued
+call; a catalog observation cannot replace a missing receipt. Store requests have
+content identity, not restoration generations, so a newly signed repeat is a new
+mutation. Host now enforces these obligations under its existing journal lock.
+Removal is a v4 PlanAction derived from an independent publication, with the exact
+manifest reconstructed from retained bytes. Before removal, every known matching
+publication mutation must have a retained successful reply and an expired dispatch
+window. All publication paths, including nested fleet work, consult removal fences.
+Restoration is a new v3 publication approval carrying an optional exact predecessor
+removal digest; omission preserves historical approval bytes. Every known removal
+must be a successfully settled, expired ancestor before restoration can sign.
+Existing publication receipts cannot stand in for new authority. The CLI exposes
+artifact plan-removal/plan-restoration and uses the existing apply/status/reconcile
+owner. Reconcile cannot create a first removal signature. Current selection is
+limited to independent publications and unchanged reviewed Root/Store identities
+and code; nested source selection and repair after a retained refusal/unknown
+outcome remain unqualified. These guarantees cover one canonical Host journal,
+not independent journals or privileged manual calls.
 
 The explicit installation request supplies the approved replacement bytes, bounded
 to one 1 MiB management-cache chunk for this first infrastructure path. Host keeps

@@ -40,6 +40,7 @@ fn publication() -> Plan {
     Plan {
         version: 3,
         action: PlanAction::Publish(crate::Publication {
+            after_removal: None,
             root: UpgradeTarget {
                 canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
                 module: "01".repeat(32),
@@ -239,4 +240,29 @@ fn incomplete_or_conflicting_record_authority_is_rejected_at_decode() {
     let mut record = maintenance;
     record["maintenance"] = serde_json::Value::Null;
     assert!(serde_json::from_value::<Plan>(record).is_err());
+}
+
+#[test]
+fn historical_scan_json_keeps_approval_fields_while_entries_are_explicit() {
+    use canic_management_protocol::store_maintenance::Scan;
+    let historical = serde_json::json!({
+        "catalog": {"quota": {"reserved_bytes": 8, "releases": 2},
+            "reserved_bytes": 8, "releases": 1, "artifacts": 1, "chunks": 1},
+        "after": {"name": "app", "version": "v1"},
+        "observed": 1, "digest": ([7; 32]), "complete": true
+    });
+    let scan: Scan = serde_json::from_value(historical.clone()).unwrap();
+    assert!(matches!(scan, Scan::Legacy(_)));
+    assert_eq!(serde_json::to_value(&scan).unwrap(), historical);
+    assert_eq!(serde_json::to_string(&Scan::Legacy(None)).unwrap(), "null");
+    let entries = Scan::Entries(scan.as_ref().cloned());
+    let value = serde_json::to_value(&entries).unwrap();
+    assert_eq!(value["entries"]["after_removed"], false);
+    assert_eq!(serde_json::from_value::<Scan>(value).unwrap(), entries);
+    for invalid in [
+        serde_json::json!({"entries": null, "unknown": true}),
+        serde_json::json!({"version": 3}),
+    ] {
+        assert!(serde_json::from_value::<Scan>(invalid).is_err());
+    }
 }

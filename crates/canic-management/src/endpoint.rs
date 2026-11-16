@@ -58,6 +58,7 @@ pub fn response_limits(method: u64) -> wire::Limits {
             | protocol::publication::INFO
             | protocol::publication::CUSTODY
             | protocol::publication::ADMISSION
+            | protocol::publication::REMOVE
     ) {
         return protocol::publication::RESPONSE_LIMITS;
     }
@@ -89,6 +90,7 @@ pub fn response_limits(method: u64) -> wire::Limits {
 /// `observe_store` reads initialized Store state through Root without claiming deployment.
 /// `observe_store_custody` reads one release and all pins on its shared artifact.
 /// `store_admission` forwards an exact Store close/observe/activate command, not an upgrade.
+/// `store_removal` forwards one exact deletion/cancellation; the caller owns settlement custody.
 /// `stage_store_maintenance`, `advance_store_maintenance` and `observe_store_maintenance`
 /// retain and recover Root-owned closure/stopping.
 /// `install_store_maintenance` supplies approved replacement bytes; `activate_store_maintenance`
@@ -159,6 +161,11 @@ macro_rules! mount_endpoints {
         $crate::mount_endpoints!(@method store_maintenance_status, query, false, store_maintenance::STATUS, LIMITS,
             [] () -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
             $crate::store_maintenance::observe(), "Store maintenance request", "Store maintenance reply");
+    };
+    (@select store_removal) => {
+        $crate::mount_endpoints!(@method store_removal, update, true, publication::REMOVE, publication::REMOVAL_LIMITS,
+            [async] (input: $crate::endpoint::protocol::publication::RemovalRequest) -> $crate::endpoint::protocol::publication::RemovalReply,
+            $crate::publication::remove(input).await, "Store removal request", "Store removal reply");
     };
     (@select store_admission) => {
         $crate::mount_endpoints!(@method store_admission, update, true, publication::ADMISSION, LIMITS,
@@ -310,7 +317,7 @@ macro_rules! mount_endpoints {
     // One expansion for this actor's fixed endpoint surface, not a public generic
     // endpoint framework. The response alias keeps Platform's owned encoder
     // signature uniform, including the unit fault acknowledgement.
-    (@method $name:ident, $kind:ident, $private:literal, $($id:ident)::+, $limits:ident,
+    (@method $name:ident, $kind:ident, $private:literal, $($id:ident)::+, $($limits:ident)::+,
         [$($asynchronous:ident)?] ($($input:ident: $request:ty)?) -> $reply:ty,
         $body:expr, $decode_error:literal, $encode_error:literal) => {
         mod $name {
@@ -318,11 +325,11 @@ macro_rules! mount_endpoints {
             type Reply = $reply;
 
             fn admit() -> Result<(), String> {
-                $crate::endpoint::admit(protocol::$limits.bytes, $private)
+                $crate::endpoint::admit(protocol::$($limits)::+.bytes, $private)
             }
             #[expect(clippy::needless_pass_by_value, reason = "Platform transfers the argument buffer to its decoder")]
             fn decode(bytes: Vec<u8>) -> ($($request)?) {
-                wire::decode(&bytes, wire::Encoding::Frame { method: protocol::$($id)::+, direction: wire::Direction::Request }, protocol::$limits)
+                wire::decode(&bytes, wire::Encoding::Frame { method: protocol::$($id)::+, direction: wire::Direction::Request }, protocol::$($limits)::+)
                     .expect($decode_error)
             }
             #[allow(clippy::needless_pass_by_value, reason = "Platform passes an owned reply; selected reply types include both Copy and non-Copy values")]

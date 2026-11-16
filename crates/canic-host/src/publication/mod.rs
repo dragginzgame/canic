@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 pub(crate) mod list;
+pub(crate) mod removal;
 #[cfg(test)]
 mod tests;
 const OBSERVATIONS: usize = 32;
@@ -24,6 +25,9 @@ pub struct Publication {
     pub store: UpgradeTarget,
     /// Application canister name and explicit version, never a moving latest alias.
     pub release: protocol::Release,
+    /// Settled predecessor removal; omission preserves historical approval bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after_removal: Option<String>,
 }
 /// Named publication inputs, resolved against one selected fleet before retaining a plan.
 pub struct PublicationInput {
@@ -55,6 +59,13 @@ pub struct PublicationProgress {
 }
 
 pub(crate) fn validate(plan: &Plan, publication: &Publication) -> Result<()> {
+    if let Some(id) = &publication.after_removal
+        && (id.len() != 64 || crate::unhex(id)?.len() != 32 || id != &id.to_ascii_lowercase())
+    {
+        return Err(Error::Invalid(
+            "restoration requires an exact removal operation".into(),
+        ));
+    }
     for target in [&publication.root, &publication.store] {
         let id = principal(&target.canister)?;
         if id.to_text() != target.canister
@@ -114,6 +125,7 @@ pub fn create_publication_plan(
         ));
     }
     let binding = Publication {
+        after_removal: None,
         root: UpgradeTarget {
             canister: root.id.clone().ok_or_else(|| {
                 Error::Invalid("bind the existing Root ID before publication".into())
@@ -147,7 +159,8 @@ pub fn create_publication_plan(
             canister: input.canister,
         }),
     };
-    plan::retain_locked(&store::Store::open(journal)?, plan, &bytes)
+    let held = store::Store::open(journal)?;
+    plan::retain_locked(&held, plan, &bytes)
 }
 
 fn binding(plan: &Plan) -> Result<&Publication> {
@@ -249,6 +262,23 @@ fn steps(manifest: &protocol::Manifest) -> Vec<String> {
         .chain(std::iter::once("publish".into()))
         .collect()
 }
+fn command(expected: &protocol::Manifest, bytes: &[u8], index: usize) -> Command {
+    if index == 0 {
+        Command::Prepare(expected.clone())
+    } else if index <= expected.chunks.len() {
+        Command::Put(protocol::Put {
+            release: expected.release.clone(),
+            index: (index - 1) as u32,
+            bytes: bytes
+                .chunks(protocol::CHUNK_BYTES)
+                .nth(index - 1)
+                .expect("manifest chunk")
+                .to_vec(),
+        })
+    } else {
+        Command::Publish(expected.release.clone())
+    }
+}
 fn observed(status: Option<&protocol::Status>, index: usize, chunks: usize) -> bool {
     status.is_some_and(|s| {
         if index == 0 {
@@ -281,8 +311,7 @@ fn step_deadline(dir: &Path, plan: &Plan) -> Result<u64> {
     }
     Ok(deadline)
 }
-async fn verify(agent: &Agent, plan: &Plan) -> Result<()> {
-    let publication = binding(plan)?;
+async fn verify_binding(agent: &Agent, plan: &Plan, publication: &Publication) -> Result<()> {
     for (target, controller) in [
         (&publication.root, &plan.controller),
         (&publication.store, &publication.root.canister),
@@ -318,16 +347,19 @@ async fn observe(
     ))
 }
 pub(crate) async fn apply(
+    journal: &Path,
     dir: &Path,
-    digest: &str,
     plan: &Plan,
     bytes: &[u8],
     identity: &str,
     icp: &Path,
     read_only: bool,
 ) -> Result<ApplyOutcome> {
+    let digest = plan.digest()?;
+    let digest = digest.as_str();
     let agent = plan.network.agent()?;
-    verify(&agent, plan).await?;
+    removal::permit_publication(journal, plan)?;
+    verify_binding(&agent, plan, binding(plan)?).await?;
     let expected = manifest(plan, bytes)?;
     if let Some(receipt) = receipt(dir, plan, digest, &expected)? {
         return Ok(ApplyOutcome::Publication {
@@ -342,21 +374,7 @@ pub(crate) async fn apply(
             if observed(status.as_ref(), index, expected.chunks.len()) {
                 continue;
             }
-            let command = if index == 0 {
-                Command::Prepare(expected.clone())
-            } else if index <= expected.chunks.len() {
-                Command::Put(protocol::Put {
-                    release: expected.release.clone(),
-                    index: (index - 1) as u32,
-                    bytes: bytes
-                        .chunks(protocol::CHUNK_BYTES)
-                        .nth(index - 1)
-                        .expect("manifest chunk")
-                        .to_vec(),
-                })
-            } else {
-                Command::Publish(expected.release.clone())
-            };
+            let command = command(&expected, bytes, index);
             let path = dir.join("publication").join(step);
             let deadline = step_deadline(&path, plan)?;
             let call = call(plan, command, deadline)?;

@@ -1660,9 +1660,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ac8eeefd0b49bc36a1e946bc984dcabae974cb6510150296d90ae205d5e1cd0"
+checksum = "16223c5f7a3d553adb817492dee47cfa57236eaaefd233c57e21173591c6df27"
 dependencies = [
  "ic-platform",
  "ic-platform-runtime",
@@ -1675,9 +1675,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store-protocol"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f5b667c70c507beac46ccd0bd86d2330d27faf63deaa99d37754234016d253"
+checksum = "045957dad0846b97a65a0b4979e828839048a483ca4daaba2b00c2edcf39c1d0"
 dependencies = [
  "ic-wire 0.24.1",
  "serde",

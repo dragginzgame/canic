@@ -4,7 +4,7 @@ use super::{
 };
 use canic_management_protocol::{
     Failure, Refusal,
-    store_maintenance::{Approval, MAX_UPGRADES, Phase, Status},
+    store_maintenance::{Approval, MAX_UPGRADES, Phase, Scan, Status},
 };
 use ic_platform::management_canister_types::{
     CanisterIdRecord, CanisterStatusResult, CanisterStatusType,
@@ -210,7 +210,7 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
             phase: Phase::Reserved,
             stop_request: None,
             failure: None,
-            preservation: None,
+            preservation: Scan::Entries(None),
             installation: None,
         };
         let mut journals = state.journal.get().clone();

@@ -71,6 +71,20 @@ both executable directions. The publication witness carries two children's Store
 pins and upgrade histories through Host-driven Root replacement. No Host hash
 fallback or new state format is introduced.
 
+## Historical release-scan Root
+
+`root-release-scan.wasm` was retained on 2026-11-16 before versioning Store scan
+evidence. Its 1,453,680 bytes have SHA-256
+`2f099c8d8d5bd9919963900b4002cf25ca50518bd38df9463ef35a19e595d24d`.
+It is the `fault-injection` Root built by `test-store.sh preservation` from
+Canic `37270cb` plus the pending Store 0.2.3 dependency adoption. The runtime
+source was unchanged; this is retained executable evidence, not a tagged-release
+or reproducible-build claim. It writes CUJ8/CUA4 and uses Store method 113 with
+the metadata-v1 digest. Tests retain an actual partial scan, upgrade to CUJ9,
+and verify its evidence and refusal survive; a downgrade from CUJ9 must fail.
+The older-Store witness also starts its legacy scan before upgrading this owner.
+No Host code-hash fallback is added.
+
 ## Pre-registry Store predecessor
 
 `store-0.1.0.wasm` is the normal standalone Store retained from Canic's extraction

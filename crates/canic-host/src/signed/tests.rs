@@ -46,7 +46,7 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     (bytes, plan, call)
 }
 
-fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u8> {
+pub(crate) fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u8> {
     let agent = Agent::builder()
         .with_url(plan.network.url())
         .build()
@@ -413,6 +413,7 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
         canister: "app".into(),
     });
     plan.action = crate::PlanAction::Publish(crate::Publication {
+        after_removal: None,
         root: crate::UpgradeTarget {
             canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
             module: "11".repeat(32),

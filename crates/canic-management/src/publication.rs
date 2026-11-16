@@ -121,6 +121,41 @@ fn admit(store: &str, expires_at_ns: u64) -> Result<Principal, Error> {
     Ok(target)
 }
 
+/// Dispatch one exact removal, waiting for Store's response without a best-effort timeout.
+/// The caller owns durable signed-attempt custody. Only a matching successful reply
+/// settles this call; observation, expiry or a callback trap cannot substitute for it.
+/// Before restoring a label, settle all removals and expire their dispatch authority.
+/// This endpoint does not deduplicate newly signed ingress or automatically retry.
+/// # Errors
+/// Refuses invalid, expired or maintenance-fenced calls; propagates supplier refusal.
+/// Missing or invalid responses retain uncertainty and cannot authorize restoration.
+/// # Panics
+/// Traps unless the actual caller controls Root, or if a qualification reply fault is selected.
+pub async fn remove(
+    input: canic_management_protocol::publication::RemovalRequest,
+) -> canic_management_protocol::publication::RemovalReply {
+    use canic_management_protocol::publication::Removal;
+    let target = admit(&input.store, input.expires_at_ns)?;
+    if crate::engine::store_maintenance::active() {
+        return Err(Error::Maintenance);
+    }
+    if !input.manifest.valid() {
+        return Err(Error::Invalid);
+    }
+    let (method, id) = match input.action {
+        Removal::Delete => ("delete", store::DELETE),
+        Removal::Cancel => ("cancel", store::CANCEL),
+    };
+    // A stalled Store may retain this call indefinitely; the caller stays blocked.
+    let reply: Result<store::Manifest, store::Error> =
+        store_call(target, method, id, &input.manifest, WaitPolicy::Unbounded).await?;
+    let removed = reply.map_err(Error::Store)?;
+    if removed != input.manifest {
+        return Err(Error::Uncertain);
+    }
+    Ok(removed)
+}
+
 /// Read Store state after handover through the actual controller canister.
 /// This performs no storage write, timer registration or management effect.
 /// # Errors
@@ -131,7 +166,14 @@ pub async fn observe_info(
     input: canic_management_protocol::publication::InfoRequest,
 ) -> canic_management_protocol::publication::InfoReply {
     let target = admit(&input.store, input.expires_at_ns)?;
-    metadata_call(target, "observe_info", store::INFO, &()).await
+    store_call(
+        target,
+        "observe_info",
+        store::INFO,
+        &(),
+        WaitPolicy::Bounded { timeout_seconds: 5 },
+    )
+    .await
 }
 
 /// Read one release and all retention obligations on its artifact through Root.
@@ -147,8 +189,14 @@ pub async fn observe_custody(
     if !input.release.valid() {
         return Err(Error::Invalid);
     }
-    let reply: Result<store::Custody, store::Error> =
-        metadata_call(target, "observe_custody", store::CUSTODY, &input.release).await?;
+    let reply: Result<store::Custody, store::Error> = store_call(
+        target,
+        "observe_custody",
+        store::CUSTODY,
+        &input.release,
+        WaitPolicy::Bounded { timeout_seconds: 5 },
+    )
+    .await?;
     let custody = reply.map_err(Error::Store)?;
     if custody.status.manifest.release != input.release || custody.pins.len() > store::MAX_PINS {
         return Err(Error::Uncertain);
@@ -171,17 +219,24 @@ pub async fn admission(
     {
         return Err(Error::Maintenance);
     }
-    let reply: Result<Option<store::Admission>, store::Error> =
-        metadata_call(target, "admission", store::ADMISSION, &input.command).await?;
+    let reply: Result<Option<store::Admission>, store::Error> = store_call(
+        target,
+        "admission",
+        store::ADMISSION,
+        &input.command,
+        WaitPolicy::Bounded { timeout_seconds: 5 },
+    )
+    .await?;
     reply.map_err(Error::Store)
 }
 
 // Small typed calls share transport and codec bounds; no arbitrary forwarding or Root mirror.
-async fn metadata_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
+async fn store_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
     target: Principal,
     method: &'static str,
     id: u64,
     input: &T,
+    wait: WaitPolicy,
 ) -> Result<R, Error> {
     let bytes = ic_wire::encode(
         input,
@@ -192,7 +247,7 @@ async fn metadata_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
         store::LIMITS,
     )
     .map_err(|_| Error::Invalid)?;
-    let reply = Call::new(target, method, WaitPolicy::Bounded { timeout_seconds: 5 })
+    let reply = Call::new(target, method, wait)
         .take_raw_args(bytes)
         .execute()
         .await

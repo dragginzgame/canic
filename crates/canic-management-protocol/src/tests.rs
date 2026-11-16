@@ -257,3 +257,62 @@ fn store_readiness_frame_is_separate_from_publication_and_carries_bounded_info()
     .unwrap();
     assert_eq!(decoded.unwrap(), expected);
 }
+
+#[test]
+fn removal_envelope_binds_full_manifest_and_cannot_be_publication() {
+    use crate::publication::{self, Removal, RemovalRequest};
+    use ic_wasm_store_protocol as store;
+    let manifest = store::Manifest {
+        release: store::Release {
+            name: "a".repeat(64),
+            version: "v".repeat(64),
+        },
+        hash: [255; 32],
+        bytes: (store::CHUNK_BYTES * store::MAX_CHUNKS) as u64,
+        chunks: vec![[255; 32]; store::MAX_CHUNKS],
+    };
+    for action in [Removal::Delete, Removal::Cancel] {
+        let input = RemovalRequest {
+            store: "a".repeat(63),
+            expires_at_ns: u64::MAX,
+            action,
+            manifest: manifest.clone(),
+        };
+        let encoding = ic_wire::Encoding::Frame {
+            method: publication::REMOVE,
+            direction: ic_wire::Direction::Request,
+        };
+        let bytes = ic_wire::encode(&input, encoding, publication::REMOVAL_LIMITS).unwrap();
+        assert_eq!(
+            ic_wire::decode::<RemovalRequest>(&bytes, encoding, publication::REMOVAL_LIMITS)
+                .unwrap(),
+            input
+        );
+        assert!(
+            ic_wire::decode::<publication::Request>(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method: publication::EXECUTE,
+                    direction: ic_wire::Direction::Request,
+                },
+                publication::REQUEST_LIMITS
+            )
+            .is_err()
+        );
+        let reply: publication::RemovalReply = Ok(manifest.clone());
+        let encoding = ic_wire::Encoding::Frame {
+            method: publication::REMOVE,
+            direction: ic_wire::Direction::Response,
+        };
+        let bytes = ic_wire::encode(&reply, encoding, publication::RESPONSE_LIMITS).unwrap();
+        assert_eq!(
+            ic_wire::decode::<publication::RemovalReply>(
+                &bytes,
+                encoding,
+                publication::RESPONSE_LIMITS
+            )
+            .unwrap(),
+            reply
+        );
+    }
+}

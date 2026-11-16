@@ -46,6 +46,11 @@ pub enum ManagementStatus {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum StatusDetail {
+    /// Removal has no deployment receipt.
+    Removal {
+        /// Exact successful response, if retained.
+        removal: Option<crate::RemovalReceipt>,
+    },
     /// Deployment has no additional fields.
     Deployment {},
     /// Store-backed child delivery retained from authenticated Root observations.

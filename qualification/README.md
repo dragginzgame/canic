@@ -7,13 +7,25 @@ the existing artifact builder selects the matching locked crates.io runtime and
 builds it using its packaged lockfile.
 This workspace retains Root integration, chunked installation and complete CLI
 journeys. `make store-test` does not rerun the supplier's native suite.
-`bash scripts/dev/test-store.sh preservation` selects two installed limitation
-regressions for published 0.2.2: indistinguishable removed/restored metadata, and
-Root refusing non-monotonic tombstone ordering before stop. Passing these tests
-demonstrates the limitation, not successful removal integration. The correction
-belongs to [Store #2](https://github.com/dragginzgame/ic-wasm-store/issues/2);
-adoption and the consumer journey remain in
-[Canic #4](https://github.com/dragginzgame/canic/issues/4).
+`bash scripts/dev/test-store.sh preservation` selects three installed boundaries
+against published 0.2.3: distinct removed/restored pages, an actual historical
+scan retaining its digest/refusal across CUJ8→CUJ9, and a new Root scan retaining
+deleted/cancelled labels and its removed-entry cursor across Root and Store
+upgrades. Store activation remains explicit; a downgrade cannot discard the
+scan contract. Historical pre-registry Store maintenance starts under the retained
+old Root, preserving that scan through owner replacement.
+`bash scripts/dev/test-store.sh removal` selects the actual Root forwarding cases:
+full-manifest delete/cancel, pinned refusal, immutable tombstones/quota, malformed
+and unauthorized requests, maintenance fencing, expiry before exact restoration,
+and a lost reply that cannot become settlement evidence. The fixture is the caller
+and retains the original request/result.
+`bash scripts/dev/test-publication.sh cli_removal_restoration` separately qualifies
+Host/CLI custody using installed Root/Store and the real ICP signer: shared content,
+publication quiescence, one retained removal signature, reconcile without renewed
+authority, deadline-gated explicit restoration, historical payload replay refusal,
+and cancellation committed remotely with a lost reply that remains blocked.
+Only independent publication sources and one canonical journal are selected; this
+does not qualify nested removal selection or repair after a refusal/unknown outcome.
 Its packages are named by responsibility, independently of design milestones:
 
 | Package | Responsibility |
@@ -390,7 +402,7 @@ bash scripts/dev/test-root.sh whole_fleet managed_child_cli multi_child_cli reta
 These fixtures explicitly select inline custody. The publication runner above
 owns the generated Root/Store/app default; neither fixture migrates retained fleets.
 `bash scripts/dev/test-root.sh identified_storage_migrates_pending_children_and_refuses_downgrade`
-checks migration from the retained positional-storage Root to CUJ8/CUA4 identified
+checks migration from the retained positional-storage Root to CUJ9/CUA4 identified
 collections. Both pending child approvals survive replacement unchanged and
 complete independently. Compatible executables reopen the collection; the old
 executable refuses without changing state. The two-child publication journey

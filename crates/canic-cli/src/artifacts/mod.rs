@@ -1,4 +1,4 @@
-//! Local publication evidence; no live availability or installed-version inference.
+//! Artifact evidence and explicit local plans; no live availability inference.
 use crate::Output;
 use canic_host::FleetArtifacts;
 use ic_host_text::{escape::terminal_text, table::render_bordered};
@@ -15,6 +15,66 @@ pub(crate) fn output(report: &FleetArtifacts, json: bool, details: bool) -> Outp
     } else {
         Output::Partial(Box::new(output))
     }
+}
+
+pub(crate) fn run(
+    command: &crate::args::FleetArtifactCommand,
+    json: bool,
+) -> canic_host::Result<Output> {
+    use crate::args::{FleetArtifactCommand, RemovalAction};
+    let (selection, state_dir) = match command {
+        FleetArtifactCommand::List {
+            selection,
+            state_dir,
+            ..
+        }
+        | FleetArtifactCommand::PlanRemoval {
+            selection,
+            state_dir,
+            ..
+        }
+        | FleetArtifactCommand::PlanRestoration {
+            selection,
+            state_dir,
+            ..
+        } => (selection, state_dir),
+    };
+    let path = selection.config.path(selection.app.as_deref())?;
+    let selected = canic_host::load_config(&path)?
+        .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+    let journal = state_dir
+        .clone()
+        .unwrap_or_else(|| selected.journal_path(&path));
+    let (operation, plan) = match command {
+        FleetArtifactCommand::List { details, .. } => {
+            return Ok(output(
+                &canic_host::fleet_artifacts(&journal, &selected)?,
+                json,
+                *details,
+            ));
+        }
+        FleetArtifactCommand::PlanRemoval {
+            operation, action, ..
+        } => {
+            let action = match action {
+                RemovalAction::Cancel => canic_management_protocol::publication::Removal::Cancel,
+                RemovalAction::Delete => canic_management_protocol::publication::Removal::Delete,
+            };
+            canic_host::create_removal_plan(&journal, operation, &selected, action)?
+        }
+        FleetArtifactCommand::PlanRestoration { operation, .. } => {
+            canic_host::create_restoration_plan(&journal, operation, &selected)?
+        }
+    };
+    if json {
+        return Ok(Output::Json(
+            serde_json::json!({"operation": operation, "plan": plan}),
+        ));
+    }
+    let text = crate::status::render(&canic_host::status(&journal, &operation)?, &journal)?;
+    Ok(Output::Text(format!(
+        "{text}\nPlan retained; review before using fleet apply.\n"
+    )))
 }
 
 fn render(report: &FleetArtifacts, details: bool) -> String {

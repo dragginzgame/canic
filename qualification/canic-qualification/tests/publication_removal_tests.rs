@@ -1,0 +1,377 @@
+//! Installed CLI custody: publication -> removal -> explicit restoration, plus lost replies.
+use super::{
+    CanisterId, CanisterSettings, Duration, Path, PathBuf, PocketIcBuilder, PocketIcStartupConfig,
+    Value, cli, hex, json, run, server_assets,
+};
+use canic_management_protocol::{children, publication as wire};
+use ic_testkit::pocket_ic::nonblocking::PocketIc;
+use ic_wasm_store_protocol as store;
+
+fn time() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        .try_into()
+        .unwrap()
+}
+fn deadlines(dir: &Path, operation: &str, steps: &[&str]) -> u64 {
+    let deadline = time() + 12_000_000_000;
+    for step in steps {
+        let path = dir.join("journal").join(operation).join(step);
+        std::fs::create_dir_all(&path).unwrap();
+        // Fixture chooses a shorter dispatch window before any signature exists.
+        std::fs::write(path.join("dispatch-deadline.json"), deadline.to_string()).unwrap();
+    }
+    deadline
+}
+async fn expire(deadline: u64) {
+    tokio::time::sleep(Duration::from_nanos(
+        deadline.saturating_sub(time()) + 250_000_000,
+    ))
+    .await;
+}
+fn publication(dir: &Path, version: &str, root_hash: &str, store_hash: &str) -> String {
+    cli(
+        dir,
+        &[
+            "fleet",
+            "plan",
+            "--canister",
+            "app",
+            "--publish-version",
+            version,
+            "--store",
+            "store",
+            "--root-module",
+            root_hash,
+            "--store-module",
+            store_hash,
+            "--controller",
+            "2vxsx-fae",
+        ],
+    )["operation"]
+        .as_str()
+        .unwrap()
+        .into()
+}
+fn remove(dir: &Path, operation: &str, action: &str) -> String {
+    cli(
+        dir,
+        &[
+            "fleet",
+            "artifact",
+            "plan-removal",
+            operation,
+            "--action",
+            action,
+        ],
+    )["operation"]
+        .as_str()
+        .unwrap()
+        .into()
+}
+fn apply(dir: &Path, operation: &str) -> Value {
+    cli(
+        dir,
+        &["fleet", "apply", operation, "--identity", "anonymous"],
+    )
+}
+async fn update<T: serde::Serialize, R: serde::de::DeserializeOwned>(
+    pic: &PocketIc,
+    canister: CanisterId,
+    method: &str,
+    id: u64,
+    value: &T,
+) -> R {
+    let bytes = ic_wire::encode(
+        value,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Request,
+        },
+        wire::REQUEST_LIMITS,
+    )
+    .unwrap();
+    let reply = pic
+        .update_call(canister, CanisterId::anonymous(), method, bytes)
+        .await
+        .unwrap();
+    ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::RESPONSE_LIMITS,
+    )
+    .unwrap()
+}
+async fn observe(
+    pic: &PocketIc,
+    root: CanisterId,
+    supplier: CanisterId,
+    version: &str,
+) -> wire::Reply {
+    update(
+        pic,
+        root,
+        "store_publication",
+        wire::EXECUTE,
+        &wire::Request {
+            store: supplier.to_text(),
+            expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
+            command: wire::Command::Observe(store::Release {
+                name: "app".into(),
+                version: version.into(),
+            }),
+        },
+    )
+    .await
+}
+async fn fault(pic: &PocketIc, root: CanisterId, value: u8) {
+    update::<_, ()>(
+        pic,
+        root,
+        "inject_child_fault",
+        children::INJECT,
+        &children::Request {
+            slot: children::ChildId::FIRST,
+            value,
+        },
+    )
+    .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .to_owned();
+    let assets = PathBuf::from(std::env::var_os("CANIC_PUBLICATION_ARTIFACTS").unwrap());
+    let binary = server_assets::check(&canic_qualification::server_directory()).unwrap();
+    let mut owner = PocketIcStartupConfig::Spawn {
+        server_binary: binary,
+        timeout: Duration::from_secs(30),
+        server_hard_ttl: Some(Duration::from_secs(300)),
+        server_idle_ttl: None,
+        server_output_files: None,
+    }
+    .build_instance(
+        PocketIcBuilder::new()
+            .with_nns_subnet()
+            .with_application_subnet(),
+    )
+    .await
+    .unwrap();
+    let pic = owner.instance();
+    let root_bytes = std::fs::read(assets.join("root-faults.wasm")).unwrap();
+    let store_bytes = std::fs::read(assets.join("store.wasm")).unwrap();
+    let root = pic.create_canister().await;
+    let supplier = pic.create_canister().await;
+    for canister in [root, supplier] {
+        pic.add_cycles(canister, 10_000_000_000_000).await;
+    }
+    pic.install_canister(root, root_bytes.clone(), vec![], None)
+        .await;
+    pic.install_canister(supplier, store_bytes.clone(), vec![], None)
+        .await;
+    pic.update_canister_settings(
+        supplier,
+        None,
+        CanisterSettings {
+            controllers: Some(vec![root]),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let root_stable = pic.get_stable_memory(root).await;
+    let url = owner.instance_mut().make_live(None).await.to_string();
+    let pic = owner.instance();
+    let dir = repo
+        .join("target/publication")
+        .join(format!("removal-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    let wasm = dir.join("app.wasm");
+    std::fs::copy(assets.join("app.wasm"), &wasm).unwrap();
+    assert!(std::fs::metadata(&wasm).unwrap().len() < store::CHUNK_BYTES as u64);
+    let config = json!({"apps":{"assets":{
+        "canisters":{"root":{"role":"root"},"store":{"role":"wasm-store","parent":"root"},"app":{"parent":"root","wasm":wasm}},
+        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":hex(&pic.root_key().await.unwrap()),"routing_canister":root.to_text()},"journal":"journal","canisters":{"root":{"id":root.to_text()},"store":{"id":supplier.to_text()}}}}
+    }}});
+    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    let root_hash = hex(&store::digest(&root_bytes));
+    let store_hash = hex(&store::digest(&store_bytes));
+    let original = publication(&dir, "v1", &root_hash, &store_hash);
+    let deadline = deadlines(
+        &dir,
+        &original,
+        &[
+            "publication/prepare",
+            "publication/chunk-0",
+            "publication/publish",
+        ],
+    );
+    apply(&dir, &original);
+    assert!(
+        !run(
+            &dir,
+            &[
+                "fleet",
+                "artifact",
+                "plan-removal",
+                &original,
+                "--action",
+                "delete"
+            ]
+        )
+        .status
+        .success()
+    );
+    let alias = publication(&dir, "shared", &root_hash, &store_hash);
+    apply(&dir, &alias);
+    let before = observe(pic, root, supplier, "v1").await.unwrap().manifest;
+    expire(deadline).await;
+    let removal = remove(&dir, &original, "delete");
+    assert_eq!(remove(&dir, &original, "delete"), removal);
+    assert!(
+        !run(
+            &dir,
+            &["fleet", "reconcile", &removal, "--identity", "anonymous"]
+        )
+        .status
+        .success()
+    );
+    let deadline = deadlines(&dir, &removal, &["removal"]);
+    let result = apply(&dir, &removal);
+    let path = dir.join("journal").join(&removal).join("removal");
+    let signed = std::fs::read(path.join("signed.json")).unwrap();
+    assert_eq!(apply(&dir, &removal), result);
+    assert_eq!(
+        cli(
+            &dir,
+            &["fleet", "reconcile", &removal, "--identity", "anonymous"]
+        ),
+        result
+    );
+    assert_eq!(std::fs::read(path.join("signed.json")).unwrap(), signed);
+    assert!(
+        !run(
+            &dir,
+            &["fleet", "apply", &original, "--identity", "anonymous"]
+        )
+        .status
+        .success()
+    );
+    assert_eq!(
+        observe(pic, root, supplier, "v1").await,
+        Err(wire::Error::Store(store::Error::NotFound))
+    );
+    assert_eq!(
+        observe(pic, root, supplier, "shared")
+            .await
+            .unwrap()
+            .manifest
+            .hash,
+        before.hash
+    );
+    assert!(
+        !run(&dir, &["fleet", "artifact", "plan-restoration", &removal])
+            .status
+            .success()
+    );
+    expire(deadline).await;
+    let restoration = cli(&dir, &["fleet", "artifact", "plan-restoration", &removal]);
+    assert_eq!(restoration["plan"]["publication"]["after_removal"], removal);
+    let restored = restoration["operation"].as_str().unwrap();
+    assert_ne!(restored, original);
+    apply(&dir, restored);
+    assert_eq!(
+        observe(pic, root, supplier, "v1").await.unwrap().manifest,
+        before
+    );
+    // Even a fresh ingress replay of the old content-bound payload is expired.
+    let request: wire::RemovalRequest = ic_wire::decode(
+        &std::fs::read(path.join("arguments.bin")).unwrap(),
+        ic_wire::Encoding::Frame {
+            method: wire::REMOVE,
+            direction: ic_wire::Direction::Request,
+        },
+        wire::REMOVAL_LIMITS,
+    )
+    .unwrap();
+    let reply: wire::RemovalReply =
+        update(pic, root, "store_removal", wire::REMOVE, &request).await;
+    assert_eq!(reply, Err(wire::Error::Expired));
+    assert_eq!(pic.get_stable_memory(root).await, root_stable);
+
+    // A separate incomplete upload is cancelled remotely, but Root traps before its reply commits.
+    let bytes = b"\0asm\x01\0\0\0\0\x01\0";
+    // Match the publication's actual retained Wasm while leaving a chunk outstanding.
+    let bytes = [std::fs::read(&wasm).unwrap(), bytes[8..].to_vec()].concat();
+    std::fs::write(&wasm, &bytes).unwrap();
+    let cancelled = publication(&dir, "cancelled", &root_hash, &store_hash);
+    let manifest = store::Manifest {
+        release: store::Release {
+            name: "app".into(),
+            version: "cancelled".into(),
+        },
+        hash: store::digest(&bytes),
+        bytes: bytes.len() as u64,
+        chunks: bytes
+            .chunks(store::CHUNK_BYTES)
+            .map(store::digest)
+            .collect(),
+    };
+    let prepared: wire::Reply = update(
+        pic,
+        root,
+        "store_publication",
+        wire::EXECUTE,
+        &wire::Request {
+            store: supplier.to_text(),
+            expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
+            command: wire::Command::Prepare(manifest),
+        },
+    )
+    .await;
+    assert!(!prepared.unwrap().published);
+    let cancellation = remove(&dir, &cancelled, "cancel");
+    let deadline = deadlines(&dir, &cancellation, &["removal"]);
+    fault(pic, root, 12).await;
+    assert!(
+        !run(
+            &dir,
+            &["fleet", "apply", &cancellation, "--identity", "anonymous"]
+        )
+        .status
+        .success()
+    );
+    fault(pic, root, 0).await;
+    assert_eq!(
+        observe(pic, root, supplier, "cancelled").await,
+        Err(wire::Error::Store(store::Error::NotFound))
+    );
+    let path = dir.join("journal").join(&cancellation).join("removal");
+    let signed = std::fs::read(path.join("signed.json")).unwrap();
+    expire(deadline).await;
+    for args in [
+        vec!["fleet", "artifact", "plan-restoration", &cancellation],
+        vec![
+            "fleet",
+            "reconcile",
+            &cancellation,
+            "--identity",
+            "anonymous",
+        ],
+    ] {
+        assert!(!run(&dir, &args).status.success());
+    }
+    assert_eq!(std::fs::read(path.join("signed.json")).unwrap(), signed);
+    assert!(!path.join("reply.bin").exists());
+    owner.instance_mut().stop_live().await;
+    std::fs::remove_dir_all(dir).unwrap();
+}

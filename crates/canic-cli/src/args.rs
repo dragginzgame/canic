@@ -193,7 +193,7 @@ pub(super) enum ArtifactCommand {
 
 #[derive(Subcommand)]
 pub(super) enum FleetCommand {
-    /// Inspect retained Wasm publications for this fleet; no network calls.
+    /// Inspect publications or plan exact removal/restoration; no network calls.
     #[command(subcommand)]
     Artifact(FleetArtifactCommand),
     /// Cancel an unsubmitted whole-fleet approval; retain its evidence and release its slots.
@@ -446,6 +446,35 @@ pub(super) enum FleetArtifactCommand {
         #[arg(long)]
         details: bool,
     },
+    /// Plan exact removal from an independent publication; sends nothing.
+    PlanRemoval {
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+        /// Original standalone publication approval.
+        #[arg(value_name = "PUBLICATION_OPERATION")]
+        operation: String,
+        /// Delete published content or cancel an incomplete upload.
+        #[arg(long, value_enum)]
+        action: RemovalAction,
+    },
+    /// Plan same-content restoration after the original removal settles and expires; sends nothing.
+    PlanRestoration {
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+        /// Original removal approval with its successful retained reply.
+        #[arg(value_name = "REMOVAL_OPERATION")]
+        operation: String,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub(super) enum RemovalAction {
+    Cancel,
+    Delete,
 }
 
 pub(super) fn checkout() -> PathBuf {

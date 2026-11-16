@@ -5,6 +5,7 @@ use ic_host_text::{
     escape::terminal_text,
     table::{self, Alignment, Options},
 };
+use std::fmt::Write as _;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn quote(value: &str) -> String {
@@ -87,6 +88,11 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
 
 fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
     match value {
+        ApplyOutcome::Removal { removal } => {
+            writeln!(text, "Removal result retained: {} / {}\nPreserve this journal; restoration needs a separate plan after the original dispatch deadline.",
+                terminal_text(&removal.manifest.release.name), terminal_text(&removal.manifest.release.version)).expect("String write");
+            true
+        }
         ApplyOutcome::StorePending {
             root,
             store_maintenance,

@@ -6,19 +6,45 @@
 
 Wire hosted Linux/macOS native and Wasm product checks, formatting, snapshot/pin
 admission and one full-history secret scan for
-[#3](https://github.com/dragginzgame/canic/issues/3). Adopted Toko Tooling 0.44.5
+[#3 — Complete hosted CI wiring](https://github.com/dragginzgame/canic/issues/3). Adopted Toko Tooling 0.44.5
 fixes admission of the required exact tooling pin and independent private
-qualification versions. Hosted execution is still pending.
+qualification versions. Hosted Linux and policy checks passed; macOS qualification
+remains pending after the path-validation fix below.
 Private Blob dependency access uses a dedicated read-only deploy key in the
 `CANIC_BLOB_DEPLOY_KEY` Actions secret, with pinned SSH host verification and
-fetch-only credential lifetime. Authenticated source access is verified locally;
-hosted execution is still pending.
+fetch-only credential lifetime. Authenticated source access is verified locally
+and by hosted dependency preparation.
 
-For [#4](https://github.com/dragginzgame/canic/issues/4), installed tests reproduce
-Store 0.2.2's ambiguous tombstone preservation and verify Root refuses incompatible
-ordering before stop. The supplier correction is tracked in
-[Store #2](https://github.com/dragginzgame/ic-wasm-store/issues/2); removal and
-restoration remain unexposed until adoption and consumer qualification.
+Adopt published Store/runtime protocol 0.2.3 for
+[#4 — Qualify Store deployment and maintenance flows](https://github.com/dragginzgame/canic/issues/4).
+The installed boundary witness confirms its versioned page distinguishes removed
+labels from empty restored uploads while preserving the historical page contract.
+Root now commits to that distinction and retains the scan contract and removed-entry
+cursor across Root/Store upgrades. Historical attempts preserve their exact scan
+and refusal. Root provides exact deletion/cancellation with pin, identity, deadline
+and maintenance checks. Host plans removal from an independent publication,
+retains one signed attempt, and permits same-content restoration only under a new
+approval after successful settlement and expiry of every original removal deadline.
+Old publication approvals are fenced. Lost replies and ambiguous publication calls
+stay blocked; observing absence cannot substitute for their exact replies.
+
+With the current Root/Store installed, the selected fleet's original journal, and
+an independent publication operation (not a nested bootstrap publication), these
+commands retain plans only:
+
+```sh
+canic fleet artifact plan-removal PUBLICATION_OPERATION --action delete --app starter --fleet mainnet
+canic fleet status REMOVAL_OPERATION --app starter --fleet mainnet
+# After successful removal and expiry of its original dispatch deadline:
+canic fleet artifact plan-restoration REMOVAL_OPERATION --app starter --fleet mainnet
+```
+
+Use `--action cancel` for an incomplete upload. After reviewing each returned
+plan, `canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet`
+sends its approved effects. `fleet reconcile` reuses the original removal attempt;
+it cannot sign a replacement. Restoration retains immutable version/content identity.
+Pinned content remains protected. This is locally qualified; no mainnet effects
+were submitted.
 
 For an existing configured fleet and retained operation, inspect evidence without
 signing or opening a browser:
@@ -57,6 +83,18 @@ The report command creates a new file and refuses replacement. These commands
 do not launch a browser or submit deployment effects.
 
 ### ⚠️ Breaking
+
+New Store-maintenance attempts require Store 0.2.3. Existing fleets must upgrade
+Store under their old Root before upgrading Root. The shared management journal
+now writes CUJ9; historical records migrate without changing approval digests,
+but older executables refuse the new journal. New scan evidence uses an explicit
+Wire variant and JSON `{"entries": ...}` wrapper; historical evidence keeps its
+original encoding. Rust callers use `Scan` for maintenance preservation and
+verification rather than `Option<Preservation>`.
+
+Host callers that exhaustively match `PlanAction`, `ApplyOutcome` and `StatusDetail`
+must handle removal. `Publication` adds optional `after_removal` authority; old
+approval bytes/digests remain unchanged when it is absent.
 
 Host callers that exhaustively match `FleetPlanning` must handle the new
 `AddChild` result. CLI JSON consumers must accept `action: "add_child"` for
@@ -158,6 +196,11 @@ Compact artifact encoding preserves full existing allocations and checks Storage
 framing before writing; it replaces the old per-child writers, retaining migration readers.
 
 ### 🩹 Fixed
+
+App build rejects regular files used as directory ancestors consistently on Linux
+and macOS, including trailing slashes, dot components and symlink targets.
+Validation happens before generating a lockfile or starting a build. This fixes
+the macOS failure found by [#3 — Complete hosted CI wiring](https://github.com/dragginzgame/canic/issues/3).
 
 Named upgrades now use the same retained serial upgrade chain as whole-fleet
 planning, including children added later and completed Root/Store maintenance.

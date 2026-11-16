@@ -60,7 +60,7 @@ fn positional_journals_migrate_to_identified_records_without_reassignment() {
     );
     let loaded = Journals::from_bytes(Cow::Owned(bytes)).unwrap();
     let bytes = loaded.to_bytes().unwrap();
-    assert!(bytes.starts_with(b"CUJ8"));
+    assert!(bytes.starts_with(b"CUJ9"));
     let reopened = Journals::from_bytes(bytes).unwrap();
     for slot in ChildId::ALL {
         assert_eq!(reopened.0[&slot].0, previous[slot.index()].0);
@@ -292,4 +292,40 @@ fn full_mixed_predecessor_migrates_without_growing_either_checked_allocation() {
             .values()
             .all(|entry| entry.0.approval.is_none())
     );
+}
+
+#[test]
+fn scan_contract_requires_its_journal_version_and_survives_reopen() {
+    use store_maintenance::{Approval, Phase, Scan};
+    let record = store_maintenance::Status {
+        approval: Approval {
+            store: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+            previous_module: [1; 32],
+            module_hash: [2; 32],
+            attempt: ic_wasm_store_protocol::MaintenanceAttempt {
+                sequence: 1,
+                operation: [3; 32],
+            },
+            expires_at_ns: 100,
+        },
+        operator: "r7inp-6aaaa-aaaaa-aaabq-cai".into(),
+        phase: Phase::Reserved,
+        stop_request: None,
+        failure: None,
+        preservation: Scan::Entries(None),
+        installation: None,
+    };
+    let mut journals = Journals(Journals::default().0, Some(record), vec![]);
+    let bytes = journals.to_bytes().unwrap().into_owned();
+    let loaded = Journals::from_bytes(Cow::Borrowed(&bytes)).unwrap();
+    assert_eq!(loaded.1, journals.1);
+    let mut mislabeled = bytes;
+    mislabeled[..4].copy_from_slice(b"CUJ8");
+    assert!(Journals::from_bytes(Cow::Owned(mislabeled)).is_err());
+    journals.1.as_mut().unwrap().preservation = Scan::Legacy(None);
+    let mut historical = journals.to_bytes().unwrap().into_owned();
+    historical[..4].copy_from_slice(b"CUJ8");
+    let loaded = Journals::from_bytes(Cow::Owned(historical)).unwrap();
+    assert_eq!(loaded.1, journals.1);
+    assert!(loaded.to_bytes().unwrap().starts_with(b"CUJ9"));
 }

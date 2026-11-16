@@ -13,7 +13,7 @@ fn post_upgrade() {
     management::open(false, readiness());
 }
 management::mount_endpoints! {
-    store_publication, observe_store, observe_store_custody, store_admission,
+    store_publication, observe_store, observe_store_custody, store_admission, store_removal,
     stage_store_maintenance, advance_store_maintenance, observe_store_maintenance,
     install_store_maintenance, activate_store_maintenance, store_maintenance_status, recover_store_maintenance,
     status, observe, observe_custody, observe_root_custody, observe_root_history, observe_store_attempt, stage, reconcile,

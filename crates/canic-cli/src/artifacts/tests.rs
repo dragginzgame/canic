@@ -50,6 +50,7 @@ fn listing_distinguishes_publication_evidence_and_retains_partial_results() {
             canister: "app".into(),
         },
         publication: Publication {
+            after_removal: None,
             root: UpgradeTarget {
                 canister: "root".into(),
                 module: "11".repeat(32),
@@ -91,4 +92,35 @@ fn listing_distinguishes_publication_evidence_and_retains_partial_results() {
     let entry = &mut report.publications[0];
     entry.publication_operation.clone_from(&entry.operation);
     assert!(!render(&report, true).contains("Nested publication approval"));
+}
+
+#[test]
+fn removal_and_restoration_plan_commands_require_exact_operations_and_reject_effect_options() {
+    for (action, extra) in [
+        ("plan-removal", vec!["--action", "delete"]),
+        ("plan-removal", vec!["--action", "cancel"]),
+        ("plan-restoration", vec![]),
+    ] {
+        let mut args = vec![
+            "canic",
+            "fleet",
+            "artifact",
+            action,
+            "OPERATION",
+            "--app",
+            "demo",
+            "--fleet",
+            "local",
+        ];
+        args.extend(extra);
+        assert!(Cli::try_parse_from(&args).is_ok());
+        for flag in ["--identity", "--icp-bin", "--wasm", "--open"] {
+            let mut invalid = args.clone();
+            invalid.extend([flag, "unexpected"]);
+            assert!(Cli::try_parse_from(invalid).is_err());
+        }
+    }
+    assert!(
+        Cli::try_parse_from(["canic", "fleet", "artifact", "plan-removal", "OPERATION"]).is_err()
+    );
 }

@@ -70,6 +70,11 @@ pub enum ApplyOutcome {
         /// Authenticated retained operation, including uncertainty.
         store_maintenance: Box<canic_management_protocol::store_maintenance::Status>,
     },
+    /// Successful exact removal reply; restoration still requires separate authority.
+    Removal {
+        /// Validated original response and dispatch deadline.
+        removal: crate::RemovalReceipt,
+    },
     /// Store publication progress; it does not report an installed canister.
     Publication {
         /// Exact release evidence from the approved Store through Root.
@@ -231,7 +236,7 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
     if crate::fleet_plan::exists(&dir)? {
         return crate::fleet_plan::apply(&dir, digest, identity, icp).await;
     }
-    apply_at(&dir, digest, identity, icp).await
+    apply_at(root, &dir, digest, identity, icp).await
 }
 
 /// Request recovery of the named Root approval, retaining the exact signed request.
@@ -250,24 +255,28 @@ pub async fn reconcile(
     if crate::fleet_plan::exists(&dir)? {
         return crate::fleet_plan::reconcile(&dir, digest, identity, icp).await;
     }
-    reconcile_at(&dir, digest, identity, icp).await
+    reconcile_at(root, &dir, digest, identity, icp).await
 }
 
 pub(crate) async fn reconcile_at(
+    journal: &Path,
     dir: &Path,
     digest: &str,
     identity: &str,
     icp: &Path,
 ) -> Result<ApplyOutcome> {
     let (plan, bytes) = plan::load(dir, digest)?;
+    if plan.removal().is_some() {
+        return crate::publication::removal::apply(dir, &plan, &bytes, identity, icp, true).await;
+    }
     if plan.store_upgrade_root().is_some() {
         return crate::store_upgrade::apply(dir, &plan, &bytes, identity, icp, true).await;
     }
     if plan.publication().is_some() {
-        return crate::publication::apply(dir, digest, &plan, &bytes, identity, icp, true).await;
+        return crate::publication::apply(journal, dir, &plan, &bytes, identity, icp, true).await;
     }
     if plan.store_root().is_some() {
-        return apply_operation(dir, digest, identity, icp, true).await;
+        return apply_operation(journal, dir, digest, identity, icp, true).await;
     }
     let agent = plan.network.agent()?;
     crate::managed::recovery::reconcile(dir, digest, &plan, &bytes, identity, icp, &agent).await
@@ -275,15 +284,17 @@ pub(crate) async fn reconcile_at(
 
 // Caller holds the journal lock; fleet composition uses this same effect owner.
 pub(crate) async fn apply_at(
+    journal: &Path,
     dir: &Path,
     digest: &str,
     identity: &str,
     icp: &Path,
 ) -> Result<ApplyOutcome> {
-    apply_operation(dir, digest, identity, icp, false).await
+    apply_operation(journal, dir, digest, identity, icp, false).await
 }
 
 async fn apply_operation(
+    journal: &Path,
     dir: &Path,
     digest: &str,
     identity: &str,
@@ -291,11 +302,15 @@ async fn apply_operation(
     read_only: bool,
 ) -> Result<ApplyOutcome> {
     let (plan, wasm) = plan::load(dir, digest)?;
+    if plan.removal().is_some() {
+        return crate::publication::removal::apply(dir, &plan, &wasm, identity, icp, read_only)
+            .await;
+    }
     if plan.store_upgrade_root().is_some() {
         return crate::store_upgrade::apply(dir, &plan, &wasm, identity, icp, false).await;
     }
     if plan.publication().is_some() {
-        return crate::publication::apply(dir, digest, &plan, &wasm, identity, icp, false).await;
+        return crate::publication::apply(journal, dir, &plan, &wasm, identity, icp, false).await;
     }
     let agent = plan.network.agent()?;
     crate::store_bootstrap::verify_root(&agent, &plan).await?;
@@ -521,6 +536,9 @@ pub(crate) fn status_loaded(
     plan: Plan,
     bytes: &[u8],
 ) -> Result<CanisterStatus> {
+    if plan.removal().is_some() {
+        return crate::publication::removal::status(dir, &plan, bytes);
+    }
     if plan.store_upgrade_root().is_some() {
         return crate::store_upgrade::status(dir, &plan);
     }
@@ -529,7 +547,9 @@ pub(crate) fn status_loaded(
     }
     let mut effects = std::collections::BTreeMap::<String, String>::new();
     let effect_names: Vec<_> = match plan.action {
-        crate::PlanAction::Publish(_) => unreachable!("publication status selected above"),
+        crate::PlanAction::Remove(_) | crate::PlanAction::Publish(_) => {
+            unreachable!("publication status selected above")
+        }
         crate::PlanAction::UpgradeStore { .. } => unreachable!("Store status selected above"),
         crate::PlanAction::MaintainRoot { .. } => crate::maintenance::observations(&plan, false)
             .iter()

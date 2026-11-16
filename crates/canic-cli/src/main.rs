@@ -189,23 +189,8 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 }
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
-    if let FleetCommand::Artifact(args::FleetArtifactCommand::List {
-        selection,
-        state_dir,
-        details,
-    }) = command
-    {
-        let path = selection.config.path(selection.app.as_deref())?;
-        let selected = canic_host::load_config(&path)?
-            .select(selection.app.as_deref(), selection.fleet.as_deref())?;
-        let journal = state_dir
-            .clone()
-            .unwrap_or_else(|| selected.journal_path(&path));
-        return Ok(artifacts::output(
-            &canic_host::fleet_artifacts(&journal, &selected)?,
-            cli.json,
-            *details,
-        ));
+    if let FleetCommand::Artifact(command) = command {
+        return artifacts::run(command, cli.json);
     }
     if let FleetCommand::CompareSubnets {
         selection,
@@ -278,7 +263,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         FleetCommand::Artifact(_)
         | FleetCommand::CompareSubnets { .. }
         | FleetCommand::Placements { .. } => {
-            unreachable!("read-only commands handled before journal resolution")
+            unreachable!("artifact and observation commands handled before deployment resolution")
         }
         FleetCommand::Canister(command) => match command {
             CanisterCommand::Bind {

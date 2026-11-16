@@ -389,7 +389,7 @@ async fn cuj5_maintenance_migration_preserves_real_attempt_without_inventing_a_s
         if stopped {
             assert_eq!(resumed, restored);
         } else {
-            let scan = resumed.preservation.unwrap();
+            let scan = resumed.preservation.as_ref().unwrap();
             assert!(scan.complete);
             assert_eq!(scan.observed, 0);
             assert_eq!(resumed.phase, Phase::Closed);

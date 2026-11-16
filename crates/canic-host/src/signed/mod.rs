@@ -1,7 +1,7 @@
 //! ICP CLI owns keys and signing; Canic owns exact-attempt custody and submission.
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::{
     Error, Plan, Result,

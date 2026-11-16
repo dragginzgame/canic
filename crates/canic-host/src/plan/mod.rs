@@ -13,7 +13,7 @@ mod record;
 mod tests;
 pub use action::{PlanAction, StoreMaintenance, UpgradeTarget};
 
-/// Complete one-canister deployment approval. No implicit funding conversions.
+/// One explicit deployment or artifact-operation approval. No implicit funding conversions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(try_from = "record::PlanRecord")]
 pub struct Plan {
@@ -23,7 +23,7 @@ pub struct Plan {
     pub network: Network,
     /// Required signer; sole direct controller, or sole operator controller of Root.
     pub controller: String,
-    /// Exact installation bytes.
+    /// Exact retained Wasm bytes, including publication/removal content identity.
     pub artifact: Artifact,
     /// Explicit effect and its complete authority.
     pub action: PlanAction,
@@ -72,6 +72,7 @@ impl Plan {
         if self.store_upgrade_root().is_some() {
             canic_management_protocol::store_maintenance::MAX_MODULE_BYTES
         } else if self.publication().is_some()
+            || self.removal().is_some()
             || self.management().is_some_and(|m| m.source.is_some())
         {
             artifact::MAX_ARTIFACT_BYTES
@@ -84,8 +85,9 @@ impl Plan {
         let controller = principal(&self.controller)?;
         if !matches!(
             (self.version, self.deployment.is_some()),
-            (1, false) | (2, true) | (3, true)
+            (1, false) | (2, true) | (3, true) | (4, true)
         ) || (self.version == 3) != self.publication().is_some()
+            || (self.version == 4) != self.removal().is_some()
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
@@ -147,6 +149,7 @@ impl Plan {
         }
         match &self.action {
             PlanAction::Publish(value) => crate::publication::validate(self, value)?,
+            PlanAction::Remove(value) => crate::publication::removal::validate(self, value)?,
             PlanAction::Create { cycles } | PlanAction::CreateStore { cycles, .. }
                 if !(500_000_000_000..=5_000_000_000_000).contains(cycles) =>
             {
@@ -276,6 +279,11 @@ pub(crate) fn retain(
 /// Lookup and publication share the caller's journal lock.
 pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
     let root = &store.path;
+    let publication_predecessors = if plan.publication().is_some() {
+        crate::publication::removal::publication_predecessors(root, &plan)?
+    } else {
+        Vec::new()
+    };
     let mut retained = None;
     let mut fleet_predecessors = None;
     if let Some(name) = plan.deployment.clone() {
@@ -330,6 +338,9 @@ pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Resu
             let existing: Plan = store::json(&entry.path().join("plan.json"))?;
             if existing.digest()? != existing_id {
                 return Err(Error::Invalid("retained plan digest mismatch".into()));
+            }
+            if existing.removal().is_some() || publication_predecessors.contains(&existing_id) {
+                continue;
             }
             // Only the shared history owner can prove that these earlier upgrades completed.
             if fleet_predecessors

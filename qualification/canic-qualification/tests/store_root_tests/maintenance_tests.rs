@@ -176,22 +176,34 @@ async fn restore_faults(root: &Client<'_>) {
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callback() {
-    replacement_preserves_state(std::fs::read(artifacts().join("original.wasm")).unwrap()).await;
+    replacement_preserves_state(
+        std::fs::read(artifacts().join("original.wasm")).unwrap(),
+        false,
+    )
+    .await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_upgrades_pre_registry_store_preserving_state_and_uncertain_effects() {
-    replacement_preserves_state(include_bytes!("../../fixtures/store-0.1.0.wasm").to_vec()).await;
+    replacement_preserves_state(
+        include_bytes!("../../fixtures/store-0.1.0.wasm").to_vec(),
+        true,
+    )
+    .await;
 }
 
-async fn replacement_preserves_state(store_wasm: Vec<u8>) {
+async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool) {
     let previous_module = store::digest(&store_wasm);
     let (_, binary) = support::inputs();
     let owner = support::instance(&binary).await;
     let pic = owner.instance();
     let (root, supplier) = readiness_tests::fixture_with_code(
         pic,
-        std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
+        if historical_scan {
+            include_bytes!("../../fixtures/root-release-scan.wasm").to_vec()
+        } else {
+            std::fs::read(artifacts().join("root-faults.wasm")).unwrap()
+        },
         store_wasm,
     )
     .await;

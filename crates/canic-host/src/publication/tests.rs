@@ -5,7 +5,7 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-fn selection() -> SelectedFleet {
+pub(super) fn selection() -> SelectedFleet {
     SelectedFleet {
         app: "starter".into(),
         fleet: "mainnet".into(),
@@ -41,7 +41,7 @@ fn selection() -> SelectedFleet {
         },
     }
 }
-fn publication(version: &str) -> PublicationInput {
+pub(super) fn publication(version: &str) -> PublicationInput {
     PublicationInput {
         canister: "app".into(),
         store: "store".into(),

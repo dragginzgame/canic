@@ -96,6 +96,7 @@ pub(super) fn select(
     {
         return Err(invalid());
     }
+    crate::publication::removal::permit_publication(&journal.path, &publication)?;
     let manifest = crate::publication::manifest(&publication, &bytes)?;
     if crate::publication::receipt(&path, &publication, id, &manifest)?.is_none() {
         return Err(Error::Blocked(

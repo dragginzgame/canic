@@ -250,12 +250,15 @@ impl Storable for Journals {
             JOURNAL_LIMITS,
         )
         .map_err(|_| CodecError::Invalid("child journals"))?;
-        let mut bytes = b"CUJ8".to_vec();
+        let mut bytes = b"CUJ9".to_vec();
         bytes.extend_from_slice(&payload);
         Ok(Cow::Owned(bytes))
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        let value = if let Some(payload) = bytes.strip_prefix(b"CUJ8") {
+        let value = if let Some(payload) = bytes
+            .strip_prefix(b"CUJ9")
+            .or_else(|| bytes.strip_prefix(b"CUJ8"))
+        {
             let (entries, maintenance, history): (Records<Journal>, _, _) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                     .map_err(|_| CodecError::Invalid("identified child journals"))?;
@@ -291,7 +294,7 @@ impl Storable for Journals {
                     phase: old.phase,
                     stop_request: old.stop_request,
                     failure: old.failure,
-                    preservation: None,
+                    preservation: store_maintenance::Scan::Legacy(None),
                     installation: None,
                 }),
                 vec![],
@@ -308,6 +311,19 @@ impl Storable for Journals {
                 vec![],
             ))
         }?;
+        if !bytes.starts_with(b"CUJ9")
+            && value.1.iter().chain(value.2.iter()).any(|record| {
+                matches!(record.preservation, store_maintenance::Scan::Entries(_))
+                    || record.installation.as_ref().is_some_and(|installation| {
+                        matches!(
+                            installation.verification,
+                            store_maintenance::Scan::Entries(_)
+                        )
+                    })
+            })
+        {
+            return Err(CodecError::Invalid("versioned scan in historical journal"));
+        }
         value.validate()?;
         Ok(value)
     }

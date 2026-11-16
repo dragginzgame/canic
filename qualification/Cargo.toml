@@ -25,7 +25,7 @@ ic-platform-runtime = { version = "0.22.1", default-features = false, features =
 ic-platform-types = { version = "0.20.3", default-features = false }
 ic-storage = "0.74.1"
 ic-testkit = { version = "0.106.0", default-features = false }
-ic-wasm-store-protocol = "0.2.1"
+ic-wasm-store-protocol = "0.2.3"
 ic-wire = { version = "0.24.1", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"

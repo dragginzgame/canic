@@ -524,6 +524,9 @@ pub fn plan_fleet(
             }
         } else {
             let (old, _) = plan::load(&dir, &id)?;
+            if old.removal().is_some() {
+                continue;
+            }
             if old.publication().is_some() {
                 publications.push((id, old));
                 continue;
@@ -676,7 +679,14 @@ pub(crate) async fn apply(
             "fleet child admission time passed; no Root creation was signed".into(),
         ));
     }
-    let root = operation::apply_at(&dir.join("root"), &value.root.digest()?, identity, icp).await?;
+    let root = operation::apply_at(
+        dir.parent().ok_or_else(invalid)?,
+        &dir.join("root"),
+        &value.root.digest()?,
+        identity,
+        icp,
+    )
+    .await?;
     let ApplyOutcome::Complete(root) = root else {
         return Err(invalid());
     };
@@ -687,8 +697,14 @@ pub(crate) async fn apply(
             store::put_json(&path.join("plan.json"), &plan)?;
         }
         load(dir, id)?;
-        let ApplyOutcome::Complete(receipt) =
-            operation::apply_at(&path, &plan.digest()?, identity, icp).await?
+        let ApplyOutcome::Complete(receipt) = operation::apply_at(
+            dir.parent().ok_or_else(invalid)?,
+            &path,
+            &plan.digest()?,
+            identity,
+            icp,
+        )
+        .await?
         else {
             return Err(invalid());
         };
@@ -708,7 +724,14 @@ pub(crate) async fn apply(
         load(dir, id)?;
         outcomes.push(crate::operation::ChildOutcome {
             name: definition.deployment.canister.clone(),
-            outcome: operation::apply_at(&path, &child_id, identity, icp).await?,
+            outcome: operation::apply_at(
+                dir.parent().ok_or_else(invalid)?,
+                &path,
+                &child_id,
+                identity,
+                icp,
+            )
+            .await?,
         });
     }
     Ok(ApplyOutcome::Fleet {
@@ -739,9 +762,14 @@ pub(crate) async fn reconcile(
                 "Store bootstrap has not begun; resume fleet apply".into(),
             ));
         }
-        let ApplyOutcome::Complete(receipt) =
-            operation::reconcile_at(&path, &value.store_plan(&root)?.digest()?, identity, icp)
-                .await?
+        let ApplyOutcome::Complete(receipt) = operation::reconcile_at(
+            dir.parent().ok_or_else(invalid)?,
+            &path,
+            &value.store_plan(&root)?.digest()?,
+            identity,
+            icp,
+        )
+        .await?
         else {
             return Err(invalid());
         };
@@ -767,6 +795,7 @@ pub(crate) async fn reconcile(
         outcomes.push(crate::operation::ChildOutcome {
             name: definition.deployment.canister.clone(),
             outcome: operation::reconcile_at(
+                dir.parent().ok_or_else(invalid)?,
                 &path,
                 &value.child_plan(&root, store.as_ref(), index)?.digest()?,
                 identity,
@@ -881,6 +910,11 @@ pub(crate) fn artifact_inventory(
         return Ok(Vec::new());
     }
     releases::inventory(dir, id, &value)
+}
+
+pub(crate) fn quiesce_publications(dir: &Path, id: &str, selected: &Plan) -> Result<()> {
+    let fleet = load(dir, id)?;
+    releases::quiesce(dir, &fleet, selected)
 }
 
 const STORE_CYCLES: u64 = 1_000_000_000_000;

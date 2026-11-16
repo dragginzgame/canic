@@ -534,7 +534,7 @@ pub(crate) fn inventory(
                 let _store = crate::store::Store::open(root)?;
                 let dir = root.join(&id);
                 let (plan, bytes) = crate::plan::load(&dir, &id)?;
-                if plan.publication().is_some() {
+                if plan.publication().is_some() || plan.removal().is_some() {
                     return Ok(vec![]);
                 }
                 let state = operation::status_loaded(&dir, &id, plan, &bytes)?;

@@ -55,6 +55,9 @@ pub use plan::{
     ManagedOwner, Plan, PlanAction, PlanInput, StoreMaintenance, UpgradeTarget, create_plan,
 };
 pub use publication::list::{FleetArtifact, FleetArtifacts, fleet_artifacts};
+pub use publication::removal::{
+    PublicationRemoval, RemovalReceipt, create_removal_plan, create_restoration_plan,
+};
 pub use publication::{
     Publication, PublicationInput, PublicationProgress, create_publication_plan,
 };

@@ -7,6 +7,7 @@ mod preservation_limits_tests;
 mod publication_tests;
 mod quiescence_tests;
 mod readiness_tests;
+mod removal_tests;
 mod root_custody_tests;
 use super::{Client, store, support};
 use canic_management_protocol::{

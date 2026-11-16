@@ -40,8 +40,8 @@ ic-platform-runtime = { version = "0.22.1", default-features = false }
 ic-storage = "0.74.0"
 ic-timers = "0.45.10"
 ic-topology = { git = "https://github.com/dragginzgame/ic-query", rev = "0a3eca919f05d777798406087049cc51ab7ae2a8", version = "0.106.1" }
-ic-wasm-store = "0.2.1"
-ic-wasm-store-protocol = "0.2.1"
+ic-wasm-store = "0.2.3"
+ic-wasm-store-protocol = "0.2.3"
 ic-wire = { version = "0.24.1", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"

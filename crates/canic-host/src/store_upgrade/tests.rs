@@ -183,7 +183,7 @@ fn recovery_keeps_expired_effect_authority_and_cannot_select_advance() {
         phase: Phase::Ready,
         stop_request: None,
         failure: None,
-        preservation: None,
+        preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
         installation: None,
     };
     assert!(admit(&plan, &status).is_ok());

@@ -341,6 +341,7 @@ fn publication(
 ) -> Result<Option<FleetPlanning>> {
     if let Some(source) = child.management().and_then(|o| o.source.as_ref()) {
         let publication = super::releases::publication_plan(child, source)?;
+        crate::publication::removal::permit_publication(&store.path, &publication)?;
         // Completed publication is artifact evidence, not permission to renew an old mutation.
         let mut published = false;
         for (id, old) in publications {

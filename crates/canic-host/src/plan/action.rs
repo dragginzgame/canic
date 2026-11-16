@@ -34,6 +34,8 @@ pub struct StoreMaintenance {
 pub enum PlanAction {
     /// Publish immutable artifact bytes through Root; grants no installation authority.
     Publish(crate::Publication),
+    /// Remove one exact release through Root; no installation or replacement authority.
+    Remove(crate::PublicationRemoval),
     /// Direct creation and installation, funded by the operator.
     Create {
         /// Exact creation debit ceiling.
@@ -78,6 +80,14 @@ pub enum PlanAction {
 }
 
 impl super::Plan {
+    /// Exact removal authority, separate from publication and deployment.
+    #[must_use]
+    pub fn removal(&self) -> Option<&crate::PublicationRemoval> {
+        match &self.action {
+            PlanAction::Remove(value) => Some(value),
+            _ => None,
+        }
+    }
     /// Explicit Store maintenance sequence, absent in historical first-upgrade plans.
     #[must_use]
     pub fn store_upgrade_sequence(&self) -> Option<u64> {
@@ -130,6 +140,7 @@ impl super::Plan {
             PlanAction::Create { .. }
             | PlanAction::CreateStore { .. }
             | PlanAction::CreateChild(_)
+            | PlanAction::Remove(_)
             | PlanAction::Publish(_) => None,
         }
     }

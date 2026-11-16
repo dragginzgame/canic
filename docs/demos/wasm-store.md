@@ -11,20 +11,73 @@ checkout is needed. Existing generated configurations must change only their Sto
 pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
 are unchanged. Rebuilding does not authorize installing the changed executable.
 
-The supplier also supports exact removal/restoration and tombstones. Canic does
-not forward those mutation endpoints. This adoption qualifies the existing
-publication, pin and maintenance journey; maintenance of Stores containing
-tombstones needs separate qualification before exposing removal through Canic.
-The supplier's preservation page projects a tombstone as an unpublished upload
-with all chunks missing, while Root checks ordering by release name/version.
-Removal needs an explicit tombstone-preservation contract and compatible scan
-ordering; ordinary upload progress cannot prove that a removed identity stayed
-removed across an upgrade.
-The installed reproducer is `bash scripts/dev/test-store.sh preservation`.
-[Store #2](https://github.com/dragginzgame/ic-wasm-store/issues/2) owns the
-versioned correction; [Canic #4](https://github.com/dragginzgame/canic/issues/4)
-owns its adoption and removal-flow qualification. The local supplier repair is
-not part of Canic's currently selected registry executable.
+The supplier also supports exact removal/restoration and tombstones. Root now
+forwards exact deletion/cancellation through `store_removal`; Host retains their
+exact signed attempts under the existing journal lock. New Root attempts use Store 0.2.3's
+`observe_preservation_v2`: explicit active/removed entries ordered by name, active
+before removed, then version. The retained cursor includes that flag, and a
+separate digest domain commits to the entry kind. CUJ9 preserves both new and
+historical scan contracts; old attempts keep their exact digest and ordering,
+including any refusal. Old executables refuse the new journal format.
+
+For an existing fleet, upgrade Store to 0.2.3 under the old Root **before**
+upgrading Root. New attempts require the versioned supplier endpoint; no probing
+or fallback selects a weaker scan. `bash scripts/dev/test-store.sh preservation`
+qualifies removed/cancelled labels through Root and Store replacement, alongside
+the historical refusal/migration case. These tests stage removal through the
+fixture controller; the separate CLI witness below qualifies Host settlement.
+
+`bash scripts/dev/test-store.sh removal` exercises actual Root deletion/cancellation,
+pinned and wrong-manifest refusal, authorization, malformed requests, maintenance
+fencing, shared-byte retention and tombstone quota. Its fixture retains the exact
+successful response and expires the original removal deadline before restoration;
+replaying that old request then fails. An injected lost Root reply demonstrates
+why observing absence cannot replace a receipt. Root does not deduplicate freshly
+signed repeats or renew deadlines; Host owns those restrictions.
+
+## Removal and exact restoration
+
+Use one canonical fleet journal and the current Root/Store executables. Removal
+currently selects an independent publication operation, not a nested bootstrap
+publication. Store pins still refuse removal. Before planning removal, Host requires
+all known matching publication mutations (including nested ones) to have exact
+successful replies and expired dispatch windows. An absence observation or expired
+request alone cannot settle an ambiguous call.
+
+```sh
+canic fleet artifact list --app starter --fleet mainnet --details
+canic fleet artifact plan-removal PUBLICATION_OPERATION --action delete --app starter --fleet mainnet
+canic fleet status REMOVAL_OPERATION --app starter --fleet mainnet
+```
+
+Planning sends nothing. Review the exact Root/Store/code/content bindings, then
+apply with `canic fleet apply REMOVAL_OPERATION --app starter --fleet mainnet --identity canic-mainnet`.
+Use `--action cancel` instead of `delete` for an incomplete upload. Repeated
+planning retains the same approval; apply/reconcile keep the same signed attempt.
+Even a retained refusal cannot authorize a fresh mutation. Unresolved outcomes
+remain blocked; this path has no automatic repair or replacement authority.
+
+After the successful original reply is retained **and** its dispatch deadline has
+expired, retain a new same-content restoration approval:
+
+```sh
+canic fleet artifact plan-restoration REMOVAL_OPERATION --app starter --fleet mainnet
+canic fleet status RESTORATION_OPERATION --app starter --fleet mainnet
+canic fleet apply RESTORATION_OPERATION --app starter --fleet mainnet --identity canic-mainnet
+```
+
+Restoration uses the publication owner and links the exact removal in its digest.
+It cannot change label, bytes, network, controller or reviewed Root/Store code.
+Every known removal of that label must be a settled, expired ancestor. Old
+publication receipts remain historical evidence; resuming their approvals cannot
+restore content. The normal 128-operation journal bound applies; no new catalog,
+generation allocator, Root persistence or automatic retry engine is added.
+This cannot coordinate a second journal or privileged calls made outside Canic.
+
+`bash scripts/dev/test-publication.sh cli_removal_restoration` runs the actual
+CLI against installed Root/Store: shared bytes survive deletion, successful
+restoration needs new authority, fresh replay of the old payload expires, and an
+injected lost cancellation reply remains blocked despite observed absence.
 
 The standalone Store is the first implementation of the
 [per-fleet artifact contract](../design/canic-system-design.md#per-fleet-versioned-wasm-store).
@@ -221,11 +274,11 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJ8 journal preserves current and completed attempts across Root replacement
-and loads recognized predecessor journals, including CUJ6/CUJ7, without inventing or
+The CUJ9 journal preserves current and completed attempts across Root replacement
+and loads recognized predecessor journals, including CUJ6/CUJ7/CUJ8, without inventing or
 resetting authority. The 16 KiB journal ceiling within its original checked
 allocation is unchanged; full child and Store histories fit that budget.
-Older executables refuse CUJ8. Existing complete child-custody
+Older executables refuse CUJ9. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
 preventing the current Host Root-maintenance path from omitting it.
 Run `bash scripts/dev/test-store.sh quiescence` for the installed proof.

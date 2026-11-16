@@ -54,7 +54,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        match plan.action { canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
+        match plan.action { canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
@@ -84,7 +84,38 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
             output.push_str("Store maintenance: no retained observation\n");
         }
     }
+    if let Some(value) = plan.removal() {
+        writeln!(
+            output,
+            "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nRemoval: {:?}\nSource publication: {}",
+            terminal_text(&value.publication.root.canister),
+            terminal_text(&value.publication.root.module),
+            terminal_text(&value.publication.store.canister),
+            terminal_text(&value.publication.store.module),
+            terminal_text(&value.publication.release.name),
+            terminal_text(&value.publication.release.version),
+            value.action,
+            terminal_text(&value.publication_operation)
+        )
+        .expect("String write");
+        if let StatusDetail::Removal {
+            removal: Some(receipt),
+        } = &state.detail
+        {
+            writeln!(
+                output,
+                "Removal result: retained\nOriginal dispatch deadline: {} Unix ns",
+                receipt.dispatch_deadline_ns
+            )
+            .expect("String write");
+        }
+        output.push_str("Restoration needs a separate plan after this call settles and its dispatch deadline expires.\n");
+    }
     if let Some(publication) = plan.publication() {
+        if let Some(id) = &publication.after_removal {
+            writeln!(output, "Restoration after removal: {}", terminal_text(id))
+                .expect("String write");
+        }
         writeln!(output, "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nPublished receipt retained: {}",
             terminal_text(&publication.root.canister), terminal_text(&publication.root.module),
             terminal_text(&publication.store.canister), terminal_text(&publication.store.module),
@@ -219,7 +250,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
             terminal_text(&receipt.controller),
         )
         .expect("writing to String");
-    } else if plan.publication().is_none() {
+    } else if plan.publication().is_none() && plan.removal().is_none() {
         output.push_str("Receipt: none retained; deployment completion is not established.\n");
     }
     if effects

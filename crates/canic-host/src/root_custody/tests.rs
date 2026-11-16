@@ -56,7 +56,7 @@ fn operation(sequence: u64) -> store_maintenance::Status {
         phase: store_maintenance::Phase::StopIssued,
         stop_request: Some([4; 32]),
         failure: None,
-        preservation: None,
+        preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
         installation: None,
     }
 }

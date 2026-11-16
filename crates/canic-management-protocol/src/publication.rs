@@ -96,3 +96,33 @@ pub struct AdmissionRequest {
 }
 /// Store's retained admission phase; no quiescence or installation receipt.
 pub type AdmissionReply = Result<Option<store::Admission>, Error>;
+
+/// One exact removal through Root; no retry, restoration or pin-release authority.
+pub const REMOVE: u64 = 60;
+/// One full manifest plus target/deadline; no transient Wasm bytes.
+pub const REMOVAL_LIMITS: ic_wire::Limits = store::LIMITS;
+/// Published deletion and incomplete-upload cancellation have different supplier contracts.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Removal {
+    /// Delete a published, unpinned release, retaining its immutable tombstone.
+    Delete,
+    /// Cancel an incomplete, unpinned upload, retaining its immutable tombstone.
+    Cancel,
+}
+/// The caller must retain one exact signed attempt, including this original deadline.
+/// Before restoration, settle every removal and let its dispatch authority expire.
+/// A catalog observation is not settlement, and a fresh ingress is not a retry.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RemovalRequest {
+    /// Canonical Store identity, independently checked by Store against actual Root control.
+    pub store: String,
+    /// Original last-dispatch time; never renewed to replay removal after restoration.
+    pub expires_at_ns: u64,
+    /// Exact supplier action, never inferred from current upload progress.
+    pub action: Removal,
+    /// Full immutable identity, including size and ordered chunk commitments.
+    pub manifest: store::Manifest,
+}
+/// Success acknowledges this completed remote removal. Missing/invalid replies remain uncertain.
+/// This does not prove other attempts settled or allow restoration before their deadlines expire.
+pub type RemovalReply = Result<store::Manifest, Error>;

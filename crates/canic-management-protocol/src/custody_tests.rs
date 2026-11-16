@@ -3,6 +3,7 @@ use crate::{custody, store_maintenance as maintenance, stored, upgrade};
 #[test]
 fn complete_root_custody_fits_combined_budget() {
     let preservation = maintenance::Preservation {
+        after_removed: false,
         catalog: ic_wasm_store_protocol::preservation::Catalog {
             quota: ic_wasm_store_protocol::Quota {
                 reserved_bytes: u64::MAX,
@@ -36,13 +37,13 @@ fn complete_root_custody_fits_combined_budget() {
         phase: maintenance::Phase::Ready,
         stop_request: Some([255; 32]),
         failure: Some(crate::Failure::Rejected(u32::MAX)),
-        preservation: Some(preservation.clone()),
+        preservation: crate::store_maintenance::Scan::Entries(Some(preservation.clone())),
         installation: Some(maintenance::Installation {
             upload_request: [255; 32],
             request: Some([255; 32]),
             sender_version: Some(u64::MAX),
             start_request: Some([255; 32]),
-            verification: Some(preservation),
+            verification: crate::store_maintenance::Scan::Entries(Some(preservation)),
             activation_request: Some([255; 32]),
         }),
     };
@@ -152,7 +153,7 @@ fn complete_root_custody_fits_combined_budget() {
         .unwrap(),
         history
     );
-    // Same tuple shape as Root's CUJ8 payload, including both full child journals.
+    // Same tuple shape as Root's CUJ9 payload, including both full child journals.
     // The existing checked journal lease must fit every admitted record at its worst field sizes.
     let child_journal = (
         &child.creation,

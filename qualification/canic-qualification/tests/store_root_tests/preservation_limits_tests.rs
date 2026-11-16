@@ -1,5 +1,8 @@
-//! Installed supplier limitations that must be resolved before Canic admits removal.
-use super::{Client, maintenance_tests, quiescence_tests, readiness_tests, store, support};
+//! Released preservation contract and the remaining Root boundary before removal admission.
+use super::{
+    Client, artifacts, maintain, maintenance_tests, quiescence_tests, readiness_tests,
+    recover_store, store, support,
+};
 use canic_management_protocol::{self as management, store_maintenance as wire};
 use ic_testkit::pocket_ic::CanisterSettings;
 
@@ -21,8 +24,26 @@ async fn page(
         .unwrap()
 }
 
+async fn versioned_page(
+    supplier: &Client<'_>,
+    attempt: &store::MaintenanceAttempt,
+) -> store::preservation::PageV2 {
+    supplier
+        .update::<_, Result<store::preservation::PageV2, store::Error>>(
+            "observe_preservation_v2",
+            store::PRESERVATION_V2,
+            &store::preservation::Request {
+                attempt: attempt.clone(),
+                after: None,
+            },
+            store::LIMITS,
+        )
+        .await
+        .unwrap()
+}
+
 #[tokio::test(flavor = "current_thread")]
-async fn preservation_cannot_distinguish_removed_identity_from_restored_empty_upload() {
+async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old_pages() {
     let (_, binary) = support::inputs();
     let owner = support::instance(&binary).await;
     let (_, supplier) = readiness_tests::fixture(owner.instance()).await;
@@ -77,6 +98,12 @@ async fn preservation_cannot_distinguish_removed_identity_from_restored_empty_up
         .await
         .unwrap();
     let tombstone = page(&supplier, &attempt).await;
+    let versioned_tombstone = versioned_page(&supplier, &attempt).await;
+    assert_eq!(versioned_tombstone.catalog, tombstone.catalog);
+    assert_eq!(
+        versioned_tombstone.entry,
+        Some(store::preservation::Entry::Removed(removed.clone()))
+    );
     assert_eq!(tombstone.entry.as_ref().unwrap().status.manifest, removed);
     assert_eq!(tombstone.catalog.releases, 2);
     supplier
@@ -111,8 +138,16 @@ async fn preservation_cannot_distinguish_removed_identity_from_restored_empty_up
         .await
         .unwrap();
     // Even the counters match: the incomplete alias kept the same reservation.
-    // This is a supplier-contract reproducer, not a preservation success claim.
+    // The old wire contract is deliberately unchanged. Root cannot silently
+    // reinterpret an in-progress digest as a commitment to the new entry kind.
     assert_eq!(page(&supplier, &attempt).await, tombstone);
+    let restored = versioned_page(&supplier, &attempt).await;
+    assert_eq!(restored.catalog, versioned_tombstone.catalog);
+    let Some(store::preservation::Entry::Active(custody)) = restored.entry else {
+        panic!("restored upload must be active, not a removed label");
+    };
+    assert_eq!(custody.status.manifest, removed);
+    assert_eq!(Some(custody), tombstone.entry);
     let tombstones = supplier
         .update::<_, Result<Vec<store::Manifest>, store::Error>>(
             "tombstones",
@@ -126,11 +161,16 @@ async fn preservation_cannot_distinguish_removed_identity_from_restored_empty_up
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn root_refuses_non_monotonic_tombstone_catalog_before_stopping_store() {
+async fn historical_scan_keeps_its_refusal_and_digest_across_root_migration() {
     let (_, binary) = support::inputs();
     let owner = support::instance(&binary).await;
     let pic = owner.instance();
-    let (root, supplier) = readiness_tests::fixture(pic).await;
+    let (root, supplier) = readiness_tests::fixture_with_code(
+        pic,
+        include_bytes!("../../fixtures/root-release-scan.wasm").to_vec(),
+        std::fs::read(artifacts().join("original.wasm")).unwrap(),
+    )
+    .await;
     let removed = supplier.publish_bytes("a", b"\0asm\x01\0\0\0").await;
     supplier.publish_bytes("z", b"\0asm\x01\0\0\0").await;
     supplier
@@ -175,7 +215,153 @@ async fn root_refuses_non_monotonic_tombstone_catalog_before_stopping_store() {
     assert_eq!(scan.observed, 1);
     assert_eq!(scan.after.as_ref().unwrap().version, "z");
     assert_eq!(scan.catalog.releases, 2);
+    assert!(matches!(status.preservation, wire::Scan::Legacy(_)));
+    maintain(&root).await;
+    assert_eq!(maintenance_tests::observe(&root).await, status);
     // Duplicate continuation cannot bypass the refused cursor or issue stop.
     assert_eq!(maintenance_tests::advance(&root, &approval).await, status);
     assert_eq!(maintenance_tests::activate(&root, &approval).await, status);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() {
+    let (_, binary) = support::inputs();
+    let owner = support::instance(&binary).await;
+    let pic = owner.instance();
+    let (root, supplier) = readiness_tests::fixture(pic).await;
+    let removed = supplier.publish_bytes("a", b"\0asm\x01\0\0\0").await;
+    supplier.publish_bytes("z", b"\0asm\x01\0\0\0").await;
+    supplier
+        .update::<_, Result<store::Manifest, store::Error>>(
+            "delete",
+            store::DELETE,
+            &removed,
+            store::LIMITS,
+        )
+        .await
+        .unwrap();
+    let pending_bytes = b"\0asm\x01\0\0\0\0\x01\0";
+    let pending = store::Manifest {
+        release: store::Release {
+            version: "m".into(),
+            ..removed.release.clone()
+        },
+        hash: store::digest(pending_bytes),
+        bytes: pending_bytes.len() as u64,
+        chunks: vec![store::digest(pending_bytes)],
+    };
+    supplier
+        .update::<_, Result<store::Status, store::Error>>(
+            "prepare",
+            store::PREPARE,
+            &pending,
+            store::LIMITS,
+        )
+        .await
+        .unwrap();
+    supplier
+        .update::<_, Result<store::Manifest, store::Error>>(
+            "cancel",
+            store::CANCEL,
+            &pending,
+            store::LIMITS,
+        )
+        .await
+        .unwrap();
+    pic.update_canister_settings(
+        supplier.id,
+        Some(root.operator),
+        CanisterSettings {
+            controllers: Some(vec![root.id]),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let replacement = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
+    let mut approval = quiescence_tests::approval(&root, &supplier).await;
+    approval.module_hash = store::digest(&replacement);
+    root.update::<_, Result<wire::Status, management::Refusal>>(
+        "stage_store_maintenance",
+        wire::STAGE,
+        &approval,
+        wire::LIMITS,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        maintenance_tests::advance(&root, &approval).await.phase,
+        wire::Phase::Closed
+    );
+    let first = maintenance_tests::advance(&root, &approval).await;
+    assert!(matches!(first.preservation, wire::Scan::Entries(_)));
+    assert_eq!(
+        first
+            .preservation
+            .as_ref()
+            .unwrap()
+            .after
+            .as_ref()
+            .unwrap()
+            .version,
+        "z"
+    );
+    let removed_page = maintenance_tests::advance(&root, &approval).await;
+    let cursor = removed_page.preservation.as_ref().unwrap();
+    assert_eq!(cursor.after.as_ref(), Some(&removed.release));
+    assert!(cursor.after_removed);
+    assert_eq!(cursor.observed, 2);
+    maintain(&root).await;
+    assert_eq!(maintenance_tests::observe(&root).await, removed_page);
+    // Downgrade cannot drop the scan discriminator or removed cursor.
+    assert!(
+        pic.upgrade_canister(
+            root.id,
+            include_bytes!("../../fixtures/root-release-scan.wasm").to_vec(),
+            vec![],
+            Some(root.operator)
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(maintenance_tests::observe(&root).await, removed_page);
+    for _ in 0..8 {
+        if maintenance_tests::advance(&root, &approval).await.phase == wire::Phase::Stopped {
+            break;
+        }
+    }
+    let stopped = maintenance_tests::observe(&root).await;
+    assert_eq!(stopped.phase, wire::Phase::Stopped);
+    assert_eq!(stopped.preservation.as_ref().unwrap().observed, 3);
+    let before = pic.get_stable_memory(supplier.id).await;
+    maintenance_tests::install(
+        &root,
+        &wire::Install {
+            approval: approval.clone(),
+            wasm: replacement,
+        },
+    )
+    .await
+    .unwrap();
+    for _ in 0..16 {
+        if maintenance_tests::advance(&root, &approval).await.phase == wire::Phase::Verified {
+            break;
+        }
+    }
+    let verified = maintenance_tests::observe(&root).await;
+    assert_eq!(verified.phase, wire::Phase::Verified);
+    assert_eq!(verified.preservation, stopped.preservation);
+    assert_eq!(
+        verified.installation.as_ref().unwrap().verification,
+        stopped.preservation
+    );
+    assert_eq!(pic.get_stable_memory(supplier.id).await, before);
+    assert_eq!(maintenance_tests::advance(&root, &approval).await, verified);
+    assert_eq!(
+        maintenance_tests::activate(&root, &approval).await.phase,
+        wire::Phase::ActivateIssued
+    );
+    let activated = recover_store(&root, &approval).await;
+    assert_eq!(activated.phase, wire::Phase::Ready);
+    assert_eq!(activated.preservation, verified.preservation);
 }

@@ -816,6 +816,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         );
         assert!(stored::creation(&successor, &encode(&custody)).is_err());
         let preservation = maintenance::Preservation {
+            after_removed: false,
             catalog: ic_wasm_store_protocol::preservation::Catalog {
                 quota: Default::default(),
                 reserved_bytes: 0,
@@ -840,13 +841,17 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
             phase: maintenance::Phase::Ready,
             stop_request: Some([3; 32]),
             failure: None,
-            preservation: Some(preservation.clone()),
+            preservation: canic_management_protocol::store_maintenance::Scan::Legacy(Some(
+                preservation.clone(),
+            )),
             installation: Some(maintenance::Installation {
                 upload_request: [4; 32],
                 request: Some([5; 32]),
                 sender_version: Some(1),
                 start_request: Some([6; 32]),
-                verification: Some(preservation),
+                verification: canic_management_protocol::store_maintenance::Scan::Legacy(Some(
+                    preservation,
+                )),
                 activation_request: Some([8; 32]),
             }),
         };
@@ -877,7 +882,10 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
                 0 => operation.approval.attempt.operation[0] ^= 1,
                 1 => operation.approval.module_hash[0] ^= 1,
                 2 => operation.operator = operation.approval.store.clone(),
-                3 => operation.preservation = None,
+                3 => {
+                    operation.preservation =
+                        canic_management_protocol::store_maintenance::Scan::Legacy(None)
+                }
                 4 => operation.phase = maintenance::Phase::Verified,
                 _ => changed.store_operation = None,
             }

@@ -1,4 +1,4 @@
-//! Retained encoding: v1/v2 deployment bytes stay fixed; v3 adds publication authority.
+//! Retained encoding: v1/v2 deployment, v3 publication, v4 removal. Old digests stay fixed.
 use super::{ManagedOwner, Plan, PlanAction, UpgradeTarget};
 use crate::{Artifact, Error, Network, Result};
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,8 @@ pub(super) struct PlanRecord {
     store_upgrade_root: Option<UpgradeTarget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     store_upgrade_sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    removal: Option<crate::PublicationRemoval>,
 }
 
 fn invalid() -> Error {
@@ -61,6 +63,7 @@ impl TryFrom<PlanRecord> for Plan {
             maintenance_store,
             store_upgrade_root,
             store_upgrade_sequence,
+            removal,
         } = record;
         if store_upgrade_sequence.is_some() && store_upgrade_root.is_none() {
             return Err(invalid());
@@ -68,7 +71,23 @@ impl TryFrom<PlanRecord> for Plan {
         if maintenance_store.is_some() && maintenance.is_none() {
             return Err(invalid());
         }
-        let action = if let Some(root) = store_upgrade_root {
+        let action = if let Some(value) = removal {
+            if version != 4
+                || creation_cycles != 0
+                || target.is_some()
+                || previous_module.is_some()
+                || management.is_some()
+                || maintenance.is_some()
+                || maintenance_sibling.is_some()
+                || publication.is_some()
+                || store_root.is_some()
+                || maintenance_store.is_some()
+                || store_upgrade_root.is_some()
+            {
+                return Err(invalid());
+            }
+            PlanAction::Remove(value)
+        } else if let Some(root) = store_upgrade_root {
             if version != 2
                 || creation_cycles != 0
                 || store_root.is_some()
@@ -171,6 +190,7 @@ impl TryFrom<Plan> for PlanRecord {
         let creation_cycles = plan.creation_cycles();
         let management = plan.management().cloned();
         let publication = plan.publication().cloned();
+        let removal = plan.removal().cloned();
         let store_root = plan.store_root().cloned();
         let store_upgrade_root = plan.store_upgrade_root().cloned();
         let store_upgrade_sequence = plan.store_upgrade_sequence();
@@ -200,6 +220,7 @@ impl TryFrom<Plan> for PlanRecord {
             maintenance_store,
             store_upgrade_root,
             store_upgrade_sequence,
+            removal,
         })
     }
 }

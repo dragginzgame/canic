@@ -172,7 +172,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         phase: canic_management_protocol::store_maintenance::Phase::Reserved,
         stop_request: None,
         failure: None,
-        preservation: None,
+        preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
         installation: None,
     };
     let mut full_plan = plan.clone();
@@ -276,6 +276,7 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
     let mut first = previous.store_operation.clone().unwrap();
     first.phase = wire::Phase::Ready;
     let scan = wire::Preservation {
+        after_removed: false,
         catalog: ic_wasm_store_protocol::preservation::Catalog {
             quota: ic_wasm_store_protocol::Quota {
                 reserved_bytes: 8,
@@ -291,13 +292,14 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
         digest: [7; 32],
         complete: true,
     };
-    first.preservation = Some(scan.clone());
+    first.preservation =
+        canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan.clone()));
     first.installation = Some(wire::Installation {
         upload_request: [1; 32],
         request: Some([2; 32]),
         sender_version: Some(1),
         start_request: Some([3; 32]),
-        verification: Some(scan),
+        verification: canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan)),
         activation_request: Some([4; 32]),
     });
     let mut next = first.clone();

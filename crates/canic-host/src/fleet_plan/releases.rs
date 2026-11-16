@@ -58,6 +58,7 @@ pub(super) fn publication_plan(child: &Plan, source: &StoredArtifact) -> Result<
     let value = Plan {
         version: 3,
         action: PlanAction::Publish(Publication {
+            after_removal: None,
             root: UpgradeTarget {
                 canister: owner.root.clone(),
                 module: owner.root_module.clone(),
@@ -126,7 +127,8 @@ pub(super) async fn apply(
         validate(dir, fleet, slot, &bytes)?;
         let id = value.digest()?;
         if !matches!(
-            operation::apply_at(&path, &id, identity, icp).await?,
+            operation::apply_at(dir.parent().ok_or_else(invalid)?, &path, &id, identity, icp)
+                .await?,
             ApplyOutcome::Publication { .. }
         ) || publication::receipt(
             &path,
@@ -192,8 +194,32 @@ pub(super) async fn reconcile(
         if path.join("plan.json").try_exists().map_err(supplier)? {
             let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
             let value = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
-            operation::reconcile_at(&path, &value.digest()?, identity, icp).await?;
+            operation::reconcile_at(
+                dir.parent().ok_or_else(invalid)?,
+                &path,
+                &value.digest()?,
+                identity,
+                icp,
+            )
+            .await?;
         }
+    }
+    Ok(())
+}
+
+pub(super) fn quiesce(dir: &Path, fleet: &FleetPlan, selected: &Plan) -> Result<()> {
+    for (slot, _) in fleet
+        .children()
+        .filter(|(_, child)| child.release.is_some())
+    {
+        let path = dir.join(record::child_leaf(slot)).join("publication");
+        if !path.join("plan.json").try_exists().map_err(supplier)? {
+            continue;
+        }
+        let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
+        let expected = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+        let (value, bytes) = plan::load(&path, &expected.digest()?)?;
+        publication::removal::quiesce_matching(&path, &value, &bytes, selected)?;
     }
     Ok(())
 }

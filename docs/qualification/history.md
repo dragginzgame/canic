@@ -7,6 +7,146 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Host removal and explicit restoration: 2026-11-16
+
+The existing plan/journal/signed-request owners now cover removal and restoration.
+Removal is one v4 PlanAction with exact source publication, Root/Store/code and
+content bindings. Its successful receipt is derived from the original signed
+request and matching reply, not a separately trusted summary. Reconcile refuses
+to prepare a first signature. Every known matching publication mutation must
+have settled and expired before removal; a later observation cannot erase an
+ambiguous original call. Publication guards cover independent and nested fleet
+execution under the same journal lock.
+
+Restoration reuses publication with an optional exact removal predecessor in its
+approval digest. Every known removal must be an ancestor with a matching successful
+reply and expired dispatch window; ordinary old receipts cannot revive authority.
+Historical v1/v2/v3 bytes remain unchanged when the new fields are absent. There
+is no new Root journal, allocation, catalog, retry owner or package. The CLI's
+artifact selection/dispatch was consolidated into its existing artifact module.
+Legacy research recorded under the versioned Store decision still applies:
+immutable labels/content and explicit custody are retained; mutable replacement
+and copied Root catalogs are not brought back.
+
+The actual CLI/ICP/PocketIC witness
+`bash scripts/dev/test-publication.sh cli_removal_restoration` passes (44.49s):
+publication quiescence, shared bytes under distinct labels, exact deletion,
+one retained signature across apply/reconcile, refused early restoration,
+new-authority restoration, expired historical payload replay, and a remotely
+committed cancellation whose lost Root reply remains blocked despite absence.
+Root stable bytes remain unchanged. The existing two-child whole-fleet bootstrap,
+publication and serial-upgrade CLI regression also passes (145.08s), exercising
+the shared journal argument on nested paths. Native checks pass: 137 Host tests (one
+separate preparation-dependent test ignored) and 70 CLI tests, including historical
+approval digests and three removal/history regressions. Focused Host/CLI and
+installed-harness Clippy, Host Rustdoc, formatting and tooling agreement pass.
+`make canic` installs the commands on PATH; no browser is launched.
+
+Inputs remain published Store/protocol 0.2.3, with the archive identities recorded
+below. Tested Store Wasm is
+`2d6bb886db5049a2e06f292d13e462c38b0a95463a560fcb71dab5f52efa567b`;
+fault-enabled Root is
+`99ef76ade50088f158c15eb9964da11def7535174282fb5753de2bdf970e3aee`.
+
+The selected path starts from independent publication approvals and keeps reviewed
+Root/Store identities/code unchanged through restoration. Nested removal selection,
+repair after a retained refusal/unknown outcome, multiple-journal coordination
+and privileged manual calls are outside this proof. The ordinary 128-operation
+journal bound remains. Changes are uncommitted/unpushed; no mainnet effects ran.
+
+## Root exact removal boundary: 2026-11-16
+
+Root now mounts `store_removal` (method 60), forwarding only an exact-manifest
+delete or cancellation. Store retains pin, identity, tombstone and quota ownership.
+The existing controller/deadline/maintenance admission and typed transport owner
+are reused; the wait policy is explicit at each call site. Removal uses unbounded
+wait, while existing metadata/admission calls retain their five-second bounded
+wait. No Root catalog, retry journal or new allocation was introduced.
+
+`bash scripts/dev/test-store.sh removal` passes its maximum-manifest frame check
+and two installed cases (6.96s): wrong identity/action, pinned content, malformed
+and unauthorized ingress, maintenance fencing, shared-byte retention, tombstone
+quota, cancellation/restoration, and expired historical requests after restoration.
+The fixture waits for the exact successful result and expires the original
+dispatch deadline before restoring. An injected response-encoding trap demonstrates
+that Store may commit without a usable receipt; observing absence is not settlement.
+Focused protocol/runtime/harness Clippy, Rustdoc, formatting and diff checks pass.
+The fault-enabled Root executable is
+`99ef76ade50088f158c15eb9964da11def7535174282fb5753de2bdf970e3aee`;
+Store remains the recorded published 0.2.3 runtime.
+
+This is the Root/programmatic caller boundary. Host plan/apply does not yet retain
+removal attempts or gate restoration, and no CLI removal command is exposed.
+That enforcement remains in
+[#4 — Qualify Store deployment and maintenance flows](https://github.com/dragginzgame/canic/issues/4).
+Changes are uncommitted/unpushed and all effects used the local simulator.
+
+## Root preservation contract migration: 2026-11-16
+
+New maintenance attempts retain an explicit Entries scan, even before the first
+page. Method 117's active/removed entry participates in the metadata-v2 digest;
+the cursor retains its removed flag and follows the supplier's defined order.
+CUJ9 reuses the original checked journal lease and loads historical scans without
+changing their method, digest or cursor. Historical Wire tags and Host JSON stay
+exact; new evidence has a distinct tag/wrapper. Old executables refuse CUJ9.
+Existing fleets upgrade Store to 0.2.3 under their old Root before upgrading Root.
+
+Installed qualification passes for the new removed/cancelled-label scan through
+both owners' upgrades (7.61s), actual CUJ8 partial-scan refusal/digest migration,
+pre-registry Store maintenance across callback loss (8.25s), CUJ5 absent-scan
+migration (7.12s), and historical-to-current maintenance successors with stale
+authority refusal (10.85s). The actual CLI Store/Root/child journey passes in
+89.82s with the new encoded evidence. Native codec/lease/approval/CLI tests,
+native and Wasm Clippy, focused Rustdoc, formatting and diff checks pass.
+
+The retained old Root is documented in the [fixture catalog](../../qualification/canic-qualification/fixtures/README.md).
+The installed fault-enabled current Root hash is
+`2beea0084da10ff91d169d200cda43660e3f13af732de3f20be0da289a92a8ab`;
+its maintenance counterpart is
+`da4e97d1802b57d0fab5b844e3803f5fd98d6ce6c5a78540f09ed442f68eac6f`.
+Store inputs remain the published 0.2.3 artifacts recorded below. No new endpoint,
+catalog mirror, journal allocation or workflow owner was introduced. The shared
+protocol module's existing inline tests moved beside the versioned codec.
+Operator removal/restoration settlement remains in
+[#4 — Qualify Store deployment and maintenance flows](https://github.com/dragginzgame/canic/issues/4).
+Changes are uncommitted/unpushed; no mainnet deployment occurred.
+
+## Released Store 0.2.3 boundary adoption: 2026-11-16
+
+Both workspaces select registry protocol 0.2.3, archive SHA-256
+`045957dad0846b97a65a0b4979e828839048a483ca4daaba2b00c2edcf39c1d0`.
+The matching runtime archive is
+`16223c5f7a3d553adb817492dee47cfa57236eaaefd233c57e21173591c6df27`;
+its packaged lockfile builds the ordinary executable
+`2d6bb886db5049a2e06f292d13e462c38b0a95463a560fcb71dab5f52efa567b`
+and maintenance candidate
+`9377efc9fd180f89b0aefb81280ee3ec1acde4da9af65019db0b5f068c59b67d`.
+The pre-existing lock updates were preserved, and manifest minimums now reflect
+the versioned API used by qualification. No sibling source is substituted.
+
+The two installed preservation cases pass (6.76s): the new entry explicitly
+distinguishes cancellation from an empty restored upload while the historical
+page remains identical; actual Root retains Closed/Mismatch for incompatible
+tombstone ordering before stop, including repeated continuation/activation.
+This extends the existing consumer reproducer rather than importing the supplier
+suite. Focused harness Clippy, formatting, snapshot and pin checks pass.
+The sandbox initially prevented PocketIC's localhost listener; the installed
+cases passed with that local server permitted.
+
+The existing actual-CLI
+`fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`
+journey also passes (89.19s) with those registry executables. It covers repeated
+Store upgrades, retained effect recovery, Root maintenance and the next child
+upgrade. These are local simulator effects with synthetic cycles, not mainnet
+qualification. The adoption remains uncommitted and unpushed.
+
+Root still uses the historical scan. Its versioned cursor/digest, persistent
+migration and Host approval compatibility remain required before exposing removal
+under [#4 — Qualify Store deployment and maintenance flows](https://github.com/dragginzgame/canic/issues/4).
+The legacy research under **Versioned Wasm Store decision** remains applicable:
+retain immutable identity and authoritative Store custody, not mutable labels or
+a second catalog in Root. No deployment, publication or new endpoint is added.
+
 ## Canic source-push validation: 2026-11-16
 
 Push preparation found pre-existing lockfile selections for Host FS/Artifacts
