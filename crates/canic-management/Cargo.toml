@@ -9,6 +9,11 @@ description = "Reusable bounded child management engine"
 [target.'cfg(any())'.dev-dependencies]
 toko-tooling.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+ic-storage.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 canic.workspace = true
 ic-platform = { workspace = true, features = ["management-canister-types"] }

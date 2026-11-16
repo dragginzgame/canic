@@ -1,8 +1,4 @@
 use crate::{Error, Result, hex, supplier};
-use ic_host_process::tool::{
-    CompletedExecution, ExecutionEvidence, OutputLimit, OutputLimits, ToolError,
-    capture_group_command,
-};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -31,21 +27,28 @@ pub struct Artifact {
 #[derive(Debug, thiserror::Error)]
 #[error("Cargo failed: {source}\n{diagnostic}")]
 struct CargoFailure {
-    source: ToolError,
+    source: crate::process::CaptureFailure,
     diagnostic: String,
 }
 
 // Only Cargo callers expose captured diagnostics. Signer/provider evidence keeps
 // its existing disclosure policy; the process supplier owns capture and cleanup.
-pub(crate) fn cargo_failure(source: ToolError) -> Error {
-    match source.evidence().and_then(cargo_diagnostic) {
+pub(crate) fn cargo_failure(source: crate::process::CaptureFailure) -> Error {
+    match cargo_diagnostic(
+        &source.stdout,
+        &source.stderr,
+        matches!(
+            source.report.failure,
+            Some(ic_host_process::Failure::Limit(_))
+        ),
+    ) {
         Some(diagnostic) => supplier(CargoFailure { source, diagnostic }),
         None => supplier(source),
     }
 }
 
-fn cargo_diagnostic(evidence: &ExecutionEvidence) -> Option<String> {
-    let compiler = evidence.stdout.split(|b| *b == b'\n').find_map(|line| {
+fn cargo_diagnostic(stdout: &[u8], stderr: &[u8], partial: bool) -> Option<String> {
+    let compiler = stdout.split(|b| *b == b'\n').find_map(|line| {
         let value: serde_json::Value = serde_json::from_slice(line).ok()?;
         if value["reason"] != "compiler-message" || value["message"]["level"] != "error" {
             return None;
@@ -56,7 +59,7 @@ fn cargo_diagnostic(evidence: &ExecutionEvidence) -> Option<String> {
             .filter(|text| !text.trim().is_empty())
             .map(str::to_owned)
     });
-    let text = compiler.unwrap_or_else(|| String::from_utf8_lossy(&evidence.stderr).into_owned());
+    let text = compiler.unwrap_or_else(|| String::from_utf8_lossy(stderr).into_owned());
     let mut characters = text.trim().chars();
     let prefix: String = characters.by_ref().take(4096).collect();
     if prefix.is_empty() {
@@ -67,7 +70,7 @@ fn cargo_diagnostic(evidence: &ExecutionEvidence) -> Option<String> {
         .map(ic_host_text::escape::terminal_text)
         .collect::<Vec<_>>()
         .join("\n");
-    if characters.next().is_some() || evidence.stdout_truncated || evidence.stderr_truncated {
+    if characters.next().is_some() || partial {
         diagnostic.push_str("\n[Cargo diagnostic truncated]");
     }
     Some(diagnostic)
@@ -98,10 +101,10 @@ pub(crate) fn admit_bounded(bytes: &[u8], limit: usize) -> Result<Artifact> {
 /// # Errors
 /// Refuses unreadable, oversized or non-Wasm inputs. Full Wasm validation is the IC's responsibility.
 pub fn inspect(path: &Path) -> Result<Artifact> {
-    admit_bounded(
-        &ic_host_fs::read::read_file(path, MAX_ARTIFACT_BYTES).map_err(supplier)?,
-        MAX_ARTIFACT_BYTES,
-    )
+    // Inspection follows caller-selected aliases; retained-record reads do not.
+    let resolved = path.canonicalize().map_err(supplier)?;
+    let bytes = crate::store::read(&resolved, MAX_ARTIFACT_BYTES)?;
+    admit_bounded(&bytes, MAX_ARTIFACT_BYTES)
 }
 
 /// Build one explicit Cargo package and select its Wasm from artifact records.
@@ -155,20 +158,15 @@ pub fn build(
     if !features.is_empty() {
         command.arg("--features").arg(features.join(","));
     }
-    let output = capture_group_command(
+    let output = crate::process::capture(
         &mut command,
-        OutputLimits {
-            stdout: OutputLimit::Terminate(8 * 1024 * 1024),
-            stderr: OutputLimit::Terminate(1024 * 1024),
-            timeout: Some(Duration::from_secs(600)),
-        },
+        8 * 1024 * 1024,
+        1024 * 1024,
+        Duration::from_secs(600),
     )
-    .and_then(CompletedExecution::require_success)
-    .and_then(CompletedExecution::require_complete)
     .map_err(cargo_failure)?;
     let mut paths = Vec::new();
     for line in output
-        .stdout
         .split(|b| *b == b'\n')
         .filter(|line| !line.is_empty())
     {
@@ -197,23 +195,15 @@ pub fn build(
     let path = paths.remove(0);
     inspect(&path)?;
     if let Some(output) = destination {
-        let bytes = ic_host_fs::read::read_file(&path, MAX_ARTIFACT_BYTES).map_err(supplier)?;
+        let bytes =
+            crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
         admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
-        if let Some(parent) = output
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
-            ic_host_fs::durable::prepare_private_parents(parent).map_err(supplier)?;
-        }
-        ic_host_fs::durable::write_bytes(
+        crate::output_publication::publish(
             output,
-            ic_host_fs::durable::WriteOptions {
-                mode: ic_host_fs::durable::PublicationMode::Replace,
-                permissions: 0o600,
-            },
             &bytes,
-        )
-        .map_err(supplier)?;
+            ic_host_fs::Destination::Replace,
+            0o700,
+        )?;
         return Ok(output.into());
     }
     Ok(path)
@@ -221,3 +211,6 @@ pub fn build(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod inspection_tests;

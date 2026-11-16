@@ -1,12 +1,6 @@
 //! Loopback-only viewer for one retained report; no directory or journal serving.
 use canic_host::{Error, Result};
-use std::{
-    fs::File,
-    io::Read as _,
-    net::Ipv4Addr,
-    path::Path,
-    process::{Command, Stdio},
-};
+use std::{fs::File, io::Read as _, net::Ipv4Addr, path::Path, process::Command};
 use tiny_http::{Header, Method, Request, Response, Server};
 
 #[cfg(test)]
@@ -141,18 +135,15 @@ fn respond(request: Request, html: &[u8], port: u16) -> std::io::Result<()> {
 }
 
 pub(crate) fn launch(url: &str, mut command: Command) -> std::io::Result<()> {
-    command
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit());
-    let mut child = ic_host_process::child::OwnedChild::spawn_direct(&mut command)?;
-    if let Some(status) = child.relinquish()?
-        && !status.success()
-    {
-        return Err(std::io::Error::other(format!(
-            "desktop opener exited with {status}"
-        )));
+    command.arg(url);
+    let mut completion = ic_host_process::launch(command)?;
+    if completion.try_result().is_some() {
+        let status = completion.wait()?;
+        if !status.success() {
+            return Err(std::io::Error::other(format!(
+                "desktop opener exited with {status}"
+            )));
+        }
     }
     Ok(())
 }

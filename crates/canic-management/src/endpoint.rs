@@ -212,12 +212,12 @@ macro_rules! mount_endpoints {
     };
     (@select child_status) => {
         $crate::mount_endpoints!(@method child_status, query, false, children::STATUS, LIMITS,
-            [] (input: $crate::endpoint::protocol::children::Slot) -> $crate::endpoint::protocol::Status,
+            [] (input: $crate::endpoint::protocol::children::ChildId) -> $crate::endpoint::protocol::Status,
             $crate::children::status(input), "child request", "child reply");
     };
     (@select observe_child) => {
         $crate::mount_endpoints!(@method observe_child, update, true, children::STATUS, LIMITS,
-            [] (input: $crate::endpoint::protocol::children::Slot) -> $crate::endpoint::protocol::Status,
+            [] (input: $crate::endpoint::protocol::children::ChildId) -> $crate::endpoint::protocol::Status,
             $crate::children::status(input), "child request", "child reply");
     };
     (@select stage_child) => {

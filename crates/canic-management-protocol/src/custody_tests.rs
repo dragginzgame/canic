@@ -152,7 +152,7 @@ fn complete_root_custody_fits_combined_budget() {
         .unwrap(),
         history
     );
-    // Same tuple shape as Root's CUJ7 payload, including both full child journals.
+    // Same tuple shape as Root's CUJ8 payload, including both full child journals.
     // The existing checked journal lease must fit every admitted record at its worst field sizes.
     let child_journal = (
         &child.creation,
@@ -160,7 +160,7 @@ fn complete_root_custody_fits_combined_budget() {
         &child.upgrades[..upgrade::MAX_UPGRADES - 1],
     );
     let journal = (
-        [child_journal, child_journal],
+        vec![(0_u8, child_journal), (1_u8, child_journal)],
         &history.current.store_operation,
         &history.store_history,
     );
@@ -170,14 +170,14 @@ fn complete_root_custody_fits_combined_budget() {
             + maintenance::MAX_UPGRADES * maintenance::LIMITS.allocation,
         nodes: 2 * (1 + upgrade::MAX_UPGRADES) * crate::LIMITS.nodes
             + maintenance::MAX_UPGRADES * maintenance::LIMITS.nodes,
-        depth: crate::LIMITS.depth + 4,
+        depth: crate::LIMITS.depth + 5,
     };
     let journal_bytes =
         ic_wire::encode(&journal, ic_wire::Encoding::Payload, stable_limits).unwrap();
     assert!(journal_bytes.len() + 4 <= 16_384);
     type ChildJournal = (crate::Status, upgrade::Status, Vec<upgrade::Status>);
     let decoded: (
-        [ChildJournal; 2],
+        Vec<(u8, ChildJournal)>,
         Option<maintenance::Status>,
         Vec<maintenance::Status>,
     ) = ic_wire::decode(&journal_bytes, ic_wire::Encoding::Payload, stable_limits).unwrap();

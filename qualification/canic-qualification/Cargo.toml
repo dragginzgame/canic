@@ -12,6 +12,10 @@ toko-tooling.workspace = true
 [package.metadata.toko-tooling.loc]
 category = "tests"
 
+[dependencies]
+ic-host-artifacts.workspace = true
+wasmparser.workspace = true
+
 [dev-dependencies]
 canic.workspace = true
 canic-artifact-probe.workspace = true
@@ -19,7 +23,6 @@ canic-asset-catalog.workspace = true
 canic-effect-probe.workspace = true
 canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
-ic-host-artifacts.workspace = true
 ic-testkit.workspace = true
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true

@@ -9,7 +9,7 @@ async fn stage_upgrade(
         "stage_stored_upgrade",
         stored::STAGE_UPGRADE,
         &Request {
-            slot: Slot::First,
+            slot: ChildId::FIRST,
             value: input,
         },
         stored::LIMITS,

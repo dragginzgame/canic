@@ -2,7 +2,7 @@
 use crate::{Plan, Result, network::principal, signed::Call, supplier};
 use canic_management_protocol::{
     self as protocol,
-    children::{self, Slot},
+    children::{self, ChildId},
 };
 use serde::Serialize;
 
@@ -121,6 +121,6 @@ pub(crate) fn observation(plan: &Plan) -> Result<Call<'static>> {
     }
 }
 // None is the historical First slot, but must retain its original wire contract.
-pub(crate) fn same_slot(left: Option<Slot>, right: Option<Slot>) -> bool {
-    left.unwrap_or(Slot::First) == right.unwrap_or(Slot::First)
+pub(crate) fn same_slot(left: Option<ChildId>, right: Option<ChildId>) -> bool {
+    left.unwrap_or(ChildId::FIRST) == right.unwrap_or(ChildId::FIRST)
 }

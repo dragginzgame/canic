@@ -511,6 +511,17 @@ or two direct children; that capacity does not justify separate child/sibling
 branches throughout planning, execution and presentation. Retained-format codecs
 preserve existing approval digests, journal locations and signed attempts while
 the working model changes. Replanning cannot remap names to different slots.
+Named replanning must check the complete bounded reservation scope before reusing
+a matching approval. Directory order cannot hide competing ownership, corruption
+or an exceeded inventory bound. Ambiguous retained approvals remain blocked;
+replanning neither chooses one arbitrarily nor removes the others.
+Named upgrades and whole-fleet convergence share one read-only reconstruction
+of original children, later admissions, child upgrades and Root/Store maintenance.
+Explicit named targets and code bindings are checked against that retained
+authority before approval; configuration parentage alone cannot authorize an upgrade.
+Both paths enforce the same retained-upgrade count, artifact capacity and dispatch
+order. Only proven completed predecessors can admit a successor; an exact replay
+of the latest approval keeps its original schedule and digest.
 
 ### First effect contracts
 
@@ -614,14 +625,36 @@ journey qualifies up to two fixed child slots and bounded serial upgrades, not g
 admission, scaling, sharding or keyed-instance APIs. Keep those limits visible;
 do not add unused configuration variants or a general pool catalogue in advance.
 
-The current First/Second slots are an implementation qualification bound, not
+A completed one-child fleet can add the second child through a separate
+`CreateChild` approval in the existing journal. The original fleet envelope,
+funding debit and child identity remain immutable. Resolve additions after retained
+children, independent of configuration name ordering. Store-backed additions
+require publication before their separate installation approval. Pending additions
+keep their exact authority and exposure; later convergence and Root maintenance
+include their complete custody. This uses the existing two-child runtime bound
+and reserve checks, not a new capacity policy or an increase to the original budget.
+
+The current numeric child identities 0 and 1 are an implementation qualification bound, not
 the intended application capacity policy or a pool of spare canisters. General
 allocation uses stable allocation identities in a bounded collection, with
 application demand constrained by explicit operator-approved capacity and funding.
-Do not extend the fixed enum with Third/Fourth variants. Its replacement must
+The public `ChildId` is scoped to one management owner; its checked constructor
+currently admits only these two identities. A private codec retains the historical
+First/Second encoding so approval digests, signed requests and Store pins do not
+change. Do not extend that historical enum with Third/Fourth variants. Expansion must
 preserve existing child identities, signed attempts and retained custody through
 an explicitly qualified migration; numeric position must never silently reassign
 an existing allocation. Reusable empty capacity remains a separate owner contract.
+
+Root now stores child journals and artifact custody as bounded, ordered records
+with explicit numeric identities (CUJ8/CUA4), within the original two Storage
+allocations. Opening historical positional formats maps their positions exactly
+once, validates both stores, then commits both collection payloads in the upgrade
+message. Missing, duplicate, reordered or unsupported identities refuse; a load
+failure never initializes replacement state. Older executables refuse the new
+format. This storage migration leaves request/pin encodings and the two-child
+admission ceiling unchanged; expanding complete custody and its Host consumers
+is still required before admitting additional children.
 
 Each pattern's useful journey includes creation, resolution, bounded growth where
 applicable, upgrade and interrupted-operation recovery. Before extending to many
@@ -970,7 +1003,7 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJ7 journal loads recognized predecessors, including CUJ6, without inventing
+The CUJ8 journal loads recognized predecessors, including CUJ6/CUJ7, without inventing
 maintenance authority. Current and completed attempts remain in the original
 checked allocation. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any

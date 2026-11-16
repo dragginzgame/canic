@@ -47,7 +47,7 @@ pub struct ManagedOwner {
     pub execute_at_ns: u64,
     /// Authenticated runtime slot; absent preserves the original one-child contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub slot: Option<canic_management_protocol::children::Slot>,
+    pub slot: Option<canic_management_protocol::children::ChildId>,
     /// Exact published Store content; absent selects the existing inline contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<crate::StoredArtifact>,
@@ -274,11 +274,13 @@ pub(crate) fn retain(
 }
 
 /// Lookup and publication share the caller's journal lock.
-pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
+pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
     let root = &store.path;
-    if let Some(name) = &plan.deployment {
+    let mut retained = None;
+    let mut fleet_predecessors = None;
+    if let Some(name) = plan.deployment.clone() {
         // The journal lock spans lookup and publication, including an interrupted earlier plan.
-        let mut count = 0;
+        let mut entries = Vec::new();
         for entry in std::fs::read_dir(root).map_err(supplier)? {
             let entry = entry.map_err(supplier)?;
             let existing_id = entry.file_name().to_string_lossy().into_owned();
@@ -289,12 +291,16 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
             {
                 continue;
             }
-            count += 1;
-            if count > 128 {
+            entries.push(entry);
+            if entries.len() > 128 {
                 return Err(Error::Invalid(
                     "named planning inventory exceeds 128 operations".into(),
                 ));
             }
+        }
+        // Resolve inherited maintenance custody before comparing a retained named approval.
+        for entry in &entries {
+            let existing_id = entry.file_name().to_string_lossy().into_owned();
             if crate::fleet_plan::exists(&entry.path())? {
                 if plan.publication().is_some() {
                     continue;
@@ -303,18 +309,34 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                 if crate::fleet_plan::cancelled(&entry.path(), &existing_id)? {
                     continue;
                 }
-                if fleet.reserves(name)
-                    && !crate::fleet_plan::permits_upgrade(&entry.path(), &fleet, &plan)?
-                {
-                    return Err(Error::Blocked(format!(
-                        "fleet already belongs to operation {existing_id}; resume that whole-fleet approval"
-                    )));
+                if fleet.reserves(&name) {
+                    let predecessors = crate::fleet_plan::permits_upgrade(store, &existing_id, &fleet, &mut plan)?
+                        .ok_or_else(|| Error::Blocked(format!("fleet already belongs to operation {existing_id}; resume that whole-fleet approval")))?;
+                    if fleet_predecessors.replace(predecessors).is_some() {
+                        return Err(Error::Blocked(
+                            "multiple approvals reserve this fleet; inspect the original journal"
+                                .into(),
+                        ));
+                    }
                 }
+                continue;
+            }
+        }
+        for entry in entries {
+            let existing_id = entry.file_name().to_string_lossy().into_owned();
+            if crate::fleet_plan::exists(&entry.path())? {
                 continue;
             }
             let existing: Plan = store::json(&entry.path().join("plan.json"))?;
             if existing.digest()? != existing_id {
                 return Err(Error::Invalid("retained plan digest mismatch".into()));
+            }
+            // Only the shared history owner can prove that these earlier upgrades completed.
+            if fleet_predecessors
+                .as_ref()
+                .is_some_and(|ids| ids.contains(&existing_id))
+            {
+                continue;
             }
             if existing.publication().is_some() || plan.publication().is_some() {
                 if let (Some(old), Some(new)) = (existing.publication(), plan.publication())
@@ -328,7 +350,12 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                         && existing.artifact == plan.artifact
                         && existing.deployment == plan.deployment
                     {
-                        return Ok((existing_id, existing));
+                        if retained.replace((existing_id, existing)).is_some() {
+                            return Err(Error::Blocked(
+                                "multiple approvals reserve this release; inspect the original journal".into(),
+                            ));
+                        }
+                        continue;
                     }
                     return Err(Error::Blocked(format!(
                         "release already belongs to operation {existing_id}; retained authority cannot be replaced"
@@ -336,7 +363,7 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                 }
                 continue;
             }
-            if existing.deployment.as_ref() != Some(name)
+            if existing.deployment.as_ref() != Some(&name)
                 && existing.network == plan.network
                 && existing
                     .management()
@@ -349,10 +376,10 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                     "Root's child slot already belongs to operation {existing_id}"
                 )));
             }
-            if existing.deployment.as_ref() == Some(name) {
+            if existing.deployment.as_ref() == Some(&name) {
                 let (existing, _) = load(&entry.path(), &existing_id)?;
-                // Creation and the first child upgrade retain separate approvals.
-                // Never overwrite either; subsequent upgrades still hit the occupied slot.
+                // Creation remains immutable alongside upgrades. Fleet history above
+                // owns successor admission; standalone named children keep the first-upgrade bound.
                 if existing.network == plan.network
                     && existing
                         .management()
@@ -360,6 +387,14 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                         .is_some_and(|(old, new)| old.root == new.root)
                     && existing.target().is_some() != plan.target().is_some()
                 {
+                    if fleet_predecessors.is_none()
+                        && existing.target().is_none()
+                        && plan.previous_module() != Some(&existing.artifact.sha256)
+                    {
+                        return Err(Error::Blocked(
+                            "upgrade requires its retained predecessor module".into(),
+                        ));
+                    }
                     if existing
                         .management()
                         .and_then(|m| m.source.as_ref())
@@ -370,21 +405,13 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
                     }
                     continue;
                 }
-                if existing.network == plan.network
-                    && existing.controller == plan.controller
-                    && existing.artifact == plan.artifact
-                    && existing.creation_cycles() == plan.creation_cycles()
-                    && existing.target() == plan.target()
-                    && existing.previous_module() == plan.previous_module()
-                    && existing.store_root() == plan.store_root()
-                    && existing
-                        .management()
-                        .map(|owner| (&owner.root, &owner.root_module, owner.slot, &owner.source))
-                        == plan.management().map(|owner| {
-                            (&owner.root, &owner.root_module, owner.slot, &owner.source)
-                        })
-                {
-                    return Ok((existing_id, existing));
+                if same_authority(&existing, &plan) {
+                    if retained.replace((existing_id, existing)).is_some() {
+                        return Err(Error::Blocked(
+                            "multiple approvals reserve this named slot; inspect the original journal".into(),
+                        ));
+                    }
+                    continue;
                 }
                 return Err(Error::Blocked(format!(
                     "named slot already belongs to operation {existing_id}; inspect its status instead of creating new authority"
@@ -392,18 +419,39 @@ pub(crate) fn retain_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(
             }
         }
     }
+    // Every reservation is checked under the lock before reusing any matching authority.
     // Reopening returns the original authority before checking a new schedule.
     // A past requested dispatch cannot renew or replace that retained operation.
+    if let Some(retained) = retained {
+        return Ok(retained);
+    }
     publish_locked(store, plan, bytes)
+}
+
+/// A retry may request a different schedule, but cannot change the retained authority.
+pub(crate) fn same_authority(existing: &Plan, proposed: &Plan) -> bool {
+    let mut proposed = proposed.clone();
+    proposed.created_at_ns = existing.created_at_ns;
+    proposed.expires_at_ns = existing.expires_at_ns;
+    if let Some(old) = existing.management() {
+        match &mut proposed.action {
+            PlanAction::CreateChild(owner) | PlanAction::UpgradeChild { owner, .. } => {
+                owner.execute_at_ns = old.execute_at_ns;
+            }
+            _ => {}
+        }
+    }
+    *existing == proposed
 }
 
 /// Publish after the caller validates its reservation under this same lock.
 pub(crate) fn publish_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
     let id = plan.digest()?;
     let dir = store.operation(&id)?;
-    ic_host_fs::durable::prepare_private_parents(&dir).map_err(supplier)?;
-    store::put(&dir.join("module.wasm"), bytes)?;
-    store::put_json(&dir.join("plan.json"), &plan)?;
+    let held = crate::output_publication::prepare(&dir, 0o700)?;
+    store::put_in(&held, std::ffi::OsStr::new("module.wasm"), bytes)?;
+    let plan_bytes = serde_json::to_vec_pretty(&plan).map_err(supplier)?;
+    store::put_in(&held, std::ffi::OsStr::new("plan.json"), &plan_bytes)?;
     Ok((id, plan))
 }
 

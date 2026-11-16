@@ -23,12 +23,14 @@ pub(crate) mod upgrade;
 
 pub(crate) const OBSERVATIONS: usize = 32;
 
-/// Retain one Root-owned creation or first upgrade for a declared parent/child pair.
+/// Retain Root-owned creation or an upgrade for a declared parent/child pair.
 /// The parent must be bound or have a completed named deployment in this journal.
 /// `execute_at_ns` selects a new plan's schedule (default: ready once approved);
 /// reopening preserves the original schedule.
 /// `release` selects a completed publication operation in this journal. Its exact
 /// bytes, app/fleet and owners must match; absence retains inline delivery.
+/// Fleet-owned upgrades resolve original and later child admissions through the
+/// same retained history as whole-fleet planning, including completed maintenance.
 ///
 /// # Errors
 /// Refuses ambiguous/occupied slots, missing parent custody, invalid budgets or artifacts.
@@ -105,14 +107,13 @@ pub fn create_managed_plan(
             if network != input.network
                 || !record.receipt_retained
                 || record.canister != input.target
-                || input.previous_module.as_ref() != Some(&record.approved_module)
                 || child
                     .id
                     .as_ref()
                     .is_some_and(|id| Some(id) != input.target.as_ref())
             {
                 return Err(Error::Invalid(
-                    "upgrade needs this child's completed creation receipt and original module"
+                    "upgrade needs this child's completed creation receipt and exact identity"
                         .into(),
                 ));
             }

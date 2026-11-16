@@ -3,7 +3,7 @@ use canic_management_protocol::{
     Approval, CREATION_CYCLES, LIMITS, MAX_WASM, RECONCILE, Refusal, STAGE, STAGE_LIMITS, STATUS,
     Stage, Status, digest,
 };
-use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
+mod records;
 use std::{
     fs::File,
     io::Read as _,
@@ -66,14 +66,7 @@ pub(super) fn run(cli: &Cli) -> Result<serde_json::Value, Box<dyn std::error::Er
             "root_key": cli.root_key,
             "request_hex": bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
         });
-        durable::write_bytes(
-            output,
-            WriteOptions {
-                mode: PublicationMode::CreateNew,
-                permissions: 0o600,
-            },
-            &serde_json::to_vec(&document)?,
-        )?;
+        records::write(output, &serde_json::to_vec(&document)?)?;
         return Ok(
             serde_json::json!({"approval_file": output, "approval": input.approval, "bytes": input.wasm.len(), "network": cli.network}),
         );
@@ -116,30 +109,10 @@ pub(super) fn run(cli: &Cli) -> Result<serde_json::Value, Box<dyn std::error::Er
             }
             // Retain immutable submitted bytes; ICP reads this private copy, not a mutable caller path.
             let root = Path::new(".canic/growth-submissions");
-            durable::prepare_private_parents(root)?;
-            let dir = ic_host_fs::directory::create_unique_directory(
-                root,
-                "attempt",
-                0o700,
-                std::num::NonZeroUsize::new(32),
-            )?;
+            let (dir, held) = records::attempt(root)?;
             let submitted = dir.join("approval.bin");
-            durable::write_bytes(
-                &dir.join("approval.json"),
-                WriteOptions {
-                    mode: PublicationMode::CreateNew,
-                    permissions: 0o600,
-                },
-                &document,
-            )?;
-            durable::write_bytes(
-                &submitted,
-                WriteOptions {
-                    mode: PublicationMode::CreateNew,
-                    permissions: 0o600,
-                },
-                &bytes,
-            )?;
+            records::write_in(&held, "approval.json".as_ref(), &document)?;
+            records::write_in(&held, "approval.bin".as_ref(), &bytes)?;
             eprintln!(
                 "Approving one worker: manager={manager}, cycles={}, exact frame retained at {}",
                 CREATION_CYCLES,

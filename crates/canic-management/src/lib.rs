@@ -9,6 +9,8 @@ mod engine;
 pub mod publication;
 #[cfg(target_arch = "wasm32")]
 mod single;
+#[cfg(any(target_arch = "wasm32", test))]
+mod storage;
 #[cfg(target_arch = "wasm32")]
 pub use engine::{custody, metrics::snapshot as metrics, open};
 #[cfg(all(target_arch = "wasm32", feature = "fault-injection"))]

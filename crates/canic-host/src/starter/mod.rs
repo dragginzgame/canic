@@ -2,7 +2,6 @@
 use crate::{
     AppConfig, CanisterDefinition, Config, Error, FleetDeclaration, Network, Result, supplier,
 };
-use ic_host_fs::durable;
 use serde_json::json;
 use std::{
     collections::BTreeMap,
@@ -229,36 +228,42 @@ pub fn create_starter(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(supplier(error)),
     }
-    let staging = ic_host_fs::directory::create_unique_directory(
-        &parent,
-        ".canic-starter",
-        0o700,
-        std::num::NonZeroUsize::new(32),
-    )
-    .map_err(supplier)?;
+    let held_parent = ic_host_fs::Directory::open(&parent, 0)
+        .map_err(supplier)?
+        .ok_or_else(|| Error::Invalid("starter parent disappeared".into()))?;
+    let (staging_name, held) = crate::staging_directory::allocate(&held_parent, ".canic-starter")?;
+    let staging = parent.join(&staging_name);
     let publish = || -> Result<()> {
         for (path, bytes) in &files {
-            let output = staging.join(path);
-            durable::prepare_private_parents(output.parent().unwrap_or(&staging))
+            let parents = path
+                .parent()
+                .unwrap_or_else(|| Path::new(""))
+                .components()
+                .map(|component| match component {
+                    std::path::Component::Normal(name) => Ok(name),
+                    _ => Err(Error::Invalid(
+                        "starter member needs relative normal components".into(),
+                    )),
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let parent = held
+                .prepare_directories(&parents, 0o700, 0)
                 .map_err(supplier)?;
-            crate::store::put(&output, bytes)?;
+            let name = path
+                .file_name()
+                .ok_or_else(|| Error::Invalid("starter member needs a filename".into()))?;
+            crate::store::put_in(&parent, name, bytes)?;
         }
-        durable::commit_existing_directory_with(
-            &staging,
-            &destination,
-            |_held, path| {
-                for (file, bytes) in &files {
-                    if crate::store::read(&path.join(file), bytes.len())? != *bytes {
-                        return Err(Error::Invalid(
-                            "starter staging changed before publication".into(),
-                        ));
-                    }
-                }
-                Ok::<(), Error>(())
-            },
-            |_, _| Ok(()),
-        )
-        .map_err(supplier)?;
+        for (file, bytes) in &files {
+            if crate::store::read(&staging.join(file), bytes.len())? != *bytes {
+                return Err(Error::Invalid(
+                    "starter staging changed before publication".into(),
+                ));
+            }
+        }
+        held_parent
+            .publish_directory(&staging_name, &held, name)
+            .map_err(supplier)?;
         Ok(())
     };
     publish().map_err(|source| {

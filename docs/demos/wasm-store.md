@@ -31,7 +31,8 @@ bytes. Preparing a new version never removes earlier releases.
 Root now supports explicit Store-backed creation and serial upgrades. It retains
 immutable references, pin evidence and complete upgrade history in its original
 artifact allocation, with no application Wasm bytes. Named `fleet plan --release`
-now selects a completed publication for child creation and its first upgrade.
+now selects a completed publication for child creation and upgrades. Serial named
+upgrades require the retained whole-fleet creation approval and completed predecessors.
 Fresh whole fleets with a declared Store publish immutable child releases before
 admission and support bounded serial upgrades. Existing-fleet migration remains
 unimplemented; retained inline deployments keep their current limits and contracts.
@@ -97,6 +98,11 @@ recovering Store alone is not fleet completion. Cancellation is unavailable afte
 effect preparation. Store addition/removal or replacement on a retained fleet
 requires a separately qualified adoption/maintenance contract. Generation does
 not modify existing projects or migrate retained inline fleets.
+
+A completed one-child fleet can also add its second child through the same
+publication-then-creation sequence. The additional creation has its own approval
+and draws its attachment from Root's existing balance; the original fleet
+approval and debit stay unchanged. See [adding a child](root.md#add-a-child-to-a-completed-fleet).
 
 After creation completes, change and rebuild one child. For an unpublished
 artifact, planning returns publication authority first. Apply it, then replan
@@ -210,10 +216,11 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJ7 journal preserves current and completed attempts across Root replacement
-and loads recognized predecessor journals, including CUJ6, without inventing or
-resetting authority. The original 16 KiB checked allocation is unchanged; a full
-worst-field journal uses 12,880 payload bytes. Older executables refuse CUJ7. Existing complete child-custody
+The CUJ8 journal preserves current and completed attempts across Root replacement
+and loads recognized predecessor journals, including CUJ6/CUJ7, without inventing or
+resetting authority. The 16 KiB journal ceiling within its original checked
+allocation is unchanged; full child and Store histories fit that budget.
+Older executables refuse CUJ8. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
 preventing the current Host Root-maintenance path from omitting it.
 Run `bash scripts/dev/test-store.sh quiescence` for the installed proof.
@@ -554,7 +561,7 @@ completed deployment replay verifies the application receipt without requiring
 Store to be available. Publication evidence is required when planning, while the
 resulting deployment journal independently retains its approved source and bytes.
 
-For the first upgrade, publish a different executable under a new immutable
+For an upgrade, publish a different executable under a new immutable
 version, update the app's Wasm input, and use the existing target/predecessor
 arguments with the new publication operation:
 
@@ -567,7 +574,8 @@ canic fleet call UPGRADE_OPERATION --app starter --fleet mainnet --name team
 The final command is the greeting demo's read-only query. Root obtains an exact
 Store pin, prepares/reconstructs the derived management cache and performs the
 upgrade through its existing effect owner. An inline child cannot switch to Store
-custody through this flag. The named planner retains its existing first-upgrade
-limit. Serial upgrade convergence and Root maintenance with full Store custody
-are qualified through the whole-fleet workflow above; they do not expand this
-named first-upgrade planner. No live mainnet run or latency improvement is claimed.
+custody through this flag. A retained whole-fleet creation approval lets named
+planning use the same bounded serial history, Root/Store maintenance bindings and
+completion checks as whole-fleet convergence. Standalone named deployments without
+that fleet history retain their first-upgrade limit. No live mainnet run or latency
+improvement is claimed.

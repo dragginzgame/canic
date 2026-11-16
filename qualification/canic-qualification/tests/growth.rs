@@ -164,16 +164,7 @@ async fn autonomous_growth_and_commit_boundaries() {
     let faults_wasm = std::fs::read(artifacts.join("faults.wasm")).unwrap();
     let maintenance_wasm = std::fs::read(artifacts.join("maintenance.wasm")).unwrap();
     assert_ne!(manager_wasm, maintenance_wasm);
-    let facts = ic_host_artifacts::wasm::inspect(
-        &manager_wasm,
-        ic_host_artifacts::wasm::InspectionLimits {
-            module_bytes: 1_500_000,
-            sections: 64,
-            exports: 64,
-            custom_sections: 32,
-        },
-    )
-    .unwrap();
+    let facts = canic_qualification::footprint::measure(&manager_wasm).unwrap();
     let binary = server_assets::check(&canic_qualification::server_directory())
         .expect("run make qualification-setup");
     let mut owner = PocketIcStartupConfig::Spawn {

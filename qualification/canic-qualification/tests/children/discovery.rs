@@ -65,7 +65,7 @@ async fn discovers_both_children_without_local_deployment_records() {
 
     // Admit remotely, in reverse order, without giving Host either child's ID.
     let mut discovered = Vec::new();
-    for slot in [Slot::Second, Slot::First] {
+    for slot in [ChildId::SECOND, ChildId::FIRST] {
         pic.stop_progress().await;
         let stage = input(
             root,

@@ -20,9 +20,9 @@ fn empty() -> Fleet {
 
 #[test]
 fn child_reports_keep_slots_names_and_ambiguity_distinct() {
-    use canic_management_protocol::{Approval, children::Slot};
+    use canic_management_protocol::{Approval, children::ChildId};
     let mut snapshot = empty();
-    for slot in [None, Some(Slot::Second)] {
+    for slot in [None, Some(ChildId::SECOND)] {
         snapshot.managers.push(FleetManager {
             slot,
             upgrade: None,
@@ -51,7 +51,7 @@ fn child_reports_keep_slots_names_and_ambiguity_distinct() {
     check(&snapshot, "slot 2 · child<untrusted>");
     let operation = |canister: &str| FleetOperation {
         store_root: None,
-        slot: Some(Slot::First),
+        slot: Some(ChildId::FIRST),
         upgrade: None,
         management: Some(Approval {
             manager: "root".into(),
@@ -327,13 +327,7 @@ async fn fleet_command_selects_text_or_json_without_a_browser() {
         .unwrap()
         .join("target/fleet-terminal-tests");
     std::fs::create_dir_all(&root).unwrap();
-    let directory = ic_host_fs::directory::create_unique_directory(
-        &root,
-        "empty",
-        0o700,
-        std::num::NonZeroUsize::new(32),
-    )
-    .unwrap();
+    let directory = crate::tests::directory(&root, "empty").unwrap();
     let args = [
         "canic",
         "fleet",

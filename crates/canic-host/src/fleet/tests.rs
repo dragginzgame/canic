@@ -195,15 +195,22 @@ fn first_slot_observations_share_legacy_creation_and_upgrade_constraints() {
             }),
             ..Default::default()
         };
-        for retained in [None, Some(Slot::First)] {
+        for retained in [None, Some(ChildId::FIRST)] {
             operation.slot = retained;
             let operations = std::slice::from_ref(&operation);
             let before = serde_json::to_value(operations).unwrap();
-            for observed in [None, Some(Slot::First)] {
+            for observed in [None, Some(ChildId::FIRST)] {
                 assert!(check_report(operations, &network, &manager, observed, &report).is_err());
             }
             assert!(
-                check_report(operations, &network, &manager, Some(Slot::Second), &report).is_ok()
+                check_report(
+                    operations,
+                    &network,
+                    &manager,
+                    Some(ChildId::SECOND),
+                    &report
+                )
+                .is_ok()
             );
             assert_eq!(serde_json::to_value(operations).unwrap(), before);
         }

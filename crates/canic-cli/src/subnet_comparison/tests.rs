@@ -124,13 +124,7 @@ async fn subnet_comparison_duplicate_is_refused_without_journal_access() {
     let parent = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/subnet-comparison-tests");
     std::fs::create_dir_all(&parent).unwrap();
-    let root = ic_host_fs::directory::create_unique_directory(
-        &parent,
-        "duplicate",
-        0o700,
-        std::num::NonZeroUsize::new(32),
-    )
-    .unwrap();
+    let root = crate::tests::directory(&parent, "duplicate").unwrap();
     let path = root.join("canic.json");
     let raw = r#"{"apps":{"app":{"canisters":{"root":{"role":"root"}},"fleets":{"mainnet":{"network":{"kind":"Mainnet"},"journal":"must-not-exist","canisters":{}}}}}}"#;
     std::fs::write(&path, raw).unwrap();

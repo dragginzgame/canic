@@ -1,7 +1,7 @@
 # Root and its children
 
 The generated starter begins with a Wasm Store and one approved Hello World
-application; a fresh fleet can include a second application:
+application; a fresh or completed one-child fleet can include a second application:
 
 ```text
 Root
@@ -19,6 +19,11 @@ It reports an unsupported child count before reading artifacts or opening the
 journal. This is the qualified implementation bound, not an operator capacity
 setting. Adding a declaration cannot extend a retained approval; changing or
 removing a declaration does not release an existing allocation.
+Once initial creation completes, adding a second declaration selects a separate
+child approval through `fleet plan`. It consumes the unused runtime identity;
+configuration sorting cannot move the original child. Root supplies the fixed
+1T creation attachment from its current balance, subject to its reserve check.
+This does not renew the original operator debit or provide automatic funding.
 Whole-fleet apply completes Store handover/readiness before
 admitting either app; the approval includes its separate 1T debit. See the
 [Store bootstrap workflow](wasm-store.md). Adding Store to an already retained
@@ -27,6 +32,41 @@ unchanged. Fresh fleets with Store publish each application by content hash befo
 admission; existing inline fleets keep their original delivery contract. A changed
 Store-backed child with unpublished bytes first needs publication plan/apply, then a separate upgrade
 plan/apply. See [whole-fleet artifacts](wasm-store.md#whole-fleet-artifacts).
+
+## Add a child to a completed fleet
+
+For a generated starter with only its original application, declare a second
+instance of the same package, then build and plan:
+
+```sh
+canic app canister add worker --app starter --parent root --role worker \
+  --wasm artifacts/worker.wasm --manifest Cargo.toml --package starter-app
+canic app build --app starter --canister worker
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+```
+
+Review and apply the returned operation with `canic fleet apply OPERATION --app
+starter --fleet mainnet --identity canic-mainnet`. Store-backed fleets first return
+publication; after applying it, replan for the separate child creation approval.
+Repeat apply on that exact creation operation to retain its completion. The
+original fleet operation continues to describe its original approved children.
+`canic fleet show --app starter --fleet mainnet` includes the additional child.
+
+Finish outstanding work before adding children. Change existing artifacts and
+add a child in separate reviewed windows. Replanning an unfinished addition
+returns its original schedule and digest, including after expiry; it cannot
+authorize a replacement. Later whole-fleet planning includes the added child in
+serial upgrades and complete Root maintenance. This is bounded growth to two
+children, not general allocation or spare-canister reuse.
+
+The named `fleet plan --canister` path can also select the added child's next
+upgrade. It verifies the explicit target and predecessor module against retained
+history, and the explicit Root module against completed maintenance. Store-backed
+named plans retain their bound-Store and completed `--release` prerequisites.
+Both planners validate the same custody history; switching to whole-fleet planning
+returns the identical pending upgrade. Each successor needs the previous upgrade's
+retained completion and exact predecessor hash; both paths keep the eight-upgrade
+bound and immutable historical approvals.
 
 ## Current mainnet demo
 
@@ -147,11 +187,17 @@ remains inferred for the starter. Fleet views remain read-only and open no brows
 Each child has up to eight serial upgrades. Change one child artifact at a time,
 then use the same plan/apply commands; change Root separately after both complete.
 Maintenance verifies complete custody and both children's code/controllers.
+The current Root migrates historical positional child records to identified
+collections in its original Storage allocations. Approval and pin identities
+remain unchanged, but older executables refuse the new stored format. Finish
+admitted work and use the reviewed maintenance plan; this transition does not
+support downgrading to the pre-migration Root.
 
-The initial approval fixes names and permanent slots. Renaming, adding or removing
-children from a retained fleet is refused. To try two children, create a fresh
-fleet; this does not expand the existing mainnet starter. Arbitrary tree depth,
-dynamic growth and subtree cascades remain future qualification work.
+The initial approval fixes its names and permanent slots. A completed one-child
+fleet can add its second child under a separate approval, as described above;
+renaming or removing retained children is refused. This walkthrough does not
+change the existing mainnet starter. Arbitrary tree depth, growth beyond two
+children and subtree cascades remain future qualification work.
 
 ## Inspect the starter inputs
 
@@ -336,11 +382,12 @@ artifacts together is refused. Unfinished creation must complete with its origin
 An already retained upgrade keeps its original bytes and schedule; a different
 input cannot replace it, including after expiry or failure.
 
-The named `--canister` / `--root-module` path can also plan a child's first upgrade
+The named `--canister` / `--root-module` path can also plan a child's next upgrade
 from a whole-fleet deployment. It resolves the original runtime slot from retained
 creation custody, including the second child, rather than configuration order.
-Both paths use the same immutable managed plan and runtime owner. Whole-fleet
-planning remains the normal workflow and also handles subsequent upgrades.
+Both paths use the same immutable managed plan, serial history and runtime owner.
+Named successors require the latest completed predecessor hash. Whole-fleet
+planning resolves it automatically.
 
 Add `--fleet NAME` when the app has multiple fleets. Copy UPGRADE_OPERATION from
 the new plan. New upgrades dispatch when ready within the original ten-minute

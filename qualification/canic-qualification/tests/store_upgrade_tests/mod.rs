@@ -78,7 +78,7 @@ async fn inject(
         "inject_child_fault",
         ic_wire::encode(
             &children::Request {
-                slot: children::Slot::First,
+                slot: children::ChildId::FIRST,
                 value: point,
             },
             ic_wire::Encoding::Frame {

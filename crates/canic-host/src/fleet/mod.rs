@@ -1,5 +1,7 @@
+mod report;
 use crate::{Error, Network, Result, network, operation, store, supplier};
-use canic_management_protocol::children::{self, Slot};
+use canic_management_protocol::children::{self, ChildId};
+pub use report::save_fleet_report;
 use serde::Serialize;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -44,7 +46,7 @@ pub struct Fleet {
 pub struct FleetManager {
     /// Selected child scope; absent retains the original manager observation.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub slot: Option<Slot>,
+    pub slot: Option<ChildId>,
     /// Exact network binding from the manager's local plan or configuration.
     pub network_id: String,
     /// Known manager principal.
@@ -77,7 +79,7 @@ pub struct FleetOperation {
     pub store_root: Option<String>,
     /// Runtime slot bound by the retained plan, never inferred from config order.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub slot: Option<Slot>,
+    pub slot: Option<ChildId>,
     /// Exact planned Root-owned work, used only to select and check read-only reports.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub management: Option<canic_management_protocol::Approval>,
@@ -312,7 +314,7 @@ fn check_report(
     operations: &[FleetOperation],
     network_id: &str,
     manager: &str,
-    slot: Option<Slot>,
+    slot: Option<ChildId>,
     report: &canic_management_protocol::Status,
 ) -> Result<()> {
     if report
@@ -330,7 +332,7 @@ fn check_report(
             .iter()
             .filter(|operation| {
                 operation.network_id == network_id
-                    && operation.slot.unwrap_or(Slot::First) == slot.unwrap_or(Slot::First)
+                    && operation.slot.unwrap_or(ChildId::FIRST) == slot.unwrap_or(ChildId::FIRST)
             })
             .filter_map(|operation| operation.management.as_ref())
             .filter(|approval| approval.manager == manager)
@@ -382,13 +384,13 @@ fn ordered_upgrades<'a>(
     operations: &'a [FleetOperation],
     network_id: &str,
     manager: &str,
-    slot: Option<Slot>,
+    slot: Option<ChildId>,
 ) -> Vec<&'a FleetOperation> {
     let mut matching: Vec<_> = operations
         .iter()
         .filter(|operation| {
             operation.network_id == network_id
-                && operation.slot.unwrap_or(Slot::First) == slot.unwrap_or(Slot::First)
+                && operation.slot.unwrap_or(ChildId::FIRST) == slot.unwrap_or(ChildId::FIRST)
                 && operation
                     .upgrade
                     .as_ref()
@@ -427,7 +429,7 @@ async fn observe_upgrade(
     operations: &[FleetOperation],
     network_id: &str,
     manager: &str,
-    slot: Option<Slot>,
+    slot: Option<ChildId>,
     network: &Network,
     deadline: tokio::time::Instant,
 ) -> Option<FleetUpgrade> {
@@ -704,9 +706,9 @@ pub async fn fleet_with_config(
         // None is the historical first-slot endpoint, not a third child. Keep
         // its query for old owners while discovering both current physical slots.
         let first = retained_slots
-            .contains(&Some(Slot::First))
-            .then_some(Slot::First);
-        for slot in [first, Some(Slot::Second)] {
+            .contains(&Some(ChildId::FIRST))
+            .then_some(ChildId::FIRST);
+        for slot in [first, Some(ChildId::SECOND)] {
             let budget = owner_deadline
                 .saturating_duration_since(tokio::time::Instant::now())
                 .min(Duration::from_secs(5));
@@ -761,7 +763,7 @@ pub async fn fleet_with_config(
             .await
             .map_err(|_| Error::Blocked("manager observation timed out".into()))
             .and_then(|value| value);
-            if slot == Some(Slot::Second) && !retained_slots.contains(&slot) {
+            if slot == Some(ChildId::SECOND) && !retained_slots.contains(&slot) {
                 match &report {
                     Ok(report) if empty_report(report) => continue,
                     Err(error) => {

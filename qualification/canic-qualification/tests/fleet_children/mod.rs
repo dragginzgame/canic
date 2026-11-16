@@ -487,7 +487,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             "stage_child_upgrade",
             ic_wire::encode(
                 &canic_management_protocol::children::Request {
-                    slot: canic_management_protocol::children::Slot::Second,
+                    slot: canic_management_protocol::children::ChildId::SECOND,
                     value: change,
                 },
                 ic_wire::Encoding::Frame {

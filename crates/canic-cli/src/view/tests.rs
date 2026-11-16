@@ -6,6 +6,40 @@ use std::{
 };
 
 #[test]
+fn opener_handoff_retains_child_without_opening_a_browser() {
+    let parent = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .join("target/view-launch-tests");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = crate::tests::directory(&parent, "handoff").unwrap();
+    let receipt = root.join("url");
+    let mut command = Command::new("sh");
+    command
+        .args(["-c", "sleep 0.1; printf '%s' \"$2\" > \"$1\"", "fixture"])
+        .arg(&receipt);
+    launch("http://localhost:1234/", command).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !receipt.exists() {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        std::fs::read_to_string(&receipt).unwrap(),
+        "http://localhost:1234/"
+    );
+    assert!(
+        launch(
+            "http://localhost:1234/",
+            Command::new("/nonexistent/canic-opener")
+        )
+        .is_err()
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn viewer_serves_only_the_report_over_loopback() {
     let server = Server::http((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let address = server.server_addr().to_ip().unwrap();

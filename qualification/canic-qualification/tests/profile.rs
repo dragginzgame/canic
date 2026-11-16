@@ -133,16 +133,7 @@ async fn entry_journey(
 ) -> String {
     let wasm = artifacts.join("entry.wasm");
     let entry_bytes = std::fs::read(&wasm).unwrap();
-    let entry_facts = ic_host_artifacts::wasm::inspect(
-        &entry_bytes,
-        ic_host_artifacts::wasm::InspectionLimits {
-            module_bytes: 1_500_000,
-            sections: 64,
-            exports: 64,
-            custom_sections: 32,
-        },
-    )
-    .unwrap();
+    let entry_facts = canic_qualification::footprint::measure(&entry_bytes).unwrap();
     let mut args = vec![
         "fleet",
         "plan",
@@ -501,16 +492,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     let original = std::fs::read(artifacts.join("v1.wasm")).unwrap();
     let candidate = std::fs::read(artifacts.join("v2.wasm")).unwrap();
     assert_ne!(original, candidate);
-    let facts = ic_host_artifacts::wasm::inspect(
-        &original,
-        ic_host_artifacts::wasm::InspectionLimits {
-            module_bytes: 1_500_000,
-            sections: 64,
-            exports: 64,
-            custom_sections: 32,
-        },
-    )
-    .unwrap();
+    let facts = canic_qualification::footprint::measure(&original).unwrap();
     assert!(facts.raw_bytes <= 1_500_000);
     let binary = server_assets::check(&canic_qualification::server_directory())
         .expect("run make qualification-setup");

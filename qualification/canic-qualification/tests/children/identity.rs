@@ -1,8 +1,8 @@
-//! The identified runtime preserves bytes written by the positional predecessor.
+//! Identified storage preserves pending authority and refuses an incompatible predecessor.
 use super::*;
 
 #[tokio::test]
-async fn identified_runtime_preserves_positional_journal_bytes() {
+async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
     let owner = PocketIcStartupConfig::Spawn {
         server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
         timeout: Duration::from_secs(30),
@@ -28,7 +28,10 @@ async fn identified_runtime_preserves_positional_journal_bytes() {
     pic.add_cycles(root, 10_000_000_000_000).await;
     let mut approvals = Vec::new();
     // Admission order must never decide identity, including while no principal exists.
-    for (slot, name) in [(Slot::Second, "app-v2.wasm"), (Slot::First, "app.wasm")] {
+    for (slot, name) in [
+        (ChildId::SECOND, "app-v2.wasm"),
+        (ChildId::FIRST, "app.wasm"),
+    ] {
         let stage = input(
             root,
             artifact(name),
@@ -45,7 +48,9 @@ async fn identified_runtime_preserves_positional_journal_bytes() {
     pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
         .await
         .unwrap();
-    assert_eq!(pic.get_stable_memory(root).await, stable);
+    let migrated = pic.get_stable_memory(root).await;
+    assert_ne!(migrated, stable);
+    assert_eq!(migrated.len(), stable.len(), "reuse the checked backing");
     assert_eq!(read(pic, root).await, scheduled);
     for (slot, stage) in &approvals {
         assert_eq!(
@@ -54,7 +59,19 @@ async fn identified_runtime_preserves_positional_journal_bytes() {
         );
     }
     assert_eq!(read(pic, root).await, scheduled);
-    assert_eq!(pic.get_stable_memory(root).await, stable);
+    assert_eq!(pic.get_stable_memory(root).await, migrated);
+    // Unsupported code must trap at load, leaving the migrated state and new code intact.
+    assert!(
+        pic.upgrade_canister(root, old.clone(), vec![], None)
+            .await
+            .is_err()
+    );
+    assert_eq!(pic.get_stable_memory(root).await, migrated);
+    assert_eq!(read(pic, root).await, scheduled);
+    assert_eq!(
+        pic.canister_status(root, None).await.unwrap().module_hash,
+        Some(digest(&artifact("root.wasm")).to_vec())
+    );
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let completed = read(pic, root).await;
@@ -66,8 +83,10 @@ async fn identified_runtime_preserves_positional_journal_bytes() {
     }
     assert_ne!(completed[0].creation.worker, completed[1].creation.worker);
     let stable = pic.get_stable_memory(root).await;
-    // The same format remains readable in both directions, without migration or reset.
-    for executable in [old, artifact("root.wasm")] {
+    assert!(pic.upgrade_canister(root, old, vec![], None).await.is_err());
+    assert_eq!(pic.get_stable_memory(root).await, stable);
+    // Compatible executables reopen the collection without another rewrite or reset.
+    for executable in [artifact("maintenance.wasm"), artifact("root.wasm")] {
         pic.upgrade_canister(root, executable, vec![], None)
             .await
             .unwrap();

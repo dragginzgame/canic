@@ -31,8 +31,9 @@ canic-management-protocol = { path = "crates/canic-management-protocol" }
 canic-profile-protocol = { path = "apps/profile/canic-profile-protocol" }
 clap = { version = "4.6.7", features = ["derive"] }
 ic-blob-storage = { git = "https://github.com/dragginzgame/ic-blob-storage", rev = "decde204acb6d7c8362a0003e904beef72ff89b6" }
-ic-host-fs = { version = "0.79.0", default-features = false }
-ic-host-process = { version = "0.79.0", default-features = false }
+ic-host-artifacts = "0.80.1"
+ic-host-fs = { version = "0.80.1", default-features = false }
+ic-host-process = { version = "0.80.2", default-features = false }
 ic-host-text = { version = "0.76.0", default-features = false }
 ic-platform = { version = "0.33.0", default-features = false }
 ic-platform-runtime = { version = "0.22.1", default-features = false }

@@ -1,4 +1,5 @@
 //! Real CLI Store bootstrap and publication through Root with retained recovery.
+mod fleet_growth;
 mod store_upgrade_tests;
 use ic_testkit::{
     pic::{PocketIcStartupConfig, server_assets},
@@ -24,7 +25,7 @@ fn cli(dir: &Path, args: &[&str]) -> Value {
     let output = run(dir, args);
     assert!(
         output.status.success(),
-        "{}",
+        "{args:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).unwrap()
@@ -173,8 +174,18 @@ async fn maintain_root(
         std::fs::read(path.join("custody-before/reply.bin")).unwrap(),
         std::fs::read(path.join("custody-after/reply.bin")).unwrap()
     );
+    let migrated = pic.get_stable_memory(root).await;
+    assert_ne!(
+        migrated, stable,
+        "positional payloads migrate to identified collections"
+    );
+    assert_eq!(
+        migrated.len(),
+        stable.len(),
+        "existing Storage backing is retained"
+    );
     assert_eq!(cli(dir, &apply), completed);
-    assert_eq!(pic.get_stable_memory(root).await, stable);
+    assert_eq!(pic.get_stable_memory(root).await, migrated);
     assert_eq!(
         cli(dir, &["fleet", "plan", "--controller", "2vxsx-fae"])["action"],
         "unchanged"

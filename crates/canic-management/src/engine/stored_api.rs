@@ -2,7 +2,7 @@
 use super::{Artifact, STATE, delivery, snapshot, status, upgrade};
 use canic_management_protocol::{
     Approval, Refusal, Status,
-    children::{self, Slot},
+    children::{self, ChildId},
     stored,
 };
 use ic_platform_runtime::cdk::api;
@@ -12,7 +12,7 @@ use ic_platform_runtime::cdk::api;
 /// Refuses changed bindings, invalid metadata, time or capacity.
 /// # Panics
 /// Traps for noncontrollers or failed durable writes.
-pub fn stage(slot: Slot, input: stored::Stage<Approval>) -> Result<Status, Refusal> {
+pub fn stage(slot: ChildId, input: stored::Stage<Approval>) -> Result<Status, Refusal> {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
@@ -50,13 +50,13 @@ pub fn stage(slot: Slot, input: stored::Stage<Approval>) -> Result<Status, Refus
 /// # Panics
 /// Traps for noncontrollers or failed durable writes.
 pub fn stage_upgrade(
-    slot: Slot,
+    slot: ChildId,
     input: stored::Stage<canic_management_protocol::upgrade::Approval>,
 ) -> Result<canic_management_protocol::upgrade::Status, Refusal> {
     upgrade::stage_input(slot, upgrade::Input::Stored(input))
 }
 pub(super) fn upgrade_source(
-    slot: Slot,
+    slot: ChildId,
     approval: &canic_management_protocol::upgrade::Approval,
 ) -> Option<stored::Delivery> {
     STATE.with_borrow(|state| {
@@ -77,7 +77,7 @@ pub(super) fn upgrade_source(
 /// Reconcile only the exact admitted Store-backed creation.
 /// # Panics
 /// Traps for noncontrollers or mismatched complete authority.
-pub async fn reconcile(slot: Slot, input: stored::Stage<Approval>) -> Status {
+pub async fn reconcile(slot: ChildId, input: stored::Stage<Approval>) -> Status {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
@@ -95,7 +95,7 @@ pub async fn reconcile(slot: Slot, input: stored::Stage<Approval>) -> Status {
 /// # Panics
 /// Traps for noncontrollers or mismatched complete authority.
 pub async fn reconcile_upgrade(
-    slot: Slot,
+    slot: ChildId,
     input: stored::Stage<canic_management_protocol::upgrade::Approval>,
 ) -> canic_management_protocol::upgrade::Status {
     assert!(
@@ -160,7 +160,7 @@ fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {
         let artifacts = &state.as_ref().expect("open engine").artifact.get().0;
-        Slot::ALL.map(|slot| artifacts[&slot].sources().cloned())
+        ChildId::ALL.map(|slot| artifacts[&slot].sources().cloned())
     });
     stored::Custody { children, sources }
 }

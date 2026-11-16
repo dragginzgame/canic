@@ -2,7 +2,7 @@
 use crate::{Error, Plan, Result, network::principal, operation, signed, store, supplier};
 use canic_management_protocol::{
     LIMITS, Phase, STATUS, Status,
-    children::Slot,
+    children::ChildId,
     custody::{self, Custody},
     upgrade,
 };
@@ -147,7 +147,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
         return Err(invalid());
     };
     if expected.is_empty()
-        || expected.len() > Slot::ALL.len()
+        || expected.len() > ChildId::ALL.len()
         || (single_upgrade_root(plan) && expected.len() != 1)
         || expected
             .iter()

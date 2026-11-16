@@ -29,6 +29,11 @@ update their profiles; retries are idempotent, stale writes and controller write
 are refused. A new approval selects the compatible earlier worker executable
 through the upgraded Root and Store, preserving the latest profiles rather than
 restoring old application data. Wrong-user and controller reads are refused.
+The fleet then adds a second worker under a separate approval. Both users create
+independent profiles there; their original worker and records remain unchanged.
+The added worker upgrades to `profile-v2`, and another Root replacement preserves
+both workers' complete custody, private records and stable storage. Each worker
+owns its own user namespace; this does not supply automatic sharding or routing.
 An incompatible greeting application remains at
 code-verified status without a completion receipt or another install attempt.
 The witness also selects a qualification-only manager through maintenance and
@@ -82,8 +87,23 @@ Callback cleanup requires the updated management executable; a new CLI alone
 does not repair a heap guard already stranded in an older deployed Root.
 Use the profile application's client for authenticated operations; `fleet call`
 is the greeting-demo helper. Store remains an infrastructure role, not a profile
-or application-permission store. The qualified journey uses one worker; broader
-allocation patterns and arbitrary readiness protocols remain future work.
+or application-permission store. The qualified journey grows from one worker to
+two; broader allocation patterns and arbitrary readiness protocols remain future work.
+
+For a completed `profile-store` fleet prepared above, declare and build a second
+worker from the Canic checkout:
+
+```sh
+canic app canister add archive --app profile-store --parent root --role worker \
+  --wasm artifacts/archive.wasm --manifest ../Cargo.toml --package canic-profile-worker
+canic app build --app profile-store --canister archive
+canic fleet plan --app profile-store --identity canic-mainnet
+```
+
+Review and apply the publication operation, then plan and apply the separate
+creation operation. Root supplies the 1T creation attachment from its existing
+balance and must retain its operating reserve. Keep the original journal. This
+adds independent capacity; it does not move profiles or change the entry's route.
 
 ## Current mainnet demo
 

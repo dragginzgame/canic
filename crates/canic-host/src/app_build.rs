@@ -1,6 +1,5 @@
 //! App recipes reuse the artifact builder; Cargo owns dependency resolution and locking.
 use crate::{Artifact, Error, Result, supplier};
-use ic_host_process::tool::{CompletedExecution, OutputLimit, OutputLimits, capture_group_command};
 use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
@@ -66,8 +65,7 @@ pub fn build_app(
         // Compare physical destinations, including missing outputs. Keep the
         // original path for the artifact writer's independent safety checks.
         let destination =
-            ic_host_fs::path::canonicalize_allow_missing(&output, &working_directory, 40)
-                .map_err(supplier)?;
+            crate::output_path::resolve(&output, &working_directory).map_err(supplier)?;
         if !outputs.insert(destination) {
             return Err(Error::Invalid("app build outputs must be distinct".into()));
         }
@@ -86,19 +84,15 @@ pub fn build_app(
             .try_exists()
             .map_err(supplier)?
         {
-            capture_group_command(
+            crate::process::capture(
                 Command::new("cargo")
                     .current_dir(workspace)
                     .args(["generate-lockfile", "--manifest-path"])
                     .arg(&manifest),
-                OutputLimits {
-                    stdout: OutputLimit::Terminate(1024 * 1024),
-                    stderr: OutputLimit::Terminate(1024 * 1024),
-                    timeout: Some(Duration::from_secs(120)),
-                },
+                1024 * 1024,
+                1024 * 1024,
+                Duration::from_secs(120),
             )
-            .and_then(CompletedExecution::require_success)
-            .and_then(CompletedExecution::require_complete)
             .map_err(crate::artifact::cargo_failure)?;
         }
         let wasm = crate::artifact::build(&manifest, &recipe.package, &[], Some(&output))?;

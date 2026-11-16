@@ -382,23 +382,70 @@ bash scripts/dev/test-root.sh whole_fleet managed_child_cli multi_child_cli reta
 
 These fixtures explicitly select inline custody. The publication runner above
 owns the generated Root/Store/app default; neither fixture migrates retained fleets.
-`bash scripts/dev/test-root.sh identified_runtime_preserves_positional_journal_bytes`
-checks the retained positional-storage Root against the identity-keyed runtime.
-Both child admissions survive replacement byte-for-byte before autonomous creation;
-completed state remains readable in both executable directions. The existing
-two-child publication journey starts from the same retained binary and checks
-all Root stable bytes across Host-driven replacement with both Store-backed
-children and their upgrade histories. Runtime lookup changes do not change the
-stored CUJ7/CUA3 formats or increase the two-child bound.
+`bash scripts/dev/test-root.sh identified_storage_migrates_pending_children_and_refuses_downgrade`
+checks migration from the retained positional-storage Root to CUJ8/CUA4 identified
+collections. Both pending child approvals survive replacement unchanged and
+complete independently. Compatible executables reopen the collection; the old
+executable refuses without changing state. The two-child publication journey
+starts from the same retained binary and compares complete custody across
+Host-driven migration with both Store-backed children and their upgrade histories.
+Stable payload bytes change once; original Storage allocations and backing size
+are retained. Neither transition increases the two-child bound.
+The Root runner also runs `cargo test --locked -p canic-management --lib`, exercising
+the actual persistent codecs natively: malformed identities, oversized history,
+truncated records and the full retained inline artifact budget. A mixed inline/Store
+record fills the original artifact lease, migrates and reopens through governed
+Cells without growing either allocation; excess data refuses before writing. These checks use
+test-only native dependencies; Host still consumes the passive protocol alone.
 The multi-child journey plans the second child's first upgrade through the named
 `--canister` path, verifies its retained slot and lost-reply recovery, then includes
 it in whole-fleet convergence and Root maintenance. General dynamic allocation
 and new-child admission are not qualified by this named-upgrade path.
-The same journey inserts a third declaration while both original child admissions
+The publication runner's `existing_fleet_adds_child_preserving_identity_and_maintenance`
+case separately covers whole-fleet growth from one to two children, both inline
+and Store-backed, after prior Root and Store maintenance. It checks separately
+approved publication/creation, lexical name reordering, removal/artifact-change
+refusal, lost admission replies, exact signed-attempt reuse, four named serial upgrades
+of the added child and complete Root maintenance. Wrong targets, stale Root code
+and missing creation completion refuse; whole-fleet planning returns the same
+pending upgrade, including its completed Store-maintenance binding. Missing
+predecessor completion and stale predecessor code refuse the second upgrade;
+lost stage replies reuse exact signed bytes. Completed replay retains the latest
+approval. The B → C → B → C sequence repeats a code transition with a fresh
+approval against the latest predecessor, reusing the completed Store publications.
+Original signed attempts stay unchanged; later Root maintenance preserves all
+four upgrade records. The greeting variants differ by valid custom sections;
+this qualifies artifact/authority reuse, not application schema downgrade or
+state rollback.
+Original fleet bytes and admission signatures remain unchanged; the installed
+canister count excludes duplicate creation. No runtime capacity increase or
+reusable-pool behavior is claimed. Both planners share ordered custody validation
+and upgrade-count, artifact-capacity and dispatch-order checks. Serial named
+planning requires a retained whole-fleet creation approval.
+Management continuation timers and in-flight guards are keyed by the same child
+identities as durable custody. The installed `children::identity`,
+`children::lost_creation` and `children::two_children` cases cover positional
+predecessor preservation, reverse admission order, independent sibling progress,
+lost callbacks and bounded upgrade history. The profile witness below covers
+same-instance timer recovery and later Root/Store maintenance. These checks do
+not increase the current capacity or change serialized child identities.
+Protocol checks compare numeric `ChildId` encoding against the frozen deployed
+enum, including complete request frames and Store pin digests. Host checks retain
+the original JSON spellings and approval digests. Unsupported constructor values,
+numeric JSON and unknown Wire discriminants refuse. Request compatibility is
+independent of storage compatibility: installed migration preserves approval
+bytes, while old executables refuse the new persistent collection formats.
+The multi-child journey also inserts a third declaration while both original child admissions
 are retained. Planning reports the two-child bound, preserves the original approval,
 signed admissions and Root stable bytes, and resumes the original plan after the
 configuration is restored. Native checks cover zero/three children with and without
 Store, refusing before artifact reads or journal creation.
+
+Host plan tests check reservation conflicts independently of directory order,
+including duplicate approvals for the same inputs, legacy/explicit First-slot
+aliases, conflicting publication owners, malformed later records and the existing
+128-operation planning bound. A matching approval cannot bypass the remaining
+scan; valid retries still return their original digest and deadline.
 
 `bash scripts/dev/test-root.sh discovers_both_children_without_local_deployment_records`
 checks the shipped CLI against an installed Root with no local deployment journal.
@@ -417,6 +464,13 @@ and refuses an installed greeting as profile readiness without replaying effects
 After infrastructure maintenance, both users can still write; retries and refused
 writes preserve state. A subsequent approved change to the compatible earlier
 worker executable uses the current Root/Store bindings and retains the latest data.
+It then adds a second worker whose name sorts before the first, writes distinct
+profiles for the same two users, upgrades that worker, and replaces Root again.
+The original allocation stays fixed; both workers preserve private records and
+stable bytes, and Root retains both creation histories and their upgrades. Store
+stable bytes remain unchanged across that final Root replacement. Cross-user and
+Root reads remain forbidden in both workers. This qualifies explicit second-worker
+growth, not automatic user routing, shared identities or sharding.
 The same witness selects an explicitly qualified fault manager through maintenance,
 loses a worker-install callback after remote commit, and recovers through the real
 CLI's `fleet reconcile`. It checks original approval/signed-admission custody,

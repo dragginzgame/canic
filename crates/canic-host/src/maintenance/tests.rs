@@ -83,7 +83,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
                     operation: stage
                         .pin(
                             wire::STAGE,
-                            canic_management_protocol::children::Slot::First,
+                            canic_management_protocol::children::ChildId::FIRST,
                         )
                         .operation,
                     reference: stage.reference,

@@ -283,7 +283,7 @@ dependencies = [
  "canic-effect-probe",
  "canic-management-protocol",
  "canic-profile-protocol",
- "ic-host-artifacts",
+ "ic-host-artifacts 0.80.1",
  "ic-testkit",
  "ic-wasm-store-protocol",
  "ic-wire 0.24.1",
@@ -291,6 +291,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "toko-tooling",
+ "wasmparser",
 ]
 
 [[package]]
@@ -865,9 +866,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80c115b14974a670676e62940473886a1b2b289ee1ca1258aae89534f1fddb22"
 dependencies = [
  "flate2",
- "leb128",
  "sha2 0.11.1",
- "wasmparser",
+]
+
+[[package]]
+name = "ic-host-artifacts"
+version = "0.80.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9083e3927eb9649c429a1c8dfeb5b7be844cebf1596e93b077f9908d6289dcc"
+dependencies = [
+ "sha2 0.11.1",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -876,7 +885,7 @@ version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ef7770c178efe33ca0d9fcb54e78ad45f0c9c3d499f2e1bac70fb1ba5bba182"
 dependencies = [
- "ic-host-artifacts",
+ "ic-host-artifacts 0.79.0",
  "rustix",
  "thiserror 2.0.18",
 ]
@@ -887,7 +896,7 @@ version = "0.79.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfc02220bee55d050f8ebedce5f5ff71764028afcef8b58c1ae2bceb945e650"
 dependencies = [
- "ic-host-artifacts",
+ "ic-host-artifacts 0.79.0",
  "ic-host-fs",
  "libc",
  "rustix",
@@ -979,7 +988,7 @@ version = "0.106.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "090cea21af2208dad7a359e99fe803b356fe8daa27cdc52d545df7de3b32c43e"
 dependencies = [
- "ic-host-artifacts",
+ "ic-host-artifacts 0.79.0",
  "ic-host-fs",
  "ic-host-process",
  "ic-platform",

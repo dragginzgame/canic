@@ -1,7 +1,7 @@
 //! Full Store custody comparison on both sides of the existing Root upgrade effect.
 use super::{invalid, single_upgrade_root};
 use crate::{Plan, Result, managed, network::principal, supplier};
-use canic_management_protocol::{children::Slot, stored as wire};
+use canic_management_protocol::{children::ChildId, stored as wire};
 
 pub(super) fn validate(plan: &Plan) -> Result<()> {
     let Some(store) = plan.maintenance_store() else {
@@ -30,7 +30,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         if sources.upgrades.len() != child.upgrades.len() {
             return Err(invalid());
         }
-        let slot = Slot::ALL[index];
+        let slot = ChildId::ALL[index];
         let approval = child.creation.approval.as_ref().ok_or_else(invalid)?;
         delivery(
             &store.store.canister,
@@ -123,7 +123,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
 
 fn delivery<A: serde::Serialize>(
     store: &str,
-    slot: Slot,
+    slot: ChildId,
     method: u64,
     approval: &A,
     hash: [u8; 32],

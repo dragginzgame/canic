@@ -1,7 +1,6 @@
 //! Resolve the registry Store artifact input without linking its runtime into Host.
 use super::cargo_failure;
 use crate::{Error, Result, supplier};
-use ic_host_process::tool::{CompletedExecution, OutputLimit, OutputLimits, capture_group_command};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -45,7 +44,7 @@ pub(super) fn manifest(workspace: &Path) -> Result<PathBuf> {
 }
 
 fn metadata(manifest: &Path) -> Result<Metadata> {
-    let output = capture_group_command(
+    let output = crate::process::capture(
         Command::new("cargo")
             .args([
                 "metadata",
@@ -55,16 +54,12 @@ fn metadata(manifest: &Path) -> Result<Metadata> {
                 "--manifest-path",
             ])
             .arg(manifest),
-        OutputLimits {
-            stdout: OutputLimit::Terminate(8 * 1024 * 1024),
-            stderr: OutputLimit::Terminate(1024 * 1024),
-            timeout: Some(Duration::from_secs(120)),
-        },
+        8 * 1024 * 1024,
+        1024 * 1024,
+        Duration::from_secs(120),
     )
-    .and_then(CompletedExecution::require_success)
-    .and_then(CompletedExecution::require_complete)
     .map_err(cargo_failure)?;
-    serde_json::from_slice(&output.stdout).map_err(supplier)
+    serde_json::from_slice(&output).map_err(supplier)
 }
 
 fn package<'a>(metadata: &'a Metadata, name: &str) -> Result<&'a Package> {

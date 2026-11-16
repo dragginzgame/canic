@@ -1,6 +1,5 @@
 use canic_host::{Error, Fleet, Result};
-use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
-use std::{fmt::Write as _, num::NonZeroUsize, path::Path};
+use std::{fmt::Write as _, path::Path};
 
 mod metrics;
 mod roles;
@@ -397,18 +396,6 @@ fn slot_state<'a>(snapshot: &'a Fleet, slot: &str) -> SlotState<'a> {
     }
 }
 
-fn write(path: &Path, snapshot: &Fleet, routes: &str) -> Result<()> {
-    durable::write_bytes(
-        path,
-        WriteOptions {
-            mode: PublicationMode::CreateNew,
-            permissions: 0o600,
-        },
-        render(snapshot, routes).as_bytes(),
-    )
-    .map_err(|error| Error::Supplier(Box::new(error)))
-}
-
 pub(crate) fn publish(
     snapshot: &Fleet,
     html: Option<&Path>,
@@ -418,41 +405,26 @@ pub(crate) fn publish(
     links: &[String],
 ) -> Result<()> {
     let routes = declared_routes(snapshot, links)?;
-    let automatic;
-    let path = if let Some(path) = html {
-        path
-    } else if open || serve {
-        let root = Path::new("target/fleet");
-        durable::prepare_private_parents(root).map_err(|error| Error::Supplier(Box::new(error)))?;
-        automatic = ic_host_fs::directory::create_unique_directory(
-            root,
-            "snapshot",
-            0o700,
-            NonZeroUsize::new(32),
-        )
-        .map_err(|error| Error::Supplier(Box::new(error)))?
-        .join("index.html");
-        &automatic
-    } else {
+    if html.is_none() && !open && !serve {
         return Ok(());
-    };
-    write(path, snapshot, &routes)?;
+    }
+    let path = canic_host::save_fleet_report(&render(snapshot, &routes), html)?;
     eprintln!("Fleet report saved: {}", path.display());
     if open || serve {
-        crate::view::serve(path, port, open)?;
+        crate::view::serve(&path, port, open)?;
     }
     Ok(())
 }
 
 fn child_label(snapshot: &Fleet, manager: &canic_host::FleetManager) -> String {
-    use canic_management_protocol::children::Slot;
-    let slot = manager.slot.unwrap_or(Slot::First);
+    use canic_management_protocol::children::ChildId;
+    let slot = manager.slot.unwrap_or(ChildId::FIRST);
     let mut names = snapshot
         .operations
         .iter()
         .filter(|op| {
             op.network_id == manager.network_id
-                && op.slot.unwrap_or(Slot::First) == slot
+                && op.slot.unwrap_or(ChildId::FIRST) == slot
                 && op.management_owner() == Some(manager.manager.as_str())
         })
         .filter_map(|op| op.deployment.as_ref());

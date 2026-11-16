@@ -1,5 +1,5 @@
 //! Retained fleet format and journal locations; callers use identified collections.
-use super::{FleetChild, FleetPlan, Slot, invalid};
+use super::{ChildId, FleetChild, FleetPlan, invalid};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -25,7 +25,7 @@ struct Child {
     execute_at_ns: u64,
 }
 impl Child {
-    fn into_child(self, slot: Slot) -> FleetChild {
+    fn into_child(self, slot: ChildId) -> FleetChild {
         FleetChild {
             slot,
             deployment: self.deployment,
@@ -53,7 +53,7 @@ impl Serialize for FleetPlan {
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
         let record = match self.children.as_slice() {
-            [first] if first.slot == Slot::First && self.version == 1 => Record {
+            [first] if first.slot == ChildId::FIRST && self.version == 1 => Record {
                 version: self.version,
                 root: self.root.clone(),
                 child: Child::from_child(first),
@@ -61,8 +61,8 @@ impl Serialize for FleetPlan {
                 store: self.store.clone(),
             },
             [first, second]
-                if first.slot == Slot::First
-                    && second.slot == Slot::Second
+                if first.slot == ChildId::FIRST
+                    && second.slot == ChildId::SECOND
                     && self.version == 2 =>
             {
                 Record {
@@ -83,8 +83,8 @@ impl<'de> Deserialize<'de> for FleetPlan {
         deserializer: D,
     ) -> std::result::Result<Self, D::Error> {
         let r = Record::deserialize(deserializer)?;
-        let mut children = vec![r.child.into_child(Slot::First)];
-        children.extend(r.sibling.map(|c| c.into_child(Slot::Second)));
+        let mut children = vec![r.child.into_child(ChildId::FIRST)];
+        children.extend(r.sibling.map(|c| c.into_child(ChildId::SECOND)));
         let value = Self {
             version: r.version,
             root: r.root,
@@ -96,10 +96,11 @@ impl<'de> Deserialize<'de> for FleetPlan {
     }
 }
 // Existing journal paths never move, including records with retained signed attempts.
-pub(super) fn child_leaf(slot: Slot) -> &'static str {
+pub(super) fn child_leaf(slot: ChildId) -> &'static str {
     match slot {
-        Slot::First => "child",
-        Slot::Second => "sibling",
+        ChildId::FIRST => "child",
+        ChildId::SECOND => "sibling",
+        _ => unreachable!("unsupported child record identity"),
     }
 }
 

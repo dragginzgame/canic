@@ -25,6 +25,7 @@ async fn complete(config: &std::path::Path, operation: &str, signer: &std::path:
         );
         if result["canister"].is_string()
             || result["children"][0]["outcome"]["canister"].is_string()
+            || result["publication"]["status"]["published"] == true
         {
             return result;
         }
@@ -283,18 +284,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
     let publication = plan();
     assert_eq!(publication["action"], "publication");
-    cli(
-        &config,
-        &[
-            "fleet",
-            "apply",
-            publication["operation"].as_str().unwrap(),
-            "--identity",
-            "profile-fixture",
-            "--icp-bin",
-            signer.to_str().unwrap(),
-        ],
-    );
+    complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
     let upgrade = plan();
     assert_eq!(upgrade["action"], "upgrade");
     let id = upgrade["operation"].as_str().unwrap();
@@ -502,18 +492,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
     let publication = plan();
     assert_eq!(publication["action"], "publication");
-    cli(
-        &config,
-        &[
-            "fleet",
-            "apply",
-            publication["operation"].as_str().unwrap(),
-            "--identity",
-            "profile-fixture",
-            "--icp-bin",
-            signer.to_str().unwrap(),
-        ],
-    );
+    complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
     let next = plan();
     assert_eq!(next["action"], "upgrade");
     assert_ne!(next["operation"], upgrade["operation"]);
@@ -539,8 +518,128 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     );
     verify_profiles(pic, child, root, &profiles).await;
     assert_eq!(plan()["action"], "unchanged");
+
+    // Grow the real application after maintenance. A name sorting before worker
+    // must not move its allocation or route either user's existing data.
+    cli(
+        &config,
+        &[
+            "app",
+            "canister",
+            "add",
+            "archive",
+            "--parent",
+            "root",
+            "--role",
+            "worker",
+            "--wasm",
+            assets.join("profile-worker.wasm").to_str().unwrap(),
+        ],
+    );
+    value = serde_json::from_slice(&std::fs::read(&config).unwrap()).unwrap();
+    let publication = plan();
+    assert_eq!(publication["action"], "publication");
+    complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
+    let addition = plan();
+    assert_eq!(addition["action"], "add_child");
+    assert_eq!(addition["plan"]["management"]["slot"], "Second");
+    let added = complete(&config, addition["operation"].as_str().unwrap(), &signer).await;
+    let archive = CanisterId::from_text(added["canister"].as_str().unwrap()).unwrap();
+    assert_ne!(archive, child);
+    assert_eq!(added["controller"], root.to_text());
+    assert_eq!(info(pic, archive).await.executable, "profile-v1");
+    let mut archive_profiles = Vec::new();
+    for profile in &profiles {
+        let caller = CanisterId::from_slice(&profile.owner);
+        assert_eq!(
+            get(pic, archive, caller, profile.user_id).await,
+            Err(ProfileError::NotFound)
+        );
+        archive_profiles.push(
+            put(
+                pic,
+                archive,
+                caller,
+                &Put {
+                    user_id: profile.user_id,
+                    expected_revision: 0,
+                    display_name: format!("{} in archive", profile.display_name),
+                },
+            )
+            .await
+            .unwrap(),
+        );
+    }
+    verify_profiles(pic, archive, root, &archive_profiles).await;
+    verify_profiles(pic, child, root, &profiles).await;
+    assert_eq!(pic.get_stable_memory(child).await, updated_state);
+    let archive_state = pic.get_stable_memory(archive).await;
+
+    value["apps"]["profiles"]["canisters"]["archive"]["wasm"] =
+        json!(assets.join("profile-worker-v2.wasm"));
+    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    let publication = plan();
+    assert_eq!(publication["action"], "publication");
+    complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
+    let archive_upgrade = plan();
+    assert_eq!(archive_upgrade["action"], "upgrade");
+    assert_eq!(archive_upgrade["plan"]["target"], archive.to_text());
+    complete(
+        &config,
+        archive_upgrade["operation"].as_str().unwrap(),
+        &signer,
+    )
+    .await;
+    assert_eq!(info(pic, archive).await.executable, "profile-v2");
+    assert_eq!(info(pic, child).await.executable, "profile-v1");
+    assert_eq!(pic.get_stable_memory(archive).await, archive_state);
+    assert_eq!(pic.get_stable_memory(child).await, updated_state);
+    let before_maintenance = cli(&config, &["fleet", "show"]);
+    let timers = &before_maintenance["metrics"][0]["reported"]["timers"];
+    assert!(
+        timers["accepted"]["total"]
+            .as_str()
+            .unwrap()
+            .parse::<u128>()
+            .unwrap()
+            > 0
+    );
+    assert_eq!(timers["accepted"]["overflowed"], false);
+
+    // Root replacement must include the later child's custody as well as the
+    // original worker, without changing either application's records or Store.
+    value["apps"]["profiles"]["canisters"]["root"]["wasm"] =
+        json!(assets.join("profile-manager.wasm"));
+    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    let maintenance = plan();
+    assert_eq!(maintenance["action"], "maintenance");
+    assert_eq!(
+        maintenance["plan"]["maintenance"]["creation"]["worker"],
+        child.to_text()
+    );
+    assert_eq!(
+        maintenance["plan"]["maintenance_sibling"]["creation"]["worker"],
+        archive.to_text()
+    );
+    assert_eq!(
+        maintenance["plan"]["maintenance_sibling"]["upgrades"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let root_state = pic.get_stable_memory(root).await;
+    let store_state = pic.get_stable_memory(store).await;
+    complete(&config, maintenance["operation"].as_str().unwrap(), &signer).await;
+    assert_eq!(pic.get_stable_memory(root).await, root_state);
+    assert_eq!(pic.get_stable_memory(store).await, store_state);
+    assert_eq!(pic.get_stable_memory(archive).await, archive_state);
+    assert_eq!(pic.get_stable_memory(child).await, updated_state);
+    verify_profiles(pic, archive, root, &archive_profiles).await;
+    verify_profiles(pic, child, root, &profiles).await;
+    assert_eq!(plan()["action"], "unchanged");
     let view = cli(&config, &["fleet", "show"]);
-    assert_eq!(view["canisters"].as_array().unwrap().len(), 3);
+    assert_eq!(view["canisters"].as_array().unwrap().len(), 4);
     assert!(view["issues"].as_array().unwrap().is_empty(), "{view}");
     assert_eq!(view["managers"][0]["reported"]["phase"], "Ready");
     assert_eq!(view["managers"][0]["upgrade"]["reported"]["phase"], "Ready");
@@ -548,18 +647,20 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     assert_eq!(view["metrics"].as_array().unwrap().len(), 1);
     assert_eq!(view["metrics"][0]["canister"], root.to_text());
     let timer_report = &view["metrics"][0]["reported"]["timers"];
-    assert!(
-        timer_report["accepted"]["total"]
-            .as_str()
-            .unwrap()
-            .parse::<u128>()
-            .unwrap()
-            > 0
+    // Volatile diagnostics start a new epoch; durable effect custody above survives.
+    assert_eq!(timer_report["accepted"]["total"], "0");
+    assert_ne!(
+        timer_report["started_at_version"],
+        timers["started_at_version"]
     );
     assert_eq!(timer_report["accepted"]["overflowed"], false);
 
     // A valid, installed greeting is not profile readiness. Keep the same
     // management owner and prove the incompatible application remains blocked.
+    value["apps"]["profiles"]["canisters"]
+        .as_object_mut()
+        .unwrap()
+        .remove("archive");
     value["apps"]["profiles"]["canisters"]["worker"]["wasm"] = json!(assets.join("app.wasm"));
     value["apps"]["profiles"]["fleets"]["local"]["journal"] = json!("refused-journal");
     let refused_config = directory.join("refused.json");

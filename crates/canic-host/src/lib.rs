@@ -9,10 +9,15 @@ mod maintenance;
 mod managed;
 mod network;
 mod operation;
+mod output_path;
+mod output_publication;
 pub mod placements;
 mod plan;
+mod process;
 mod publication;
+mod sidecar_lock;
 mod signed;
+mod staging_directory;
 mod starter;
 mod store;
 mod store_bootstrap;
@@ -33,7 +38,7 @@ pub use config::{
 };
 pub use fleet::{
     Fleet, FleetCanister, FleetManager, FleetMetrics, FleetOperation, FleetStoreMaintenance,
-    FleetUpgrade, fleet, fleet_with_config, fleet_with_managers,
+    FleetUpgrade, fleet, fleet_with_config, fleet_with_managers, save_fleet_report,
 };
 pub use fleet_plan::{
     Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,

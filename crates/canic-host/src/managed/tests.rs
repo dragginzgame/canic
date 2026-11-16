@@ -98,7 +98,7 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
     .unwrap();
     let operation = dir.join(&id);
     let slot = operation.join("observe/0");
-    ic_host_fs::durable::prepare_private_parents(&slot.join("reconcile")).unwrap();
+    crate::output_publication::prepare(&slot.join("reconcile"), 0o700).unwrap();
     store::put_json(&slot.join("reconcile/authority.json"), &1_u64).unwrap();
     assert!(recovery::require_settled(&slot).is_err());
     let retained = Status {
@@ -310,13 +310,13 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
 
 #[test]
 fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
-    use canic_management_protocol::children::Slot;
-    for slot in [None, Some(Slot::First), Some(Slot::Second)] {
+    use canic_management_protocol::children::ChildId;
+    for slot in [None, Some(ChildId::FIRST), Some(ChildId::SECOND)] {
         check_named_upgrade_custody(slot);
     }
 }
 
-fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children::Slot>) {
+fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children::ChildId>) {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
@@ -407,7 +407,7 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
         ..Default::default()
     };
     let created_dir = dir.join(&created_id);
-    ic_host_fs::durable::prepare_private_parents(&created_dir.join("stage")).unwrap();
+    crate::output_publication::prepare(&created_dir.join("stage"), 0o700).unwrap();
     store::put(
         &created_dir.join("stage/reply.bin"),
         &ic_wire::encode(
@@ -703,7 +703,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         wire::LIMITS,
     )
     .unwrap();
-    assert_eq!(request.slot, children::Slot::First);
+    assert_eq!(request.slot, children::ChildId::FIRST);
     assert_eq!(request.value.reference.manifest, source.manifest);
     let recovery = recovery::call(&plan).unwrap();
     let recovered: children::Request<wire::Stage<Approval>> = ic_wire::decode(
@@ -904,7 +904,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     custody.sources[0].as_mut().unwrap().creation = delivery;
     custody.sources[0].as_mut().unwrap().creation.operation = request
         .value
-        .pin(wire::STAGE, children::Slot::Second)
+        .pin(wire::STAGE, children::ChildId::SECOND)
         .operation;
     assert!(stored::creation(&plan, &encode(&custody)).is_err());
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {

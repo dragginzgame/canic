@@ -5,7 +5,7 @@ use crate::{
 };
 use canic_management_protocol::{
     Status,
-    children::{Request, Slot},
+    children::{ChildId, Request},
     stored as wire, upgrade,
 };
 use ic_platform::agent::Agent;
@@ -143,10 +143,10 @@ fn stage<A>(plan: &Plan, approval: A) -> Result<wire::Stage<A>> {
             .reference(),
     })
 }
-fn slot(plan: &Plan) -> Slot {
+fn slot(plan: &Plan) -> ChildId {
     plan.management()
         .and_then(|m| m.slot)
-        .unwrap_or(Slot::First)
+        .unwrap_or(ChildId::FIRST)
 }
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
     match method {
@@ -241,7 +241,7 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<wire::Custody> {
     .map_err(supplier)
 }
 pub(crate) fn delivery<A: Serialize>(
-    slot: Slot,
+    slot: ChildId,
     expected: &wire::Stage<A>,
     method: u64,
     actual: &wire::Delivery,

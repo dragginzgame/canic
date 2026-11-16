@@ -190,7 +190,7 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
         if !binding(state, &approval) {
             return Err(Refusal::Binding);
         }
-        if !quiescent(state) || OBSERVING.get().into_iter().any(|busy| busy) {
+        if !quiescent(state) || OBSERVING.with_borrow(|active| !active.is_empty()) {
             return Err(Refusal::Occupied);
         }
         let journals = state.journal.get();
@@ -399,7 +399,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
                 store::AdmissionCommand::Close(approval.attempt.clone()),
             )
             .await;
-            super::fault(super::Slot::First, 13);
+            super::fault(super::ChildId::FIRST, 13);
             match result {
                 Ok(()) => change(approval, Phase::Closing, |value| {
                     value.phase = Phase::Closed;
@@ -437,7 +437,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
                     decoder::decode_args::<()>(&reply, MANAGEMENT_LIMITS, decoder::Arity::Exact)
                         .map_err(|_| Failure::InvalidReply)
                 });
-            super::fault(super::Slot::First, 14);
+            super::fault(super::ChildId::FIRST, 14);
             if let Err(error) = result {
                 change(approval, Phase::StopIssued, |value| {
                     value.failure = Some(error)

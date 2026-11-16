@@ -7,6 +7,427 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Published host foundation adoption: 2026-11-16
+
+Pending 0.217.0 adopts registry FS/Artifacts 0.80.1 and Process 0.80.2;
+Text 0.76.0 remains the current published selection. The supplier API and Canic
+qualification adapters at IC Tooling commit
+`ca0bef0cd29ab272c3e3419d28292ca83ecff875` informed the migration. No source
+overrides, compatibility aliases or legacy filesystem/process wrappers remain.
+Canic owns path, permission, record and diagnostic-disclosure policy; the supplier
+owns held-directory publication, durability, bounded process execution and reaping.
+The CLI delegates report publication to Host. Profile retains its small independent
+approval writer instead of importing the provisioning Host dependency graph.
+
+Linux native qualification passed 131 Host tests (one existing ignored case),
+69 CLI tests, the profile approval-record regression and the footprint parser
+regression. `make journey-test growth-test` passed installed deployment/upgrade,
+receipt replay, autonomous creation/maintenance and interrupted child upgrades.
+The new qualification-only wasmparser 0.263.0 measurement preserves section,
+export and module budgets and validates complete modules; no parser enters the
+shipped host graph. Process/fs boundary cases cover limits, deadline, failed exit,
+lock interoperability, immutable records, aliases and retained staging custody.
+No browser or mainnet deployment was launched. macOS consumer checks were not run.
+
+Testkit 0.106.0 still selects the older 0.79 host stack transitively inside the
+independent qualification workspace. Its dependency migration remains supplier-owned;
+the product graph selects only the new FS/Process stack. Local logs are under
+`target/qualification/ic-host-adoption-*`; these are regenerable check output.
+
+## Identified persistent collections preserve admitted work: 2026-11-16
+
+Pending 0.217.0 replaces the positional journal/artifact writers with bounded
+CUJ8/CUA4 collections carrying explicit numeric child identities. Historical
+readers remain at the persistence boundary; requests, approvals, Store pins and
+complete-custody responses keep their existing encodings. Both original Storage
+keys, backing configuration, journal ceiling and combined inline artifact budget
+remain unchanged. The current admission ceiling is still two children: larger
+capacity needs its complete-custody and Host transition before admission changes.
+
+This continues the allocation identity work and its pinned legacy research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, recorded below. Stable target identity
+is retained; legacy container shapes are not product requirements. The codec now
+uses Wire's bounded lists/byte fields and size admission, rather than another
+custom multi-child framing scheme. Artifact payloads encode directly; obsolete
+per-child writers were removed, with their readers retained for migration.
+Duplicate, missing, reordered and unknown IDs
+refuse before entering runtime state. Both stores validate before the upgrade
+commits their migration; load failure never initializes a replacement.
+
+The actual codec lives once in management's private storage module. Native
+development dependencies allow direct negative tests without introducing runtime
+dependencies into Host or a new package. The Root runner includes these checks.
+The child protocol module now uses ordinary directory layout for its tests.
+
+Focused evidence:
+
+- Five actual-codec tests and all eleven passive-protocol tests pass, including
+  full inline artifact capacity and complete child/Store history within 16 KiB.
+  A full mixed inline/Store predecessor migrates through real governed Cells
+  without changing any Storage diagnostic. Encoding reserves Cell framing and
+  rejects excess data before a growth attempt. The initially considered opaque
+  per-child envelopes needed extra framing space; direct payload encoding removes
+  that overhead and fits the original allocation without changing its capacity.
+- Three installed Root cases pass in 71.46s: migration of reverse-order pending
+  children, historical independent child upgrades, and the persistent profile
+  growth/Root/Store journey. The frozen positional predecessor is
+  `a00ce6fcac8687c9c350e317c53d2d653665c1c531639af9d07961ade96cc90d`.
+- The installed downgrade case confirms that the old executable traps without
+  changing stable state or the installed module. Compatible
+  replacements reopen the new format without another payload rewrite.
+- The CLI Store-backed fleet fixture passes in 102.45s, including Host-approved
+  migration with both child upgrade histories, interrupted installation reply,
+  exact signed-attempt reuse and identical complete custody before/after upgrade.
+  Payload bytes change once, while the existing backing size remains unchanged.
+- Native/Wasm Clippy, affected fixture Clippy, native/Wasm Rustdoc, formatting
+  and tooling agreement pass. Supplier selections and lockfiles are unchanged.
+
+Logs and runtime fingerprints are under `target/qualification/identified-storage-*`.
+Older executables intentionally refuse the new formats; they are not a supported
+downgrade path. No capacity increase, new endpoint, mainnet effect, release gate,
+push or publication was performed. The pending release remains 0.217.0 because
+this migration and the earlier Rust API changes alter compatibility.
+
+## Numeric child identity preserves existing authority: 2026-11-16
+
+Pending 0.217.0 replaces the public `children::Slot` enum with the checked numeric
+`ChildId`. All Host, CLI, management and qualification callers use the new type;
+there is no old-type alias. Its private field and constructor admit only current
+identities 0 and 1. Existing allocations remain `FIRST` and `SECOND`, scoped to
+their management owner. Host construction uses the checked numeric constructor;
+journals, timers and active guards retain these identities as keys.
+
+Historical First/Second names and discriminants live in a private serialization
+codec. They remain necessary for retained JSON, Wire requests, approval digests
+and Store pin identities. The code does not reinterpret approval bytes, expose
+numeric JSON, infer a new allocation from an unknown ID, or increase capacity.
+No additional storage schema, runtime endpoint, dependency or allocation engine
+was introduced. The explicit Rust API break is recorded in the root changelog.
+
+This reuses the pinned allocation/target/cascade research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded under **Cascading and workflow
+scope review** and **Named upgrades preserve each child's allocation identity**.
+The relevant invariant remains permanent target identity independent of traversal
+or admission order, with old authority retained rather than translated into a new
+operation. The current numeric bound remains a qualification boundary; expanded
+capacity still needs its explicit contract and record/protocol transition.
+
+Focused evidence:
+
+- 114 Host tests pass with one existing ignored installed entrypoint. Retained
+  approval digests and JSON spellings remain exact; invalid numeric/unknown JSON
+  is refused.
+- All 11 protocol tests pass. The frozen old enum and numeric identity produce
+  identical payloads, complete request frames and Store pin digests. Unsupported
+  constructors and unknown Wire discriminants refuse. An initial negative fixture
+  used a differently named variant at discriminant zero, which correctly decoded
+  as the original identity; the fixed probe uses an actually unknown discriminant.
+- Five installed Root cases pass in 69.99s: positional predecessor preservation,
+  independent sibling recovery, bounded upgrade histories, original two-child CLI
+  operations/views, and persistent profile growth/Root/Store maintenance. Root and
+  profile management executables were rebuilt through the public artifact builder.
+- Named growth and four repeated upgrades pass on inline and Store-backed fleets
+  in 95.55s using the prepared pre-change publication executables. Their hashes
+  remain unchanged across execution.
+- Native Host/CLI/protocol and Wasm management/Root/profile Clippy, the affected
+  Root/Store/publication fixture targets, Host/protocol/management Rustdoc,
+  formatting and tooling agreement pass.
+
+The broader fixture compile attempt exposed `tests/fleet_growth.rs` being auto-
+discovered as an unintended standalone Cargo test target despite belonging to
+`publication`. Moved it to `tests/fleet_growth/mod.rs`, preserving ordinary module
+discovery, the test name and coverage. No path override or duplicate harness remains.
+Logs and actual runtime/publication fingerprints are
+`target/qualification/numeric-child-*`. `make canic` installed the updated CLI on
+PATH; package versions remain 0.216.5 pending delivery. No push, release gate,
+crates.io publication or mainnet effects ran.
+
+## Child identity owns continuation state: 2026-11-16
+
+The next allocation increment removes positional heap state from the shared
+management engine. Retained timers use a map keyed by child identity, active
+observations use a set of those identities, and qualification faults use the same
+keys. Child upgrade admission checks its own active identity; Store maintenance
+requires the active set to be empty. Future cleanup removes only its own identity.
+Existing timer names, explicit recovery tokens, effect journals and deadlines
+are unchanged. No second scheduler, allocation abstraction or dependency was added.
+
+This continues the journal identity work recorded for 0.216.5 and reuses the
+legacy target/allocation/cascade research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded under **Cascading and workflow
+scope review** and **Named upgrades preserve each child's allocation identity**.
+The lesson is that admission or traversal order must not determine an operation's
+owner; the existing child identity supplies that owner. Historical positional
+storage and public custody representations remain unchanged at their codecs.
+
+Rebuilt normal, maintenance and fault executables for both Root and the profile
+manager through `canic artifact build`. Four selected installed cases pass in
+71.31s: positional predecessor preservation with reverse admission order; lost
+creation callback with independent sibling progress and upgrade recovery; both
+children's bounded upgrade histories; and the persistent profile growth/owner
+maintenance journey, including same-instance recovery after callback cleanup.
+The predecessor test compares complete stable bytes in both executable directions.
+
+```sh
+CANIC_CLI=$(command -v canic) cargo test --locked \
+  --manifest-path qualification/Cargo.toml -p canic-qualification --test root -- \
+  children::identity children::lost_creation children::two_children profile_store --nocapture
+```
+
+Wasm Clippy passes for management, Root and profile manager with all features;
+management Wasm Rustdoc and `make fmt-check` pass. Logs and actual locked/artifact
+fingerprints are under `target/qualification/identity-scheduling-*`. No claim of
+reduced Wasm size or execution cost is made by replacing these collections.
+
+This is a preservation-qualified step toward bounded allocation identities, not
+an increase in capacity. The public First/Second contract and two-child bound
+remain. Additional children still require an explicit bounded identity/capacity
+contract and qualified record/protocol transition; do not add Third/Fourth enum
+variants. Pending 0.217.0 remains unpushed; no mainnet effects or release gate ran.
+
+## Persistent profile growth after infrastructure maintenance: 2026-11-16
+
+Pending 0.217.0 now qualifies the second-child path with the selected persistent
+consumer, extending `profile_store` rather than adding another bootstrap fixture.
+After the original worker and Root/Store transitions, the CLI declares `archive`,
+publishes its artifact and separately approves creation in Second. Its lexical
+position before `worker` does not change the original allocation. Both users
+create distinct profiles with the same IDs in the new worker; their original
+records stay untouched. Each worker owns its namespace and permissions.
+
+The added worker then changes from the actual profile-v1 executable to profile-v2.
+The original worker stays on v1 with its latest records. Another Root replacement
+retains both creation records, the original worker's two upgrades and the added
+worker's upgrade. Root, Store and both workers preserve every stable byte across
+that replacement. Both users can read their own complete profiles; cross-user and
+Root reads remain Forbidden. Fleet inspection reports all four canisters without
+inventory issues. The existing interrupted-install/reconciliation and incompatible
+application readiness cases still run in the same witness.
+
+Reused the legacy research and ownership decision under **Store-backed profile
+composition**, at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, and the existing
+exact-target/component-operation research under **First Root-owned child upgrade**.
+The application still owns user data and readiness; Canic owns bounded effects
+and custody, Store owns artifacts, and Storage owns application allocations.
+No runtime code, dependency, protocol or stable format changed. The fixture's
+existing completion helper now handles completed publications too, removing its
+duplicated publication-apply calls.
+
+Focused validation using the installed CLI and prepared, unchanged runtime inputs:
+
+```sh
+CANIC_CLI=$(command -v canic) cargo test --locked \
+  --manifest-path qualification/Cargo.toml -p canic-qualification \
+  --test root profile_store -- --nocapture
+```
+
+The installed case passes in 70.54s; Root-fixture Clippy and `make fmt-check` pass.
+Logs and actual artifact/lock fingerprints are `target/qualification/profile-growth-*`.
+An initial run exposed the fixture's old assumption that timer counters remain
+nonzero after the new final Root replacement. The corrected check proves activity
+before replacement and a fresh diagnostic epoch afterward; durable custody and
+application preservation checks remain unchanged. This follows the existing
+installed metrics reset contract, not a product workaround.
+
+The profile guide and root changelog include the second-worker commands. This is
+explicit growth to two workers, not automatic sharding, user movement, new entry
+routing, reusable capacity or mainnet qualification. No push or release gate ran.
+
+## Reused artifacts retain fresh installation authority: 2026-11-16
+
+The pending 0.217.0 growth witness now performs four named child upgrades,
+B → C → B → C, for both inline and Store-backed fleets. The repeated B → C
+transition receives a distinct approval against the current completed predecessor;
+the earlier signed attempts remain byte-identical. Named and whole-fleet planning
+select the same pending operation. Store-backed successors reuse their original
+completed publication operations, and the CLI publication inventory is unchanged
+through installation planning. Each upgrade retains the lost-admission-reply
+exercise. Later Root maintenance preserves all four records and every stable byte.
+
+This extends the exact-authority and retained-uncertainty question covered by
+the pinned legacy component-operation/lifecycle research under **First Root-owned
+child upgrade**, revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`.
+No production logic, new workflow, dependency or persistence format was needed.
+The existing witness was extended rather than duplicating its fleet bootstrap.
+The Root demo's obsolete prohibition on adding a second child was removed; it now
+distinguishes a separate addition approval from rewriting the original envelope.
+
+Focused execution using the installed CLI and prepared artifacts:
+
+```sh
+CANIC_CLI=$(command -v canic) CANIC_PUBLICATION_ARTIFACTS="$PWD/target/publication" \
+  cargo test --locked --manifest-path qualification/Cargo.toml \
+  -p canic-qualification --test publication \
+  existing_fleet_adds_child_preserving_identity_and_maintenance -- --nocapture
+```
+
+The installed case passes (98.11s); publication-fixture Clippy and `make fmt-check`
+pass. Logs are `target/qualification/reused-upgrade-*.log`. The greeting variants
+differ only by valid custom sections: this is artifact/authority reuse evidence,
+not an application data rollback or schema downgrade guarantee. Shorter synthetic
+dispatch advances keep the longer fixture within the unchanged ingress window.
+Prior product checks remain applicable; no product code or locked input changed.
+No push, release gate or mainnet effects were performed.
+
+## Named successors use the retained serial chain: 2026-11-16
+
+Pending 0.217.0 removes the first-upgrade restriction for named children with a
+retained whole-fleet creation approval. Shared history validates the current
+predecessor and identifies only proven completed earlier upgrades; those records
+remain immutable while a separate successor is retained. A matching latest
+approval still replays with its original schedule and digest, pending or complete.
+Standalone named deployments without a whole-fleet history keep their existing
+first-upgrade limit.
+
+The original creation-module check moved from inventory projection into locked
+authority admission: a successor needs the latest completed module, while an
+independent first upgrade still needs its original module. Both planners now use
+one check for the eight-upgrade bound, combined inline artifact custody and
+strictly ordered dispatch. Exact retry comparison also has one owner, replacing
+the repeated field list. No new index, protocol, runtime format, dependency or
+workflow engine was added. This reuses the pinned component-operation and
+lifecycle research recorded under **First Root-owned child upgrade**, legacy
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`; retain explicit predecessors and
+uncertainty rather than choosing a replacement from configuration.
+
+All 113 Host tests pass with one existing ignore, including shared bound checks
+and unchanged standalone admission. The installed growth witness passes two
+consecutive named upgrades on both inline and Store-backed fleets (78.39s).
+Missing predecessor receipts, wrong targets/code and stale predecessor hashes
+refuse. Lost stage replies retain exact signed attempts; named replay and
+whole-fleet replan select the same pending operation. Later Root maintenance
+preserves both creation records and both upgrades of the added child.
+The original two-child creation, upgrade, maintenance and view regression also
+passes (29.41s).
+Host/CLI and fixture Clippy, Host Rustdoc, formatting and tooling agreement pass.
+Logs are `target/qualification/named-serial-*.log`.
+
+The first longer fixture exceeded the real signer's ingress window because its
+repeated synthetic time advances put the simulator too far ahead. Smaller
+scheduled advances keep this fixture inside the unchanged production window;
+no signing or admission rule was relaxed. `make canic` installs the development
+CLI on PATH. Package versions remain 0.216.5; no release gate, push or mainnet
+effects were performed.
+
+## Named upgrades share complete fleet history: 2026-11-16
+
+Pending 0.217.0 removes the original-fleet-only named-upgrade check. Named first
+upgrades and whole-fleet planning now use one read-only reconstruction of original
+children, later creation approvals, child upgrades and Root/Store maintenance.
+The existing history checks moved out of next-operation selection; no persistent
+index, runtime endpoint or second recovery engine was introduced. Explicit target,
+predecessor code, Root code, network, operator, slot and Store remain checked.
+Completed Store maintenance is bound before comparing a retained named approval,
+so filesystem order cannot change the resumed digest.
+
+Reuse the **First Root-owned child upgrade** and **Named upgrades preserve each
+child's allocation identity** research at legacy
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, including component-operation
+implementation/tests and installation/lifecycle history. Retain exact approval,
+target and uncertainty rather than restoring a separate legacy workflow owner.
+
+The installed growth witness now plans the added child's first upgrade by name
+after Root maintenance, and after Store maintenance on the stored path. Wrong
+targets, stale Root code and missing creation completion refuse. Named replay and
+whole-fleet replan return the same approval; later installation and complete Root
+maintenance preserve both children. All four publication/Store-maintenance cases
+pass (101.96s); the original two-child named-upgrade/maintenance/view journey also
+passes (26.96s), alongside 113 Host tests with one existing ignore. Host/CLI and
+fixture Clippy, Host Rustdoc, formatting and tooling agreement pass. Logs are
+`target/qualification/named-growth-*.log`.
+
+The old limitation recorded below is resolved for first upgrades. Serial named
+upgrade planning remains outside this increment; whole-fleet planning owns those
+successors. Named fleet-owned upgrades now require completed initial creation
+and no unrelated unfinished operation, matching the ordered custody contract.
+This stricter admission is explicit in the pending breaking-change notes.
+Existing records, signatures and runtime formats are unchanged. The installed
+development CLI remains version 0.216.5 until release; no push or mainnet effects
+were performed.
+
+## Replanning checks every reservation before reuse: 2026-11-16
+
+Pending 0.217.0 fixes directory-order-dependent named planning. Previously the
+first matching deployment or publication returned immediately, bypassing later
+conflicts, malformed records and the existing inventory bound. The same locked
+scan now retains a candidate locally and returns it only after checking the
+remaining reservation scope. Multiple matching approvals refuse rather than
+choosing arbitrary custody. Valid replays retain their original digest, deadline
+and artifact bytes; no persisted record, index or recovery mechanism was added.
+
+Reuse the **First Root-owned child upgrade** research at legacy revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, especially
+`crates/canic-host/src/component_operation/ops/mod.rs` and
+`crates/canic-host/src/component_operation/tests.rs`: immutable review identity,
+drift refusal and uncertainty retention remain the requirements. The rewrite's
+filesystem journal needs an order-independent complete reservation check, not a
+ported operation catalogue.
+
+All 113 Host tests pass (one existing installed-only ignore). New regressions
+exercise both competing requests regardless of directory order, distinct
+approvals with identical apparent inputs, legacy/explicit First aliases,
+publication authority conflicts, corruption after a match and 129 retained
+operations against the 128-operation planning bound. Refusal preserves original
+records. Valid unrelated records still permit exact reuse after expiry.
+The installed inline/Store-backed growth, prior-maintenance, lost-admission-reply,
+child-upgrade and later Root-maintenance journey passes again (62.15s). Host
+Clippy/Rustdoc, formatting and tooling agreement pass. Evidence is under
+`target/qualification/reservation-replay-*.log`; `make canic` installs the updated
+development CLI on PATH.
+
+The separate named-upgrade limitation is now explicit in the qualification guide:
+added children use whole-fleet planning. Extending named selection must reuse
+ordered creation/maintenance custody rather than add another reservation bypass.
+No supplier changes, full release gate, push or mainnet effects were performed.
+
+## Existing fleets add a separately approved child: 2026-11-16
+
+Pending 0.217.0 extends whole-fleet plan/apply from a completed one-child fleet
+to its second child. Original fleet records and debit authority stay immutable;
+the addition uses the existing `CreateChild` plan, signer, Root admission and
+Store publication owners. Configuration sorting cannot reassign retained slots.
+The same ordered history includes additions in later child upgrades and complete
+Root maintenance. Shared creation-evidence loading and publication selection
+serve both old and new paths; there is no new registry, runtime endpoint, storage
+format, dependency or allocation framework. The public `FleetPlanning::AddChild`
+result requires a new exhaustive-match arm, so the pending note selects a minor
+release. Package versions remain 0.216.5 until delivery is requested.
+
+Reuse the legacy research recorded under **Two-child fleet qualification** and
+**Cascading and workflow scope review**, revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, especially
+`crates/canic-core/src/workflow/cascade/topology.rs` and
+`crates/canic-core/src/ops/cascade/tests/mod.rs`, with the recorded
+`c04cd56c11d287cf5baebb472baac61706434dc5` history. Preserve exact target binding,
+wrong-parent refusal and independently retained outcomes. This bounded addition
+does not need legacy directory transport or a general pool owner.
+
+Focused evidence:
+
+- Eleven Host fleet-planning tests and all 68 CLI tests pass.
+- The new installed publication case passes for inline and Store-backed growth
+  with an isolated authenticated signer (61.57s). It covers prior Root/Store
+  maintenance, a lexically earlier new name, separate publication/creation,
+  mixed-change/removal refusal, unchanged original records, lost admission reply,
+  identical signed-attempt reuse, subsequent child upgrade and Root replacement
+  preserving all stable bytes. Inventory and actual canister counts exclude
+  duplicate creation. Old Root approvals still refuse changed code.
+- The three existing publication/Store-maintenance journeys pass (102.76s).
+  Host/CLI and fixture Clippy, Host/CLI Rustdoc, formatting and tooling agreement
+  pass. Logs are `target/qualification/fleet-growth-*.log`; `make canic` installs
+  the development executable on PATH.
+
+Initial fixture corrections aligned JSON assertions with the retained codec,
+kept inline artifacts within their existing bound, expected old-code refusal
+after maintenance, and reused the authenticated signer required by Store
+maintenance. No product authority check was weakened.
+
+The runtime still supports only two children. Growth uses Root's current cycles
+and existing reserve checks, not renewed host funding. Whole-fleet planning owns
+this new journey; general allocation, pool reuse, removal and inline-to-Store
+migration remain unqualified. No full release gate, push or mainnet effects were
+performed.
+
 ## 0.216.5 release qualification: 2026-11-16
 
 The sequential Linux `make -j1 ci` gate passed with all 292 captured inputs

@@ -5,15 +5,8 @@ use canic_profile_protocol::{
     RouteResult,
 };
 use clap::{ArgGroup, Parser, Subcommand};
-use ic_host_process::{
-    child::OwnedChild,
-    tool::{OutputLimit, OutputLimits, SuccessfulExit, communicate_child},
-};
-use std::{
-    path::PathBuf,
-    process::{Command, Stdio},
-    time::Duration,
-};
+use ic_host_process::{self as process, Input, Ownership, Policy, Stderr};
+use std::{path::PathBuf, process::Command, time::Duration};
 
 #[derive(Parser)]
 #[command(version, about = "Use the Canic profile demo", group(ArgGroup::new("destination").required(true).args(["canister", "entry", "manager"])))]
@@ -281,6 +274,29 @@ fn invoke(
     invoke_arguments(cli, target, method, Some(&args), None, query)
 }
 
+#[derive(Debug)]
+struct InvocationFailure {
+    report: process::Report,
+    stdout: Vec<u8>,
+}
+
+impl std::fmt::Display for InvocationFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ICP CLI invocation failed: {:?}; {} stdout bytes retained",
+            self.report,
+            self.stdout.len()
+        )
+    }
+}
+
+impl std::error::Error for InvocationFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.report.failure.as_ref().map(|failure| failure as _)
+    }
+}
+
 fn invoke_arguments(
     cli: &Cli,
     target: &str,
@@ -316,26 +332,33 @@ fn invoke_arguments(
     if let Some(args) = args {
         command.arg(args);
     }
-    command
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
-    // Stay in the foreground process group so ICP's terminal password prompt works.
-    let mut child = OwnedChild::spawn_direct(&mut command)?;
-    let output = communicate_child(
-        &mut child,
-        None,
-        OutputLimits {
-            stdout: OutputLimit::Terminate(16384),
-            stderr: OutputLimit::Terminate(16384),
-            timeout: Some(Duration::from_secs(300)),
+    // Retain foreground terminal interaction; only this child is owned.
+    let mut stdout = Vec::new();
+    let report = process::run(
+        &mut command,
+        Policy {
+            ownership: Ownership::Direct,
+            input: Input::Inherit,
+            stdout_bytes: 16384,
+            stderr: Stderr::Inherit,
+            elapsed: Duration::from_secs(300),
         },
-        SuccessfulExit::Cleanup,
-        || false,
-    )?
-    .require_success()?
-    .require_complete()?;
-    let text = std::str::from_utf8(&output.stdout)?.trim();
+        &std::sync::atomic::AtomicBool::new(false),
+        |_, bytes| {
+            stdout
+                .try_reserve(bytes.len())
+                .map_err(std::io::Error::other)?;
+            stdout.extend_from_slice(bytes);
+            Ok(())
+        },
+    );
+    if report.failure.is_some()
+        || !report.cleanup.is_empty()
+        || !report.status.is_some_and(|status| status.success())
+    {
+        return Err(Box::new(InvocationFailure { report, stdout }));
+    }
+    let text = std::str::from_utf8(&stdout)?.trim();
     let hex = text.strip_prefix("0x").unwrap_or(text);
     if !hex.is_ascii() || !hex.len().is_multiple_of(2) {
         return Err("ICP CLI returned invalid hex".into());

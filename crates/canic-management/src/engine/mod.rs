@@ -1,5 +1,6 @@
 use crate::Readiness;
-use canic_management_protocol::children::{self, Slot};
+use crate::storage::{ARTIFACT_BYTES, Artifact, Artifacts, JOURNAL_BYTES, Journals};
+use canic_management_protocol::children::{self, ChildId};
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status, digest,
     stored,
@@ -21,11 +22,12 @@ use ic_storage::{
     MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig, adapter::StableCell,
 };
 use ic_timers::{Lifetime, Observation, Once, OnceDemand, OnceNext, OnceResult, OnceStatus};
-use std::cell::RefCell;
-use storage::{ARTIFACT_BYTES, Artifact, Artifacts, JOURNAL_BYTES, Journals};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+};
 mod delivery;
 pub(super) mod metrics;
-mod storage;
 pub(crate) mod store_maintenance;
 pub(crate) mod stored_api;
 
@@ -53,7 +55,7 @@ pub fn owner_custody() -> children::Custody {
         "Store maintenance custody required"
     );
     assert!(
-        !Slot::ALL.into_iter().any(delivery::is_stored),
+        !ChildId::ALL.into_iter().any(delivery::is_stored),
         "Store-aware custody required"
     );
     journals()
@@ -61,7 +63,7 @@ pub fn owner_custody() -> children::Custody {
 fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
         let journals = &state.as_ref().expect("open engine").journal.get().0;
-        Slot::ALL.map(|slot| {
+        ChildId::ALL.map(|slot| {
             let journal = &journals[&slot];
             let mut upgrades = journal.2.clone();
             if journal.1.approval.is_some() {
@@ -93,10 +95,10 @@ struct State {
 }
 thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
-    static TIMER: RefCell<[Option<Once>; Slot::ALL.len()]> = const { RefCell::new([const { None }; Slot::ALL.len()]) };
-    static OBSERVING: std::cell::Cell<[bool; Slot::ALL.len()]> = const { std::cell::Cell::new([false; Slot::ALL.len()]) };
+    static TIMER: RefCell<BTreeMap<ChildId, Once>> = const { RefCell::new(BTreeMap::new()) };
+    static OBSERVING: RefCell<BTreeSet<ChildId>> = const { RefCell::new(BTreeSet::new()) };
     #[cfg(feature = "fault-injection")]
-    static FAULT: std::cell::Cell<[u8; Slot::ALL.len()]> = const { std::cell::Cell::new([0; Slot::ALL.len()]) };
+    static FAULT: RefCell<BTreeMap<ChildId, u8>> = const { RefCell::new(BTreeMap::new()) };
 }
 
 /// Open the bounded child engine and register independent continuation timers.
@@ -163,14 +165,14 @@ pub fn open(fresh: bool, readiness: Readiness) {
         timer_window: (api::canister_version(), api::time()),
         _runtime: runtime,
     };
-    for slot in Slot::ALL {
+    for slot in ChildId::ALL {
         validate(&state, slot);
         upgrade::validate(&state, slot);
         delivery::validate(&state, slot);
     }
     assert!(state.artifact.get().fits(), "aggregate artifact budget");
     store_maintenance::validate(&state);
-    let mut children = std::collections::BTreeSet::new();
+    let mut children = BTreeSet::new();
     for child in state
         .journal
         .get()
@@ -180,18 +182,18 @@ pub fn open(fresh: bool, readiness: Readiness) {
     {
         assert!(children.insert(child), "distinct child identities");
     }
-    // Commit the bounded v7 journal and v3 artifact payloads only after strict old/new schema validation.
+    // Commit identified collections only after strict validation of both old/new stores.
     // A post-upgrade trap rolls back both writes with the executable change.
     state.journal.set(state.journal.get().clone());
     state.artifact.set(state.artifact.get().clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     ic_timers::initialize().expect("one timer runtime");
-    for slot in Slot::ALL {
+    for slot in ChildId::ALL {
         schedule(slot);
     }
 }
 
-fn validate(state: &State, slot: Slot) {
+fn validate(state: &State, slot: ChildId) {
     let s = &state.journal.get().0[&slot].0;
     assert!(s.attempts.iter().all(|n| *n <= 1), "single-use counts");
     for index in 0..3 {
@@ -256,14 +258,14 @@ fn validate(state: &State, slot: Slot) {
     }
 }
 
-fn snapshot(slot: Slot) -> Status {
+fn snapshot(slot: ChildId) -> Status {
     STATE.with_borrow(|state| {
         state.as_ref().expect("initialized manager").journal.get().0[&slot]
             .0
             .clone()
     })
 }
-fn mutate(slot: Slot, f: impl FnOnce(&mut Status)) {
+fn mutate(slot: ChildId, f: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
         let mut journal = state.journal.get().clone();
@@ -281,19 +283,20 @@ fn next(s: &Status) -> Option<u64> {
         _ => None,
     }
 }
-fn schedule(slot: Slot) {
+fn schedule(slot: ChildId) {
     let desired = next(&snapshot(slot))
         .or_else(|| upgrade::next(slot))
         .map_or(OnceDemand::Inactive, OnceDemand::At);
     TIMER.with_borrow_mut(|timers| {
-        let timer = timers[slot.index()].get_or_insert_with(|| {
+        let timer = timers.entry(slot).or_insert_with(|| {
             ic_timers::bind_once(
                 [
                     "profile",
                     "manager",
                     match slot {
-                        Slot::First => "one-worker",
-                        Slot::Second => "second-worker",
+                        ChildId::FIRST => "one-worker",
+                        ChildId::SECOND => "second-worker",
+                        _ => unreachable!("unsupported child timer identity"),
                     },
                 ],
                 // Child slots keep their identities across creation and all upgrades.
@@ -335,9 +338,9 @@ fn schedule(slot: Slot) {
 // Only authenticated domain reconciliation may clear an abandoned timer's
 // barrier. Stop it first, then derive eligibility from the retained journal;
 // these local commands commit together and never reset effect intent.
-fn resume_after_reconciliation(slot: Slot) {
+fn resume_after_reconciliation(slot: ChildId) {
     TIMER.with_borrow(|timers| {
-        if let Some(timer) = &timers[slot.index()]
+        if let Some(timer) = timers.get(&slot)
             && let OnceStatus::RecoveryRequired(token) = timer.status().expect("timer status")
         {
             timer
@@ -351,7 +354,7 @@ fn resume_after_reconciliation(slot: Slot) {
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
 #[must_use]
-pub fn status(slot: Slot) -> Status {
+pub fn status(slot: ChildId) -> Status {
     let mut value = snapshot(slot);
     value.stable_pages = api::stable_size();
     value.maintenance_candidate = cfg!(feature = "maintenance-candidate");
@@ -362,7 +365,7 @@ pub fn status(slot: Slot) -> Status {
 /// Refuses changed authority, invalid artifact/binding/time or inadequate reserve.
 /// # Panics
 /// Traps for noncontrollers, uninitialized storage or failed durable writes.
-pub fn stage(slot: Slot, input: Stage) -> Result<Status, Refusal> {
+pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
@@ -381,10 +384,10 @@ pub fn stage(slot: Slot, input: Stage) -> Result<Status, Refusal> {
     admit(
         slot,
         input.approval,
-        Artifact::Inline(storage::Inline(input.wasm, vec![])),
+        Artifact::Inline(crate::storage::Inline(input.wasm, vec![])),
     )
 }
-fn admit(slot: Slot, approval: Approval, artifact: Artifact) -> Result<Status, Refusal> {
+fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status, Refusal> {
     if api::canister_liquid_cycle_balance() < reserved_cycles() + u128::from(CREATION_CYCLES) {
         return Err(Refusal::Reserve);
     }
@@ -403,9 +406,9 @@ fn admit(slot: Slot, approval: Approval, artifact: Artifact) -> Result<Status, R
     Ok(status(slot))
 }
 
-fn fault(slot: Slot, point: u8) {
+fn fault(slot: ChildId, point: u8) {
     #[cfg(feature = "fault-injection")]
-    if FAULT.get()[slot.index()] == point {
+    if FAULT.with_borrow(|faults| faults.get(&slot).copied()) == Some(point) {
         api::trap("injected growth boundary");
     }
     #[cfg(not(feature = "fault-injection"))]
@@ -415,15 +418,18 @@ fn fault(slot: Slot, point: u8) {
 /// Select a test-only interrupted-message boundary.
 /// # Panics
 /// Traps unless the caller controls this canister and the point is in range.
-pub fn inject_fault(slot: Slot, value: u8) {
+pub fn inject_fault(slot: ChildId, value: u8) {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
     );
     assert!(value <= 19);
-    FAULT.update(|mut values| {
-        values[slot.index()] = value;
-        values
+    FAULT.with_borrow_mut(|faults| {
+        if value == 0 {
+            faults.remove(&slot);
+        } else {
+            faults.insert(slot, value);
+        }
     });
 }
 
@@ -432,13 +438,16 @@ pub fn inject_fault(slot: Slot, value: u8) {
 #[cfg(feature = "fault-injection")]
 pub(crate) fn reply_fault(method: u64) -> bool {
     matches!(
-        (FAULT.get()[0], method),
-        (9, canic_management_protocol::STAGE)
-            | (10, canic_management_protocol::RECONCILE)
-            | (12, canic_management_protocol::publication::EXECUTE)
-            | (12, canic_management_protocol::publication::INFO)
-            | (12, canic_management_protocol::publication::CUSTODY)
-            | (12, canic_management_protocol::publication::ADMISSION)
+        (
+            FAULT.with_borrow(|faults| faults.get(&ChildId::FIRST).copied()),
+            method
+        ),
+        (Some(9), canic_management_protocol::STAGE)
+            | (Some(10), canic_management_protocol::RECONCILE)
+            | (Some(12), canic_management_protocol::publication::EXECUTE)
+            | (Some(12), canic_management_protocol::publication::INFO)
+            | (Some(12), canic_management_protocol::publication::CUSTODY)
+            | (Some(12), canic_management_protocol::publication::ADMISSION)
     )
 }
 
@@ -461,7 +470,7 @@ async fn management(method: &str, bytes: Vec<u8>, cycles: u128) -> Result<Vec<u8
     .map(|reply| reply.to_vec())
     .map_err(failure)
 }
-fn issue(slot: Slot, index: usize, phase: Phase, bytes: &[u8]) {
+fn issue(slot: ChildId, index: usize, phase: Phase, bytes: &[u8]) {
     mutate(slot, |s| {
         assert_eq!(s.attempts[index], 0);
         s.attempts[index] = 1;
@@ -474,7 +483,7 @@ fn worker(s: &Status) -> Principal {
     Principal::from_text(s.worker.as_ref().expect("retained principal")).expect("valid principal")
 }
 
-async fn step(slot: Slot) {
+async fn step(slot: ChildId) {
     let s = snapshot(slot);
     if matches!(s.phase, Phase::Scheduled | Phase::Created | Phase::Uploaded) {
         let a = s.approval.as_ref().expect("approval");
@@ -584,7 +593,7 @@ async fn step(slot: Slot) {
     }
 }
 
-async fn observation(slot: Slot) -> Result<(), Failure> {
+async fn observation(slot: ChildId) -> Result<(), Failure> {
     let before = snapshot(slot);
     let Some(a) = before.approval.as_ref() else {
         return Ok(());
@@ -653,7 +662,7 @@ async fn observation(slot: Slot) -> Result<(), Failure> {
 /// Reconstruct observable outcomes without reissuing uncertain effects.
 /// # Panics
 /// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
-pub async fn reconcile(slot: Slot, expected: canic_management_protocol::Approval) -> Status {
+pub async fn reconcile(slot: ChildId, expected: canic_management_protocol::Approval) -> Status {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
@@ -664,7 +673,7 @@ pub async fn reconcile(slot: Slot, expected: canic_management_protocol::Approval
     );
     reconcile_bound(slot, expected).await
 }
-async fn reconcile_bound(slot: Slot, expected: Approval) -> Status {
+async fn reconcile_bound(slot: ChildId, expected: Approval) -> Status {
     assert!(!store_maintenance::active(), "Store maintenance active");
     assert_eq!(
         snapshot(slot).approval,
@@ -701,16 +710,13 @@ fn reserved_cycles() -> u128 {
 }
 // The executor drops the suspended future during callback-trap cleanup. Keep
 // this heap exclusion owned by that future; durable effect intent stays intact.
-fn observing(slot: Slot) -> Option<impl Drop> {
-    let mut values = OBSERVING.get();
-    if values[slot.index()] {
+fn observing(slot: ChildId) -> Option<impl Drop> {
+    if !OBSERVING.with_borrow_mut(|active| active.insert(slot)) {
         return None;
     }
-    values[slot.index()] = true;
-    OBSERVING.set(values);
     Some(std::mem::DropGuard::new(slot, |slot| {
-        let mut values = OBSERVING.get();
-        values[slot.index()] = false;
-        OBSERVING.set(values);
+        OBSERVING.with_borrow_mut(|active| {
+            active.remove(&slot);
+        });
     }))
 }

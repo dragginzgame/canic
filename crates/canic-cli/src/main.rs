@@ -400,7 +400,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     let (digest, mut text) = match &result {
                         canic_host::FleetPlanning::Create { operation, fleet_plan } =>
                             (operation, status::fleet_preview(operation, fleet_plan, &state_dir)?),
-                        canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } | canic_host::FleetPlanning::Publication { operation, .. } =>
+                        canic_host::FleetPlanning::AddChild { operation, .. } | canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } | canic_host::FleetPlanning::Publication { operation, .. } =>
                             (operation, status::render(&canic_host::status(&state_dir, operation)?, &state_dir)?),
                         canic_host::FleetPlanning::Unchanged { .. } => return Ok(Output::Text(
                             "No artifact changes. Matches retained completion; network state was not refreshed.\n".into()

@@ -5,19 +5,20 @@ use crate::{
     store::{self, Store},
     supplier,
 };
-use canic_management_protocol::children::Slot;
+use canic_management_protocol::children::ChildId;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 mod cancellation;
 mod convergence;
+mod history;
 mod record;
 mod releases;
 #[cfg(test)]
 mod tests;
 pub use cancellation::{Cancellation, cancel_fleet_plan};
 pub use convergence::FleetPlanning;
-pub(crate) use convergence::permits_upgrade;
+pub(crate) use history::permits_upgrade;
 
 /// A typed result reference, never a guessed principal or a mutable config lookup.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -32,7 +33,7 @@ pub struct CreatedCanister {
 #[serde(deny_unknown_fields)]
 pub struct FleetChild {
     /// Permanent runtime child identity, independent of config ordering.
-    pub slot: Slot,
+    pub slot: ChildId,
     /// App/fleet/slot identity.
     pub deployment: DeploymentName,
     /// Sole controller and effect owner, resolved from the Root's creation result.
@@ -102,10 +103,10 @@ impl FleetPlan {
         domain.extend(bytes);
         Ok(artifact::digest(&domain))
     }
-    pub(crate) fn children(&self) -> impl Iterator<Item = (Slot, &FleetChild)> {
+    pub(crate) fn children(&self) -> impl Iterator<Item = (ChildId, &FleetChild)> {
         self.children.iter().map(|child| (child.slot, child))
     }
-    fn child(&self, slot: Slot) -> Result<&FleetChild> {
+    fn child(&self, slot: ChildId) -> Result<&FleetChild> {
         self.children
             .iter()
             .find(|child| child.slot == slot)
@@ -115,12 +116,12 @@ impl FleetPlan {
         self.root.validate()?;
         let root = self.root.deployment.as_ref().ok_or_else(invalid)?;
         if self.children.is_empty()
-            || self.children.len() > Slot::ALL.len()
+            || self.children.len() > ChildId::ALL.len()
             || !self
                 .children
                 .iter()
                 .map(|child| child.slot)
-                .eq(Slot::ALL[..self.children.len()].iter().copied())
+                .eq(ChildId::ALL[..self.children.len()].iter().copied())
             || self.version != self.children.len() as u32
             || !matches!(self.root.action, crate::PlanAction::Create { .. })
             || self.root.version != 2
@@ -203,7 +204,12 @@ impl FleetPlan {
             .as_ref()
             .is_some_and(|root| root.app == name.app && root.fleet == name.fleet)
     }
-    fn child_plan(&self, receipt: &Receipt, store: Option<&Receipt>, slot: Slot) -> Result<Plan> {
+    fn child_plan(
+        &self,
+        receipt: &Receipt,
+        store: Option<&Receipt>,
+        slot: ChildId,
+    ) -> Result<Plan> {
         let child = self.child(slot)?;
         self.verify_root_receipt(receipt)?;
         let plan = Plan {
@@ -329,7 +335,7 @@ fn root_receipt(dir: &Path, value: &FleetPlan) -> Result<Option<Receipt>> {
     Ok(Some(receipt))
 }
 
-/// Compare artifacts with retained completion and approve creation, child upgrade or Root maintenance.
+/// Compare declarations with retained completion and approve creation, a child addition, upgrade or maintenance.
 /// Unfinished identical work retains its original schedule, even after expiry. No network calls.
 /// # Errors
 /// Refuses anything other than an unbound Root, optional Store and one or two direct applications, occupied fleet authority,
@@ -361,11 +367,11 @@ pub fn plan_fleet(
             s.parent.as_ref() == Some(root_name) && s.role.as_deref() != Some("wasm-store")
         })
         .collect();
-    if children.is_empty() || children.len() > Slot::ALL.len() {
+    if children.is_empty() || children.len() > ChildId::ALL.len() {
         return Err(Error::Invalid(format!(
             "fleet declares {} direct application children under {root_name}; this Root path supports 1 to {} (Wasm Store is separate)",
             children.len(),
-            Slot::ALL.len()
+            ChildId::ALL.len()
         )));
     }
     if children.len() + 1 + stores.len() != slots.len()
@@ -379,7 +385,7 @@ pub fn plan_fleet(
         &selected.wasm_path(config_path, root_name, None)?,
         artifact::MAX_WASM,
     )?;
-    let child_bytes: Vec<_> = children
+    let mut child_bytes: Vec<_> = children
         .iter()
         .map(|(name, _)| {
             store::read(
@@ -426,7 +432,7 @@ pub fn plan_fleet(
     };
     let definition = |index: usize| -> Result<FleetChild> {
         Ok(FleetChild {
-            slot: Slot::ALL[index],
+            slot: ChildId::new(index).ok_or_else(invalid)?,
             deployment: name(children[index].0),
             parent: CreatedCanister {
                 operation: String::new(),
@@ -496,10 +502,12 @@ pub fn plan_fleet(
                     && old.store.as_ref().map(|s| &s.deployment)
                         == value.store.as_ref().map(|s| &s.deployment)
                     && old.root.deployment == value.root.deployment
-                    && old
-                        .children()
-                        .map(|(_, c)| &c.deployment)
-                        .eq(value.children().map(|(_, c)| &c.deployment))
+                    && old.children.iter().all(|old| {
+                        value
+                            .children
+                            .iter()
+                            .any(|new| new.deployment == old.deployment)
+                    })
                 {
                     if retained.is_some() {
                         return Err(Error::Blocked(
@@ -530,6 +538,35 @@ pub fn plan_fleet(
         }
     }
     if let Some((id, old)) = retained {
+        // Names introduced later cannot move an already approved physical child.
+        let mut names: Vec<_> = old.children.iter().map(|c| c.deployment.clone()).collect();
+        let mut additions: Vec<_> = individual
+            .iter()
+            .filter_map(|(_, plan)| {
+                matches!(plan.action, crate::PlanAction::CreateChild(_)).then_some(plan)
+            })
+            .collect();
+        additions.sort_by_key(|plan| plan.created_at_ns);
+        for plan in additions {
+            let name = plan.deployment.as_ref().ok_or_else(invalid)?;
+            if names.contains(name) || !value.children.iter().any(|c| &c.deployment == name) {
+                return Err(Error::Blocked(
+                    "retained child allocations cannot be removed or renamed".into(),
+                ));
+            }
+            names.push(name.clone());
+        }
+        let mut definitions: Vec<_> = value.children.into_iter().zip(child_bytes).collect();
+        definitions.sort_by_key(|(c, _)| {
+            names
+                .iter()
+                .position(|name| name == &c.deployment)
+                .unwrap_or(names.len())
+        });
+        (value.children, child_bytes) = definitions.into_iter().unzip();
+        for (index, child) in value.children.iter_mut().enumerate() {
+            child.slot = ChildId::new(index).ok_or_else(invalid)?;
+        }
         // Existing approvals keep their delivery contract; a Store alone never migrates inline custody.
         for (child, retained) in value.children.iter_mut().zip(&old.children) {
             if retained.release.is_none() {
@@ -557,39 +594,55 @@ pub fn plan_fleet(
     }
     let id = value.digest()?;
     let dir = store.operation(&id)?;
-    let staging = ic_host_fs::directory::create_unique_directory(
-        journal,
-        ".fleet-plan",
-        0o700,
-        std::num::NonZeroUsize::new(32),
-    )
-    .map_err(supplier)?;
-    for leaf in std::iter::once("root").chain(value.children().map(|(i, _)| record::child_leaf(i)))
-    {
-        ic_host_fs::durable::prepare_private_parents(&staging.join(leaf)).map_err(supplier)?;
-    }
-    store::put(&staging.join("root/module.wasm"), &root_bytes)?;
-    store::put_json(&staging.join("root/plan.json"), &value.root)?;
+    let held_parent = ic_host_fs::Directory::open(journal, 0)
+        .map_err(supplier)?
+        .ok_or_else(|| Error::Invalid("fleet journal disappeared".into()))?;
+    let (staging_name, held) = crate::staging_directory::allocate(&held_parent, ".fleet-plan")?;
+    let staging = journal.join(&staging_name);
+    let root_directory = held
+        .prepare_directories(&[std::ffi::OsStr::new("root")], 0o700, 0)
+        .map_err(supplier)?;
+    let child_directories = value
+        .children()
+        .map(|(slot, _)| {
+            held.prepare_directories(&[std::ffi::OsStr::new(record::child_leaf(slot))], 0o700, 0)
+                .map_err(supplier)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    store::put_in(
+        &root_directory,
+        std::ffi::OsStr::new("module.wasm"),
+        &root_bytes,
+    )?;
+    let root_plan = serde_json::to_vec_pretty(&value.root).map_err(supplier)?;
+    store::put_in(
+        &root_directory,
+        std::ffi::OsStr::new("plan.json"),
+        &root_plan,
+    )?;
     if let Some(bytes) = store_bytes {
-        ic_host_fs::durable::prepare_private_parents(&staging.join("store")).map_err(supplier)?;
-        store::put(&staging.join("store/module.wasm"), &bytes)?;
+        let directory = held
+            .prepare_directories(&[std::ffi::OsStr::new("store")], 0o700, 0)
+            .map_err(supplier)?;
+        store::put_in(&directory, std::ffi::OsStr::new("module.wasm"), &bytes)?;
     }
     for (index, bytes) in child_bytes.iter().enumerate() {
-        store::put(
-            &staging
-                .join(record::child_leaf(Slot::ALL[index]))
-                .join("module.wasm"),
-            bytes,
-        )?;
+        let directory = child_directories
+            .get(index)
+            .ok_or_else(|| Error::Invalid("fleet member directory missing".into()))?;
+        store::put_in(directory, std::ffi::OsStr::new("module.wasm"), bytes)?;
     }
-    store::put_json(&staging.join("fleet.json"), &value)?;
-    ic_host_fs::durable::commit_existing_directory_with(
-        &staging,
-        &dir,
-        |_, path| load(path, &id).map(|_| ()),
-        |_, _| Ok(()),
-    )
-    .map_err(supplier)?;
+    let fleet_bytes = serde_json::to_vec_pretty(&value).map_err(supplier)?;
+    store::put_in(&held, std::ffi::OsStr::new("fleet.json"), &fleet_bytes)?;
+    load(&staging, &id)?;
+    held_parent
+        .publish_directory(
+            &staging_name,
+            &held,
+            dir.file_name()
+                .ok_or_else(|| Error::Invalid("fleet destination needs a name".into()))?,
+        )
+        .map_err(supplier)?;
     Ok(FleetPlanning::Create {
         operation: id,
         fleet_plan: value,

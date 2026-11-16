@@ -261,13 +261,17 @@ fn observed(status: Option<&protocol::Status>, index: usize, chunks: usize) -> b
     })
 }
 fn step_deadline(dir: &Path, plan: &Plan) -> Result<u64> {
-    ic_host_fs::durable::prepare_private_parents(dir).map_err(supplier)?;
+    let directory = crate::output_publication::prepare(dir, 0o700)?;
     let path = dir.join("dispatch-deadline.json");
     let deadline = if path.try_exists().map_err(supplier)? {
         store::json(&path)?
     } else {
         let deadline = (crate::now()? + wire::MAX_WINDOW_NS).min(plan.expires_at_ns);
-        store::put_json(&path, &deadline)?;
+        store::put_json_in(
+            &directory,
+            std::ffi::OsStr::new("dispatch-deadline.json"),
+            &deadline,
+        )?;
         deadline
     };
     if deadline > plan.expires_at_ns {

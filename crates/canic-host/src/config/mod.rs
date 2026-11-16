@@ -520,13 +520,7 @@ impl SelectedFleet {
 /// Refuses invalid declarations and existing destination files.
 pub fn init_config(path: &Path, config: &Config) -> Result<()> {
     let bytes = encode_config(config)?;
-    if let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        ic_host_fs::durable::prepare_private_parents(parent).map_err(supplier)?;
-    }
-    store::put(path, &bytes)
+    crate::output_publication::publish(path, &bytes, ic_host_fs::Destination::CreateNew, 0o700)
 }
 
 pub(super) fn encode_config(config: &Config) -> Result<Vec<u8>> {
@@ -699,13 +693,10 @@ pub fn bind_canister(
 }
 
 fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) -> Result<T> {
-    use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
-
     // Refuse missing/invalid input before creating a sidecar; reload under lock.
     load_config(path)?;
-    let lock = durable::open_private_regular_lock_file(&lock_path(path)).map_err(supplier)?;
-    durable::try_lock_exclusive(&lock).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::WouldBlock {
+    let _lock = crate::sidecar_lock::acquire(&lock_path(path)).map_err(|error| {
+        if matches!(&error, ic_host_fs::Error::Io(cause) if cause.kind() == std::io::ErrorKind::WouldBlock) {
             Error::Invalid("config is being edited by another Canic command".into())
         } else {
             supplier(error)
@@ -714,15 +705,7 @@ fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) ->
     let mut config = load_config(path)?;
     let result = update(&mut config)?;
     let bytes = encode_config(&config)?;
-    durable::write_bytes(
-        path,
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o600,
-        },
-        &bytes,
-    )
-    .map_err(supplier)?;
+    crate::output_publication::publish(path, &bytes, ic_host_fs::Destination::Replace, 0o700)?;
     Ok(result)
 }
 

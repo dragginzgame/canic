@@ -273,7 +273,7 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
             std::process::id(),
             crate::now().unwrap()
         ));
-    ic_host_fs::durable::prepare_private_parents(&path).unwrap();
+    crate::output_publication::prepare(&path, 0o700).unwrap();
     crate::store::put(&path.join("signed.json"), &bytes).unwrap();
     let agent = plan.network.agent().unwrap();
     let result = super::execute(
@@ -370,11 +370,14 @@ async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing()
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
-        slot: Some(canic_management_protocol::children::Slot::Second),
+        slot: Some(canic_management_protocol::children::ChildId::SECOND),
     });
     let agent = plan.network.agent().unwrap();
     let dir = crate::tests::directory();
-    for slot in [None, Some(canic_management_protocol::children::Slot::First)] {
+    for slot in [
+        None,
+        Some(canic_management_protocol::children::ChildId::FIRST),
+    ] {
         let mut other = plan.clone();
         let crate::PlanAction::CreateChild(owner) = &mut other.action else {
             panic!("child creation")

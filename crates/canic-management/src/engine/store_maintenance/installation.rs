@@ -130,7 +130,7 @@ async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
         });
     });
     let result = management("upload_chunk", bytes, 0).await;
-    super::super::fault(super::super::Slot::First, 15); // Callback trap cannot erase issued intent.
+    super::super::fault(super::super::ChildId::FIRST, 15); // Callback trap cannot erase issued intent.
     let result = result.and_then(|reply| {
         let chunk: ChunkHash =
             decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
@@ -215,9 +215,9 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
                 value.phase = Phase::InstallIssued;
                 value.failure = None;
             });
-            super::super::fault(super::super::Slot::First, 19); // Trap rolls back intent and enqueue together.
+            super::super::fault(super::super::ChildId::FIRST, 19); // Trap rolls back intent and enqueue together.
             let result = empty_reply(management("install_chunked_code", bytes, 0).await);
-            super::super::fault(super::super::Slot::First, 16);
+            super::super::fault(super::super::ChildId::FIRST, 16);
             if let Err(error) = result {
                 change(&record.approval, Phase::InstallIssued, |value| {
                     value.failure = Some(error)
@@ -253,7 +253,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
                 value.failure = None;
             });
             let result = empty_reply(management("start_canister", bytes, 0).await);
-            super::super::fault(super::super::Slot::First, 17);
+            super::super::fault(super::super::ChildId::FIRST, 17);
             if let Err(error) = result {
                 change(&record.approval, Phase::StartIssued, |value| {
                     value.failure = Some(error)
@@ -324,7 +324,7 @@ async fn activate_once(record: &Status) -> Result<(), Failure> {
         value.failure = None;
     });
     let result = admission(approval, command, false).await;
-    super::super::fault(super::super::Slot::First, 18);
+    super::super::fault(super::super::ChildId::FIRST, 18);
     if let Err(error) = result {
         change(&record.approval, Phase::ActivateIssued, |value| {
             value.failure = Some(error)

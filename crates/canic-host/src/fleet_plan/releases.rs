@@ -1,5 +1,5 @@
 //! Bind approved future Store outputs to the existing publication and child effect owners.
-use super::{FleetChild, FleetPlan, Slot, invalid, record, root_receipt, store_receipt};
+use super::{ChildId, FleetChild, FleetPlan, invalid, record, root_receipt, store_receipt};
 use crate::{
     ApplyOutcome, Plan, PlanAction, Publication, Receipt, Result, StoredArtifact, UpgradeTarget,
     artifact, operation, plan, publication, store, supplier,
@@ -20,7 +20,7 @@ impl FleetPlan {
         &self,
         root: &Receipt,
         store: Option<&Receipt>,
-        slot: Slot,
+        slot: ChildId,
     ) -> Result<Option<StoredArtifact>> {
         let Some(manifest) = &self.child(slot)?.release else {
             return Ok(None);
@@ -42,7 +42,7 @@ impl FleetPlan {
             maintenance: None,
         }))
     }
-    fn publication(&self, root: &Receipt, store: Option<&Receipt>, slot: Slot) -> Result<Plan> {
+    fn publication(&self, root: &Receipt, store: Option<&Receipt>, slot: ChildId) -> Result<Plan> {
         let child = self.child_plan(root, store, slot)?;
         let source = child
             .management()
@@ -71,7 +71,7 @@ pub(super) fn publication_plan(child: &Plan, source: &StoredArtifact) -> Result<
     Ok(value)
 }
 
-pub(super) fn validate(dir: &Path, fleet: &FleetPlan, slot: Slot, bytes: &[u8]) -> Result<()> {
+pub(super) fn validate(dir: &Path, fleet: &FleetPlan, slot: ChildId, bytes: &[u8]) -> Result<()> {
     let child = dir.join(record::child_leaf(slot));
     let path = child.join("publication");
     if !path.join("plan.json").try_exists().map_err(supplier)? {
@@ -112,16 +112,16 @@ pub(super) async fn apply(
         let path = child_dir.join("publication");
         let bytes = store::read(&child_dir.join("module.wasm"), child.artifact_limit())?;
         if !path.join("plan.json").try_exists().map_err(supplier)? {
-            ic_host_fs::durable::prepare_private_parents(&path).map_err(supplier)?;
+            let directory = crate::output_publication::prepare(&path, 0o700)?;
             let module = path.join("module.wasm");
             if module.try_exists().map_err(supplier)? {
                 if store::read(&module, child.artifact_limit())? != bytes {
                     return Err(invalid());
                 }
             } else {
-                store::put(&module, &bytes)?;
+                store::put_in(&directory, std::ffi::OsStr::new("module.wasm"), &bytes)?;
             }
-            store::put_json(&path.join("plan.json"), &value)?;
+            store::put_json_in(&directory, std::ffi::OsStr::new("plan.json"), &value)?;
         }
         validate(dir, fleet, slot, &bytes)?;
         let id = value.digest()?;
@@ -145,7 +145,7 @@ pub(super) async fn apply(
 pub(super) fn status(
     dir: &Path,
     fleet: &FleetPlan,
-    slot: Slot,
+    slot: ChildId,
 ) -> Result<Option<crate::CanisterStatus>> {
     let path = dir.join(record::child_leaf(slot)).join("publication");
     if !path.join("plan.json").try_exists().map_err(supplier)? {

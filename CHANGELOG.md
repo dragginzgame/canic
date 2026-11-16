@@ -1,5 +1,156 @@
 # Changelog
 
+## [0.217.0]
+
+### 🔧 Dependencies
+
+Adopt published `ic-host-fs` / `ic-host-artifacts` 0.80.1 and
+`ic-host-process` 0.80.2. Text remains at the current published 0.76.0.
+Host now uses held directories for journal writes and complete fleet publication,
+and bounded process reports for Cargo and ICP. Report publication shares Host's
+file policy; the CLI no longer depends directly on FS. Wasm footprint parsing
+stays in qualification, outside the shipped host graph.
+
+Output writes require normal path components: use a path without `..` or
+symlinked parents. Artifact inspection still follows selected aliases; retained
+records refuse final symlinks. Existing files and approval records are preserved.
+
+Build/install the updated CLI with `make canic`. For an existing configured fleet:
+
+```sh
+canic --help
+canic fleet show --app starter --fleet mainnet
+canic fleet show --app starter --fleet mainnet --html target/starter-fleet.html
+```
+
+The report command creates a new file and refuses replacement. These commands
+do not launch a browser or submit deployment effects.
+
+### ⚠️ Breaking
+
+Host callers that exhaustively match `FleetPlanning` must handle the new
+`AddChild` result. CLI JSON consumers must accept `action: "add_child"` for
+growth plans. Existing approval records remain unchanged.
+Named fleet-owned upgrades now require completed initial fleet creation and no
+unrelated unfinished fleet operation. Finish or reconcile that work first.
+Rust callers now use `children::ChildId` instead of the `Slot` enum. Use the
+checked `ChildId::new` constructor or `FIRST`/`SECOND` constants. Numeric identity
+does not expand capacity: only 0 and 1 are admitted. Existing JSON/Wire names,
+approval digests and Store pin identities remain unchanged; there is no old-type alias.
+
+Root and profile managers migrate their stored child records to identified
+collections during upgrade, preserving the original allocations and complete
+custody. Older executables refuse the new format. Upgrade through reviewed Root
+maintenance; returning to a pre-migration executable is no longer supported.
+The two-child capacity and existing artifact budget remain unchanged.
+
+For a completed starter whose Root build input has been updated, build and review
+its maintenance plan before applying the returned operation:
+
+```sh
+canic app build --app starter --canister root
+canic fleet plan --app starter --identity canic-mainnet
+canic fleet apply OPERATION --app starter --identity canic-mainnet
+```
+
+### ➕ Added
+
+A completed one-child fleet can now add its second child through the existing
+plan/apply workflow. The new child has a separate, finite creation approval;
+the original fleet budget, approval and child identity remain unchanged. Store
+fleets publish the new release first. Later upgrades and Root maintenance retain
+both children, including a new name that sorts before the original child.
+
+For a completed generated `starter` fleet with one app, add a second instance of
+its application package and build its artifact:
+
+```sh
+canic app canister add worker --app starter --parent root --role worker \
+  --wasm artifacts/worker.wasm --manifest Cargo.toml --package starter-app
+canic app build --app starter --canister worker
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+```
+
+Review the returned operation, then apply it. If it publishes a Store release,
+repeat plan/apply to approve creation separately:
+
+```sh
+canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
+canic fleet plan --app starter --fleet mainnet --identity canic-mainnet
+canic fleet show --app starter --fleet mainnet
+```
+
+Creation draws 1T from Root's existing balance; Root must retain its operating
+reserve. Planning does not fund Root or submit effects. Pending creation resumes
+its original authority; removing its declaration or changing its artifact cannot
+replace it. The two-child bound remains; general allocation and reusable pools
+are still pending.
+
+The installed profile demo also exercises second-worker growth after Root/Store
+maintenance, private data on both workers, the added worker's upgrade and later
+Root replacement. User IDs remain local to each worker; no profiles move.
+For a completed fleet prepared by the [profile guide](docs/demos/profile.md):
+
+```sh
+canic app canister add archive --app profile-store --parent root --role worker \
+  --wasm artifacts/archive.wasm --manifest ../Cargo.toml --package canic-profile-worker
+canic app build --app profile-store --canister archive
+canic fleet plan --app profile-store --identity canic-mainnet
+```
+
+Apply each reviewed publication/creation operation separately, as above.
+
+### 🧹 Cleanup
+
+Management timers, active-operation guards and qualification fault selection now
+use child identities directly, matching the durable journal. This removes their
+fixed array-position dependency without changing approvals, timer
+recovery rules or the current two-child capacity bound.
+The public child identity is now numeric; historical enum names belong to its
+compatibility codec. Unsupported values refuse before entering runtime authority.
+Persistent collection readers also reject duplicate, missing, reordered or unknown
+identities instead of assigning records by their position or discarding entries.
+Compact artifact encoding preserves full existing allocations and checks Storage
+framing before writing; it replaces the old per-child writers, retaining migration readers.
+
+### 🩹 Fixed
+
+Named upgrades now use the same retained serial upgrade chain as whole-fleet
+planning, including children added later and completed Root/Store maintenance.
+Both paths return the same pending approval and enforce the eight-upgrade,
+artifact-custody and dispatch limits. Earlier approvals remain immutable; missing
+completion or a stale predecessor cannot authorize the next upgrade.
+Installed qualification also repeats B → C → B → C: reused artifacts get fresh
+installation approvals, while Store reuses the existing immutable publications.
+This does not establish application schema downgrade or state rollback support.
+
+For a completed inline child, rebuild its changed artifact and substitute the
+exact identities and current predecessor hash from retained receipts:
+
+```sh
+canic app build --app starter --canister worker
+canic fleet plan --app starter --fleet mainnet --canister worker \
+  --target WORKER_ID --previous-module WORKER_SHA256 \
+  --root-module ROOT_SHA256 --identity canic-mainnet
+```
+
+Named Store-backed plans also require their bound Store and completed publication
+via `--release`. Serial named upgrades require the retained whole-fleet creation
+approval. Whole-fleet planning resolves these inputs automatically.
+
+Named replanning checks the complete bounded reservation scope before reusing
+an approval. A matching record can no longer hide a conflicting or duplicate
+approval, malformed later record or exceeded inventory limit because of directory
+order. Valid retries retain their original digest and deadline.
+
+For an existing configured fleet, inspect an operation and retained publications
+without signing or submitting effects:
+
+```sh
+canic fleet status OPERATION --app starter --fleet mainnet
+canic fleet artifact list --app starter --fleet mainnet
+```
+
 ## [0.216.5] - 2026-11-16
 
 ### 🩹 Fixed

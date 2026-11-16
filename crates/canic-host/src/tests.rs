@@ -8,7 +8,14 @@ pub(crate) fn directory() -> PathBuf {
         .unwrap()
         .join("target/host-tests");
     std::fs::create_dir_all(&root).unwrap();
-    ic_host_fs::directory::create_unique_directory(&root, "case", 0o700, None).unwrap()
+    root.join(
+        crate::staging_directory::allocate(
+            &crate::output_publication::prepare(&root, 0o700).unwrap(),
+            "case",
+        )
+        .unwrap()
+        .0,
+    )
 }
 
 pub(crate) fn input() -> PlanInput {

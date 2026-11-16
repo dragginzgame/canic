@@ -211,8 +211,17 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     assert_eq!(resolved.application_controller(), receipt.canister);
     assert_eq!(resolved.creation_cycles(), 1_000_000_000_000);
     let path = dir.join("journal").join(&id);
-    assert!(!permits_upgrade(&path, &value, &value.root).unwrap());
-    assert!(value.child_plan(&receipt, None, Slot::First).is_err());
+    assert!(
+        permits_upgrade(
+            &Store::open(&dir.join("journal")).unwrap(),
+            &id,
+            &value,
+            &mut value.root.clone()
+        )
+        .unwrap()
+        .is_none()
+    );
+    assert!(value.child_plan(&receipt, None, ChildId::FIRST).is_err());
     let store_receipt = Receipt {
         operation: resolved.digest().unwrap(),
         canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
@@ -220,7 +229,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
         controller: receipt.canister.clone(),
     };
     let child = value
-        .child_plan(&receipt, Some(&store_receipt), Slot::First)
+        .child_plan(&receipt, Some(&store_receipt), ChildId::FIRST)
         .unwrap();
     assert_eq!(
         child
@@ -238,7 +247,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     wrong.operation = "00".repeat(32);
     assert!(
         value
-            .child_plan(&receipt, Some(&wrong), Slot::First)
+            .child_plan(&receipt, Some(&wrong), ChildId::FIRST)
             .is_err()
     );
     assert!(path.join("store/module.wasm").exists());
@@ -298,7 +307,7 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     )
     .unwrap();
     store::put_json(&path.join("root/receipt.json"), &root).unwrap();
-    let child = fleet.child_plan(&root, None, Slot::First).unwrap();
+    let child = fleet.child_plan(&root, None, ChildId::FIRST).unwrap();
     store::put_json(&path.join("child/plan.json"), &child).unwrap();
     let receipt = Receipt {
         operation: child.digest().unwrap(),
@@ -347,6 +356,32 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
             operation: id.clone()
         }
     );
+    // Both planners use these limits after reconstructing actual creation custody.
+    {
+        let mut history = super::history::load(&Store::open(&journal).unwrap(), &id, &fleet, &[])
+            .unwrap()
+            .unwrap();
+        history.children[0].dispatch = 10;
+        assert!(super::history::check_upgrade(&history.children, 0, 8, 11).is_ok());
+        assert!(super::history::check_upgrade(&history.children, 0, 8, 10).is_err());
+        assert!(
+            super::history::check_upgrade(
+                &history.children,
+                0,
+                canic_management_protocol::children::MAX_ARTIFACT_BYTES,
+                11
+            )
+            .is_err()
+        );
+        history.children[0].custody.upgrades =
+            vec![Default::default(); canic_management_protocol::upgrade::MAX_UPGRADES];
+        assert!(
+            super::history::check_upgrade(&history.children, 0, 8, 11)
+                .unwrap_err()
+                .to_string()
+                .contains("history is full")
+        );
+    }
     std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0\0\x02\x01x").unwrap();
     let planned = planning(None).unwrap();
     let FleetPlanning::Upgrade { operation, plan } = &planned else {
@@ -380,7 +415,11 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
         panic!("child upgrade")
     };
     target.canister = "r7inp-6aaaa-aaaaa-aaabq-cai".into();
-    assert!(!permits_upgrade(&path, &fleet, &foreign).unwrap());
+    assert!(
+        permits_upgrade(&Store::open(&journal).unwrap(), &id, &fleet, &mut foreign)
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(load(&path, &id).unwrap(), fleet);
 }
 
@@ -523,7 +562,7 @@ fn fleet_refuses_unsupported_trees_conflicts_and_tampered_artifacts() {
         module_hash: value.root.artifact.sha256.clone(),
         controller: value.root.controller.clone(),
     };
-    let child = value.child_plan(&receipt, None, Slot::First).unwrap();
+    let child = value.child_plan(&receipt, None, ChildId::FIRST).unwrap();
     store::put_json(&root.join("child/plan.json"), &child).unwrap();
     // An invented child plan without Root result custody is never admitted.
     assert!(load(&root, &id).is_err());
@@ -659,15 +698,15 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
         module_hash: fleet.root.artifact.sha256.clone(),
         controller: fleet.root.controller.clone(),
     };
-    let first = fleet.child_plan(&root, None, Slot::First).unwrap();
-    let second = fleet.child_plan(&root, None, Slot::Second).unwrap();
+    let first = fleet.child_plan(&root, None, ChildId::FIRST).unwrap();
+    let second = fleet.child_plan(&root, None, ChildId::SECOND).unwrap();
     assert_eq!(
         first.management().unwrap().slot,
-        Some(canic_management_protocol::children::Slot::First)
+        Some(canic_management_protocol::children::ChildId::FIRST)
     );
     assert_eq!(
         second.management().unwrap().slot,
-        Some(canic_management_protocol::children::Slot::Second)
+        Some(canic_management_protocol::children::ChildId::SECOND)
     );
     assert_ne!(first.digest().unwrap(), second.digest().unwrap());
     let mut renamed = selected.clone();
@@ -702,7 +741,7 @@ fn retained_two_child_approval_preserves_digest_and_rejects_slot_reassignment() 
     changed.children.swap(0, 1);
     assert!(changed.digest().is_err());
     let mut changed = fleet.clone();
-    changed.children[1].slot = Slot::First;
+    changed.children[1].slot = ChildId::FIRST;
     assert!(changed.digest().is_err());
     let mut changed = fleet.clone();
     changed.children[1].deployment = changed.children[0].deployment.clone();

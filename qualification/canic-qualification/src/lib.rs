@@ -76,3 +76,6 @@ pub fn isolated_signer(
             .to_owned(),
     )
 }
+
+/// Bounded footprint measurements for the installed profile and growth fixtures.
+pub mod footprint;

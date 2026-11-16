@@ -10,7 +10,7 @@ mod root_custody_tests;
 use super::{Client, store, support};
 use canic_management_protocol::{
     self as management,
-    children::{self, Request, Slot},
+    children::{self, ChildId, Request},
     store_maintenance, stored, upgrade,
 };
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, nonblocking::PocketIc};
@@ -51,7 +51,7 @@ async fn inject(root: &Client<'_>, point: u8) {
         "inject_child_fault",
         children::INJECT,
         &Request {
-            slot: Slot::First,
+            slot: ChildId::FIRST,
             value: point,
         },
         management::LIMITS,
@@ -192,7 +192,7 @@ async fn stage(
         "stage_stored_child",
         stored::STAGE,
         &Request {
-            slot: Slot::First,
+            slot: ChildId::FIRST,
             value: input,
         },
         stored::LIMITS,
@@ -207,7 +207,7 @@ async fn reconcile(
         "reconcile_stored_child",
         stored::RECONCILE,
         &Request {
-            slot: Slot::First,
+            slot: ChildId::FIRST,
             value: input,
         },
         stored::LIMITS,
@@ -297,7 +297,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
             "reconcile_child",
             ic_wire::encode(
                 &Request {
-                    slot: Slot::First,
+                    slot: ChildId::FIRST,
                     value: &input.approval
                 },
                 ic_wire::Encoding::Frame {
@@ -332,7 +332,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         "stage_stored_upgrade",
         stored::STAGE_UPGRADE,
         &Request {
-            slot: Slot::First,
+            slot: ChildId::FIRST,
             value: &upgrade,
         },
         stored::LIMITS,
@@ -352,7 +352,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         "reconcile_stored_upgrade",
         stored::RECONCILE_UPGRADE,
         &Request {
-            slot: Slot::First,
+            slot: ChildId::FIRST,
             value: &upgrade,
         },
         stored::LIMITS,
@@ -401,7 +401,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         "stage_stored_upgrade",
         stored::STAGE_UPGRADE,
         &Request {
-            slot: Slot::First,
+            slot: ChildId::FIRST,
             value: &successor,
         },
         stored::LIMITS,
@@ -422,7 +422,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         "stage_child",
         children::STAGE,
         &Request {
-            slot: Slot::Second,
+            slot: ChildId::SECOND,
             value: inline,
         },
         management::STAGE_LIMITS,
@@ -449,7 +449,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
             "stage_stored_upgrade",
             stored::STAGE_UPGRADE,
             &Request {
-                slot: Slot::First,
+                slot: ChildId::FIRST,
                 value: &upgrade,
             },
             stored::LIMITS,

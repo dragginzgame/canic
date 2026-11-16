@@ -1,7 +1,7 @@
 //! Independent siblings, aggregate reservations and migration in the original storage leases.
 use super::*;
 use canic_management_protocol::{
-    children::{self, Request, Slot},
+    children::{self, ChildId, Request},
     custody, upgrade,
 };
 
@@ -39,7 +39,7 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
 async fn admit(
     pic: &PocketIc,
     root: CanisterId,
-    slot: Slot,
+    slot: ChildId,
     input: Stage,
 ) -> Result<Status, Refusal> {
     let reply = pic
@@ -216,7 +216,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
     assert_eq!(
-        admit(pic, root, Slot::Second, too_large).await,
+        admit(pic, root, ChildId::SECOND, too_large).await,
         Err(Refusal::Artifact)
     );
     assert_eq!(read(pic, root).await, migrated);
@@ -238,7 +238,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             "stage_child",
             ic_wire::encode(
                 &Request {
-                    slot: Slot::Second,
+                    slot: ChildId::SECOND,
                     value: second.clone(),
                 },
                 ic_wire::Encoding::Frame {
@@ -257,7 +257,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         );
     }
     assert_eq!(read(pic, root).await, migrated);
-    admit(pic, root, Slot::Second, second.clone())
+    admit(pic, root, ChildId::SECOND, second.clone())
         .await
         .unwrap();
     // An old maintenance client must fail closed, never omit the second slot.
@@ -328,7 +328,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             "stage_child_upgrade",
             ic_wire::encode(
                 &Request {
-                    slot: Slot::First,
+                    slot: ChildId::FIRST,
                     value: too_large,
                 },
                 ic_wire::Encoding::Frame {
@@ -353,7 +353,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     assert_eq!(refused, Err(Refusal::Artifact));
     assert_eq!(read(pic, root).await, both);
     // Wrong-slot upgrade authority must not cross into its sibling's journal.
-    for (slot, expected) in [(Slot::Second, false), (Slot::First, true)] {
+    for (slot, expected) in [(ChildId::SECOND, false), (ChildId::FIRST, true)] {
         let reply = pic
             .update_call(
                 root,
@@ -401,7 +401,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     // Fill both histories and the combined artifact budget. Every successor
     // must leave the sibling's full retained evidence unchanged.
     for round in 0..upgrade::MAX_UPGRADES {
-        for slot in [Slot::First, Slot::Second] {
+        for slot in [ChildId::FIRST, ChildId::SECOND] {
             let before = read(pic, root).await;
             let record = &before[slot.index()];
             if record.upgrades.len() > round {
@@ -474,14 +474,14 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .iter()
             .all(|c| c.upgrades.len() == upgrade::MAX_UPGRADES)
     );
-    let replay = admit(pic, root, Slot::Second, second.clone())
+    let replay = admit(pic, root, ChildId::SECOND, second.clone())
         .await
         .unwrap();
     assert_eq!(replay.worker, both[1].creation.worker);
     let mut changed = second;
     changed.approval.expires_at_ns += 1;
     assert_eq!(
-        admit(pic, root, Slot::Second, changed).await,
+        admit(pic, root, ChildId::SECOND, changed).await,
         Err(Refusal::Occupied)
     );
     pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
@@ -522,7 +522,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
         "inject_child_fault",
         ic_wire::encode(
             &Request {
-                slot: Slot::First,
+                slot: ChildId::FIRST,
                 value: 2_u8,
             },
             ic_wire::Encoding::Frame {
@@ -535,8 +535,8 @@ async fn lost_creation_callback_does_not_block_sibling() {
     )
     .await
     .unwrap();
-    admit(pic, root, Slot::First, first).await.unwrap();
-    admit(pic, root, Slot::Second, second).await.unwrap();
+    admit(pic, root, ChildId::FIRST, first).await.unwrap();
+    admit(pic, root, ChildId::SECOND, second).await.unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let evidence = read(pic, root).await;
@@ -552,7 +552,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
         "inject_child_fault",
         ic_wire::encode(
             &Request {
-                slot: Slot::Second,
+                slot: ChildId::SECOND,
                 value: 8_u8,
             },
             ic_wire::Encoding::Frame {
@@ -585,7 +585,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
             "stage_child_upgrade",
             ic_wire::encode(
                 &Request {
-                    slot: Slot::Second,
+                    slot: ChildId::SECOND,
                     value: change.clone(),
                 },
                 ic_wire::Encoding::Frame {
@@ -621,7 +621,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
         .unwrap();
     settle(pic).await;
     assert_eq!(read(pic, root).await, interrupted);
-    for slot in [Slot::First, Slot::Second] {
+    for slot in [ChildId::FIRST, ChildId::SECOND] {
         let result = pic
             .update_call(
                 root,
@@ -641,7 +641,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
                 .unwrap(),
             )
             .await;
-        assert_eq!(result.is_ok(), slot == Slot::Second);
+        assert_eq!(result.is_ok(), slot == ChildId::SECOND);
     }
     settle(pic).await;
     let recovered = read(pic, root).await;
@@ -685,14 +685,14 @@ async fn child_admission_reserves_siblings_unissued_attachment() {
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
     let first = input(root, artifact("app.wasm"), now);
     let second = input(root, artifact("app-v2.wasm"), now);
-    admit(pic, root, Slot::First, first).await.unwrap();
+    admit(pic, root, ChildId::FIRST, first).await.unwrap();
     assert_eq!(
-        admit(pic, root, Slot::Second, second.clone()).await,
+        admit(pic, root, ChildId::SECOND, second.clone()).await,
         Err(Refusal::Reserve)
     );
     assert_eq!(read(pic, root).await[1].creation, Status::default());
     pic.add_cycles(root, 1_000_000_000_000).await;
-    admit(pic, root, Slot::Second, second).await.unwrap();
+    admit(pic, root, ChildId::SECOND, second).await.unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let evidence = read(pic, root).await;

@@ -1,9 +1,9 @@
 //! Serial child upgrades with bounded immutable history and one active effect owner.
 use super::{
-    MANAGEMENT_LIMITS, OBSERVING, STATE, State, delivery, failure, fault, management, observing,
-    reserved_cycles, schedule, snapshot, storage::Artifact,
+    Artifact, MANAGEMENT_LIMITS, OBSERVING, STATE, State, delivery, failure, fault, management,
+    observing, reserved_cycles, schedule, snapshot,
 };
-use canic_management_protocol::children::Slot;
+use canic_management_protocol::children::ChildId;
 use canic_management_protocol::upgrade::{
     Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage, Status as UpgradeStatus,
 };
@@ -24,14 +24,14 @@ use ic_platform_runtime::{
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
 #[must_use]
-pub fn status(slot: Slot) -> UpgradeStatus {
+pub fn status(slot: ChildId) -> UpgradeStatus {
     STATE.with_borrow(|state| {
         state.as_ref().expect("initialized manager").journal.get().0[&slot]
             .1
             .clone()
     })
 }
-fn mutate(slot: Slot, f: impl FnOnce(&mut UpgradeStatus)) {
+fn mutate(slot: ChildId, f: impl FnOnce(&mut UpgradeStatus)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
         let mut value = state.journal.get().clone();
@@ -43,7 +43,7 @@ fn mutate(slot: Slot, f: impl FnOnce(&mut UpgradeStatus)) {
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
 #[must_use]
-pub fn observe(slot: Slot, expected: &Approval) -> UpgradeStatus {
+pub fn observe(slot: ChildId, expected: &Approval) -> UpgradeStatus {
     STATE.with_borrow(|state| {
         let journal = &state.as_ref().expect("initialized manager").journal.get().0[&slot];
         journal
@@ -56,7 +56,7 @@ pub fn observe(slot: Slot, expected: &Approval) -> UpgradeStatus {
     })
 }
 
-pub(super) fn validate(state: &State, slot: Slot) {
+pub(super) fn validate(state: &State, slot: ChildId) {
     let journal = &state.journal.get().0[&slot];
     assert!(journal.2.len() < MAX_UPGRADES, "bounded upgrade history");
     let mut previous = journal
@@ -154,7 +154,7 @@ fn validate_record(
 /// Refuses incomplete creation, changed authority, invalid bytes/time or inadequate reserve.
 /// # Panics
 /// Traps for noncontrollers, uninitialized storage or failed durable writes.
-pub fn stage(slot: Slot, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
+pub fn stage(slot: ChildId, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
     stage_input(slot, Input::Inline(input))
 }
 pub(super) enum Input {
@@ -184,7 +184,7 @@ impl Input {
         }
     }
 }
-pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Refusal> {
+pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, Refusal> {
     assert!(
         api::is_controller(&api::msg_caller()),
         "controller required"
@@ -210,7 +210,7 @@ pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Ref
         };
     }
     let current = status(slot);
-    if OBSERVING.get()[slot.index()]
+    if OBSERVING.with_borrow(|active| active.contains(&slot))
         || (current.approval.is_some()
             && (current.phase != UpgradePhase::Ready || current.failure.is_some()))
     {
@@ -296,7 +296,7 @@ pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Ref
     schedule(slot);
     Ok(status(slot))
 }
-pub(super) fn next(slot: Slot) -> Option<u64> {
+pub(super) fn next(slot: ChildId) -> Option<u64> {
     let s = status(slot);
     if s.failure.is_some() {
         return None;
@@ -326,7 +326,7 @@ async fn inspect(a: &Approval) -> Result<CanisterStatusResult, Failure> {
     }
     Ok(value)
 }
-fn issue(slot: Slot, index: usize, phase: UpgradePhase, bytes: &[u8]) {
+fn issue(slot: ChildId, index: usize, phase: UpgradePhase, bytes: &[u8]) {
     mutate(slot, |s| {
         assert_eq!(s.attempts[index], 0, "no effect replay");
         s.attempts[index] = 1;
@@ -334,7 +334,7 @@ fn issue(slot: Slot, index: usize, phase: UpgradePhase, bytes: &[u8]) {
         s.phase = phase;
     });
 }
-pub(super) async fn step(slot: Slot) {
+pub(super) async fn step(slot: ChildId) {
     let s = status(slot);
     let Some(a) = &s.approval else {
         return;
@@ -454,7 +454,7 @@ pub(super) async fn step(slot: Slot) {
         mutate(slot, |s| s.failure = Some(error));
     }
 }
-async fn observation(slot: Slot) -> Result<(), Failure> {
+async fn observation(slot: ChildId) -> Result<(), Failure> {
     let s = status(slot);
     let Some(a) = &s.approval else {
         return Ok(());
@@ -513,7 +513,7 @@ async fn observation(slot: Slot) -> Result<(), Failure> {
 /// # Panics
 /// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
 pub async fn reconcile(
-    slot: Slot,
+    slot: ChildId,
     expected: canic_management_protocol::upgrade::Approval,
 ) -> UpgradeStatus {
     assert!(
@@ -526,7 +526,7 @@ pub async fn reconcile(
     );
     reconcile_bound(slot, expected).await
 }
-pub(super) async fn reconcile_bound(slot: Slot, expected: Approval) -> UpgradeStatus {
+pub(super) async fn reconcile_bound(slot: ChildId, expected: Approval) -> UpgradeStatus {
     assert!(
         !super::store_maintenance::active(),
         "Store maintenance active"

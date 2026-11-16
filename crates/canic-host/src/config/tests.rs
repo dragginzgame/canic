@@ -460,8 +460,7 @@ fn app_and_fleet_initialization_preserve_evidence_and_refuse_conflicts() {
         assert!(init_fleet(&path, app, fleet, Network::Mainnet).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
-    let lock = ic_host_fs::durable::open_private_regular_lock_file(&lock_path(&path)).unwrap();
-    ic_host_fs::durable::try_lock_exclusive(&lock).unwrap();
+    let lock = crate::sidecar_lock::acquire(&lock_path(&path)).unwrap();
     assert!(init_app(&path, "new", "demo", Network::Mainnet).is_err());
     assert!(init_fleet(&path, "hello", "busy", Network::Mainnet).is_err());
     assert!(add_app_canister(&path, "hello", "busy", CanisterDefinition::default()).is_err());

@@ -323,14 +323,8 @@ fn browser_handoff_uses_localhost_and_preserves_background_lifetime() {
         .nth(2)
         .unwrap()
         .join("target/fleet-open-tests");
-    durable::prepare_private_parents(&root).unwrap();
-    let dir = ic_host_fs::directory::create_unique_directory(
-        &root,
-        "launch",
-        0o700,
-        NonZeroUsize::new(32),
-    )
-    .unwrap();
+    std::fs::create_dir_all(&root).unwrap();
+    let dir = crate::tests::directory(&root, "launch").unwrap();
     let report = dir.join("- report ' $(literal).html");
     std::fs::write(&report, "report retained").unwrap();
     let marker = dir.join("opened");

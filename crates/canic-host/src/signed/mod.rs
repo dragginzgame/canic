@@ -265,13 +265,17 @@ async fn observe_metadata(
     icp: &Path,
     agent: &Agent,
 ) -> Result<Vec<u8>> {
-    ic_host_fs::durable::prepare_private_parents(path).map_err(supplier)?;
+    let directory = crate::output_publication::prepare(path, 0o700)?;
     let authority = path.join("authority.json");
     let expires_at_ns = if authority.try_exists().map_err(supplier)? {
         store::json::<u64>(&authority)?
     } else {
         let deadline = now()? + 600_000_000_000;
-        store::put_json(&authority, &deadline)?;
+        store::put_json_in(
+            &directory,
+            std::ffi::OsStr::new("authority.json"),
+            &deadline,
+        )?;
         deadline
     };
     let dispatch_deadline = expires_at_ns
@@ -390,13 +394,17 @@ pub(crate) async fn reconcile(
     } else {
         crate::managed::recovery::call(plan)?
     };
-    ic_host_fs::durable::prepare_private_parents(path).map_err(supplier)?;
+    let directory = crate::output_publication::prepare(path, 0o700)?;
     let authority = path.join("authority.json");
     let expires_at_ns = if authority.try_exists().map_err(supplier)? {
         store::json::<u64>(&authority)?
     } else {
         let deadline = now()? + 600_000_000_000;
-        store::put_json(&authority, &deadline)?;
+        store::put_json_in(
+            &directory,
+            std::ffi::OsStr::new("authority.json"),
+            &deadline,
+        )?;
         deadline
     };
     execute_with(
@@ -422,7 +430,7 @@ async fn execute_with(
     icp: &Path,
     agent: &Agent,
 ) -> Result<Vec<u8>> {
-    ic_host_fs::durable::prepare_private_parents(path).map_err(supplier)?;
+    let directory = crate::output_publication::prepare(path, 0o700)?;
     if path.join("reply.bin").try_exists().map_err(supplier)? {
         admit(
             &store::read(&path.join("signed.json"), store::MAX_RECORD)?,
@@ -450,7 +458,7 @@ async fn execute_with(
             }
         }
         let bytes = sign(path, plan, call, identity, icp)?;
-        store::put(&signed, &bytes)?;
+        store::put_in(&directory, std::ffi::OsStr::new("signed.json"), &bytes)?;
         bytes
     };
     let attempt = admit(&bytes, plan, call)?;
@@ -465,7 +473,7 @@ async fn execute_with(
     let effective = EffectiveId::Canister(call.effective.to_text().parse().map_err(supplier)?);
     let result = bounded(agent.update_signed(effective, attempt.envelope)).await;
     if let Ok(CallResponse::Response(reply)) = result {
-        store::put(&path.join("reply.bin"), &reply)?;
+        store::put_in(&directory, std::ffi::OsStr::new("reply.bin"), &reply)?;
         return Ok(reply);
     }
     // Transport failure or acceptance is not effect failure. Read the certified
@@ -482,12 +490,13 @@ async fn execute_with(
         .await?;
         match status {
             RequestStatusResponse::Replied(reply) => {
-                store::put(&path.join("reply.bin"), &reply.arg)?;
+                store::put_in(&directory, std::ffi::OsStr::new("reply.bin"), &reply.arg)?;
                 return Ok(reply.arg);
             }
             RequestStatusResponse::Rejected(rejection) => {
-                store::put_json(
-                    &path.join("rejected.json"),
+                store::put_json_in(
+                    &directory,
+                    std::ffi::OsStr::new("rejected.json"),
                     &Rejection {
                         code: format!("{:?}", rejection.reject_code),
                         message: rejection.reject_message,
@@ -508,18 +517,14 @@ async fn execute_with(
 }
 
 fn admit_signer(icp: &Path) -> Result<()> {
-    let version = ic_host_process::tool::capture_group_command(
+    let version = crate::process::capture(
         Command::new(icp).arg("--version"),
-        ic_host_process::tool::OutputLimits {
-            stdout: ic_host_process::tool::OutputLimit::Terminate(1024),
-            stderr: ic_host_process::tool::OutputLimit::Terminate(1024),
-            timeout: Some(Duration::from_secs(5)),
-        },
+        1024,
+        1024,
+        Duration::from_secs(5),
     )
-    .map_err(supplier)?
-    .require_success()
     .map_err(supplier)?;
-    if version.stdout != b"icp 1.7.0\n" {
+    if version != b"icp 1.7.0\n" {
         return Err(Error::Invalid(
             "signer must be repository-qualified ICP CLI 1.7.0; run make install-ic-tools".into(),
         ));
@@ -532,23 +537,13 @@ fn admit_signer(icp: &Path) -> Result<()> {
 /// Refuses an unavailable/unqualified signer, missing identity or invalid principal output.
 pub fn signing_principal(identity: &str, icp: &Path) -> Result<String> {
     admit_signer(icp)?;
-    let output = ic_host_process::tool::capture_group_command(
+    let output = crate::process::capture(
         Command::new(icp).args(["identity", "principal", "--identity", identity]),
-        ic_host_process::tool::OutputLimits {
-            stdout: ic_host_process::tool::OutputLimit::Terminate(1024),
-            stderr: ic_host_process::tool::OutputLimit::Terminate(4096),
-            timeout: Some(Duration::from_secs(30)),
-        },
+        1024,
+        4096,
+        Duration::from_secs(30),
     )
-    .map_err(supplier)?
-    .require_success()
-    .map_err(supplier)?
-    .require_complete()
     .map_err(supplier)?;
-    crate::network::principal(
-        std::str::from_utf8(&output.stdout)
-            .map_err(supplier)?
-            .trim(),
-    )
-    .map(|principal| principal.to_text())
+    crate::network::principal(std::str::from_utf8(&output).map_err(supplier)?.trim())
+        .map(|principal| principal.to_text())
 }

@@ -43,7 +43,7 @@ impl<A: Serialize> Stage<A> {
     /// # Panics
     /// Panics if the caller supplies metadata outside the bounded contract.
     #[must_use]
-    pub fn pin(&self, method: u64, slot: children::Slot) -> Pin {
+    pub fn pin(&self, method: u64, slot: children::ChildId) -> Pin {
         let bytes = ic_wire::encode(&(method, slot, self), ic_wire::Encoding::Payload, LIMITS)
             .expect("bounded Store operation");
         Pin {
@@ -133,26 +133,26 @@ mod tests {
                 manifest,
             },
         };
-        let operation = stage.pin(STAGE, children::Slot::First).operation;
+        let operation = stage.pin(STAGE, children::ChildId::FIRST).operation;
         assert_ne!(
             operation,
-            stage.pin(STAGE, children::Slot::Second).operation
+            stage.pin(STAGE, children::ChildId::SECOND).operation
         );
         assert_ne!(
             operation,
-            stage.pin(STAGE_UPGRADE, children::Slot::First).operation
+            stage.pin(STAGE_UPGRADE, children::ChildId::FIRST).operation
         );
         let mut changed = stage.clone();
         changed.reference.store.push('c');
         assert_ne!(
             operation,
-            changed.pin(STAGE, children::Slot::First).operation
+            changed.pin(STAGE, children::ChildId::FIRST).operation
         );
         changed = stage.clone();
         changed.reference.manifest.release.version.push('x');
         assert_ne!(
             operation,
-            changed.pin(STAGE, children::Slot::First).operation
+            changed.pin(STAGE, children::ChildId::FIRST).operation
         );
         let delivery = Delivery {
             reference: stage.reference.clone(),
